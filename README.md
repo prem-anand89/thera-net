@@ -1,8 +1,10 @@
-# Clinic OS — Patient Visit Ledger
+# Thera.Net — Patient Visit Ledger & Clinical Modules
 
 Offline-first visit ledger, revenue-split tracker, and invoice book for
-physiotherapy clinics operating inside a partner hospital. Built for
-Beyond Mechanics @ Health Valley, structured multi-clinic from day one.
+physiotherapy clinics operating inside a partner hospital, extended with a
+consent-compliant clinical documentation layer and a pluggable assessment-
+module system. Built for Beyond Mechanics @ Health Valley, structured
+multi-clinic from day one.
 
 **Stack:** React + Vite + TypeScript · Supabase (Postgres/Auth/Realtime/Storage)
 · Dexie (IndexedDB) local-first store with outbox sync · Tailwind CSS.
@@ -46,15 +48,48 @@ Beyond Mechanics @ Health Valley, structured multi-clinic from day one.
   SVG component (no charting dependency), colored from a validated
   categorical palette.
 
+## Clinical documentation & assessment modules
+
+- **Consultation notes** — a structured clinical note per patient
+  (draft/completed/archived, authorized session count), intentionally
+  decoupled from invoice/visit financial columns so a therapist can finish
+  documentation after a visit is billed and frozen.
+- **Consent ledger** — DPDP (2023)-grade, versioned, append-only grant/
+  withdraw log for patients and therapists across three consent types
+  (data privacy, treatment, professional engagement). Withdrawal is always
+  a new row, never an edit to the original grant; templates are versioned
+  so historical consents stay auditable after wording changes.
+- **Pluggable assessment modules** — a 3-tier activation gate enforced at
+  the database via RLS (`clinic_module_settings` + `can_use_module()`),
+  not just hidden in the UI:
+  1. **Clinic**: is the module enabled at all
+  2. **Role**: which staff roles may open it when enabled
+  3. **Patient**: `patient_module_enrollments` tracks who is actually
+     enrolled (repeat/concurrent enrollment is allowed)
+
+  **FaCE Scale** and **Facial Palsy** (House-Brackmann / Sunnybrook) are
+  fully built and enabled by default — ported from real standalone
+  assessment tools, with all scoring in pure TS
+  (`src/domain/instruments/`) so results compute identically online and
+  offline. **Gut Screening**, **Return to Sport**, and **Scoliosis
+  Screening** have schema and enrollment support staged but are disabled
+  by default pending their real tool specs.
+- **AI generation log** — any AI-generated clinical impression is logged
+  verbatim (model name + raw output) before a human reviews and signs off
+  on the note it informed. Deliberately online-only: never added to the
+  offline sync set, so it can't be created while offline and never
+  appears in the local activity feed.
+
 ## Architecture
 
 ```
-src/domain/        pure business logic (money, splits, fiscal year) — no framework imports, unit-tested
-src/repositories/  data-access interfaces + Dexie implementations (UI reads/writes local only)
-src/sync/          outbox push / delta pull engine against Supabase
-src/services/      visit/invoice/report/patient orchestration — no React imports
-src/features/      UI (React + TanStack Router)
-supabase/          SQL migrations (schema, RLS, RPCs), seed
+src/domain/            pure business logic (money, splits, fiscal year, instrument scoring) — no framework imports, unit-tested
+src/domain/instruments/ FaCE Scale / Facial Palsy scoring, shared by online + offline paths
+src/repositories/      data-access interfaces + Dexie implementations (UI reads/writes local only)
+src/sync/              outbox push / delta pull engine against Supabase
+src/services/          visit/invoice/report/patient orchestration — no React imports
+src/features/          UI (React + TanStack Router)
+supabase/              SQL migrations (schema, RLS, RPCs), seed
 ```
 
 Business logic never imports Supabase or Dexie — swapping the backend means
