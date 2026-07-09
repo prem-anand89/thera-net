@@ -1,0 +1,12 @@
+project_id = "thera-net"
+
+[db]
+port = 54322
+major_version = 15
+
+[api]
+port = 54321
+schemas = ["public", "storage"]
+
+[auth]
+site_url = "http://localhost:5173"

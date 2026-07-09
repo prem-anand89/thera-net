@@ -1,0 +1,64 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens. Neutrals (paper/surface/ink/muted/border) are true neutral
+ * gray — only the accents carry hue. Teal is the one primary action color
+ * (buttons, active nav, links); rust is reserved for attention states only
+ * (alerts, the current-session marker, non-zero adjustments) and is never a
+ * background fill; moss is confirmed-good states only (paid, synced).
+ */
+:root {
+  --paper: #f5f5f4;
+  --surface: #ffffff;
+  --ink: #262626;
+  --muted: #63676a;
+  --border: #e2e2e1;
+  --teal: #2c5f63;
+  --teal-strong: #244d50;
+  --teal-light: #e4edec;
+  --rust: #a6552f;
+  --rust-light: #f3e4dd;
+  --moss: #5b7a52;
+  --moss-strong: #41583b;
+  --moss-light: #eaf0e7;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* Section headers and patient names only — a personality accent, not a body face. */
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* MRNOs, invoice numbers, and every currency figure — misaligned rupee
+   columns are the fastest way for a ledger to look untrustworthy. */
+.font-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Chart bars grow from the baseline on mount (see components/BarChart.tsx) */
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+.bar-grow {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: bar-grow 0.45s ease-out backwards;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}
