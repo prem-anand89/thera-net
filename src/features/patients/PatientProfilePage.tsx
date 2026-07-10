@@ -3,15 +3,10 @@ import { Link, useParams } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, patientActivityService, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
+import { Pill, btnPrimary } from '@/components/ui';
 import type { ActivityKind } from '@/services/patientActivityService';
-import { canUseModule } from '@/domain/modules';
 import { formatDateDMY } from '@/domain/fiscalYear';
-import {
-  REFERRING_SOURCE_LABELS,
-  type FaceScaleResponse,
-  type FacialPalsyAssessment,
-} from '@/domain/types';
+import { REFERRING_SOURCE_LABELS } from '@/domain/types';
 
 const KIND_LABELS: Record<ActivityKind, string> = {
   visit: 'Visit',
@@ -53,29 +48,12 @@ export function PatientProfilePage() {
     () => patientActivityService.getActivityForPatient(clinic.id, patientId, daysBack),
     [clinic.id, patientId, daysBack]
   );
-  const faceScaleHistory = useLiveQuery(
-    () => repos.faceScale.list(clinic.id, patientId),
-    [clinic.id, patientId]
-  );
-  const facialPalsyHistory = useLiveQuery(
-    () => repos.facialPalsy.list(clinic.id, patientId),
-    [clinic.id, patientId]
-  );
   const notes = useLiveQuery(
     () => repos.consultationNotes.list(clinic.id, patientId),
     [clinic.id, patientId]
   );
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
 
-  // Tier 1 (clinic enabled?) + Tier 2 (my role permitted?) — mirrors the
-  // can_use_module() SQL function that ultimately gates the write via RLS.
-  const moduleSettings = useLiveQuery(() => repos.moduleSettings.list(clinic.id), [clinic.id]);
-  const myRole = useLiveQuery(() => repos.myMembership.getRole(clinic.id), [clinic.id]);
-  const canFaceScale = canUseModule(moduleSettings, 'face_scale', myRole ?? null);
-  const canFacialPalsy = canUseModule(moduleSettings, 'facial_palsy', myRole ?? null);
-
-  const faceSorted = useMemo(() => sortByUpdated(faceScaleHistory), [faceScaleHistory]);
-  const palsySorted = useMemo(() => sortByUpdated(facialPalsyHistory), [facialPalsyHistory]);
   const latestNote = useMemo(() => sortByUpdated(notes)[0], [notes]);
   const patientPackages = useMemo(
     () => (openPackages ?? []).filter((p) => p.patientId === patientId),
@@ -147,20 +125,6 @@ export function PatientProfilePage() {
             <Link to="/visits/new" className={btnPrimary}>
               New visit
             </Link>
-            {canFaceScale && (
-              <Link to="/patients/$patientId/face-scale/new" params={{ patientId }} className={btnSecondary}>
-                + FaCE Scale
-              </Link>
-            )}
-            {canFacialPalsy && (
-              <Link
-                to="/patients/$patientId/facial-palsy/new"
-                params={{ patientId }}
-                className={btnSecondary}
-              >
-                + Facial Palsy
-              </Link>
-            )}
           </div>
         </div>
       </section>
@@ -168,27 +132,6 @@ export function PatientProfilePage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         {/* Main column */}
         <div className="space-y-4">
-          <SectionLabel>Assessments</SectionLabel>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FaceScaleCard
-              history={faceSorted}
-              canLaunch={canFaceScale}
-              patientId={patientId}
-            />
-            <FacialPalsyCard
-              history={palsySorted}
-              canLaunch={canFacialPalsy}
-              patientId={patientId}
-            />
-          </div>
-
-          {moduleSettings && myRole !== undefined && !canFaceScale && !canFacialPalsy && (
-            <p className="text-xs text-[var(--muted)]">
-              No assessment modules are available to you here — ask your clinic admin to enable one
-              in Setup, or check your role.
-            </p>
-          )}
-
           <SectionLabel>Recent activity</SectionLabel>
           <section className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-4 py-2">
             <div className="mb-1 flex flex-wrap gap-1.5 pt-2 text-xs">
@@ -336,190 +279,8 @@ function SideCard({
   );
 }
 
-function AssessmentCard({
-  name,
-  when,
-  children,
-  launch,
-}: {
-  name: string;
-  when?: string;
-  children: React.ReactNode;
-  launch?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-2.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-sm font-semibold text-[var(--ink)]">{name}</div>
-        {when && <div className="font-num text-xs text-[var(--muted)]/80">{when}</div>}
-      </div>
-      {children}
-      {launch}
-    </div>
-  );
-}
-
-function FaceScaleCard({
-  history,
-  canLaunch,
-  patientId,
-}: {
-  history: FaceScaleResponse[];
-  canLaunch: boolean;
-  patientId: string;
-}) {
-  const latest = history[0];
-  const prev = history[1];
-  const trend = [...history].reverse().map((f) => f.totalScore);
-  const delta = latest && prev ? latest.totalScore - prev.totalScore : null;
-
-  return (
-    <AssessmentCard
-      name="FaCE Scale"
-      when={latest ? formatDateDMY(latest.updatedAt.slice(0, 10)) : undefined}
-      launch={
-        canLaunch ? (
-          <Link
-            to="/patients/$patientId/face-scale/new"
-            params={{ patientId }}
-            className="text-xs font-semibold text-[var(--teal)] hover:underline"
-          >
-            + New FaCE Scale
-          </Link>
-        ) : undefined
-      }
-    >
-      {!latest ? (
-        <p className="text-sm text-[var(--muted)]">No FaCE Scale recorded yet.</p>
-      ) : (
-        <>
-          <div className="flex items-baseline gap-2">
-            <span className="font-num text-3xl font-semibold leading-none text-[var(--ink)]">
-              {latest.totalScore}
-            </span>
-            <span className="text-xs text-[var(--muted)]">/ 100</span>
-            {delta != null && delta !== 0 && (
-              <span
-                className={`font-num text-xs font-bold ${
-                  delta > 0 ? 'text-[var(--moss)]' : 'text-[var(--rust)]'
-                }`}
-              >
-                {delta > 0 ? '▲' : '▼'} {Math.abs(delta)}
-              </span>
-            )}
-          </div>
-          <Sparkline values={trend} />
-          <div className="flex flex-wrap gap-1.5">
-            <DomainStat label="Movement" value={latest.domainScores.facialMovement} />
-            <DomainStat label="Comfort" value={latest.domainScores.facialComfort} />
-            <DomainStat label="Social" value={latest.domainScores.socialFunction} />
-          </div>
-        </>
-      )}
-    </AssessmentCard>
-  );
-}
-
-function FacialPalsyCard({
-  history,
-  canLaunch,
-  patientId,
-}: {
-  history: FacialPalsyAssessment[];
-  canLaunch: boolean;
-  patientId: string;
-}) {
-  const latest = history[0];
-  return (
-    <AssessmentCard
-      name="Facial Palsy · HB / Sunnybrook"
-      when={latest ? formatDateDMY(latest.updatedAt.slice(0, 10)) : undefined}
-      launch={
-        canLaunch ? (
-          <Link
-            to="/patients/$patientId/facial-palsy/new"
-            params={{ patientId }}
-            className="text-xs font-semibold text-[var(--teal)] hover:underline"
-          >
-            + New assessment
-          </Link>
-        ) : undefined
-      }
-    >
-      {!latest ? (
-        <p className="text-sm text-[var(--muted)]">No assessment recorded yet.</p>
-      ) : (
-        <>
-          <div className="flex items-baseline gap-2">
-            <span className="font-num text-3xl font-semibold leading-none text-[var(--ink)]">
-              {latest.sunnybrookScore ?? '—'}
-            </span>
-            <span className="text-xs text-[var(--muted)]">Sunnybrook</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <DomainStat label="HB grade" value={toRoman(latest.hbGrade)} />
-            <DomainStat label="Synkinesis" value={latest.synkinesisTotal ?? '—'} />
-            {latest.sideAffected && <DomainStat label="Side" value={sideShort(latest.sideAffected)} />}
-          </div>
-        </>
-      )}
-    </AssessmentCard>
-  );
-}
-
-function DomainStat({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="rounded-lg bg-[var(--paper)] px-2.5 py-1.5">
-      <div className="font-num text-base font-semibold text-[var(--ink)]">{value}</div>
-      <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{label}</div>
-    </div>
-  );
-}
-
-/** Inline outcome sparkline — an area fill under a polyline with an emphasized endpoint. */
-function Sparkline({ values }: { values: number[] }) {
-  if (values.length < 2) return null;
-  const w = 200;
-  const h = 34;
-  const pad = 3;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const pts = values.map((v, i) => {
-    const x = pad + (i / (values.length - 1)) * (w - 2 * pad);
-    const y = h - pad - ((v - min) / span) * (h - 2 * pad);
-    return [x, y] as const;
-  });
-  const line = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const [lastX, lastY] = pts[pts.length - 1];
-  const area = `${line} ${(w - pad).toFixed(1)},${(h - pad).toFixed(1)} ${pad.toFixed(1)},${(h - pad).toFixed(1)}`;
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-8 w-full" aria-hidden="true">
-      <polygon points={area} fill="var(--teal-light)" />
-      <polyline
-        points={line}
-        fill="none"
-        stroke="var(--teal)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx={lastX} cy={lastY} r="3" fill="var(--teal)" />
-    </svg>
-  );
-}
-
 /* -------------------------------------------------------------------------- */
 
 function sortByUpdated<T extends { updatedAt: string }>(rows: T[] | undefined): T[] {
   return [...(rows ?? [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-}
-
-function toRoman(n: number | null): string {
-  if (n == null) return '—';
-  return ['', 'I', 'II', 'III', 'IV', 'V', 'VI'][n] ?? String(n);
-}
-
-function sideShort(side: 'left' | 'right' | 'both'): string {
-  return side === 'left' ? 'L' : side === 'right' ? 'R' : 'L+R';
 }
