@@ -9,6 +9,15 @@ multi-clinic from day one.
 **Stack:** React + Vite + TypeScript · Supabase (Postgres/Auth/Realtime/Storage)
 · Dexie (IndexedDB) local-first store with outbox sync · Tailwind CSS.
 
+## Phase 2: Patient-Centric Redesign ✨
+
+The app has been redesigned with a patient-centric information architecture:
+- **Patient Hub** — Assessment cards for FaCE Scale & Facial Palsy with trends, care plan progress, and unified activity feed
+- **Patients list** — Smart segments (Active/Lapsed/New), search, and filtering
+- **Ledger** — Multi-view toggles (Visit/Invoice/Patient/Month), revenue tracking
+- **Setup** — Module registry with role-based access control
+- **Clinic-OS design system** — Complete component library and design tokens
+
 ## What it does (Phase 1)
 
 - **Visit ledger** — patient lookup by MRNO/name (create-if-missing, walk-in
