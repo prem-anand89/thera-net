@@ -3,5 +3,8 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/thera-net-design.html", "destination": "/thera-net-design.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
