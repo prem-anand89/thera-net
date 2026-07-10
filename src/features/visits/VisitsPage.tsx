@@ -206,61 +206,80 @@ export function VisitsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Visits</h1>
-        {filteredPatient && (
-          <span className="rounded-full bg-[var(--teal-light)] px-3 py-1 text-xs text-[var(--teal)]">
-            {filteredPatient.name} ({filteredPatient.mrno})
-            <Link to="/visits" className="ml-2 font-medium">
-              ✕
-            </Link>
-          </span>
-        )}
-        <div className="ml-auto flex flex-wrap items-end gap-2">
-          <div className="relative">
-            <Field label="Find patient">
-              <input
-                className={inputCls}
-                placeholder="Name or MRNO…"
-                value={patientQuery}
-                onChange={(e) => setPatientQuery(e.target.value)}
-                onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
-              />
-            </Field>
-            {patientMatches.length > 0 && (
-              <div className="absolute z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)]">
-                {patientMatches.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className="block w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--paper)]"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      setPatientQuery('');
-                      void navigate({ to: '/visits', search: { patientId: p.id } });
-                    }}
-                  >
-                    <span className="font-display">{p.name}</span>{' '}
-                    <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <Field label="Therapist">
-            <select className={inputCls} value={therapistId} onChange={(e) => setTherapistId(e.target.value)}>
-              <option value="">All</option>
-              {(therapists ?? []).map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Visits</h1>
+          {filteredPatient && (
+            <span className="rounded-full bg-[var(--teal-light)] px-3 py-1 text-xs text-[var(--teal)]">
+              {filteredPatient.name} ({filteredPatient.mrno})
+              <Link to="/visits" className="ml-2 font-medium">
+                ✕
+              </Link>
+            </span>
+          )}
+        </div>
+        <Link to="/visits/new" className={btnPrimary}>
+          + New visit
+        </Link>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+        <div className="relative">
+          <Field label="Find patient">
+            <input
+              className={inputCls}
+              placeholder="Name or MRNO…"
+              value={patientQuery}
+              onChange={(e) => setPatientQuery(e.target.value)}
+              onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
+            />
           </Field>
-          <Link to="/visits/new" className={btnPrimary}>
-            + New visit
-          </Link>
+          {patientMatches.length > 0 && (
+            <div className="absolute z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+              {patientMatches.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="block w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--paper)]"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setPatientQuery('');
+                    void navigate({ to: '/visits', search: { patientId: p.id } });
+                  }}
+                >
+                  <span className="font-display">{p.name}</span>{' '}
+                  <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <Field label="Therapist">
+          <select className={inputCls} value={therapistId} onChange={(e) => setTherapistId(e.target.value)}>
+            <option value="">All</option>
+            {(therapists ?? []).map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <div className="ml-auto flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+          {DATE_PRESETS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                datePreset === p.key
+                  ? 'bg-[var(--teal)] text-white'
+                  : 'text-[var(--muted)] hover:bg-[var(--surface)]'
+              }`}
+              onClick={() => applyDatePreset(p.key)}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -320,26 +339,7 @@ export function VisitsPage() {
         </SectionCard>
       )}
 
-      <div className="flex justify-end">
-        <div className="flex flex-wrap gap-1 rounded-md border border-[var(--border)] p-1">
-          {DATE_PRESETS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              className={`rounded px-2.5 py-1 text-xs font-medium ${
-                datePreset === p.key
-                  ? 'bg-[var(--teal)] text-white'
-                  : 'text-[var(--muted)] hover:bg-[var(--paper)]'
-              }`}
-              onClick={() => applyDatePreset(p.key)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
             <tr>

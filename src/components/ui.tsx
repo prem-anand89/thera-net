@@ -19,8 +19,8 @@ export function Field({ label, children }: { label: ReactNode; children: ReactNo
 
 export function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-4">
-      <h2 className="font-display mb-3 text-sm font-semibold text-[var(--ink)]">{title}</h2>
+    <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+      <h2 className="font-display mb-3 text-base font-semibold text-[var(--ink)]">{title}</h2>
       {children}
     </section>
   );
@@ -65,9 +65,9 @@ export function RupeeInput({
 /** Small caption-over-number tile for summary strips. */
 export function StatTile({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-[10px] bg-[var(--paper)] px-4 py-3">
-      <div className="text-xs text-[var(--muted)]">{label}</div>
-      <div className="font-num text-lg font-semibold text-[var(--ink)]">{value}</div>
+    <div className="min-w-36 flex-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-sm">
+      <div className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
+      <div className="font-num mt-1 text-2xl font-semibold text-[var(--ink)]">{value}</div>
     </div>
   );
 }
@@ -142,7 +142,9 @@ export function PackageThread({
   );
 }
 
-export const th = 'px-3 py-2 text-left text-xs font-semibold text-[var(--muted)]';
-export const td = 'px-3 py-2 text-sm text-[var(--ink)]';
-export const tdNum = 'font-num px-3 py-2 text-sm text-[var(--ink)] text-right';
-export const thNum = 'px-3 py-2 text-right text-xs font-semibold text-[var(--muted)]';
+export const th =
+  'px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]';
+export const td = 'px-3 py-3 text-sm text-[var(--ink)]';
+export const tdNum = 'font-num px-3 py-3 text-sm text-[var(--ink)] text-right';
+export const thNum =
+  'px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]';
