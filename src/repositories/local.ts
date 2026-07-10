@@ -9,12 +9,6 @@ import type {
   InvoicePayment,
   Settlement,
   ConsultationNote,
-  PatientModuleEnrollment,
-  ScreeningResponse,
-  ReturnToSportResponse,
-  ScoliosisScreeningResponse,
-  FaceScaleResponse,
-  FacialPalsyAssessment,
   UUID,
 } from '@/domain/types';
 import type {
@@ -28,14 +22,6 @@ import type {
   InvoicePaymentRepo,
   SettlementRepo,
   ConsultationNoteRepo,
-  PatientModuleEnrollmentRepo,
-  ScreeningResponseRepo,
-  ReturnToSportRepo,
-  ScoliosisScreeningRepo,
-  FaceScaleRepo,
-  FacialPalsyRepo,
-  ModuleSettingsRepo,
-  MyMembershipRepo,
   Repos,
 } from './types';
 
@@ -186,88 +172,6 @@ const consultationNotes: ConsultationNoteRepo = {
   put: (note) => putWithOutbox('consultation_notes', note),
 };
 
-const moduleEnrollments: PatientModuleEnrollmentRepo = {
-  get: (id) => db.patient_module_enrollments.get(id),
-  async list(clinicId, patientId) {
-    const all = await db.patient_module_enrollments.where('patientId').equals(patientId).toArray();
-    return all
-      .filter((e) => e.clinicId === clinicId)
-      .sort((a, b) => b.enrolledAt.localeCompare(a.enrolledAt));
-  },
-  async listByModule(clinicId, moduleType) {
-    const all = await db.patient_module_enrollments.where('moduleType').equals(moduleType).toArray();
-    return all.filter((e) => e.clinicId === clinicId);
-  },
-  put: (enrollment) => putWithOutbox('patient_module_enrollments', enrollment),
-};
-
-const screeningResponses: ScreeningResponseRepo = {
-  get: (id) => db.screening_responses.get(id),
-  async list(clinicId, patientId) {
-    const all = await db.screening_responses.where('patientId').equals(patientId).toArray();
-    return all
-      .filter((r) => r.clinicId === clinicId)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  },
-  put: (response) => putWithOutbox('screening_responses', response),
-};
-
-const returnToSport: ReturnToSportRepo = {
-  get: (id) => db.return_to_sport_responses.get(id),
-  async list(clinicId, patientId) {
-    const all = await db.return_to_sport_responses.where('patientId').equals(patientId).toArray();
-    return all
-      .filter((r) => r.clinicId === clinicId)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  },
-  put: (response) => putWithOutbox('return_to_sport_responses', response),
-};
-
-const scoliosisScreening: ScoliosisScreeningRepo = {
-  get: (id) => db.scoliosis_screening_responses.get(id),
-  async list(clinicId, patientId) {
-    const all = await db.scoliosis_screening_responses.where('patientId').equals(patientId).toArray();
-    return all
-      .filter((r) => r.clinicId === clinicId)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  },
-  put: (response) => putWithOutbox('scoliosis_screening_responses', response),
-};
-
-const faceScale: FaceScaleRepo = {
-  get: (id) => db.face_scale_responses.get(id),
-  async list(clinicId, patientId) {
-    const all = await db.face_scale_responses.where('patientId').equals(patientId).toArray();
-    return all
-      .filter((r) => r.clinicId === clinicId)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  },
-  put: (response) => putWithOutbox('face_scale_responses', response),
-};
-
-const facialPalsy: FacialPalsyRepo = {
-  get: (id) => db.facial_palsy_assessments.get(id),
-  async list(clinicId, patientId) {
-    const all = await db.facial_palsy_assessments.where('patientId').equals(patientId).toArray();
-    return all
-      .filter((a) => a.clinicId === clinicId)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  },
-  put: (assessment) => putWithOutbox('facial_palsy_assessments', assessment),
-};
-
-const moduleSettings: ModuleSettingsRepo = {
-  list: (clinicId) => db.clinic_module_settings.where('clinicId').equals(clinicId).toArray(),
-  put: (setting) => putWithOutbox('clinic_module_settings', setting),
-};
-
-const myMembership: MyMembershipRepo = {
-  async getRole(clinicId) {
-    const row = await db.my_memberships.get(clinicId);
-    return row?.role ?? null;
-  },
-};
-
 export const repos: Repos = {
   clinics,
   therapists,
@@ -278,14 +182,6 @@ export const repos: Repos = {
   invoicePayments,
   settlements,
   consultationNotes,
-  moduleEnrollments,
-  screeningResponses,
-  returnToSport,
-  scoliosisScreening,
-  faceScale,
-  facialPalsy,
-  moduleSettings,
-  myMembership,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers
@@ -299,10 +195,4 @@ export type {
   InvoicePayment,
   Settlement,
   ConsultationNote,
-  PatientModuleEnrollment,
-  ScreeningResponse,
-  ReturnToSportResponse,
-  ScoliosisScreeningResponse,
-  FaceScaleResponse,
-  FacialPalsyAssessment,
 };

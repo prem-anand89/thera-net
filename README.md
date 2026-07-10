@@ -1,24 +1,19 @@
-# Thera.Net — Patient Visit Ledger & Clinical Modules
+# Thera.Net — Patient Visit Ledger & Clinical Documentation
 
 Offline-first visit ledger, revenue-split tracker, and invoice book for
 physiotherapy clinics operating inside a partner hospital, extended with a
-consent-compliant clinical documentation layer and a pluggable assessment-
-module system. Built for Beyond Mechanics @ Health Valley, structured
-multi-clinic from day one.
+consent-compliant clinical documentation layer. Built for Beyond Mechanics @
+Health Valley, structured multi-clinic from day one.
 
 **Stack:** React + Vite + TypeScript · Supabase (Postgres/Auth/Realtime/Storage)
 · Dexie (IndexedDB) local-first store with outbox sync · Tailwind CSS.
 
-## Phase 2: Patient-Centric Redesign ✨
+**Current scope:** the visit ledger (visits, invoices, reports, dashboard) and
+clinical documentation (consultation notes, consent ledger) only. Assessment
+modules (FaCE Scale, Facial Palsy, and others) are deliberately out of scope
+for now and will be added once this base layer is finalized.
 
-The app has been redesigned with a patient-centric information architecture:
-- **Patient Hub** — Assessment cards for FaCE Scale & Facial Palsy with trends, care plan progress, and unified activity feed
-- **Patients list** — Smart segments (Active/Lapsed/New), search, and filtering
-- **Ledger** — Multi-view toggles (Visit/Invoice/Patient/Month), revenue tracking
-- **Setup** — Module registry with role-based access control
-- **Clinic-OS design system** — Complete component library and design tokens
-
-## What it does (Phase 1)
+## What it does
 
 - **Visit ledger** — patient lookup by MRNO/name (create-if-missing, walk-in
   MRNO auto-generation), visit entry with catalog price autofill, price
@@ -57,7 +52,7 @@ The app has been redesigned with a patient-centric information architecture:
   SVG component (no charting dependency), colored from a validated
   categorical palette.
 
-## Clinical documentation & assessment modules
+## Clinical documentation
 
 - **Consultation notes** — a structured clinical note per patient
   (draft/completed/archived, authorized session count), intentionally
@@ -68,21 +63,6 @@ The app has been redesigned with a patient-centric information architecture:
   (data privacy, treatment, professional engagement). Withdrawal is always
   a new row, never an edit to the original grant; templates are versioned
   so historical consents stay auditable after wording changes.
-- **Pluggable assessment modules** — a 3-tier activation gate enforced at
-  the database via RLS (`clinic_module_settings` + `can_use_module()`),
-  not just hidden in the UI:
-  1. **Clinic**: is the module enabled at all
-  2. **Role**: which staff roles may open it when enabled
-  3. **Patient**: `patient_module_enrollments` tracks who is actually
-     enrolled (repeat/concurrent enrollment is allowed)
-
-  **FaCE Scale** and **Facial Palsy** (House-Brackmann / Sunnybrook) are
-  fully built and enabled by default — ported from real standalone
-  assessment tools, with all scoring in pure TS
-  (`src/domain/instruments/`) so results compute identically online and
-  offline. **Gut Screening**, **Return to Sport**, and **Scoliosis
-  Screening** have schema and enrollment support staged but are disabled
-  by default pending their real tool specs.
 - **AI generation log** — any AI-generated clinical impression is logged
   verbatim (model name + raw output) before a human reviews and signs off
   on the note it informed. Deliberately online-only: never added to the
@@ -92,8 +72,7 @@ The app has been redesigned with a patient-centric information architecture:
 ## Architecture
 
 ```
-src/domain/            pure business logic (money, splits, fiscal year, instrument scoring) — no framework imports, unit-tested
-src/domain/instruments/ FaCE Scale / Facial Palsy scoring, shared by online + offline paths
+src/domain/            pure business logic (money, splits, fiscal year) — no framework imports, unit-tested
 src/repositories/      data-access interfaces + Dexie implementations (UI reads/writes local only)
 src/sync/              outbox push / delta pull engine against Supabase
 src/services/          visit/invoice/report/patient orchestration — no React imports

@@ -8,15 +8,6 @@ import type {
   InvoicePayment,
   Settlement,
   ConsultationNote,
-  PatientModuleEnrollment,
-  ModuleType,
-  ScreeningResponse,
-  ReturnToSportResponse,
-  ScoliosisScreeningResponse,
-  FaceScaleResponse,
-  FacialPalsyAssessment,
-  ClinicModuleSetting,
-  MemberRole,
   UUID,
 } from '@/domain/types';
 
@@ -100,55 +91,6 @@ export interface ConsultationNoteRepo {
   put(note: ConsultationNote): Promise<void>;
 }
 
-export interface PatientModuleEnrollmentRepo {
-  get(id: UUID): Promise<PatientModuleEnrollment | undefined>;
-  list(clinicId: UUID, patientId: UUID): Promise<PatientModuleEnrollment[]>;
-  listByModule(clinicId: UUID, moduleType: ModuleType): Promise<PatientModuleEnrollment[]>;
-  put(enrollment: PatientModuleEnrollment): Promise<void>;
-}
-
-export interface ScreeningResponseRepo {
-  get(id: UUID): Promise<ScreeningResponse | undefined>;
-  list(clinicId: UUID, patientId: UUID): Promise<ScreeningResponse[]>;
-  put(response: ScreeningResponse): Promise<void>;
-}
-
-export interface ReturnToSportRepo {
-  get(id: UUID): Promise<ReturnToSportResponse | undefined>;
-  list(clinicId: UUID, patientId: UUID): Promise<ReturnToSportResponse[]>;
-  put(response: ReturnToSportResponse): Promise<void>;
-}
-
-export interface ScoliosisScreeningRepo {
-  get(id: UUID): Promise<ScoliosisScreeningResponse | undefined>;
-  list(clinicId: UUID, patientId: UUID): Promise<ScoliosisScreeningResponse[]>;
-  put(response: ScoliosisScreeningResponse): Promise<void>;
-}
-
-export interface FaceScaleRepo {
-  get(id: UUID): Promise<FaceScaleResponse | undefined>;
-  list(clinicId: UUID, patientId: UUID): Promise<FaceScaleResponse[]>;
-  put(response: FaceScaleResponse): Promise<void>;
-}
-
-export interface FacialPalsyRepo {
-  get(id: UUID): Promise<FacialPalsyAssessment | undefined>;
-  list(clinicId: UUID, patientId: UUID): Promise<FacialPalsyAssessment[]>;
-  put(assessment: FacialPalsyAssessment): Promise<void>;
-}
-
-export interface ModuleSettingsRepo {
-  /** All module rows configured for a clinic (Tier 1 + Tier 2 registry). */
-  list(clinicId: UUID): Promise<ClinicModuleSetting[]>;
-  /** Admin-only write; RLS rejects non-admins server-side regardless of this call. */
-  put(setting: ClinicModuleSetting): Promise<void>;
-}
-
-export interface MyMembershipRepo {
-  /** The signed-in user's own role in a clinic, from the local sync cache — null if not yet synced. */
-  getRole(clinicId: UUID): Promise<MemberRole | null>;
-}
-
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -159,12 +101,4 @@ export interface Repos {
   invoicePayments: InvoicePaymentRepo;
   settlements: SettlementRepo;
   consultationNotes: ConsultationNoteRepo;
-  moduleEnrollments: PatientModuleEnrollmentRepo;
-  screeningResponses: ScreeningResponseRepo;
-  returnToSport: ReturnToSportRepo;
-  scoliosisScreening: ScoliosisScreeningRepo;
-  faceScale: FaceScaleRepo;
-  facialPalsy: FacialPalsyRepo;
-  moduleSettings: ModuleSettingsRepo;
-  myMembership: MyMembershipRepo;
 }

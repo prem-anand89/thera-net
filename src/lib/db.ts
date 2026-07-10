@@ -9,14 +9,6 @@ import type {
   InvoicePayment,
   Settlement,
   ConsultationNote,
-  PatientModuleEnrollment,
-  ScreeningResponse,
-  ReturnToSportResponse,
-  ScoliosisScreeningResponse,
-  FaceScaleResponse,
-  FacialPalsyAssessment,
-  ClinicModuleSetting,
-  MyMembership,
 } from '@/domain/types';
 
 /**
@@ -47,14 +39,7 @@ export type SyncedTable =
   | 'invoices'
   | 'invoice_payments'
   | 'settlements'
-  | 'consultation_notes'
-  | 'patient_module_enrollments'
-  | 'screening_responses'
-  | 'return_to_sport_responses'
-  | 'scoliosis_screening_responses'
-  | 'face_scale_responses'
-  | 'facial_palsy_assessments'
-  | 'clinic_module_settings';
+  | 'consultation_notes';
 
 /**
  * Tables the client is allowed to write. Invoices are server-issued only.
@@ -72,13 +57,6 @@ export const CLIENT_WRITABLE_TABLES = [
   'invoice_payments',
   'settlements',
   'consultation_notes',
-  'patient_module_enrollments',
-  'screening_responses',
-  'return_to_sport_responses',
-  'scoliosis_screening_responses',
-  'face_scale_responses',
-  'facial_palsy_assessments',
-  'clinic_module_settings',
 ] as const satisfies readonly SyncedTable[];
 
 export class ClinicDB extends Dexie {
@@ -91,15 +69,6 @@ export class ClinicDB extends Dexie {
   invoice_payments!: Table<InvoicePayment, string>;
   settlements!: Table<Settlement, string>;
   consultation_notes!: Table<ConsultationNote, string>;
-  patient_module_enrollments!: Table<PatientModuleEnrollment, string>;
-  screening_responses!: Table<ScreeningResponse, string>;
-  return_to_sport_responses!: Table<ReturnToSportResponse, string>;
-  scoliosis_screening_responses!: Table<ScoliosisScreeningResponse, string>;
-  face_scale_responses!: Table<FaceScaleResponse, string>;
-  facial_palsy_assessments!: Table<FacialPalsyAssessment, string>;
-  clinic_module_settings!: Table<ClinicModuleSetting, string>;
-  /** Read-only cache of the signed-in user's own clinic_members rows — see MyMembership doc comment. */
-  my_memberships!: Table<MyMembership, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 

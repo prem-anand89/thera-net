@@ -15,12 +15,8 @@ import {
   type CatalogItem,
   type Clinic,
   type VisitColumnKey,
-  type ClinicModuleSetting,
-  type MemberRole,
-  type ModuleType,
 } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
-import { MODULE_LABELS } from '@/domain/modules';
 import {
   Field,
   inputCls,
@@ -44,7 +40,6 @@ export function SetupPage() {
       <ClinicProfile />
       <Catalog />
       <Therapists />
-      <Modules />
       <SectionCard title="Historical data">
         <p className="mb-3 text-xs text-[var(--muted)]">
           One-time import of visits logged before go-live in the Excel ledger.
@@ -634,102 +629,3 @@ function Therapists() {
   );
 }
 
-/**
- * Tier 1 + Tier 2 of the module activation model: per-clinic on/off, per-
- * role permission. Every clinic is auto-seeded with one row per known
- * module (see the clinics_seed_modules DB trigger), so this always has
- * something to render once synced. Writes are RLS-gated to clinic admins
- * server-side — the UI mirrors that by disabling the controls for others.
- */
-const MODULE_KEYS: ModuleType[] = [
-  'face_scale',
-  'facial_palsy',
-  'gut_screening',
-  'return_to_sport',
-  'scoliosis_screening',
-];
-const MODULE_ROLES: MemberRole[] = ['admin', 'staff'];
-
-function Modules() {
-  const clinic = useClinic();
-  const settings = useLiveQuery(() => repos.moduleSettings.list(clinic.id), [clinic.id]);
-  const myRole = useLiveQuery(() => repos.myMembership.getRole(clinic.id), [clinic.id]);
-  const isAdmin = myRole === 'admin';
-
-  const byKey = new Map((settings ?? []).map((s) => [s.moduleKey, s]));
-
-  async function toggleEnabled(setting: ClinicModuleSetting) {
-    await repos.moduleSettings.put({
-      ...setting,
-      enabled: !setting.enabled,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  async function toggleRole(setting: ClinicModuleSetting, role: MemberRole) {
-    const allowedRoles = setting.allowedRoles.includes(role)
-      ? setting.allowedRoles.filter((r) => r !== role)
-      : [...setting.allowedRoles, role];
-    await repos.moduleSettings.put({ ...setting, allowedRoles, updatedAt: new Date().toISOString() });
-  }
-
-  return (
-    <SectionCard title="Modules">
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        Turn assessment tools on or off for this clinic, and choose which staff roles may use each
-        one.{!isAdmin && ' Only clinic admins can change these.'}
-      </p>
-      {!settings ? (
-        <p className="text-sm text-[var(--muted)]">Loading…</p>
-      ) : (
-        <ul className="space-y-2">
-          {MODULE_KEYS.map((key) => {
-            const setting = byKey.get(key);
-            if (!setting) {
-              return (
-                <li key={key} className="flex items-center gap-3 py-2 text-sm text-[var(--muted)]">
-                  <span className="min-w-48">{MODULE_LABELS[key]}</span>
-                  <span className="text-xs">Not yet synced</span>
-                </li>
-              );
-            }
-            return (
-              <li
-                key={key}
-                className="flex flex-wrap items-center gap-3 border-b border-[var(--border)] py-2 text-sm last:border-0"
-              >
-                <span className="min-w-48 font-medium text-[var(--ink)]">{MODULE_LABELS[key]}</span>
-                <button
-                  disabled={!isAdmin}
-                  className={`rounded-full px-3 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
-                    setting.enabled
-                      ? 'bg-[var(--teal-light)] text-[var(--teal)]'
-                      : 'bg-[var(--paper)] text-[var(--muted)]'
-                  }`}
-                  onClick={() => void toggleEnabled(setting)}
-                >
-                  {setting.enabled ? 'Enabled' : 'Disabled'}
-                </button>
-                {setting.enabled && (
-                  <div className="ml-auto flex gap-3 text-xs text-[var(--muted)]">
-                    {MODULE_ROLES.map((role) => (
-                      <label key={role} className="flex items-center gap-1.5">
-                        <input
-                          type="checkbox"
-                          disabled={!isAdmin}
-                          checked={setting.allowedRoles.includes(role)}
-                          onChange={() => void toggleRole(setting, role)}
-                        />
-                        {role}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </SectionCard>
-  );
-}

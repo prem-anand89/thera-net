@@ -116,14 +116,6 @@ function makeFakeRepos() {
       put: async () => {},
     },
     consultationNotes: { get: async () => undefined, list: async () => [], put: async () => {} },
-    moduleEnrollments: { get: async () => undefined, list: async () => [], listByModule: async () => [], put: async () => {} },
-    screeningResponses: { get: async () => undefined, list: async () => [], put: async () => {} },
-    returnToSport: { get: async () => undefined, list: async () => [], put: async () => {} },
-    scoliosisScreening: { get: async () => undefined, list: async () => [], put: async () => {} },
-    faceScale: { get: async () => undefined, list: async () => [], put: async () => {} },
-    facialPalsy: { get: async () => undefined, list: async () => [], put: async () => {} },
-    moduleSettings: { list: async () => [], put: async () => {} },
-    myMembership: { getRole: async () => null },
   };
   return { repos, patients, visits };
 }

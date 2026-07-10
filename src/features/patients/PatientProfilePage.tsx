@@ -11,32 +11,17 @@ import { REFERRING_SOURCE_LABELS } from '@/domain/types';
 const KIND_LABELS: Record<ActivityKind, string> = {
   visit: 'Visit',
   consultation_note: 'Note',
-  module_enrollment: 'Enrollment',
-  screening_response: 'Gut Screening',
-  return_to_sport_response: 'Return to Sport',
-  scoliosis_screening_response: 'Scoliosis Screening',
-  face_scale_response: 'FaCE Scale',
-  facial_palsy_assessment: 'Facial Palsy',
 };
 
 const KIND_TONES: Record<ActivityKind, 'green' | 'amber' | 'slate'> = {
   visit: 'green',
   consultation_note: 'slate',
-  module_enrollment: 'amber',
-  screening_response: 'amber',
-  return_to_sport_response: 'amber',
-  scoliosis_screening_response: 'amber',
-  face_scale_response: 'amber',
-  facial_palsy_assessment: 'amber',
 };
 
 /**
  * Patient Hub — the patient-centric home of the app. One patient's identity,
- * their assessment outcomes (FaCE / Facial Palsy with trend), care plan,
- * latest clinical note and a unified cross-module activity feed, all on one
- * page. Every attached module writes into its own local-first table; this page
- * reads them back through the repos/activity service and never contains
- * module-specific write logic.
+ * care plan, latest clinical note, and a unified visit/documentation
+ * activity feed, all on one page.
  */
 export function PatientProfilePage() {
   const clinic = useClinic();

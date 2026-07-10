@@ -25,13 +25,6 @@ const SYNC_TABLES: SyncedTable[] = [
   'invoice_payments',
   'settlements',
   'consultation_notes',
-  'patient_module_enrollments',
-  'screening_responses',
-  'return_to_sport_responses',
-  'scoliosis_screening_responses',
-  'face_scale_responses',
-  'facial_palsy_assessments',
-  'clinic_module_settings',
 ];
 // ai_generation_log is deliberately excluded — online-only, per the clinical
 // docs handoff. It never appears here, in CLIENT_WRITABLE_TABLES, or in the
@@ -45,11 +38,6 @@ const PAGE = 1000;
 const NUMERIC_FIELDS: Partial<Record<SyncedTable, string[]>> = {
   clinics: ['bmSplitPct', 'taxPct', 'fyStartMonth'],
   visits: ['bmSplitPct', 'taxPct', 'sharedPct'],
-  screening_responses: ['computedScore'],
-  return_to_sport_responses: ['computedScore'],
-  scoliosis_screening_responses: ['cobbAngle'],
-  face_scale_responses: ['totalScore'],
-  facial_palsy_assessments: ['sunnybrookScore'],
 };
 
 function normalize(table: SyncedTable, obj: Record<string, unknown>) {
@@ -118,7 +106,6 @@ export class SyncEngine {
     try {
       await this.push();
       await this.pull();
-      await this.pullMyMemberships(session.user.id);
       syncStatus.set({ lastSyncAt: Date.now(), error: null });
     } catch (e) {
       syncStatus.set({ error: e instanceof Error ? e.message : String(e) });
@@ -226,31 +213,6 @@ export class SyncEngine {
         if (data.length < PAGE) break;
       }
     }
-  }
-
-  /**
-   * clinic_members isn't a general SyncedTable (composite primary key, no
-   * client writes — membership is managed from Setup's existing admin
-   * flow). But the module launcher needs to know the signed-in user's own
-   * role per clinic to gate offline, so this pulls just that one self-row
-   * per clinic (RLS already permits `user_id = auth.uid()`) into a small
-   * read-only cache: db.my_memberships.
-   */
-  private async pullMyMemberships(userId: string) {
-    const supabase = this.supabase!;
-    const { data, error } = await supabase
-      .from('clinic_members')
-      .select('clinic_id, role, updated_at')
-      .eq('user_id', userId);
-    if (error) throw new Error(`pull clinic_members (self): ${error.message}`);
-    if (!data) return;
-    await db.my_memberships.bulkPut(
-      data.map((row) => ({
-        clinicId: row.clinic_id as string,
-        role: row.role as 'admin' | 'staff',
-        updatedAt: row.updated_at as string,
-      }))
-    );
   }
 }
 

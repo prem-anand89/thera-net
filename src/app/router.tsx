@@ -21,12 +21,6 @@ const PatientsPage = lazy(() =>
 const PatientProfilePage = lazy(() =>
   import('@/features/patients/PatientProfilePage').then((m) => ({ default: m.PatientProfilePage }))
 );
-const FaceScaleFormPage = lazy(() =>
-  import('@/features/patients/FaceScaleFormPage').then((m) => ({ default: m.FaceScaleFormPage }))
-);
-const FacialPalsyFormPage = lazy(() =>
-  import('@/features/patients/FacialPalsyFormPage').then((m) => ({ default: m.FacialPalsyFormPage }))
-);
 const ReportsPage = lazy(() =>
   import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage }))
 );
@@ -92,18 +86,6 @@ const patientProfileRoute = createRoute({
   component: PatientProfilePage,
 });
 
-const faceScaleNewRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/patients/$patientId/face-scale/new',
-  component: FaceScaleFormPage,
-});
-
-const facialPalsyNewRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/patients/$patientId/facial-palsy/new',
-  component: FacialPalsyFormPage,
-});
-
 const reportsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports',
@@ -162,8 +144,6 @@ const routeTree = rootRoute.addChildren([
   newVisitRoute,
   patientsRoute,
   patientProfileRoute,
-  faceScaleNewRoute,
-  facialPalsyNewRoute,
   reportsRoute,
   reportsPrintRoute,
   invoicesRoute,
