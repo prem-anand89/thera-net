@@ -8,6 +8,7 @@ import {
   REFERRING_SOURCE_LABELS,
   type Patient,
   type ReferringSource,
+  type Visit,
 } from '@/domain/types';
 import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, monthName, formatDateDMY } from '@/domain/fiscalYear';
 import { btnPrimary, btnSecondary, ErrorNote, Field, inputCls, Pill, PackageThread, td, th } from '@/components/ui';
@@ -68,7 +69,7 @@ export function PatientsPage() {
   );
 
   const visitStatsByPatient = useMemo(() => {
-    const map = new Map<string, { lastVisitOn: string; visitCount: number; latestVisit: any }>();
+    const map = new Map<string, { lastVisitOn: string; visitCount: number; latestVisit: Visit }>();
     for (const v of allVisits ?? []) {
       if (v.deleted) continue;
       const cur = map.get(v.patientId);
@@ -277,8 +278,8 @@ export function PatientsPage() {
                   {stats?.latestVisit ? therapistName.get(stats.latestVisit.therapistId) ?? '-' : '-'}
                 </td>
                 <td className={td}>
-                  {stats?.latestVisit?.treatment ? (
-                    <span className="text-xs">{stats.latestVisit.treatment}</span>
+                  {stats?.latestVisit?.treatmentNotes ? (
+                    <span className="text-xs">{stats.latestVisit.treatmentNotes}</span>
                   ) : (
                     '-'
                   )}
