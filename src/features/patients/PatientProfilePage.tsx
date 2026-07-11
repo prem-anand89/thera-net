@@ -3,19 +3,37 @@ import { Link, useParams } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, patientActivityService, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { Pill, btnPrimary } from '@/components/ui';
+import { Pill, PackageThread, btnPrimary } from '@/components/ui';
 import type { ActivityKind } from '@/services/patientActivityService';
+import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { REFERRING_SOURCE_LABELS } from '@/domain/types';
 
 const KIND_LABELS: Record<ActivityKind, string> = {
-  visit: 'Visit',
   consultation_note: 'Note',
 };
 
 const KIND_TONES: Record<ActivityKind, 'green' | 'amber' | 'slate'> = {
-  visit: 'green',
   consultation_note: 'slate',
+};
+
+type VisitPaymentState = 'paid' | 'outstanding' | 'uninvoiced' | 'zero_session';
+
+function visitPaymentState(
+  billPaise: number,
+  invoiceId: string | null,
+  statusByInvoiceId: Map<string, string>
+): VisitPaymentState {
+  if (billPaise === 0) return 'zero_session';
+  if (!invoiceId) return 'uninvoiced';
+  return statusByInvoiceId.get(invoiceId) === 'outstanding' ? 'outstanding' : 'paid';
+}
+
+const PAYMENT_PILL: Record<VisitPaymentState, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
+  paid: { tone: 'green', label: 'Paid' },
+  outstanding: { tone: 'amber', label: 'Outstanding' },
+  uninvoiced: { tone: 'amber', label: 'Not invoiced' },
+  zero_session: { tone: 'slate', label: '₹0 session' },
 };
 
 /**
@@ -38,6 +56,28 @@ export function PatientProfilePage() {
     [clinic.id, patientId]
   );
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
+
+  const visits = useLiveQuery(
+    () => repos.visits.list({ clinicId: clinic.id, patientId }),
+    [clinic.id, patientId]
+  );
+  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
+  const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
+
+  const therapistName = useMemo(
+    () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
+    [therapists]
+  );
+  const serviceName = useMemo(() => new Map((catalog ?? []).map((c) => [c.id, c.name])), [catalog]);
+  const statusByInvoiceId = useMemo(
+    () => new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status])),
+    [invoicePayments]
+  );
+  const visitRows = useMemo(
+    () => [...(visits ?? [])].filter((v) => !v.deleted).sort((a, b) => b.visitDate.localeCompare(a.visitDate)),
+    [visits]
+  );
 
   const latestNote = useMemo(() => sortByUpdated(notes)[0], [notes]);
   const patientPackages = useMemo(
@@ -117,6 +157,77 @@ export function PatientProfilePage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         {/* Main column */}
         <div className="space-y-4">
+          <SectionLabel>Visit history</SectionLabel>
+          <section className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+            {visitRows.length === 0 ? (
+              <p className="p-4 text-sm text-[var(--muted)]">No visits recorded yet.</p>
+            ) : (
+              <table className="min-w-full divide-y divide-[var(--border)] text-sm">
+                <thead className="bg-[var(--paper)]">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      Date
+                    </th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      Service
+                    </th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      Therapist
+                    </th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      Condition
+                    </th>
+                    <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      Bill
+                    </th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {visitRows.map((v) => {
+                    const state = visitPaymentState(v.actualBillPaise, v.invoiceId, statusByInvoiceId);
+                    const pill = PAYMENT_PILL[state];
+                    return (
+                      <tr key={v.id}>
+                        <td className="font-num px-3 py-2.5 text-[var(--ink)]">
+                          {formatDateDMY(v.visitDate)}
+                        </td>
+                        <td className="px-3 py-2.5 text-[var(--ink)]">
+                          {serviceName.get(v.serviceCatalogId) ?? '—'}
+                          {v.sessionIndex && v.packageTotal && (
+                            <span className="ml-1.5">
+                              <PackageThread sessionIndex={v.sessionIndex} packageTotal={v.packageTotal} />
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-[var(--ink)]">
+                          {therapistName.get(v.therapistId) ?? '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-[var(--ink)]">{v.condition ?? '—'}</td>
+                        <td className="font-num px-3 py-2.5 text-right text-[var(--ink)]">
+                          {formatINR(v.actualBillPaise)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          {v.invoiceId ? (
+                            <Link
+                              to="/invoices/$invoiceId/print"
+                              params={{ invoiceId: v.invoiceId }}
+                              className="hover:opacity-80"
+                            >
+                              <Pill tone={pill.tone}>{pill.label}</Pill>
+                            </Link>
+                          ) : (
+                            <Pill tone={pill.tone}>{pill.label}</Pill>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </section>
+
           <SectionLabel>Recent activity</SectionLabel>
           <section className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-4 py-2">
             <div className="mb-1 flex flex-wrap gap-1.5 pt-2 text-xs">

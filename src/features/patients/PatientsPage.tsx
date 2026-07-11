@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, patientService } from '@/services';
+import { repos, patientService, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import {
   referringSourceDetailLabel,
@@ -10,7 +10,7 @@ import {
   type ReferringSource,
 } from '@/domain/types';
 import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, monthName, formatDateDMY } from '@/domain/fiscalYear';
-import { btnPrimary, btnSecondary, ErrorNote, Field, inputCls, Pill, td, th } from '@/components/ui';
+import { btnPrimary, btnSecondary, ErrorNote, Field, inputCls, Pill, PackageThread, td, th } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
 
@@ -56,6 +56,37 @@ export function PatientsPage() {
   );
 
   const all = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
+
+  const allVisits = useLiveQuery(() => repos.visits.list({ clinicId: clinic.id }), [clinic.id]);
+  const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
+  const outstanding = useLiveQuery(() => dashboardService.outstandingInvoices(clinic.id), [clinic.id]);
+
+  const visitStatsByPatient = useMemo(() => {
+    const map = new Map<string, { lastVisitOn: string; visitCount: number }>();
+    for (const v of allVisits ?? []) {
+      if (v.deleted) continue;
+      const cur = map.get(v.patientId);
+      if (!cur) map.set(v.patientId, { lastVisitOn: v.visitDate, visitCount: 1 });
+      else {
+        cur.visitCount += 1;
+        if (v.visitDate > cur.lastVisitOn) cur.lastVisitOn = v.visitDate;
+      }
+    }
+    return map;
+  }, [allVisits]);
+
+  const openPackageByPatient = useMemo(() => {
+    const map = new Map<string, { sessionsLogged: number; packageTotal: number }>();
+    for (const p of openPackages ?? []) {
+      if (!map.has(p.patientId)) map.set(p.patientId, { sessionsLogged: p.sessionsLogged, packageTotal: p.packageTotal });
+    }
+    return map;
+  }, [openPackages]);
+
+  const outstandingMrnos = useMemo(
+    () => new Set((outstanding?.rows ?? []).map((r) => r.mrno)),
+    [outstanding]
+  );
 
   const q = query.trim().toLowerCase();
   const active = (all ?? []).filter(
@@ -172,12 +203,17 @@ export function PatientsPage() {
               <SortHeader label="Name" k="name" sort={sort} />
               <SortHeader label="Age / Sex" k="age" sort={sort} />
               <SortHeader label="Primary condition" k="condition" sort={sort} />
+              <th className={th}>Last visit</th>
               <th className={th}>Phone</th>
               <th className={th}></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
-            {rows.map((p) => (
+            {rows.map((p) => {
+              const stats = visitStatsByPatient.get(p.id);
+              const pkg = openPackageByPatient.get(p.id);
+              const isOutstanding = outstandingMrnos.has(p.mrno);
+              return (
               <tr key={p.id} className="hover:bg-[var(--paper)]">
                 <td className={td}>
                   {p.mrno}
@@ -200,6 +236,29 @@ export function PatientsPage() {
                   {p.age ?? '—'} / {p.sex ?? '—'}
                 </td>
                 <td className={td}>{p.primaryCondition ?? '—'}</td>
+                <td className={td}>
+                  {stats ? (
+                    <>
+                      <div className="font-num text-xs text-[var(--ink)]">
+                        {formatDateDMY(stats.lastVisitOn)}
+                        <span className="text-[var(--muted)]">
+                          {' '}
+                          · {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      {(pkg || isOutstanding) && (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          {pkg && (
+                            <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />
+                          )}
+                          {isOutstanding && <Pill tone="amber">Outstanding</Pill>}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-xs text-[var(--muted)]">No visits yet</span>
+                  )}
+                </td>
                 <td className={td}>{p.phone ?? '—'}</td>
                 <td className={`${td} whitespace-nowrap`}>
                   <Link
@@ -223,10 +282,11 @@ export function PatientsPage() {
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-sm text-[var(--muted)]">
+                <td colSpan={7} className="px-3 py-8 text-center text-sm text-[var(--muted)]">
                   {q
                     ? 'No patients match your search.'
                     : selectedPeriod

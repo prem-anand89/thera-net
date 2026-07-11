@@ -3,9 +3,13 @@ import type { Repos } from '@/repositories/types';
 
 /**
  * Unified, patient-centric activity feed — the core of the Patient Hub.
- * Visits and clinical notes each write their own local-first table; this
- * service normalizes them into one chronological stream so the patient
- * profile page doesn't need to know about each source individually.
+ * Clinical notes (and any future non-visit event kind) write their own
+ * local-first table; this service normalizes them into one chronological
+ * stream so the patient profile page doesn't need to know about each
+ * source individually. Visits are deliberately excluded here — they get
+ * their own richer Visit history table on the Patient Hub (date, service,
+ * package progress, bill, invoice status), which a one-line "Visit logged"
+ * summary can't carry.
  *
  * Reads local Dexie data only (via repos), matching the rest of the app's
  * offline-first design. Consent events are deliberately excluded — consents
@@ -13,7 +17,7 @@ import type { Repos } from '@/repositories/types';
  * data while offline; a future online-aware panel can query them separately.
  */
 
-export type ActivityKind = 'visit' | 'consultation_note';
+export type ActivityKind = 'consultation_note';
 
 export interface ActivityItem {
   kind: ActivityKind;
@@ -34,27 +38,14 @@ export function createPatientActivityService(repos: Repos) {
       patientId: UUID,
       daysBack?: number
     ): Promise<ActivityItem[]> {
-      const [visits, notes] = await Promise.all([
-        repos.visits.list({ clinicId, patientId }),
-        repos.consultationNotes.list(clinicId, patientId),
-      ]);
+      const notes = await repos.consultationNotes.list(clinicId, patientId);
 
-      const items: ActivityItem[] = [
-        ...visits
-          .filter((v) => !v.deleted)
-          .map((v) => ({
-            kind: 'visit' as const,
-            id: v.id,
-            at: v.visitDate,
-            summary: v.condition ? `Visit — ${v.condition}` : 'Visit logged',
-          })),
-        ...notes.map((n) => ({
-          kind: 'consultation_note' as const,
-          id: n.id,
-          at: n.updatedAt,
-          summary: `Consultation note (${n.status})`,
-        })),
-      ];
+      const items: ActivityItem[] = notes.map((n) => ({
+        kind: 'consultation_note' as const,
+        id: n.id,
+        at: n.updatedAt,
+        summary: `Consultation note (${n.status})`,
+      }));
 
       const filtered = daysBack == null ? items : items.filter((i) => withinDays(i.at, daysBack));
       return filtered.sort((a, b) => b.at.localeCompare(a.at));
