@@ -12,8 +12,10 @@ import {
   visibleVisitColumns,
   type PaymentMode,
   type Therapist,
+  type UUID,
   type Visit,
 } from '@/domain/types';
+import type { TodayPaymentState, TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
   btnSecondary,
@@ -24,6 +26,7 @@ import {
   tdNum,
   ErrorNote,
   Field,
+  Pill,
   PackageThread,
   SectionCard,
   StatTile,
@@ -35,15 +38,24 @@ import { toFriendlyMessage } from '@/lib/errors';
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PATIENT_SEARCH_LIMIT = 6;
 
-type DatePreset = 'week' | 'month' | 'lastMonth' | 'all';
-const DATE_PRESETS: { key: DatePreset; label: string }[] = [
+type LedgerTab = 'today' | 'recent' | 'all';
+
+type DatePreset = 'week' | 'month' | 'lastMonth';
+const RECENT_PRESETS: { key: DatePreset; label: string }[] = [
   { key: 'week', label: 'This week' },
   { key: 'month', label: 'This month' },
   { key: 'lastMonth', label: 'Last month' },
-  { key: 'all', label: 'All' },
 ];
 const toIsoDate = (d: Date) => d.toISOString().slice(0, 10);
 const TREATMENT_TRUNCATE = 40;
+
+/** What the invoice-issuance modal needs, independent of which tab opened it. */
+interface InvoicingTarget {
+  visitId: UUID;
+  patientLabel: string;
+  serviceLabel: string;
+  isPackage: boolean;
+}
 
 export function VisitsPage() {
   const clinic = useClinic();
@@ -59,12 +71,13 @@ export function VisitsPage() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string };
 
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [datePreset, setDatePreset] = useState<DatePreset>('all');
+  const [tab, setTab] = useState<LedgerTab>(search.patientId ? 'all' : 'today');
+  const [from, setFrom] = useState(() => toIsoDate(new Date(Date.now() - 6 * 86400000)));
+  const [to, setTo] = useState(() => toIsoDate(new Date()));
+  const [datePreset, setDatePreset] = useState<DatePreset>('week');
   const [therapistId, setTherapistId] = useState('');
   const [patientQuery, setPatientQuery] = useState('');
-  const [invoicing, setInvoicing] = useState<Visit | null>(null);
+  const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [splitting, setSplitting] = useState<Visit | null>(null);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
   const [paidNow, setPaidNow] = useState(true);
@@ -95,9 +108,16 @@ export function VisitsPage() {
     } else if (preset === 'lastMonth') {
       setFrom(toIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
       setTo(toIsoDate(new Date(now.getFullYear(), now.getMonth(), 0)));
-    } else if (preset === 'all') {
+    }
+  }
+
+  function selectTab(next: LedgerTab) {
+    setTab(next);
+    if (next === 'all') {
       setFrom('');
       setTo('');
+    } else if (next === 'recent' && !from && !to) {
+      applyDatePreset('week');
     }
   }
 
@@ -114,6 +134,7 @@ export function VisitsPage() {
       }),
     [clinic.id, from, to, therapistId, search.patientId]
   );
+  const today = useLiveQuery(() => dashboardService.todayWorklist(clinic.id), [clinic.id]);
 
   const therapistName = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
@@ -187,7 +208,7 @@ export function VisitsPage() {
     setBusy(true);
     setError(null);
     try {
-      const invoice = await invoiceService.issueForVisit(invoicing.id, paymentMode);
+      const invoice = await invoiceService.issueForVisit(invoicing.visitId, paymentMode);
       try {
         await paymentService.setStatus(invoice.id, clinic.id, paidNow ? 'paid' : 'outstanding');
       } catch (statusError) {
@@ -224,75 +245,146 @@ export function VisitsPage() {
         </Link>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
-        <div className="relative">
-          <Field label="Find patient">
-            <input
-              className={inputCls}
-              placeholder="Name or MRNO…"
-              value={patientQuery}
-              onChange={(e) => setPatientQuery(e.target.value)}
-              onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
-            />
-          </Field>
-          {patientMatches.length > 0 && (
-            <div className="absolute z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-              {patientMatches.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className="block w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--paper)]"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    setPatientQuery('');
-                    void navigate({ to: '/visits', search: { patientId: p.id } });
+      <div className="flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+        {(
+          [
+            { key: 'today', label: 'Today' },
+            { key: 'recent', label: 'Recent' },
+            { key: 'all', label: 'All' },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            className={`rounded-md px-3.5 py-1.5 text-sm font-medium ${
+              tab === t.key
+                ? 'bg-[var(--surface)] text-[var(--ink)] shadow-sm'
+                : 'text-[var(--muted)] hover:text-[var(--ink)]'
+            }`}
+            onClick={() => selectTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'today' && (
+        <>
+          <div className="flex flex-wrap gap-3">
+            <StatTile label="Today's visits" value={today?.visitCount ?? 0} />
+            <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
+            <StatTile label="Outstanding today" value={formatINR(today?.outstandingPaise ?? 0)} />
+            <StatTile label="Follow-ups due" value={followUps.length} />
+          </div>
+
+          {!today || today.visits.length === 0 ? (
+            <SectionCard title="Today">
+              <p className="text-sm text-[var(--muted)]">
+                No visits logged today — log one with “+ New visit”.
+              </p>
+            </SectionCard>
+          ) : (
+            <div className="space-y-2.5">
+              {today.visits.map((row) => (
+                <TodayVisitCard
+                  key={row.visitId}
+                  row={row}
+                  canRepeat={Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId))}
+                  onInvoice={() => {
+                    setError(null);
+                    setPaidNow(true);
+                    setInvoicing({
+                      visitId: row.visitId,
+                      patientLabel: row.patientName,
+                      serviceLabel: row.serviceName,
+                      isPackage: row.packageTotal != null,
+                    });
                   }}
-                >
-                  <span className="font-display">{p.name}</span>{' '}
-                  <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                </button>
+                  onDelete={() => {
+                    if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+                  }}
+                />
               ))}
             </div>
           )}
-        </div>
-        <Field label="Therapist">
-          <select className={inputCls} value={therapistId} onChange={(e) => setTherapistId(e.target.value)}>
-            <option value="">All</option>
-            {(therapists ?? []).map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <div className="ml-auto flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
-          {DATE_PRESETS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                datePreset === p.key
-                  ? 'bg-[var(--teal)] text-white'
-                  : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-              }`}
-              onClick={() => applyDatePreset(p.key)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
+        </>
+      )}
 
-      {filteredPatient && <PatientOverview patient={filteredPatient} />}
+      {tab !== 'today' && (
+        <>
+          <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+            <div className="relative">
+              <Field label="Find patient">
+                <input
+                  className={inputCls}
+                  placeholder="Name or MRNO…"
+                  value={patientQuery}
+                  onChange={(e) => setPatientQuery(e.target.value)}
+                  onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
+                />
+              </Field>
+              {patientMatches.length > 0 && (
+                <div className="absolute z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+                  {patientMatches.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="block w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--paper)]"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setPatientQuery('');
+                        void navigate({ to: '/visits', search: { patientId: p.id } });
+                      }}
+                    >
+                      <span className="font-display">{p.name}</span>{' '}
+                      <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Field label="Therapist">
+              <select className={inputCls} value={therapistId} onChange={(e) => setTherapistId(e.target.value)}>
+                <option value="">All</option>
+                {(therapists ?? []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {tab === 'recent' && (
+              <div className="ml-auto flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+                {RECENT_PRESETS.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                      datePreset === p.key
+                        ? 'bg-[var(--teal)] text-white'
+                        : 'text-[var(--muted)] hover:bg-[var(--surface)]'
+                    }`}
+                    onClick={() => applyDatePreset(p.key)}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-      <div className="flex flex-wrap gap-3">
-        <StatTile label="This week's visits" value={weeklySummary?.visitCount ?? 0} />
-        <StatTile label="Collected this week" value={formatINR(weeklySummary?.collectedPaise ?? 0)} />
-        <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
-        <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
-      </div>
+          {filteredPatient && <PatientOverview patient={filteredPatient} />}
 
-      {followUps.length > 0 && (
+          <div className="flex flex-wrap gap-3">
+            <StatTile label="This week's visits" value={weeklySummary?.visitCount ?? 0} />
+            <StatTile label="Collected this week" value={formatINR(weeklySummary?.collectedPaise ?? 0)} />
+            <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
+            <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
+          </div>
+        </>
+      )}
+
+      {tab !== 'today' && followUps.length > 0 && (
         <SectionCard title="Due for follow-up">
           <p className="mb-3 text-xs text-[var(--muted)]">
             Mid-package and not seen in over 14 days — your actionable retention list.
@@ -339,6 +431,7 @@ export function VisitsPage() {
         </SectionCard>
       )}
 
+      {tab !== 'today' && (
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
@@ -450,7 +543,12 @@ export function VisitsPage() {
                         onClick={() => {
                           setError(null);
                           setPaidNow(true);
-                          setInvoicing(v);
+                          setInvoicing({
+                            visitId: v.id,
+                            patientLabel: p?.name ?? '—',
+                            serviceLabel: serviceName.get(v.serviceCatalogId) ?? '—',
+                            isPackage: Boolean(v.packageGroupId),
+                          });
                         }}
                       >
                         Invoice…
@@ -524,15 +622,15 @@ export function VisitsPage() {
           )}
         </table>
       </div>
+      )}
 
       {invoicing && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">
           <div className="w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5">
             <h2 className="text-sm font-semibold text-[var(--ink)]">Issue invoice</h2>
             <p className="text-sm text-[var(--muted)]">
-              {patientById.get(invoicing.patientId)?.name} —{' '}
-              {serviceName.get(invoicing.serviceCatalogId)}
-              {invoicing.packageGroupId && ', all sessions of this package'}
+              {invoicing.patientLabel} — {invoicing.serviceLabel}
+              {invoicing.isPackage && ', all sessions of this package'}
             </p>
             <Field label="Payment mode">
               <select
@@ -580,6 +678,95 @@ export function VisitsPage() {
           onClose={() => setSplitting(null)}
         />
       )}
+    </div>
+  );
+}
+
+const PAYMENT_CHIP: Record<TodayPaymentState, { tone: 'green' | 'amber' | 'slate'; label: (bill: string) => string }> = {
+  paid: { tone: 'green', label: () => 'Paid' },
+  outstanding: { tone: 'amber', label: (bill) => `Outstanding ${bill}` },
+  uninvoiced: { tone: 'amber', label: (bill) => `Collect ${bill}` },
+  zero_session: { tone: 'slate', label: () => '₹0 session' },
+};
+
+function TodayVisitCard({
+  row,
+  canRepeat,
+  onInvoice,
+  onDelete,
+}: {
+  row: TodayVisitRow;
+  canRepeat: boolean;
+  onInvoice: () => void;
+  onDelete: () => void;
+}) {
+  const chip = PAYMENT_CHIP[row.paymentState];
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+      <div className="min-w-[10rem] flex-1">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <span className="font-display text-base font-semibold text-[var(--ink)]">{row.patientName}</span>
+          <span className="text-xs text-[var(--muted)]">{row.mrno}</span>
+          {row.condition && (
+            <span className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-xs font-medium text-[var(--teal)]">
+              {row.condition}
+            </span>
+          )}
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">
+          <span>{row.serviceName}</span>
+          <span>·</span>
+          <span>{row.therapistName}</span>
+          {row.sessionIndex && row.packageTotal && (
+            <span className="ml-0.5">
+              <PackageThread sessionIndex={row.sessionIndex} packageTotal={row.packageTotal} />
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="font-num text-sm font-semibold text-[var(--ink)]">{formatINR(row.billPaise)}</span>
+        {row.paymentState === 'uninvoiced' ? (
+          <button
+            type="button"
+            className="rounded-full bg-[var(--rust-light)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:opacity-80"
+            onClick={onInvoice}
+          >
+            {chip.label(formatINR(row.billPaise))}
+          </button>
+        ) : row.invoiceId ? (
+          <Link
+            to="/invoices/$invoiceId/print"
+            params={{ invoiceId: row.invoiceId }}
+            className="hover:opacity-80"
+          >
+            <Pill tone={chip.tone}>{chip.label(formatINR(row.billPaise))}</Pill>
+          </Link>
+        ) : (
+          <Pill tone={chip.tone}>{chip.label(formatINR(row.billPaise))}</Pill>
+        )}
+      </div>
+      <div className="flex items-center gap-3">
+        {canRepeat && (
+          <Link
+            to="/visits/new"
+            search={{ repeatVisitId: row.visitId }}
+            className="text-xs text-[var(--muted)] hover:text-[var(--teal)]"
+            title="Start the next session with this visit's therapist, service, and condition pre-filled"
+          >
+            Repeat
+          </Link>
+        )}
+        {!row.invoiceId && (
+          <button
+            type="button"
+            className="text-xs text-[var(--muted)] hover:text-[var(--rust)]"
+            onClick={onDelete}
+          >
+            Delete
+          </button>
+        )}
+      </div>
     </div>
   );
 }

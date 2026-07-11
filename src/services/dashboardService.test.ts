@@ -382,6 +382,77 @@ describe('dashboardService.weeklySummary', () => {
   });
 });
 
+describe('dashboardService.todayWorklist', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  const today = new Date(2026, 5, 10); // Wed 10 Jun 2026 (local)
+  const todayStr = '2026-06-10';
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+
+  it('only includes visits on the given date', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr }));
+    fake.visits.set('v2', baseVisit('v2', { visitDate: '2026-06-09' }));
+    const svc = createDashboardService(fake.repos);
+    const result = await svc.todayWorklist('clinic-1', today);
+    expect(result.visitCount).toBe(1);
+    expect(result.visits[0].visitId).toBe('v1');
+  });
+
+  it('marks a zero-bill continuation session as zero_session regardless of invoice', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr, actualBillPaise: 0 }));
+    const svc = createDashboardService(fake.repos);
+    const result = await svc.todayWorklist('clinic-1', today);
+    expect(result.visits[0].paymentState).toBe('zero_session');
+  });
+
+  it('marks a billable visit with no invoice as uninvoiced and counts it outstanding', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr, actualBillPaise: rs(1500) }));
+    const svc = createDashboardService(fake.repos);
+    const result = await svc.todayWorklist('clinic-1', today);
+    expect(result.visits[0].paymentState).toBe('uninvoiced');
+    expect(result.outstandingPaise).toBe(rs(1500));
+    expect(result.collectedPaise).toBe(0);
+  });
+
+  it('marks an invoiced visit with no payment row as paid (default-paid convention)', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr, actualBillPaise: rs(1500), invoiceId: 'inv-1' }));
+    const svc = createDashboardService(fake.repos);
+    const result = await svc.todayWorklist('clinic-1', today);
+    expect(result.visits[0].paymentState).toBe('paid');
+    expect(result.collectedPaise).toBe(rs(1500));
+  });
+
+  it('marks an invoiced visit with an explicit outstanding row as outstanding', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr, actualBillPaise: rs(2000), invoiceId: 'inv-1' }));
+    fake.invoicePayments.set('p1', {
+      id: 'p1',
+      clinicId: 'clinic-1',
+      invoiceId: 'inv-1',
+      status: 'outstanding',
+      paidAt: null,
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    const result = await svc.todayWorklist('clinic-1', today);
+    expect(result.visits[0].paymentState).toBe('outstanding');
+    expect(result.outstandingPaise).toBe(rs(2000));
+  });
+
+  it('attaches patient/therapist/service names and sorts by patient name', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr, condition: 'Shoulder pain' }));
+    const svc = createDashboardService(fake.repos);
+    const result = await svc.todayWorklist('clinic-1', today);
+    expect(result.visits[0]).toMatchObject({
+      patientName: 'Test Patient',
+      mrno: '1001',
+      condition: 'Shoulder pain',
+      therapistName: 'Prem',
+      serviceName: 'Manual Therapy',
+    });
+  });
+});
+
 describe('dashboardService.monthlyNewCounts', () => {
   let fake: ReturnType<typeof makeFakeRepos>;
   beforeEach(() => {

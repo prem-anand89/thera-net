@@ -62,6 +62,33 @@ export interface MonthlyNewCounts {
   newPatients: number;
 }
 
+export type TodayPaymentState = 'paid' | 'outstanding' | 'uninvoiced' | 'zero_session';
+
+export interface TodayVisitRow {
+  visitId: UUID;
+  patientId: UUID;
+  patientName: string;
+  mrno: string;
+  condition: string | null;
+  therapistName: string;
+  serviceName: string;
+  sessionIndex: number | null;
+  packageTotal: number | null;
+  packageGroupId: UUID | null;
+  billPaise: Paise;
+  invoiceId: UUID | null;
+  paymentState: TodayPaymentState;
+}
+
+export interface TodayWorklist {
+  visits: TodayVisitRow[];
+  visitCount: number;
+  /** Sum of visits whose invoice is paid (or invoiced with no explicit status row). */
+  collectedPaise: Paise;
+  /** Sum of visits still owed: issued-but-outstanding, or billable but not yet invoiced. */
+  outstandingPaise: Paise;
+}
+
 export interface SingleVisitPatientRow {
   patientId: UUID;
   patientName: string;
@@ -296,6 +323,62 @@ export function createDashboardService(repos: Repos) {
           .filter((v) => isPaid(v.invoiceId))
           .reduce((sum, v) => sum + v.postTaxPaise, 0),
       };
+    },
+
+    /**
+     * Today's visits (by visitDate, not entry time) with everything a
+     * physio or the front desk needs at a glance: condition, service,
+     * package progress, and a single payment-state chip so "who still
+     * needs to be collected from" doesn't require opening the ledger.
+     */
+    async todayWorklist(clinicId: UUID, asOf = new Date()): Promise<TodayWorklist> {
+      const todayStr = asOf.toISOString().slice(0, 10);
+      const [visits, patients, therapists, catalog, payments] = await Promise.all([
+        repos.visits.list({ clinicId, from: todayStr, to: todayStr }),
+        repos.patients.list(clinicId),
+        repos.therapists.list(clinicId, true),
+        repos.catalog.list(clinicId, true),
+        repos.invoicePayments.list(clinicId),
+      ]);
+      const patientById = new Map(patients.map((p) => [p.id, p]));
+      const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
+      const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
+      const statusByInvoiceId = new Map(payments.map((p) => [p.invoiceId, p.status]));
+
+      const rows: TodayVisitRow[] = visits
+        .map((v): TodayVisitRow => {
+          const patient = patientById.get(v.patientId);
+          let paymentState: TodayPaymentState;
+          if (v.actualBillPaise === 0) paymentState = 'zero_session';
+          else if (!v.invoiceId) paymentState = 'uninvoiced';
+          else paymentState = statusByInvoiceId.get(v.invoiceId) === 'outstanding' ? 'outstanding' : 'paid';
+
+          return {
+            visitId: v.id,
+            patientId: v.patientId,
+            patientName: patient?.name ?? 'Unknown',
+            mrno: patient?.mrno ?? '—',
+            condition: v.condition,
+            therapistName: therapistNameById.get(v.therapistId) ?? '—',
+            serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
+            sessionIndex: v.sessionIndex,
+            packageTotal: v.packageTotal,
+            packageGroupId: v.packageGroupId,
+            billPaise: v.actualBillPaise,
+            invoiceId: v.invoiceId,
+            paymentState,
+          };
+        })
+        .sort((a, b) => a.patientName.localeCompare(b.patientName));
+
+      const collectedPaise = rows
+        .filter((r) => r.paymentState === 'paid')
+        .reduce((sum, r) => sum + r.billPaise, 0);
+      const outstandingPaise = rows
+        .filter((r) => r.paymentState === 'outstanding' || r.paymentState === 'uninvoiced')
+        .reduce((sum, r) => sum + r.billPaise, 0);
+
+      return { visits: rows, visitCount: rows.length, collectedPaise, outstandingPaise };
     },
 
     /**
