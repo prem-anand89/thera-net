@@ -63,11 +63,10 @@ export function VisitsPage() {
   const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
   const cols = visibleVisitColumns(clinic);
   // Fixed columns: Date, Patient, Therapist, Service (before Bill) + Bill,
-  // Invoice, actions. Optional: Condition, Treatment, Adjustment, and the two
+  // Invoice, actions. Optional: Condition, Treatment, and the two
   // hospital-split columns. The Totals label spans everything before Bill.
   const labelSpan = 4 + (cols.condition ? 1 : 0) + (cols.treatment ? 1 : 0);
-  const columnCount =
-    labelSpan + 1 + (cols.adjustment ? 1 : 0) + (hospitalSplit ? 2 : 0) + 2;
+  const columnCount = labelSpan + 1 + (hospitalSplit ? 2 : 0) + 2;
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string };
 
@@ -443,7 +442,6 @@ export function VisitsPage() {
               {cols.condition && <th className={th}>Condition</th>}
               {cols.treatment && <th className={th}>Treatment</th>}
               <SortHeader label="Bill" k="bill" sort={sort} numeric firstDir="desc" />
-              {cols.adjustment && <th className={thNum}>Adj.</th>}
               {hospitalSplit && (
                 <SortHeader label={`${labels.own} Share`} k="bmShare" sort={sort} numeric firstDir="desc" />
               )}
@@ -521,11 +519,6 @@ export function VisitsPage() {
                     </td>
                   )}
                   <td className={tdNum}>{formatINR(v.actualBillPaise)}</td>
-                  {cols.adjustment && (
-                    <td className={tdNum} title={v.adjustmentReason ?? undefined}>
-                      {v.adjustmentPaise !== 0 ? formatINR(v.adjustmentPaise) : '—'}
-                    </td>
-                  )}
                   {hospitalSplit && <td className={tdNum}>{formatINR(v.bmSharePaise)}</td>}
                   {hospitalSplit && <td className={tdNum}>{formatINR(v.postTaxPaise)}</td>}
                   <td className={td}>
@@ -612,7 +605,6 @@ export function VisitsPage() {
                   Totals ({visits.length} visit{visits.length === 1 ? '' : 's'})
                 </td>
                 <td className={tdNum}>{formatINR(totals.bill)}</td>
-                {cols.adjustment && <td className={tdNum}></td>}
                 {hospitalSplit && <td className={tdNum}>{formatINR(totals.bmShare)}</td>}
                 {hospitalSplit && <td className={tdNum}>{formatINR(totals.postTax)}</td>}
                 <td className={td}></td>

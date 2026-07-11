@@ -23,9 +23,18 @@ export interface Clinic {
   /** Abbreviation for the partner hospital's share (default "HV"). */
   partnerShareLabel?: string | null;
   /**
-   * 'hospital_split' = the clinic-share/partner-share/TDS/Post-Tax model;
-   * 'simple' = a plain clinic that just bills a visit (no share/tax columns).
-   * Optional so older cached rows default to hospital_split (current behavior).
+   * 'individual' = single therapist clinic;
+   * 'multiple' = clinic with multiple therapists.
+   * Optional so older cached rows default to 'multiple' (original behavior).
+   */
+  clinicType?: 'individual' | 'multiple';
+  /** Whether the clinic has an external partner (hospital, organization, etc.). Defaults to false. */
+  hasPartner?: boolean;
+  /**
+   * Legacy field: maps to clinicType and hasPartner for backward compat.
+   * 'hospital_split' = clinicType='multiple' + hasPartner=true (with revenue split).
+   * 'simple' = clinicType='individual' + hasPartner=false.
+   * Kept for older cached rows; new saves use clinicType + hasPartner.
    */
   billingMode?: 'simple' | 'hospital_split';
   /** Whether the internal therapist revenue-split feature is available. */
@@ -42,18 +51,16 @@ export interface Clinic {
 }
 
 /** Optional (toggleable) Visits-table columns — the essentials aren't listed. */
-export type VisitColumnKey = 'condition' | 'treatment' | 'adjustment';
+export type VisitColumnKey = 'condition' | 'treatment';
 
 export const VISIT_COLUMN_LABELS: Record<VisitColumnKey, string> = {
   condition: 'Condition',
   treatment: 'Treatment',
-  adjustment: 'Adjustment (Adj.)',
 };
 
 /**
- * Which optional Visits columns a clinic shows. Adjustment is off by default
- * (most clinics don't need the catalog-vs-actual variance column); condition
- * and treatment are on. Stored prefs override these per clinic.
+ * Which optional Visits columns a clinic shows. Condition and treatment are on.
+ * Stored prefs override these per clinic.
  */
 export function visibleVisitColumns(
   clinic: Pick<Clinic, 'visitColumnPrefs'>
@@ -62,7 +69,6 @@ export function visibleVisitColumns(
   return {
     condition: prefs.condition ?? true,
     treatment: prefs.treatment ?? true,
-    adjustment: prefs.adjustment ?? false,
   };
 }
 
@@ -78,13 +84,21 @@ export function clinicShareLabels(
 
 /**
  * Which billing surfaces a clinic shows. Defaults preserve the original
- * hospital-split behavior when the fields are unset (older cached rows or the
- * founding clinic), so nothing changes for Beyond Mechanics.
+ * hospital-split behavior when the fields are unset (older cached rows), so
+ * nothing changes for existing clinics using billingMode.
  */
 export function clinicBillingConfig(
-  clinic: Pick<Clinic, 'billingMode' | 'enableTherapistSplit'>
+  clinic: Pick<Clinic, 'clinicType' | 'hasPartner' | 'billingMode' | 'enableTherapistSplit'>
 ): { hospitalSplit: boolean; therapistSplit: boolean } {
-  const hospitalSplit = (clinic.billingMode ?? 'hospital_split') === 'hospital_split';
+  // Prefer new clinicType/hasPartner model; fall back to billingMode for backward compat
+  let hospitalSplit: boolean;
+  if (clinic.clinicType !== undefined) {
+    // New model: hospitalSplit = multiple therapists AND has a partner
+    hospitalSplit = clinic.clinicType === 'multiple' && (clinic.hasPartner ?? false);
+  } else {
+    // Legacy: billingMode
+    hospitalSplit = (clinic.billingMode ?? 'hospital_split') === 'hospital_split';
+  }
   return {
     hospitalSplit,
     therapistSplit: clinic.enableTherapistSplit ?? true,

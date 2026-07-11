@@ -60,16 +60,26 @@ export function PatientsPage() {
   const allVisits = useLiveQuery(() => repos.visits.list({ clinicId: clinic.id }), [clinic.id]);
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
   const outstanding = useLiveQuery(() => dashboardService.outstandingInvoices(clinic.id), [clinic.id]);
+  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+
+  const therapistName = useMemo(
+    () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
+    [therapists]
+  );
 
   const visitStatsByPatient = useMemo(() => {
-    const map = new Map<string, { lastVisitOn: string; visitCount: number }>();
+    const map = new Map<string, { lastVisitOn: string; visitCount: number; latestVisit: any }>();
     for (const v of allVisits ?? []) {
       if (v.deleted) continue;
       const cur = map.get(v.patientId);
-      if (!cur) map.set(v.patientId, { lastVisitOn: v.visitDate, visitCount: 1 });
-      else {
+      if (!cur) {
+        map.set(v.patientId, { lastVisitOn: v.visitDate, visitCount: 1, latestVisit: v });
+      } else {
         cur.visitCount += 1;
-        if (v.visitDate > cur.lastVisitOn) cur.lastVisitOn = v.visitDate;
+        if (v.visitDate > cur.lastVisitOn) {
+          cur.lastVisitOn = v.visitDate;
+          cur.latestVisit = v;
+        }
       }
     }
     return map;
@@ -201,9 +211,11 @@ export function PatientsPage() {
             <tr>
               <SortHeader label="MRNO" k="mrno" sort={sort} />
               <SortHeader label="Name" k="name" sort={sort} />
-              <SortHeader label="Age / Sex" k="age" sort={sort} />
               <SortHeader label="Primary condition" k="condition" sort={sort} />
               <th className={th}>Last visit</th>
+              <th className={th}>Therapist</th>
+              <th className={th}>Treatment</th>
+              <th className={th}>Bill</th>
               <th className={th}>Phone</th>
               <th className={th}></th>
             </tr>
@@ -231,11 +243,13 @@ export function PatientsPage() {
                   >
                     {p.name}
                   </Link>
+                  {(p.age || p.sex) && (
+                    <div className="text-xs text-[var(--muted)]">
+                      {p.age ?? '-'} / {p.sex ?? '-'}
+                    </div>
+                  )}
                 </td>
-                <td className={td}>
-                  {p.age ?? '—'} / {p.sex ?? '—'}
-                </td>
-                <td className={td}>{p.primaryCondition ?? '—'}</td>
+                <td className={td}>{p.primaryCondition ?? '-'}</td>
                 <td className={td}>
                   {stats ? (
                     <>
@@ -259,7 +273,24 @@ export function PatientsPage() {
                     <span className="text-xs text-[var(--muted)]">No visits yet</span>
                   )}
                 </td>
-                <td className={td}>{p.phone ?? '—'}</td>
+                <td className={td}>
+                  {stats?.latestVisit ? therapistName.get(stats.latestVisit.therapistId) ?? '-' : '-'}
+                </td>
+                <td className={td}>
+                  {stats?.latestVisit?.treatment ? (
+                    <span className="text-xs">{stats.latestVisit.treatment}</span>
+                  ) : (
+                    '-'
+                  )}
+                </td>
+                <td className={`${td} font-num text-right`}>
+                  {stats?.latestVisit ? (
+                    <span className="text-sm">INR {Math.round(stats.latestVisit.actualBillPaise / 100)}</span>
+                  ) : (
+                    '-'
+                  )}
+                </td>
+                <td className={td}>{p.phone ?? '-'}</td>
                 <td className={`${td} whitespace-nowrap`}>
                   <Link
                     to="/visits"
@@ -286,7 +317,7 @@ export function PatientsPage() {
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-sm text-[var(--muted)]">
+                <td colSpan={9} className="px-3 py-8 text-center text-sm text-[var(--muted)]">
                   {q
                     ? 'No patients match your search.'
                     : selectedPeriod

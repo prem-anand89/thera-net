@@ -7,7 +7,6 @@ import { getSupabase } from '@/lib/supabase';
 import { db } from '@/lib/db';
 import { formatINR } from '@/domain/money';
 import {
-  clinicBillingConfig,
   clinicShareLabels,
   effectivePricePerSession,
   visibleVisitColumns,
@@ -146,7 +145,6 @@ function ClinicProfile() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const labels = clinicShareLabels(form);
-  const { hospitalSplit } = clinicBillingConfig(form);
 
   useEffect(() => setForm(clinic), [clinic]);
 
@@ -198,18 +196,35 @@ function ClinicProfile() {
         <Field
           label={
             <>
-              Clinic type
-              <InfoTip text="Simple: bill a visit and track paid/outstanding. Hospital-partnered: split each bill between the clinic and a partner hospital, with TDS and Post-Tax columns." />
+              Therapist setup
+              <InfoTip text="Individual: single therapist practice. Multiple: clinic with multiple therapists. This affects billing and reporting." />
             </>
           }
         >
           <select
             className={inputCls}
-            value={form.billingMode ?? 'hospital_split'}
-            onChange={(e) => set({ billingMode: e.target.value as Clinic['billingMode'] })}
+            value={form.clinicType ?? 'multiple'}
+            onChange={(e) => set({ clinicType: e.target.value as Clinic['clinicType'] })}
           >
-            <option value="simple">Simple (bill + paid/outstanding)</option>
-            <option value="hospital_split">Hospital-partnered (revenue split + TDS)</option>
+            <option value="individual">Individual Therapist</option>
+            <option value="multiple">Multiple Therapists</option>
+          </select>
+        </Field>
+        <Field
+          label={
+            <>
+              Partner with external organization
+              <InfoTip text="Enable if your clinic partners with a hospital or another organization for revenue sharing, tax deduction, or other arrangements." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.hasPartner ? 'yes' : 'no'}
+            onChange={(e) => set({ hasPartner: e.target.value === 'yes' })}
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
           </select>
         </Field>
         <Field
@@ -238,16 +253,16 @@ function ClinicProfile() {
         <Field label="Email">
           <input className={inputCls} value={form.email ?? ''} onChange={(e) => set({ email: e.target.value || null })} />
         </Field>
-        {hospitalSplit && (
+        {form.hasPartner && (
           <>
-            <Field label="Partner hospital (optional, prints on invoices if set)">
+            <Field label="Partner name (prints on invoices if set)">
               <input
                 className={inputCls}
                 value={form.partnerHospitalName ?? ''}
                 onChange={(e) => set({ partnerHospitalName: e.target.value || null })}
               />
             </Field>
-            <Field label="Own share label (report column, e.g. BM)">
+            <Field label="Your share label (report column, e.g. BM)">
               <input
                 className={inputCls}
                 placeholder="BM"
@@ -263,7 +278,7 @@ function ClinicProfile() {
                 onChange={(e) => set({ partnerShareLabel: e.target.value || null })}
               />
             </Field>
-            <Field label={`Clinic share % (${labels.own} split)`}>
+            <Field label={`Your share % (${labels.own} split)`}>
               <input
                 type="number"
                 className={inputCls}
@@ -271,39 +286,42 @@ function ClinicProfile() {
                 onChange={(e) => set({ bmSplitPct: Number(e.target.value) })}
               />
             </Field>
-            <Field
-              label={
-                <>
-                  Tax / TDS %
-                  <InfoTip text="Tax Deducted at Source — the % withheld before payout to the partner hospital or to the clinic, depending on TDS basis below." />
-                </>
-              }
-            >
-              <input
-                type="number"
-                className={inputCls}
-                value={form.taxPct}
-                onChange={(e) => set({ taxPct: Number(e.target.value) })}
-              />
-            </Field>
-            <Field
-              label={
-                <>
-                  TDS basis
-                  <InfoTip text="Whether the tax % is calculated on the full bill (matches most hospital sheets) or only on the clinic's own share. Both produce the same final clinic payout." />
-                </>
-              }
-            >
-              <select
-                className={inputCls}
-                value={form.tdsBasis}
-                onChange={(e) => set({ tdsBasis: e.target.value as TdsBasis })}
-              >
-                <option value="gross_bill">{form.taxPct}% of gross bill (matches {labels.partner} sheet)</option>
-                <option value="bm_share">On clinic share only</option>
-              </select>
-            </Field>
           </>
+        )}
+        <Field
+          label={
+            <>
+              Tax / TDS % (optional)
+              <InfoTip text="Tax Deducted at Source — the % withheld from payouts. Leave blank if not applicable. When enabled with a partner, TDS is calculated based on the TDS basis below." />
+            </>
+          }
+        >
+          <input
+            type="number"
+            className={inputCls}
+            placeholder="0"
+            value={form.taxPct ?? ''}
+            onChange={(e) => set({ taxPct: e.target.value === '' ? 0 : Number(e.target.value) })}
+          />
+        </Field>
+        {form.hasPartner && form.taxPct > 0 && (
+          <Field
+            label={
+              <>
+                TDS basis
+                <InfoTip text="Whether the tax % is calculated on the full bill (matches most hospital sheets) or only on the clinic's own share. Both produce the same final clinic payout." />
+              </>
+            }
+          >
+            <select
+              className={inputCls}
+              value={form.tdsBasis}
+              onChange={(e) => set({ tdsBasis: e.target.value as TdsBasis })}
+            >
+              <option value="gross_bill">{form.taxPct}% of gross bill (matches {labels.partner} sheet)</option>
+              <option value="bm_share">On clinic share only</option>
+            </select>
+          </Field>
         )}
         <Field label="Fiscal year starts in month">
           <input
@@ -323,8 +341,8 @@ function ClinicProfile() {
             onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0], 'logoPath')}
           />
         </Field>
-        {hospitalSplit && (
-          <Field label="Partner hospital logo">
+        {form.hasPartner && (
+          <Field label="Partner logo">
             <input
               type="file"
               accept="image/*"
@@ -355,9 +373,9 @@ function ClinicProfile() {
             </label>
           ))}
         </div>
-        {hospitalSplit && (
+        {form.hasPartner && (
           <p className="mt-2 text-xs text-[var(--muted)]">
-            The {labels.own} Share and Post-Tax columns follow the clinic type above.
+            The {labels.own} Share and Post-Tax columns appear in ledger and reports when a partner is configured.
           </p>
         )}
       </div>
