@@ -10,6 +10,7 @@ import {
   clinicBillingConfig,
   clinicShareLabels,
   visibleVisitColumns,
+  type Invoice,
   type PaymentMode,
   type Therapist,
   type UUID,
@@ -38,7 +39,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PATIENT_SEARCH_LIMIT = 6;
 
-type LedgerTab = 'today' | 'recent' | 'all';
+type LedgerTab = 'today' | 'recent' | 'all' | 'invoices';
 
 type DatePreset = 'week' | 'month' | 'lastMonth';
 const RECENT_PRESETS: { key: DatePreset; label: string }[] = [
@@ -134,6 +135,8 @@ export function VisitsPage() {
     [clinic.id, from, to, therapistId, search.patientId]
   );
   const today = useLiveQuery(() => dashboardService.todayWorklist(clinic.id), [clinic.id]);
+  const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
+  const payments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
 
   const therapistName = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
@@ -189,6 +192,23 @@ export function VisitsPage() {
     sort
   );
 
+  const invoiceSort = useSort<'no' | 'date' | 'patient' | 'total' | 'status'>('date', 'desc');
+  const statusByInvoiceId = useMemo(
+    () => new Map((payments ?? []).map((p) => [p.invoiceId, p.status])),
+    [payments]
+  );
+  const sortedInvoices = applySort(
+    invoices ?? [],
+    {
+      no: byNumber<Invoice>((inv) => inv.seq),
+      date: byString<Invoice>((inv) => inv.issuedAt),
+      patient: byString<Invoice>((inv) => inv.patientSnapshot.name),
+      total: byNumber<Invoice>((inv) => inv.totalPaise),
+      status: byString<Invoice>((inv) => statusByInvoiceId.get(inv.id) ?? 'paid'),
+    },
+    invoiceSort
+  );
+
   const totals = useMemo(
     () =>
       (visits ?? []).reduce(
@@ -225,6 +245,10 @@ export function VisitsPage() {
     }
   }
 
+  async function toggleInvoiceStatus(invoiceId: string, current: 'paid' | 'outstanding') {
+    await paymentService.setStatus(invoiceId, clinic.id, current === 'paid' ? 'outstanding' : 'paid');
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -250,6 +274,7 @@ export function VisitsPage() {
             { key: 'today', label: 'Today' },
             { key: 'recent', label: 'Recent' },
             { key: 'all', label: 'All' },
+            { key: 'invoices', label: 'Invoices' },
           ] as const
         ).map((t) => (
           <button
@@ -613,6 +638,73 @@ export function VisitsPage() {
             </tfoot>
           )}
         </table>
+      </div>
+      )}
+
+      {tab === 'invoices' && (
+      <div className="space-y-4">
+        <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+          <table className="min-w-full divide-y divide-[var(--border)]">
+            <thead className="bg-[var(--paper)]">
+              <tr>
+                <SortHeader label="Invoice No" k="no" sort={invoiceSort} firstDir="desc" />
+                <SortHeader label="Date" k="date" sort={invoiceSort} firstDir="desc" />
+                <SortHeader label="Patient" k="patient" sort={invoiceSort} />
+                <th className={th}>MRNO</th>
+                <SortHeader label="Total" k="total" sort={invoiceSort} numeric firstDir="desc" />
+                <th className={th}>Mode</th>
+                <SortHeader label="Status" k="status" sort={invoiceSort} />
+                <th className={th}></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border)]">
+              {sortedInvoices.map((inv) => {
+                const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+                return (
+                  <tr key={inv.id} className="hover:bg-[var(--paper)]">
+                    <td className={`${td} font-medium`}>{inv.invoiceNo}</td>
+                    <td className={td}>{formatDateDMY(inv.issuedAt)}</td>
+                    <td className={`${td} font-display`}>{inv.patientSnapshot.name}</td>
+                    <td className={td}>{inv.patientSnapshot.mrno}</td>
+                    <td className={tdNum}>{formatINR(inv.totalPaise)}</td>
+                    <td className={td}>{inv.paymentMode}</td>
+                    <td className={td}>
+                      <Pill tone={status === 'paid' ? 'green' : 'amber'}>
+                        {status === 'paid' ? 'Paid' : 'Outstanding'}
+                      </Pill>
+                      <button
+                        className="ml-2 text-xs text-[var(--teal)] hover:underline"
+                        onClick={() => void toggleInvoiceStatus(inv.id, status)}
+                      >
+                        Mark {status === 'paid' ? 'outstanding' : 'paid'}
+                      </button>
+                    </td>
+                    <td className={td}>
+                      <Link
+                        to="/invoices/$invoiceId/print"
+                        params={{ invoiceId: inv.id }}
+                        className="font-medium text-[var(--teal)] hover:underline"
+                      >
+                        Print
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+              {invoices?.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-3 py-8 text-center text-sm text-[var(--muted)]">
+                    No invoices issued yet — issue one from the Visits table.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-[var(--muted)]">
+          Issued invoices are immutable; numbering is sequential per fiscal year and gap-free.
+          Payment status is tracked separately and doesn't affect the invoice itself.
+        </p>
       </div>
       )}
 
