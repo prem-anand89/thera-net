@@ -159,7 +159,7 @@ export function DashboardPage() {
           </table>
         </div>
         <div className="mt-3 text-right">
-          <Link to="/visits" className="text-sm font-medium text-[var(--teal)] hover:underline">
+          <Link to="/archive" className="text-sm font-medium text-[var(--teal)] hover:underline">
             View all visits →
           </Link>
         </div>
@@ -193,7 +193,7 @@ export function DashboardPage() {
                   <td className={tdNum}>{p.daysSince}</td>
                   <td className={td}>
                     <Link
-                      to="/visits"
+                      to="/archive"
                       search={{ patientId: p.patientId }}
                       className="font-medium text-[var(--teal)] hover:underline"
                     >
@@ -239,7 +239,7 @@ export function DashboardPage() {
                   <td className={td}>{formatDateDMY(p.lastVisitOn)}</td>
                   <td className={td}>
                     <Link
-                      to="/visits"
+                      to="/archive"
                       search={{ patientId: p.patientId }}
                       className="font-medium text-[var(--teal)] hover:underline"
                     >

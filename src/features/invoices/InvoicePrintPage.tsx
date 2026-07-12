@@ -32,7 +32,7 @@ export function InvoicePrintPage() {
       <style>{`@page { size: ${paper}; margin: ${paper === 'A5' ? '10mm' : '16mm'}; }`}</style>
 
       <div className="no-print mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
-        <Link to="/invoices" className={btnSecondary}>
+        <Link to="/archive" className={btnSecondary}>
           ← Back
         </Link>
         <div className="ml-auto flex items-center gap-2">

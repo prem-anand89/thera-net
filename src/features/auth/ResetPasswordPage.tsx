@@ -78,7 +78,7 @@ export function ResetPasswordPage() {
             <p className="text-sm text-[var(--ink)]">
               Password updated. You're signed in — continue to the app.
             </p>
-            <button className={`${btnPrimary} w-full`} onClick={() => void navigate({ to: '/visits' })}>
+            <button className={`${btnPrimary} w-full`} onClick={() => void navigate({ to: '/workspace' })}>
               Continue
             </button>
           </>

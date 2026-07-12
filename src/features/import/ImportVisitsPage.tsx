@@ -163,11 +163,11 @@ export function ImportVisitsPage() {
             <li>{stage.summary.rowsSkipped} rows skipped</li>
           </ul>
           <div className="mt-4 flex gap-2">
-            <Link to="/visits" className={btnPrimary}>
-              Go to Visits
+            <Link to="/archive" className={btnPrimary}>
+              Go to Archive
             </Link>
-            <Link to="/patients" className={btnSecondary}>
-              Go to Patients
+            <Link to="/workspace" className={btnSecondary}>
+              Go to Workspace
             </Link>
           </div>
         </SectionCard>

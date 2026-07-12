@@ -256,7 +256,7 @@ export function VisitsPage() {
           {filteredPatient && (
             <span className="rounded-full bg-[var(--teal-light)] px-3 py-1 text-xs text-[var(--teal)]">
               {filteredPatient.name} ({filteredPatient.mrno})
-              <Link to="/visits" className="ml-2 font-medium">
+              <Link to="/archive" className="ml-2 font-medium">
                 ✕
               </Link>
             </span>
@@ -312,7 +312,7 @@ export function VisitsPage() {
                       onMouseDown={(e) => {
                         e.preventDefault();
                         setPatientQuery('');
-                        void navigate({ to: '/visits', search: { patientId: p.id } });
+                        void navigate({ to: '/archive', search: { patientId: p.id } });
                       }}
                     >
                       <span className="font-display">{p.name}</span>{' '}
@@ -393,7 +393,7 @@ export function VisitsPage() {
                     <td className={tdNum}>{p.daysSinceLastVisit}</td>
                     <td className={td}>
                       <Link
-                        to="/visits"
+                        to="/archive"
                         search={{ patientId: p.patientId }}
                         className="font-medium text-[var(--teal)] hover:underline"
                       >

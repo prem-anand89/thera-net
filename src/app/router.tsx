@@ -6,20 +6,17 @@ import {
   redirect,
 } from '@tanstack/react-router';
 import { Shell } from './Shell';
-import { VisitsPage } from '@/features/visits/VisitsPage';
+import { WorkspacePage } from '@/features/workspace/WorkspacePage';
 
 // Code-split every route except the default post-login landing page
-// (Visits) — that one stays eager so the most common path pays no extra
-// chunk fetch. Everything else (reports, dashboard charts, print pages,
-// the Excel import UI, setup) only loads when actually visited.
+// (Workspace) — that one stays eager so the most common path pays no extra
+// chunk fetch. Everything else (archive, insights, print pages, the Excel
+// import UI, setup) only loads when actually visited.
 const NewVisitPage = lazy(() =>
   import('@/features/visits/NewVisitPage').then((m) => ({ default: m.NewVisitPage }))
 );
-const PatientsPage = lazy(() =>
-  import('@/features/patients/PatientsPage').then((m) => ({ default: m.PatientsPage }))
-);
-const WorkspacePage = lazy(() =>
-  import('@/features/workspace/WorkspacePage').then((m) => ({ default: m.WorkspacePage }))
+const ArchivePage = lazy(() =>
+  import('@/features/visits/VisitsPage').then((m) => ({ default: m.VisitsPage }))
 );
 const PatientProfilePage = lazy(() =>
   import('@/features/patients/PatientProfilePage').then((m) => ({ default: m.PatientProfilePage }))
@@ -31,9 +28,6 @@ const MonthlyLedgerPrintPage = lazy(() =>
   import('@/features/reports/MonthlyLedgerPrintPage').then((m) => ({
     default: m.MonthlyLedgerPrintPage,
   }))
-);
-const InvoicesPage = lazy(() =>
-  import('@/features/invoices/InvoicesPage').then((m) => ({ default: m.InvoicesPage }))
 );
 const InvoicePrintPage = lazy(() =>
   import('@/features/invoices/InvoicePrintPage').then((m) => ({ default: m.InvoicePrintPage }))
@@ -57,16 +51,22 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   beforeLoad: () => {
-    throw redirect({ to: '/visits' });
+    throw redirect({ to: '/workspace' });
   },
 });
 
-const visitsRoute = createRoute({
+const workspaceRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/visits',
+  path: '/workspace',
+  component: WorkspacePage,
+});
+
+const archiveRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/archive',
   validateSearch: (search: Record<string, unknown>): { patientId?: string } =>
     typeof search.patientId === 'string' ? { patientId: search.patientId } : {},
-  component: VisitsPage,
+  component: ArchivePage,
 });
 
 const newVisitRoute = createRoute({
@@ -77,18 +77,6 @@ const newVisitRoute = createRoute({
     ...(typeof search.newPatient === 'string' ? { newPatient: search.newPatient } : {}),
   }),
   component: NewVisitPage,
-});
-
-const patientsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/patients',
-  component: PatientsPage,
-});
-
-const workspaceRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/workspace',
-  component: WorkspacePage,
 });
 
 const patientProfileRoute = createRoute({
@@ -111,12 +99,6 @@ const reportsPrintRoute = createRoute({
     month: Number(search.month) || new Date().getMonth() + 1,
   }),
   component: MonthlyLedgerPrintPage,
-});
-
-const invoicesRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/invoices',
-  component: InvoicesPage,
 });
 
 const invoicePrintRoute = createRoute({
@@ -151,14 +133,12 @@ const resetPasswordRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  visitsRoute,
-  newVisitRoute,
-  patientsRoute,
   workspaceRoute,
+  archiveRoute,
+  newVisitRoute,
   patientProfileRoute,
   reportsRoute,
   reportsPrintRoute,
-  invoicesRoute,
   invoicePrintRoute,
   setupRoute,
   importVisitsRoute,

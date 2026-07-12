@@ -247,7 +247,7 @@ export function NewVisitPage() {
         await directPaymentService.logPayment(clinic.id, visit.id, billPaise, paymentMethod, visitDate, null);
       }
 
-      void navigate({ to: '/visits' });
+      void navigate({ to: '/workspace' });
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
@@ -591,7 +591,7 @@ export function NewVisitPage() {
         <button className={btnPrimary} disabled={busy} onClick={() => void save()}>
           {busy ? 'Saving…' : 'Save visit'}
         </button>
-        <button className={btnSecondary} onClick={() => void navigate({ to: '/visits' })}>
+        <button className={btnSecondary} onClick={() => void navigate({ to: '/workspace' })}>
           Cancel
         </button>
       </div>

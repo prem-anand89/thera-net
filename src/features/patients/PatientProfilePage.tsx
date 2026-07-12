@@ -113,7 +113,7 @@ export function PatientProfilePage() {
 
   return (
     <div className="space-y-4">
-      <Link to="/patients" className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]">
+      <Link to="/workspace" className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]">
         ← All patients
       </Link>
 

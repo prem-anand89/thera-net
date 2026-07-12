@@ -11,8 +11,8 @@ import { SyncBadge } from '@/components/SyncBadge';
 import { btnSecondary } from '@/components/ui';
 
 const NAV = [
-  { to: '/patients', label: 'Patients' },
-  { to: '/visits', label: 'Ledger' },
+  { to: '/workspace', label: 'Workspace' },
+  { to: '/archive', label: 'Archive' },
   { to: '/insights', label: 'Insights' },
   { to: '/setup', label: 'Setup' },
 ] as const;
