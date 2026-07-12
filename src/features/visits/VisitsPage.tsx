@@ -42,7 +42,8 @@ import { toFriendlyMessage } from '@/lib/errors';
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PATIENT_SEARCH_LIMIT = 6;
 
-type ArchiveTab = 'all' | 'patients' | 'invoices';
+type ArchiveTab = 'records' | 'invoices';
+type RecordsView = 'visits' | 'patients';
 
 type PatientSortKey = 'name' | 'mrno' | 'age' | 'condition';
 const PATIENT_COMPARATORS = {
@@ -83,7 +84,8 @@ export function VisitsPage() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string };
 
-  const [tab, setTab] = useState<ArchiveTab>('all');
+  const [tab, setTab] = useState<ArchiveTab>('records');
+  const [recordsView, setRecordsView] = useState<RecordsView>('visits');
   const [from, setFrom] = useState(() => toIsoDate(new Date(Date.now() - 6 * 86400000)));
   const [to, setTo] = useState(() => toIsoDate(new Date()));
   const [datePreset, setDatePreset] = useState<DatePreset>('week');
@@ -128,7 +130,7 @@ export function VisitsPage() {
 
   function selectTab(next: ArchiveTab) {
     setTab(next);
-    if (next === 'all' && !from && !to) {
+    if (next === 'records' && recordsView === 'visits' && !from && !to) {
       applyDatePreset('week');
     }
   }
@@ -282,8 +284,7 @@ export function VisitsPage() {
       <div className="flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
         {(
           [
-            { key: 'all', label: 'All Visits' },
-            { key: 'patients', label: 'Patients' },
+            { key: 'records', label: 'Records' },
             { key: 'invoices', label: 'Invoices' },
           ] as const
         ).map((t) => (
@@ -302,7 +303,31 @@ export function VisitsPage() {
         ))}
       </div>
 
-      {tab === 'all' && (
+      {tab === 'records' && (
+        <div className="flex w-fit gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+          {(
+            [
+              { key: 'visits', label: 'Visits' },
+              { key: 'patients', label: 'Patients' },
+            ] as const
+          ).map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              className={`rounded-md px-3 py-1 text-xs font-medium ${
+                recordsView === v.key
+                  ? 'bg-[var(--teal)] text-white'
+                  : 'text-[var(--muted)] hover:bg-[var(--surface)]'
+              }`}
+              onClick={() => setRecordsView(v.key)}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tab === 'records' && recordsView === 'visits' && (
         <>
           <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
             <div className="relative">
@@ -374,7 +399,7 @@ export function VisitsPage() {
         </>
       )}
 
-      {tab === 'all' && followUps.length > 0 && (
+      {tab === 'records' && recordsView === 'visits' && followUps.length > 0 && (
         <SectionCard title="Due for follow-up">
           <p className="mb-3 text-xs text-[var(--muted)]">
             Mid-package and not seen in over 14 days — your actionable retention list.
@@ -421,7 +446,7 @@ export function VisitsPage() {
         </SectionCard>
       )}
 
-      {tab === 'all' && (
+      {tab === 'records' && recordsView === 'visits' && (
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
@@ -607,7 +632,7 @@ export function VisitsPage() {
       </div>
       )}
 
-      {tab === 'patients' && <AllPatientsSection />}
+      {tab === 'records' && recordsView === 'patients' && <AllPatientsSection />}
 
       {tab === 'invoices' && (
       <div className="space-y-4">
