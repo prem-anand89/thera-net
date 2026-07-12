@@ -446,6 +446,14 @@ describe('dashboardService.recentVisitsWindow', () => {
     expect(await svc.recentVisitsWindow('clinic-1', 7, asOf)).toHaveLength(0);
     expect(await svc.recentVisitsWindow('clinic-1', 30, asOf)).toHaveLength(1);
   });
+
+  it('excludes visits dated today, so Recent continues after the Today list without overlap', async () => {
+    fake.visits.set('yesterday', baseVisit('yesterday', { visitDate: '2026-06-14' }));
+    fake.visits.set('today', baseVisit('today', { visitDate: '2026-06-15' }));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.recentVisitsWindow('clinic-1', 7, asOf);
+    expect(rows.map((r) => r.visitId)).toEqual(['yesterday']);
+  });
 });
 
 describe('dashboardService.singleVisitPatients', () => {

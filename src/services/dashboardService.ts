@@ -38,6 +38,7 @@ export interface OutstandingSummary {
 export interface RecentVisitRow {
   visitId: UUID;
   visitDate: string;
+  patientId: UUID;
   patientName: string;
   mrno: string;
   condition: string | null;
@@ -345,6 +346,7 @@ export function createDashboardService(repos: Repos) {
         .map((v) => ({
           visitId: v.id,
           visitDate: v.visitDate,
+          patientId: v.patientId,
           patientName: patientById.get(v.patientId)?.name ?? 'Unknown',
           mrno: patientById.get(v.patientId)?.mrno ?? '—',
           condition: v.condition,
@@ -361,12 +363,15 @@ export function createDashboardService(repos: Repos) {
 
     /**
      * Visits within a rolling day window, most recent first — backs the
-     * Workspace "Recent" list's 7/15/30-day toggle. Unlike recentVisits
-     * (a fixed-length at-a-glance strip), this returns every visit in the
-     * window since the whole point is a complete recent history, not a
-     * capped preview.
+     * Workspace "Recent" list's 7/15/30-day toggle. Excludes today's own
+     * visits (those live on the Today list right above) so the two lists
+     * read as one continuous timeline instead of overlapping. Unlike
+     * recentVisits (a fixed-length at-a-glance strip), this returns every
+     * visit in the window since the whole point is a complete recent
+     * history, not a capped preview.
      */
     async recentVisitsWindow(clinicId: UUID, days: number, asOf = new Date()): Promise<RecentVisitRow[]> {
+      const todayStr = asOf.toISOString().slice(0, 10);
       const cutoff = new Date(asOf);
       cutoff.setDate(cutoff.getDate() - days);
       const fromStr = cutoff.toISOString().slice(0, 10);
@@ -380,11 +385,13 @@ export function createDashboardService(repos: Repos) {
       const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
 
-      return [...visits]
+      return visits
+        .filter((v) => v.visitDate < todayStr)
         .sort((a, b) => b.visitDate.localeCompare(a.visitDate))
         .map((v) => ({
           visitId: v.id,
           visitDate: v.visitDate,
+          patientId: v.patientId,
           patientName: patientById.get(v.patientId)?.name ?? 'Unknown',
           mrno: patientById.get(v.patientId)?.mrno ?? '—',
           condition: v.condition,

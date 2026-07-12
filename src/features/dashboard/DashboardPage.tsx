@@ -6,12 +6,8 @@ import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { monthName, formatDateDMY } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
-import { Pill, SectionCard, StatTile, th, thNum, td, tdNum } from '@/components/ui';
+import { SectionCard, StatTile, th, thNum, td, tdNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
-import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
-import type { OpenPackageRow } from '@/services/dashboardService';
-
-const RECENT_VISITS_LIMIT = 8;
 
 // Reference categorical palette — all 8 validated slots in fixed order,
 // assigned by index and never cycled (a 9th series would repeat hues and
@@ -34,7 +30,6 @@ export function DashboardPage() {
   const revenueLabel = hospitalSplit ? `Post-Tax ${labels.own}` : 'Revenue';
 
   const trend = useLiveQuery(() => dashboardService.revenueTrend(clinic.id), [clinic.id]);
-  const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
   const outstanding = useLiveQuery(() => dashboardService.outstandingInvoices(clinic.id), [clinic.id]);
   const singleVisitPatients = useLiveQuery(
     () => dashboardService.singleVisitPatients(clinic.id),
@@ -42,10 +37,6 @@ export function DashboardPage() {
   );
   const recurringPatients = useLiveQuery(
     () => dashboardService.recurringPatients(clinic.id),
-    [clinic.id]
-  );
-  const recentVisits = useLiveQuery(
-    () => dashboardService.recentVisits(clinic.id, RECENT_VISITS_LIMIT),
     [clinic.id]
   );
 
@@ -59,111 +50,9 @@ export function DashboardPage() {
     [trend]
   );
 
-  const packageSort = useSort<'days' | 'patient' | 'progress' | 'started'>('days', 'desc');
-  const sortedPackages = applySort(
-    openPackages ?? [],
-    {
-      days: byNumber<OpenPackageRow>((p) => p.daysSinceLastVisit),
-      patient: byString<OpenPackageRow>((p) => p.patientName),
-      progress: byNumber<OpenPackageRow>((p) => p.sessionsLogged / p.packageTotal),
-      started: byString<OpenPackageRow>((p) => p.startedOn),
-    },
-    packageSort
-  );
-
   return (
     <div className="space-y-6">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Dashboard</h1>
-
-      <SectionCard title="Open packages">
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          Packages still short of their session count, most-quiet first. A patient not seen in over
-          14 days is flagged stale.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-            <thead>
-              <tr>
-                <SortHeader label="Patient" k="patient" sort={packageSort} />
-                <th className={th}>Service</th>
-                <SortHeader label="Progress" k="progress" sort={packageSort} numeric />
-                <SortHeader label="Started" k="started" sort={packageSort} />
-                <th className={th}>Last visit</th>
-                <SortHeader label="Days since" k="days" sort={packageSort} numeric firstDir="desc" />
-                <th className={th}></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {sortedPackages.map((p) => (
-                <tr key={p.packageGroupId} className="hover:bg-[var(--paper)]">
-                  <td className={td}>
-                    <span className="font-display">{p.patientName}</span> <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                  </td>
-                  <td className={td}>{p.serviceName}</td>
-                  <td className={tdNum}>
-                    {p.sessionsLogged} of {p.packageTotal}
-                  </td>
-                  <td className={td}>{formatDateDMY(p.startedOn)}</td>
-                  <td className={td}>{formatDateDMY(p.lastVisitOn)}</td>
-                  <td className={tdNum}>{p.daysSinceLastVisit}</td>
-                  <td className={td}>{p.stale && <Pill tone="amber">⚠ Stale</Pill>}</td>
-                </tr>
-              ))}
-              {openPackages?.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-[var(--muted)]">
-                    No open packages in the last 6 months.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
-
-      <SectionCard title="Recent visits">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-            <thead>
-              <tr>
-                <th className={th}>Date</th>
-                <th className={th}>Patient</th>
-                <th className={th}>Therapist</th>
-                <th className={th}>Service</th>
-                <th className={th}>Treatment</th>
-                <th className={thNum}>Bill</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {(recentVisits ?? []).map((v) => (
-                <tr key={v.visitId} className="hover:bg-[var(--paper)]">
-                  <td className={td}>{formatDateDMY(v.visitDate)}</td>
-                  <td className={td}>
-                    <span className="font-display">{v.patientName}</span>{' '}
-                    <span className="text-xs text-[var(--muted)]">{v.mrno}</span>
-                  </td>
-                  <td className={td}>{v.therapistName}</td>
-                  <td className={td}>{v.serviceName}</td>
-                  <td className={td}>{v.treatmentNotes ?? '—'}</td>
-                  <td className={tdNum}>{formatINR(v.billPaise)}</td>
-                </tr>
-              ))}
-              {recentVisits?.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-sm text-[var(--muted)]">
-                    No visits logged yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-3 text-right">
-          <Link to="/archive" className="text-sm font-medium text-[var(--teal)] hover:underline">
-            View all visits →
-          </Link>
-        </div>
-      </SectionCard>
 
       <SectionCard title="Single-visit patients">
         <p className="mb-3 text-xs text-[var(--muted)]">
