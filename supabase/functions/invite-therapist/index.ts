@@ -49,18 +49,27 @@ export default async function handler(req: Request): Promise<Response> {
 
     const jwt = authHeader.slice(7); // Remove 'Bearer ' prefix
 
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
+      return new Response(
+        JSON.stringify({
+          error: 'Server configuration error: missing Supabase credentials',
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Create a client with the caller's JWT to check permissions
-    const userClient = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || '',
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${jwt}`,
-          },
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
         },
-      }
-    );
+      },
+    });
 
     // Verify caller is admin in this clinic
     const { data: memberData, error: memberError } = await userClient
@@ -86,16 +95,12 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     // Use service-role client for admin operations
-    const serviceClient = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    );
+    const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
 
     // Invite the user via Supabase Admin API
     const { data: inviteData, error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(

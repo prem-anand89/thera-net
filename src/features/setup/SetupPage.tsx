@@ -645,6 +645,7 @@ function Therapists() {
   const [name, setName] = useState('');
   const [members, setMembers] = useState<ClinicMember[] | null>(null);
   const [membersError, setMembersError] = useState<string | null>(null);
+  const [revokeInProgress, setRevokeInProgress] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'staff'>('staff');
   const [inviteBusy, setInviteBusy] = useState(false);
@@ -732,6 +733,8 @@ function Therapists() {
 
   async function revokeMember(userId: string, email: string) {
     if (!confirm(`Revoke ${email}'s access to this clinic?`)) return;
+    setMembersError(null);
+    setRevokeInProgress(userId);
     try {
       const supabase = getSupabase();
       if (!supabase) throw new Error('No Supabase connection');
@@ -747,6 +750,8 @@ function Therapists() {
       setMembers((prev) => prev?.filter((m) => m.userId !== userId) ?? null);
     } catch (e) {
       setMembersError(toFriendlyMessage(e));
+    } finally {
+      setRevokeInProgress(null);
     }
   }
 
@@ -791,10 +796,11 @@ function Therapists() {
                   </p>
                 </div>
                 <button
-                  className="text-xs text-[var(--rust)] hover:underline"
+                  className="text-xs text-[var(--rust)] hover:underline disabled:opacity-50"
+                  disabled={revokeInProgress === m.userId}
                   onClick={() => void revokeMember(m.userId, m.email)}
                 >
-                  Revoke
+                  {revokeInProgress === m.userId ? 'Revoking…' : 'Revoke'}
                 </button>
               </li>
             ))}
