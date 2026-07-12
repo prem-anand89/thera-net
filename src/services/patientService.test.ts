@@ -7,6 +7,9 @@ import type { Patient } from '@/domain/types';
 function makeFakeRepos() {
   const patients = new Map<string, Patient>();
   const repos = {
+    clinics: {
+      get: async () => undefined,
+    },
     patients: {
       get: async (id: string) => patients.get(id),
       getByMrno: async (_c: string, mrno: string) => [...patients.values()].find((p) => p.mrno === mrno),
@@ -55,6 +58,20 @@ describe('patientService.create', () => {
     const patient = await createPatientService(fake.repos).create({ clinicId: 'clinic-1', name: 'New Patient' });
     expect(patient.referringSource).toBeNull();
     expect(patient.referringSourceDetail).toBeNull();
+  });
+
+  it('auto-generates a walk-in MRNO with the default "W" prefix when the clinic has no override', async () => {
+    const fake = makeFakeRepos();
+    const patient = await createPatientService(fake.repos).create({ clinicId: 'clinic-1', name: 'Walk-in' });
+    expect(patient.mrno).toMatch(/^W-\d{6}-[A-Z0-9]{3}$/);
+    expect(patient.mrnoSource).toBe('auto');
+  });
+
+  it('uses the clinic\'s configured walk-in MRNO prefix when set', async () => {
+    const fake = makeFakeRepos();
+    fake.repos.clinics.get = async () => ({ walkInMrnoPrefix: 'BM' }) as never;
+    const patient = await createPatientService(fake.repos).create({ clinicId: 'clinic-1', name: 'Walk-in' });
+    expect(patient.mrno).toMatch(/^BM-\d{6}-[A-Z0-9]{3}$/);
   });
 });
 

@@ -196,6 +196,21 @@ function ClinicProfile() {
         <Field
           label={
             <>
+              Walk-in patient ID prefix
+              <InfoTip text="Used for auto-generated MRNOs when a walk-in has no hospital ID (format: PREFIX-YYMMDD-XXX). Defaults to 'W'." />
+            </>
+          }
+        >
+          <input
+            className={inputCls}
+            placeholder="W"
+            value={form.walkInMrnoPrefix ?? ''}
+            onChange={(e) => set({ walkInMrnoPrefix: e.target.value.toUpperCase() || null })}
+          />
+        </Field>
+        <Field
+          label={
+            <>
               Therapist setup
               <InfoTip text="Individual: single therapist practice. Multiple: clinic with multiple therapists. This affects billing and reporting." />
             </>

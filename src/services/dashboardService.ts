@@ -40,8 +40,12 @@ export interface RecentVisitRow {
   visitDate: string;
   patientName: string;
   mrno: string;
+  condition: string | null;
+  phone: string | null;
   therapistName: string;
   serviceName: string;
+  sessionIndex: number | null;
+  packageTotal: number | null;
   treatmentNotes: string | null;
   billPaise: Paise;
   hasInvoice: boolean;
@@ -70,8 +74,10 @@ export interface TodayVisitRow {
   patientName: string;
   mrno: string;
   condition: string | null;
+  phone: string | null;
   therapistName: string;
   serviceName: string;
+  treatmentNotes: string | null;
   sessionIndex: number | null;
   packageTotal: number | null;
   packageGroupId: UUID | null;
@@ -123,6 +129,8 @@ export interface PendingWorkItem {
   detail: string;
   amountPaise: Paise | null;
   visitId: UUID | null;
+  /** Set only for the invoice-outstanding case — lets "Mark paid" toggle the invoice's status directly. */
+  invoiceId: UUID | null;
   daysSince: number;
 }
 
@@ -256,6 +264,7 @@ export function createDashboardService(repos: Repos) {
           detail: `${serviceNameById.get(g.serviceCatalogId) ?? 'Package'} — no visit in ${days} days`,
           amountPaise: null,
           visitId: null,
+          invoiceId: null,
           daysSince: days,
         });
       }
@@ -273,6 +282,7 @@ export function createDashboardService(repos: Repos) {
           detail: `Invoice ${inv.invoiceNo} outstanding`,
           amountPaise: inv.totalPaise,
           visitId: null,
+          invoiceId: inv.id,
           daysSince: days,
         });
       }
@@ -292,6 +302,7 @@ export function createDashboardService(repos: Repos) {
           detail: v.pendingPaymentNote ? `Marked pending: ${v.pendingPaymentNote}` : 'No payment recorded yet',
           amountPaise: v.actualBillPaise,
           visitId: v.id,
+          invoiceId: null,
           daysSince: days,
         });
       }
@@ -308,6 +319,7 @@ export function createDashboardService(repos: Repos) {
           detail: 'Clinical note not finished',
           amountPaise: null,
           visitId: v.id,
+          invoiceId: null,
           daysSince: days,
         });
       }
@@ -335,8 +347,12 @@ export function createDashboardService(repos: Repos) {
           visitDate: v.visitDate,
           patientName: patientById.get(v.patientId)?.name ?? 'Unknown',
           mrno: patientById.get(v.patientId)?.mrno ?? '—',
+          condition: v.condition,
+          phone: patientById.get(v.patientId)?.phone ?? null,
           therapistName: therapistNameById.get(v.therapistId) ?? '—',
           serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
+          sessionIndex: v.sessionIndex,
+          packageTotal: v.packageTotal,
           treatmentNotes: v.treatmentNotes,
           billPaise: v.actualBillPaise,
           hasInvoice: Boolean(v.invoiceId),
@@ -371,8 +387,12 @@ export function createDashboardService(repos: Repos) {
           visitDate: v.visitDate,
           patientName: patientById.get(v.patientId)?.name ?? 'Unknown',
           mrno: patientById.get(v.patientId)?.mrno ?? '—',
+          condition: v.condition,
+          phone: patientById.get(v.patientId)?.phone ?? null,
           therapistName: therapistNameById.get(v.therapistId) ?? '—',
           serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
+          sessionIndex: v.sessionIndex,
+          packageTotal: v.packageTotal,
           treatmentNotes: v.treatmentNotes,
           billPaise: v.actualBillPaise,
           hasInvoice: Boolean(v.invoiceId),
@@ -520,8 +540,10 @@ export function createDashboardService(repos: Repos) {
             patientName: patient?.name ?? 'Unknown',
             mrno: patient?.mrno ?? '—',
             condition: v.condition,
+            phone: patient?.phone ?? null,
             therapistName: therapistNameById.get(v.therapistId) ?? '—',
             serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
+            treatmentNotes: v.treatmentNotes,
             sessionIndex: v.sessionIndex,
             packageTotal: v.packageTotal,
             packageGroupId: v.packageGroupId,
