@@ -644,6 +644,11 @@ function Therapists() {
   const [name, setName] = useState('');
   const [members, setMembers] = useState<ClinicMember[] | null>(null);
   const [membersError, setMembersError] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'staff'>('staff');
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -678,72 +683,193 @@ function Therapists() {
     setName('');
   }
 
+  async function inviteTherapist() {
+    if (!inviteEmail.trim()) return;
+    setInviteError(null);
+    setInviteSuccess(null);
+    setInviteBusy(true);
+    try {
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('No Supabase connection');
+
+      const session = await supabase.auth.getSession();
+      if (!session.data.session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(
+        `${supabase.supabaseUrl}/functions/v1/invite-therapist`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.data.session.access_token}`,
+          },
+          body: JSON.stringify({
+            clinicId: clinic.id,
+            email: inviteEmail.trim(),
+            role: inviteRole,
+          }),
+        }
+      );
+
+      const result = (await response.json()) as { success?: boolean; message?: string; error?: string };
+
+      if (!response.ok || result.error) {
+        throw new Error(result.error || `Request failed with status ${response.status}`);
+      }
+
+      setInviteSuccess(`Invitation sent to ${inviteEmail}`);
+      setInviteEmail('');
+      setInviteRole('staff');
+    } catch (e) {
+      setInviteError(toFriendlyMessage(e));
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
+  async function revokeMember(userId: string, email: string) {
+    if (!confirm(`Revoke ${email}'s access to this clinic?`)) return;
+    try {
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('No Supabase connection');
+
+      const { error } = await supabase
+        .from('clinic_members')
+        .delete()
+        .eq('clinic_id', clinic.id)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      setMembers((prev) => prev?.filter((m) => m.userId !== userId) ?? null);
+    } catch (e) {
+      setMembersError(toFriendlyMessage(e));
+    }
+  }
+
   return (
-    <SectionCard title="Therapists">
-      <ul className="mb-3 space-y-2">
-        {(therapists ?? []).map((t) => (
-          <li key={t.id} className="flex flex-wrap items-center gap-3 text-sm">
-            <span className={`min-w-32 ${t.active ? '' : 'text-[var(--muted)] line-through'}`}>{t.name}</span>
-            <button
-              className="text-xs text-[var(--teal)] hover:underline"
-              onClick={() =>
-                void repos.therapists.put({
-                  ...t,
-                  active: !t.active,
-                  updatedAt: new Date().toISOString(),
-                })
-              }
-            >
-              {t.active ? 'Deactivate' : 'Reactivate'}
-            </button>
-            {members && members.length > 0 && (
-              <label className="ml-auto flex items-center gap-2 text-xs text-[var(--muted)]">
-                Linked login
-                <select
-                  className={inputCls}
-                  value={t.userId ?? ''}
-                  onChange={(e) =>
-                    void repos.therapists.put({
-                      ...t,
-                      userId: e.target.value || null,
-                      updatedAt: new Date().toISOString(),
-                    })
-                  }
-                >
-                  <option value="">— None —</option>
-                  {members.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </li>
-        ))}
-      </ul>
-      <div className="flex max-w-sm gap-2">
-        <input
-          className={inputCls}
-          placeholder="New therapist name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <button className={btnSecondary} onClick={() => void add()}>
-          + Add
-        </button>
+    <SectionCard title="Therapists & team">
+      <div className="mb-6 space-y-3">
+        <h3 className="text-sm font-semibold text-[var(--ink)]">Invite a therapist to this clinic</h3>
+        <div className="flex max-w-sm flex-col gap-2">
+          <input
+            className={inputCls}
+            type="email"
+            placeholder="Email address"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            disabled={inviteBusy}
+          />
+          <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+            Role
+            <select className={inputCls} value={inviteRole} onChange={(e) => setInviteRole(e.target.value as 'admin' | 'staff')} disabled={inviteBusy}>
+              <option value="staff">Staff therapist</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <button className={btnSecondary} disabled={inviteBusy} onClick={() => void inviteTherapist()}>
+            {inviteBusy ? 'Sending…' : 'Send invitation'}
+          </button>
+        </div>
+        {inviteSuccess && <p className="text-sm text-[var(--moss)]">{inviteSuccess}</p>}
+        {inviteError && <ErrorNote message={inviteError} />}
       </div>
-      <p className="mt-2 text-xs text-[var(--muted)]">
-        Deactivating keeps history intact — past visits still show the therapist.
-        {members && members.length > 0 && (
-          <>
-            {' '}
-            Linking a therapist to their own login lets edit history show their name instead of
-            "another user".
-          </>
+
+      <div className="border-t border-[var(--border)] pt-6">
+        <h3 className="mb-3 text-sm font-semibold text-[var(--ink)]">Team members</h3>
+        {members && members.length > 0 ? (
+          <ul className="space-y-2">
+            {members.map((m) => (
+              <li key={m.userId} className="flex items-center justify-between gap-3 text-sm">
+                <div>
+                  <p className="text-[var(--ink)]">{m.email}</p>
+                  <p className="text-xs text-[var(--muted)]">
+                    {m.role === 'admin' ? 'Admin' : 'Staff'}
+                  </p>
+                </div>
+                <button
+                  className="text-xs text-[var(--rust)] hover:underline"
+                  onClick={() => void revokeMember(m.userId, m.email)}
+                >
+                  Revoke
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-[var(--muted)]">No team members yet.</p>
         )}
-      </p>
-      <ErrorNote message={membersError} />
+        <ErrorNote message={membersError} />
+      </div>
+
+      <div className="border-t border-[var(--border)] pt-6">
+        <h3 className="mb-3 text-sm font-semibold text-[var(--ink)]">Service roster</h3>
+        <ul className="mb-3 space-y-2">
+          {(therapists ?? []).map((t) => (
+            <li key={t.id} className="flex flex-wrap items-center gap-3 text-sm">
+              <span className={`min-w-32 ${t.active ? '' : 'text-[var(--muted)] line-through'}`}>{t.name}</span>
+              <button
+                className="text-xs text-[var(--teal)] hover:underline"
+                onClick={() =>
+                  void repos.therapists.put({
+                    ...t,
+                    active: !t.active,
+                    updatedAt: new Date().toISOString(),
+                  })
+                }
+              >
+                {t.active ? 'Deactivate' : 'Reactivate'}
+              </button>
+              {members && members.length > 0 && (
+                <label className="ml-auto flex items-center gap-2 text-xs text-[var(--muted)]">
+                  Linked login
+                  <select
+                    className={inputCls}
+                    value={t.userId ?? ''}
+                    onChange={(e) =>
+                      void repos.therapists.put({
+                        ...t,
+                        userId: e.target.value || null,
+                        updatedAt: new Date().toISOString(),
+                      })
+                    }
+                  >
+                    <option value="">— None —</option>
+                    {members.map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.email}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </li>
+          ))}
+        </ul>
+        <div className="flex max-w-sm gap-2">
+          <input
+            className={inputCls}
+            placeholder="New therapist name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <button className={btnSecondary} onClick={() => void add()}>
+            + Add
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-[var(--muted)]">
+          Deactivating keeps history intact — past visits still show the therapist.
+          {members && members.length > 0 && (
+            <>
+              {' '}
+              Linking a therapist to their own login lets edit history show their name instead of
+              "another user".
+            </>
+          )}
+        </p>
+      </div>
     </SectionCard>
   );
 }
