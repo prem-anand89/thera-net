@@ -112,7 +112,7 @@ function makeFakeRepos() {
     },
     consultationNotes: { get: async () => undefined, list: async () => [], put: async () => {} },
   };
-  return { repos, visits, invoices, invoicePayments };
+  return { repos, visits, invoices, invoicePayments, payments, patients };
 }
 
 const baseVisit = (id: string, overrides: Partial<Visit>): Visit => ({
@@ -256,6 +256,125 @@ describe('dashboardService.outstandingInvoices', () => {
   });
 });
 
+describe('dashboardService.pendingWork', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+
+  it('flags a stale open package', async () => {
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', {
+        visitDate: '2026-01-01',
+        packageGroupId: 'pkg-1',
+        packageTotal: 5,
+        sessionIndex: 1,
+      })
+    );
+    // Paid, so this only exercises the stale-package signal, not the
+    // separate (and independently tested) outstanding-payment one.
+    fake.payments.set('pay-1', {
+      id: 'pay-1',
+      clinicId: 'clinic-1',
+      visitId: 'v1',
+      amountPaise: rs(1500),
+      method: 'cash',
+      receivedDate: '2026-01-01',
+      notes: null,
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    const items = await svc.pendingWork('clinic-1');
+    expect(items).toHaveLength(1);
+    expect(items[0].kind).toBe('stale_package');
+    expect(items[0].patientName).toBe('Test Patient');
+  });
+
+  it('flags an invoice explicitly marked outstanding', async () => {
+    fake.invoices.set('inv-1', baseInvoice('inv-1', { totalPaise: rs(1500) }));
+    fake.invoicePayments.set('p1', {
+      id: 'p1',
+      clinicId: 'clinic-1',
+      invoiceId: 'inv-1',
+      status: 'outstanding',
+      paidAt: null,
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    const items = await svc.pendingWork('clinic-1');
+    expect(items).toHaveLength(1);
+    expect(items[0].kind).toBe('outstanding_payment');
+    expect(items[0].amountPaise).toBe(rs(1500));
+  });
+
+  it('flags a billed visit with no invoice and no direct payment, carrying the pending note', async () => {
+    fake.visits.set('v1', baseVisit('v1', { pendingPaymentNote: 'Will pay next Monday' }));
+    const svc = createDashboardService(fake.repos);
+    const items = await svc.pendingWork('clinic-1');
+    expect(items).toHaveLength(1);
+    expect(items[0].kind).toBe('outstanding_payment');
+    expect(items[0].detail).toBe('Marked pending: Will pay next Monday');
+  });
+
+  it('does not flag a billed visit once a direct payment is logged against it', async () => {
+    fake.visits.set('v1', baseVisit('v1', {}));
+    fake.payments.set('pay-1', {
+      id: 'pay-1',
+      clinicId: 'clinic-1',
+      visitId: 'v1',
+      amountPaise: rs(1500),
+      method: 'cash',
+      receivedDate: '2026-06-01',
+      notes: null,
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.pendingWork('clinic-1')).toHaveLength(0);
+  });
+
+  it('does not flag a zero-bill continuation session as an outstanding payment', async () => {
+    fake.visits.set('v1', baseVisit('v1', { actualBillPaise: 0, catalogPricePaise: 0 }));
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.pendingWork('clinic-1')).toHaveLength(0);
+  });
+
+  it('flags a visit whose clinical note was never finished', async () => {
+    fake.visits.set('v1', baseVisit('v1', { clinicalStatus: 'pending', invoiceId: null }));
+    fake.payments.set('pay-1', {
+      id: 'pay-1',
+      clinicId: 'clinic-1',
+      visitId: 'v1',
+      amountPaise: rs(1500),
+      method: 'cash',
+      receivedDate: '2026-06-01',
+      notes: null,
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    const items = await svc.pendingWork('clinic-1');
+    // Paid, so no outstanding_payment item — only the incomplete note remains.
+    expect(items).toHaveLength(1);
+    expect(items[0].kind).toBe('incomplete_note');
+  });
+
+  it('sorts all items most-overdue-first', async () => {
+    fake.invoices.set('inv-1', baseInvoice('inv-1', { issuedAt: '2026-06-10T00:00:00Z' }));
+    fake.invoicePayments.set('p1', {
+      id: 'p1',
+      clinicId: 'clinic-1',
+      invoiceId: 'inv-1',
+      status: 'outstanding',
+      paidAt: null,
+      updatedAt: '',
+    });
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-01-01' }));
+    const svc = createDashboardService(fake.repos);
+    const items = await svc.pendingWork('clinic-1');
+    expect(items[0].visitId).toBe('v1'); // the older unpaid visit sorts before the newer invoice
+  });
+});
+
 describe('dashboardService.recentVisits', () => {
   let fake: ReturnType<typeof makeFakeRepos>;
   beforeEach(() => {
@@ -295,6 +414,37 @@ describe('dashboardService.recentVisits', () => {
     fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', treatmentNotes: 'Ultrasound + stretch' }));
     const svc = createDashboardService(fake.repos);
     expect((await svc.recentVisits('clinic-1'))[0].treatmentNotes).toBe('Ultrasound + stretch');
+  });
+});
+
+describe('dashboardService.recentVisitsWindow', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+  const asOf = new Date('2026-06-15T00:00:00Z');
+
+  it('includes visits inside the window and excludes visits outside it', async () => {
+    fake.visits.set('in-window', baseVisit('in-window', { visitDate: '2026-06-10' }));
+    fake.visits.set('too-old', baseVisit('too-old', { visitDate: '2026-05-01' }));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.recentVisitsWindow('clinic-1', 7, asOf);
+    expect(rows.map((r) => r.visitId)).toEqual(['in-window']);
+  });
+
+  it('returns every matching visit, not a capped preview', async () => {
+    for (let i = 0; i < 10; i++) {
+      fake.visits.set(`v${i}`, baseVisit(`v${i}`, { visitDate: `2026-06-${String(i + 1).padStart(2, '0')}` }));
+    }
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.recentVisitsWindow('clinic-1', 30, asOf)).toHaveLength(10);
+  });
+
+  it('widening the window from 7 to 30 days includes older visits', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-05-20' }));
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.recentVisitsWindow('clinic-1', 7, asOf)).toHaveLength(0);
+    expect(await svc.recentVisitsWindow('clinic-1', 30, asOf)).toHaveLength(1);
   });
 });
 

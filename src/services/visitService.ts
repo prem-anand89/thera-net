@@ -24,6 +24,13 @@ export interface NewVisitInput {
    * visit), so a zero bill is recorded as normal — not as a 100% discount.
    */
   isContinuation?: boolean;
+  /**
+   * Set when the therapist explicitly marks the bill "collect later" at
+   * logging time, instead of paying immediately. Optional free-text reason —
+   * surfaced on the Workspace pending-work list. Absence of a Payment row
+   * (not this field) is what actually drives outstanding calculations.
+   */
+  pendingPaymentNote?: string | null;
 }
 
 export function createVisitService(repos: Repos) {
@@ -89,6 +96,7 @@ export function createVisitService(repos: Repos) {
         tdsPaise: split.tdsPaise,
         hvPaise: split.hvPaise,
         invoiceId: null,
+        pendingPaymentNote: input.pendingPaymentNote?.trim() || null,
         deleted: false,
         updatedAt: new Date().toISOString(),
       };

@@ -106,6 +106,26 @@ export interface RecurringPatientRow {
   lastVisitOn: string;
 }
 
+export type PendingWorkKind = 'stale_package' | 'outstanding_payment' | 'incomplete_note';
+
+/**
+ * One unresolved item from a prior visit, surfaced on the Workspace landing
+ * page so nothing falls through the cracks between visits. Three unrelated
+ * signals feed this list — a stale package, an unpaid bill, an unfinished
+ * clinical note — deliberately kept as one merged, most-overdue-first feed
+ * rather than three separate widgets.
+ */
+export interface PendingWorkItem {
+  kind: PendingWorkKind;
+  patientId: UUID | null;
+  patientName: string;
+  mrno: string;
+  detail: string;
+  amountPaise: Paise | null;
+  visitId: UUID | null;
+  daysSince: number;
+}
+
 /** Groups a clinic-wide visit list by patient, skipping deleted rows. */
 function groupByPatient(visits: Visit[]): Map<UUID, Visit[]> {
   const byPatient = new Map<UUID, Visit[]>();
@@ -201,6 +221,100 @@ export function createDashboardService(repos: Repos) {
       };
     },
 
+    /**
+     * Everything left unresolved from a prior visit, most-overdue-first:
+     * packages gone quiet, bills with no payment on record, and visits whose
+     * clinical note was never finished. One merged feed for the Workspace
+     * landing page — the point is nothing needs a separate trip to another
+     * tab to notice it's still open.
+     */
+    async pendingWork(clinicId: UUID): Promise<PendingWorkItem[]> {
+      const [visits, patients, catalog, invoices, invoicePayments, directPayments] = await Promise.all([
+        repos.visits.list({ clinicId }),
+        repos.patients.list(clinicId),
+        repos.catalog.list(clinicId, true),
+        repos.invoices.list(clinicId),
+        repos.invoicePayments.list(clinicId),
+        repos.payments.list(clinicId),
+      ]);
+      const patientById = new Map(patients.map((p) => [p.id, p]));
+      const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
+      const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
+      const paidVisitIds = new Set(directPayments.map((p) => p.visitId));
+
+      const items: PendingWorkItem[] = [];
+
+      for (const g of groupOpenPackages(visits)) {
+        if (!isStale(g.lastVisitOn)) continue;
+        const patient = patientById.get(g.patientId);
+        const days = daysSince(g.lastVisitOn);
+        items.push({
+          kind: 'stale_package',
+          patientId: g.patientId,
+          patientName: patient?.name ?? 'Unknown',
+          mrno: patient?.mrno ?? '—',
+          detail: `${serviceNameById.get(g.serviceCatalogId) ?? 'Package'} — no visit in ${days} days`,
+          amountPaise: null,
+          visitId: null,
+          daysSince: days,
+        });
+      }
+
+      // Invoices explicitly marked outstanding (invoices carry no patientId,
+      // only a name/mrno snapshot taken at issue time).
+      for (const inv of invoices) {
+        if (statusByInvoiceId.get(inv.id) !== 'outstanding') continue;
+        const days = daysSince(inv.issuedAt.slice(0, 10));
+        items.push({
+          kind: 'outstanding_payment',
+          patientId: null,
+          patientName: inv.patientSnapshot.name,
+          mrno: inv.patientSnapshot.mrno,
+          detail: `Invoice ${inv.invoiceNo} outstanding`,
+          amountPaise: inv.totalPaise,
+          visitId: null,
+          daysSince: days,
+        });
+      }
+
+      // Billed visits with neither an invoice nor a direct payment logged —
+      // the "collect later" case Phase 1/3 introduced.
+      for (const v of visits) {
+        if (v.deleted || v.actualBillPaise === 0 || v.invoiceId) continue;
+        if (paidVisitIds.has(v.id)) continue;
+        const patient = patientById.get(v.patientId);
+        const days = daysSince(v.visitDate);
+        items.push({
+          kind: 'outstanding_payment',
+          patientId: v.patientId,
+          patientName: patient?.name ?? 'Unknown',
+          mrno: patient?.mrno ?? '—',
+          detail: v.pendingPaymentNote ? `Marked pending: ${v.pendingPaymentNote}` : 'No payment recorded yet',
+          amountPaise: v.actualBillPaise,
+          visitId: v.id,
+          daysSince: days,
+        });
+      }
+
+      for (const v of visits) {
+        if (v.deleted || v.clinicalStatus !== 'pending') continue;
+        const patient = patientById.get(v.patientId);
+        const days = daysSince(v.visitDate);
+        items.push({
+          kind: 'incomplete_note',
+          patientId: v.patientId,
+          patientName: patient?.name ?? 'Unknown',
+          mrno: patient?.mrno ?? '—',
+          detail: 'Clinical note not finished',
+          amountPaise: null,
+          visitId: v.id,
+          daysSince: days,
+        });
+      }
+
+      return items.sort((a, b) => b.daysSince - a.daysSince);
+    },
+
     /** Most recent visits first, for an at-a-glance strip — not filtered by date. */
     async recentVisits(clinicId: UUID, limit = 8): Promise<RecentVisitRow[]> {
       const [visits, patients, therapists, catalog] = await Promise.all([
@@ -216,6 +330,42 @@ export function createDashboardService(repos: Repos) {
       return [...visits]
         .sort((a, b) => b.visitDate.localeCompare(a.visitDate))
         .slice(0, limit)
+        .map((v) => ({
+          visitId: v.id,
+          visitDate: v.visitDate,
+          patientName: patientById.get(v.patientId)?.name ?? 'Unknown',
+          mrno: patientById.get(v.patientId)?.mrno ?? '—',
+          therapistName: therapistNameById.get(v.therapistId) ?? '—',
+          serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
+          treatmentNotes: v.treatmentNotes,
+          billPaise: v.actualBillPaise,
+          hasInvoice: Boolean(v.invoiceId),
+        }));
+    },
+
+    /**
+     * Visits within a rolling day window, most recent first — backs the
+     * Workspace "Recent" list's 7/15/30-day toggle. Unlike recentVisits
+     * (a fixed-length at-a-glance strip), this returns every visit in the
+     * window since the whole point is a complete recent history, not a
+     * capped preview.
+     */
+    async recentVisitsWindow(clinicId: UUID, days: number, asOf = new Date()): Promise<RecentVisitRow[]> {
+      const cutoff = new Date(asOf);
+      cutoff.setDate(cutoff.getDate() - days);
+      const fromStr = cutoff.toISOString().slice(0, 10);
+      const [visits, patients, therapists, catalog] = await Promise.all([
+        repos.visits.list({ clinicId, from: fromStr }),
+        repos.patients.list(clinicId),
+        repos.therapists.list(clinicId, true),
+        repos.catalog.list(clinicId, true),
+      ]);
+      const patientById = new Map(patients.map((p) => [p.id, p]));
+      const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
+      const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
+
+      return [...visits]
+        .sort((a, b) => b.visitDate.localeCompare(a.visitDate))
         .map((v) => ({
           visitId: v.id,
           visitDate: v.visitDate,

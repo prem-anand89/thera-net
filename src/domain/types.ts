@@ -223,6 +223,14 @@ export interface Visit {
   tdsPaise: Paise;
   hvPaise: Paise;
   invoiceId: UUID | null;
+  /**
+   * Set when the bill was explicitly marked "collect later" at logging time
+   * (as opposed to simply having no Payment row yet). Optional free-text
+   * reason ("insurance claim in process"); absence of a Payment row is what
+   * actually drives outstanding calculations — this is just context for the
+   * pending-work list. Optional so existing Visit rows are unaffected.
+   */
+  pendingPaymentNote?: string | null;
   deleted: boolean;
   /**
    * Clinical documentation fields — retrospective record of what happened,
