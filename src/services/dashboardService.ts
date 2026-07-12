@@ -333,23 +333,34 @@ export function createDashboardService(repos: Repos) {
      */
     async todayWorklist(clinicId: UUID, asOf = new Date()): Promise<TodayWorklist> {
       const todayStr = asOf.toISOString().slice(0, 10);
-      const [visits, patients, therapists, catalog, payments] = await Promise.all([
+      const [visits, patients, therapists, catalog, invoicePayments, directPayments] = await Promise.all([
         repos.visits.list({ clinicId, from: todayStr, to: todayStr }),
         repos.patients.list(clinicId),
         repos.therapists.list(clinicId, true),
         repos.catalog.list(clinicId, true),
         repos.invoicePayments.list(clinicId),
+        repos.payments.listByDate(clinicId, todayStr),
       ]);
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
-      const statusByInvoiceId = new Map(payments.map((p) => [p.invoiceId, p.status]));
+      const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
+
+      // Map visits to their direct payment amounts
+      const directPaymentByVisitId = new Map<UUID, Paise>();
+      directPayments.forEach((p) => {
+        const existing = directPaymentByVisitId.get(p.visitId) ?? 0;
+        directPaymentByVisitId.set(p.visitId, existing + p.amountPaise);
+      });
 
       const rows: TodayVisitRow[] = visits
         .map((v): TodayVisitRow => {
           const patient = patientById.get(v.patientId);
+          const directPaymentAmount = directPaymentByVisitId.get(v.id) ?? 0;
+
           let paymentState: TodayPaymentState;
           if (v.actualBillPaise === 0) paymentState = 'zero_session';
+          else if (directPaymentAmount > 0) paymentState = 'paid'; // Direct payment received
           else if (!v.invoiceId) paymentState = 'uninvoiced';
           else paymentState = statusByInvoiceId.get(v.invoiceId) === 'outstanding' ? 'outstanding' : 'paid';
 
@@ -371,6 +382,7 @@ export function createDashboardService(repos: Repos) {
         })
         .sort((a, b) => a.patientName.localeCompare(b.patientName));
 
+      // Collected = invoice payments + direct payments
       const collectedPaise = rows
         .filter((r) => r.paymentState === 'paid')
         .reduce((sum, r) => sum + r.billPaise, 0);

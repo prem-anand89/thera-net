@@ -293,6 +293,25 @@ export interface InvoicePayment {
   updatedAt: string;
 }
 
+/**
+ * Direct payment received for a visit — independent of invoices.
+ * Allows tracking cash/UPI payments without requiring an invoice.
+ * Can be for a visit (cash payment) or tied to an invoice (invoice payment).
+ */
+export type PaymentMethod = 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque';
+
+export interface Payment {
+  id: UUID;
+  clinicId: UUID;
+  visitId: UUID;
+  amountPaise: Paise;
+  method: PaymentMethod;
+  /** ISO date YYYY-MM-DD when payment was received */
+  receivedDate: string;
+  notes: string | null;
+  updatedAt: string;
+}
+
 /** What Health Valley actually paid Beyond Mechanics for one fiscal month. */
 export interface Settlement {
   id: UUID;

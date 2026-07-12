@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDashboardService } from './dashboardService';
 import type { Repos, VisitFilter } from '@/repositories/types';
-import type { CatalogItem, Clinic, Invoice, InvoicePayment, Patient, Therapist, Visit } from '@/domain/types';
+import type { CatalogItem, Clinic, Invoice, InvoicePayment, Payment, Patient, Therapist, Visit } from '@/domain/types';
 import { rupeesToPaise as rs } from '@/domain/money';
 
 function makeFakeRepos() {
@@ -57,6 +57,7 @@ function makeFakeRepos() {
   const visits = new Map<string, Visit>();
   const invoices = new Map<string, Invoice>();
   const invoicePayments = new Map<string, InvoicePayment>();
+  const payments = new Map<string, Payment>();
 
   const repos: Repos = {
     clinics: { get: async (id) => (id === clinic.id ? clinic : undefined), list: async () => [clinic], put: async () => {} },
@@ -94,6 +95,15 @@ function makeFakeRepos() {
       getByInvoiceId: async (invoiceId) => [...invoicePayments.values()].find((p) => p.invoiceId === invoiceId),
       list: async (clinicId) => [...invoicePayments.values()].filter((p) => p.clinicId === clinicId),
       put: async (p) => void invoicePayments.set(p.id, p),
+    },
+    payments: {
+      get: async (id) => payments.get(id),
+      list: async (clinicId) => [...payments.values()].filter((p) => p.clinicId === clinicId),
+      listByDate: async (clinicId, date) =>
+        [...payments.values()].filter((p) => p.clinicId === clinicId && p.receivedDate === date),
+      listByVisit: async (visitId) => [...payments.values()].filter((p) => p.visitId === visitId),
+      put: async (p) => void payments.set(p.id, p),
+      delete: async (id) => void payments.delete(id),
     },
     settlements: {
       getByPeriod: async () => undefined,

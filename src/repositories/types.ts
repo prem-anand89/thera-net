@@ -6,6 +6,7 @@ import type {
   Visit,
   Invoice,
   InvoicePayment,
+  Payment,
   Settlement,
   ConsultationNote,
   UUID,
@@ -91,6 +92,15 @@ export interface ConsultationNoteRepo {
   put(note: ConsultationNote): Promise<void>;
 }
 
+export interface PaymentRepo {
+  get(id: UUID): Promise<Payment | undefined>;
+  list(clinicId: UUID): Promise<Payment[]>;
+  listByDate(clinicId: UUID, date: string): Promise<Payment[]>;
+  listByVisit(visitId: UUID): Promise<Payment[]>;
+  put(payment: Payment): Promise<void>;
+  delete(id: UUID): Promise<void>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -99,6 +109,7 @@ export interface Repos {
   visits: VisitRepo;
   invoices: InvoiceRepo;
   invoicePayments: InvoicePaymentRepo;
+  payments: PaymentRepo;
   settlements: SettlementRepo;
   consultationNotes: ConsultationNoteRepo;
 }

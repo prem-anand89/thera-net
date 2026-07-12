@@ -7,6 +7,7 @@ import type {
   Visit,
   Invoice,
   InvoicePayment,
+  Payment,
   Settlement,
   ConsultationNote,
   UUID,
@@ -20,6 +21,7 @@ import type {
   VisitFilter,
   InvoiceRepo,
   InvoicePaymentRepo,
+  PaymentRepo,
   SettlementRepo,
   ConsultationNoteRepo,
   Repos,
@@ -172,6 +174,24 @@ const consultationNotes: ConsultationNoteRepo = {
   put: (note) => putWithOutbox('consultation_notes', note),
 };
 
+const payments: PaymentRepo = {
+  get: (id) => db.payments.get(id),
+  async list(clinicId) {
+    return db.payments.where('clinicId').equals(clinicId).toArray();
+  },
+  async listByDate(clinicId, date) {
+    const all = await db.payments.where('clinicId').equals(clinicId).toArray();
+    return all.filter((p) => p.receivedDate === date);
+  },
+  async listByVisit(visitId) {
+    return db.payments.where('visitId').equals(visitId).toArray();
+  },
+  put: (payment) => putWithOutbox('payments', payment),
+  delete: async (id) => {
+    await db.payments.delete(id);
+  },
+};
+
 export const repos: Repos = {
   clinics,
   therapists,
@@ -180,6 +200,7 @@ export const repos: Repos = {
   visits,
   invoices,
   invoicePayments,
+  payments,
   settlements,
   consultationNotes,
 };
@@ -193,6 +214,7 @@ export type {
   Visit,
   Invoice,
   InvoicePayment,
+  Payment,
   Settlement,
   ConsultationNote,
 };
