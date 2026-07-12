@@ -23,6 +23,7 @@ const SYNC_TABLES: SyncedTable[] = [
   'visits',
   'invoices',
   'invoice_payments',
+  'payments',
   'settlements',
   'consultation_notes',
 ];
