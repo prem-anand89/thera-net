@@ -18,6 +18,9 @@ const NewVisitPage = lazy(() =>
 const PatientsPage = lazy(() =>
   import('@/features/patients/PatientsPage').then((m) => ({ default: m.PatientsPage }))
 );
+const WorkspacePage = lazy(() =>
+  import('@/features/workspace/WorkspacePage').then((m) => ({ default: m.WorkspacePage }))
+);
 const PatientProfilePage = lazy(() =>
   import('@/features/patients/PatientProfilePage').then((m) => ({ default: m.PatientProfilePage }))
 );
@@ -69,8 +72,10 @@ const visitsRoute = createRoute({
 const newVisitRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/visits/new',
-  validateSearch: (search: Record<string, unknown>): { repeatVisitId?: string } =>
-    typeof search.repeatVisitId === 'string' ? { repeatVisitId: search.repeatVisitId } : {},
+  validateSearch: (search: Record<string, unknown>): { repeatVisitId?: string; newPatient?: string } => ({
+    ...(typeof search.repeatVisitId === 'string' ? { repeatVisitId: search.repeatVisitId } : {}),
+    ...(typeof search.newPatient === 'string' ? { newPatient: search.newPatient } : {}),
+  }),
   component: NewVisitPage,
 });
 
@@ -78,6 +83,12 @@ const patientsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients',
   component: PatientsPage,
+});
+
+const workspaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/workspace',
+  component: WorkspacePage,
 });
 
 const patientProfileRoute = createRoute({
@@ -143,6 +154,7 @@ const routeTree = rootRoute.addChildren([
   visitsRoute,
   newVisitRoute,
   patientsRoute,
+  workspaceRoute,
   patientProfileRoute,
   reportsRoute,
   reportsPrintRoute,

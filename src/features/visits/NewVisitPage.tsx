@@ -37,7 +37,7 @@ interface OpenPackage {
 export function NewVisitPage() {
   const clinic = useClinic();
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { repeatVisitId?: string };
+  const search = useSearch({ strict: false }) as { repeatVisitId?: string; newPatient?: string };
 
   // Patient selection
   const [query, setQuery] = useState('');
@@ -125,6 +125,13 @@ export function NewVisitPage() {
     () => (search.repeatVisitId ? repos.visits.get(search.repeatVisitId) : undefined),
     [search.repeatVisitId]
   );
+
+  // Workspace's "+ New patient" quick action links here with ?newPatient=1
+  // so the create-patient form is already open, skipping the search step.
+  useEffect(() => {
+    if (search.newPatient && !patient) setCreatingPatient(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.newPatient]);
 
   useEffect(() => {
     if (!repeatVisit || patient) return;
