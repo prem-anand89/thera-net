@@ -39,13 +39,14 @@ import { toFriendlyMessage } from '@/lib/errors';
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PATIENT_SEARCH_LIMIT = 6;
 
-type LedgerTab = 'today' | 'recent' | 'all' | 'invoices';
+type LedgerTab = 'today' | 'ledger' | 'invoices';
 
-type DatePreset = 'week' | 'month' | 'lastMonth';
-const RECENT_PRESETS: { key: DatePreset; label: string }[] = [
+type DatePreset = 'week' | 'month' | 'lastMonth' | 'all';
+const DATE_PRESETS: { key: DatePreset; label: string }[] = [
   { key: 'week', label: 'This week' },
   { key: 'month', label: 'This month' },
   { key: 'lastMonth', label: 'Last month' },
+  { key: 'all', label: 'All time' },
 ];
 const toIsoDate = (d: Date) => d.toISOString().slice(0, 10);
 const TREATMENT_TRUNCATE = 40;
@@ -71,7 +72,7 @@ export function VisitsPage() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string };
 
-  const [tab, setTab] = useState<LedgerTab>(search.patientId ? 'all' : 'today');
+  const [tab, setTab] = useState<LedgerTab>(search.patientId ? 'ledger' : 'today');
   const [from, setFrom] = useState(() => toIsoDate(new Date(Date.now() - 6 * 86400000)));
   const [to, setTo] = useState(() => toIsoDate(new Date()));
   const [datePreset, setDatePreset] = useState<DatePreset>('week');
@@ -108,15 +109,15 @@ export function VisitsPage() {
     } else if (preset === 'lastMonth') {
       setFrom(toIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
       setTo(toIsoDate(new Date(now.getFullYear(), now.getMonth(), 0)));
+    } else if (preset === 'all') {
+      setFrom('');
+      setTo('');
     }
   }
 
   function selectTab(next: LedgerTab) {
     setTab(next);
-    if (next === 'all') {
-      setFrom('');
-      setTo('');
-    } else if (next === 'recent' && !from && !to) {
+    if (next === 'ledger' && !from && !to) {
       applyDatePreset('week');
     }
   }
@@ -272,8 +273,7 @@ export function VisitsPage() {
         {(
           [
             { key: 'today', label: 'Today' },
-            { key: 'recent', label: 'Recent' },
-            { key: 'all', label: 'All' },
+            { key: 'ledger', label: 'Ledger' },
             { key: 'invoices', label: 'Invoices' },
           ] as const
         ).map((t) => (
@@ -377,9 +377,9 @@ export function VisitsPage() {
                 ))}
               </select>
             </Field>
-            {tab === 'recent' && (
+            {tab === 'ledger' && (
               <div className="ml-auto flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
-                {RECENT_PRESETS.map((p) => (
+                {DATE_PRESETS.map((p) => (
                   <button
                     key={p.key}
                     type="button"
