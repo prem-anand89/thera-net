@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, visitService, patientService } from '@/services';
+import { repos, visitService, patientService, directPaymentService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
@@ -11,6 +11,7 @@ import {
   referringSourceDetailLabel,
   REFERRING_SOURCE_LABELS,
   type Patient,
+  type PaymentMethod,
   type ReferringSource,
   type UUID,
 } from '@/domain/types';
@@ -33,6 +34,14 @@ interface OpenPackage {
   packageTotal: number;
   startedOn: string;
 }
+
+const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'upi', label: 'UPI' },
+  { value: 'card', label: 'Card' },
+  { value: 'bank_transfer', label: 'Bank transfer' },
+  { value: 'cheque', label: 'Cheque' },
+];
 
 export function NewVisitPage() {
   const clinic = useClinic();
@@ -65,6 +74,9 @@ export function NewVisitPage() {
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [condition, setCondition] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending'>('paid');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [pendingNote, setPendingNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -204,7 +216,7 @@ export function NewVisitPage() {
     if (mode === 'continuation' && !selectedPackage) return setError('Select the open package');
     setBusy(true);
     try {
-      await visitService.create({
+      const visit = await visitService.create({
         clinicId: clinic.id,
         patientId: patient.id,
         therapistId,
@@ -222,7 +234,19 @@ export function NewVisitPage() {
               packageTotal: selectedPackage!.packageTotal,
             }
           : {}),
+        ...(billPaise > 0 && paymentChoice === 'pending'
+          ? { pendingPaymentNote: pendingNote || null }
+          : {}),
       });
+
+      // Billed and marked paid on the spot — log the cash/UPI/etc payment
+      // immediately so it counts toward "collected" without needing an
+      // invoice. A ₹0 continuation session or an explicit "collect later"
+      // choice skips this; the latter shows up on Workspace's pending list.
+      if (billPaise > 0 && paymentChoice === 'paid') {
+        await directPaymentService.logPayment(clinic.id, visit.id, billPaise, paymentMethod, visitDate, null);
+      }
+
       void navigate({ to: '/visits' });
     } catch (e) {
       setError(toFriendlyMessage(e));
@@ -502,6 +526,45 @@ export function NewVisitPage() {
                 value={adjustmentReason}
                 onChange={(e) => setAdjustmentReason(e.target.value)}
               />
+            </Field>
+          )}
+
+          {billPaise > 0 && (
+            <Field label="Payment">
+              <div className="flex gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={paymentChoice === 'paid'} onChange={() => setPaymentChoice('paid')} />
+                  Paid now
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    checked={paymentChoice === 'pending'}
+                    onChange={() => setPaymentChoice('pending')}
+                  />
+                  Pending — collect later
+                </label>
+              </div>
+              {paymentChoice === 'paid' ? (
+                <select
+                  className={`${inputCls} mt-2`}
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                >
+                  {PAYMENT_METHODS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className={`${inputCls} mt-2`}
+                  placeholder="Optional note — e.g. will pay next Monday"
+                  value={pendingNote}
+                  onChange={(e) => setPendingNote(e.target.value)}
+                />
+              )}
             </Field>
           )}
 

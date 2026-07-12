@@ -1,4 +1,3 @@
-import { db } from '@/lib/db';
 import type { InvoicePayment, Payment, PaymentStatus, PaymentMethod, UUID } from '@/domain/types';
 import type { Repos } from '@/repositories/types';
 import type { Paise } from '@/domain/money';
@@ -29,101 +28,84 @@ export function createPaymentService(repos: Repos) {
 
 /**
  * Direct payment service: log cash/UPI/etc payments independent of invoices.
- * These represent actual money received, whether or not an invoice was generated.
+ * These represent actual money received, whether or not an invoice was
+ * generated. Routed through repos.payments (not raw Dexie) so writes go
+ * through the same outbox/sync path as every other table.
  */
-export const directPaymentService = {
-  /**
-   * Log a payment received for a visit.
-   */
-  async logPayment(
-    clinicId: UUID,
-    visitId: UUID,
-    amountPaise: Paise,
-    method: PaymentMethod,
-    receivedDate: string,
-    notes: string | null = null
-  ): Promise<Payment> {
-    const payment: Payment = {
-      id: crypto.randomUUID(),
-      clinicId,
-      visitId,
-      amountPaise,
-      method,
-      receivedDate,
-      notes,
-      updatedAt: new Date().toISOString(),
-    };
+export function createDirectPaymentService(repos: Repos) {
+  return {
+    /** Log a payment received for a visit. */
+    async logPayment(
+      clinicId: UUID,
+      visitId: UUID,
+      amountPaise: Paise,
+      method: PaymentMethod,
+      receivedDate: string,
+      notes: string | null = null
+    ): Promise<Payment> {
+      const payment: Payment = {
+        id: crypto.randomUUID(),
+        clinicId,
+        visitId,
+        amountPaise,
+        method,
+        receivedDate,
+        notes,
+        updatedAt: new Date().toISOString(),
+      };
+      await repos.payments.put(payment);
+      return payment;
+    },
 
-    await db.payments.add(payment);
-    return payment;
-  },
+    /** All payments for a clinic on a specific date. */
+    paymentsOnDate(clinicId: UUID, date: string): Promise<Payment[]> {
+      return repos.payments.listByDate(clinicId, date);
+    },
 
-  /**
-   * Get all payments for a clinic on a specific date.
-   */
-  async paymentsOnDate(clinicId: UUID, date: string): Promise<Payment[]> {
-    return db.payments.where('clinicId').equals(clinicId).filter((p) => p.receivedDate === date).toArray();
-  },
+    /** Total collected for a clinic on a specific date. */
+    async collectedOnDate(clinicId: UUID, date: string): Promise<Paise> {
+      const payments = await repos.payments.listByDate(clinicId, date);
+      return payments.reduce((sum, p) => sum + p.amountPaise, 0);
+    },
 
-  /**
-   * Get total collected for a clinic on a specific date.
-   */
-  async collectedOnDate(clinicId: UUID, date: string): Promise<Paise> {
-    const payments = await this.paymentsOnDate(clinicId, date);
-    return payments.reduce((sum, p) => sum + p.amountPaise, 0);
-  },
+    /** Total collected for a date range. */
+    async collectedInRange(clinicId: UUID, fromDate: string, toDate: string): Promise<Paise> {
+      const payments = await repos.payments.list(clinicId);
+      return payments
+        .filter((p) => p.receivedDate >= fromDate && p.receivedDate <= toDate)
+        .reduce((sum, p) => sum + p.amountPaise, 0);
+    },
 
-  /**
-   * Get total collected for a date range.
-   */
-  async collectedInRange(clinicId: UUID, fromDate: string, toDate: string): Promise<Paise> {
-    const payments = await db.payments
-      .where('clinicId')
-      .equals(clinicId)
-      .filter((p) => p.receivedDate >= fromDate && p.receivedDate <= toDate)
-      .toArray();
-    return payments.reduce((sum, p) => sum + p.amountPaise, 0);
-  },
+    /** Payments by method for a date. */
+    async paymentsBreakdown(clinicId: UUID, date: string): Promise<Record<PaymentMethod, Paise>> {
+      const payments = await repos.payments.listByDate(clinicId, date);
+      const breakdown: Record<PaymentMethod, Paise> = {
+        cash: 0,
+        upi: 0,
+        card: 0,
+        bank_transfer: 0,
+        cheque: 0,
+      };
+      payments.forEach((p) => {
+        breakdown[p.method] += p.amountPaise;
+      });
+      return breakdown;
+    },
 
-  /**
-   * Get payments by method for a date.
-   */
-  async paymentsBreakdown(clinicId: UUID, date: string): Promise<Record<PaymentMethod, Paise>> {
-    const payments = await this.paymentsOnDate(clinicId, date);
-    const breakdown: Record<PaymentMethod, Paise> = {
-      cash: 0,
-      upi: 0,
-      card: 0,
-      bank_transfer: 0,
-      cheque: 0,
-    };
+    /** Delete a payment (e.g., if logged by mistake). */
+    deletePayment(paymentId: UUID): Promise<void> {
+      return repos.payments.delete(paymentId);
+    },
 
-    payments.forEach((p) => {
-      breakdown[p.method] += p.amountPaise;
-    });
+    /** All payments for a visit. */
+    paymentsForVisit(visitId: UUID): Promise<Payment[]> {
+      return repos.payments.listByVisit(visitId);
+    },
 
-    return breakdown;
-  },
-
-  /**
-   * Delete a payment (e.g., if logged by mistake).
-   */
-  async deletePayment(paymentId: UUID): Promise<void> {
-    await db.payments.delete(paymentId);
-  },
-
-  /**
-   * Get all payments for a visit.
-   */
-  async paymentsForVisit(visitId: UUID): Promise<Payment[]> {
-    return db.payments.where('visitId').equals(visitId).toArray();
-  },
-
-  /**
-   * Get total paid for a visit across all payments.
-   */
-  async totalPaidForVisit(visitId: UUID): Promise<Paise> {
-    const payments = await this.paymentsForVisit(visitId);
-    return payments.reduce((sum, p) => sum + p.amountPaise, 0);
-  },
-};
+    /** Total paid for a visit across all payments. */
+    async totalPaidForVisit(visitId: UUID): Promise<Paise> {
+      const payments = await repos.payments.listByVisit(visitId);
+      return payments.reduce((sum, p) => sum + p.amountPaise, 0);
+    },
+  };
+}
