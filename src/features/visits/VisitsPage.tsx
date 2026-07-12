@@ -16,7 +16,6 @@ import {
   type UUID,
   type Visit,
 } from '@/domain/types';
-import type { TodayPaymentState, TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
   btnSecondary,
@@ -39,7 +38,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PATIENT_SEARCH_LIMIT = 6;
 
-type LedgerTab = 'today' | 'ledger' | 'invoices';
+type ArchiveTab = 'all' | 'invoices';
 
 type DatePreset = 'week' | 'month' | 'lastMonth' | 'all';
 const DATE_PRESETS: { key: DatePreset; label: string }[] = [
@@ -72,7 +71,7 @@ export function VisitsPage() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string };
 
-  const [tab, setTab] = useState<LedgerTab>(search.patientId ? 'ledger' : 'today');
+  const [tab, setTab] = useState<ArchiveTab>('all');
   const [from, setFrom] = useState(() => toIsoDate(new Date(Date.now() - 6 * 86400000)));
   const [to, setTo] = useState(() => toIsoDate(new Date()));
   const [datePreset, setDatePreset] = useState<DatePreset>('week');
@@ -115,9 +114,9 @@ export function VisitsPage() {
     }
   }
 
-  function selectTab(next: LedgerTab) {
+  function selectTab(next: ArchiveTab) {
     setTab(next);
-    if (next === 'ledger' && !from && !to) {
+    if (next === 'all' && !from && !to) {
       applyDatePreset('week');
     }
   }
@@ -135,7 +134,6 @@ export function VisitsPage() {
       }),
     [clinic.id, from, to, therapistId, search.patientId]
   );
-  const today = useLiveQuery(() => dashboardService.todayWorklist(clinic.id), [clinic.id]);
   const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
   const payments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
 
@@ -254,7 +252,7 @@ export function VisitsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Visits</h1>
+          <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Archive</h1>
           {filteredPatient && (
             <span className="rounded-full bg-[var(--teal-light)] px-3 py-1 text-xs text-[var(--teal)]">
               {filteredPatient.name} ({filteredPatient.mrno})
@@ -272,8 +270,7 @@ export function VisitsPage() {
       <div className="flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
         {(
           [
-            { key: 'today', label: 'Today' },
-            { key: 'ledger', label: 'Ledger' },
+            { key: 'all', label: 'All Visits' },
             { key: 'invoices', label: 'Invoices' },
           ] as const
         ).map((t) => (
@@ -292,49 +289,7 @@ export function VisitsPage() {
         ))}
       </div>
 
-      {tab === 'today' && (
-        <>
-          <div className="flex flex-wrap gap-3">
-            <StatTile label="Today's visits" value={today?.visitCount ?? 0} />
-            <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
-            <StatTile label="Outstanding today" value={formatINR(today?.outstandingPaise ?? 0)} />
-            <StatTile label="Follow-ups due" value={followUps.length} />
-          </div>
-
-          {!today || today.visits.length === 0 ? (
-            <SectionCard title="Today">
-              <p className="text-sm text-[var(--muted)]">
-                No visits logged today — log one with “+ New visit”.
-              </p>
-            </SectionCard>
-          ) : (
-            <div className="space-y-2.5">
-              {today.visits.map((row) => (
-                <TodayVisitCard
-                  key={row.visitId}
-                  row={row}
-                  canRepeat={Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId))}
-                  onInvoice={() => {
-                    setError(null);
-                    setPaidNow(true);
-                    setInvoicing({
-                      visitId: row.visitId,
-                      patientLabel: row.patientName,
-                      serviceLabel: row.serviceName,
-                      isPackage: row.packageTotal != null,
-                    });
-                  }}
-                  onDelete={() => {
-                    if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      )}
-
-      {tab !== 'today' && (
+      {tab === 'all' && (
         <>
           <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
             <div className="relative">
@@ -377,24 +332,22 @@ export function VisitsPage() {
                 ))}
               </select>
             </Field>
-            {tab === 'ledger' && (
-              <div className="ml-auto flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
-                {DATE_PRESETS.map((p) => (
-                  <button
-                    key={p.key}
-                    type="button"
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                      datePreset === p.key
-                        ? 'bg-[var(--teal)] text-white'
-                        : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-                    }`}
-                    onClick={() => applyDatePreset(p.key)}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="ml-auto flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+              {DATE_PRESETS.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                    datePreset === p.key
+                      ? 'bg-[var(--teal)] text-white'
+                      : 'text-[var(--muted)] hover:bg-[var(--surface)]'
+                  }`}
+                  onClick={() => applyDatePreset(p.key)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {filteredPatient && <PatientOverview patient={filteredPatient} />}
@@ -408,7 +361,7 @@ export function VisitsPage() {
         </>
       )}
 
-      {tab !== 'today' && followUps.length > 0 && (
+      {tab === 'all' && followUps.length > 0 && (
         <SectionCard title="Due for follow-up">
           <p className="mb-3 text-xs text-[var(--muted)]">
             Mid-package and not seen in over 14 days — your actionable retention list.
@@ -455,7 +408,7 @@ export function VisitsPage() {
         </SectionCard>
       )}
 
-      {tab !== 'today' && (
+      {tab === 'all' && (
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
@@ -762,95 +715,6 @@ export function VisitsPage() {
           onClose={() => setSplitting(null)}
         />
       )}
-    </div>
-  );
-}
-
-const PAYMENT_CHIP: Record<TodayPaymentState, { tone: 'green' | 'amber' | 'slate'; label: (bill: string) => string }> = {
-  paid: { tone: 'green', label: () => 'Paid' },
-  outstanding: { tone: 'amber', label: (bill) => `Outstanding ${bill}` },
-  uninvoiced: { tone: 'amber', label: (bill) => `Collect ${bill}` },
-  zero_session: { tone: 'slate', label: () => '₹0 session' },
-};
-
-function TodayVisitCard({
-  row,
-  canRepeat,
-  onInvoice,
-  onDelete,
-}: {
-  row: TodayVisitRow;
-  canRepeat: boolean;
-  onInvoice: () => void;
-  onDelete: () => void;
-}) {
-  const chip = PAYMENT_CHIP[row.paymentState];
-  return (
-    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
-      <div className="min-w-[10rem] flex-1">
-        <div className="flex flex-wrap items-baseline gap-2">
-          <span className="font-display text-base font-semibold text-[var(--ink)]">{row.patientName}</span>
-          <span className="text-xs text-[var(--muted)]">{row.mrno}</span>
-          {row.condition && (
-            <span className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-xs font-medium text-[var(--teal)]">
-              {row.condition}
-            </span>
-          )}
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">
-          <span>{row.serviceName}</span>
-          <span>·</span>
-          <span>{row.therapistName}</span>
-          {row.sessionIndex && row.packageTotal && (
-            <span className="ml-0.5">
-              <PackageThread sessionIndex={row.sessionIndex} packageTotal={row.packageTotal} />
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="font-num text-sm font-semibold text-[var(--ink)]">{formatINR(row.billPaise)}</span>
-        {row.paymentState === 'uninvoiced' ? (
-          <button
-            type="button"
-            className="rounded-full bg-[var(--rust-light)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:opacity-80"
-            onClick={onInvoice}
-          >
-            {chip.label(formatINR(row.billPaise))}
-          </button>
-        ) : row.invoiceId ? (
-          <Link
-            to="/invoices/$invoiceId/print"
-            params={{ invoiceId: row.invoiceId }}
-            className="hover:opacity-80"
-          >
-            <Pill tone={chip.tone}>{chip.label(formatINR(row.billPaise))}</Pill>
-          </Link>
-        ) : (
-          <Pill tone={chip.tone}>{chip.label(formatINR(row.billPaise))}</Pill>
-        )}
-      </div>
-      <div className="flex items-center gap-3">
-        {canRepeat && (
-          <Link
-            to="/visits/new"
-            search={{ repeatVisitId: row.visitId }}
-            className="text-xs text-[var(--muted)] hover:text-[var(--teal)]"
-            title="Start the next session with this visit's therapist, service, and condition pre-filled"
-          >
-            Repeat
-          </Link>
-        )}
-        {!row.invoiceId && (
-          <button
-            type="button"
-            className="text-xs text-[var(--muted)] hover:text-[var(--rust)]"
-            onClick={onDelete}
-          >
-            Delete
-          </button>
-        )}
-      </div>
     </div>
   );
 }
