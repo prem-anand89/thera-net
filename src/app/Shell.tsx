@@ -12,10 +12,8 @@ import { btnSecondary } from '@/components/ui';
 
 const NAV = [
   { to: '/patients', label: 'Patients' },
-  { to: '/visits', label: 'Visits' },
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/reports', label: 'Reports' },
-  { to: '/invoices', label: 'Invoices' },
+  { to: '/visits', label: 'Ledger' },
+  { to: '/insights', label: 'Insights' },
   { to: '/setup', label: 'Setup' },
 ] as const;
 
