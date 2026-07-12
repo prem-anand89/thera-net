@@ -197,7 +197,7 @@ function ClinicProfile() {
           label={
             <>
               Walk-in patient ID prefix
-              <InfoTip text="Used for auto-generated MRNOs when a walk-in has no hospital ID (format: PREFIX-YYMMDD-XXX). Defaults to 'W'." />
+              <InfoTip text="Used for auto-generated Patient IDs when a walk-in has no existing ID (format: PREFIX-YYMMDD-XXX). Defaults to 'W'." />
             </>
           }
         >

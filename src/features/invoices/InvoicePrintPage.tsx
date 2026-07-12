@@ -81,7 +81,7 @@ export function InvoicePrintPage() {
         <section className="mt-4 flex justify-between text-sm">
           <div>
             <p className="font-display font-semibold text-[var(--ink)]">{invoice.patientSnapshot.name}</p>
-            <p className="text-[var(--muted)]">MRNO: {invoice.patientSnapshot.mrno}</p>
+            <p className="text-[var(--muted)]">Patient ID: {invoice.patientSnapshot.mrno}</p>
             {(invoice.patientSnapshot.age != null || invoice.patientSnapshot.sex) && (
               <p className="text-[var(--muted)]">
                 {[

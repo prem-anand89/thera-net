@@ -104,7 +104,7 @@ export function MonthlyLedgerPrintPage() {
               <th className="py-1.5 pr-2">Date</th>
               <th className="py-1.5 pr-2">Day</th>
               <th className="py-1.5 pr-2">Patient</th>
-              <th className="py-1.5 pr-2">MRNO</th>
+              <th className="py-1.5 pr-2">Patient ID</th>
               <th className="py-1.5 pr-2">Age/Sex</th>
               <th className="py-1.5 pr-2">Condition</th>
               <th className="py-1.5 pr-2">Therapist</th>

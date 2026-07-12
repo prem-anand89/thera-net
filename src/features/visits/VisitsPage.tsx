@@ -309,7 +309,7 @@ export function VisitsPage() {
               <Field label="Find patient">
                 <input
                   className={inputCls}
-                  placeholder="Name or MRNO…"
+                  placeholder="Name or Patient ID…"
                   value={patientQuery}
                   onChange={(e) => setPatientQuery(e.target.value)}
                   onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
@@ -618,7 +618,7 @@ export function VisitsPage() {
                 <SortHeader label="Invoice No" k="no" sort={invoiceSort} firstDir="desc" />
                 <SortHeader label="Date" k="date" sort={invoiceSort} firstDir="desc" />
                 <SortHeader label="Patient" k="patient" sort={invoiceSort} />
-                <th className={th}>MRNO</th>
+                <th className={th}>Patient ID</th>
                 <SortHeader label="Total" k="total" sort={invoiceSort} numeric firstDir="desc" />
                 <th className={th}>Mode</th>
                 <SortHeader label="Status" k="status" sort={invoiceSort} />
@@ -995,7 +995,7 @@ function AllPatientsSection() {
           </div>
           <input
             className={`${inputCls} max-w-xs`}
-            placeholder="Search by MRNO or name…"
+            placeholder="Search by Patient ID or name…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -1016,7 +1016,7 @@ function AllPatientsSection() {
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
             <tr>
-              <SortHeader label="MRNO" k="mrno" sort={sort} />
+              <SortHeader label="Patient ID" k="mrno" sort={sort} />
               <SortHeader label="Name" k="name" sort={sort} />
               <SortHeader label="Primary condition" k="condition" sort={sort} />
               <th className={th}>Last visit</th>
@@ -1172,7 +1172,7 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
 
   async function save() {
     setError(null);
-    if (form.mrno.trim() !== patient.mrno && !confirm(`Change MRNO from ${patient.mrno} to ${form.mrno.trim()}? This may need to match hospital records.`)) {
+    if (form.mrno.trim() !== patient.mrno && !confirm(`Change Patient ID from ${patient.mrno} to ${form.mrno.trim()}?`)) {
       return;
     }
     setBusy(true);
@@ -1203,7 +1203,7 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
           <Field label="Name">
             <input className={inputCls} value={form.name} onChange={(e) => set({ name: e.target.value })} />
           </Field>
-          <Field label="MRNO">
+          <Field label="Patient ID">
             <input className={inputCls} value={form.mrno} onChange={(e) => set({ mrno: e.target.value })} />
           </Field>
           <Field label="Age">

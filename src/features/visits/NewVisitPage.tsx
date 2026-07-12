@@ -265,7 +265,7 @@ export function NewVisitPage() {
             <div>
               <div className="font-display text-sm font-medium text-[var(--ink)]">{patient.name}</div>
               <div className="text-xs text-[var(--muted)]">
-                MRNO {patient.mrno}
+                Patient ID {patient.mrno}
                 {patient.age != null && ` · ${patient.age}y`}
                 {patient.sex && ` · ${patient.sex}`}
               </div>
@@ -285,15 +285,15 @@ export function NewVisitPage() {
             </Field>
             {duplicateMatch && (
               <p className="col-span-2 rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-sm text-[var(--rust)]">
-                ⚠ A patient named "{duplicateMatch.name}" (MRNO {duplicateMatch.mrno}) already exists.
+                ⚠ A patient named "{duplicateMatch.name}" (Patient ID {duplicateMatch.mrno}) already exists.
                 If this is the same person, use "Back to search" below instead of creating a new
                 record.
               </p>
             )}
-            <Field label="MRNO (leave blank to auto-generate for walk-ins)">
+            <Field label="Patient ID (leave blank to auto-generate for walk-ins)">
               <input
                 className={inputCls}
-                placeholder="Hospital MRNO"
+                placeholder="Existing Patient ID, if any"
                 value={newPatient.mrno}
                 onChange={(e) => setNewPatient({ ...newPatient, mrno: e.target.value })}
               />
@@ -381,7 +381,7 @@ export function NewVisitPage() {
           <div className="space-y-2">
             <input
               className={inputCls}
-              placeholder="Search by MRNO or name…"
+              placeholder="Search by Patient ID or name…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               autoFocus

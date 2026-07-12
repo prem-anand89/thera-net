@@ -180,7 +180,7 @@ export function ImportPreviewTable({
               <tr>
                 <th className={th}>Date</th>
                 <th className={th}>Patient</th>
-                <th className={th}>MRNO</th>
+                <th className={th}>Patient ID</th>
                 <th className={th}>Therapist</th>
                 <th className={th}>Service</th>
                 <th className={th}>Bill</th>

@@ -46,7 +46,7 @@ export function createPatientService(repos: Repos) {
       let mrnoSource: MrnoSource;
       if (manual) {
         const existing = await repos.patients.getByMrno(input.clinicId, manual);
-        if (existing) throw new Error(`MRNO ${manual} already exists (${existing.name}).`);
+        if (existing) throw new Error(`Patient ID ${manual} already exists (${existing.name}).`);
         mrno = manual;
         mrnoSource = 'hospital';
       } else {
@@ -91,11 +91,11 @@ export function createPatientService(repos: Repos) {
       let mrno = patient.mrno;
       if (patch.mrno !== undefined) {
         const trimmed = patch.mrno.trim();
-        if (!trimmed) throw new Error('MRNO cannot be empty.');
+        if (!trimmed) throw new Error('Patient ID cannot be empty.');
         if (trimmed !== patient.mrno) {
           const existing = await repos.patients.getByMrno(patient.clinicId, trimmed);
           if (existing && existing.id !== id) {
-            throw new Error(`MRNO ${trimmed} already exists (${existing.name}).`);
+            throw new Error(`Patient ID ${trimmed} already exists (${existing.name}).`);
           }
           mrno = trimmed;
         }
