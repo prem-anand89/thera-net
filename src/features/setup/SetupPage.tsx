@@ -5,6 +5,7 @@ import { repos, backupService } from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { getSupabase } from '@/lib/supabase';
+import { SUPABASE_URL } from '@/lib/env';
 import { db } from '@/lib/db';
 import { formatINR } from '@/domain/money';
 import {
@@ -698,7 +699,7 @@ function Therapists() {
       }
 
       const response = await fetch(
-        `${supabase.supabaseUrl}/functions/v1/invite-therapist`,
+        `${SUPABASE_URL}/functions/v1/invite-therapist`,
         {
           method: 'POST',
           headers: {
