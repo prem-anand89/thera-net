@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos } from '@/services';
+import { repos, backupService } from '@/services';
+import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { getSupabase } from '@/lib/supabase';
 import { db } from '@/lib/db';
@@ -47,8 +48,93 @@ export function SetupPage() {
           Import historical visits from Excel →
         </Link>
       </SectionCard>
+      <DataBackup />
       <DangerZone />
     </div>
+  );
+}
+
+function DataBackup() {
+  const clinic = useClinic();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<RestoreSummary | null>(null);
+
+  async function exportNow() {
+    setError(null);
+    setBusy(true);
+    try {
+      await backupService.downloadBackup(clinic.id, clinic.name);
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importFile(file: File) {
+    setError(null);
+    setSummary(null);
+    setBusy(true);
+    try {
+      const text = await file.text();
+      const bundle = JSON.parse(text) as BackupBundle;
+      if (
+        !confirm(
+          `Restore this backup (exported ${bundle.exportedAt?.slice(0, 10) ?? 'unknown date'})?\n\nThis writes patients, visits, invoices, payments, and settlements back into this clinic. Existing records with the same ID are overwritten; nothing else is deleted.`
+        )
+      ) {
+        return;
+      }
+      const result = await backupService.restoreBundle(bundle, clinic.id);
+      setSummary(result);
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      setBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  return (
+    <SectionCard title="Data backup">
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        Download a full snapshot of this clinic's data (patients, visits, invoices, payments,
+        catalog, therapists) any time — a safety net before a wipe, a device change, or just as a
+        habit. Restoring writes back through the same sync path as normal use, so restored data
+        reaches the server too.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button className={btnSecondary} disabled={busy} onClick={() => void exportNow()}>
+          {busy ? 'Working…' : 'Export backup'}
+        </button>
+        <button className={btnSecondary} disabled={busy} onClick={() => fileInputRef.current?.click()}>
+          Import backup…
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void importFile(file);
+          }}
+        />
+      </div>
+      {summary && (
+        <p className="mt-3 text-sm text-[var(--moss)]">
+          Restored {summary.patients} patients, {summary.visits} visits, {summary.invoices} invoices,{' '}
+          {summary.payments + summary.invoicePayments} payment records, {summary.catalog} catalog
+          items, {summary.therapists} therapists, {summary.settlements} settlements, and{' '}
+          {summary.consultationNotes} clinical notes.
+        </p>
+      )}
+      <div className="mt-2">
+        <ErrorNote message={error} />
+      </div>
+    </SectionCard>
   );
 }
 

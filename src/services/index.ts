@@ -8,6 +8,7 @@ import { createPaymentService, createDirectPaymentService } from './paymentServi
 import { createSettlementService } from './settlementService';
 import { createDashboardService } from './dashboardService';
 import { createPatientActivityService } from './patientActivityService';
+import { createBackupService } from './backupService';
 
 export const patientService = createPatientService(repos);
 export const visitService = createVisitService(repos);
@@ -19,4 +20,5 @@ export const directPaymentService = createDirectPaymentService(repos);
 export const settlementService = createSettlementService(repos);
 export const dashboardService = createDashboardService(repos);
 export const patientActivityService = createPatientActivityService(repos);
+export const backupService = createBackupService(repos);
 export { repos };
