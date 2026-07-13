@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { db } from '@/lib/db';
 import { repos } from '@/services';
-import { Field, inputCls, btnPrimary, ErrorNote } from '@/components/ui';
+import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
 import type { Clinic } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
 
@@ -145,6 +145,13 @@ export function CreateClinicForm({ onSuccess }: CreateClinicFormProps) {
         <ErrorNote message={error} />
         <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
           {busy ? 'Creating clinic…' : 'Create clinic'}
+        </button>
+        <button
+          type="button"
+          className={`${btnSecondary} w-full`}
+          onClick={() => getSupabase()?.auth.signOut()}
+        >
+          Sign out
         </button>
       </form>
     </div>
