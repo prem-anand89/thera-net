@@ -272,7 +272,15 @@ export function InvoicesPage() {
               <select
                 className={inputCls}
                 value={formData.serviceCatalogId}
-                onChange={(e) => setFormData({ ...formData, serviceCatalogId: e.target.value })}
+                onChange={(e) => {
+                  const serviceId = e.target.value;
+                  const service = catalog?.find((s) => s.id === serviceId);
+                  setFormData({
+                    ...formData,
+                    serviceCatalogId: serviceId,
+                    billPaise: service ? Math.round(service.basePricePaise).toString() : '',
+                  });
+                }}
               >
                 <option value="">Select service</option>
                 {(catalog ?? []).map((s) => (
