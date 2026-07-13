@@ -12,6 +12,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [signupSuccess, setSignupSuccess] = useState(false);
 
   if (!hasSupabaseConfig) {
     return (
@@ -34,8 +35,6 @@ export function LoginPage() {
     if (error) setError(toFriendlyMessage(error));
     setBusy(false);
   }
-
-  const [signupSuccess, setSignupSuccess] = useState(false);
 
   async function onSignup(e: FormEvent) {
     e.preventDefault();
