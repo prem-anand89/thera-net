@@ -35,6 +35,8 @@ export function LoginPage() {
     setBusy(false);
   }
 
+  const [signupSuccess, setSignupSuccess] = useState(false);
+
   async function onSignup(e: FormEvent) {
     e.preventDefault();
     if (password !== confirmPassword) {
@@ -48,12 +50,11 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     const { error } = await getSupabase()!.auth.signUp({ email, password });
+    setBusy(false);
     if (error) {
       setError(toFriendlyMessage(error));
-      setBusy(false);
     } else {
-      setError(null);
-      // Show success message
+      setSignupSuccess(true);
       setPassword('');
       setConfirmPassword('');
     }
@@ -76,53 +77,74 @@ export function LoginPage() {
       <div className="mx-auto mt-24 max-w-sm">
         <h1 className="font-display mb-1 text-center text-xl font-semibold text-[var(--ink)]">Thera.Net</h1>
         <p className="mb-6 text-center text-sm text-[var(--muted)]">Create an account</p>
-        <form onSubmit={onSignup} className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
-          <Field label="Email">
-            <input
-              type="email"
-              required
-              className={inputCls}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </Field>
-          <Field label="Password">
-            <input
-              type="password"
-              required
-              minLength={6}
-              className={inputCls}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </Field>
-          <Field label="Confirm Password">
-            <input
-              type="password"
-              required
-              minLength={6}
-              className={inputCls}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-            />
-          </Field>
-          <ErrorNote message={error} />
-          <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
-            {busy ? 'Creating account…' : 'Sign up'}
-          </button>
-          <button
-            type="button"
-            className="w-full text-center text-xs text-[var(--muted)] hover:text-[var(--ink)]"
-            onClick={() => {
-              setMode('signin');
-              setError(null);
-              setPassword('');
-              setConfirmPassword('');
-            }}
-          >
-            ← Back to sign in
-          </button>
-        </form>
+        <div className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
+          {signupSuccess ? (
+            <>
+              <p className="text-sm text-[var(--ink)]">
+                Account created! Sign in with your email address and password.
+              </p>
+              <button
+                type="button"
+                className="w-full text-center text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+                onClick={() => {
+                  setMode('signin');
+                  setError(null);
+                  setSignupSuccess(false);
+                }}
+              >
+                ← Back to sign in
+              </button>
+            </>
+          ) : (
+            <form onSubmit={onSignup} className="space-y-4">
+              <Field label="Email">
+                <input
+                  type="email"
+                  required
+                  className={inputCls}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </Field>
+              <Field label="Password">
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  className={inputCls}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </Field>
+              <Field label="Confirm Password">
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  className={inputCls}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </Field>
+              <ErrorNote message={error} />
+              <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
+                {busy ? 'Creating account…' : 'Sign up'}
+              </button>
+              <button
+                type="button"
+                className="w-full text-center text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+                onClick={() => {
+                  setMode('signin');
+                  setError(null);
+                  setPassword('');
+                  setConfirmPassword('');
+                }}
+              >
+                ← Back to sign in
+              </button>
+            </form>
+          )}
+        </div>
       </div>
     );
   }
