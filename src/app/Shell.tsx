@@ -125,14 +125,17 @@ export function Shell() {
                 </Link>
               ))}
             </nav>
-            <div className="ml-auto flex items-center gap-3">
+            <div className="ml-auto flex items-center gap-4">
               <SyncBadge />
-              <button
-                className="hidden text-xs text-[var(--muted)] hover:text-[var(--ink)] sm:block"
-                onClick={() => getSupabase()?.auth.signOut()}
-              >
-                Sign out
-              </button>
+              <div className="hidden flex-col items-end gap-1 sm:flex">
+                <div className="text-xs text-[var(--muted)]">{session.user?.email}</div>
+                <button
+                  className="text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+                  onClick={() => getSupabase()?.auth.signOut()}
+                >
+                  Sign out
+                </button>
+              </div>
               {/* Mobile menu toggle */}
               <button
                 className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--paper)] sm:hidden"
