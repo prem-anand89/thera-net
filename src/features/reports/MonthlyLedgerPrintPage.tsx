@@ -10,10 +10,6 @@ import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { btnPrimary, btnSecondary } from '@/components/ui';
 import { MonthlyReportTable } from '@/components/MonthlyReportTable';
 
-function dayOfWeek(visitDate: string): string {
-  return new Date(`${visitDate}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long' });
-}
-
 export function MonthlyLedgerPrintPage() {
   const clinic = useClinic();
   const { year, month } = useSearch({ strict: false }) as { year: number; month: number };
@@ -102,7 +98,6 @@ export function MonthlyLedgerPrintPage() {
             <tr className="border-b border-[var(--border)] text-left uppercase tracking-wide text-[var(--muted)]">
               <th className="py-1.5 pr-2">SN</th>
               <th className="py-1.5 pr-2">Date</th>
-              <th className="py-1.5 pr-2">Day</th>
               <th className="py-1.5 pr-2">Patient</th>
               <th className="py-1.5 pr-2">Patient ID</th>
               <th className="py-1.5 pr-2">Age/Sex</th>
@@ -119,7 +114,6 @@ export function MonthlyLedgerPrintPage() {
                 <tr key={v.id} className="border-b border-[var(--border)]">
                   <td className="py-1 pr-2 text-[var(--muted)]">{i + 1}</td>
                   <td className="py-1 pr-2">{formatDateDMY(v.visitDate)}</td>
-                  <td className="py-1 pr-2 text-[var(--muted)]">{dayOfWeek(v.visitDate)}</td>
                   <td className="font-display py-1 pr-2 font-medium text-[var(--ink)]">{p?.name ?? '—'}</td>
                   <td className="py-1 pr-2">{p?.mrno ?? '—'}</td>
                   <td className="py-1 pr-2">
@@ -141,7 +135,7 @@ export function MonthlyLedgerPrintPage() {
             })}
             {sortedVisits.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-6 text-center text-[var(--muted)]">
+                <td colSpan={9} className="py-6 text-center text-[var(--muted)]">
                   No visits in this month.
                 </td>
               </tr>
