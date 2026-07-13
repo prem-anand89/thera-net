@@ -12,7 +12,6 @@ import {
   referringSourceDetailLabel,
   REFERRING_SOURCE_LABELS,
   visibleVisitColumns,
-  type Invoice,
   type Patient,
   type PaymentMode,
   type ReferringSource,
@@ -33,7 +32,6 @@ import {
   Pill,
   PackageThread,
   SectionCard,
-  StatTile,
 } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { PatientOverview } from './PatientOverview';
@@ -42,7 +40,6 @@ import { toFriendlyMessage } from '@/lib/errors';
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PATIENT_SEARCH_LIMIT = 6;
 
-type ArchiveTab = 'records' | 'invoices';
 type RecordsView = 'visits' | 'patients';
 
 type PatientSortKey = 'name' | 'mrno' | 'age' | 'condition';
@@ -84,7 +81,6 @@ export function VisitsPage() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string };
 
-  const [tab, setTab] = useState<ArchiveTab>('records');
   const [recordsView, setRecordsView] = useState<RecordsView>('visits');
   const [from, setFrom] = useState(() => toIsoDate(new Date(Date.now() - 6 * 86400000)));
   const [to, setTo] = useState(() => toIsoDate(new Date()));
@@ -128,13 +124,6 @@ export function VisitsPage() {
     }
   }
 
-  function selectTab(next: ArchiveTab) {
-    setTab(next);
-    if (next === 'records' && recordsView === 'visits' && !from && !to) {
-      applyDatePreset('week');
-    }
-  }
-
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
   const visits = useLiveQuery(
@@ -148,8 +137,6 @@ export function VisitsPage() {
       }),
     [clinic.id, from, to, therapistId, search.patientId]
   );
-  const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
-  const payments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
 
   const therapistName = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
@@ -188,9 +175,6 @@ export function VisitsPage() {
     [openPackages]
   );
 
-  const weeklySummary = useLiveQuery(() => dashboardService.weeklySummary(clinic.id), [clinic.id]);
-  const monthlyNew = useLiveQuery(() => dashboardService.monthlyNewCounts(clinic.id), [clinic.id]);
-
   const sort = useSort<'date' | 'patient' | 'therapist' | 'bill' | 'bmShare' | 'postTax'>('date', 'desc');
   const sortedVisits = applySort(
     visits ?? [],
@@ -203,23 +187,6 @@ export function VisitsPage() {
       postTax: byNumber<Visit>((v) => v.postTaxPaise),
     },
     sort
-  );
-
-  const invoiceSort = useSort<'no' | 'date' | 'patient' | 'total' | 'status'>('date', 'desc');
-  const statusByInvoiceId = useMemo(
-    () => new Map((payments ?? []).map((p) => [p.invoiceId, p.status])),
-    [payments]
-  );
-  const sortedInvoices = applySort(
-    invoices ?? [],
-    {
-      no: byNumber<Invoice>((inv) => inv.seq),
-      date: byString<Invoice>((inv) => inv.issuedAt),
-      patient: byString<Invoice>((inv) => inv.patientSnapshot.name),
-      total: byNumber<Invoice>((inv) => inv.totalPaise),
-      status: byString<Invoice>((inv) => statusByInvoiceId.get(inv.id) ?? 'paid'),
-    },
-    invoiceSort
   );
 
   const totals = useMemo(
@@ -258,10 +225,6 @@ export function VisitsPage() {
     }
   }
 
-  async function toggleInvoiceStatus(invoiceId: string, current: 'paid' | 'outstanding') {
-    await paymentService.setStatus(invoiceId, clinic.id, current === 'paid' ? 'outstanding' : 'paid');
-  }
-
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -281,30 +244,9 @@ export function VisitsPage() {
         </Link>
       </div>
 
-      <div className="flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
-        {(
-          [
-            { key: 'records', label: 'Records' },
-            { key: 'invoices', label: 'Invoices' },
-          ] as const
-        ).map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            className={`rounded-md px-3.5 py-1.5 text-sm font-medium ${
-              tab === t.key
-                ? 'bg-[var(--surface)] text-[var(--ink)] shadow-sm'
-                : 'text-[var(--muted)] hover:text-[var(--ink)]'
-            }`}
-            onClick={() => selectTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <h1 className="font-display text-2xl font-semibold text-[var(--ink)] mb-4">Records</h1>
 
-      {tab === 'records' && (
-        <div className="flex w-fit gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+      <div className="flex w-fit gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
           {(
             [
               { key: 'visits', label: 'Visits' },
@@ -325,9 +267,8 @@ export function VisitsPage() {
             </button>
           ))}
         </div>
-      )}
 
-      {tab === 'records' && recordsView === 'visits' && (
+      {recordsView === 'visits' && (
         <>
           <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
             <div className="relative">
@@ -389,17 +330,10 @@ export function VisitsPage() {
           </div>
 
           {filteredPatient && <PatientOverview patient={filteredPatient} />}
-
-          <div className="flex flex-wrap gap-3">
-            <StatTile label="This week's visits" value={weeklySummary?.visitCount ?? 0} />
-            <StatTile label="Collected this week" value={formatINR(weeklySummary?.collectedPaise ?? 0)} />
-            <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
-            <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
-          </div>
         </>
       )}
 
-      {tab === 'records' && recordsView === 'visits' && followUps.length > 0 && (
+      {recordsView === 'visits' && followUps.length > 0 && (
         <SectionCard title="Due for follow-up">
           <p className="mb-3 text-xs text-[var(--muted)]">
             Mid-package and not seen in over 14 days — your actionable retention list.
@@ -446,7 +380,7 @@ export function VisitsPage() {
         </SectionCard>
       )}
 
-      {tab === 'records' && recordsView === 'visits' && (
+      {recordsView === 'visits' && (
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
@@ -632,74 +566,8 @@ export function VisitsPage() {
       </div>
       )}
 
-      {tab === 'records' && recordsView === 'patients' && <AllPatientsSection />}
+      {recordsView === 'patients' &&<AllPatientsSection />}
 
-      {tab === 'invoices' && (
-      <div className="space-y-4">
-        <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-          <table className="min-w-full divide-y divide-[var(--border)]">
-            <thead className="bg-[var(--paper)]">
-              <tr>
-                <SortHeader label="Invoice No" k="no" sort={invoiceSort} firstDir="desc" />
-                <SortHeader label="Date" k="date" sort={invoiceSort} firstDir="desc" />
-                <SortHeader label="Patient" k="patient" sort={invoiceSort} />
-                <th className={th}>Patient ID</th>
-                <SortHeader label="Total" k="total" sort={invoiceSort} numeric firstDir="desc" />
-                <th className={th}>Mode</th>
-                <SortHeader label="Status" k="status" sort={invoiceSort} />
-                <th className={th}></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {sortedInvoices.map((inv) => {
-                const status = statusByInvoiceId.get(inv.id) ?? 'paid';
-                return (
-                  <tr key={inv.id} className="hover:bg-[var(--paper)]">
-                    <td className={`${td} font-medium`}>{inv.invoiceNo}</td>
-                    <td className={td}>{formatDateDMY(inv.issuedAt)}</td>
-                    <td className={`${td} font-display`}>{inv.patientSnapshot.name}</td>
-                    <td className={td}>{inv.patientSnapshot.mrno}</td>
-                    <td className={tdNum}>{formatINR(inv.totalPaise)}</td>
-                    <td className={td}>{inv.paymentMode}</td>
-                    <td className={td}>
-                      <Pill tone={status === 'paid' ? 'green' : 'amber'}>
-                        {status === 'paid' ? 'Paid' : 'Outstanding'}
-                      </Pill>
-                      <button
-                        className="ml-2 text-xs text-[var(--teal)] hover:underline"
-                        onClick={() => void toggleInvoiceStatus(inv.id, status)}
-                      >
-                        Mark {status === 'paid' ? 'outstanding' : 'paid'}
-                      </button>
-                    </td>
-                    <td className={td}>
-                      <Link
-                        to="/invoices/$invoiceId/print"
-                        params={{ invoiceId: inv.id }}
-                        className="font-medium text-[var(--teal)] hover:underline"
-                      >
-                        Print
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-              {invoices?.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-sm text-[var(--muted)]">
-                    No invoices issued yet — issue one from the Visits table.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-[var(--muted)]">
-          Issued invoices are immutable; numbering is sequential per fiscal year and gap-free.
-          Payment status is tracked separately and doesn't affect the invoice itself.
-        </p>
-      </div>
-      )}
 
       {invoicing && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">
