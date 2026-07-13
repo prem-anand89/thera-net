@@ -51,10 +51,6 @@ export function PatientProfilePage() {
     () => patientActivityService.getActivityForPatient(clinic.id, patientId, daysBack),
     [clinic.id, patientId, daysBack]
   );
-  const notes = useLiveQuery(
-    () => repos.consultationNotes.list(clinic.id, patientId),
-    [clinic.id, patientId]
-  );
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
 
   const visits = useLiveQuery(
@@ -79,7 +75,6 @@ export function PatientProfilePage() {
     [visits]
   );
 
-  const latestNote = useMemo(() => sortByUpdated(notes)[0], [notes]);
   const patientPackages = useMemo(
     () => (openPackages ?? []).filter((p) => p.patientId === patientId),
     [openPackages, patientId]
@@ -307,38 +302,6 @@ export function PatientProfilePage() {
             )}
           </SideCard>
 
-          <SideCard
-            title="Latest note"
-            action={
-              latestNote ? (
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                    latestNote.status === 'completed'
-                      ? 'bg-[var(--moss-light)] text-[var(--moss)]'
-                      : 'bg-[var(--paper)] text-[var(--muted)]'
-                  }`}
-                >
-                  {latestNote.status}
-                </span>
-              ) : undefined
-            }
-          >
-            {!latestNote ? (
-              <p className="text-sm text-[var(--muted)]">No consultation note yet.</p>
-            ) : (
-              <div className="space-y-2 text-sm text-[var(--ink)]">
-                <p className="leading-relaxed">
-                  {latestNote.notesText?.trim() || <span className="text-[var(--muted)]">No text recorded.</span>}
-                </p>
-                <div className="font-num flex flex-wrap gap-x-3 text-xs text-[var(--muted)]">
-                  <span>{formatDateDMY(latestNote.updatedAt.slice(0, 10))}</span>
-                  {latestNote.authorizedSessionCount != null && (
-                    <span>{latestNote.authorizedSessionCount} sessions authorized</span>
-                  )}
-                </div>
-              </div>
-            )}
-          </SideCard>
         </div>
       </div>
     </div>
@@ -376,7 +339,3 @@ function SideCard({
 }
 
 /* -------------------------------------------------------------------------- */
-
-function sortByUpdated<T extends { updatedAt: string }>(rows: T[] | undefined): T[] {
-  return [...(rows ?? [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-}

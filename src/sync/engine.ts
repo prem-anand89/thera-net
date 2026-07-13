@@ -25,7 +25,6 @@ const SYNC_TABLES: SyncedTable[] = [
   'invoice_payments',
   'payments',
   'settlements',
-  'consultation_notes',
 ];
 // ai_generation_log is deliberately excluded — online-only, per the clinical
 // docs handoff. It never appears here, in CLIENT_WRITABLE_TABLES, or in the

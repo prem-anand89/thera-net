@@ -1,9 +1,7 @@
-import { db } from '@/lib/db';
 import type { Repos } from '@/repositories/types';
 import type {
   CatalogItem,
   Clinic,
-  ConsultationNote,
   Invoice,
   InvoicePayment,
   Patient,
@@ -29,7 +27,6 @@ export interface BackupBundle {
   invoicePayments: InvoicePayment[];
   payments: Payment[];
   settlements: Settlement[];
-  consultationNotes: ConsultationNote[];
 }
 
 export interface RestoreSummary {
@@ -41,18 +38,12 @@ export interface RestoreSummary {
   invoicePayments: number;
   payments: number;
   settlements: number;
-  consultationNotes: number;
 }
 
 export function createBackupService(repos: Repos) {
-  /**
-   * Everything scoped to one clinic, bundled for a downloadable backup.
-   * consultationNotes has no "list all for clinic" repo method (it's
-   * normally fetched per-patient), so this reads Dexie directly for that
-   * one table — the same direct-table pattern the sync engine already uses.
-   */
+  /** Everything scoped to one clinic, bundled for a downloadable backup. */
   async function exportBundle(clinicId: UUID): Promise<BackupBundle> {
-    const [clinic, therapists, catalog, patients, visits, invoices, invoicePayments, payments, settlements, consultationNotes] =
+    const [clinic, therapists, catalog, patients, visits, invoices, invoicePayments, payments, settlements] =
       await Promise.all([
         repos.clinics.get(clinicId),
         repos.therapists.list(clinicId, true),
@@ -63,7 +54,6 @@ export function createBackupService(repos: Repos) {
         repos.invoicePayments.list(clinicId),
         repos.payments.list(clinicId),
         repos.settlements.list(clinicId),
-        db.consultation_notes.where('clinicId').equals(clinicId).toArray(),
       ]);
     if (!clinic) throw new Error('Clinic not found');
 
@@ -80,7 +70,6 @@ export function createBackupService(repos: Repos) {
       invoicePayments,
       payments,
       settlements,
-      consultationNotes,
     };
   }
 
@@ -130,7 +119,6 @@ export function createBackupService(repos: Repos) {
         ...bundle.invoicePayments.map((p) => repos.invoicePayments.put(p)),
         ...bundle.payments.map((p) => repos.payments.put(p)),
         ...bundle.settlements.map((s) => repos.settlements.put(s)),
-        ...bundle.consultationNotes.map((n) => repos.consultationNotes.put(n)),
       ]);
 
       return {
@@ -142,7 +130,6 @@ export function createBackupService(repos: Repos) {
         invoicePayments: bundle.invoicePayments.length,
         payments: bundle.payments.length,
         settlements: bundle.settlements.length,
-        consultationNotes: bundle.consultationNotes.length,
       };
     },
   };
