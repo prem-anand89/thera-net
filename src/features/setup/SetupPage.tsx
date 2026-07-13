@@ -315,8 +315,8 @@ function ClinicProfile() {
         <Field
           label={
             <>
-              Partner with external organization
-              <InfoTip text="Enable if your clinic partners with a hospital or another organization for revenue sharing, tax deduction, or other arrangements." />
+              Partner with therapist/external org
+              <InfoTip text="Enable if your clinic partners with a therapist or external organization (hospital, etc.) for revenue sharing, tax deduction, or other arrangements." />
             </>
           }
         >

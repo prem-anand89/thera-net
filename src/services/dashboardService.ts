@@ -600,5 +600,23 @@ export function createDashboardService(repos: Repos) {
 
       return { newPackages, newPatients };
     },
+
+    async referralSourceStats(clinicId: UUID): Promise<Array<{ source: string; count: number }>> {
+      const visits = await repos.visits.list({ clinicId });
+      const patients = await repos.patients.list(clinicId);
+      const patientById = new Map(patients.map((p) => [p.id, p]));
+
+      const sourceCounts = new Map<string | null, number>();
+      for (const v of visits) {
+        const patient = patientById.get(v.patientId);
+        const source = patient?.referringSource ?? null;
+        const sourceLabel = source ? (source === 'hospital_referral' ? 'Hospital referral' : source === 'doctor_referral' ? 'Doctor referral' : source) : 'Unknown';
+        sourceCounts.set(sourceLabel, (sourceCounts.get(sourceLabel) ?? 0) + 1);
+      }
+
+      return Array.from(sourceCounts.entries())
+        .map(([source, count]) => ({ source: source ?? 'Unknown', count }))
+        .sort((a, b) => b.count - a.count);
+    },
   };
 }
