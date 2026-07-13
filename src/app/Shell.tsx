@@ -7,8 +7,8 @@ import { syncEngine } from '@/sync/engine';
 import { useSession } from './useSession';
 import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
+import { CreateClinicForm } from '@/features/setup/CreateClinicForm';
 import { SyncBadge } from '@/components/SyncBadge';
-import { btnSecondary } from '@/components/ui';
 
 const NAV = [
   { to: '/workspace', label: 'Workspace' },
@@ -77,33 +77,22 @@ export function Shell() {
   if (!session) return <LoginPage />;
 
   if (!clinic) {
+    if (!syncKicked) {
+      return (
+        <Centered>
+          <div className="text-center text-sm text-[var(--muted)]">Preparing…</div>
+        </Centered>
+      );
+    }
+
+    // Show clinic creation form for new users
     return (
-      <Centered>
-        <div className="max-w-md space-y-3 text-center text-sm text-[var(--muted)]">
-          <p className="font-display text-base font-medium text-[var(--ink)]">
-            {syncKicked ? "You're signed in, but not on a clinic yet" : 'Preparing…'}
-          </p>
-          {syncKicked && (
-            <p>Ask your clinic admin to add your login, then come back and retry.</p>
-          )}
-          <button className={btnSecondary} onClick={() => syncEngine.schedule(0)}>
-            Retry sync
-          </button>
-          <button className={btnSecondary} onClick={() => getSupabase()?.auth.signOut()}>
-            Sign out
-          </button>
-          {syncKicked && (
-            <details className="pt-2 text-left text-xs text-[var(--muted)]">
-              <summary className="cursor-pointer select-none text-center">Technical details</summary>
-              <p className="mt-2">
-                A membership row links your Supabase auth user to a clinic in{' '}
-                <code>clinic_members</code>. See <code>supabase/provision_clinic.sql</code> (new
-                clinic) or add a row manually, then retry sync.
-              </p>
-            </details>
-          )}
-        </div>
-      </Centered>
+      <CreateClinicForm
+        onSuccess={() => {
+          // Force sync to pull the new clinic data
+          void syncEngine.schedule(0);
+        }}
+      />
     );
   }
 
