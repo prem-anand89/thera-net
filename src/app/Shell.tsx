@@ -38,6 +38,20 @@ export function Shell() {
       syncEngine.start();
       syncEngine.schedule(0);
       setSyncKicked(true);
+    } else {
+      // Clear local Dexie data when user signs out to prevent leaking
+      // cached data from one account to another
+      void db.clinics.clear();
+      void db.therapists.clear();
+      void db.service_catalog.clear();
+      void db.patients.clear();
+      void db.visits.clear();
+      void db.invoices.clear();
+      void db.invoice_payments.clear();
+      void db.payments.clear();
+      void db.settlements.clear();
+      void db.outbox.clear();
+      void db.meta.clear();
     }
   }, [session]);
 
