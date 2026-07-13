@@ -5,9 +5,10 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { Field, inputCls, btnPrimary, ErrorNote } from '@/components/ui';
 
 export function LoginPage() {
-  const [mode, setMode] = useState<'signin' | 'reset'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resetSent, setResetSent] = useState(false);
@@ -34,6 +35,30 @@ export function LoginPage() {
     setBusy(false);
   }
 
+  async function onSignup(e: FormEvent) {
+    e.preventDefault();
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const { error } = await getSupabase()!.auth.signUp({ email, password });
+    if (error) {
+      setError(toFriendlyMessage(error));
+      setBusy(false);
+    } else {
+      setError(null);
+      // Show success message
+      setPassword('');
+      setConfirmPassword('');
+    }
+  }
+
   async function onRequestReset(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -44,6 +69,62 @@ export function LoginPage() {
     if (error) setError(toFriendlyMessage(error));
     else setResetSent(true);
     setBusy(false);
+  }
+
+  if (mode === 'signup') {
+    return (
+      <div className="mx-auto mt-24 max-w-sm">
+        <h1 className="font-display mb-1 text-center text-xl font-semibold text-[var(--ink)]">Thera.Net</h1>
+        <p className="mb-6 text-center text-sm text-[var(--muted)]">Create an account</p>
+        <form onSubmit={onSignup} className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
+          <Field label="Email">
+            <input
+              type="email"
+              required
+              className={inputCls}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </Field>
+          <Field label="Password">
+            <input
+              type="password"
+              required
+              minLength={6}
+              className={inputCls}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </Field>
+          <Field label="Confirm Password">
+            <input
+              type="password"
+              required
+              minLength={6}
+              className={inputCls}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+          </Field>
+          <ErrorNote message={error} />
+          <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
+            {busy ? 'Creating account…' : 'Sign up'}
+          </button>
+          <button
+            type="button"
+            className="w-full text-center text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+            onClick={() => {
+              setMode('signin');
+              setError(null);
+              setPassword('');
+              setConfirmPassword('');
+            }}
+          >
+            ← Back to sign in
+          </button>
+        </form>
+      </div>
+    );
   }
 
   if (mode === 'reset') {
@@ -117,16 +198,29 @@ export function LoginPage() {
         <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
-        <button
-          type="button"
-          className="w-full text-center text-xs text-[var(--muted)] hover:text-[var(--ink)]"
-          onClick={() => {
-            setMode('reset');
-            setError(null);
-          }}
-        >
-          Forgot password?
-        </button>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            className="text-center text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+            onClick={() => {
+              setMode('reset');
+              setError(null);
+            }}
+          >
+            Forgot password?
+          </button>
+          <button
+            type="button"
+            className="text-center text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+            onClick={() => {
+              setMode('signup');
+              setError(null);
+              setPassword('');
+            }}
+          >
+            Don't have an account? Sign up
+          </button>
+        </div>
         <p className="text-xs text-[var(--muted)]">
           First sign-in needs a connection; after that the app works offline and syncs when back
           online.
