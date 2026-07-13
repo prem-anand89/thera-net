@@ -32,7 +32,6 @@ import {
   Pill,
   PackageThread,
   SectionCard,
-  StatTile,
 } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { PatientOverview } from './PatientOverview';
@@ -175,9 +174,6 @@ export function VisitsPage() {
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
   );
-
-  const weeklySummary = useLiveQuery(() => dashboardService.weeklySummary(clinic.id), [clinic.id]);
-  const monthlyNew = useLiveQuery(() => dashboardService.monthlyNewCounts(clinic.id), [clinic.id]);
 
   const sort = useSort<'date' | 'patient' | 'therapist' | 'bill' | 'bmShare' | 'postTax'>('date', 'desc');
   const sortedVisits = applySort(
@@ -334,13 +330,6 @@ export function VisitsPage() {
           </div>
 
           {filteredPatient && <PatientOverview patient={filteredPatient} />}
-
-          <div className="flex flex-wrap gap-3">
-            <StatTile label="This week's visits" value={weeklySummary?.visitCount ?? 0} />
-            <StatTile label="Collected this week" value={formatINR(weeklySummary?.collectedPaise ?? 0)} />
-            <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
-            <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
-          </div>
         </>
       )}
 
