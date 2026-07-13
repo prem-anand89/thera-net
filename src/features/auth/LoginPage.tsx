@@ -32,8 +32,19 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     const { error } = await getSupabase()!.auth.signInWithPassword({ email, password });
-    if (error) setError(toFriendlyMessage(error));
     setBusy(false);
+    if (error) {
+      let message = error.message;
+      if (error.message.includes('Invalid login credentials')) {
+        message = 'Incorrect email or password.';
+      } else if (error.message.includes('Email not confirmed')) {
+        message = 'Please check your email to confirm your account before signing in.';
+      } else if (error.message.includes('too many')) {
+        message = 'Too many login attempts. Please try again in a few minutes.';
+      }
+      console.error('Sign in error:', error);
+      setError(message);
+    }
   }
 
   async function onSignup(e: FormEvent) {
@@ -51,7 +62,21 @@ export function LoginPage() {
     const { error } = await getSupabase()!.auth.signUp({ email, password });
     setBusy(false);
     if (error) {
-      setError(toFriendlyMessage(error));
+      // Auth-specific error messages
+      let message = error.message;
+      if (error.message.includes('rate limit')) {
+        message = 'Too many signup attempts. Please wait a few minutes and try again.';
+      } else if (error.message.includes('already registered')) {
+        message = 'This email is already registered. Try signing in instead.';
+      } else if (error.message.includes('invalid email')) {
+        message = 'Please enter a valid email address.';
+      } else if (error.message.includes('weak password')) {
+        message = 'Password is too weak. Use at least 6 characters.';
+      } else if (error.message.includes('User already exists')) {
+        message = 'This email is already registered. Try signing in instead.';
+      }
+      console.error('Signup error:', error);
+      setError(message);
     } else {
       setSignupSuccess(true);
       setPassword('');
@@ -66,9 +91,19 @@ export function LoginPage() {
     const { error } = await getSupabase()!.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
-    if (error) setError(toFriendlyMessage(error));
-    else setResetSent(true);
     setBusy(false);
+    if (error) {
+      let message = error.message;
+      if (error.message.includes('rate limit')) {
+        message = 'Too many password reset requests. Please wait a few minutes and try again.';
+      } else if (error.message.includes('no user found')) {
+        message = 'No account found with this email address.';
+      }
+      console.error('Password reset error:', error);
+      setError(message);
+    } else {
+      setResetSent(true);
+    }
   }
 
   if (mode === 'signup') {
