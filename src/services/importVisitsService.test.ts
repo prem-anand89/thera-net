@@ -123,7 +123,6 @@ function makeFakeRepos() {
       list: async () => [],
       put: async () => {},
     },
-    consultationNotes: { get: async () => undefined, list: async () => [], put: async () => {} },
   };
   return { repos, patients, visits };
 }

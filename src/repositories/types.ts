@@ -8,7 +8,6 @@ import type {
   InvoicePayment,
   Payment,
   Settlement,
-  ConsultationNote,
   UUID,
 } from '@/domain/types';
 
@@ -86,12 +85,6 @@ export interface SettlementRepo {
   put(settlement: Settlement): Promise<void>;
 }
 
-export interface ConsultationNoteRepo {
-  get(id: UUID): Promise<ConsultationNote | undefined>;
-  list(clinicId: UUID, patientId: UUID): Promise<ConsultationNote[]>;
-  put(note: ConsultationNote): Promise<void>;
-}
-
 export interface PaymentRepo {
   get(id: UUID): Promise<Payment | undefined>;
   list(clinicId: UUID): Promise<Payment[]>;
@@ -111,5 +104,4 @@ export interface Repos {
   invoicePayments: InvoicePaymentRepo;
   payments: PaymentRepo;
   settlements: SettlementRepo;
-  consultationNotes: ConsultationNoteRepo;
 }

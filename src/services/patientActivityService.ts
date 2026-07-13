@@ -17,7 +17,7 @@ import type { Repos } from '@/repositories/types';
  * data while offline; a future online-aware panel can query them separately.
  */
 
-export type ActivityKind = 'consultation_note';
+export type ActivityKind = never;
 
 export interface ActivityItem {
   kind: ActivityKind;
@@ -27,34 +27,19 @@ export interface ActivityItem {
   detailHref?: string;
 }
 
-export function createPatientActivityService(repos: Repos) {
+export function createPatientActivityService(_repos: Repos) {
   return {
     /**
      * Full cross-module activity for one patient, most recent first.
      * daysBack limits the window; omit for full history.
+     * (Currently empty; consultation notes have been removed.)
      */
     async getActivityForPatient(
-      clinicId: UUID,
-      patientId: UUID,
-      daysBack?: number
+      _clinicId: UUID,
+      _patientId: UUID,
+      _daysBack?: number
     ): Promise<ActivityItem[]> {
-      const notes = await repos.consultationNotes.list(clinicId, patientId);
-
-      const items: ActivityItem[] = notes.map((n) => ({
-        kind: 'consultation_note' as const,
-        id: n.id,
-        at: n.updatedAt,
-        summary: `Consultation note (${n.status})`,
-      }));
-
-      const filtered = daysBack == null ? items : items.filter((i) => withinDays(i.at, daysBack));
-      return filtered.sort((a, b) => b.at.localeCompare(a.at));
+      return [];
     },
   };
-}
-
-function withinDays(isoDateOrTimestamp: string, days: number): boolean {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-  return new Date(isoDateOrTimestamp) >= cutoff;
 }

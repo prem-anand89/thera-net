@@ -9,7 +9,6 @@ import type {
   InvoicePayment,
   Payment,
   Settlement,
-  ConsultationNote,
 } from '@/domain/types';
 
 /**
@@ -40,15 +39,10 @@ export type SyncedTable =
   | 'invoices'
   | 'invoice_payments'
   | 'payments'
-  | 'settlements'
-  | 'consultation_notes';
+  | 'settlements';
 
 /**
  * Tables the client is allowed to write. Invoices are server-issued only.
- * consultation_notes is therapist-authored but still client-writable (the
- * therapist finishing the note is the client); it's excluded from
- * server-only status only in the sense that no RPC mints it — RLS still
- * gates who can write which row.
  */
 export const CLIENT_WRITABLE_TABLES = [
   'clinics',
@@ -59,7 +53,6 @@ export const CLIENT_WRITABLE_TABLES = [
   'invoice_payments',
   'payments',
   'settlements',
-  'consultation_notes',
 ] as const satisfies readonly SyncedTable[];
 
 export class ClinicDB extends Dexie {
@@ -72,7 +65,6 @@ export class ClinicDB extends Dexie {
   invoice_payments!: Table<InvoicePayment, string>;
   payments!: Table<Payment, string>;
   settlements!: Table<Settlement, string>;
-  consultation_notes!: Table<ConsultationNote, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 
@@ -95,19 +87,7 @@ export class ClinicDB extends Dexie {
     this.version(6).stores({
       payments: 'id, clinicId, visitId, receivedDate',
     });
-    this.version(3).stores({
-      consultation_notes: 'id, clinicId, patientId, therapistId',
-      patient_module_enrollments: 'id, clinicId, patientId, moduleType',
-      screening_responses: 'id, clinicId, patientId',
-      return_to_sport_responses: 'id, clinicId, patientId',
-      scoliosis_screening_responses: 'id, clinicId, patientId',
-    });
-    this.version(4).stores({
-      face_scale_responses: 'id, clinicId, patientId',
-      facial_palsy_assessments: 'id, clinicId, patientId',
-    });
     this.version(5).stores({
-      clinic_module_settings: 'id, clinicId, moduleKey, [clinicId+moduleKey]',
       // Keyed by clinicId (not id) — one row per clinic the signed-in user
       // belongs to, written only by the sync engine's read-only pull.
       my_memberships: 'clinicId',

@@ -9,7 +9,6 @@ import type {
   InvoicePayment,
   Payment,
   Settlement,
-  ConsultationNote,
   UUID,
 } from '@/domain/types';
 import type {
@@ -23,7 +22,6 @@ import type {
   InvoicePaymentRepo,
   PaymentRepo,
   SettlementRepo,
-  ConsultationNoteRepo,
   Repos,
 } from './types';
 
@@ -163,17 +161,6 @@ const settlements: SettlementRepo = {
   put: (settlement) => putWithOutbox('settlements', settlement),
 };
 
-const consultationNotes: ConsultationNoteRepo = {
-  get: (id) => db.consultation_notes.get(id),
-  async list(clinicId, patientId) {
-    const all = await db.consultation_notes.where('patientId').equals(patientId).toArray();
-    return all
-      .filter((n) => n.clinicId === clinicId)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  },
-  put: (note) => putWithOutbox('consultation_notes', note),
-};
-
 const payments: PaymentRepo = {
   get: (id) => db.payments.get(id),
   async list(clinicId) {
@@ -202,7 +189,6 @@ export const repos: Repos = {
   invoicePayments,
   payments,
   settlements,
-  consultationNotes,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers
@@ -216,5 +202,4 @@ export type {
   InvoicePayment,
   Payment,
   Settlement,
-  ConsultationNote,
 };
