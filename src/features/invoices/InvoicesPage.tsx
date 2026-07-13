@@ -111,6 +111,7 @@ export function InvoicesPage() {
         actualBillPaise: billPaise,
         condition: 'Manual invoice',
         treatmentNotes: 'Manual invoice',
+        adjustmentReason: 'Custom billing amount',
       });
 
       // Create invoice for the visit
