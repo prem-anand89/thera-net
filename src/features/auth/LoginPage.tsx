@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { getSupabase } from '@/lib/supabase';
 import { hasSupabaseConfig } from '@/lib/env';
-import { toFriendlyMessage } from '@/lib/errors';
 import { Field, inputCls, btnPrimary, ErrorNote } from '@/components/ui';
 
 export function LoginPage() {
