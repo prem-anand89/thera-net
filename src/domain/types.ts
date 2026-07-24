@@ -45,8 +45,6 @@ export interface Clinic {
    * cached rows are unaffected.
    */
   visitColumnPrefs?: Partial<Record<VisitColumnKey, boolean>> | null;
-  /** Whether the clinical documentation module (consultation notes, screening, consent) is on. */
-  clinicalDocsEnabled?: boolean;
   /**
    * Prefix for auto-generated walk-in MRNOs (format `{prefix}-YYMMDD-XXX`).
    * Optional so older cached rows default to 'W' (original behavior).
@@ -246,7 +244,6 @@ export interface Visit {
   patientConsentConfirmed?: boolean;
   patientSignatureUrl?: string | null;
   clinicalStatus?: 'pending' | 'documented' | 'reviewed';
-  consultationNoteId?: UUID | null;
   reauthorizationRequired?: boolean;
   updatedAt: string;
   /** Auth user who created/last touched this row. Optional: older cached rows lack the key. */

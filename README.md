@@ -1,17 +1,17 @@
-# Thera.Net — Patient Visit Ledger & Clinical Documentation
+# Thera.Net — Patient Visit Ledger & Revenue Tracking
 
 Offline-first visit ledger, revenue-split tracker, and invoice book for
-physiotherapy clinics operating inside a partner hospital, extended with a
-consent-compliant clinical documentation layer. Built for Beyond Mechanics @
-Health Valley, structured multi-clinic from day one.
+physiotherapy clinics operating inside a partner hospital. Structured for
+multi-clinic operations from day one, with configurable revenue-split models
+(simple or hospital partnership).
 
 **Stack:** React + Vite + TypeScript · Supabase (Postgres/Auth/Realtime/Storage)
 · Dexie (IndexedDB) local-first store with outbox sync · Tailwind CSS.
 
-**Current scope:** the visit ledger (visits, invoices, reports, dashboard) and
-clinical documentation (consultation notes, consent ledger) only. Assessment
-modules (FaCE Scale, Facial Palsy, and others) are deliberately out of scope
-for now and will be added once this base layer is finalized.
+**Current scope:** the visit ledger (visits, invoices, reports, dashboard),
+revenue tracking, and multi-clinic isolation. Assessment modules (FaCE Scale,
+Facial Palsy, and others) are deliberately out of scope and can be added
+after this base layer is stabilized.
 
 ## What it does
 
@@ -32,23 +32,6 @@ for now and will be added once this base layer is finalized.
 
 ### Analytics & Dashboard
 - **Dashboard** — rolling last-6-months view: Post-Tax BM revenue trend, therapist-vs-therapist comparison, open packages sorted by days since last visit (flagged stale past 14 days), outstanding invoices summary. Charts are hand-built SVG (no charting dependency), colored from validated categorical palette.
-
-## Clinical documentation
-
-- **Consultation notes** — a structured clinical note per patient
-  (draft/completed/archived, authorized session count), intentionally
-  decoupled from invoice/visit financial columns so a therapist can finish
-  documentation after a visit is billed and frozen.
-- **Consent ledger** — DPDP (2023)-grade, versioned, append-only grant/
-  withdraw log for patients and therapists across three consent types
-  (data privacy, treatment, professional engagement). Withdrawal is always
-  a new row, never an edit to the original grant; templates are versioned
-  so historical consents stay auditable after wording changes.
-- **AI generation log** — any AI-generated clinical impression is logged
-  verbatim (model name + raw output) before a human reviews and signs off
-  on the note it informed. Deliberately online-only: never added to the
-  offline sync set, so it can't be created while offline and never
-  appears in the local activity feed.
 
 ## Architecture
 
