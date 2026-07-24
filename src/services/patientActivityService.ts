@@ -17,7 +17,7 @@ import type { Repos } from '@/repositories/types';
  * data while offline; a future online-aware panel can query them separately.
  */
 
-export type ActivityKind = never;
+export type ActivityKind = 'consultation_note';
 
 export interface ActivityItem {
   kind: ActivityKind;
@@ -27,19 +27,36 @@ export interface ActivityItem {
   detailHref?: string;
 }
 
-export function createPatientActivityService(_repos: Repos) {
+function noteSummary(status: string, notesText: string | null): string {
+  const verb = status === 'draft' ? 'Note drafted' : status === 'completed' ? 'Note completed' : 'Note archived';
+  const preview = notesText?.trim().slice(0, 80);
+  return preview ? `${verb} — ${preview}${notesText!.trim().length > 80 ? '…' : ''}` : verb;
+}
+
+export function createPatientActivityService(repos: Repos) {
   return {
     /**
      * Full cross-module activity for one patient, most recent first.
      * daysBack limits the window; omit for full history.
-     * (Currently empty; consultation notes have been removed.)
      */
     async getActivityForPatient(
-      _clinicId: UUID,
-      _patientId: UUID,
-      _daysBack?: number
+      clinicId: UUID,
+      patientId: UUID,
+      daysBack?: number
     ): Promise<ActivityItem[]> {
-      return [];
+      const notes = await repos.consultationNotes.listByPatient(clinicId, patientId);
+      const cutoff = daysBack != null ? Date.now() - daysBack * 24 * 60 * 60 * 1000 : null;
+
+      return notes
+        .filter((n) => cutoff == null || new Date(n.updatedAt).getTime() >= cutoff)
+        .map((n) => ({
+          kind: 'consultation_note' as const,
+          id: n.id,
+          at: n.updatedAt,
+          summary: noteSummary(n.status, n.notesText),
+          detailHref: `/patients/${patientId}/notes/${n.id}`,
+        }))
+        .sort((a, b) => b.at.localeCompare(a.at));
     },
   };
 }

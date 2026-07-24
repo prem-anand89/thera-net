@@ -8,6 +8,7 @@ import type {
   InvoicePayment,
   Payment,
   Settlement,
+  ConsultationNote,
   UUID,
 } from '@/domain/types';
 
@@ -94,6 +95,17 @@ export interface PaymentRepo {
   delete(id: UUID): Promise<void>;
 }
 
+export interface ConsultationNoteRepo {
+  get(id: UUID): Promise<ConsultationNote | undefined>;
+  /** All notes for a patient, most-recently-updated first. */
+  listByPatient(clinicId: UUID, patientId: UUID): Promise<ConsultationNote[]>;
+  /** Every note in the clinic — used for full-clinic export (backup). */
+  listByClinic(clinicId: UUID): Promise<ConsultationNote[]>;
+  /** The single open draft for a patient, if one exists (v1: one draft at a time). */
+  getOpenDraft(clinicId: UUID, patientId: UUID): Promise<ConsultationNote | undefined>;
+  put(note: ConsultationNote): Promise<void>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -104,4 +116,5 @@ export interface Repos {
   invoicePayments: InvoicePaymentRepo;
   payments: PaymentRepo;
   settlements: SettlementRepo;
+  consultationNotes: ConsultationNoteRepo;
 }

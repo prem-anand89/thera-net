@@ -9,6 +9,7 @@ import type {
   InvoicePayment,
   Payment,
   Settlement,
+  ConsultationNote,
   UUID,
 } from '@/domain/types';
 import type {
@@ -22,6 +23,7 @@ import type {
   InvoicePaymentRepo,
   PaymentRepo,
   SettlementRepo,
+  ConsultationNoteRepo,
   Repos,
 } from './types';
 
@@ -179,6 +181,28 @@ const payments: PaymentRepo = {
   },
 };
 
+const consultationNotes: ConsultationNoteRepo = {
+  get: (id) => db.consultation_notes.get(id),
+  async listByPatient(clinicId, patientId) {
+    const all = await db.consultation_notes
+      .where('patientId')
+      .equals(patientId)
+      .toArray();
+    return all
+      .filter((n) => n.clinicId === clinicId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  },
+  async listByClinic(clinicId) {
+    const all = await db.consultation_notes.where('clinicId').equals(clinicId).toArray();
+    return all.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  },
+  async getOpenDraft(clinicId, patientId) {
+    const all = await this.listByPatient(clinicId, patientId);
+    return all.find((n) => n.status === 'draft');
+  },
+  put: (note) => putWithOutbox('consultation_notes', note),
+};
+
 export const repos: Repos = {
   clinics,
   therapists,
@@ -189,6 +213,7 @@ export const repos: Repos = {
   invoicePayments,
   payments,
   settlements,
+  consultationNotes,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers
@@ -202,4 +227,5 @@ export type {
   InvoicePayment,
   Payment,
   Settlement,
+  ConsultationNote,
 };

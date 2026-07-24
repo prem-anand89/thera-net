@@ -21,6 +21,9 @@ const ArchivePage = lazy(() =>
 const PatientProfilePage = lazy(() =>
   import('@/features/patients/PatientProfilePage').then((m) => ({ default: m.PatientProfilePage }))
 );
+const NoteEditorPage = lazy(() =>
+  import('@/features/patients/NoteEditorPage').then((m) => ({ default: m.NoteEditorPage }))
+);
 const ReportsPage = lazy(() =>
   import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage }))
 );
@@ -88,6 +91,18 @@ const patientProfileRoute = createRoute({
   component: PatientProfilePage,
 });
 
+const newNoteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/notes/new',
+  component: NoteEditorPage,
+});
+
+const noteEditorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/notes/$noteId',
+  component: NoteEditorPage,
+});
+
 const reportsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports',
@@ -146,6 +161,8 @@ const routeTree = rootRoute.addChildren([
   archiveRoute,
   newVisitRoute,
   patientProfileRoute,
+  newNoteRoute,
+  noteEditorRoute,
   reportsRoute,
   reportsPrintRoute,
   invoicePrintRoute,

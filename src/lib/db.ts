@@ -9,6 +9,7 @@ import type {
   InvoicePayment,
   Payment,
   Settlement,
+  ConsultationNote,
 } from '@/domain/types';
 
 /**
@@ -39,7 +40,8 @@ export type SyncedTable =
   | 'invoices'
   | 'invoice_payments'
   | 'payments'
-  | 'settlements';
+  | 'settlements'
+  | 'consultation_notes';
 
 /**
  * Tables the client is allowed to write. Invoices are server-issued only.
@@ -53,6 +55,7 @@ export const CLIENT_WRITABLE_TABLES = [
   'invoice_payments',
   'payments',
   'settlements',
+  'consultation_notes',
 ] as const satisfies readonly SyncedTable[];
 
 export class ClinicDB extends Dexie {
@@ -65,6 +68,7 @@ export class ClinicDB extends Dexie {
   invoice_payments!: Table<InvoicePayment, string>;
   payments!: Table<Payment, string>;
   settlements!: Table<Settlement, string>;
+  consultation_notes!: Table<ConsultationNote, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 
@@ -91,6 +95,9 @@ export class ClinicDB extends Dexie {
       // Keyed by clinicId (not id) — one row per clinic the signed-in user
       // belongs to, written only by the sync engine's read-only pull.
       my_memberships: 'clinicId',
+    });
+    this.version(7).stores({
+      consultation_notes: 'id, clinicId, patientId, visitId, status',
     });
   }
 }

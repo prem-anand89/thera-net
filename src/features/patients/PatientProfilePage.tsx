@@ -1,20 +1,26 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, patientActivityService, dashboardService } from '@/services';
+import { repos, patientActivityService, dashboardService, consultationNoteService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { Pill, PackageThread, btnPrimary } from '@/components/ui';
+import { Pill, PackageThread, btnPrimary, btnSecondary } from '@/components/ui';
 import type { ActivityKind } from '@/services/patientActivityService';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
-import { REFERRING_SOURCE_LABELS } from '@/domain/types';
+import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
+
+const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
+  draft: { tone: 'amber', label: 'Draft' },
+  completed: { tone: 'green', label: 'Completed' },
+  archived: { tone: 'slate', label: 'Archived' },
+};
 
 const KIND_LABELS: Record<ActivityKind, string> = {
   consultation_note: 'Note',
 };
 
 const KIND_TONES: Record<ActivityKind, 'green' | 'amber' | 'slate'> = {
-  consultation_note: 'slate',
+  consultation_note: 'amber',
 };
 
 type VisitPaymentState = 'paid' | 'outstanding' | 'uninvoiced' | 'zero_session';
@@ -52,6 +58,10 @@ export function PatientProfilePage() {
     [clinic.id, patientId, daysBack]
   );
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
+  const notes = useLiveQuery(
+    () => consultationNoteService.listByPatient(clinic.id, patientId),
+    [clinic.id, patientId]
+  );
 
   const visits = useLiveQuery(
     () => repos.visits.list({ clinicId: clinic.id, patientId }),
@@ -270,6 +280,8 @@ export function PatientProfilePage() {
 
         {/* Side column */}
         <div className="space-y-4">
+          <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />
+
           <SideCard title="Care plan">
             {patientPackages.length === 0 ? (
               <p className="text-sm text-[var(--muted)]">No open package.</p>
@@ -309,6 +321,66 @@ export function PatientProfilePage() {
 }
 
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Entry point into consultation notes. One open draft per patient at a
+ * time (v1 constraint) — surface it instead of offering to start a second.
+ */
+function ConsultationNotePanel({
+  patientId,
+  notes,
+}: {
+  patientId: string;
+  notes: ConsultationNote[];
+}) {
+  const draft = notes.find((n) => n.status === 'draft');
+  const latest = notes[0]; // notes are pre-sorted most-recently-updated first
+  const pill = latest ? NOTE_STATUS_PILL[latest.status] : null;
+
+  return (
+    <SideCard
+      title="Consultation notes"
+      action={
+        <Link
+          to={draft ? '/patients/$patientId/notes/$noteId' : '/patients/$patientId/notes/new'}
+          params={draft ? { patientId, noteId: draft.id } : { patientId }}
+          className={btnSecondary}
+        >
+          {draft ? 'Continue draft' : 'New note'}
+        </Link>
+      }
+    >
+      {!latest ? (
+        <p className="text-sm text-[var(--muted)]">No notes yet.</p>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            {pill && <Pill tone={pill.tone}>{pill.label}</Pill>}
+            <span className="font-num text-xs text-[var(--muted)]">
+              updated {formatDateDMY(latest.updatedAt.slice(0, 10))}
+            </span>
+          </div>
+          {notes.length > 1 && (
+            <ul className="space-y-1 border-t border-[var(--border)] pt-2 text-xs">
+              {notes.slice(1, 5).map((n) => (
+                <li key={n.id} className="flex items-center justify-between">
+                  <Link
+                    to="/patients/$patientId/notes/$noteId"
+                    params={{ patientId, noteId: n.id }}
+                    className="text-[var(--muted)] hover:text-[var(--ink)]"
+                  >
+                    {formatDateDMY(n.updatedAt.slice(0, 10))}
+                  </Link>
+                  <Pill tone={NOTE_STATUS_PILL[n.status].tone}>{NOTE_STATUS_PILL[n.status].label}</Pill>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </SideCard>
+  );
+}
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (

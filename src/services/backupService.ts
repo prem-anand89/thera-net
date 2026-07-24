@@ -2,6 +2,7 @@ import type { Repos } from '@/repositories/types';
 import type {
   CatalogItem,
   Clinic,
+  ConsultationNote,
   Invoice,
   InvoicePayment,
   Patient,
@@ -12,7 +13,7 @@ import type {
   Visit,
 } from '@/domain/types';
 
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
 
 export interface BackupBundle {
   version: number;
@@ -27,6 +28,7 @@ export interface BackupBundle {
   invoicePayments: InvoicePayment[];
   payments: Payment[];
   settlements: Settlement[];
+  consultationNotes: ConsultationNote[];
 }
 
 export interface RestoreSummary {
@@ -38,23 +40,35 @@ export interface RestoreSummary {
   invoicePayments: number;
   payments: number;
   settlements: number;
+  consultationNotes: number;
 }
 
 export function createBackupService(repos: Repos) {
   /** Everything scoped to one clinic, bundled for a downloadable backup. */
   async function exportBundle(clinicId: UUID): Promise<BackupBundle> {
-    const [clinic, therapists, catalog, patients, visits, invoices, invoicePayments, payments, settlements] =
-      await Promise.all([
-        repos.clinics.get(clinicId),
-        repos.therapists.list(clinicId, true),
-        repos.catalog.list(clinicId, true),
-        repos.patients.list(clinicId),
-        repos.visits.list({ clinicId }),
-        repos.invoices.list(clinicId),
-        repos.invoicePayments.list(clinicId),
-        repos.payments.list(clinicId),
-        repos.settlements.list(clinicId),
-      ]);
+    const [
+      clinic,
+      therapists,
+      catalog,
+      patients,
+      visits,
+      invoices,
+      invoicePayments,
+      payments,
+      settlements,
+      consultationNotes,
+    ] = await Promise.all([
+      repos.clinics.get(clinicId),
+      repos.therapists.list(clinicId, true),
+      repos.catalog.list(clinicId, true),
+      repos.patients.list(clinicId),
+      repos.visits.list({ clinicId }),
+      repos.invoices.list(clinicId),
+      repos.invoicePayments.list(clinicId),
+      repos.payments.list(clinicId),
+      repos.settlements.list(clinicId),
+      repos.consultationNotes.listByClinic(clinicId),
+    ]);
     if (!clinic) throw new Error('Clinic not found');
 
     return {
@@ -70,6 +84,7 @@ export function createBackupService(repos: Repos) {
       invoicePayments,
       payments,
       settlements,
+      consultationNotes,
     };
   }
 
@@ -119,6 +134,7 @@ export function createBackupService(repos: Repos) {
         ...bundle.invoicePayments.map((p) => repos.invoicePayments.put(p)),
         ...bundle.payments.map((p) => repos.payments.put(p)),
         ...bundle.settlements.map((s) => repos.settlements.put(s)),
+        ...bundle.consultationNotes.map((n) => repos.consultationNotes.put(n)),
       ]);
 
       return {
@@ -130,6 +146,7 @@ export function createBackupService(repos: Repos) {
         invoicePayments: bundle.invoicePayments.length,
         payments: bundle.payments.length,
         settlements: bundle.settlements.length,
+        consultationNotes: bundle.consultationNotes.length,
       };
     },
   };

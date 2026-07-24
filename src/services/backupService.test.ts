@@ -1,4 +1,4 @@
-import { describe, beforeEach, expect, it, vi } from 'vitest';
+import { describe, beforeEach, expect, it } from 'vitest';
 import { createBackupService } from './backupService';
 import type { Repos } from '@/repositories/types';
 import type {
@@ -13,21 +13,6 @@ import type {
   Therapist,
   Visit,
 } from '@/domain/types';
-
-// db.consultation_notes is queried directly by backupService (no
-// clinic-wide list method on the repo). Stub just enough of Dexie's
-// chained query API for that one call.
-vi.mock('@/lib/db', () => ({
-  db: {
-    consultation_notes: {
-      where: () => ({
-        equals: () => ({
-          toArray: async () => [] as ConsultationNote[],
-        }),
-      }),
-    },
-  },
-}));
 
 function makeFakeRepos() {
   const clinic: Clinic = {
@@ -86,6 +71,7 @@ function makeFakeRepos() {
       put: async (s: Settlement) => void settlements.set(s.id, s),
     },
     consultationNotes: {
+      listByClinic: async () => [...consultationNotes.values()],
       put: async (n: ConsultationNote) => void consultationNotes.set(n.id, n),
     },
   } as unknown as Repos;
@@ -111,7 +97,7 @@ describe('backupService.exportBundle', () => {
     });
     const svc = createBackupService(fake.repos);
     const bundle = await svc.exportBundle('clinic-1');
-    expect(bundle.version).toBe(1);
+    expect(bundle.version).toBe(2);
     expect(bundle.clinicId).toBe('clinic-1');
     expect(bundle.patients).toHaveLength(1);
     expect(bundle.exportedAt).toBeTruthy();

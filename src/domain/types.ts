@@ -342,16 +342,21 @@ export type ConsultationNoteStatus = 'draft' | 'completed' | 'archived';
 /**
  * Structured clinical note, distinct from a visit's free-text treatment
  * notes. Carries sign-off status and an authorized session count so a
- * course of treatment can be tracked independent of billing.
+ * course of treatment can be tracked independent of billing. One note
+ * documents one visit (visitId nullable only until a visit is picked).
  */
 export interface ConsultationNote {
   id: UUID;
   clinicId: UUID;
   patientId: UUID;
   therapistId: UUID;
+  visitId: UUID | null;
   authorizedSessionCount: number | null;
   notesText: string | null;
   status: ConsultationNoteStatus;
   updatedAt: string;
+  /** Auth user who created/last touched this row. Optional: older cached rows lack the key. */
+  createdBy?: UUID | null;
+  updatedBy?: UUID | null;
 }
 
