@@ -7,7 +7,6 @@ import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import type { PaymentMethod, PaymentMode } from '@/domain/types';
 import type {
-  OpenPackageRow,
   PendingWorkItem,
   RecentVisitRow,
   TodayPaymentState,
@@ -56,6 +55,7 @@ export function WorkspacePage() {
   const [paidNow, setPaidNow] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [packagesOpen, setPackagesOpen] = useState(false);
   const navigate = useNavigate();
 
   const today = useLiveQuery(() => dashboardService.todayWorklist(clinic.id), [clinic.id]);
@@ -91,28 +91,69 @@ export function WorkspacePage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Workspace</h1>
-        <div className="flex gap-2">
-          <Link to="/visits/new" search={{ newPatient: '1' }} className={btnSecondary}>
+        <div className="flex w-full gap-2 sm:w-auto">
+          <Link to="/visits/new" search={{ newPatient: '1' }} className={`${btnSecondary} flex-1 text-center sm:flex-none`}>
             + New patient
           </Link>
-          <Link to="/visits/new" className={btnPrimary}>
+          <Link to="/visits/new" className={`${btnPrimary} flex-1 text-center sm:flex-none`}>
             + New visit
           </Link>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:flex lg:flex-wrap">
         <StatTile label="Today's visits" value={today?.visitCount ?? 0} />
         <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
         <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
         <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
+        {openPackages && openPackages.length > 0 && (
+          <div className="relative">
+            <button
+              onClick={() => setPackagesOpen(!packagesOpen)}
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
+            >
+              📦 {openPackages.length} open{' '}
+              <span className="hidden xs:inline">
+                {openPackages.length === 1 ? 'package' : 'packages'}
+              </span>
+              <span className={`ml-1 inline-block transition-transform ${packagesOpen ? 'rotate-180' : ''}`}>
+                ▼
+              </span>
+            </button>
+            {packagesOpen && (
+              <div className="absolute right-0 top-full mt-2 z-10 max-h-80 min-w-max overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-lg">
+                <div className="p-3">
+                  <ul className="space-y-2 text-xs">
+                    {openPackages.map((p) => (
+                      <li key={p.packageGroupId} className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--border)] last:border-0 last:pb-0">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-[var(--ink)] truncate">{p.patientName}</p>
+                          <p className="text-[var(--muted)]">{p.serviceName}</p>
+                          <p className="text-[var(--muted)]">{p.sessionsLogged}/{p.packageTotal} sessions</p>
+                          {p.stale && <Pill tone="amber">⚠ Stale</Pill>}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="border-t border-[var(--border)] px-3 py-2">
+                  <Link
+                    to="/archive"
+                    onClick={() => setPackagesOpen(false)}
+                    className="block text-center text-xs text-[var(--teal)] hover:underline"
+                  >
+                    View details →
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <PendingWorkList items={pendingWork ?? []} clinicId={clinic.id} />
-
-      <OpenPackagesSection rows={openPackages ?? []} />
 
       <SectionCard title="Today">
         {!today || today.visits.length === 0 ? (
@@ -143,8 +184,8 @@ export function WorkspacePage() {
       <RecentVisitsSection clinicId={clinic.id} />
 
       {invoicing && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">
-          <div className="w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5">
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-3 sm:p-4">
+          <div className="w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-4 sm:p-5 max-h-[90vh] overflow-y-auto">
             <h2 className="text-sm font-semibold text-[var(--ink)]">Issue invoice</h2>
             <p className="text-sm text-[var(--muted)]">
               {invoicing.patientLabel} — {invoicing.serviceLabel}
@@ -418,66 +459,6 @@ function TodayVisitsTable({
         </tbody>
       </table>
     </div>
-  );
-}
-
-function OpenPackagesSection({ rows }: { rows: OpenPackageRow[] }) {
-  const sort = useSort<'days' | 'patient' | 'progress' | 'started'>('days', 'desc');
-  const sorted = applySort(
-    rows,
-    {
-      days: byNumber<OpenPackageRow>((p) => p.daysSinceLastVisit),
-      patient: byString<OpenPackageRow>((p) => p.patientName),
-      progress: byNumber<OpenPackageRow>((p) => p.sessionsLogged / p.packageTotal),
-      started: byString<OpenPackageRow>((p) => p.startedOn),
-    },
-    sort
-  );
-
-  if (rows.length === 0) return null;
-
-  return (
-    <SectionCard title="Open packages">
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        Packages still short of their session count, most-quiet first. A patient not seen in over
-        14 days is flagged stale.
-      </p>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-          <thead>
-            <tr>
-              <SortHeader label="Patient" k="patient" sort={sort} />
-              <th className={th}>Service</th>
-              <SortHeader label="Progress" k="progress" sort={sort} numeric />
-              <SortHeader label="Started" k="started" sort={sort} />
-              <th className={th}>Last visit</th>
-              <SortHeader label="Days since" k="days" sort={sort} numeric firstDir="desc" />
-              <th className={th}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border)]">
-            {sorted.map((p) => (
-              <tr key={p.packageGroupId} className="hover:bg-[var(--paper)]">
-                <td className={td}>
-                  <Link to="/patients/$patientId" params={{ patientId: p.patientId }} className="font-display hover:underline">
-                    {p.patientName}
-                  </Link>{' '}
-                  <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                </td>
-                <td className={td}>{p.serviceName}</td>
-                <td className={tdNum}>
-                  {p.sessionsLogged} of {p.packageTotal}
-                </td>
-                <td className={td}>{formatDateDMY(p.startedOn)}</td>
-                <td className={td}>{formatDateDMY(p.lastVisitOn)}</td>
-                <td className={tdNum}>{p.daysSinceLastVisit}</td>
-                <td className={td}>{p.stale && <Pill tone="amber">⚠ Stale</Pill>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </SectionCard>
   );
 }
 
