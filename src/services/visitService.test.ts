@@ -61,6 +61,7 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       get: async (id) => (id === clinic.id ? clinic : undefined),
       list: async () => [clinic],
       put: async () => {},
+      putLocal: async () => {},
     },
     therapists: {
       list: async () => therapists,

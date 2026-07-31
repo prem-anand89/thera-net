@@ -4,11 +4,25 @@ import { repos } from '@/services';
 import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
 import type { Clinic } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
+import { toFriendlyMessage } from '@/lib/errors';
 
 interface CreateClinicFormProps {
   onSuccess: () => void;
 }
 
+/**
+ * Clinic creation is a one-time, online-only operation — the user is by
+ * definition at a login/setup screen with a live connection, exactly like
+ * invoice issuance. It goes through the create_clinic_with_admin() RPC
+ * (one synchronous, authoritative round trip) rather than the local-first
+ * outbox: routing it through repos.clinics.put() plus a separate direct
+ * client-side clinic_members insert used to fail RLS almost every time,
+ * because that insert requires is_clinic_admin(clinic_id), which depends on
+ * the clinic row already existing on the server — but the outbox push is
+ * async and debounced, so it usually hadn't landed yet. The RPC's AFTER
+ * INSERT trigger (add_creator_as_admin) adds the creator as admin
+ * atomically in the same transaction, so there's nothing left to race.
+ */
 export function CreateClinicForm({ onSuccess }: CreateClinicFormProps) {
   const [form, setForm] = useState({
     name: '',
@@ -37,63 +51,69 @@ export function CreateClinicForm({ onSuccess }: CreateClinicFormProps) {
         return;
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData.session?.user.id;
-      if (!userId) {
-        setError('Not signed in');
+      const { data, error: rpcError } = await supabase.rpc('create_clinic_with_admin', {
+        p_name: form.name.trim(),
+        p_email: form.email.trim(),
+        p_phone: form.phone.trim(),
+        p_address: form.address.trim(),
+        p_invoice_prefix: form.name.trim().slice(0, 3).toUpperCase(),
+      });
+
+      if (rpcError) {
+        setError(toFriendlyMessage(rpcError));
         setBusy(false);
         return;
       }
 
-      // Create clinic
-      const clinic: Clinic = {
-        id: crypto.randomUUID(),
-        name: form.name.trim(),
-        email: form.email || null,
-        phone: form.phone || null,
-        address: form.address || null,
-        gstNo: null,
-        logoPath: null,
-        partnerHospitalName: null,
-        partnerHospitalLogoPath: null,
-        invoicePrefix: form.name.slice(0, 3).toUpperCase(),
-        bmSplitPct: 50,
-        taxPct: 18,
-        tdsBasis: 'gross_bill',
-        fyStartMonth: 4,
-        enableTherapistSplit: false,
-        updatedAt: new Date().toISOString(),
+      const row = data as {
+        id: string;
+        name: string;
+        email: string | null;
+        phone: string | null;
+        address: string | null;
+        gst_no: string | null;
+        logo_path: string | null;
+        partner_hospital_name: string | null;
+        partner_hospital_logo_path: string | null;
+        invoice_prefix: string;
+        bm_split_pct: number;
+        tax_pct: number;
+        tds_basis: 'gross_bill' | 'bm_share';
+        fy_start_month: number;
+        enable_therapist_split: boolean;
+        updated_at: string;
       };
 
-      // Save clinic and add user as member
-      await repos.clinics.put(clinic);
+      const clinic: Clinic = {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        phone: row.phone,
+        address: row.address,
+        gstNo: row.gst_no,
+        logoPath: row.logo_path,
+        partnerHospitalName: row.partner_hospital_name,
+        partnerHospitalLogoPath: row.partner_hospital_logo_path,
+        invoicePrefix: row.invoice_prefix,
+        bmSplitPct: row.bm_split_pct,
+        taxPct: row.tax_pct,
+        tdsBasis: row.tds_basis,
+        fyStartMonth: row.fy_start_month,
+        enableTherapistSplit: row.enable_therapist_split,
+        updatedAt: row.updated_at,
+      };
 
-      // Add current user to clinic_members via RPC or direct insert
-      // Since RLS allows insert if auth.uid() IS NOT NULL, this should work
-      const { error: memberError } = await supabase
-        .from('clinic_members')
-        .insert({
-          clinic_id: clinic.id,
-          user_id: userId,
-          role: 'admin',
-        });
-
-      if (memberError) {
-        console.error('Error adding clinic member:', memberError);
-        // Clinic was created but member add failed - clinic is orphaned
-        setError(`Clinic created but couldn't add you as member: ${memberError.message}`);
-        setBusy(false);
-        return;
-      }
-
-      // Set as active clinic
+      // Server already confirmed this row (and added us as admin, in the
+      // same transaction) — cache it locally without re-queuing an outbox
+      // push of our own.
+      await repos.clinics.putLocal(clinic);
       await db.meta.put({ key: 'activeClinicId', value: clinic.id });
 
       setBusy(false);
       onSuccess();
     } catch (err) {
       console.error('Clinic creation error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to create clinic');
+      setError(err instanceof Error ? toFriendlyMessage(err) : 'Failed to create clinic');
       setBusy(false);
     }
   }

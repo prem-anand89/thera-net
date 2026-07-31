@@ -60,7 +60,7 @@ function makeFakeRepos() {
   const payments = new Map<string, Payment>();
 
   const repos: Repos = {
-    clinics: { get: async (id) => (id === clinic.id ? clinic : undefined), list: async () => [clinic], put: async () => {} },
+    clinics: { get: async (id) => (id === clinic.id ? clinic : undefined), list: async () => [clinic], put: async () => {}, putLocal: async () => {} },
     therapists: { list: async () => therapists, put: async () => {} },
     catalog: { list: async () => catalog, get: async (id) => catalog.find((c) => c.id === id), put: async () => {} },
     patients: {

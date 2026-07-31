@@ -23,6 +23,8 @@ export interface ClinicRepo {
   get(id: UUID): Promise<Clinic | undefined>;
   list(): Promise<Clinic[]>;
   put(clinic: Clinic): Promise<void>;
+  /** Local cache write for a server-created clinic (e.g. via create_clinic_with_admin RPC) — not outboxed */
+  putLocal(clinic: Clinic): Promise<void>;
 }
 
 export interface TherapistRepo {

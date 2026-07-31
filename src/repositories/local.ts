@@ -54,6 +54,9 @@ const clinics: ClinicRepo = {
   get: (id) => db.clinics.get(id),
   list: () => db.clinics.toArray(),
   put: (clinic) => putWithOutbox('clinics', clinic),
+  putLocal: async (clinic) => {
+    await db.clinics.put(clinic);
+  },
 };
 
 const therapists: TherapistRepo = {
