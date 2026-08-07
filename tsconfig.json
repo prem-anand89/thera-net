@@ -14,7 +14,7 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
