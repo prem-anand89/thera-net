@@ -138,18 +138,44 @@ assessment modules — `gut_screening`/`return_to_sport`/`scoliosis_screening`/
       (not `core_assessment`, which doesn't exist in thera-net — see §3). Required a
       new `listByEnrollment` method on `ConsultationNoteRepo` + a matching Dexie index
       (Postgres already had one, added in the §4.1 migration). The old draft-only
-      methods (`startOrContinueDraft`/`saveDraft`/`setStatus`) are left in place for
-      now — still used by the not-yet-replaced `NoteEditorPage.tsx` — and will be
-      removed in §4.5 once that page is replaced and they're genuinely unused. 5 new
-      unit tests, including the Initial-vs-Follow-up transition specifically.
-- [ ] **4.5 UI** — port `NoteEditorPage.tsx` from TheraNet-OS into
-      `thera-net/src/features/patients/NoteEditorPage.tsx`, rewiring imports/hooks to
-      thera-net's actual service/repo shapes (not identical to TheraNet-OS's). Largest
-      single step.
-- [ ] **4.6 CSS** — thera-net is Tailwind; port only the specific component classes
-      the ported UI needs (`.setup-section`, `.screening-banner`, `.nrs-scale`, etc.)
-      into thera-net's stylesheet rather than rewriting 1,220 lines into Tailwind
-      utilities. Also port the two new tokens from §2b #7 (`--amber`/`--slate`).
+      methods (`startOrContinueDraft`/`saveDraft`/`setStatus`) were left in place at
+      this step — still used by the not-yet-replaced `NoteEditorPage.tsx` — and were
+      removed in §4.5 once that page was replaced and they became genuinely unused.
+      5 new unit tests, including the Initial-vs-Follow-up transition specifically.
+- [x] **4.5 UI** — `NoteEditorPage.tsx` replaced wholesale with the TheraNet-OS
+      version, rewired to thera-net's actual shapes: routing converted from
+      `{patientId, noteId, onClose}` props to `useParams`/`useNavigate`/`Link`
+      (`/patients/$patientId/notes/new` and `/notes/$noteId`, matching thera-net's
+      existing route table); `ClinicSwitcher` dropped (thera-net's shell already
+      provides clinic context, TheraNet-OS's page needed its own); `initials()`
+      computed inline (matches `PatientProfilePage.tsx`'s convention — thera-net has
+      no shared `initials` util); `consultationNoteService.save()` renamed to the
+      already-shipped `.saveAssessment()`. Two features that only existed in
+      thera-net's original 347-line file were preserved rather than dropped:
+      `useTreatmentConsentStatus` (shown as a chip next to the note-status chip in
+      the topbar) and the visit-linkage/`Documenting visit` picker — the latter was
+      **not** carried forward: the Core Assessment model attaches notes to an
+      enrollment (episode), not an individual visit, per the TheraNet-OS mockup, so
+      `visitId` is now just carried through from `existingNote` rather than
+      user-selected. The note-history list from the original file was also dropped —
+      `PatientProfilePage.tsx`'s "Consultation notes" side card already lists a
+      patient's notes, so the editor page doesn't need to duplicate it. `ScaleWidget.tsx`
+      ported verbatim alongside it. The now-orphaned draft-only service methods
+      (`startOrContinueDraft`/`saveDraft`/`setStatus`) and their tests were removed
+      from `consultationNoteService.ts`/`.test.ts` — confirmed unused outside their
+      own tests once this page stopped calling them. `npm run typecheck && lint &&
+      test && build` all pass (184 tests).
+- [x] **4.6 CSS** — ~40 TheraNet-OS classes the ported page needs (`.app-header`,
+      `.screen-title`/`.screen-body`, `.pheader`/`.avatar`/`.chip`, `.field-block`,
+      `.btn-primary`/`.btn-secondary`, `.setup-card`/`.setup-accordion`/
+      `.setup-section*`, `.toggle-chip`/`.chip-row`/`.mini-table`, `.nrs-scale`/
+      `.psfs-scale`/`.scale-labels`/`.derived-value`, `.outcome-card`, `.ne-topbar`/
+      `.mode-toggle`/`.note-status-chip`/`.carry-forward`/`.screening-banner`/`.sb-*`/
+      `.flag-*`) appended verbatim to `src/index.css` as a dedicated "Core Assessment
+      / Note Editor" block, per the decision in §2b #7/#8 not to hand-translate 1,220
+      lines into Tailwind. Added the missing `--amber`/`--amber-light`/`--slate`/
+      `--slate-light`/`--shadow-1`/`--shadow-2` tokens to `:root` alongside thera-net's
+      existing tokens (didn't touch or duplicate any existing token).
 - [ ] **4.7 Contraindication banner / safety flags** — port onto Patient Profile once
       the payload fields exist (depends on 4.2–4.5).
 
