@@ -267,3 +267,36 @@ body {
 .bc-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
 .bc-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
 .bc-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+/* ---------- responsive breakpoints ---------- */
+/* .mobile-only / .desktop-only are global visibility toggles used across every
+   screen, some of which (.setup-accordion, .setup-layout, etc.) also set their
+   own unconditional `display` later in this file. Without !important, source
+   order alone would let those later rules win at equal specificity and defeat
+   the toggle — !important pins these as fixed regardless of where else in the
+   file `display` gets set for the same element. */
+/* mobile: phone-sized (< 720px) */
+@media (max-width: 719.98px) {
+  .desktop-only { display: none !important; }
+  .mobile-only { display: block !important; }
+}
+
+/* tablet/iPad: medium screens (720px - 999px) */
+@media (min-width: 720px) and (max-width: 999.98px) {
+  .screen-body { max-width: 900px; padding: 18px 22px; gap: 20px; }
+  .dir-toolbar { flex-direction: row; align-items: center; gap: 14px; }
+  .desktop-only { display: block !important; }
+  .mobile-only { display: none !important; }
+  .modal-card { max-width: 480px; }
+  .panel-sheet { max-width: 560px; }
+}
+
+/* desktop/laptop: large screens (1000px+) */
+@media (min-width: 1000px) {
+  .screen-body { max-width: 1000px; padding: 22px 26px; gap: 22px; }
+  .dir-toolbar { flex-direction: row; align-items: center; }
+  .desktop-only { display: block !important; }
+  .mobile-only { display: none !important; }
+  .modal-card { max-width: 500px; }
+  .panel-sheet { max-width: 600px; }
+}
