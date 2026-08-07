@@ -188,7 +188,7 @@ export function NewVisitPage() {
   }, [repeatVisit, patient]);
 
   // Default therapist when patient is selected:
-  // - Use therapist from their most recent visit
+  // - Use therapist from their most recent visit (only if not already set)
   // - If no previous visits, leave empty (user selects manually)
   useEffect(() => {
     if (!patient || therapistId) return;
@@ -199,7 +199,7 @@ export function NewVisitPage() {
         setTherapistId(sorted[0].therapistId);
       }
     })();
-  }, [patient?.id, clinic.id, therapistId]);
+  }, [patient?.id, clinic.id]);
 
   useEffect(() => {
     if (!repeatVisit?.packageGroupId || !openPackages?.length) return;
