@@ -21,7 +21,6 @@ import {
   inputCls,
   ErrorNote,
   Field,
-  Pill,
   SectionCard,
   StatTile,
   SummaryBar,
@@ -77,7 +76,6 @@ export function WorkspacePage() {
   const [paidNow, setPaidNow] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [packagesOpen, setPackagesOpen] = useState(false);
   const [attentionOpen, setAttentionOpen] = useState(false);
   const [addingExpected, setAddingExpected] = useState(false);
   const [expectedQuery, setExpectedQuery] = useState('');
@@ -103,10 +101,9 @@ export function WorkspacePage() {
   );
   const pendingWork = useLiveQuery(() => dashboardService.pendingWork(clinic.id), [clinic.id]);
   const monthlyNew = useLiveQuery(() => dashboardService.monthlyNewCounts(clinic.id), [clinic.id]);
-  const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
   const openPackageGroupIds = useMemo(
-    () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
-    [openPackages]
+    () => new Set<string>(),
+    []
   );
 
   const expectedToday = useLiveQuery(
@@ -198,53 +195,11 @@ export function WorkspacePage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
         {clinic.enableExpectedToday && <StatTile label="Expected" value={expectedToday?.length ?? 0} />}
         <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
-        {openPackages && openPackages.length > 0 && (
-          <div className="relative">
-            <button
-              onClick={() => setPackagesOpen(!packagesOpen)}
-              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
-            >
-              📦 {openPackages.length} open{' '}
-              <span className="hidden xs:inline">
-                {openPackages.length === 1 ? 'package' : 'packages'}
-              </span>
-              <span className={`ml-1 inline-block transition-transform ${packagesOpen ? 'rotate-180' : ''}`}>
-                ▼
-              </span>
-            </button>
-            {packagesOpen && (
-              <div className="absolute right-0 top-full mt-2 z-10 max-h-80 min-w-max overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-lg">
-                <div className="p-3">
-                  <ul className="space-y-2 text-xs">
-                    {openPackages.map((p) => (
-                      <li key={p.packageGroupId} className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--border)] last:border-0 last:pb-0">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-[var(--ink)] truncate">{p.patientName}</p>
-                          <p className="text-[var(--muted)]">{p.serviceName}</p>
-                          <p className="text-[var(--muted)]">{p.sessionsLogged}/{p.packageTotal} sessions</p>
-                          {p.stale && <Pill tone="amber">⚠ Stale</Pill>}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="border-t border-[var(--border)] px-3 py-2">
-                  <Link
-                    to="/archive"
-                    onClick={() => setPackagesOpen(false)}
-                    className="block text-center text-xs text-[var(--teal)] hover:underline"
-                  >
-                    View details →
-                  </Link>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
         <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
+        <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
       </div>
 
       {pendingWork && pendingWork.length > 0 && (

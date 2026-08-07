@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, patientActivityService, dashboardService, consultationNoteService } from '@/services';
+import { repos, dashboardService, consultationNoteService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { Pill, PackageThread, btnPrimary, btnSecondary } from '@/components/ui';
-import type { ActivityKind } from '@/services/patientActivityService';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
@@ -14,14 +13,6 @@ const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber'
   draft: { tone: 'amber', label: 'Draft' },
   completed: { tone: 'green', label: 'Completed' },
   archived: { tone: 'slate', label: 'Archived' },
-};
-
-const KIND_LABELS: Record<ActivityKind, string> = {
-  consultation_note: 'Note',
-};
-
-const KIND_TONES: Record<ActivityKind, 'green' | 'amber' | 'slate'> = {
-  consultation_note: 'amber',
 };
 
 type VisitPaymentState = 'paid' | 'outstanding' | 'uninvoiced' | 'zero_session';
@@ -51,13 +42,8 @@ const PAYMENT_PILL: Record<VisitPaymentState, { tone: 'green' | 'amber' | 'slate
 export function PatientProfilePage() {
   const clinic = useClinic();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
-  const [daysBack, setDaysBack] = useState<number | undefined>(undefined);
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
-  const activity = useLiveQuery(
-    () => patientActivityService.getActivityForPatient(clinic.id, patientId, daysBack),
-    [clinic.id, patientId, daysBack]
-  );
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
   const notes = useLiveQuery(
     () => consultationNoteService.listByPatient(clinic.id, patientId),
@@ -265,50 +251,6 @@ export function PatientProfilePage() {
                   })}
                 </tbody>
               </table>
-            )}
-          </section>
-
-          <SectionLabel>Recent activity</SectionLabel>
-          <section className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-4 py-2">
-            <div className="mb-1 flex flex-wrap gap-1.5 pt-2 text-xs">
-              {[
-                { label: 'Today', days: 1 },
-                { label: 'This week', days: 7 },
-                { label: 'This month', days: 30 },
-                { label: 'All time', days: undefined },
-              ].map((preset) => (
-                <button
-                  key={preset.label}
-                  onClick={() => setDaysBack(preset.days)}
-                  className={`rounded-full px-3 py-1 ${
-                    daysBack === preset.days
-                      ? 'bg-[var(--teal)] text-white'
-                      : 'bg-[var(--paper)] text-[var(--muted)] hover:bg-[var(--border)]'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-            {!activity || activity.length === 0 ? (
-              <p className="py-4 text-sm text-[var(--muted)]">No activity in this window.</p>
-            ) : (
-              <ul>
-                {activity.map((item) => (
-                  <li
-                    key={`${item.kind}:${item.id}`}
-                    className="grid grid-cols-[6rem_1fr] gap-3 border-t border-[var(--border)] py-2.5 first:border-t-0"
-                  >
-                    <span className="font-num pt-0.5 text-xs text-[var(--muted)]">
-                      {formatDateDMY(item.at.slice(0, 10))}
-                    </span>
-                    <span className="flex flex-wrap items-center gap-2 text-sm text-[var(--ink)]">
-                      <Pill tone={KIND_TONES[item.kind]}>{KIND_LABELS[item.kind]}</Pill>
-                      {item.summary}
-                    </span>
-                  </li>
-                ))}
-              </ul>
             )}
           </section>
         </div>
