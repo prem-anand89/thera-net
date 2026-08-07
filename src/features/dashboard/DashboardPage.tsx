@@ -8,6 +8,7 @@ import { monthName, formatDateDMY } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { SectionCard, StatTile, th, thNum, td, tdNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
+import { PieChart } from '@/components/PieChart';
 
 // Reference categorical palette — all 8 validated slots in fixed order,
 // assigned by index and never cycled (a 9th series would repeat hues and
@@ -37,6 +38,10 @@ export function DashboardPage() {
   );
   const recurringPatients = useLiveQuery(
     () => dashboardService.recurringPatients(clinic.id),
+    [clinic.id]
+  );
+  const referralSources = useLiveQuery(
+    () => dashboardService.referralSourceStats(clinic.id),
     [clinic.id]
   );
 
@@ -257,6 +262,22 @@ export function DashboardPage() {
         )}
         {trend && therapistNames.length === 0 && (
           <p className="text-sm text-[var(--muted)]">No visits in the last 6 months.</p>
+        )}
+      </SectionCard>
+
+      <SectionCard title="Referral sources">
+        <p className="mb-4 text-xs text-[var(--muted)]">
+          Where your patients are coming from — hospital referrals, doctor referrals, and other sources.
+        </p>
+        {referralSources && referralSources.length > 0 ? (
+          <PieChart
+            data={referralSources.map((r) => ({
+              label: r.source,
+              value: r.count,
+            }))}
+          />
+        ) : (
+          <p className="py-8 text-center text-sm text-[var(--muted)]">No referral data yet.</p>
         )}
       </SectionCard>
     </div>
