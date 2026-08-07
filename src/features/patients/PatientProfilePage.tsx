@@ -10,7 +10,7 @@ import { upcastPayload } from '@/domain/coreAssessment';
 import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
-import { EditVisitModal } from '@/features/visits/EditVisitModal';
+import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 
 const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
   draft: { tone: 'amber', label: 'Draft' },
@@ -40,12 +40,14 @@ export function PatientProfilePage() {
   const clinic = useClinic();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
   const [editOpen, setEditOpen] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
+  const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [newPatientId, setNewPatientId] = useState<string | null>(null);
   const [selectedVisitIds, setSelectedVisitIds] = useState<Set<string>>(new Set());
   const [issuingInvoice, setIssuingInvoice] = useState(false);
   const [issueError, setIssueError] = useState<string | null>(null);
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
+  const editPatient = useLiveQuery(() => (editPatientId ? repos.patients.get(editPatientId) : undefined), [editPatientId]);
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
   const notes = useLiveQuery(
     () => consultationNoteService.listByPatient(clinic.id, patientId),
@@ -319,7 +321,7 @@ export function PatientProfilePage() {
                           showDate={true}
                           showPatient={false}
                           onInvoice={() => {}}
-                          onEdit={() => setEditing(v.id)}
+                          onEditPatient={() => setEditPatientId(v.patientId)}
                           onDelete={() => handleVisitDelete(v.id)}
                         />
                       </div>
@@ -381,11 +383,22 @@ export function PatientProfilePage() {
         />
       )}
 
-      {editing && (
-        <EditVisitModal
-          visitId={editing}
-          onClose={() => setEditing(null)}
-          setError={setIssueError}
+      {editPatientId && editPatient && (
+        <EditPatientModal
+          patient={editPatient}
+          open={true}
+          onClose={() => setEditPatientId(null)}
+          onSave={() => {
+            setEditPatientId(null);
+          }}
+        />
+      )}
+
+      {newPatientId && (
+        <AddPatientDetailsModal
+          patientId={newPatientId}
+          onClose={() => setNewPatientId(null)}
+          onOpenEdit={() => setEditPatientId(newPatientId)}
         />
       )}
     </div>
