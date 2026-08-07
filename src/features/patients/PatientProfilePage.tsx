@@ -1,13 +1,15 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService, consultationNoteService } from '@/services';
+import { repos, dashboardService, consultationNoteService, invoiceService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { Pill, PackageThread, btnPrimary, btnSecondary } from '@/components/ui';
-import { formatINR } from '@/domain/money';
+import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
+import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
 import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
+import { toFriendlyMessage } from '@/lib/errors';
+import { EditPatientModal } from './EditPatientModal';
 
 const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
   draft: { tone: 'amber', label: 'Draft' },
@@ -27,12 +29,6 @@ function visitPaymentState(
   return statusByInvoiceId.get(invoiceId) === 'outstanding' ? 'outstanding' : 'paid';
 }
 
-const PAYMENT_PILL: Record<VisitPaymentState, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
-  paid: { tone: 'green', label: 'Paid' },
-  outstanding: { tone: 'amber', label: 'Outstanding' },
-  uninvoiced: { tone: 'amber', label: 'Not invoiced' },
-  zero_session: { tone: 'slate', label: '₹0 session' },
-};
 
 /**
  * Patient Hub — the patient-centric home of the app. One patient's identity,
@@ -42,6 +38,10 @@ const PAYMENT_PILL: Record<VisitPaymentState, { tone: 'green' | 'amber' | 'slate
 export function PatientProfilePage() {
   const clinic = useClinic();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
+  const [editOpen, setEditOpen] = useState(false);
+  const [selectedVisitIds, setSelectedVisitIds] = useState<Set<string>>(new Set());
+  const [issuingInvoice, setIssuingInvoice] = useState(false);
+  const [issueError, setIssueError] = useState<string | null>(null);
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
@@ -57,6 +57,7 @@ export function PatientProfilePage() {
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
   const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
+  const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
 
   const therapistName = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
@@ -76,6 +77,61 @@ export function PatientProfilePage() {
     () => (openPackages ?? []).filter((p) => p.patientId === patientId),
     [openPackages, patientId]
   );
+
+  const outstandingBalance = useMemo(() => {
+    if (!visits || !invoices) return 0;
+    const invoiceStatusMap = new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status]));
+    let total = 0;
+    for (const v of visits) {
+      if (!v.deleted && v.invoiceId && invoiceStatusMap.get(v.invoiceId) === 'outstanding') {
+        total += v.actualBillPaise;
+      }
+    }
+    return total;
+  }, [visits, invoices, invoicePayments]);
+
+  const openPackageIds = useMemo(
+    () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
+    [openPackages]
+  );
+
+  const handleVisitDelete = useCallback(async (visitId: string) => {
+    if (!confirm('Delete this visit?')) return;
+    try {
+      const visit = await repos.visits.get(visitId);
+      if (visit && !visit.invoiceId) {
+        await repos.visits.softDelete(visitId);
+      }
+    } catch (e) {
+      console.error('Failed to delete visit:', e);
+    }
+  }, []);
+
+  const toggleVisitSelection = useCallback((visitId: string) => {
+    setSelectedVisitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(visitId)) {
+        next.delete(visitId);
+      } else {
+        next.add(visitId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBulkIssueInvoice = useCallback(async () => {
+    if (selectedVisitIds.size === 0) return;
+    setIssuingInvoice(true);
+    setIssueError(null);
+    try {
+      await invoiceService.issueForVisits(Array.from(selectedVisitIds), 'Cash');
+      setSelectedVisitIds(new Set());
+    } catch (e) {
+      setIssueError(toFriendlyMessage(e));
+    } finally {
+      setIssuingInvoice(false);
+    }
+  }, [selectedVisitIds]);
 
   // Derived from the most recent Core Assessment note's safety-history
   // fields — no separate manual entry point, since a clinician already
@@ -150,7 +206,16 @@ export function PatientProfilePage() {
             {initials || '?'}
           </div>
           <div className="min-w-[12rem] flex-1">
-            <h1 className="font-display text-xl font-semibold text-[var(--ink)]">{patient.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-display text-xl font-semibold text-[var(--ink)]">{patient.name}</h1>
+              <button
+                onClick={() => setEditOpen(true)}
+                className="text-[var(--muted)] hover:text-[var(--ink)]"
+                title="Edit patient"
+              >
+                ✎
+              </button>
+            </div>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-[var(--muted)]">
               <span>
                 <span className="text-[var(--muted)]/70">MRN</span>{' '}
@@ -164,6 +229,11 @@ export function PatientProfilePage() {
               )}
             </div>
             <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {outstandingBalance > 0 && (
+                <span className="rounded-full bg-[var(--rust-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--rust)]">
+                  ₹{(outstandingBalance / 100).toFixed(0)} outstanding
+                </span>
+              )}
               {patient.primaryCondition && (
                 <span className="rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--teal)]">
                   {patient.primaryCondition}
@@ -184,73 +254,76 @@ export function PatientProfilePage() {
         {/* Main column */}
         <div className="space-y-4">
           <SectionLabel>Visit history</SectionLabel>
-          <section className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+          {issueError && (
+            <div className="rounded bg-[var(--rust-light)] p-2 text-sm text-[var(--rust)]">
+              {issueError}
+            </div>
+          )}
+          <section className="divide-y divide-[var(--border)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+            {selectedVisitIds.size > 0 && (
+              <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--teal-light)] px-4 py-2.5">
+                <span className="text-sm font-medium text-[var(--teal)]">
+                  {selectedVisitIds.size} selected
+                </span>
+                <button
+                  type="button"
+                  className="rounded-full bg-[var(--teal)] px-3 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                  onClick={handleBulkIssueInvoice}
+                  disabled={issuingInvoice}
+                >
+                  {issuingInvoice ? 'Issuing...' : 'Issue invoice for selected'}
+                </button>
+              </div>
+            )}
             {visitRows.length === 0 ? (
               <p className="p-4 text-sm text-[var(--muted)]">No visits recorded yet.</p>
             ) : (
-              <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-                <thead className="bg-[var(--paper)]">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      Date
-                    </th>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      Service
-                    </th>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      Therapist
-                    </th>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      Condition
-                    </th>
-                    <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      Bill
-                    </th>
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {visitRows.map((v) => {
-                    const state = visitPaymentState(v.actualBillPaise, v.invoiceId, statusByInvoiceId);
-                    const pill = PAYMENT_PILL[state];
-                    return (
-                      <tr key={v.id}>
-                        <td className="font-num px-3 py-2.5 text-[var(--ink)]">
-                          {formatDateDMY(v.visitDate)}
-                        </td>
-                        <td className="px-3 py-2.5 text-[var(--ink)]">
-                          {serviceName.get(v.serviceCatalogId) ?? '—'}
-                          {v.sessionIndex && v.packageTotal && (
-                            <span className="ml-1.5">
-                              <PackageThread sessionIndex={v.sessionIndex} packageTotal={v.packageTotal} />
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-[var(--ink)]">
-                          {therapistName.get(v.therapistId) ?? '—'}
-                        </td>
-                        <td className="px-3 py-2.5 text-[var(--ink)]">{v.condition ?? '—'}</td>
-                        <td className="font-num px-3 py-2.5 text-right text-[var(--ink)]">
-                          {formatINR(v.actualBillPaise)}
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          {v.invoiceId ? (
-                            <Link
-                              to="/invoices/$invoiceId/print"
-                              params={{ invoiceId: v.invoiceId }}
-                              className="hover:opacity-80"
-                            >
-                              <Pill tone={pill.tone}>{pill.label}</Pill>
-                            </Link>
-                          ) : (
-                            <Pill tone={pill.tone}>{pill.label}</Pill>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <ul className="divide-y divide-[var(--border)]">
+                {visitRows.map((v) => {
+                  const isSelected = selectedVisitIds.has(v.id);
+                  const canInvoice = !v.invoiceId;
+                  const cardData: VisitCardData = {
+                    visitId: v.id,
+                    visitDate: v.visitDate,
+                    patientId,
+                    patientName: patient.name,
+                    mrno: patient.mrno,
+                    condition: v.condition ?? null,
+                    serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
+                    sessionIndex: v.sessionIndex ?? null,
+                    packageTotal: v.packageTotal ?? null,
+                    therapistName: therapistName.get(v.therapistId) ?? '—',
+                    treatmentNotes: v.treatmentNotes ?? null,
+                    billPaise: v.actualBillPaise,
+                    paymentState: visitPaymentState(v.actualBillPaise, v.invoiceId, statusByInvoiceId),
+                    invoiceId: v.invoiceId ?? null,
+                    canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
+                    canDelete: !v.invoiceId,
+                  };
+                  return (
+                    <li key={v.id} className="flex items-start gap-3 px-3">
+                      {canInvoice && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleVisitSelection(v.id)}
+                          className="mt-4 shrink-0 cursor-pointer"
+                          aria-label={`Select visit on ${formatDateDMY(v.visitDate)}`}
+                        />
+                      )}
+                      <div className="flex-1">
+                        <SharedVisitCard
+                          data={cardData}
+                          showDate={true}
+                          showPatient={false}
+                          onInvoice={() => {}}
+                          onDelete={() => handleVisitDelete(v.id)}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </section>
         </div>
@@ -293,6 +366,17 @@ export function PatientProfilePage() {
 
         </div>
       </div>
+
+      {patient && (
+        <EditPatientModal
+          patient={patient}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSave={() => {
+            setEditOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

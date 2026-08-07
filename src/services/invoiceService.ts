@@ -23,6 +23,37 @@ export function createInvoiceService(repos: Repos) {
     return group.filter((v) => !v.invoiceId);
   }
 
+  /**
+   * Group visits by package/service for multi-line-item invoicing.
+   * Each group becomes one line item on a combined invoice.
+   */
+  async function groupVisitsForInvoicing(visitIds: UUID[]): Promise<Map<string, Visit[]>> {
+    const visits = await Promise.all(visitIds.map((id) => repos.visits.get(id)));
+    const valid = visits.filter((v): v is Visit => v !== undefined);
+
+    const groups = new Map<string, Visit[]>();
+    for (const visit of valid) {
+      if (visit.invoiceId) throw new Error(`Visit ${visit.id} is already invoiced`);
+
+      // Collect full package group if this is a package visit
+      let fullGroup: Visit[];
+      if (visit.packageGroupId) {
+        fullGroup = await collectVisits(visit);
+      } else {
+        fullGroup = [visit];
+      }
+
+      // Group key = packageGroupId (or visitId for standalone visits)
+      const key = visit.packageGroupId || visit.id;
+      const existing = groups.get(key) ?? [];
+      const merged = [...existing, ...fullGroup].filter(
+        (v, i, a) => a.findIndex((x) => x.id === v.id) === i
+      );
+      groups.set(key, merged);
+    }
+    return groups;
+  }
+
   return {
     /**
      * Issues an invoice for a visit — for package visits, every uninvoiced
@@ -30,6 +61,15 @@ export function createInvoiceService(repos: Repos) {
      * session dates even though usually only session 1 carried the charge.
      */
     async issueForVisit(visitId: UUID, paymentMode: PaymentMode): Promise<Invoice> {
+      return this.issueForVisits([visitId], paymentMode);
+    },
+
+    /**
+     * Issues a single invoice for multiple visits/packages. Groups visits by
+     * package and creates one line item per group, combining them into a
+     * single invoice. All visits must belong to the same patient.
+     */
+    async issueForVisits(visitIds: UUID[], paymentMode: PaymentMode): Promise<Invoice> {
       const supabase = getSupabase();
       if (!supabase) throw new Error('Supabase is not configured');
       if (!navigator.onLine) {
@@ -38,32 +78,45 @@ export function createInvoiceService(repos: Repos) {
         );
       }
 
-      const visit = await repos.visits.get(visitId);
-      if (!visit) throw new Error('Visit not found');
-      if (visit.invoiceId) throw new Error('This visit is already invoiced');
+      if (visitIds.length === 0) throw new Error('No visits selected');
 
-      const [clinic, patient, catalogItem] = await Promise.all([
-        repos.clinics.get(visit.clinicId),
-        repos.patients.get(visit.patientId),
-        repos.catalog.get(visit.serviceCatalogId),
+      // Fetch first visit to get clinic/patient
+      const firstVisit = await repos.visits.get(visitIds[0]);
+      if (!firstVisit) throw new Error('Visit not found');
+
+      const [clinic, patient] = await Promise.all([
+        repos.clinics.get(firstVisit.clinicId),
+        repos.patients.get(firstVisit.patientId),
       ]);
-      if (!clinic || !patient || !catalogItem) throw new Error('Missing clinic/patient/service data');
+      if (!clinic || !patient) throw new Error('Missing clinic/patient data');
 
-      const visits = await collectVisits(visit);
-      const totalPaise = visits.reduce((sum, v) => sum + v.actualBillPaise, 0);
-      const billed = visits.find((v) => v.actualBillPaise > 0) ?? visit;
+      // Group visits by package
+      const groups = await groupVisitsForInvoicing(visitIds);
+      const allVisits: Visit[] = [];
+      const lineItems: InvoiceLineItem[] = [];
+      let totalPaise = 0;
+      let therapistId: UUID = firstVisit.therapistId;
 
-      const lineItems: InvoiceLineItem[] = [
-        {
+      for (const groupVisits of groups.values()) {
+        const groupBilled = groupVisits.find((v) => v.actualBillPaise > 0) ?? groupVisits[0];
+        const catalogItem = await repos.catalog.get(groupBilled.serviceCatalogId);
+        if (!catalogItem) throw new Error('Service not found');
+
+        const groupTotal = groupVisits.reduce((sum, v) => sum + v.actualBillPaise, 0);
+        allVisits.push(...groupVisits);
+        totalPaise += groupTotal;
+        therapistId = groupBilled.therapistId;
+
+        lineItems.push({
           serviceName: catalogItem.name,
-          sessionCount: visit.packageTotal ?? catalogItem.sessionCount,
-          sessionDates: visits.map((v) => v.visitDate).sort(),
-          catalogPricePaise: billed.catalogPricePaise,
-          adjustmentPaise: visits.reduce((sum, v) => sum + v.adjustmentPaise, 0),
-          adjustmentReason: billed.adjustmentReason,
-          totalPaise,
-        },
-      ];
+          sessionCount: groupBilled.packageTotal ?? catalogItem.sessionCount,
+          sessionDates: groupVisits.map((v) => v.visitDate).sort(),
+          catalogPricePaise: groupBilled.catalogPricePaise,
+          adjustmentPaise: groupVisits.reduce((sum, v) => sum + v.adjustmentPaise, 0),
+          adjustmentReason: groupBilled.adjustmentReason,
+          totalPaise: groupTotal,
+        });
+      }
 
       const fy = fiscalYearOf(new Date(), clinic.fyStartMonth);
       const { data, error } = await supabase.rpc('issue_invoice', {
@@ -78,15 +131,15 @@ export function createInvoiceService(repos: Repos) {
         p_line_items: lineItems,
         p_total_paise: totalPaise,
         p_payment_mode: paymentMode,
-        p_therapist_id: billed.therapistId,
-        p_visit_ids: visits.map((v) => v.id),
+        p_therapist_id: therapistId,
+        p_visit_ids: allVisits.map((v) => v.id),
       });
       if (error) throw new Error(`Could not issue invoice: ${error.message}`);
 
       const invoice = rowToDomain<Invoice>(data as Record<string, unknown>);
       await repos.invoices.putLocal(invoice);
       await repos.visits.markInvoiced(
-        visits.map((v) => v.id),
+        allVisits.map((v) => v.id),
         invoice.id
       );
       return invoice;
