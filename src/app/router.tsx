@@ -78,9 +78,13 @@ const archiveRoute = createRoute({
 const newVisitRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/visits/new',
-  validateSearch: (search: Record<string, unknown>): { repeatVisitId?: string; newPatient?: string } => ({
+  validateSearch: (
+    search: Record<string, unknown>
+  ): { repeatVisitId?: string; newPatient?: string; patientId?: string; prefillName?: string } => ({
     ...(typeof search.repeatVisitId === 'string' ? { repeatVisitId: search.repeatVisitId } : {}),
     ...(typeof search.newPatient === 'string' ? { newPatient: search.newPatient } : {}),
+    ...(typeof search.patientId === 'string' ? { patientId: search.patientId } : {}),
+    ...(typeof search.prefillName === 'string' ? { prefillName: search.prefillName } : {}),
   }),
   component: NewVisitPage,
 });

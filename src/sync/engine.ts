@@ -26,6 +26,8 @@ const SYNC_TABLES: SyncedTable[] = [
   'payments',
   'settlements',
   'consultation_notes',
+  'patient_module_enrollments',
+  'expected_visits',
 ];
 // ai_generation_log is deliberately excluded — online-only, per the clinical
 // docs handoff. It never appears here, in CLIENT_WRITABLE_TABLES, or in the
@@ -39,6 +41,9 @@ const PAGE = 1000;
 const NUMERIC_FIELDS: Partial<Record<SyncedTable, string[]>> = {
   clinics: ['bmSplitPct', 'taxPct', 'fyStartMonth'],
   visits: ['bmSplitPct', 'taxPct', 'sharedPct'],
+  // psfs_mean is numeric(3,1), same family as the columns above that
+  // PostgREST can hand back as a string.
+  consultation_notes: ['psfsMean'],
 };
 
 function normalize(table: SyncedTable, obj: Record<string, unknown>) {

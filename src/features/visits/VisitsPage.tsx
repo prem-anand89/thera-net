@@ -244,8 +244,6 @@ export function VisitsPage() {
         </Link>
       </div>
 
-      <h1 className="font-display text-2xl font-semibold text-[var(--ink)] mb-4">Records</h1>
-
       <div className="flex w-fit gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
           {(
             [

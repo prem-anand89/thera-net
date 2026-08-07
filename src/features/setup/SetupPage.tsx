@@ -345,6 +345,23 @@ function ClinicProfile() {
             <option value="yes">Yes</option>
           </select>
         </Field>
+        <Field
+          label={
+            <>
+              Expected today
+              <InfoTip text="Shows a lightweight 'who's coming in today' list on Workspace, for clinics that track informal walk-in/appointment expectations. Not a booking system — no calendar, no availability checking." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.enableExpectedToday ? 'yes' : 'no'}
+            onChange={(e) => set({ enableExpectedToday: e.target.value === 'yes' })}
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </Field>
         <Field label="Address">
           <input className={inputCls} value={form.address ?? ''} onChange={(e) => set({ address: e.target.value || null })} />
         </Field>

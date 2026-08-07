@@ -52,6 +52,8 @@ export interface Clinic {
    * Optional so older cached rows default to 'W' (original behavior).
    */
   walkInMrnoPrefix?: string | null;
+  /** Opt-in, off by default — the "Expected today" section on Workspace. */
+  enableExpectedToday?: boolean;
   updatedAt: string;
 }
 
@@ -337,13 +339,45 @@ export interface Settlement {
   updatedAt: string;
 }
 
+export type EnrollmentStatus = 'active' | 'completed' | 'discharged';
+
+/**
+ * Episode-of-care tracking for a patient's participation in a given module.
+ * Core Assessment's Initial/Follow-up note-mode split depends on this: the
+ * first consultation note under an active enrollment is Initial, every
+ * later one in the same enrollment is Follow-up. `moduleType` matches the
+ * live `patient_module_enrollments.module_type` column name and its CHECK
+ * constraint's allowed values (see docs/CORE-ASSESSMENT-PORT-PLAN.md §3) —
+ * not an FK to a modules table.
+ */
+export interface PatientModuleEnrollment {
+  id: UUID;
+  clinicId: UUID;
+  patientId: UUID;
+  moduleType: 'gut_screening' | 'return_to_sport' | 'scoliosis_screening' | 'face_scale' | 'facial_palsy' | 'consultation_notes';
+  status: EnrollmentStatus;
+  enrolledAt: string;
+  updatedAt: string;
+  createdBy?: UUID | null;
+  updatedBy?: UUID | null;
+}
+
 export type ConsultationNoteStatus = 'draft' | 'completed' | 'archived';
+export type NoteMode = 'initial' | 'followup';
 
 /**
  * Structured clinical note, distinct from a visit's free-text treatment
  * notes. Carries sign-off status and an authorized session count so a
  * course of treatment can be tracked independent of billing. One note
  * documents one visit (visitId nullable only until a visit is picked).
+ *
+ * `assessmentPayload` carries the Core Assessment handoff v1.3 structured
+ * JSON (see `domain/coreAssessment.ts`) when this note is a Core Assessment;
+ * null for a plain free-text note. The four scalar fields alongside it are a
+ * derived, queryable projection of that payload — written by the same save
+ * that writes the payload, never authored independently — so outcome-
+ * tracking trend queries are an indexed query instead of loading every note
+ * and JSON.parsing each one.
  */
 export interface ConsultationNote {
   id: UUID;
@@ -351,11 +385,39 @@ export interface ConsultationNote {
   patientId: UUID;
   therapistId: UUID;
   visitId: UUID | null;
+  enrollmentId: UUID | null;
   authorizedSessionCount: number | null;
   notesText: string | null;
+  assessmentPayload: Record<string, unknown> | null;
+  noteMode: NoteMode | null;
+  nrsScore: number | null;
+  psfsMean: number | null;
+  redFlagCount: number;
   status: ConsultationNoteStatus;
   updatedAt: string;
   /** Auth user who created/last touched this row. Optional: older cached rows lack the key. */
+  createdBy?: UUID | null;
+  updatedBy?: UUID | null;
+}
+
+export type ExpectedVisitStatus = 'expected' | 'arrived' | 'no-show';
+
+/**
+ * "Who's coming in today" — deliberately not a booking system (no calendar,
+ * no per-therapist availability). `timeNote` is free text, not a real time
+ * slot, so a future booking module can populate it with a real timestamp
+ * later without a migration. `patientId` is null for a visitor who isn't a
+ * registered patient yet — `patientName` free text carries the name instead.
+ */
+export interface ExpectedVisit {
+  id: UUID;
+  clinicId: UUID;
+  patientId: UUID | null;
+  patientName: string | null;
+  timeNote: string;
+  visitDate: string;
+  status: ExpectedVisitStatus;
+  updatedAt: string;
   createdBy?: UUID | null;
   updatedBy?: UUID | null;
 }

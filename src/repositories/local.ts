@@ -24,6 +24,8 @@ import type {
   PaymentRepo,
   SettlementRepo,
   ConsultationNoteRepo,
+  PatientModuleEnrollmentRepo,
+  ExpectedVisitRepo,
   Repos,
 } from './types';
 
@@ -203,7 +205,37 @@ const consultationNotes: ConsultationNoteRepo = {
     const all = await this.listByPatient(clinicId, patientId);
     return all.find((n) => n.status === 'draft');
   },
+  async listByEnrollment(enrollmentId) {
+    const all = await db.consultation_notes.where('enrollmentId').equals(enrollmentId).toArray();
+    return all.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+  },
   put: (note) => putWithOutbox('consultation_notes', note),
+};
+
+const patientModuleEnrollments: PatientModuleEnrollmentRepo = {
+  get: (id) => db.patient_module_enrollments.get(id),
+  async listByPatient(clinicId, patientId, moduleType) {
+    const all = await db.patient_module_enrollments
+      .where('patientId')
+      .equals(patientId)
+      .toArray();
+    return all
+      .filter((e) => e.clinicId === clinicId && e.moduleType === moduleType)
+      .sort((a, b) => a.enrolledAt.localeCompare(b.enrolledAt));
+  },
+  async getActive(clinicId, patientId, moduleType) {
+    const all = await this.listByPatient(clinicId, patientId, moduleType);
+    return all.find((e) => e.status === 'active');
+  },
+  put: (enrollment) => putWithOutbox('patient_module_enrollments', enrollment),
+};
+
+const expectedVisits: ExpectedVisitRepo = {
+  async listForDate(clinicId, visitDate) {
+    const all = await db.expected_visits.where('clinicId').equals(clinicId).toArray();
+    return all.filter((e) => e.visitDate === visitDate).sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+  },
+  put: (entry) => putWithOutbox('expected_visits', entry),
 };
 
 export const repos: Repos = {
@@ -217,6 +249,8 @@ export const repos: Repos = {
   payments,
   settlements,
   consultationNotes,
+  patientModuleEnrollments,
+  expectedVisits,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers

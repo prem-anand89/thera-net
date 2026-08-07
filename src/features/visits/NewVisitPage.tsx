@@ -46,7 +46,12 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
 export function NewVisitPage() {
   const clinic = useClinic();
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { repeatVisitId?: string; newPatient?: string };
+  const search = useSearch({ strict: false }) as {
+    repeatVisitId?: string;
+    newPatient?: string;
+    patientId?: string;
+    prefillName?: string;
+  };
 
   // Patient selection
   const [query, setQuery] = useState('');
@@ -144,6 +149,30 @@ export function NewVisitPage() {
     if (search.newPatient && !patient) setCreatingPatient(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.newPatient]);
+
+  // Patient Profile's "New visit" button and an Expected-today card linked
+  // to a registered patient both arrive with ?patientId=… — skip search and
+  // pre-select that patient directly, same as repeatVisit does below.
+  const prefillPatient = useLiveQuery(
+    () => (search.patientId ? repos.patients.get(search.patientId) : undefined),
+    [search.patientId]
+  );
+  useEffect(() => {
+    if (!prefillPatient || patient) return;
+    setPatient(prefillPatient);
+    if (prefillPatient.primaryCondition) setCondition(prefillPatient.primaryCondition);
+  }, [prefillPatient, patient]);
+
+  // An Expected-today entry with no linked patient yet arrives with
+  // ?prefillName=… instead — open the new-patient form with the name
+  // already filled in rather than a blank search.
+  useEffect(() => {
+    if (search.prefillName && !patient && !search.patientId) {
+      setCreatingPatient(true);
+      setNewPatient((p) => (p.name ? p : { ...p, name: search.prefillName! }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.prefillName]);
 
   useEffect(() => {
     if (!repeatVisit || patient) return;
