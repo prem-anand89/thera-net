@@ -103,11 +103,17 @@ alter table public.consultation_notes
 
 (`patient_module_enrollments.module_type` is a plain `text` column, not an FK — reuse
 the existing `'consultation_notes'` value, don't introduce a new key or rename the
-column.)
+column. Its CHECK constraint originally only allowed the *other*, frontend-unwired
+assessment modules — `gut_screening`/`return_to_sport`/`scoliosis_screening`/
+`face_scale`/`facial_palsy` — not `consultation_notes`. Widened in
+`20260807000002_allow_consultation_notes_enrollment.sql`, applied 2026-08-07.)
 
 ## 4. Ordered task list
 
-- [ ] **4.1 Migration** — apply the SQL in §3 to `kzsldbdjrignwxjgbqof`.
+- [x] **4.1 Migration** — applied to `kzsldbdjrignwxjgbqof` 2026-08-07
+      (`20260807000001_core_assessment_payload.sql` +
+      `20260807000002_allow_consultation_notes_enrollment.sql`, the latter found
+      while applying the former — see §5). Verified via `information_schema`.
 - [ ] **4.2 Domain** — port `src/domain/coreAssessment.ts` + its test from
       TheraNet-OS into thera-net near-verbatim (self-contained, no
       TheraNet-OS-specific imports). Extend thera-net's `ConsultationNote` type
@@ -132,6 +138,10 @@ column.)
 
 ## 5. Open questions
 
-- None blocking yet. `patient_module_enrollments.module_type` has no FK to `modules.key`
-  today — worth deciding whether to add one during 4.1, or leave it loose to match the
-  table's current (unconstrained) shape.
+- Resolved 2026-08-07: `patient_module_enrollments.module_type`'s CHECK constraint
+  didn't include `consultation_notes` — widened rather than dropped, so it still
+  catches typos/unknown module keys. See §3.
+- No other blockers currently open. `patient_module_enrollments.module_type` has no FK
+  to `modules.key`, just the CHECK constraint from §3 — left that way rather than
+  adding an FK, to match the table's existing shape (the other four module rows it
+  references aren't FK-constrained either).

@@ -29,6 +29,15 @@ export function createConsultationNoteService(repos: Repos) {
         patientId,
         therapistId,
         visitId,
+        // Enrollment/payload wiring lands in a later step (see
+        // docs/CORE-ASSESSMENT-PORT-PLAN.md §4.4) — a plain draft today has
+        // no assessment payload, same as before this type extension.
+        enrollmentId: null,
+        assessmentPayload: null,
+        noteMode: null,
+        nrsScore: null,
+        psfsMean: null,
+        redFlagCount: 0,
         authorizedSessionCount: null,
         notesText: null,
         status: 'draft',
