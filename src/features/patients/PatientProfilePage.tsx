@@ -7,6 +7,7 @@ import { Pill, PackageThread, btnPrimary, btnSecondary } from '@/components/ui';
 import type { ActivityKind } from '@/services/patientActivityService';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
+import { upcastPayload } from '@/domain/coreAssessment';
 import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
 
 const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
@@ -90,6 +91,26 @@ export function PatientProfilePage() {
     [openPackages, patientId]
   );
 
+  // Derived from the most recent Core Assessment note's safety-history
+  // fields — no separate manual entry point, since a clinician already
+  // captures these in the note. Empty when no note has been assessed yet.
+  const safetyFlags = useMemo(() => {
+    const latest = (notes ?? []).find((n) => n.assessmentPayload);
+    if (!latest?.assessmentPayload) return [];
+    const payload = upcastPayload(latest.assessmentPayload);
+    const flags: string[] = [];
+    if (payload.history.anticoagulant.onBloodThinner) {
+      flags.push('On blood thinner — caution with dry needling and manual therapy (bleeding risk)');
+    }
+    if (payload.history.implants.present) {
+      flags.push('Implants/pacemaker — avoid electrotherapy modalities (TENS, IFC, ultrasound over the site)');
+    }
+    if (payload.history.pregnancyStatus === 'yes') {
+      flags.push('Pregnant — avoid contraindicated modalities and positions');
+    }
+    return flags;
+  }, [notes]);
+
   if (!patient) {
     return (
       <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-8 text-sm text-[var(--muted)]">
@@ -121,6 +142,20 @@ export function PatientProfilePage() {
       <Link to="/workspace" className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]">
         ← All patients
       </Link>
+
+      {safetyFlags.length > 0 && (
+        <div className="flex items-start gap-2 rounded-[10px] border border-[var(--rust)] bg-[var(--rust-light)] px-3.5 py-3 text-sm text-[var(--rust)]">
+          <span className="shrink-0" aria-hidden>⚠</span>
+          <div>
+            <p className="font-semibold">Contraindications</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {safetyFlags.map((flag) => (
+                <li key={flag}>{flag}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
       {/* Patient identity header */}
       <section className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-5">

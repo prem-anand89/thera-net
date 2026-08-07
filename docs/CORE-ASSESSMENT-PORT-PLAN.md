@@ -176,8 +176,24 @@ assessment modules — `gut_screening`/`return_to_sport`/`scoliosis_screening`/
       lines into Tailwind. Added the missing `--amber`/`--amber-light`/`--slate`/
       `--slate-light`/`--shadow-1`/`--shadow-2` tokens to `:root` alongside thera-net's
       existing tokens (didn't touch or duplicate any existing token).
-- [ ] **4.7 Contraindication banner / safety flags** — port onto Patient Profile once
-      the payload fields exist (depends on 4.2–4.5).
+- [x] **4.7 Contraindication banner / safety flags** — deliberately **not** a literal
+      port of TheraNet-OS's design. TheraNet-OS has a manual free-text
+      `patient.contraindications` field, set via an "Edit Patient" modal. thera-net
+      has no patient-edit UI at all (patients are only created inline from New
+      Visit) — building one solely to host this field would be new scope beyond
+      what was asked. Asked the user which direction to take; chose instead to
+      **derive** the banner from the safety-history fields already captured in the
+      Core Assessment note (`anticoagulant.onBloodThinner`, `implants.present`,
+      `pregnancyStatus`) — no new data-entry surface needed, since §4.5 already
+      built that entry point. `PatientProfilePage.tsx` takes the most recent note
+      with a non-null `assessmentPayload` from the `notes` query it already loads
+      (most-recently-updated first), and shows a rust-toned banner above the
+      identity header listing whichever flags are set; auto-hides when none are
+      (matches the "auto-hide at zero/not-applicable" convention). Styled as
+      Tailwind to match the rest of this page, not the straight-CSS-port classes
+      from §4.6 — Patient Profile is not part of that port. `npm run typecheck &&
+      lint && test && build` all pass (184 tests, unchanged — no new tests needed
+      for a pure derived-display read).
 
 ## 5. Open questions
 
