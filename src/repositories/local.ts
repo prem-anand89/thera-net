@@ -204,6 +204,10 @@ const consultationNotes: ConsultationNoteRepo = {
     const all = await this.listByPatient(clinicId, patientId);
     return all.find((n) => n.status === 'draft');
   },
+  async listByEnrollment(enrollmentId) {
+    const all = await db.consultation_notes.where('enrollmentId').equals(enrollmentId).toArray();
+    return all.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+  },
   put: (note) => putWithOutbox('consultation_notes', note),
 };
 

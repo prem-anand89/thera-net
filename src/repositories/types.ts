@@ -106,6 +106,9 @@ export interface ConsultationNoteRepo {
   listByClinic(clinicId: UUID): Promise<ConsultationNote[]>;
   /** The single open draft for a patient, if one exists (v1: one draft at a time). */
   getOpenDraft(clinicId: UUID, patientId: UUID): Promise<ConsultationNote | undefined>;
+  /** Notes under one enrollment (episode of care) — an empty result means
+   *  the next note written is Initial, a non-empty one means Follow-up. */
+  listByEnrollment(enrollmentId: UUID): Promise<ConsultationNote[]>;
   put(note: ConsultationNote): Promise<void>;
 }
 

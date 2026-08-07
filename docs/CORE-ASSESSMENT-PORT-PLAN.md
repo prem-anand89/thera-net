@@ -130,9 +130,18 @@ assessment modules — `gut_screening`/`return_to_sport`/`scoliosis_screening`/
       `backupService.ts`'s export/restore bundle (would need a `listByClinic`
       method + a `BACKUP_VERSION` bump) — flagged as a follow-up, not silently
       folded into this step.
-- [ ] **4.4 Services** — extend `consultationNoteService.ts` with enrollment-aware
-      create (first enrollment for a patient = Initial, later ones = Follow-up) and a
-      payload-aware save path.
+- [x] **4.4 Services** — `consultationNoteService.ts` extended with
+      `getOrCreateActiveEnrollment` (reuses the active enrollment or creates one),
+      `noteModeFor` (empty enrollment → initial, non-empty → followup), and
+      `saveAssessment` (payload-aware save writing the four derived scalar fields via
+      `computeDerivedFields`). Uses the `consultation_notes` module key throughout
+      (not `core_assessment`, which doesn't exist in thera-net — see §3). Required a
+      new `listByEnrollment` method on `ConsultationNoteRepo` + a matching Dexie index
+      (Postgres already had one, added in the §4.1 migration). The old draft-only
+      methods (`startOrContinueDraft`/`saveDraft`/`setStatus`) are left in place for
+      now — still used by the not-yet-replaced `NoteEditorPage.tsx` — and will be
+      removed in §4.5 once that page is replaced and they're genuinely unused. 5 new
+      unit tests, including the Initial-vs-Follow-up transition specifically.
 - [ ] **4.5 UI** — port `NoteEditorPage.tsx` from TheraNet-OS into
       `thera-net/src/features/patients/NoteEditorPage.tsx`, rewiring imports/hooks to
       thera-net's actual service/repo shapes (not identical to TheraNet-OS's). Largest

@@ -129,6 +129,7 @@ function makeFakeRepos() {
       listByPatient: async () => [],
       listByClinic: async () => [],
       getOpenDraft: async () => undefined,
+      listByEnrollment: async () => [],
       put: async () => {},
     },
     patientModuleEnrollments: {

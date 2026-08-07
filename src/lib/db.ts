@@ -105,6 +105,9 @@ export class ClinicDB extends Dexie {
     });
     this.version(8).stores({
       patient_module_enrollments: 'id, clinicId, patientId, moduleType, status',
+      // Re-declared with enrollmentId added — Dexie index changes on an
+      // existing table require the full index string at the new version.
+      consultation_notes: 'id, clinicId, patientId, visitId, status, enrollmentId',
     });
   }
 }
