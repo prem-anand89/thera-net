@@ -187,6 +187,20 @@ export function NewVisitPage() {
     })();
   }, [repeatVisit, patient]);
 
+  // Default therapist when patient is selected:
+  // - Use therapist from their most recent visit
+  // - If no previous visits, leave empty (user selects manually)
+  useEffect(() => {
+    if (!patient || therapistId) return;
+    (async () => {
+      const visits = await repos.visits.list({ clinicId: clinic.id, patientId: patient.id });
+      if (visits.length > 0) {
+        const sorted = [...visits].sort((a, b) => b.visitDate.localeCompare(a.visitDate));
+        setTherapistId(sorted[0].therapistId);
+      }
+    })();
+  }, [patient?.id, clinic.id, therapistId]);
+
   useEffect(() => {
     if (!repeatVisit?.packageGroupId || !openPackages?.length) return;
     const match = openPackages.find((op) => op.packageGroupId === repeatVisit.packageGroupId);
