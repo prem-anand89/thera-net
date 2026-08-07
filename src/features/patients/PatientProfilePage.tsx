@@ -1,13 +1,14 @@
 import { useMemo, useState, useCallback } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService, consultationNoteService } from '@/services';
+import { repos, dashboardService, consultationNoteService, invoiceService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
 import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
+import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
 
 const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
@@ -38,6 +39,9 @@ export function PatientProfilePage() {
   const clinic = useClinic();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
   const [editOpen, setEditOpen] = useState(false);
+  const [selectedVisitIds, setSelectedVisitIds] = useState<Set<string>>(new Set());
+  const [issuingInvoice, setIssuingInvoice] = useState(false);
+  const [issueError, setIssueError] = useState<string | null>(null);
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
@@ -102,6 +106,32 @@ export function PatientProfilePage() {
       console.error('Failed to delete visit:', e);
     }
   }, []);
+
+  const toggleVisitSelection = useCallback((visitId: string) => {
+    setSelectedVisitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(visitId)) {
+        next.delete(visitId);
+      } else {
+        next.add(visitId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBulkIssueInvoice = useCallback(async () => {
+    if (selectedVisitIds.size === 0) return;
+    setIssuingInvoice(true);
+    setIssueError(null);
+    try {
+      await invoiceService.issueForVisits(Array.from(selectedVisitIds), 'Cash');
+      setSelectedVisitIds(new Set());
+    } catch (e) {
+      setIssueError(toFriendlyMessage(e));
+    } finally {
+      setIssuingInvoice(false);
+    }
+  }, [selectedVisitIds]);
 
   // Derived from the most recent Core Assessment note's safety-history
   // fields — no separate manual entry point, since a clinician already
@@ -224,12 +254,34 @@ export function PatientProfilePage() {
         {/* Main column */}
         <div className="space-y-4">
           <SectionLabel>Visit history</SectionLabel>
+          {issueError && (
+            <div className="rounded bg-[var(--rust-light)] p-2 text-sm text-[var(--rust)]">
+              {issueError}
+            </div>
+          )}
           <section className="divide-y divide-[var(--border)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+            {selectedVisitIds.size > 0 && (
+              <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--teal-light)] px-4 py-2.5">
+                <span className="text-sm font-medium text-[var(--teal)]">
+                  {selectedVisitIds.size} selected
+                </span>
+                <button
+                  type="button"
+                  className="rounded-full bg-[var(--teal)] px-3 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                  onClick={handleBulkIssueInvoice}
+                  disabled={issuingInvoice}
+                >
+                  {issuingInvoice ? 'Issuing...' : 'Issue invoice for selected'}
+                </button>
+              </div>
+            )}
             {visitRows.length === 0 ? (
               <p className="p-4 text-sm text-[var(--muted)]">No visits recorded yet.</p>
             ) : (
               <ul className="divide-y divide-[var(--border)]">
                 {visitRows.map((v) => {
+                  const isSelected = selectedVisitIds.has(v.id);
+                  const canInvoice = !v.invoiceId;
                   const cardData: VisitCardData = {
                     visitId: v.id,
                     visitDate: v.visitDate,
@@ -249,14 +301,25 @@ export function PatientProfilePage() {
                     canDelete: !v.invoiceId,
                   };
                   return (
-                    <li key={v.id} className="px-3">
-                      <SharedVisitCard
-                        data={cardData}
-                        showDate={true}
-                        showPatient={false}
-                        onInvoice={() => {}}
-                        onDelete={() => handleVisitDelete(v.id)}
-                      />
+                    <li key={v.id} className="flex items-start gap-3 px-3">
+                      {canInvoice && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleVisitSelection(v.id)}
+                          className="mt-4 shrink-0 cursor-pointer"
+                          aria-label={`Select visit on ${formatDateDMY(v.visitDate)}`}
+                        />
+                      )}
+                      <div className="flex-1">
+                        <SharedVisitCard
+                          data={cardData}
+                          showDate={true}
+                          showPatient={false}
+                          onInvoice={() => {}}
+                          onDelete={() => handleVisitDelete(v.id)}
+                        />
+                      </div>
                     </li>
                   );
                 })}
