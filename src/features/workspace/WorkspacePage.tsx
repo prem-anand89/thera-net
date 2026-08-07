@@ -14,7 +14,7 @@ import { useSession } from '@/app/useSession';
 import { useClinicRole } from '@/app/useClinicRole';
 import { formatINR } from '@/domain/money';
 import type { ExpectedVisit, PaymentMethod, PaymentMode } from '@/domain/types';
-import type { PendingWorkItem, RecentVisitRow, TodayVisitRow } from '@/services/dashboardService';
+import type { PendingWorkItem, TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
   btnSecondary,
@@ -68,27 +68,6 @@ function todayRowToCardData(row: TodayVisitRow, openPackageGroupIds: Set<string>
   };
 }
 
-function recentRowToCardData(row: RecentVisitRow): VisitCardData {
-  return {
-    visitId: row.visitId,
-    visitDate: row.visitDate,
-    patientId: row.patientId,
-    patientName: row.patientName,
-    mrno: row.mrno,
-    condition: row.condition,
-    serviceName: row.serviceName,
-    sessionIndex: row.sessionIndex,
-    packageTotal: row.packageTotal,
-    therapistName: row.therapistName,
-    treatmentNotes: row.treatmentNotes,
-    billPaise: row.billPaise,
-    paymentState: row.outstandingPaise === 0 ? (row.hasInvoice ? 'paid' : 'zero_session') : row.hasInvoice ? 'outstanding' : 'uninvoiced',
-    invoiceId: row.invoiceId,
-    canRepeat: false,
-    canDelete: false,
-  };
-}
-
 export function WorkspacePage() {
   const clinic = useClinic();
   const { session } = useSession();
@@ -100,7 +79,6 @@ export function WorkspacePage() {
   const [busy, setBusy] = useState(false);
   const [packagesOpen, setPackagesOpen] = useState(false);
   const [attentionOpen, setAttentionOpen] = useState(false);
-  const [recentOpen, setRecentOpen] = useState(false);
   const [addingExpected, setAddingExpected] = useState(false);
   const [expectedQuery, setExpectedQuery] = useState('');
   const [expectedPatientId, setExpectedPatientId] = useState<string | null>(null);
@@ -126,10 +104,6 @@ export function WorkspacePage() {
   const pendingWork = useLiveQuery(() => dashboardService.pendingWork(clinic.id), [clinic.id]);
   const monthlyNew = useLiveQuery(() => dashboardService.monthlyNewCounts(clinic.id), [clinic.id]);
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
-  const recentVisits = useLiveQuery(
-    () => (recentOpen ? dashboardService.recentVisits(clinic.id, 8) : undefined),
-    [clinic.id, recentOpen]
-  );
   const openPackageGroupIds = useMemo(
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
@@ -221,9 +195,8 @@ export function WorkspacePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:flex lg:flex-wrap">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
         {clinic.enableExpectedToday && <StatTile label="Expected" value={expectedToday?.length ?? 0} />}
-        <StatTile label="Seen today" value={today?.visitCount ?? 0} />
         <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
         {openPackages && openPackages.length > 0 && (
           <div className="relative">
@@ -272,7 +245,6 @@ export function WorkspacePage() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
         <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
-        <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
       </div>
 
       {pendingWork && pendingWork.length > 0 && (
@@ -295,7 +267,6 @@ export function WorkspacePage() {
           </div>
         </>
       )}
-      <SummaryBar tone="neutral" label="Recently seen ›" onClick={() => setRecentOpen(true)} />
 
       {clinic.enableExpectedToday && (
         <SectionCard title="Expected today">
@@ -431,27 +402,6 @@ export function WorkspacePage() {
             <PendingWorkRow key={i} item={item} clinicId={clinic.id} />
           ))}
         </ul>
-      </Panel>
-
-      <Panel open={recentOpen} onClose={() => setRecentOpen(false)} title="Recently seen">
-        {!recentVisits ? (
-          <p className="text-sm text-[var(--muted)]">Loading…</p>
-        ) : recentVisits.length === 0 ? (
-          <p className="text-sm text-[var(--muted)]">No visits yet.</p>
-        ) : (
-          <div className="divide-y divide-[var(--border)]">
-            {recentVisits.map((row) => (
-              <SharedVisitCard
-                key={row.visitId}
-                data={recentRowToCardData(row)}
-                showDate={true}
-                showPatient={true}
-                onInvoice={() => openInvoiceFor(recentRowToCardData(row))}
-                onDelete={() => {}}
-              />
-            ))}
-          </div>
-        )}
       </Panel>
 
       {invoicing && (
