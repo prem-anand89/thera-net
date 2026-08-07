@@ -195,6 +195,87 @@ assessment modules — `gut_screening`/`return_to_sport`/`scoliosis_screening`/
       lint && test && build` all pass (184 tests, unchanged — no new tests needed
       for a pure derived-display read).
 
+## 4a. Post-port redesign (2026-08-07, follow-up to §4.5/§4.6)
+
+Having seen the ported editor live, the user supplied a detailed 5-section spec
+(~18 changes) plus a reference HTML (`BM_Patient_Assessment_1.html`) with a working
+tap-to-mark body chart the port had left as a placeholder. All work stayed in
+thera-net, `feature/core-assessment-port`. Confirmed with the user up front:
+**Authorized Sessions removed outright** (not repurposed — the DB column stays,
+just unused) and the **ROM Flexion/Extension/Lateral Flexion/Rotation quick-preset
+table is spine-only** (Cervical/Thoracic/Lumbar), other regions get a per-region
+movement dropdown instead. Zero new Postgres/Dexie migrations — the whole payload
+is one `jsonb` column, so every field change below is additive inside it.
+
+- **General Health moved to the top** of the form (BMI + height-to-waist ratio
+  added as derived read-only values, `computeBmi`/`computeWaistToHeightRatio` in
+  `coreAssessment.ts`), out of the accordion entirely — always visible, not
+  gated by follow-up-mode collapse.
+- **Anatomical Region** (`ANATOMICAL_REGIONS`, 9 regions) added as a mandatory
+  first field in Chief Complaint — drives the ROM/MMT movement quick-pick
+  (`ROM_MOVEMENTS_BY_REGION`) and the spine-only ROM preset table
+  (`SPINE_REGIONS`/`SPINE_ROM`). `save()` now blocks with an inline error if it's
+  empty.
+- **Contextual timeline** (onset/mechanism/episode pattern/trend) grouped under
+  its own label inside Chief Complaint — JSX regrouping only, no type change.
+- **Work demand level removed**; replaced by **Occupation** and **Activity/
+  Sports**, both grouped `<optgroup>` selects (`OCCUPATION_GROUPS`/
+  `ACTIVITY_GROUPS`) — `chiefComplaint.workDemandLevel` deleted from the type,
+  `occupation`/`activity` added.
+- **Trauma/Surgery history** rows gained a Date/Year input bound to the
+  already-existing (previously unrendered) `date` field on each entry.
+- **Body chart**: new `src/components/BodyChart.tsx`, a canvas component ported
+  from the reference HTML's tap-to-mark logic (front/back/left-lateral composite
+  image, 4 mark types, normalized coordinates, tap-again-to-remove,
+  `ResizeObserver`-driven redraw). `BodyChartMark` simplified from a
+  never-implemented `{view,regionId,intensity,referredTo}` shape to
+  `{id,nx,ny,type}` — the richer shape had no reader anywhere. Artwork extracted
+  from the reference HTML's base64 `BODY_IMG` to `src/assets/body-chart.png`
+  (1000×512 PNG), imported as an ES module so it rides in `NoteEditorPage`'s
+  existing lazy chunk.
+- **Pain Profile (NRS)** split from one value into `nrsCurrent`/`nrsBest`/
+  `nrsWorst` (3 `ScaleWidget`s side by side); `computeDerivedFields()`'s
+  `nrsScore` (used by Outcome Tracking) now reads `nrsCurrent` specifically.
+- **PSFS**: confirmed already inline (no modal existed in the ported page) — no
+  change needed, the request's premise didn't match this codebase's actual state.
+- **Neurological screen**: added a "Mark all WNL" button (bulk-sets every
+  `NEURO_LEVELS` entry to `'normal'`, same pattern as the screening banner's
+  bulk-clear) and made the detailed level table collapse by default unless a
+  level is flagged (anything other than normal/not-tested) or manually expanded.
+- **ROM & MMT**: movement fields gained a region-driven quick-pick `<select>`
+  (writes into the same free-text field, not a parallel data path) alongside the
+  existing free-text input/add-on. Spine regions additionally get the 6-row
+  (bilateral lateral flexion/rotation) preset table, upserting into
+  `objective.rom` by movement name via a new `upsertRom()` helper so the preset
+  table and freeform list share one source of truth.
+- **Gait & Posture** split into two labeled subsections (still inside the
+  Objective accordion item, not two new top-level accordion entries — matches
+  how Palpation/ROM/MMT are already just labeled blocks within Objective), each
+  with an expanded `MultiToggle` option list.
+- **Load management (post-surgical)** now conditional — only renders when
+  `onset === 'post-surgical'` or any surgery history entry has
+  `currentStatus === 'ongoing'`.
+- **Session duration**: new `treatment.session.duration` quick-pick `<select>`
+  (15/30/45/60/90 min) alongside the existing free-text `timeSpent` field, which
+  stays as the override/detail.
+- **HEP** rows restructured into 4 explicitly-labeled fields (Exercise name/Sets/
+  Reps/Frequency — the `frequency` field existed on the type already but was
+  never rendered).
+- **Plan & Goals**: each goal gained `targetTerm: 'short-term' | 'long-term' | ''`
+  alongside its existing target date.
+
+New/changed files: `src/domain/coreAssessment.ts` (types + `computeBmi`/
+`computeWaistToHeightRatio`), `src/components/BodyChart.tsx` (new),
+`src/assets/body-chart.png` (new), `src/features/patients/NoteEditorPage.tsx`,
+`src/index.css` (`.bc-*`/`.mkb` block), `src/domain/coreAssessment.test.ts` (+7
+tests), `src/services/consultationNoteService.test.ts` (updated fixture for the
+`painProfile.nrs` → `nrsCurrent` rename). `npm run typecheck && lint && test &&
+build` all pass (191 tests). No live manual click-through was possible from this
+sandbox — no Supabase env vars are configured here (`.env` doesn't exist
+locally, only in Vercel's dashboard) — so verification relied on typecheck/lint/
+tests/build plus code-review-level reading of the JSX; the Vercel preview
+deployment on push is the actual place to click through it.
+
 ## 5. Open questions
 
 - Resolved 2026-08-07: `patient_module_enrollments.module_type`'s CHECK constraint

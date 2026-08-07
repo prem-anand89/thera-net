@@ -46,14 +46,56 @@ export const REFLEX_ITEMS = ['Biceps', 'Triceps', 'Brachioradialis', 'Patellar',
 export type ReflexItem = (typeof REFLEX_ITEMS)[number];
 export type ReflexResult = 'normal' | 'reduced' | 'absent' | 'hyperreflexic' | 'not-tested';
 
-export type WorkDemandLevel = 'sedentary' | 'light' | 'moderate' | 'heavy' | 'not-currently-working';
-export const WORK_DEMAND_LEVELS: { value: WorkDemandLevel; label: string }[] = [
-  { value: 'sedentary', label: 'Sedentary — mostly seated' },
-  { value: 'light', label: 'Light — standing/walking, light lifting' },
-  { value: 'moderate', label: 'Moderate — regular lifting/bending/reaching' },
-  { value: 'heavy', label: 'Heavy — frequent heavy lifting/labour' },
-  { value: 'not-currently-working', label: 'Not currently working — retired/student/homemaker' },
+export const ANATOMICAL_REGIONS = [
+  'Cervical Spine',
+  'Thoracic Spine',
+  'Lumbar Spine',
+  'Shoulder',
+  'Elbow',
+  'Wrist/Hand',
+  'Hip',
+  'Knee',
+  'Ankle/Foot',
+] as const;
+export type AnatomicalRegion = (typeof ANATOMICAL_REGIONS)[number];
+
+/** The spine-only ROM quick-preset table's fixed row set (§4). */
+export const SPINE_ROM = ['Flexion', 'Extension', 'Lateral flexion (L)', 'Lateral flexion (R)', 'Rotation (L)', 'Rotation (R)'];
+
+/** Standard goniometry movement set per region, driving the ROM/MMT movement
+ *  dropdown once Anatomical Region is picked — keeps entries consistent
+ *  instead of relying on free text for every row. */
+export const ROM_MOVEMENTS_BY_REGION: Record<AnatomicalRegion, string[]> = {
+  'Cervical Spine': SPINE_ROM,
+  'Thoracic Spine': SPINE_ROM,
+  'Lumbar Spine': SPINE_ROM,
+  Shoulder: ['Flexion', 'Extension', 'Abduction', 'Adduction', 'Internal rotation', 'External rotation', 'Horizontal adduction'],
+  Elbow: ['Flexion', 'Extension', 'Pronation', 'Supination'],
+  'Wrist/Hand': ['Flexion', 'Extension', 'Radial deviation', 'Ulnar deviation', 'Grip strength'],
+  Hip: ['Flexion', 'Extension', 'Abduction', 'Adduction', 'Internal rotation', 'External rotation'],
+  Knee: ['Flexion', 'Extension'],
+  'Ankle/Foot': ['Dorsiflexion', 'Plantarflexion', 'Inversion', 'Eversion'],
+};
+
+/** The 3 spine regions get the Flexion/Extension/Lateral Flexion/Rotation
+ *  quick-preset table (§4) instead of only the freeform ROM list — those
+ *  movements are spinal, not applicable to e.g. Shoulder or Knee. */
+export const SPINE_REGIONS: readonly AnatomicalRegion[] = ['Cervical Spine', 'Thoracic Spine', 'Lumbar Spine'];
+
+export const OCCUPATION_GROUPS: { group: string; options: string[] }[] = [
+  { group: 'Desk / Office', options: ['Desk job', 'IT / computer work', 'Teaching (seated)'] },
+  { group: 'Home', options: ['Homemaker'] },
+  { group: 'Physical / Manual', options: ['Manual labour', 'Driver', 'Construction', 'Delivery / field work'] },
+  { group: 'Other', options: ['Student', 'Retired', 'Other'] },
 ];
+
+export const ACTIVITY_GROUPS: { group: string; options: string[] }[] = [
+  { group: 'Sports', options: ['Cricket', 'Football', 'Badminton', 'Running', 'Swimming', 'Tennis', 'Basketball', 'Other sport'] },
+  { group: 'Fitness', options: ['Gym / weight training', 'Yoga', 'Pilates', 'Walking / jogging', 'Cycling'] },
+  { group: 'None / Sedentary', options: ['None / sedentary lifestyle'] },
+];
+
+export const SESSION_DURATIONS = ['15 min', '30 min', '45 min', '60 min', '90 min'] as const;
 
 export interface PsfsActivity {
   label: string;
@@ -124,15 +166,14 @@ export interface HepExerciseEntry {
   fromProtocol?: boolean;
 }
 
+/** Normalized (0..1) position on the composite front/back/lateral chart image
+ *  so marks stay aligned across phone/iPad/laptop and any canvas size — see
+ *  BodyChart.tsx. */
 export interface BodyChartMark {
   id: string;
-  view: 'front' | 'back' | 'lateral';
-  regionId: string;
-  x: number;
-  y: number;
+  nx: number;
+  ny: number;
   type: 'pain' | 'numbness' | 'stiffness' | 'referred';
-  intensity: 1 | 2 | 3 | 4 | 5;
-  referredTo?: { x: number; y: number; regionId: string; view: 'front' | 'back' | 'lateral' };
 }
 
 export interface CoreAssessmentPayload {
@@ -144,6 +185,9 @@ export interface CoreAssessmentPayload {
   regionModules?: Record<string, { version: string; data: unknown }>;
 
   chiefComplaint: {
+    /** Drives the ROM/MMT movement dropdown and the spine-only ROM preset
+     *  table (§4) — mandatory, so this is required at the top of the form. */
+    anatomicalRegion: AnatomicalRegion | '';
     presentingProblem: string;
     primaryComplaint: string[];
     secondaryComplaint?: string;
@@ -154,9 +198,9 @@ export interface CoreAssessmentPayload {
       postOpWeek: number | null;
       protocolLabel?: string;
     };
-    workDemandLevel: WorkDemandLevel | '';
+    occupation: string;
     jobRole?: string;
-    sportActivity: 'none' | 'recreational' | 'competitive' | 'elite';
+    activity: string;
     specificDemands?: string;
     mechanism?: string;
     episodePattern: 'first-episode' | 'recurrent-episodes' | 'chronic-ongoing' | 'post-surgical' | '';
@@ -189,7 +233,11 @@ export interface CoreAssessmentPayload {
   };
 
   painProfile: {
-    nrs: number | null;
+    /** Current is the tracked/scored value (outcome tracking, followup
+     *  trend) — Best/Worst are context only, never read for trend math. */
+    nrsCurrent: number | null;
+    nrsBest: number | null;
+    nrsWorst: number | null;
     pattern: 'constant' | 'intermittent' | 'night-only' | 'morning-stiffness' | '';
     sleepDisturbed: 'no' | 'wakes-occasionally' | 'cannot-return-to-sleep' | '';
     aggravating: string;
@@ -228,6 +276,9 @@ export interface CoreAssessmentPayload {
       manualTherapy: string[];
       therapeuticExercise: string[];
       modalities: string[];
+      /** Structured quick-pick (§5); timeSpent stays as the free-text
+       *  override/detail for anything non-standard. */
+      duration: string;
       timeSpent: string;
       response: 'improved' | 'unchanged' | 'worse' | 'unclear' | '';
       weightBearing?: 'nwb' | 'pwb' | 'wb' | 'fwb';
@@ -264,7 +315,7 @@ export interface CoreAssessmentPayload {
       warnings?: string[];
     }[];
     currentProtocolPhase?: string;
-    goals: { text: string; targetDate?: string }[];
+    goals: { text: string; targetDate?: string; targetTerm: 'short-term' | 'long-term' | '' }[];
     estimatedSessions: string;
     patientEducation: string[];
   };
@@ -272,6 +323,7 @@ export interface CoreAssessmentPayload {
   generalHealth?: {
     weightKg?: number;
     heightCm?: number;
+    waistCm?: number;
     bmi?: number;
     bmiFlag?: 'underweight' | 'normal' | 'overweight' | 'obese-i' | 'obese-ii';
     vitals: { date: string; bpSystolic?: number; bpDiastolic?: number; heartRate?: number; o2Saturation?: number; respiratoryRate?: number }[];
@@ -304,11 +356,12 @@ export function emptyPayload(): CoreAssessmentPayload {
     noteMode: 'initial',
     enrollmentId: '',
     chiefComplaint: {
+      anatomicalRegion: '',
       presentingProblem: '',
       primaryComplaint: [],
       onset: '',
-      workDemandLevel: '',
-      sportActivity: 'none',
+      occupation: '',
+      activity: '',
       episodePattern: '',
       trend: '',
       priorSurgery: false,
@@ -330,7 +383,9 @@ export function emptyPayload(): CoreAssessmentPayload {
     },
     bodyChart: { marks: [] },
     painProfile: {
-      nrs: null,
+      nrsCurrent: null,
+      nrsBest: null,
+      nrsWorst: null,
       pattern: '',
       sleepDisturbed: '',
       aggravating: '',
@@ -343,7 +398,7 @@ export function emptyPayload(): CoreAssessmentPayload {
     neurologicalScreen: { dermatomes: {}, myotomes: {}, reflexes: {}, upperMotorNeuronSigns: { present: false } },
     objective: { rom: [], strength: [], specialTests: [] },
     treatment: {
-      session: { manualTherapy: [], therapeuticExercise: [], modalities: [], timeSpent: '', response: '' },
+      session: { manualTherapy: [], therapeuticExercise: [], modalities: [], duration: '', timeSpent: '', response: '' },
       notes: '',
     },
     hep: { exercises: [], compliance: '' },
@@ -381,7 +436,22 @@ export function computeDerivedFields(payload: CoreAssessmentPayload): {
   const yellowConcernCount = Object.values(payload.screening.yellowFlags).filter(
     (v) => v === 'some-concern' || v === 'significant-concern'
   ).length;
-  return { nrsScore: payload.painProfile.nrs, psfsMean, redFlagCount, yellowConcernCount };
+  return { nrsScore: payload.painProfile.nrsCurrent, psfsMean, redFlagCount, yellowConcernCount };
+}
+
+/** BMI = weight(kg) / height(m)^2, rounded to 1 decimal. Null if either input
+ *  is missing — never divide by an absent/zero height. */
+export function computeBmi(weightKg: number | undefined, heightCm: number | undefined): number | null {
+  if (!weightKg || !heightCm) return null;
+  const heightM = heightCm / 100;
+  return Math.round((weightKg / (heightM * heightM)) * 10) / 10;
+}
+
+/** Height-to-waist ratio, rounded to 2 decimals. Null if either input is
+ *  missing. */
+export function computeWaistToHeightRatio(waistCm: number | undefined, heightCm: number | undefined): number | null {
+  if (!waistCm || !heightCm) return null;
+  return Math.round((waistCm / heightCm) * 100) / 100;
 }
 
 export type OutcomeDirection = 'higher-is-better' | 'lower-is-better';

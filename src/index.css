@@ -256,3 +256,14 @@ body {
 .flag-pill.significant-concern, .flag-pill.yes { background: var(--rust-light); color: var(--rust); border-color: transparent; }
 .sb-bulk-btn { font-size: 11.5px; font-weight: 500; color: var(--teal-strong); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 5px 11px; margin-bottom: 8px; cursor: pointer; }
 .sb-provenance { font-size: 10.5px; color: var(--muted); margin-top: 6px; font-style: italic; }
+
+/* ---------- body chart (BodyChart.tsx) ---------- */
+.bc-mkbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.mkb { font-size: 11.5px; font-weight: 500; padding: 6px 11px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--ink); cursor: pointer; }
+.mkb:disabled { opacity: 0.5; cursor: not-allowed; }
+.mkb.active { color: #fff; }
+.bc-canvas-wrap { width: 100%; }
+.bc-canvas { width: 100%; aspect-ratio: 1000 / 512; display: block; border: 1.5px solid var(--border); border-radius: 10px; cursor: crosshair; touch-action: none; }
+.bc-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.bc-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+.bc-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }

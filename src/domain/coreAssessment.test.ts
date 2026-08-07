@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { outcomeTrend } from './coreAssessment';
+import { computeBmi, computeDerivedFields, computeWaistToHeightRatio, emptyPayload, outcomeTrend } from './coreAssessment';
 
 // One test per registered instrument, per the handoff's own instruction:
 // "Getting this wrong renders a deteriorating patient as improving, so it
@@ -27,5 +27,36 @@ describe('outcomeTrend', () => {
     it('is stable when unchanged', () => {
       expect(outcomeTrend('lower-is-better', 4, 4)).toBe('stable');
     });
+  });
+});
+
+describe('computeBmi', () => {
+  it('computes weight(kg) / height(m)^2, rounded to 1 decimal', () => {
+    expect(computeBmi(70, 175)).toBe(22.9);
+  });
+  it('is null when weight is missing', () => {
+    expect(computeBmi(undefined, 175)).toBeNull();
+  });
+  it('is null when height is missing', () => {
+    expect(computeBmi(70, undefined)).toBeNull();
+  });
+});
+
+describe('computeWaistToHeightRatio', () => {
+  it('computes waist(cm) / height(cm), rounded to 2 decimals', () => {
+    expect(computeWaistToHeightRatio(80, 175)).toBe(0.46);
+  });
+  it('is null when waist is missing', () => {
+    expect(computeWaistToHeightRatio(undefined, 175)).toBeNull();
+  });
+  it('is null when height is missing', () => {
+    expect(computeWaistToHeightRatio(80, undefined)).toBeNull();
+  });
+});
+
+describe('computeDerivedFields', () => {
+  it('reads nrsScore from painProfile.nrsCurrent, not Best or Worst', () => {
+    const payload = { ...emptyPayload(), painProfile: { ...emptyPayload().painProfile, nrsCurrent: 4, nrsBest: 1, nrsWorst: 9 } };
+    expect(computeDerivedFields(payload).nrsScore).toBe(4);
   });
 });

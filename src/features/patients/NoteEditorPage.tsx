@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { getSupabase } from '@/lib/supabase';
 import { ScaleWidget } from '@/components/ScaleWidget';
+import { BodyChart } from '@/components/BodyChart';
 import { repos, consultationNoteService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import {
@@ -11,11 +12,19 @@ import {
   YELLOW_FLAG_ITEMS,
   NEURO_LEVELS,
   REFLEX_ITEMS,
-  WORK_DEMAND_LEVELS,
+  ANATOMICAL_REGIONS,
+  ROM_MOVEMENTS_BY_REGION,
+  SPINE_REGIONS,
+  SPINE_ROM,
+  OCCUPATION_GROUPS,
+  ACTIVITY_GROUPS,
+  SESSION_DURATIONS,
   PSFS_MCID_THRESHOLD,
   emptyPayload,
   upcastPayload,
   computeDerivedFields,
+  computeBmi,
+  computeWaistToHeightRatio,
   outcomeTrend,
   type CoreAssessmentPayload,
   type RedFlagItem,
@@ -27,6 +36,7 @@ import {
   type DermatomeResult,
   type MyotomeResult,
   type ReflexResult,
+  type RomEntry,
 } from '@/domain/coreAssessment';
 
 /** Toggle-chip multi-select: value is the array of selected labels. */
@@ -85,6 +95,30 @@ function CarryForward({ summary, onUpdate }: { summary: string; onUpdate: () => 
   );
 }
 
+/** Region-driven movement quick-pick for a ROM/Strength row — writes into the
+ *  same free-text `movement` field the input already uses, so choosing one
+ *  is just a fast-fill, not a separate data path. Only rendered once an
+ *  Anatomical Region is selected. */
+function MovementQuickPick({
+  region,
+  onPick,
+  disabled,
+}: {
+  region: (typeof ANATOMICAL_REGIONS)[number] | '';
+  onPick: (movement: string) => void;
+  disabled?: boolean;
+}) {
+  if (!region) return null;
+  return (
+    <select value="" disabled={disabled} onChange={(e) => e.target.value && onPick(e.target.value)} style={{ maxWidth: 150 }}>
+      <option value="">Quick pick…</option>
+      {ROM_MOVEMENTS_BY_REGION[region].map((m) => (
+        <option key={m} value={m}>{m}</option>
+      ))}
+    </select>
+  );
+}
+
 /** Best-effort, online-only read of current_consents — never blocks saving a draft. */
 function useTreatmentConsentStatus(clinicId: string, patientId: string) {
   const [status, setStatus] = useState<'unknown' | 'on_file' | 'not_on_file'>('unknown');
@@ -140,7 +174,6 @@ export function NoteEditorPage() {
   const [therapistId, setTherapistId] = useState('');
   const [noteMode, setNoteMode] = useState<'initial' | 'followup'>('initial');
   const [enrollmentId, setEnrollmentId] = useState<string | null>(null);
-  const [authorizedSessionCount, setAuthorizedSessionCount] = useState('');
   const [payload, setPayload] = useState<CoreAssessmentPayload>(emptyPayload());
   const [status, setStatus] = useState<'draft' | 'completed'>('draft');
   const [busy, setBusy] = useState(false);
@@ -175,6 +208,10 @@ export function NoteEditorPage() {
   }
   const [screeningOpen, setScreeningOpen] = useState(false);
 
+  // Neurological screen: collapsed by default once WNL, expands automatically
+  // if any level is flagged, or on manual expand.
+  const [neuroExpanded, setNeuroExpanded] = useState(false);
+
   useEffect(() => {
     if (therapists && therapists.length > 0 && !therapistId) setTherapistId(therapists[0].id);
   }, [therapists, therapistId]);
@@ -188,7 +225,6 @@ export function NoteEditorPage() {
         setNoteMode(mode);
         setStatus(existingNote.status === 'completed' ? 'completed' : 'draft');
         setTherapistId(existingNote.therapistId);
-        setAuthorizedSessionCount(existingNote.authorizedSessionCount?.toString() ?? '');
         if (existingNote.assessmentPayload) {
           setPayload(upcastPayload(existingNote.assessmentPayload));
         }
@@ -215,6 +251,15 @@ export function NoteEditorPage() {
   const psfsImproving = payload.functionalStatus.activities.filter(
     (a) => a.current - a.baseline >= PSFS_MCID_THRESHOLD
   ).length;
+  const bmi = computeBmi(payload.generalHealth?.weightKg, payload.generalHealth?.heightCm);
+  const waistToHeight = computeWaistToHeightRatio(payload.generalHealth?.waistCm, payload.generalHealth?.heightCm);
+
+  const neuroFlagged = NEURO_LEVELS.some((l) => {
+    const d = payload.neurologicalScreen.dermatomes[l];
+    const m = payload.neurologicalScreen.myotomes[l];
+    return (d && d !== 'normal' && d !== 'not-tested') || (m && m !== 'normal' && m !== 'not-tested');
+  });
+  const showNeuroTable = neuroExpanded || neuroFlagged;
 
   // Most recent note in this episode before the one being edited —
   // listByEnrollment() is oldest-first, so excluding this note's own id
@@ -246,6 +291,10 @@ export function NoteEditorPage() {
 
   async function save(nextStatus: 'draft' | 'completed') {
     if (!enrollmentId || !therapistId) return;
+    if (!payload.chiefComplaint.anatomicalRegion) {
+      setError('Anatomical region is required before saving.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -258,7 +307,7 @@ export function NoteEditorPage() {
           visitId: existingNote?.visitId ?? null,
           enrollmentId,
           noteMode,
-          authorizedSessionCount: authorizedSessionCount ? Number(authorizedSessionCount) : null,
+          authorizedSessionCount: null,
         },
         payload,
         nextStatus
@@ -273,6 +322,17 @@ export function NoteEditorPage() {
 
   function update<K extends keyof CoreAssessmentPayload>(key: K, value: CoreAssessmentPayload[K]) {
     setPayload((p) => ({ ...p, [key]: value }));
+  }
+
+  /** Upserts a ROM entry by movement name — used by both the freeform ROM
+   *  list and the spine-only quick-preset table, so they share one source
+   *  of truth in `objective.rom` rather than a parallel structure. */
+  function upsertRom(movement: string, patch: Partial<RomEntry>) {
+    const exists = payload.objective.rom.some((r) => r.movement === movement);
+    const rom = exists
+      ? payload.objective.rom.map((r) => (r.movement === movement ? { ...r, ...patch } : r))
+      : [...payload.objective.rom, { movement, active: null, passive: null, unit: 'deg' as const, painProvoked: false, ...patch }];
+    update('objective', { ...payload.objective, rom });
   }
 
   if (!ready || patient === undefined) return null;
@@ -294,6 +354,8 @@ export function NoteEditorPage() {
         .map((w) => w[0]?.toUpperCase() ?? '')
         .join('')
     : '';
+
+  const region = payload.chiefComplaint.anatomicalRegion;
 
   return (
     <div>
@@ -347,6 +409,47 @@ export function NoteEditorPage() {
             </div>
           </div>
         )}
+
+        {/* General Health & Triage — moved up near basic info (§1), not part
+            of the accordion, always visible/editable regardless of note mode. */}
+        <div className="setup-card">
+          <p className="section-label" style={{ margin: '0 0 8px' }}>General health &amp; triage</p>
+          <div className="field-row">
+            <div className="field-block">
+              <label>Weight (kg)</label>
+              <input
+                type="number"
+                value={payload.generalHealth?.weightKg ?? ''}
+                disabled={readOnly}
+                onChange={(e) => update('generalHealth', { ...payload.generalHealth, weightKg: e.target.value ? Number(e.target.value) : undefined, vitals: payload.generalHealth?.vitals ?? [] })}
+              />
+            </div>
+            <div className="field-block">
+              <label>Height (cm)</label>
+              <input
+                type="number"
+                value={payload.generalHealth?.heightCm ?? ''}
+                disabled={readOnly}
+                onChange={(e) => update('generalHealth', { ...payload.generalHealth, heightCm: e.target.value ? Number(e.target.value) : undefined, vitals: payload.generalHealth?.vitals ?? [] })}
+              />
+            </div>
+          </div>
+          <div className="field-row" style={{ marginTop: 10 }}>
+            <div className="field-block">
+              <label>Waist (cm)</label>
+              <input
+                type="number"
+                value={payload.generalHealth?.waistCm ?? ''}
+                disabled={readOnly}
+                onChange={(e) => update('generalHealth', { ...payload.generalHealth, waistCm: e.target.value ? Number(e.target.value) : undefined, vitals: payload.generalHealth?.vitals ?? [] })}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              {bmi !== null && <div className="derived-value">BMI {bmi}</div>}
+              {waistToHeight !== null && <div className="derived-value">Waist/height {waistToHeight}</div>}
+            </div>
+          </div>
+        </div>
 
         <div className={`screening-banner ${derived.redFlagCount > 0 ? 'red' : derived.yellowConcernCount > 0 ? 'amber' : 'clear'} ${screeningOpen ? 'open' : ''}`}>
           <button type="button" className="sb-head" onClick={() => setScreeningOpen((v) => !v)}>
@@ -406,25 +509,13 @@ export function NoteEditorPage() {
           </div>
         </div>
 
-        <div className="field-row">
-          <div className="field-block">
-            <label>Therapist</label>
-            <select value={therapistId} onChange={(e) => setTherapistId(e.target.value)} disabled={readOnly}>
-              {(therapists ?? []).map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field-block">
-            <label>Authorized sessions</label>
-            <input
-              type="number"
-              min={1}
-              value={authorizedSessionCount}
-              onChange={(e) => setAuthorizedSessionCount(e.target.value)}
-              disabled={readOnly}
-            />
-          </div>
+        <div className="field-block">
+          <label>Therapist</label>
+          <select value={therapistId} onChange={(e) => setTherapistId(e.target.value)} disabled={readOnly}>
+            {(therapists ?? []).map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
         </div>
 
         <div className="setup-accordion">
@@ -432,10 +523,24 @@ export function NoteEditorPage() {
         {/* 1. Chief Complaint */}
         <div className={`setup-section ${openSections.has('chiefComplaint') ? 'open' : ''}`}>
           <button type="button" className="setup-section-head" onClick={() => toggleSection('chiefComplaint')}>
-            <div><h3>Chief Complaint</h3><div className="sub">Onset, activity context, post-surgical detail</div></div>
+            <div><h3>Chief Complaint</h3><div className="sub">Region, timeline, occupation/activity context</div></div>
             <span className="chev">›</span>
           </button>
           <div className="setup-section-body">
+          <div className="field-block">
+            <label>Anatomical region *</label>
+            <select
+              required
+              value={region}
+              disabled={readOnly}
+              onChange={(e) => update('chiefComplaint', { ...payload.chiefComplaint, anatomicalRegion: e.target.value as CoreAssessmentPayload['chiefComplaint']['anatomicalRegion'] })}
+            >
+              <option value="">Select region…</option>
+              {ANATOMICAL_REGIONS.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </div>
           {isCollapsed('chiefComplaint') ? (
             <CarryForward
               summary={`${payload.chiefComplaint.onset || 'onset not set'}${payload.chiefComplaint.primaryComplaint.length ? ' · ' + payload.chiefComplaint.primaryComplaint.join(', ') : ''}`}
@@ -459,6 +564,8 @@ export function NoteEditorPage() {
                   onChange={(v) => update('chiefComplaint', { ...payload.chiefComplaint, primaryComplaint: v })}
                 />
               </div>
+
+              <p className="section-label" style={{ marginTop: 4 }}>Contextual timeline</p>
               <div className="field-block" style={{ margin: 0 }}>
                 <label>Onset</label>
                 <select
@@ -508,29 +615,6 @@ export function NoteEditorPage() {
                   </div>
                 </div>
               )}
-              <div className="field-row">
-                <div className="field-block">
-                  <label>Work demand level</label>
-                  <select
-                    value={payload.chiefComplaint.workDemandLevel}
-                    disabled={readOnly}
-                    onChange={(e) => update('chiefComplaint', { ...payload.chiefComplaint, workDemandLevel: e.target.value as CoreAssessmentPayload['chiefComplaint']['workDemandLevel'] })}
-                  >
-                    <option value="">—</option>
-                    {WORK_DEMAND_LEVELS.map((w) => (
-                      <option key={w.value} value={w.value}>{w.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field-block">
-                  <label>Job/role</label>
-                  <input
-                    value={payload.chiefComplaint.jobRole ?? ''}
-                    disabled={readOnly}
-                    onChange={(e) => update('chiefComplaint', { ...payload.chiefComplaint, jobRole: e.target.value })}
-                  />
-                </div>
-              </div>
               <div className="field-block" style={{ margin: 0 }}>
                 <label>Mechanism of injury</label>
                 <input
@@ -568,6 +652,52 @@ export function NoteEditorPage() {
                     <option value="fluctuating">Fluctuating</option>
                   </select>
                 </div>
+              </div>
+
+              <p className="section-label" style={{ marginTop: 4 }}>Occupation &amp; activity</p>
+              <div className="field-row">
+                <div className="field-block">
+                  <label>Occupation</label>
+                  <select
+                    value={payload.chiefComplaint.occupation}
+                    disabled={readOnly}
+                    onChange={(e) => update('chiefComplaint', { ...payload.chiefComplaint, occupation: e.target.value })}
+                  >
+                    <option value="">—</option>
+                    {OCCUPATION_GROUPS.map((g) => (
+                      <optgroup key={g.group} label={g.group}>
+                        {g.options.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+                <div className="field-block">
+                  <label>Activity / sports</label>
+                  <select
+                    value={payload.chiefComplaint.activity}
+                    disabled={readOnly}
+                    onChange={(e) => update('chiefComplaint', { ...payload.chiefComplaint, activity: e.target.value })}
+                  >
+                    <option value="">—</option>
+                    {ACTIVITY_GROUPS.map((g) => (
+                      <optgroup key={g.group} label={g.group}>
+                        {g.options.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="field-block" style={{ margin: 0 }}>
+                <label>Job/role (specifics)</label>
+                <input
+                  value={payload.chiefComplaint.jobRole ?? ''}
+                  disabled={readOnly}
+                  onChange={(e) => update('chiefComplaint', { ...payload.chiefComplaint, jobRole: e.target.value })}
+                />
               </div>
             </div>
           )}
@@ -645,7 +775,8 @@ export function NoteEditorPage() {
                   <button className="btn-secondary" disabled={readOnly} onClick={() => update('history', { ...payload.history, traumas: [...payload.history.traumas, { date: '', bodyPart: '', nature: '', treatment: '', sequelae: 'none' }] })}>+ Add</button>
                 </div>
                 {payload.history.traumas.map((t, i) => (
-                  <div key={i} className="field-row" style={{ marginTop: 6, alignItems: 'center' }}>
+                  <div key={i} className="field-row" style={{ marginTop: 6, alignItems: 'center', gridTemplateColumns: '90px 1fr 1fr auto' }}>
+                    <input type="text" placeholder="Date/year" value={t.date} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)) })} />
                     <input placeholder="Body part" value={t.bodyPart} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, bodyPart: e.target.value } : x)) })} />
                     <input placeholder="Nature" value={t.nature} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, nature: e.target.value } : x)) })} />
                     <button className="kebab" disabled={readOnly} onClick={() => update('history', { ...payload.history, traumas: payload.history.traumas.filter((_, j) => j !== i) })}>✕</button>
@@ -659,7 +790,8 @@ export function NoteEditorPage() {
                   <button className="btn-secondary" disabled={readOnly} onClick={() => update('history', { ...payload.history, surgeries: [...payload.history.surgeries, { date: '', procedure: '', outcome: 'good', currentStatus: 'recovered' }] })}>+ Add</button>
                 </div>
                 {payload.history.surgeries.map((s, i) => (
-                  <div key={i} className="field-row" style={{ marginTop: 6, alignItems: 'center' }}>
+                  <div key={i} className="field-row" style={{ marginTop: 6, alignItems: 'center', gridTemplateColumns: '90px 1fr 1fr auto' }}>
+                    <input type="text" placeholder="Date/year" value={s.date} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)) })} />
                     <input placeholder="Procedure" value={s.procedure} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, procedure: e.target.value } : x)) })} />
                     <select value={s.outcome} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, outcome: e.target.value as typeof x.outcome } : x)) })}>
                       <option value="good">Good</option>
@@ -675,7 +807,7 @@ export function NoteEditorPage() {
           </div>
         </div>
 
-        {/* 4. Subjective — Pain Profile (body chart deferred, no reference artwork yet) */}
+        {/* 4. Subjective — Pain Profile + Body chart */}
         <div className={`setup-section ${openSections.has('subjective') ? 'open' : ''}`}>
           <button type="button" className="setup-section-head" onClick={() => toggleSection('subjective')}>
             <div><h3>Subjective</h3><div className="sub">Body chart, pain profile</div></div>
@@ -684,15 +816,37 @@ export function NoteEditorPage() {
           <div className="setup-section-body">
           <p className="section-label">Pain profile</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div>
-              <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>NRS (0–10)</label>
-              <ScaleWidget
-                variant="nrs"
-                value={payload.painProfile.nrs}
-                onChange={(n) => update('painProfile', { ...payload.painProfile, nrs: n })}
-                endpoints={['No pain', 'Worst imaginable']}
-                disabled={readOnly}
-              />
+            <div className="field-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              <div>
+                <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Current</label>
+                <ScaleWidget
+                  variant="nrs"
+                  value={payload.painProfile.nrsCurrent}
+                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrsCurrent: n })}
+                  endpoints={['No pain', 'Worst imaginable']}
+                  disabled={readOnly}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Best</label>
+                <ScaleWidget
+                  variant="nrs"
+                  value={payload.painProfile.nrsBest}
+                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrsBest: n })}
+                  endpoints={['No pain', 'Worst imaginable']}
+                  disabled={readOnly}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Worst</label>
+                <ScaleWidget
+                  variant="nrs"
+                  value={payload.painProfile.nrsWorst}
+                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrsWorst: n })}
+                  endpoints={['No pain', 'Worst imaginable']}
+                  disabled={readOnly}
+                />
+              </div>
             </div>
             <div className="field-row">
               <div className="field-block">
@@ -727,11 +881,12 @@ export function NoteEditorPage() {
             </div>
           </div>
 
-          {/* Body chart — reserved shape, real interaction deferred */}
           <p className="section-label" style={{ marginTop: 14 }}>Body chart</p>
-          <p className="empty-note">
-            {payload.bodyChart.marks.length} mark{payload.bodyChart.marks.length === 1 ? '' : 's'} recorded — tap-to-mark UI not built yet (needs the reference artwork integration).
-          </p>
+          <BodyChart
+            marks={payload.bodyChart.marks}
+            onChange={(marks) => update('bodyChart', { ...payload.bodyChart, marks })}
+            disabled={readOnly}
+          />
           </div>
         </div>
 
@@ -810,20 +965,32 @@ export function NoteEditorPage() {
           <button type="button" className="setup-section-head" onClick={() => toggleSection('objective')}>
             <div>
               <h3>Objective</h3>
-              <div className="sub">{noteMode === 'followup' ? 'Tracked measures only' : 'Full battery — gait, palpation, neuro, ROM, MMT, special tests'}</div>
+              <div className="sub">{noteMode === 'followup' ? 'Tracked measures only' : 'Full battery — gait, posture, palpation, neuro, ROM, MMT, special tests'}</div>
             </div>
             <span className="chev">›</span>
           </button>
           <div className="setup-section-body">
           <div className="initial-only">
-          <p className="section-label">Gait &amp; posture</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <MultiToggle options={['Normal', 'Limping/Antalgic', 'Trendelenburg', 'Ataxic', 'Stooped']} value={payload.gaitPosture.gait} onChange={(v) => update('gaitPosture', { ...payload.gaitPosture, gait: v })} />
-            <MultiToggle options={['Normal', 'Forward head', 'Rounded shoulders', 'Increased kyphosis', 'Increased lordosis', 'Scoliosis']} value={payload.gaitPosture.posture} onChange={(v) => update('gaitPosture', { ...payload.gaitPosture, posture: v })} />
+          <p className="section-label">Gait</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+            <MultiToggle
+              options={['Normal', 'Limping/Antalgic', 'Trendelenburg', 'Ataxic', 'Wide-based', 'Shuffling', 'Circumduction']}
+              value={payload.gaitPosture.gait}
+              onChange={(v) => update('gaitPosture', { ...payload.gaitPosture, gait: v })}
+            />
             <div className="field-block" style={{ margin: 0 }}>
               <label>Assistive device</label>
               <input value={payload.gaitPosture.assistiveDevice} disabled={readOnly} onChange={(e) => update('gaitPosture', { ...payload.gaitPosture, assistiveDevice: e.target.value })} />
             </div>
+          </div>
+
+          <p className="section-label">Posture</p>
+          <div style={{ marginBottom: 14 }}>
+            <MultiToggle
+              options={['Normal', 'Forward head', 'Rounded shoulders', 'Increased kyphosis', 'Increased lordosis', 'Scoliosis', 'Pelvic tilt (anterior)', 'Pelvic tilt (posterior)', 'Shoulder asymmetry', 'Genu valgum', 'Genu varum']}
+              value={payload.gaitPosture.posture}
+              onChange={(v) => update('gaitPosture', { ...payload.gaitPosture, posture: v })}
+            />
           </div>
         </div>
 
@@ -854,8 +1021,23 @@ export function NoteEditorPage() {
         </div>
 
         <div className="initial-only">
-          <p className="section-label">Neurological screen</p>
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <p className="section-label" style={{ margin: 0 }}>Neurological screen</p>
+            <button type="button" className="btn-secondary" disabled={readOnly} onClick={() => {
+              const dermatomes = Object.fromEntries(NEURO_LEVELS.map((l) => [l, 'normal'])) as CoreAssessmentPayload['neurologicalScreen']['dermatomes'];
+              const myotomes = Object.fromEntries(NEURO_LEVELS.map((l) => [l, 'normal'])) as CoreAssessmentPayload['neurologicalScreen']['myotomes'];
+              update('neurologicalScreen', { ...payload.neurologicalScreen, dermatomes, myotomes });
+            }}>
+              Mark all WNL
+            </button>
+          </div>
+          {!showNeuroTable ? (
+            <div className="carry-forward" style={{ marginTop: 8 }}>
+              All levels within normal limits.
+              <button className="cf-update" onClick={() => setNeuroExpanded(true)}>Expand</button>
+            </div>
+          ) : (
+          <div style={{ overflowX: 'auto', marginTop: 8 }}>
             <table className="mini-table">
               <thead>
                 <tr><th>Level</th><th>Dermatome</th><th>Myotome</th></tr>
@@ -933,12 +1115,51 @@ export function NoteEditorPage() {
               Upper motor neuron signs present
             </label>
           </div>
+          )}
         </div>
+
+        {region && SPINE_REGIONS.includes(region) && (
+          <div className="initial-only">
+            <p className="section-label" style={{ marginTop: 14 }}>ROM quick preset — {region}</p>
+            <table className="mini-table">
+              <thead><tr><th>Movement</th><th>Degrees</th><th>Pain</th></tr></thead>
+              <tbody>
+                {SPINE_ROM.map((movement) => {
+                  const entry = payload.objective.rom.find((r) => r.movement === movement);
+                  return (
+                    <tr key={movement}>
+                      <td>{movement}</td>
+                      <td>
+                        <input
+                          type="number"
+                          value={entry?.active ?? ''}
+                          disabled={readOnly}
+                          onChange={(e) => upsertRom(movement, { active: e.target.value ? Number(e.target.value) : null })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={entry?.painProvoked ?? false}
+                          disabled={readOnly}
+                          onChange={(e) => upsertRom(movement, { painProvoked: e.target.checked })}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <p className="section-label" style={{ margin: 0 }}>ROM</p>
-            <button className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, rom: [...payload.objective.rom, { movement: '', active: null, passive: null, unit: 'deg', painProvoked: false }] })}>+ Add</button>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <MovementQuickPick region={region} disabled={readOnly} onPick={(m) => update('objective', { ...payload.objective, rom: [...payload.objective.rom, { movement: m, active: null, passive: null, unit: 'deg', painProvoked: false }] })} />
+              <button className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, rom: [...payload.objective.rom, { movement: '', active: null, passive: null, unit: 'deg', painProvoked: false }] })}>+ Add</button>
+            </div>
           </div>
           {payload.objective.rom.map((r, i) => (
             <div key={i} className="field-row" style={{ marginBottom: 6, alignItems: 'center' }}>
@@ -953,7 +1174,10 @@ export function NoteEditorPage() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <p className="section-label" style={{ margin: 0 }}>Strength / MMT</p>
-            <button className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, strength: [...payload.objective.strength, { movement: '', grade: 'not-tested' }] })}>+ Add</button>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <MovementQuickPick region={region} disabled={readOnly} onPick={(m) => update('objective', { ...payload.objective, strength: [...payload.objective.strength, { movement: m, grade: 'not-tested' }] })} />
+              <button className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, strength: [...payload.objective.strength, { movement: '', grade: 'not-tested' }] })}>+ Add</button>
+            </div>
           </div>
           {payload.objective.strength.map((s, i) => (
             <div key={i} className="field-row" style={{ marginBottom: 6, alignItems: 'center' }}>
@@ -1002,9 +1226,18 @@ export function NoteEditorPage() {
             <MultiToggle options={['Joint mobilisation', 'Manipulation', 'MFR', 'Taping', 'Dry needling']} value={payload.treatment.session.manualTherapy} onChange={(v) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, manualTherapy: v } })} />
             <MultiToggle options={['Strengthening', 'Stretching', 'ROM', 'Neuromuscular', 'Balance', 'Plyometric']} value={payload.treatment.session.therapeuticExercise} onChange={(v) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, therapeuticExercise: v } })} />
             <MultiToggle options={['Ultrasound', 'TENS', 'IFC', 'Heat/ice', 'Laser', 'Shockwave']} value={payload.treatment.session.modalities} onChange={(v) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, modalities: v } })} />
-            <div className="field-row">
+            <div className="field-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
               <div className="field-block">
-                <label>Time spent</label>
+                <label>Session duration</label>
+                <select value={payload.treatment.session.duration} disabled={readOnly} onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, duration: e.target.value } })}>
+                  <option value="">—</option>
+                  {SESSION_DURATIONS.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field-block">
+                <label>Time spent (detail)</label>
                 <input value={payload.treatment.session.timeSpent} disabled={readOnly} onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, timeSpent: e.target.value } })} />
               </div>
               <div className="field-block">
@@ -1018,68 +1251,74 @@ export function NoteEditorPage() {
                 </select>
               </div>
             </div>
-            <p className="section-label" style={{ marginTop: 10 }}>Load management (post-surgical)</p>
-            <div className="field-row">
-              <div className="field-block">
-                <label>Weight-bearing</label>
-                <select
-                  value={payload.treatment.session.weightBearing ?? ''}
-                  disabled={readOnly}
-                  onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, weightBearing: (e.target.value || undefined) as CoreAssessmentPayload['treatment']['session']['weightBearing'] } })}
-                >
-                  <option value="">—</option>
-                  <option value="nwb">NWB</option>
-                  <option value="pwb">PWB</option>
-                  <option value="wb">WBAT</option>
-                  <option value="fwb">FWB</option>
-                </select>
-              </div>
-              {payload.treatment.session.weightBearing === 'pwb' && (
-                <div className="field-block">
-                  <label>PWB %</label>
-                  <input
-                    type="number"
-                    value={payload.treatment.session.pwbPercentage ?? ''}
-                    disabled={readOnly}
-                    onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, pwbPercentage: e.target.value ? Number(e.target.value) : undefined } })}
-                  />
+
+            {(payload.chiefComplaint.onset === 'post-surgical' || payload.history.surgeries.some((s) => s.currentStatus === 'ongoing')) && (
+              <>
+                <p className="section-label" style={{ marginTop: 10 }}>Load management (post-surgical)</p>
+                <div className="field-row">
+                  <div className="field-block">
+                    <label>Weight-bearing</label>
+                    <select
+                      value={payload.treatment.session.weightBearing ?? ''}
+                      disabled={readOnly}
+                      onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, weightBearing: (e.target.value || undefined) as CoreAssessmentPayload['treatment']['session']['weightBearing'] } })}
+                    >
+                      <option value="">—</option>
+                      <option value="nwb">NWB</option>
+                      <option value="pwb">PWB</option>
+                      <option value="wb">WBAT</option>
+                      <option value="fwb">FWB</option>
+                    </select>
+                  </div>
+                  {payload.treatment.session.weightBearing === 'pwb' && (
+                    <div className="field-block">
+                      <label>PWB %</label>
+                      <input
+                        type="number"
+                        value={payload.treatment.session.pwbPercentage ?? ''}
+                        disabled={readOnly}
+                        onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, pwbPercentage: e.target.value ? Number(e.target.value) : undefined } })}
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <div className="field-row">
-              <div className="field-block">
-                <label>Brace</label>
-                <select
-                  value={payload.treatment.session.brace ?? ''}
-                  disabled={readOnly}
-                  onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, brace: (e.target.value || undefined) as CoreAssessmentPayload['treatment']['session']['brace'] } })}
-                >
-                  <option value="">—</option>
-                  <option value="none">None</option>
-                  <option value="hinged">Hinged</option>
-                  <option value="locked">Locked</option>
-                </select>
-              </div>
-              {payload.treatment.session.brace === 'locked' && (
-                <div className="field-block">
-                  <label>Locked at (°)</label>
-                  <input
-                    value={payload.treatment.session.lockedDegrees ?? ''}
-                    disabled={readOnly}
-                    onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, lockedDegrees: e.target.value || undefined } })}
-                  />
+                <div className="field-row">
+                  <div className="field-block">
+                    <label>Brace</label>
+                    <select
+                      value={payload.treatment.session.brace ?? ''}
+                      disabled={readOnly}
+                      onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, brace: (e.target.value || undefined) as CoreAssessmentPayload['treatment']['session']['brace'] } })}
+                    >
+                      <option value="">—</option>
+                      <option value="none">None</option>
+                      <option value="hinged">Hinged</option>
+                      <option value="locked">Locked</option>
+                    </select>
+                  </div>
+                  {payload.treatment.session.brace === 'locked' && (
+                    <div className="field-block">
+                      <label>Locked at (°)</label>
+                      <input
+                        value={payload.treatment.session.lockedDegrees ?? ''}
+                        disabled={readOnly}
+                        onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, lockedDegrees: e.target.value || undefined } })}
+                      />
+                    </div>
+                  )}
+                  <div className="field-block">
+                    <label>ROM limit (°)</label>
+                    <input
+                      type="number"
+                      value={payload.treatment.session.romLimit ?? ''}
+                      disabled={readOnly}
+                      onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, romLimit: e.target.value ? Number(e.target.value) : undefined } })}
+                    />
+                  </div>
                 </div>
-              )}
-              <div className="field-block">
-                <label>ROM limit (°)</label>
-                <input
-                  type="number"
-                  value={payload.treatment.session.romLimit ?? ''}
-                  disabled={readOnly}
-                  onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, romLimit: e.target.value ? Number(e.target.value) : undefined } })}
-                />
-              </div>
-            </div>
+              </>
+            )}
+
             <div className="field-block" style={{ margin: 0 }}>
               <label>Notes</label>
               <textarea value={payload.treatment.notes} disabled={readOnly} onChange={(e) => update('treatment', { ...payload.treatment, notes: e.target.value })} />
@@ -1101,10 +1340,23 @@ export function NoteEditorPage() {
           </div>
           <p className="empty-note" style={{ marginTop: 0 }}>Manual entry only — the exercise library browser isn't built yet.</p>
           {payload.hep.exercises.map((ex, i) => (
-            <div key={i} className="field-row" style={{ marginBottom: 6, alignItems: 'center' }}>
-              <input placeholder="Exercise" value={ex.name} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
-              <input type="number" placeholder="Sets" value={ex.sets} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, sets: Number(e.target.value) } : x)) })} />
-              <input type="number" placeholder="Reps" value={ex.reps} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, reps: Number(e.target.value) } : x)) })} />
+            <div key={i} className="field-row" style={{ marginBottom: 10, alignItems: 'end', gridTemplateColumns: 'repeat(4, 1fr) auto' }}>
+              <div className="field-block" style={{ margin: 0 }}>
+                <label>Exercise name</label>
+                <input placeholder="e.g. Wall slides" value={ex.name} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
+              </div>
+              <div className="field-block" style={{ margin: 0 }}>
+                <label>Sets</label>
+                <input type="number" value={ex.sets} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, sets: Number(e.target.value) } : x)) })} />
+              </div>
+              <div className="field-block" style={{ margin: 0 }}>
+                <label>Reps</label>
+                <input type="number" value={ex.reps} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, reps: Number(e.target.value) } : x)) })} />
+              </div>
+              <div className="field-block" style={{ margin: 0 }}>
+                <label>Frequency / hold</label>
+                <input placeholder="e.g. Daily, hold 30s" value={ex.frequency} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, frequency: e.target.value } : x)) })} />
+              </div>
               <button className="kebab" disabled={readOnly} onClick={() => update('hep', { ...payload.hep, exercises: payload.hep.exercises.filter((_, j) => j !== i) })}>✕</button>
             </div>
           ))}
@@ -1159,11 +1411,16 @@ export function NoteEditorPage() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Goals</label>
-                <button className="btn-secondary" disabled={readOnly} onClick={() => update('plan', { ...payload.plan, goals: [...payload.plan.goals, { text: '' }] })}>+ Add</button>
+                <button className="btn-secondary" disabled={readOnly} onClick={() => update('plan', { ...payload.plan, goals: [...payload.plan.goals, { text: '', targetTerm: '' }] })}>+ Add</button>
               </div>
               {payload.plan.goals.map((g, i) => (
-                <div key={i} className="field-row" style={{ marginTop: 6, alignItems: 'center' }}>
+                <div key={i} className="field-row" style={{ marginTop: 6, alignItems: 'center', gridTemplateColumns: '1fr 120px 140px auto' }}>
                   <input placeholder="Goal" value={g.text} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) })} />
+                  <select value={g.targetTerm} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, targetTerm: e.target.value as 'short-term' | 'long-term' | '' } : x)) })}>
+                    <option value="">Term…</option>
+                    <option value="short-term">Short-term</option>
+                    <option value="long-term">Long-term</option>
+                  </select>
                   <input type="date" value={g.targetDate ?? ''} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, targetDate: e.target.value } : x)) })} />
                   <button className="kebab" disabled={readOnly} onClick={() => update('plan', { ...payload.plan, goals: payload.plan.goals.filter((_, j) => j !== i) })}>✕</button>
                 </div>
@@ -1177,34 +1434,7 @@ export function NoteEditorPage() {
           </div>
         </div>
 
-        {/* 10. General Health */}
-        <div className={`setup-section ${openSections.has('generalHealth') ? 'open' : ''}`}>
-          <button type="button" className="setup-section-head" onClick={() => toggleSection('generalHealth')}>
-            <div><h3>General Health</h3><div className="sub">Vitals, falls risk</div></div>
-            <span className="chev">›</span>
-          </button>
-          <div className="setup-section-body">
-          {isCollapsed('generalHealth') ? (
-            <CarryForward
-              summary={`Weight ${payload.generalHealth?.weightKg ?? '—'}kg · Height ${payload.generalHealth?.heightCm ?? '—'}cm`}
-              onUpdate={() => expand('generalHealth')}
-            />
-          ) : (
-            <div className="initial-only field-row">
-              <div className="field-block">
-                <label>Weight (kg)</label>
-                <input type="number" value={payload.generalHealth?.weightKg ?? ''} disabled={readOnly} onChange={(e) => update('generalHealth', { ...payload.generalHealth, weightKg: e.target.value ? Number(e.target.value) : undefined, vitals: payload.generalHealth?.vitals ?? [] })} />
-              </div>
-              <div className="field-block">
-                <label>Height (cm)</label>
-                <input type="number" value={payload.generalHealth?.heightCm ?? ''} disabled={readOnly} onChange={(e) => update('generalHealth', { ...payload.generalHealth, heightCm: e.target.value ? Number(e.target.value) : undefined, vitals: payload.generalHealth?.vitals ?? [] })} />
-              </div>
-            </div>
-          )}
-          </div>
-        </div>
-
-        {/* 11. Outcome tracking */}
+        {/* 10. Outcome tracking */}
         {outcomeCards.length > 0 && (
           <div className={`setup-section ${openSections.has('outcome') ? 'open' : ''}`}>
             <button type="button" className="setup-section-head" onClick={() => toggleSection('outcome')}>
