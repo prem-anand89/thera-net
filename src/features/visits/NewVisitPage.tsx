@@ -199,6 +199,7 @@ export function NewVisitPage() {
         setTherapistId(sorted[0].therapistId);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patient?.id, clinic.id]);
 
   useEffect(() => {
