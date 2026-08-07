@@ -75,7 +75,12 @@ function makeFakeRepos() {
       get: async (id) => visits.get(id),
       list: async (f: VisitFilter) =>
         [...visits.values()].filter(
-          (v) => !v.deleted && v.clinicId === f.clinicId && (!f.from || v.visitDate >= f.from)
+          (v) =>
+            !v.deleted &&
+            v.clinicId === f.clinicId &&
+            (!f.from || v.visitDate >= f.from) &&
+            (!f.to || v.visitDate <= f.to) &&
+            (!f.therapistId || v.therapistId === f.therapistId)
         ),
       listByIds: async (ids) => ids.map((id) => visits.get(id)!).filter(Boolean),
       listByPackageGroup: async (gid) => [...visits.values()].filter((v) => v.packageGroupId === gid && !v.deleted),
@@ -122,6 +127,10 @@ function makeFakeRepos() {
       get: async () => undefined,
       listByPatient: async () => [],
       getActive: async () => undefined,
+      put: async () => {},
+    },
+    expectedVisits: {
+      listForDate: async () => [],
       put: async () => {},
     },
   };
@@ -665,6 +674,23 @@ describe('dashboardService.todayWorklist', () => {
       therapistName: 'Prem',
       serviceName: 'Manual Therapy',
     });
+  });
+
+  it('is unfiltered by therapist when therapistId is omitted', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr, therapistId: 'th-prem' }));
+    fake.visits.set('v2', baseVisit('v2', { visitDate: todayStr, therapistId: 'th-other' }));
+    const svc = createDashboardService(fake.repos);
+    const result = await svc.todayWorklist('clinic-1', today);
+    expect(result.visitCount).toBe(2);
+  });
+
+  it('scopes to only the given therapist when therapistId is passed', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr, therapistId: 'th-prem' }));
+    fake.visits.set('v2', baseVisit('v2', { visitDate: todayStr, therapistId: 'th-other' }));
+    const svc = createDashboardService(fake.repos);
+    const result = await svc.todayWorklist('clinic-1', today, 'th-prem');
+    expect(result.visitCount).toBe(1);
+    expect(result.visits[0].visitId).toBe('v1');
   });
 });
 

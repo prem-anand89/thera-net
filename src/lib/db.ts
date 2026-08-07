@@ -11,6 +11,7 @@ import type {
   Settlement,
   ConsultationNote,
   PatientModuleEnrollment,
+  ExpectedVisit,
 } from '@/domain/types';
 
 /**
@@ -43,7 +44,8 @@ export type SyncedTable =
   | 'payments'
   | 'settlements'
   | 'consultation_notes'
-  | 'patient_module_enrollments';
+  | 'patient_module_enrollments'
+  | 'expected_visits';
 
 /**
  * Tables the client is allowed to write. Invoices are server-issued only.
@@ -59,6 +61,7 @@ export const CLIENT_WRITABLE_TABLES = [
   'settlements',
   'consultation_notes',
   'patient_module_enrollments',
+  'expected_visits',
 ] as const satisfies readonly SyncedTable[];
 
 export class ClinicDB extends Dexie {
@@ -73,6 +76,7 @@ export class ClinicDB extends Dexie {
   settlements!: Table<Settlement, string>;
   consultation_notes!: Table<ConsultationNote, string>;
   patient_module_enrollments!: Table<PatientModuleEnrollment, string>;
+  expected_visits!: Table<ExpectedVisit, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 
@@ -105,6 +109,7 @@ export class ClinicDB extends Dexie {
     });
     this.version(8).stores({
       patient_module_enrollments: 'id, clinicId, patientId, moduleType, status',
+      expected_visits: 'id, clinicId, visitDate, status',
       // Re-declared with enrollmentId added — Dexie index changes on an
       // existing table require the full index string at the new version.
       consultation_notes: 'id, clinicId, patientId, visitId, status, enrollmentId',

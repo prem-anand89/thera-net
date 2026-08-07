@@ -1,10 +1,19 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService, invoiceService, paymentService, directPaymentService } from '@/services';
+import {
+  repos,
+  dashboardService,
+  invoiceService,
+  paymentService,
+  directPaymentService,
+  expectedVisitsService,
+} from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { useSession } from '@/app/useSession';
+import { useClinicRole } from '@/app/useClinicRole';
 import { formatINR } from '@/domain/money';
-import type { PaymentMethod, PaymentMode } from '@/domain/types';
+import type { ExpectedVisit, PaymentMethod, PaymentMode } from '@/domain/types';
 import type { PendingWorkItem, RecentVisitRow, TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
@@ -82,6 +91,8 @@ function recentRowToCardData(row: RecentVisitRow): VisitCardData {
 
 export function WorkspacePage() {
   const clinic = useClinic();
+  const { session } = useSession();
+  const { role } = useClinicRole(clinic.id);
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
   const [paidNow, setPaidNow] = useState(true);
@@ -90,9 +101,28 @@ export function WorkspacePage() {
   const [packagesOpen, setPackagesOpen] = useState(false);
   const [attentionOpen, setAttentionOpen] = useState(false);
   const [recentOpen, setRecentOpen] = useState(false);
+  const [addingExpected, setAddingExpected] = useState(false);
+  const [expectedQuery, setExpectedQuery] = useState('');
+  const [expectedPatientId, setExpectedPatientId] = useState<string | null>(null);
+  const [expectedTimeNote, setExpectedTimeNote] = useState('');
   const navigate = useNavigate();
 
-  const today = useLiveQuery(() => dashboardService.todayWorklist(clinic.id), [clinic.id]);
+  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
+  const myTherapistId = useMemo(
+    () => (therapists ?? []).find((t) => t.userId === session?.user?.id)?.id,
+    [therapists, session?.user?.id]
+  );
+  // Staff (therapist) tier sees only their own visits in the today-scoped
+  // stats; admin sees the whole clinic. While role hasn't resolved yet
+  // ('unknown'), default to the narrower staff-scoped view rather than
+  // flashing clinic-wide data. Content below the stat row (Needs-attention,
+  // Seen today, Recently-seen) stays clinic-wide for everyone — only the
+  // stat pills are tier-scoped.
+  const myScopeTherapistId = role === 'admin' ? undefined : myTherapistId;
+  const today = useLiveQuery(
+    () => dashboardService.todayWorklist(clinic.id, new Date(), myScopeTherapistId),
+    [clinic.id, myScopeTherapistId]
+  );
   const pendingWork = useLiveQuery(() => dashboardService.pendingWork(clinic.id), [clinic.id]);
   const monthlyNew = useLiveQuery(() => dashboardService.monthlyNewCounts(clinic.id), [clinic.id]);
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
@@ -104,6 +134,45 @@ export function WorkspacePage() {
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
   );
+
+  const expectedToday = useLiveQuery(
+    () => (clinic.enableExpectedToday ? expectedVisitsService.listForToday(clinic.id) : undefined),
+    [clinic.id, clinic.enableExpectedToday]
+  );
+  const expectedMatches = useLiveQuery(
+    () => (expectedQuery.trim() && !expectedPatientId ? repos.patients.search(clinic.id, expectedQuery) : []),
+    [clinic.id, expectedQuery, expectedPatientId]
+  );
+  const allPatientsForExpected = useLiveQuery(
+    () => (clinic.enableExpectedToday ? repos.patients.list(clinic.id) : undefined),
+    [clinic.id, clinic.enableExpectedToday]
+  );
+  const expectedPatientById = useMemo(
+    () => new Map((allPatientsForExpected ?? []).map((p) => [p.id, p])),
+    [allPatientsForExpected]
+  );
+
+  async function addExpected() {
+    if (expectedPatientId) {
+      await expectedVisitsService.add({ clinicId: clinic.id, patientId: expectedPatientId, timeNote: expectedTimeNote });
+    } else if (expectedQuery.trim()) {
+      await expectedVisitsService.add({ clinicId: clinic.id, patientName: expectedQuery.trim(), timeNote: expectedTimeNote });
+    } else {
+      return;
+    }
+    setExpectedQuery('');
+    setExpectedPatientId(null);
+    setExpectedTimeNote('');
+    setAddingExpected(false);
+  }
+
+  function openExpectedVisit(entry: ExpectedVisit) {
+    if (entry.patientId) {
+      void navigate({ to: '/visits/new', search: { patientId: entry.patientId } });
+    } else {
+      void navigate({ to: '/visits/new', search: { prefillName: entry.patientName ?? '' } });
+    }
+  }
 
   async function issue() {
     if (!invoicing) return;
@@ -152,11 +221,10 @@ export function WorkspacePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:flex lg:flex-wrap">
-        <StatTile label="Today's visits" value={today?.visitCount ?? 0} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:flex lg:flex-wrap">
+        {clinic.enableExpectedToday && <StatTile label="Expected" value={expectedToday?.length ?? 0} />}
+        <StatTile label="Seen today" value={today?.visitCount ?? 0} />
         <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
-        <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
-        <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
         {openPackages && openPackages.length > 0 && (
           <div className="relative">
             <button
@@ -202,10 +270,137 @@ export function WorkspacePage() {
         )}
       </div>
 
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
+        <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
+        <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
+      </div>
+
       {pendingWork && pendingWork.length > 0 && (
-        <SummaryBar tone="rust" label="need attention" count={pendingWork.length} onClick={() => setAttentionOpen(true)} />
+        <>
+          {role === 'admin' && (
+            <div className="hidden lg:block">
+              <SectionCard title="Needs attention">
+                <ul className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                  {pendingWork.map((item, i) => (
+                    <li key={i} className="rounded-lg border border-[var(--border)] p-3">
+                      <PendingWorkRow item={item} clinicId={clinic.id} />
+                    </li>
+                  ))}
+                </ul>
+              </SectionCard>
+            </div>
+          )}
+          <div className={role === 'admin' ? 'lg:hidden' : ''}>
+            <SummaryBar tone="rust" label="need attention" count={pendingWork.length} onClick={() => setAttentionOpen(true)} />
+          </div>
+        </>
       )}
       <SummaryBar tone="neutral" label="Recently seen ›" onClick={() => setRecentOpen(true)} />
+
+      {clinic.enableExpectedToday && (
+        <SectionCard title="Expected today">
+          {(expectedToday ?? []).length === 0 && !addingExpected && (
+            <p className="text-sm text-[var(--muted)]">Nobody expected yet today.</p>
+          )}
+          {expectedToday && expectedToday.length > 0 && (
+            <ul className="mb-2 divide-y divide-[var(--border)]">
+              {expectedToday.map((entry) => {
+                const linked = entry.patientId ? expectedPatientById.get(entry.patientId) : undefined;
+                const name = linked?.name ?? entry.patientName ?? 'Unnamed';
+                return (
+                  <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                    <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openExpectedVisit(entry)}>
+                      <span className="font-display text-[var(--ink)]">{name}</span>
+                      {entry.status !== 'expected' && (
+                        <span className="ml-2 text-xs text-[var(--muted)]">({entry.status})</span>
+                      )}
+                      <div className="text-xs text-[var(--muted)]">
+                        {[entry.timeNote, linked?.primaryCondition, linked?.phone].filter(Boolean).join(' · ') || '—'}
+                      </div>
+                    </button>
+                    {entry.status === 'expected' && (
+                      <div className="flex shrink-0 gap-2 text-xs">
+                        <button
+                          type="button"
+                          className="text-[var(--moss)] hover:underline"
+                          onClick={() => void expectedVisitsService.setStatus(entry, 'arrived')}
+                        >
+                          Arrived
+                        </button>
+                        <button
+                          type="button"
+                          className="text-[var(--muted)] hover:underline"
+                          onClick={() => void expectedVisitsService.setStatus(entry, 'no-show')}
+                        >
+                          No-show
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {addingExpected ? (
+            <div className="space-y-2">
+              <input
+                className={inputCls}
+                placeholder="Patient ID/name, or type a new name"
+                value={expectedQuery}
+                onChange={(e) => {
+                  setExpectedQuery(e.target.value);
+                  setExpectedPatientId(null);
+                }}
+                autoFocus
+              />
+              {!expectedPatientId && expectedQuery.trim() && (expectedMatches ?? []).length > 0 && (
+                <div className="space-y-1">
+                  {(expectedMatches ?? []).map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="flex w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-1.5 text-left text-sm hover:bg-[var(--paper)]"
+                      onClick={() => {
+                        setExpectedPatientId(p.id);
+                        setExpectedQuery(p.name);
+                      }}
+                    >
+                      <span>{p.name}</span>
+                      <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <input
+                className={inputCls}
+                placeholder="Time note (e.g. Around 4pm) — optional"
+                value={expectedTimeNote}
+                onChange={(e) => setExpectedTimeNote(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <button className={btnPrimary} disabled={!expectedQuery.trim()} onClick={() => void addExpected()}>
+                  Add
+                </button>
+                <button
+                  className={btnSecondary}
+                  onClick={() => {
+                    setAddingExpected(false);
+                    setExpectedQuery('');
+                    setExpectedPatientId(null);
+                    setExpectedTimeNote('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button className={btnSecondary} onClick={() => setAddingExpected(true)}>
+              + Add expected
+            </button>
+          )}
+        </SectionCard>
+      )}
 
       <SectionCard title="Seen today">
         {!today || today.visits.length === 0 ? (

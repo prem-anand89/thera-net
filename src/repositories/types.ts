@@ -10,6 +10,7 @@ import type {
   Settlement,
   ConsultationNote,
   PatientModuleEnrollment,
+  ExpectedVisit,
   UUID,
 } from '@/domain/types';
 
@@ -122,6 +123,12 @@ export interface PatientModuleEnrollmentRepo {
   put(enrollment: PatientModuleEnrollment): Promise<void>;
 }
 
+export interface ExpectedVisitRepo {
+  /** Every expected-visit entry for one date, oldest-created first. */
+  listForDate(clinicId: UUID, visitDate: string): Promise<ExpectedVisit[]>;
+  put(entry: ExpectedVisit): Promise<void>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -134,4 +141,5 @@ export interface Repos {
   settlements: SettlementRepo;
   consultationNotes: ConsultationNoteRepo;
   patientModuleEnrollments: PatientModuleEnrollmentRepo;
+  expectedVisits: ExpectedVisitRepo;
 }

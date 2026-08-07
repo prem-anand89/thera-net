@@ -139,6 +139,10 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       getActive: async () => undefined,
       put: async () => {},
     },
+    expectedVisits: {
+      listForDate: async () => [],
+      put: async () => {},
+    },
   };
   return { repos, visits };
 }

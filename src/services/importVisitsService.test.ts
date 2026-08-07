@@ -138,6 +138,10 @@ function makeFakeRepos() {
       getActive: async () => undefined,
       put: async () => {},
     },
+    expectedVisits: {
+      listForDate: async () => [],
+      put: async () => {},
+    },
   };
   return { repos, patients, visits };
 }

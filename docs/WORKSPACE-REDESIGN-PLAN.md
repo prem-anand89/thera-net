@@ -35,20 +35,54 @@ Archive, one PR-sized chunk at a time.**
 - [x] `dashboardService.recentVisits()`/`recentVisitsWindow()` gained `invoiceId` and
       `outstandingPaise` fields on `RecentVisitRow` (needed for the card's invoice
       link and the brief's ₹0-hidden balance rule) — 3 new unit tests.
-- [x] `npm run typecheck && lint && test && build` all pass (181 tests).
-
-**Deliberately deferred, not silently dropped:**
-- **Expected-today section** — genuinely new feature (new `expected_visits` table +
-  migration, Setup toggle, new UI). Brief itself says "don't build toward the
-  booking system now — just don't paint it into a corner," so deferring is
-  explicitly fine. Not started.
-- **Therapist/admin "tier" scoping** ("mine" vs clinic-wide stats, desktop-inline
-  Needs-attention) — no role/tier concept exists anywhere in this codebase
-  (`clinicContext.tsx` has no role field). Inventing one is a separate,
-  cross-cutting auth decision, out of scope for this chunk.
-- Stat pills stay at their current 4 (Today's visits/Collected today/New patients
-  this month/Packages this month) rather than the brief's "exactly 3 + Expected" —
-  reducing to 3 only makes sense once Expected-today's count exists.
+- [x] **Expected-today section** — new `expected_visits` table (migration
+      `20260807000001_expected_visits.sql`: `id, clinic_id, patient_id?, patient_name?,
+      time_note, visit_date, status ('expected'|'arrived'|'no-show'), updated_at,
+      created_by, updated_by`, RLS via `is_clinic_member`, added to the realtime
+      publication) plus `clinics.enable_expected_today` (opt-in, off by default, same
+      Setup `<select>` pattern as `enableTherapistSplit`). Full new-synced-table wiring
+      (`domain/types.ts` → `db.ts` Dexie v8 → `repositories/types.ts`/`local.ts` →
+      `sync/engine.ts`) plus `src/services/expectedVisitsService.ts`
+      (`listForToday`/`add`/`setStatus`, 4 unit tests). Workspace renders an inline
+      (not collapsed) "Expected today" `SectionCard` when the toggle is on: list of
+      expected entries (linked-patient name or free-text name, time note, arrived/
+      no-show actions), a "+ Add expected" inline form reusing the existing patient-
+      search pattern. Tapping an entry navigates to `/visits/new` pre-filled —
+      `NewVisitPage.tsx`/`router.tsx` gained `patientId`/`prefillName` search params
+      for this (also fixes the same pre-fill gap flagged for Patient Profile's "New
+      visit" button in chunk 2 — reused when that chunk lands, not duplicated).
+- [x] **Therapist/admin tier scoping** — role system already existed server-side
+      (`clinic_members.role`, RLS-readable via the existing `members_select` policy)
+      but was never exposed to the client. New `src/app/useClinicRole.ts`
+      (`useClinicRole(clinicId) => { role: 'admin'|'staff'|'unknown', loading }`,
+      best-effort/online-only, same shape as `NoteEditorPage.tsx`'s
+      `useTreatmentConsentStatus`). Mapping: `role='staff'` ≡ brief's "therapist
+      tier", `role='admin'` ≡ "admin tier"; `'unknown'` (not yet resolved, or
+      offline) is treated the same as `'staff'` — the narrower view — so nothing
+      flashes clinic-wide data before the real role loads.
+  - `dashboardService.todayWorklist(clinicId, asOf?, therapistId?)` gained an
+    optional 3rd-position therapist filter (kept 3rd, not 2nd, so the 6 existing
+    `asOf`-passing call sites in `dashboardService.test.ts` didn't need touching);
+    threads into `repos.visits.list({ ..., therapistId })`, which `VisitFilter`
+    already supported. 2 new unit tests (unfiltered when omitted; scoped to one
+    therapist when passed).
+  - Workspace resolves "which therapist is me" via `Therapist.userId === session
+    .user.id` (same pattern `VisitsPage.tsx` already used elsewhere) and calls
+    `todayWorklist` with that therapist's id when `role !== 'admin'`.
+  - Stat pills reduced to the brief's 3 for row 1 (Expected — hidden when the
+    Expected-today toggle is off, since the table has no therapist column to
+    scope by anyway — Seen today, Collected today; both of the latter two are
+    tier-scoped through `todayWorklist`'s new filter). Row 2 keeps New patients
+    this month / Packages this month, unchanged and always clinic-wide — a
+    monthly count isn't a "whose visit is it" concept, and the brief's "3, not 4"
+    reads as replacing the old *today-scoped* 4-tile set, not deleting the
+    monthly counts nobody asked to remove.
+  - Needs-attention: `role === 'admin'` gets a `lg:`-only inline 3-column card
+    grid (reusing `PendingWorkRow`) alongside the usual collapsed `SummaryBar`→
+    `Panel` on narrower widths; every other role/state always gets the collapsed
+    version regardless of width. Needs-attention's *content* (`pendingWork()`)
+    stays clinic-wide for every tier — only the stat pills are "mine"-scoped.
+- [x] `npm run typecheck && lint && test && build` all pass (187 tests).
 
 **Real capability change, not a bug**: Workspace's old "Recent" section
 (`RecentVisitsSection`) was a sortable 9-column, 7/15/30-day-toggleable table. It's

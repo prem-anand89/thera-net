@@ -525,10 +525,10 @@ export function createDashboardService(repos: Repos) {
      * package progress, and a single payment-state chip so "who still
      * needs to be collected from" doesn't require opening the ledger.
      */
-    async todayWorklist(clinicId: UUID, asOf = new Date()): Promise<TodayWorklist> {
+    async todayWorklist(clinicId: UUID, asOf = new Date(), therapistId?: UUID): Promise<TodayWorklist> {
       const todayStr = asOf.toISOString().slice(0, 10);
       const [visits, patients, therapists, catalog, invoicePayments, directPayments] = await Promise.all([
-        repos.visits.list({ clinicId, from: todayStr, to: todayStr }),
+        repos.visits.list({ clinicId, from: todayStr, to: todayStr, therapistId }),
         repos.patients.list(clinicId),
         repos.therapists.list(clinicId, true),
         repos.catalog.list(clinicId, true),
