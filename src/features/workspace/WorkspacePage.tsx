@@ -4,30 +4,21 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, invoiceService, paymentService, directPaymentService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
-import { formatDateDMY } from '@/domain/fiscalYear';
 import type { PaymentMethod, PaymentMode } from '@/domain/types';
-import type {
-  PendingWorkItem,
-  RecentVisitRow,
-  TodayPaymentState,
-  TodayVisitRow,
-} from '@/services/dashboardService';
+import type { PendingWorkItem, RecentVisitRow, TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
   btnSecondary,
   inputCls,
-  th,
-  thNum,
-  td,
-  tdNum,
   ErrorNote,
   Field,
   Pill,
-  PackageThread,
   SectionCard,
   StatTile,
+  SummaryBar,
+  Panel,
 } from '@/components/ui';
-import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
+import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
 import { toFriendlyMessage } from '@/lib/errors';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
@@ -38,7 +29,6 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: 'bank_transfer', label: 'Bank transfer' },
   { value: 'cheque', label: 'Cheque' },
 ];
-type RecentWindow = 7 | 15 | 30;
 
 /** What the invoice-issuance modal needs, independent of which card opened it. */
 interface InvoicingTarget {
@@ -46,6 +36,48 @@ interface InvoicingTarget {
   patientLabel: string;
   serviceLabel: string;
   isPackage: boolean;
+}
+
+function todayRowToCardData(row: TodayVisitRow, openPackageGroupIds: Set<string>): VisitCardData {
+  return {
+    visitId: row.visitId,
+    visitDate: new Date().toISOString().slice(0, 10),
+    patientId: row.patientId,
+    patientName: row.patientName,
+    mrno: row.mrno,
+    condition: row.condition,
+    serviceName: row.serviceName,
+    sessionIndex: row.sessionIndex,
+    packageTotal: row.packageTotal,
+    therapistName: row.therapistName,
+    treatmentNotes: row.treatmentNotes,
+    billPaise: row.billPaise,
+    paymentState: row.paymentState,
+    invoiceId: row.invoiceId,
+    canRepeat: Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId)),
+    canDelete: !row.invoiceId,
+  };
+}
+
+function recentRowToCardData(row: RecentVisitRow): VisitCardData {
+  return {
+    visitId: row.visitId,
+    visitDate: row.visitDate,
+    patientId: row.patientId,
+    patientName: row.patientName,
+    mrno: row.mrno,
+    condition: row.condition,
+    serviceName: row.serviceName,
+    sessionIndex: row.sessionIndex,
+    packageTotal: row.packageTotal,
+    therapistName: row.therapistName,
+    treatmentNotes: row.treatmentNotes,
+    billPaise: row.billPaise,
+    paymentState: row.outstandingPaise === 0 ? (row.hasInvoice ? 'paid' : 'zero_session') : row.hasInvoice ? 'outstanding' : 'uninvoiced',
+    invoiceId: row.invoiceId,
+    canRepeat: false,
+    canDelete: false,
+  };
 }
 
 export function WorkspacePage() {
@@ -56,12 +88,18 @@ export function WorkspacePage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [packagesOpen, setPackagesOpen] = useState(false);
+  const [attentionOpen, setAttentionOpen] = useState(false);
+  const [recentOpen, setRecentOpen] = useState(false);
   const navigate = useNavigate();
 
   const today = useLiveQuery(() => dashboardService.todayWorklist(clinic.id), [clinic.id]);
   const pendingWork = useLiveQuery(() => dashboardService.pendingWork(clinic.id), [clinic.id]);
   const monthlyNew = useLiveQuery(() => dashboardService.monthlyNewCounts(clinic.id), [clinic.id]);
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
+  const recentVisits = useLiveQuery(
+    () => (recentOpen ? dashboardService.recentVisits(clinic.id, 8) : undefined),
+    [clinic.id, recentOpen]
+  );
   const openPackageGroupIds = useMemo(
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
@@ -87,6 +125,17 @@ export function WorkspacePage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function openInvoiceFor(data: VisitCardData) {
+    setError(null);
+    setPaidNow(true);
+    setInvoicing({
+      visitId: data.visitId,
+      patientLabel: data.patientName,
+      serviceLabel: data.serviceName,
+      isPackage: data.packageTotal != null,
+    });
   }
 
   return (
@@ -153,35 +202,62 @@ export function WorkspacePage() {
         )}
       </div>
 
-      <PendingWorkList items={pendingWork ?? []} clinicId={clinic.id} />
+      {pendingWork && pendingWork.length > 0 && (
+        <SummaryBar tone="rust" label="need attention" count={pendingWork.length} onClick={() => setAttentionOpen(true)} />
+      )}
+      <SummaryBar tone="neutral" label="Recently seen ›" onClick={() => setRecentOpen(true)} />
 
-      <SectionCard title="Today">
+      <SectionCard title="Seen today">
         {!today || today.visits.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">
             No visits logged today — log one with &ldquo;+ New visit&rdquo;.
           </p>
         ) : (
-          <TodayVisitsTable
-            rows={today.visits}
-            openPackageGroupIds={openPackageGroupIds}
-            onInvoice={(row) => {
-              setError(null);
-              setPaidNow(true);
-              setInvoicing({
-                visitId: row.visitId,
-                patientLabel: row.patientName,
-                serviceLabel: row.serviceName,
-                isPackage: row.packageTotal != null,
-              });
-            }}
-            onDelete={(row) => {
-              if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
-            }}
-          />
+          <div className="divide-y divide-[var(--border)]">
+            {today.visits.map((row) => (
+              <SharedVisitCard
+                key={row.visitId}
+                data={todayRowToCardData(row, openPackageGroupIds)}
+                showDate={false}
+                showPatient={true}
+                onInvoice={() => openInvoiceFor(todayRowToCardData(row, openPackageGroupIds))}
+                onDelete={() => {
+                  if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+                }}
+              />
+            ))}
+          </div>
         )}
       </SectionCard>
 
-      <RecentVisitsSection clinicId={clinic.id} />
+      <Panel open={attentionOpen} onClose={() => setAttentionOpen(false)} title="Needs attention">
+        <ul className="divide-y divide-[var(--border)]">
+          {(pendingWork ?? []).map((item, i) => (
+            <PendingWorkRow key={i} item={item} clinicId={clinic.id} />
+          ))}
+        </ul>
+      </Panel>
+
+      <Panel open={recentOpen} onClose={() => setRecentOpen(false)} title="Recently seen">
+        {!recentVisits ? (
+          <p className="text-sm text-[var(--muted)]">Loading…</p>
+        ) : recentVisits.length === 0 ? (
+          <p className="text-sm text-[var(--muted)]">No visits yet.</p>
+        ) : (
+          <div className="divide-y divide-[var(--border)]">
+            {recentVisits.map((row) => (
+              <SharedVisitCard
+                key={row.visitId}
+                data={recentRowToCardData(row)}
+                showDate={true}
+                showPatient={true}
+                onInvoice={() => openInvoiceFor(recentRowToCardData(row))}
+                onDelete={() => {}}
+              />
+            ))}
+          </div>
+        )}
+      </Panel>
 
       {invoicing && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-3 sm:p-4">
@@ -232,29 +308,17 @@ export function WorkspacePage() {
   );
 }
 
-const PENDING_KIND_LABEL: Record<PendingWorkItem['kind'], string> = {
-  stale_package: 'Package',
-  outstanding_payment: 'Payment',
-  incomplete_note: 'Note',
+const PENDING_KIND: Record<PendingWorkItem['kind'], { bg: string; fg: string; label: (item: PendingWorkItem) => string }> = {
+  outstanding_payment: { bg: 'var(--rust-light)', fg: 'var(--rust)', label: (item) => `Pending · ${item.daysSince}d` },
+  stale_package: { bg: 'var(--amber-light)', fg: 'var(--amber)', label: (item) => `${item.daysSince}d since last visit` },
+  incomplete_note: { bg: 'var(--paper)', fg: 'var(--muted)', label: () => 'Note not finished' },
 };
-
-function PendingWorkList({ items, clinicId }: { items: PendingWorkItem[]; clinicId: string }) {
-  if (items.length === 0) return null;
-  return (
-    <SectionCard title={`Pending work (${items.length})`}>
-      <ul className="divide-y divide-[var(--border)]">
-        {items.map((item, i) => (
-          <PendingWorkRow key={i} item={item} clinicId={clinicId} />
-        ))}
-      </ul>
-    </SectionCard>
-  );
-}
 
 function PendingWorkRow({ item, clinicId }: { item: PendingWorkItem; clinicId: string }) {
   const [choosingMethod, setChoosingMethod] = useState(false);
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [busy, setBusy] = useState(false);
+  const badge = PENDING_KIND[item.kind];
 
   async function markInvoicePaid() {
     if (!item.invoiceId) return;
@@ -289,7 +353,12 @@ function PendingWorkRow({ item, clinicId }: { item: PendingWorkItem; clinicId: s
   return (
     <li className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <Pill tone="amber">{PENDING_KIND_LABEL[item.kind]}</Pill>
+        <span
+          className="rounded-full px-2 py-0.5 text-xs font-medium"
+          style={{ background: badge.bg, color: badge.fg }}
+        >
+          {badge.label(item)}
+        </span>
         <span className="font-display">{item.patientName}</span>
         <span className="text-xs text-[var(--muted)]">{item.mrno}</span>
         <span className="text-[var(--muted)]">{item.detail}</span>
@@ -351,199 +420,5 @@ function PendingWorkRow({ item, clinicId }: { item: PendingWorkItem; clinicId: s
         )}
       </div>
     </li>
-  );
-}
-
-const PAYMENT_CHIP: Record<TodayPaymentState, { tone: 'green' | 'amber' | 'slate'; label: (bill: string) => string }> = {
-  paid: { tone: 'green', label: () => 'Paid' },
-  outstanding: { tone: 'amber', label: (bill) => `Outstanding ${bill}` },
-  uninvoiced: { tone: 'amber', label: (bill) => `Collect ${bill}` },
-  zero_session: { tone: 'slate', label: () => '₹0 session' },
-};
-
-function TodayVisitsTable({
-  rows,
-  openPackageGroupIds,
-  onInvoice,
-  onDelete,
-}: {
-  rows: TodayVisitRow[];
-  openPackageGroupIds: Set<string>;
-  onInvoice: (row: TodayVisitRow) => void;
-  onDelete: (row: TodayVisitRow) => void;
-}) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-        <thead>
-          <tr>
-            <th className={th}>Patient</th>
-            <th className={th}>Condition</th>
-            <th className={th}>Therapist</th>
-            <th className={th}>Service</th>
-            <th className={th}>Treatment</th>
-            <th className={thNum}>Bill</th>
-            <th className={th}>Phone</th>
-            <th className={th}>Payment</th>
-            <th className={th}></th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--border)]">
-          {rows.map((row) => {
-            const chip = PAYMENT_CHIP[row.paymentState];
-            const canRepeat = Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId));
-            return (
-              <tr key={row.visitId} className="hover:bg-[var(--paper)]">
-                <td className={td}>
-                  <Link to="/patients/$patientId" params={{ patientId: row.patientId }} className="font-display hover:underline">
-                    {row.patientName}
-                  </Link>{' '}
-                  <span className="text-xs text-[var(--muted)]">{row.mrno}</span>
-                </td>
-                <td className={td}>{row.condition ?? '—'}</td>
-                <td className={td}>{row.therapistName}</td>
-                <td className={td}>
-                  {row.serviceName}
-                  {row.sessionIndex && row.packageTotal && (
-                    <span className="ml-1.5">
-                      <PackageThread sessionIndex={row.sessionIndex} packageTotal={row.packageTotal} />
-                    </span>
-                  )}
-                </td>
-                <td className={td}>{row.treatmentNotes ?? '—'}</td>
-                <td className={tdNum}>{formatINR(row.billPaise)}</td>
-                <td className={td}>{row.phone ?? '—'}</td>
-                <td className={td}>
-                  {row.paymentState === 'uninvoiced' ? (
-                    <button
-                      type="button"
-                      className="rounded-full bg-[var(--rust-light)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:opacity-80"
-                      onClick={() => onInvoice(row)}
-                    >
-                      {chip.label(formatINR(row.billPaise))}
-                    </button>
-                  ) : row.invoiceId ? (
-                    <Link to="/invoices/$invoiceId/print" params={{ invoiceId: row.invoiceId }} className="hover:opacity-80">
-                      <Pill tone={chip.tone}>{chip.label(formatINR(row.billPaise))}</Pill>
-                    </Link>
-                  ) : (
-                    <Pill tone={chip.tone}>{chip.label(formatINR(row.billPaise))}</Pill>
-                  )}
-                </td>
-                <td className={`${td} whitespace-nowrap`}>
-                  <div className="flex gap-3">
-                    {canRepeat && (
-                      <Link
-                        to="/visits/new"
-                        search={{ repeatVisitId: row.visitId }}
-                        className="text-xs text-[var(--muted)] hover:text-[var(--teal)]"
-                        title="Start the next session with this visit's therapist, service, and condition pre-filled"
-                      >
-                        Repeat
-                      </Link>
-                    )}
-                    {!row.invoiceId && (
-                      <button
-                        type="button"
-                        className="text-xs text-[var(--muted)] hover:text-[var(--rust)]"
-                        onClick={() => onDelete(row)}
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function RecentVisitsSection({ clinicId }: { clinicId: string }) {
-  const [days, setDays] = useState<RecentWindow>(7);
-  const rows = useLiveQuery(() => dashboardService.recentVisitsWindow(clinicId, days), [clinicId, days]);
-  const sort = useSort<'date' | 'patient' | 'therapist' | 'bill'>('date', 'desc');
-  const sorted = applySort(
-    rows ?? [],
-    {
-      date: byString<RecentVisitRow>((r) => r.visitDate),
-      patient: byString<RecentVisitRow>((r) => r.patientName),
-      therapist: byString<RecentVisitRow>((r) => r.therapistName),
-      bill: byNumber<RecentVisitRow>((r) => r.billPaise),
-    },
-    sort
-  );
-
-  return (
-    <SectionCard title="Recent">
-      <div className="mb-3 flex w-fit gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
-        {([7, 15, 30] as RecentWindow[]).map((d) => (
-          <button
-            key={d}
-            type="button"
-            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-              days === d ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-            }`}
-            onClick={() => setDays(d)}
-          >
-            {d}d
-          </button>
-        ))}
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-          <thead>
-            <tr>
-              <SortHeader label="Date" k="date" sort={sort} firstDir="desc" />
-              <SortHeader label="Patient" k="patient" sort={sort} />
-              <th className={th}>Condition</th>
-              <SortHeader label="Therapist" k="therapist" sort={sort} />
-              <th className={th}>Service</th>
-              <th className={th}>Treatment</th>
-              <SortHeader label="Bill" k="bill" sort={sort} numeric firstDir="desc" />
-              <th className={th}>Phone</th>
-              <th className={th}>Invoice</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border)]">
-            {sorted.map((r) => (
-              <tr key={r.visitId} className="hover:bg-[var(--paper)]">
-                <td className={td}>{formatDateDMY(r.visitDate)}</td>
-                <td className={td}>
-                  <Link to="/patients/$patientId" params={{ patientId: r.patientId }} className="font-display hover:underline">
-                    {r.patientName}
-                  </Link>{' '}
-                  <span className="text-xs text-[var(--muted)]">{r.mrno}</span>
-                </td>
-                <td className={td}>{r.condition ?? '—'}</td>
-                <td className={td}>{r.therapistName}</td>
-                <td className={td}>
-                  {r.serviceName}
-                  {r.sessionIndex && r.packageTotal && (
-                    <span className="ml-1.5">
-                      <PackageThread sessionIndex={r.sessionIndex} packageTotal={r.packageTotal} />
-                    </span>
-                  )}
-                </td>
-                <td className={td}>{r.treatmentNotes ?? '—'}</td>
-                <td className={tdNum}>{formatINR(r.billPaise)}</td>
-                <td className={td}>{r.phone ?? '—'}</td>
-                <td className={td}>{r.hasInvoice ? <Pill tone="green">Invoiced</Pill> : '—'}</td>
-              </tr>
-            ))}
-            {sorted.length === 0 && (
-              <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-sm text-[var(--muted)]">
-                  No visits in the last {days} days.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </SectionCard>
   );
 }

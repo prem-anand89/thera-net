@@ -428,6 +428,40 @@ describe('dashboardService.recentVisits', () => {
     const svc = createDashboardService(fake.repos);
     expect((await svc.recentVisits('clinic-1'))[0].treatmentNotes).toBe('Ultrasound + stretch');
   });
+
+  it('reports the full bill as outstanding when there is no invoice yet', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: null }));
+    const svc = createDashboardService(fake.repos);
+    expect((await svc.recentVisits('clinic-1'))[0].outstandingPaise).toBe(rs(500));
+  });
+
+  it('reports the full bill as outstanding when the invoice is explicitly unpaid', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: 'inv-1' }));
+    fake.invoicePayments.set('p1', {
+      id: 'p1',
+      clinicId: 'clinic-1',
+      invoiceId: 'inv-1',
+      status: 'outstanding',
+      paidAt: null,
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    expect((await svc.recentVisits('clinic-1'))[0].outstandingPaise).toBe(rs(500));
+  });
+
+  it('reports zero outstanding once the invoice is paid', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: 'inv-1' }));
+    fake.invoicePayments.set('p1', {
+      id: 'p1',
+      clinicId: 'clinic-1',
+      invoiceId: 'inv-1',
+      status: 'paid',
+      paidAt: '2026-06-02T00:00:00Z',
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    expect((await svc.recentVisits('clinic-1'))[0].outstandingPaise).toBe(0);
+  });
 });
 
 describe('dashboardService.recentVisitsWindow', () => {

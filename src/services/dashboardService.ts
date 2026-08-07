@@ -50,6 +50,9 @@ export interface RecentVisitRow {
   treatmentNotes: string | null;
   billPaise: Paise;
   hasInvoice: boolean;
+  invoiceId: UUID | null;
+  /** Unpaid amount — no invoice yet, or invoiced but still outstanding. 0 once collected. */
+  outstandingPaise: Paise;
 }
 
 export interface WeeklySummary {
@@ -330,35 +333,42 @@ export function createDashboardService(repos: Repos) {
 
     /** Most recent visits first, for an at-a-glance strip — not filtered by date. */
     async recentVisits(clinicId: UUID, limit = 8): Promise<RecentVisitRow[]> {
-      const [visits, patients, therapists, catalog] = await Promise.all([
+      const [visits, patients, therapists, catalog, invoicePayments] = await Promise.all([
         repos.visits.list({ clinicId }),
         repos.patients.list(clinicId),
         repos.therapists.list(clinicId, true),
         repos.catalog.list(clinicId, true),
+        repos.invoicePayments.list(clinicId),
       ]);
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
+      const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
 
       return [...visits]
         .sort((a, b) => b.visitDate.localeCompare(a.visitDate))
         .slice(0, limit)
-        .map((v) => ({
-          visitId: v.id,
-          visitDate: v.visitDate,
-          patientId: v.patientId,
-          patientName: patientById.get(v.patientId)?.name ?? 'Unknown',
-          mrno: patientById.get(v.patientId)?.mrno ?? '—',
-          condition: v.condition,
-          phone: patientById.get(v.patientId)?.phone ?? null,
-          therapistName: therapistNameById.get(v.therapistId) ?? '—',
-          serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
-          sessionIndex: v.sessionIndex,
-          packageTotal: v.packageTotal,
-          treatmentNotes: v.treatmentNotes,
-          billPaise: v.actualBillPaise,
-          hasInvoice: Boolean(v.invoiceId),
-        }));
+        .map((v) => {
+          const outstanding = !v.invoiceId || statusByInvoiceId.get(v.invoiceId) === 'outstanding';
+          return {
+            visitId: v.id,
+            visitDate: v.visitDate,
+            patientId: v.patientId,
+            patientName: patientById.get(v.patientId)?.name ?? 'Unknown',
+            mrno: patientById.get(v.patientId)?.mrno ?? '—',
+            condition: v.condition,
+            phone: patientById.get(v.patientId)?.phone ?? null,
+            therapistName: therapistNameById.get(v.therapistId) ?? '—',
+            serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
+            sessionIndex: v.sessionIndex,
+            packageTotal: v.packageTotal,
+            treatmentNotes: v.treatmentNotes,
+            billPaise: v.actualBillPaise,
+            hasInvoice: Boolean(v.invoiceId),
+            invoiceId: v.invoiceId,
+            outstandingPaise: outstanding ? v.actualBillPaise : 0,
+          };
+        });
     },
 
     /**
@@ -375,35 +385,42 @@ export function createDashboardService(repos: Repos) {
       const cutoff = new Date(asOf);
       cutoff.setDate(cutoff.getDate() - days);
       const fromStr = cutoff.toISOString().slice(0, 10);
-      const [visits, patients, therapists, catalog] = await Promise.all([
+      const [visits, patients, therapists, catalog, invoicePayments] = await Promise.all([
         repos.visits.list({ clinicId, from: fromStr }),
         repos.patients.list(clinicId),
         repos.therapists.list(clinicId, true),
         repos.catalog.list(clinicId, true),
+        repos.invoicePayments.list(clinicId),
       ]);
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
+      const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
 
       return visits
         .filter((v) => v.visitDate < todayStr)
         .sort((a, b) => b.visitDate.localeCompare(a.visitDate))
-        .map((v) => ({
-          visitId: v.id,
-          visitDate: v.visitDate,
-          patientId: v.patientId,
-          patientName: patientById.get(v.patientId)?.name ?? 'Unknown',
-          mrno: patientById.get(v.patientId)?.mrno ?? '—',
-          condition: v.condition,
-          phone: patientById.get(v.patientId)?.phone ?? null,
-          therapistName: therapistNameById.get(v.therapistId) ?? '—',
-          serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
-          sessionIndex: v.sessionIndex,
-          packageTotal: v.packageTotal,
-          treatmentNotes: v.treatmentNotes,
-          billPaise: v.actualBillPaise,
-          hasInvoice: Boolean(v.invoiceId),
-        }));
+        .map((v) => {
+          const outstanding = !v.invoiceId || statusByInvoiceId.get(v.invoiceId) === 'outstanding';
+          return {
+            visitId: v.id,
+            visitDate: v.visitDate,
+            patientId: v.patientId,
+            patientName: patientById.get(v.patientId)?.name ?? 'Unknown',
+            mrno: patientById.get(v.patientId)?.mrno ?? '—',
+            condition: v.condition,
+            phone: patientById.get(v.patientId)?.phone ?? null,
+            therapistName: therapistNameById.get(v.therapistId) ?? '—',
+            serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
+            sessionIndex: v.sessionIndex,
+            packageTotal: v.packageTotal,
+            treatmentNotes: v.treatmentNotes,
+            billPaise: v.actualBillPaise,
+            hasInvoice: Boolean(v.invoiceId),
+            invoiceId: v.invoiceId,
+            outstandingPaise: outstanding ? v.actualBillPaise : 0,
+          };
+        });
     },
 
     /**

@@ -142,6 +142,78 @@ export function PackageThread({
   );
 }
 
+const SUMMARY_BAR_TONES = {
+  rust: 'bg-[var(--rust-light)] text-[var(--rust)]',
+  neutral: 'bg-[var(--surface)] text-[var(--ink)] border border-[var(--border)]',
+} as const;
+
+/**
+ * Collapsed entry point for a Panel — a slim tappable bar rather than
+ * rendering its content inline. Two configured uses today: Needs-attention
+ * (rust) and Recently-seen (neutral), sharing this one pair rather than two
+ * bespoke implementations.
+ */
+export function SummaryBar({
+  tone,
+  label,
+  count,
+  onClick,
+}: {
+  tone: keyof typeof SUMMARY_BAR_TONES;
+  label: string;
+  count?: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-medium shadow-sm ${SUMMARY_BAR_TONES[tone]}`}
+    >
+      <span>
+        {tone === 'rust' && count != null ? `⚠ ${count} ` : ''}
+        {label}
+      </span>
+      <span aria-hidden>›</span>
+    </button>
+  );
+}
+
+/**
+ * Bottom-sheet overlay opened by a SummaryBar. Full-screen scrim, sheet
+ * anchored to the bottom edge (rounded top corners) rather than centered —
+ * distinct from the existing centered invoice-issuance modal pattern.
+ */
+export function Panel({
+  open,
+  onClose,
+  title,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-20 flex items-end justify-center bg-[var(--ink)]/40" onClick={onClose}>
+      <div
+        className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-[var(--surface)] p-4 sm:p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-base font-semibold text-[var(--ink)]">{title}</h2>
+          <button type="button" aria-label="Close" className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--paper)]" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export const th =
   'px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]';
 export const td = 'px-3 py-3 text-sm text-[var(--ink)]';
