@@ -188,18 +188,22 @@ export function NewVisitPage() {
   }, [repeatVisit, patient]);
 
   // Default therapist when patient is selected:
-  // - Use therapist from their most recent visit (only if not already set)
+  // - Use therapist from their most recent visit
   // - If no previous visits, leave empty (user selects manually)
   useEffect(() => {
-    if (!patient || therapistId) return;
+    const patientId = patient?.id;
+    if (!patientId) return;
+
     (async () => {
-      const visits = await repos.visits.list({ clinicId: clinic.id, patientId: patient.id });
+      const visits = await repos.visits.list({ clinicId: clinic.id, patientId });
       if (visits.length > 0) {
         const sorted = [...visits].sort((a, b) => b.visitDate.localeCompare(a.visitDate));
         setTherapistId(sorted[0].therapistId);
+      } else {
+        // Clear therapist if patient has no prior visits
+        setTherapistId('');
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patient?.id, clinic.id]);
 
   useEffect(() => {
