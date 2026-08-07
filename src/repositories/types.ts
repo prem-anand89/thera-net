@@ -9,6 +9,7 @@ import type {
   Payment,
   Settlement,
   ConsultationNote,
+  PatientModuleEnrollment,
   UUID,
 } from '@/domain/types';
 
@@ -108,6 +109,16 @@ export interface ConsultationNoteRepo {
   put(note: ConsultationNote): Promise<void>;
 }
 
+export interface PatientModuleEnrollmentRepo {
+  get(id: UUID): Promise<PatientModuleEnrollment | undefined>;
+  /** All enrollments for a patient in a given module, oldest first — the
+   *  first one is the episode Initial/Follow-up note-mode detection anchors on. */
+  listByPatient(clinicId: UUID, patientId: UUID, moduleType: PatientModuleEnrollment['moduleType']): Promise<PatientModuleEnrollment[]>;
+  /** The active enrollment for a patient in a module, if one exists. */
+  getActive(clinicId: UUID, patientId: UUID, moduleType: PatientModuleEnrollment['moduleType']): Promise<PatientModuleEnrollment | undefined>;
+  put(enrollment: PatientModuleEnrollment): Promise<void>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -119,4 +130,5 @@ export interface Repos {
   payments: PaymentRepo;
   settlements: SettlementRepo;
   consultationNotes: ConsultationNoteRepo;
+  patientModuleEnrollments: PatientModuleEnrollmentRepo;
 }

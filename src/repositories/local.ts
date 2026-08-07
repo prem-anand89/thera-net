@@ -24,6 +24,7 @@ import type {
   PaymentRepo,
   SettlementRepo,
   ConsultationNoteRepo,
+  PatientModuleEnrollmentRepo,
   Repos,
 } from './types';
 
@@ -206,6 +207,24 @@ const consultationNotes: ConsultationNoteRepo = {
   put: (note) => putWithOutbox('consultation_notes', note),
 };
 
+const patientModuleEnrollments: PatientModuleEnrollmentRepo = {
+  get: (id) => db.patient_module_enrollments.get(id),
+  async listByPatient(clinicId, patientId, moduleType) {
+    const all = await db.patient_module_enrollments
+      .where('patientId')
+      .equals(patientId)
+      .toArray();
+    return all
+      .filter((e) => e.clinicId === clinicId && e.moduleType === moduleType)
+      .sort((a, b) => a.enrolledAt.localeCompare(b.enrolledAt));
+  },
+  async getActive(clinicId, patientId, moduleType) {
+    const all = await this.listByPatient(clinicId, patientId, moduleType);
+    return all.find((e) => e.status === 'active');
+  },
+  put: (enrollment) => putWithOutbox('patient_module_enrollments', enrollment),
+};
+
 export const repos: Repos = {
   clinics,
   therapists,
@@ -217,6 +236,7 @@ export const repos: Repos = {
   payments,
   settlements,
   consultationNotes,
+  patientModuleEnrollments,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers

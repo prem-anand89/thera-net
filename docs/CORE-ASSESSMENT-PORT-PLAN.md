@@ -119,9 +119,17 @@ assessment modules — `gut_screening`/`return_to_sport`/`scoliosis_screening`/
       TheraNet-OS-specific imports). Extend thera-net's `ConsultationNote` type
       (`domain/types.ts`) with `assessmentPayload`, `noteMode`, `nrsScore`,
       `psfsMean`, `redFlagCount`, `enrollmentId`. Add a `PatientModuleEnrollment` type.
-- [ ] **4.3 Data layer** — register `patient_module_enrollments` in thera-net's
-      `src/lib/db.ts` (new Dexie table + sync registry entry, mirroring how
-      `consultation_notes` is already wired) and add a repo for it.
+- [x] **4.3 Data layer** — `patient_module_enrollments` registered in `db.ts`
+      (Dexie v8), `CLIENT_WRITABLE_TABLES`, and `sync/engine.ts`'s `SYNC_TABLES`.
+      `PatientModuleEnrollmentRepo` added (`get`/`listByPatient`/`getActive`/`put`),
+      mirroring `ConsultationNoteRepo`'s shape. `psfsMean` (Postgres `numeric(3,1)`)
+      added to `NUMERIC_FIELDS` alongside the existing numeric columns that
+      PostgREST can hand back as strings. `rowMapping.ts`'s camelCase↔snake_case
+      conversion is fully generic — no per-field changes needed there.
+      **Not included**: `patientModuleEnrollments` isn't wired into
+      `backupService.ts`'s export/restore bundle (would need a `listByClinic`
+      method + a `BACKUP_VERSION` bump) — flagged as a follow-up, not silently
+      folded into this step.
 - [ ] **4.4 Services** — extend `consultationNoteService.ts` with enrollment-aware
       create (first enrollment for a patient = Initial, later ones = Follow-up) and a
       payload-aware save path.
