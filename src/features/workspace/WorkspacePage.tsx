@@ -27,8 +27,9 @@ import {
   Panel,
 } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
-import { EditVisitModal } from '@/features/visits/EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
+import { EditPatientModal } from '@/features/patients/EditPatientModal';
+import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -73,7 +74,6 @@ export function WorkspacePage() {
   const { session } = useSession();
   const { role } = useClinicRole(clinic.id);
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
-  const [editing, setEditing] = useState<string | null>(null);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
   const [paidNow, setPaidNow] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +83,8 @@ export function WorkspacePage() {
   const [expectedQuery, setExpectedQuery] = useState('');
   const [expectedPatientId, setExpectedPatientId] = useState<string | null>(null);
   const [expectedTimeNote, setExpectedTimeNote] = useState('');
+  const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [newPatientId, setNewPatientId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
@@ -120,6 +122,7 @@ export function WorkspacePage() {
     () => (clinic.enableExpectedToday ? repos.patients.list(clinic.id) : undefined),
     [clinic.id, clinic.enableExpectedToday]
   );
+  const editPatient = useLiveQuery(() => (editPatientId ? repos.patients.get(editPatientId) : undefined), [editPatientId]);
   const expectedPatientById = useMemo(
     () => new Map((allPatientsForExpected ?? []).map((p) => [p.id, p])),
     [allPatientsForExpected]
@@ -344,7 +347,7 @@ export function WorkspacePage() {
                 showDate={false}
                 showPatient={true}
                 onInvoice={() => openInvoiceFor(todayRowToCardData(row, openPackageGroupIds))}
-                onEdit={() => setEditing(row.visitId)}
+                onEditPatient={() => setEditPatientId(row.patientId)}
                 onDelete={() => {
                   if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
                 }}
@@ -408,11 +411,22 @@ export function WorkspacePage() {
         </div>
       )}
 
-      {editing && (
-        <EditVisitModal
-          visitId={editing}
-          onClose={() => setEditing(null)}
-          setError={setError}
+      {editPatientId && editPatient && (
+        <EditPatientModal
+          patient={editPatient}
+          open={true}
+          onClose={() => setEditPatientId(null)}
+          onSave={() => {
+            setEditPatientId(null);
+          }}
+        />
+      )}
+
+      {newPatientId && (
+        <AddPatientDetailsModal
+          patientId={newPatientId}
+          onClose={() => setNewPatientId(null)}
+          onOpenEdit={() => setEditPatientId(newPatientId)}
         />
       )}
     </div>
