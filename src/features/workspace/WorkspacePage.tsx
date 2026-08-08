@@ -27,7 +27,6 @@ import {
   Panel,
 } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
-import { EditVisitModal } from '@/features/visits/EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
@@ -75,7 +74,6 @@ export function WorkspacePage() {
   const { session } = useSession();
   const { role } = useClinicRole(clinic.id);
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
-  const [editing, setEditing] = useState<string | null>(null);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
   const [paidNow, setPaidNow] = useState(true);
   const [error, setError] = useState<string | null>(null);
