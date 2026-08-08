@@ -255,8 +255,45 @@ export function PatientProfilePage() {
       </section>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        {/* Side column — rendered first on mobile for proper ordering */}
+        <div className="order-1 space-y-4 lg:order-none lg:col-start-2">
+          <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />
+
+          <SideCard title="Care plan">
+            {patientPackages.length === 0 ? (
+              <p className="text-sm text-[var(--muted)]">No open package.</p>
+            ) : (
+              <ul className="space-y-3">
+                {patientPackages.map((p) => {
+                  const pct = Math.min(100, Math.round((p.sessionsLogged / p.packageTotal) * 100));
+                  return (
+                    <li key={p.packageGroupId}>
+                      <div className="flex items-center justify-between text-sm font-medium text-[var(--ink)]">
+                        <span>{p.serviceName}</span>
+                        {p.stale && <Pill tone="amber">⚠ Stale</Pill>}
+                      </div>
+                      <div className="my-1.5 h-2 overflow-hidden rounded-full bg-[var(--paper)]">
+                        <span
+                          className="block h-full rounded-full bg-[var(--teal)]"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <div className="font-num flex justify-between text-xs text-[var(--muted)]">
+                        <span>
+                          {p.sessionsLogged} of {p.packageTotal} sessions
+                        </span>
+                        <span>last {formatDateDMY(p.lastVisitOn)}</span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </SideCard>
+        </div>
+
         {/* Main column */}
-        <div className="space-y-4">
+        <div className="order-2 space-y-4 lg:order-none lg:col-start-1">
           <SectionLabel>Visit history</SectionLabel>
           {issueError && (
             <div className="rounded bg-[var(--rust-light)] p-2 text-sm text-[var(--rust)]">
@@ -331,44 +368,6 @@ export function PatientProfilePage() {
               </ul>
             )}
           </section>
-        </div>
-
-        {/* Side column */}
-        <div className="space-y-4">
-          <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />
-
-          <SideCard title="Care plan">
-            {patientPackages.length === 0 ? (
-              <p className="text-sm text-[var(--muted)]">No open package.</p>
-            ) : (
-              <ul className="space-y-3">
-                {patientPackages.map((p) => {
-                  const pct = Math.min(100, Math.round((p.sessionsLogged / p.packageTotal) * 100));
-                  return (
-                    <li key={p.packageGroupId}>
-                      <div className="flex items-center justify-between text-sm font-medium text-[var(--ink)]">
-                        <span>{p.serviceName}</span>
-                        {p.stale && <Pill tone="amber">⚠ Stale</Pill>}
-                      </div>
-                      <div className="my-1.5 h-2 overflow-hidden rounded-full bg-[var(--paper)]">
-                        <span
-                          className="block h-full rounded-full bg-[var(--teal)]"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <div className="font-num flex justify-between text-xs text-[var(--muted)]">
-                        <span>
-                          {p.sessionsLogged} of {p.packageTotal} sessions
-                        </span>
-                        <span>last {formatDateDMY(p.lastVisitOn)}</span>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </SideCard>
-
         </div>
       </div>
 
