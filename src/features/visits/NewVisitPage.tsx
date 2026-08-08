@@ -58,7 +58,7 @@ export function NewVisitPage() {
   const [query, setQuery] = useState('');
   const [patient, setPatient] = useState<Patient | null>(null);
   const [newPatient, setNewPatient] = useState({
-    name: '',
+    name: search.prefillName ?? '',
     mrno: '',
     age: '',
     sex: '',
@@ -157,6 +157,15 @@ export function NewVisitPage() {
   useEffect(() => {
     if (!prefillPatient || patient) return;
     setPatient(prefillPatient);
+    setNewPatient((prev) => ({
+      ...prev,
+      name: prefillPatient.name,
+      mrno: prefillPatient.mrno,
+      age: prefillPatient.age ? String(prefillPatient.age) : '',
+      sex: prefillPatient.sex ?? '',
+      phone: prefillPatient.phone ?? '',
+      primaryCondition: prefillPatient.primaryCondition ?? '',
+    }));
     if (prefillPatient.primaryCondition) setCondition(prefillPatient.primaryCondition);
   }, [prefillPatient, patient]);
 
@@ -238,6 +247,21 @@ export function NewVisitPage() {
     return [...map.entries()];
   }, [catalog]);
 
+  function selectPatientFromSearch(p: Patient) {
+    setPatient(p);
+    setNewPatient((prev) => ({
+      ...prev,
+      name: p.name,
+      mrno: p.mrno,
+      age: p.age ? String(p.age) : '',
+      sex: p.sex ?? '',
+      phone: p.phone ?? '',
+      primaryCondition: p.primaryCondition ?? '',
+    }));
+    setQuery('');
+    if (p.primaryCondition) setCondition(p.primaryCondition);
+  }
+
   async function createPatient() {
     setError(null);
     try {
@@ -261,15 +285,33 @@ export function NewVisitPage() {
 
   async function save() {
     setError(null);
-    if (!patient) return setError('Select or create a patient first');
+    if (!newPatient.name.trim()) return setError('Patient name is required');
     if (!therapistId) return setError('Select a therapist');
     if (mode === 'new' && !serviceCatalogId) return setError('Select a service');
     if (mode === 'continuation' && !selectedPackage) return setError('Select the open package');
     setBusy(true);
     try {
+      let patientId = patient?.id ?? null;
+
+      if (!patientId) {
+        // Create new patient if one wasn't selected
+        const created = await patientService.create({
+          clinicId: clinic.id,
+          name: newPatient.name,
+          mrno: newPatient.mrno || undefined,
+          age: newPatient.age ? Number(newPatient.age) : null,
+          sex: (newPatient.sex || null) as Patient['sex'],
+          phone: newPatient.phone || null,
+          primaryCondition: newPatient.primaryCondition || null,
+          referringSource: newPatient.referringSource || null,
+          referringSourceDetail: newPatient.referringSourceDetail || null,
+        });
+        patientId = created.id;
+      }
+
       const visit = await visitService.create({
         clinicId: clinic.id,
-        patientId: patient.id,
+        patientId,
         therapistId,
         visitDate,
         serviceCatalogId: mode === 'continuation' ? selectedPackage!.serviceCatalogId : serviceCatalogId,
@@ -311,153 +353,152 @@ export function NewVisitPage() {
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
 
       <SectionCard title="Patient">
-        {patient ? (
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-display text-sm font-medium text-[var(--ink)]">{patient.name}</div>
-              <div className="text-xs text-[var(--muted)]">
-                ID {patient.mrno}
-                {patient.age != null && ` · ${patient.age}y`}
-                {patient.sex && ` · ${patient.sex}`}
-              </div>
-            </div>
-            <button className={btnSecondary} onClick={() => setPatient(null)}>
-              Change
+        <div className="space-y-3">
+          <input
+            className={inputCls}
+            placeholder="Search by Patient ID or name…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+          />
+          {(matches ?? []).map((p) => (
+            <button
+              key={p.id}
+              className="flex w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)]"
+              onClick={() => selectPatientFromSearch(p)}
+            >
+              <span>{p.name}</span>
+              <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
             </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <input
-              className={inputCls}
-              placeholder="Search by Patient ID or name…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoFocus
-            />
-            {(matches ?? []).map((p) => (
-              <button
-                key={p.id}
-                className="flex w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)]"
-                onClick={() => {
-                  setPatient(p);
-                  if (p.primaryCondition) setCondition(p.primaryCondition);
-                }}
+          ))}
+          {patient && (
+            <p className="text-xs text-[var(--muted)]">
+              Selected: {patient.name} <span className="font-medium">ID {patient.mrno}</span>
+              {!search.patientId && (
+                <>
+                  {' '}
+                  <button
+                    className="text-[var(--teal)] hover:underline"
+                    onClick={() => {
+                      setPatient(null);
+                      setQuery('');
+                    }}
+                  >
+                    change
+                  </button>
+                </>
+              )}
+            </p>
+          )}
+          {query.trim() && matches?.length === 0 && (
+            <p className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-2 text-xs text-[var(--muted)]">
+              No existing patient found
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Name *">
+              <input
+                className={inputCls}
+                value={newPatient.name}
+                onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
+                placeholder="Patient name"
+              />
+            </Field>
+            {duplicateMatch && (
+              <p className="col-span-2 rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-xs text-[var(--rust)]">
+                ⚠ A patient named "{duplicateMatch.name}" (ID {duplicateMatch.mrno}) already exists. Use search results above if this is the same person.
+              </p>
+            )}
+            <Field label="ID (optional)">
+              <input
+                className={inputCls}
+                placeholder="Leave blank to auto-generate"
+                value={newPatient.mrno}
+                onChange={(e) => setNewPatient({ ...newPatient, mrno: e.target.value })}
+              />
+            </Field>
+            <Field label="Age">
+              <input
+                type="number"
+                className={inputCls}
+                placeholder="Optional"
+                value={newPatient.age}
+                onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
+              />
+            </Field>
+            <Field label="Sex">
+              <select
+                className={inputCls}
+                value={newPatient.sex}
+                onChange={(e) => setNewPatient({ ...newPatient, sex: e.target.value })}
               >
-                <span>{p.name}</span>
-                <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-              </button>
-            ))}
-            {query.trim() && matches?.length === 0 && (
-              <div className="space-y-2 rounded-md border border-[var(--border)] bg-[var(--paper)] p-3">
-                <p className="text-sm font-medium text-[var(--ink)]">No existing patient found</p>
-                <p className="text-xs text-[var(--muted)]">Create a new patient entry or continue filling the form with a new name.</p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Field label="Name *">
-                    <input
-                      className={inputCls}
-                      value={newPatient.name}
-                      onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
-                      placeholder="Patient name"
-                    />
-                  </Field>
-                  {duplicateMatch && (
-                    <p className="col-span-2 rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-xs text-[var(--rust)]">
-                      ⚠ A patient named "{duplicateMatch.name}" (ID {duplicateMatch.mrno}) already exists. Use search results above if this is the same person.
-                    </p>
-                  )}
-                  <Field label="ID (optional)">
-                    <input
-                      className={inputCls}
-                      placeholder="Leave blank to auto-generate"
-                      value={newPatient.mrno}
-                      onChange={(e) => setNewPatient({ ...newPatient, mrno: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Age">
-                    <input
-                      type="number"
-                      className={inputCls}
-                      placeholder="Optional"
-                      value={newPatient.age}
-                      onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Sex">
-                    <select
-                      className={inputCls}
-                      value={newPatient.sex}
-                      onChange={(e) => setNewPatient({ ...newPatient, sex: e.target.value })}
-                    >
-                      <option value="">—</option>
-                      <option value="M">M</option>
-                      <option value="F">F</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </Field>
-                  <Field label="Phone">
-                    <input
-                      className={inputCls}
-                      placeholder="Optional"
-                      value={newPatient.phone}
-                      onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Primary condition">
-                    <input
-                      className={inputCls}
-                      placeholder="e.g. Neck Pain"
-                      value={newPatient.primaryCondition}
-                      onChange={(e) => setNewPatient({ ...newPatient, primaryCondition: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Referring source">
-                    <select
-                      className={inputCls}
-                      value={newPatient.referringSource}
-                      onChange={(e) =>
-                        setNewPatient({
-                          ...newPatient,
-                          referringSource: e.target.value as ReferringSource | '',
-                          referringSourceDetail: '',
-                        })
-                      }
-                    >
-                      <option value="">—</option>
-                      {(Object.entries(REFERRING_SOURCE_LABELS) as [ReferringSource, string][]).map(
-                        ([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        )
-                      )}
-                    </select>
-                  </Field>
-                  {referringSourceDetailLabel(newPatient.referringSource) && (
-                    <Field label={referringSourceDetailLabel(newPatient.referringSource)!}>
-                      <input
-                        className={inputCls}
-                        value={newPatient.referringSourceDetail}
-                        onChange={(e) => setNewPatient({ ...newPatient, referringSourceDetail: e.target.value })}
-                      />
-                    </Field>
-                  )}
-                  <div className="col-span-2 flex gap-2">
-                    <button
-                      className={btnPrimary}
-                      disabled={!newPatient.name.trim()}
-                      onClick={() => void createPatient()}
-                    >
-                      Create & continue
-                    </button>
-                    <button className={btnSecondary} onClick={() => setQuery('')}>
-                      Clear search
-                    </button>
-                  </div>
-                </div>
+                <option value="">—</option>
+                <option value="M">M</option>
+                <option value="F">F</option>
+                <option value="Other">Other</option>
+              </select>
+            </Field>
+            <Field label="Phone">
+              <input
+                className={inputCls}
+                placeholder="Optional"
+                value={newPatient.phone}
+                onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
+              />
+            </Field>
+            <Field label="Primary condition">
+              <input
+                className={inputCls}
+                placeholder="e.g. Neck Pain"
+                value={newPatient.primaryCondition}
+                onChange={(e) => setNewPatient({ ...newPatient, primaryCondition: e.target.value })}
+              />
+            </Field>
+            <Field label="Referring source">
+              <select
+                className={inputCls}
+                value={newPatient.referringSource}
+                onChange={(e) =>
+                  setNewPatient({
+                    ...newPatient,
+                    referringSource: e.target.value as ReferringSource | '',
+                    referringSourceDetail: '',
+                  })
+                }
+              >
+                <option value="">—</option>
+                {(Object.entries(REFERRING_SOURCE_LABELS) as [ReferringSource, string][]).map(
+                  ([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  )
+                )}
+              </select>
+            </Field>
+            {referringSourceDetailLabel(newPatient.referringSource) && (
+              <Field label={referringSourceDetailLabel(newPatient.referringSource)!}>
+                <input
+                  className={inputCls}
+                  value={newPatient.referringSourceDetail}
+                  onChange={(e) => setNewPatient({ ...newPatient, referringSourceDetail: e.target.value })}
+                />
+              </Field>
+            )}
+            {!patient && (
+              <div className="col-span-2 flex gap-2">
+                <button
+                  className={btnPrimary}
+                  disabled={!newPatient.name.trim()}
+                  onClick={() => void createPatient()}
+                >
+                  Create & continue
+                </button>
               </div>
             )}
           </div>
-        )}
+        </div>
       </SectionCard>
 
       <SectionCard title="Visit">
