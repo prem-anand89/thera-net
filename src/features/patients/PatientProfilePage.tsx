@@ -10,6 +10,7 @@ import { upcastPayload } from '@/domain/coreAssessment';
 import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
+import { EditVisitModal } from '@/features/visits/EditVisitModal';
 
 const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
   draft: { tone: 'amber', label: 'Draft' },
@@ -39,6 +40,7 @@ export function PatientProfilePage() {
   const clinic = useClinic();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
   const [editOpen, setEditOpen] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const [selectedVisitIds, setSelectedVisitIds] = useState<Set<string>>(new Set());
   const [issuingInvoice, setIssuingInvoice] = useState(false);
   const [issueError, setIssueError] = useState<string | null>(null);
@@ -317,6 +319,7 @@ export function PatientProfilePage() {
                           showDate={true}
                           showPatient={false}
                           onInvoice={() => {}}
+                          onEdit={() => setEditing(v.id)}
                           onDelete={() => handleVisitDelete(v.id)}
                         />
                       </div>
@@ -375,6 +378,14 @@ export function PatientProfilePage() {
           onSave={() => {
             setEditOpen(false);
           }}
+        />
+      )}
+
+      {editing && (
+        <EditVisitModal
+          visitId={editing}
+          onClose={() => setEditing(null)}
+          setError={setIssueError}
         />
       )}
     </div>

@@ -27,6 +27,7 @@ import {
   Panel,
 } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
+import { EditVisitModal } from '@/features/visits/EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
@@ -72,6 +73,7 @@ export function WorkspacePage() {
   const { session } = useSession();
   const { role } = useClinicRole(clinic.id);
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
   const [paidNow, setPaidNow] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -342,6 +344,7 @@ export function WorkspacePage() {
                 showDate={false}
                 showPatient={true}
                 onInvoice={() => openInvoiceFor(todayRowToCardData(row, openPackageGroupIds))}
+                onEdit={() => setEditing(row.visitId)}
                 onDelete={() => {
                   if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
                 }}
@@ -403,6 +406,14 @@ export function WorkspacePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {editing && (
+        <EditVisitModal
+          visitId={editing}
+          onClose={() => setEditing(null)}
+          setError={setError}
+        />
       )}
     </div>
   );
