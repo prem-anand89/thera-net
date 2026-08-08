@@ -976,10 +976,7 @@ function AllPatientsSection() {
                   </td>
                   <td className={td}>{p.phone ?? '-'}</td>
                   <td className={`${td} whitespace-nowrap`}>
-                    <Link to="/archive" search={{ patientId: p.id }} className="font-medium text-[var(--teal)] hover:underline">
-                      Visit history
-                    </Link>
-                    <button className="ml-3 text-xs text-[var(--muted)] hover:text-[var(--teal)]" onClick={() => setEditing(p)}>
+                    <button className="text-xs text-[var(--muted)] hover:text-[var(--teal)]" onClick={() => setEditing(p)}>
                       Edit
                     </button>
                     <button className="ml-3 text-xs text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => void hide(p)}>
