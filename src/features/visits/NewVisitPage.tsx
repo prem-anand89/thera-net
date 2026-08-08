@@ -3,6 +3,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, visitService, patientService, directPaymentService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { useSession } from '@/app/useSession';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { DUPLICATE_NAME_THRESHOLD, nameSimilarity } from '@/domain/nameSimilarity';
@@ -46,6 +47,7 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
 export function NewVisitPage() {
   const clinic = useClinic();
   const navigate = useNavigate();
+  const { session } = useSession();
   const search = useSearch({ strict: false }) as {
     repeatVisitId?: string;
     newPatient?: string;
@@ -86,6 +88,10 @@ export function NewVisitPage() {
   const [busy, setBusy] = useState(false);
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
+  const myTherapistId = useMemo(
+    () => (therapists ?? []).find((t) => t.userId === session?.user?.id)?.id,
+    [therapists, session?.user?.id]
+  );
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
   const matches = useLiveQuery(
     () => (patient ? Promise.resolve([]) : repos.patients.search(clinic.id, query)),
@@ -211,6 +217,13 @@ export function NewVisitPage() {
     const match = openPackages.find((op) => op.packageGroupId === repeatVisit.packageGroupId);
     if (match) setOpenPackageId(match.packageGroupId);
   }, [repeatVisit, openPackages]);
+
+  // Default therapist to current user's therapist when creating a new patient
+  // or selecting a patient for 'new' mode (unless therapist is already selected)
+  useEffect(() => {
+    if (!patient || therapistId || !myTherapistId) return;
+    setTherapistId(myTherapistId);
+  }, [patient, therapistId, myTherapistId]);
 
   const selectedService = useMemo(
     () => (catalog ?? []).find((c) => c.id === serviceCatalogId),

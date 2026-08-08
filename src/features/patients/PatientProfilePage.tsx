@@ -247,7 +247,7 @@ export function PatientProfilePage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link to="/visits/new" className={btnPrimary}>
+            <Link to="/visits/new" search={{ patientId }} className={btnPrimary}>
               New visit
             </Link>
           </div>
