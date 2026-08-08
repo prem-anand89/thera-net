@@ -35,6 +35,7 @@ import {
 } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { PatientOverview } from './PatientOverview';
+import { EditVisitModal } from './EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
@@ -89,6 +90,7 @@ export function VisitsPage() {
   const [patientQuery, setPatientQuery] = useState('');
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [splitting, setSplitting] = useState<Visit | null>(null);
+  const [editing, setEditing] = useState<UUID | null>(null);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
   const [paidNow, setPaidNow] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -510,6 +512,16 @@ export function VisitsPage() {
                           Repeat
                         </Link>
                       )}
+                      <button
+                        className="text-xs text-[var(--muted)] hover:text-[var(--slate)]"
+                        title="Edit visit details"
+                        onClick={() => {
+                          setError(null);
+                          setEditing(v.id);
+                        }}
+                      >
+                        Edit
+                      </button>
                       {therapistSplit && v.actualBillPaise > 0 && (
                         <button
                           className="text-xs text-[var(--muted)] hover:text-[var(--moss)]"
@@ -619,6 +631,14 @@ export function VisitsPage() {
           therapists={(therapists ?? []).filter((t) => t.id !== splitting.therapistId)}
           primaryName={therapistName.get(splitting.therapistId) ?? '—'}
           onClose={() => setSplitting(null)}
+        />
+      )}
+
+      {editing && (
+        <EditVisitModal
+          visitId={editing}
+          onClose={() => setEditing(null)}
+          setError={setError}
         />
       )}
     </div>

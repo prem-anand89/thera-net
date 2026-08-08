@@ -50,6 +50,7 @@ export function SharedVisitCard({
   showDate,
   showPatient,
   onInvoice,
+  onEdit,
   onSplit,
   onDelete,
 }: {
@@ -57,6 +58,7 @@ export function SharedVisitCard({
   showDate: boolean;
   showPatient: boolean;
   onInvoice: () => void;
+  onEdit: () => void;
   onSplit?: () => void;
   onDelete: () => void;
 }) {
@@ -78,7 +80,7 @@ export function SharedVisitCard({
     data.treatmentNotes,
   ].filter(Boolean);
 
-  const hasMenu = data.canRepeat || (data.canSplit && onSplit) || data.canDelete;
+  const hasMenu = true; // Edit is always available, plus Repeat/Split/Delete as conditional
 
   return (
     <div className="flex items-start gap-3 py-3">
@@ -171,6 +173,16 @@ export function SharedVisitCard({
                     Repeat
                   </Link>
                 )}
+                <button
+                  type="button"
+                  className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onEdit();
+                  }}
+                >
+                  Edit
+                </button>
                 {data.canSplit && onSplit && (
                   <button
                     type="button"
