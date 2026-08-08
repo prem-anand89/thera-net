@@ -9,9 +9,11 @@ multi-clinic operations from day one, with configurable revenue-split models
 · Dexie (IndexedDB) local-first store with outbox sync · Tailwind CSS.
 
 **Current scope:** the visit ledger (visits, invoices, reports, dashboard),
-revenue tracking, and multi-clinic isolation. Assessment modules (FaCE Scale,
-Facial Palsy, and others) are deliberately out of scope and can be added
-after this base layer is stabilized.
+revenue tracking, multi-clinic isolation, and Core Assessment (clinical
+consultation notes with comprehensive pain profiling, functional status tracking,
+and objective neurological examination). Additional assessment modules (FaCE Scale,
+Facial Palsy, and others) can be added as Region Modules within the Core Assessment
+framework.
 
 ## What it does
 
@@ -19,6 +21,16 @@ after this base layer is stabilized.
 - **Visit entry & patient lookup** — search by MRNO/name (create-if-missing, walk-in MRNO auto-generation), visit entry with catalog price autofill, price override with mandatory adjustment reason, package session tracking (1/3, 2/3 … with ₹0 continuations).
 - **Today-first workspace** — default landing page showing today's visits with payment state at a glance (Paid / Collect ₹X / ₹0 session), open packages with stale flags, pending work (outstanding invoices, incomplete notes), and recent visits in a rolling 7/15/30 day window.
 - **Archive & historical records** — full visit history with dense table, patient enrichment (last visit + count, treatment, condition, bill amount), therapist filter, date range search, bulk actions (invoice, repeat, split, delete).
+
+### Clinical Assessment & Notes
+- **Core Assessment (Initial/Follow-up)** — comprehensive consultation notes with automatic episode-of-care tracking via patient enrollments. Follow-up notes collapse read-only carry-forward sections (medical history, screening) while narrowing objective examination to new findings.
+- **Chief Complaint & History** — anatomical region selection (9 regions: Cervical/Thoracic/Lumbar Spine, Shoulder, Elbow, Wrist/Hand, Hip, Knee, Ankle/Foot), onset/mechanism/episode pattern timeline, occupation/activity context, trauma & surgical history with structured dates, and secondary complaints array.
+- **Pain Profiling** — NRS current/best/worst (3-point scale tracking), pain pattern (constant/intermittent/night-only/morning stiffness), sleep disturbance, aggravating/easing factors. Previous pain history section for tracking historical episodes.
+- **Functional Status (PSFS)** — up to 5 activities with baseline (locked on first save, carryable to follow-ups) and current function scores, MCID crossing counter.
+- **Body Chart** — interactive tap-to-mark front/back/left-lateral outline with 4 mark types (pain/numbness/stiffness/referred), responsive canvas layout.
+- **Objective Examination** — region-driven ROM movements (quick spine preset table for cervical/thoracic/lumbar with flexion/extension/lateral flexion/rotation), manual muscle testing with nerve-root tags (derived read-only myotome display), 4-state neurological screening (dermatomes/myotomes, T1/L2/L3/S2 extended levels), red/yellow flag tri-state screening banner with collapsible detail.
+- **Treatment & HEP** — load management block (weight-bearing %, PWB %, brace, ROM limits), structured interventions with session duration quick-pick, HEP exercise rows with sets/reps/frequency, plan & goals with target timeframe (short/long-term).
+- **Outcome Tracking** — direction-aware outcome cards per instrument (NRS: ▼ Improving for lower scores, PSFS: ▲ Improving for higher scores) comparing against most recent prior note in same episode.
 
 ### Revenue & Invoicing
 - **Revenue split** — per visit, computed at billing time and stored with the rate snapshot: BM Share (75%), Post-Tax (90% of share), TDS (configurable basis: % of gross bill or % of BM share), HV share. Rounding: half-up to the rupee, once per visit — rollups reconcile by construction.
@@ -36,24 +48,27 @@ after this base layer is stabilized.
 ## Architecture
 
 ```
-src/domain/            pure business logic (money, splits, fiscal year) — no framework imports, unit-tested
+src/domain/            pure business logic (money, splits, fiscal year, clinical assessments) — no framework imports, unit-tested
 src/repositories/      data-access interfaces + Dexie implementations (UI reads/writes local only)
 src/sync/              outbox push / delta pull engine against Supabase
-src/services/          visit/invoice/report/patient/dashboard orchestration — no React imports
+src/services/          visit/invoice/report/patient/dashboard/consultation-note orchestration — no React imports
 src/features/          UI pages and components (React + TanStack Router)
   ├── workspace/       WorkspacePage (default landing: Today, Recent, Open Packages, Pending Work)
   ├── visits/          ArchivePage (historical records: Visits/Patients tabs with filters)
-  ├── patients/        Patient profiles and list views
+  ├── patients/        PatientProfilePage with clinical notes, visit history
   ├── invoices/        Invoice management
   ├── insights/        Reports and analytics
-  └── setup/           Clinic configuration
-supabase/              SQL migrations (schema, RLS, RPCs), seed
+  ├── setup/           Clinic configuration
+  └── patients/notes/  NoteEditorPage (Core Assessment: Initial/Follow-up consultation notes)
+src/components/        Shared UI components (BodyChart, ScaleWidget, TreatmentNote, ColumnsPicker, etc.)
+supabase/              SQL migrations (schema, RLS, RPCs, realtime publications), seed
 ```
 
 **App Routes:**
 - `/workspace` (default, `/` redirects here) — today's work, recent history, open packages, pending items
 - `/archive` — historical visit records and patient search with enriched columns
-- `/patients/$patientId` — individual patient profile
+- `/patients/$patientId` — individual patient profile with clinical notes history
+- `/patients/$patientId/notes/$noteId` — Core Assessment note editor (Initial/Follow-up consultation notes)
 - `/invoices` — invoice management and payment tracking
 - `/insights` — reports and revenue analytics
 - `/setup` — clinic configuration, MRNO settings, billing mode, rate setup
@@ -63,7 +78,8 @@ reimplementing the repository interfaces, nothing above them.
 
 ## Status
 
-**Phase 1: Complete ✅** Merged to main and deployed.
+**Phase 1 (Ledger & Revenue): Complete ✅** Merged to main and deployed.
+**Phase 2 (Core Assessment): Complete ✅** Merged to main and deployed.
 
 ### Phase 1 Deliverables (LIVE)
 
@@ -100,16 +116,40 @@ reimplementing the repository interfaces, nothing above them.
 - `add_creator_as_admin()` trigger now SECURITY DEFINER to bypass RLS during clinic founder onboarding
 - Multi-tenant isolation verified: no patient data leaks between clinics
 
+### Phase 2 Deliverables (LIVE)
+
+**Core Assessment (NoteEditorPage)**
+- Complete clinical consultation note builder with Initial/Follow-up modes
+- Episode-of-care tracking via `patient_module_enrollments` (Supabase RLS + Dexie sync)
+- Multi-section accordion layout: Chief Complaint, History, Subjective (Pain Profile + Body Chart), Functional Status (PSFS), Objective (Neuro/ROM/MMT), Treatment & HEP, Screening Banner
+- Derived scalar columns (`nrsScore`, `psfsMean`, `redFlagCount`) extracted at save time for filtering/reporting
+- Follow-up mode auto-collapses read-only carry-forward, editable only for clinical follow-up sections
+- Body chart with responsive tap-to-mark canvas and 4 mark types
+- NRS tracking (current/best/worst), PSFS per-activity baseline & current
+- Secondary complaints array for multi-region presentations
+- Previous pain history section for historical episode tracking
+- Outcome cards with direction-aware trends (per-instrument polarity)
+- Unit test coverage for domain logic (`computeBmi`, `computeWaistToHeightRatio`, `outcomeTrend`, `computeDerivedFields`)
+
+**Patient Profile Integration**
+- New "Clinical notes" section on patient profile drilling into note editor
+- Contraindication banner for clinical safety flags
+
+**New Visit Form Enhancements**
+- Always-visible patient form fields with auto-prefill from search
+- Support for pre-filling with `patientId` or `prefillName` search params
+- Seamless patient selection → form population → visit creation flow
+
 ---
 
-### Phase 2: Planning Complete
+### Phase 3: Future (TBD)
 
-Three options documented in `PHASE_2_PLAN.md`:
-- **Option A (Recommended):** Add visit history table to PatientProfilePage (low effort, high impact)
-- **Option B:** Create dedicated PatientHistoryPage (medium effort, very high impact)
-- **Option C:** Enhance Patients list columns in Archive (low effort, medium impact)
-
-Awaiting user decision before Phase 2 implementation begins.
+Candidates for future phases:
+- Region Modules (FaCE Scale, Facial Palsy assessment plugins within Core Assessment framework)
+- HEP exercise library & video linking
+- Protocol library & phase management
+- Treatment consent tracking (blocked: no data infrastructure exists)
+- Advanced outcome reports (MCID aggregation, multi-patient trends)
 
 ---
 
