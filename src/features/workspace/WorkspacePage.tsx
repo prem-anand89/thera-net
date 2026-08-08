@@ -187,14 +187,9 @@ export function WorkspacePage() {
     <div className="space-y-5">
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Workspace</h1>
-        <div className="flex w-full gap-2 sm:w-auto">
-          <Link to="/visits/new" search={{ newPatient: '1' }} className={`${btnSecondary} flex-1 text-center sm:flex-none`}>
-            + New patient
-          </Link>
-          <Link to="/visits/new" className={`${btnPrimary} flex-1 text-center sm:flex-none`}>
-            + New visit
-          </Link>
-        </div>
+        <Link to="/visits/new" className={`${btnPrimary} w-full text-center sm:w-auto`}>
+          + New visit
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
