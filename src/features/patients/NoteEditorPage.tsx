@@ -821,8 +821,8 @@ export function NoteEditorPage() {
                 <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Current</label>
                 <ScaleWidget
                   variant="nrs"
-                  value={payload.painProfile.nrsCurrent}
-                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrsCurrent: n })}
+                  value={payload.painProfile.nrs.current}
+                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrs: { ...payload.painProfile.nrs, current: n } })}
                   endpoints={['No pain', 'Worst imaginable']}
                   disabled={readOnly}
                 />
@@ -831,8 +831,8 @@ export function NoteEditorPage() {
                 <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Best</label>
                 <ScaleWidget
                   variant="nrs"
-                  value={payload.painProfile.nrsBest}
-                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrsBest: n })}
+                  value={payload.painProfile.nrs.best}
+                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrs: { ...payload.painProfile.nrs, best: n } })}
                   endpoints={['No pain', 'Worst imaginable']}
                   disabled={readOnly}
                 />
@@ -841,8 +841,8 @@ export function NoteEditorPage() {
                 <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Worst</label>
                 <ScaleWidget
                   variant="nrs"
-                  value={payload.painProfile.nrsWorst}
-                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrsWorst: n })}
+                  value={payload.painProfile.nrs.worst}
+                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrs: { ...payload.painProfile.nrs, worst: n } })}
                   endpoints={['No pain', 'Worst imaginable']}
                   disabled={readOnly}
                 />
