@@ -8,10 +8,8 @@ import { formatINR } from '@/domain/money';
 import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, monthName, formatDateDMY } from '@/domain/fiscalYear';
 import {
   clinicBillingConfig,
-  clinicShareLabels,
   referringSourceDetailLabel,
   REFERRING_SOURCE_LABELS,
-  visibleVisitColumns,
   type Patient,
   type PaymentMode,
   type ReferringSource,
@@ -37,6 +35,7 @@ import { applySort, byNumber, byString, SortHeader, useSort } from '@/components
 import { PatientOverview } from './PatientOverview';
 import { EditVisitModal } from './EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
+import { SharedVisitCard, type VisitCardData, type VisitCardPaymentState } from '@/components/VisitCard';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PATIENT_SEARCH_LIMIT = 6;
@@ -51,15 +50,126 @@ const PATIENT_COMPARATORS = {
   condition: byString<Patient>((p) => p.primaryCondition ?? ''),
 };
 
-type DatePreset = 'week' | 'month' | 'lastMonth' | 'all';
+type DatePreset = 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
 const DATE_PRESETS: { key: DatePreset; label: string }[] = [
   { key: 'week', label: 'This week' },
   { key: 'month', label: 'This month' },
   { key: 'lastMonth', label: 'Last month' },
   { key: 'all', label: 'All time' },
+  { key: 'custom', label: 'Custom' },
 ];
 const toIsoDate = (d: Date) => d.toISOString().slice(0, 10);
-const TREATMENT_TRUNCATE = 40;
+
+type DateGroup = 'today' | 'this-week' | 'this-month' | 'last-month' | 'earlier';
+interface GroupedVisits {
+  group: DateGroup;
+  label: string;
+  visits: Visit[];
+  totalBillPaise: number;
+}
+
+function groupVisitsByDate(visits: Visit[], today: Date): GroupedVisits[] {
+  const todayStr = toIsoDate(today);
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - today.getDay());
+  const startOfWeekStr = toIsoDate(startOfWeek);
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const startOfMonthStr = toIsoDate(startOfMonth);
+  const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+  const startOfLastMonthStr = toIsoDate(startOfLastMonth);
+  const endOfLastMonthStr = toIsoDate(endOfLastMonth);
+
+  const groups: Record<DateGroup, Visit[]> = {
+    today: [],
+    'this-week': [],
+    'this-month': [],
+    'last-month': [],
+    earlier: [],
+  };
+
+  for (const v of visits) {
+    if (v.visitDate === todayStr) {
+      groups.today.push(v);
+    } else if (v.visitDate >= startOfWeekStr && v.visitDate < todayStr) {
+      groups['this-week'].push(v);
+    } else if (v.visitDate >= startOfMonthStr && v.visitDate < startOfWeekStr) {
+      groups['this-month'].push(v);
+    } else if (v.visitDate >= startOfLastMonthStr && v.visitDate <= endOfLastMonthStr) {
+      groups['last-month'].push(v);
+    } else {
+      groups.earlier.push(v);
+    }
+  }
+
+  const result: GroupedVisits[] = [];
+  const groupLabels: Record<DateGroup, string> = {
+    today: 'Today',
+    'this-week': 'This week',
+    'this-month': 'This month',
+    'last-month': 'Last month',
+    earlier: 'Earlier',
+  };
+  const groupOrder: DateGroup[] = ['today', 'this-week', 'this-month', 'last-month', 'earlier'];
+
+  for (const group of groupOrder) {
+    if (groups[group].length > 0) {
+      const totalBillPaise = groups[group].reduce((sum, v) => sum + v.actualBillPaise, 0);
+      result.push({
+        group,
+        label: groupLabels[group],
+        visits: groups[group].sort((a, b) => b.visitDate.localeCompare(a.visitDate)),
+        totalBillPaise,
+      });
+    }
+  }
+
+  return result;
+}
+
+function visitToCardData(
+  v: Visit,
+  patientById: Map<UUID, Patient>,
+  therapistName: Map<UUID, string>,
+  therapistNameByUserId: Map<string, string>,
+  serviceName: Map<UUID, string>,
+  syncErrorByVisitId: Map<UUID, string>,
+  openPackageGroupIds: Set<UUID>,
+  therapistSplit: boolean
+): VisitCardData {
+  const p = patientById.get(v.patientId);
+  const editedBy = v.createdBy && v.updatedBy && v.createdBy !== v.updatedBy
+    ? therapistNameByUserId.get(v.updatedBy) ?? 'another user'
+    : null;
+  const paymentState: VisitCardPaymentState = v.invoiceId
+    ? 'paid'
+    : v.actualBillPaise === 0
+    ? 'zero_session'
+    : 'uninvoiced';
+
+  return {
+    visitId: v.id,
+    visitDate: v.visitDate,
+    patientId: v.patientId,
+    patientName: p?.name ?? '-',
+    mrno: p?.mrno ?? '-',
+    condition: v.condition ?? null,
+    serviceName: serviceName.get(v.serviceCatalogId) ?? '-',
+    sessionIndex: v.sessionIndex ?? null,
+    packageTotal: v.packageTotal ?? null,
+    therapistName: therapistName.get(v.therapistId) ?? '-',
+    treatmentNotes: v.treatmentNotes ?? null,
+    billPaise: v.actualBillPaise,
+    paymentState,
+    invoiceId: v.invoiceId ?? null,
+    editedBy,
+    syncError: syncErrorByVisitId.get(v.id) ?? null,
+    canRepeat: v.packageGroupId ? openPackageGroupIds.has(v.packageGroupId) : false,
+    canSplit: therapistSplit && v.actualBillPaise > 0,
+    hasSplit: v.sharedTherapistId ? true : false,
+    canDelete: !v.invoiceId,
+  };
+}
 
 /** What the invoice-issuance modal needs, independent of which tab opened it. */
 interface InvoicingTarget {
@@ -71,14 +181,7 @@ interface InvoicingTarget {
 
 export function VisitsPage() {
   const clinic = useClinic();
-  const labels = clinicShareLabels(clinic);
-  const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
-  const cols = visibleVisitColumns(clinic);
-  // Fixed columns: Date, Patient, Therapist, Service (before Bill) + Bill,
-  // Invoice, actions. Optional: Condition, Treatment, and the two
-  // hospital-split columns. The Totals label spans everything before Bill.
-  const labelSpan = 4 + (cols.condition ? 1 : 0) + (cols.treatment ? 1 : 0);
-  const columnCount = labelSpan + 1 + (hospitalSplit ? 2 : 0) + 2;
+  const { therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string };
 
@@ -95,16 +198,6 @@ export function VisitsPage() {
   const [paidNow, setPaidNow] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [expandedTreatment, setExpandedTreatment] = useState<Set<string>>(new Set());
-
-  function toggleTreatment(id: string) {
-    setExpandedTreatment((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
 
   function applyDatePreset(preset: DatePreset) {
     setDatePreset(preset);
@@ -123,6 +216,8 @@ export function VisitsPage() {
     } else if (preset === 'all') {
       setFrom('');
       setTo('');
+    } else if (preset === 'custom') {
+      // Custom: just set the preset, don't auto-fill dates
     }
   }
 
@@ -177,19 +272,6 @@ export function VisitsPage() {
     [openPackages]
   );
 
-  const sort = useSort<'date' | 'patient' | 'therapist' | 'bill' | 'bmShare' | 'postTax'>('date', 'desc');
-  const sortedVisits = applySort(
-    visits ?? [],
-    {
-      date: byString<Visit>((v) => v.visitDate),
-      patient: byString<Visit>((v) => patientById.get(v.patientId)?.name ?? ''),
-      therapist: byString<Visit>((v) => therapistName.get(v.therapistId) ?? ''),
-      bill: byNumber<Visit>((v) => v.actualBillPaise),
-      bmShare: byNumber<Visit>((v) => v.bmSharePaise),
-      postTax: byNumber<Visit>((v) => v.postTaxPaise),
-    },
-    sort
-  );
 
   const totals = useMemo(
     () =>
@@ -214,7 +296,7 @@ export function VisitsPage() {
         await paymentService.setStatus(invoice.id, clinic.id, paidNow ? 'paid' : 'outstanding');
       } catch (statusError) {
         // Non-fatal: the invoice IS issued (retrying would fail with
-        // "already invoiced"), and a missing status row reads as Paid —
+        // "already invoiced"), and a missing status row reads as Paid -
         // correctable anytime from the Invoices page.
         console.error('Could not record payment status', statusError);
       }
@@ -275,7 +357,7 @@ export function VisitsPage() {
               <Field label="Find patient">
                 <input
                   className={inputCls}
-                  placeholder="Name or Patient ID…"
+                  placeholder="Name or Patient ID..."
                   value={patientQuery}
                   onChange={(e) => setPatientQuery(e.target.value)}
                   onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
@@ -311,21 +393,33 @@ export function VisitsPage() {
                 ))}
               </select>
             </Field>
-            <div className="ml-auto flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
-              {DATE_PRESETS.map((p) => (
-                <button
-                  key={p.key}
-                  type="button"
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                    datePreset === p.key
-                      ? 'bg-[var(--teal)] text-white'
-                      : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-                  }`}
-                  onClick={() => applyDatePreset(p.key)}
-                >
-                  {p.label}
-                </button>
-              ))}
+            <div className="ml-auto flex flex-wrap items-end gap-2">
+              <div className="flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+                {DATE_PRESETS.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                      datePreset === p.key
+                        ? 'bg-[var(--teal)] text-white'
+                        : 'text-[var(--muted)] hover:bg-[var(--surface)]'
+                    }`}
+                    onClick={() => applyDatePreset(p.key)}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              {datePreset === 'custom' && (
+                <div className="flex flex-wrap gap-2">
+                  <Field label="From">
+                    <input type="date" className={inputCls} value={from} onChange={(e) => setFrom(e.target.value)} />
+                  </Field>
+                  <Field label="To">
+                    <input type="date" className={inputCls} value={to} onChange={(e) => setTo(e.target.value)} />
+                  </Field>
+                </div>
+              )}
             </div>
           </div>
 
@@ -336,7 +430,7 @@ export function VisitsPage() {
       {recordsView === 'visits' && followUps.length > 0 && (
         <SectionCard title="Due for follow-up">
           <p className="mb-3 text-xs text-[var(--muted)]">
-            Mid-package and not seen in over 14 days — your actionable retention list.
+            Mid-package and not seen in over 14 days - your actionable retention list.
           </p>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-[var(--border)] text-sm">
@@ -380,200 +474,79 @@ export function VisitsPage() {
         </SectionCard>
       )}
 
-      {recordsView === 'visits' && (
-      <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-        <table className="min-w-full divide-y divide-[var(--border)]">
-          <thead className="bg-[var(--paper)]">
-            <tr>
-              <SortHeader label="Date" k="date" sort={sort} firstDir="desc" />
-              <SortHeader label="Patient" k="patient" sort={sort} />
-              <SortHeader label="Therapist" k="therapist" sort={sort} />
-              <th className={th}>Service</th>
-              {cols.condition && <th className={th}>Condition</th>}
-              {cols.treatment && <th className={th}>Treatment</th>}
-              <SortHeader label="Bill" k="bill" sort={sort} numeric firstDir="desc" />
-              {hospitalSplit && (
-                <SortHeader label={`${labels.own} Share`} k="bmShare" sort={sort} numeric firstDir="desc" />
-              )}
-              {hospitalSplit && (
-                <SortHeader label="Post Tax" k="postTax" sort={sort} numeric firstDir="desc" />
-              )}
-              <th className={th}>Invoice</th>
-              <th className={th}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border)]">
-            {sortedVisits.map((v) => {
-              const p = patientById.get(v.patientId);
-              return (
-                <tr key={v.id} className="hover:bg-[var(--paper)]">
-                  <td className={td}>
-                    {formatDateDMY(v.visitDate)}
-                    {v.createdBy && v.updatedBy && v.createdBy !== v.updatedBy && (
-                      <span
-                        className="ml-1 text-[var(--muted)]"
-                        title={`Edited by ${therapistNameByUserId.get(v.updatedBy) ?? 'another user'}`}
-                      >
-                        ✎
-                      </span>
-                    )}
-                    {syncErrorByVisitId.has(v.id) && (
-                      <span
-                        className="ml-1 text-[var(--rust)]"
-                        title={`Sync issue: ${syncErrorByVisitId.get(v.id)}`}
-                      >
-                        ⚠
-                      </span>
-                    )}
-                  </td>
-                  <td className={td}>
-                    <div className="font-display">{p?.name ?? '—'}</div>
-                    <div className="text-xs text-[var(--muted)]">{p?.mrno}</div>
-                  </td>
-                  <td className={td}>
-                    {therapistName.get(v.therapistId) ?? '—'}
-                    {therapistSplit && v.sharedTherapistId && (
-                      <div className="text-xs font-medium text-[var(--moss-strong)]" title="Internal revenue split">
-                        ⇄ {therapistName.get(v.sharedTherapistId) ?? '—'} {v.sharedPct}%
-                      </div>
-                    )}
-                  </td>
-                  <td className={td}>
-                    {serviceName.get(v.serviceCatalogId) ?? '—'}
-                    {v.sessionIndex && v.packageTotal && (
-                      <span className="ml-1.5">
-                        <PackageThread sessionIndex={v.sessionIndex} packageTotal={v.packageTotal} />
-                      </span>
-                    )}
-                  </td>
-                  {cols.condition && <td className={td}>{v.condition ?? '—'}</td>}
-                  {cols.treatment && (
-                    <td className={`${td} max-w-56`}>
-                      {v.treatmentNotes ? (
-                        v.treatmentNotes.length > TREATMENT_TRUNCATE ? (
-                          <button
-                            type="button"
-                            className="text-left hover:text-[var(--teal)]"
-                            onClick={() => toggleTreatment(v.id)}
-                          >
-                            {expandedTreatment.has(v.id)
-                              ? v.treatmentNotes
-                              : `${v.treatmentNotes.slice(0, TREATMENT_TRUNCATE)}…`}
-                          </button>
-                        ) : (
-                          v.treatmentNotes
-                        )
-                      ) : (
-                        <span className="text-[var(--muted)]">—</span>
-                      )}
-                    </td>
-                  )}
-                  <td className={tdNum}>{formatINR(v.actualBillPaise)}</td>
-                  {hospitalSplit && <td className={tdNum}>{formatINR(v.bmSharePaise)}</td>}
-                  {hospitalSplit && <td className={tdNum}>{formatINR(v.postTaxPaise)}</td>}
-                  <td className={td}>
-                    {v.invoiceId ? (
-                      <Link
-                        to="/invoices/$invoiceId/print"
-                        params={{ invoiceId: v.invoiceId }}
-                        className="font-medium text-[var(--teal)] hover:underline"
-                      >
-                        View
-                      </Link>
-                    ) : v.actualBillPaise > 0 ? (
-                      <button
-                        className="font-medium text-[var(--teal)] hover:underline"
-                        onClick={() => {
-                          setError(null);
-                          setPaidNow(true);
-                          setInvoicing({
-                            visitId: v.id,
-                            patientLabel: p?.name ?? '—',
-                            serviceLabel: serviceName.get(v.serviceCatalogId) ?? '—',
-                            isPackage: Boolean(v.packageGroupId),
-                          });
-                        }}
-                      >
-                        Invoice…
-                      </button>
-                    ) : (
-                      <span className="text-xs text-[var(--muted)]">₹0 session</span>
-                    )}
-                  </td>
-                  <td className={td}>
-                    <div className="flex gap-3">
-                      {v.packageGroupId && openPackageGroupIds.has(v.packageGroupId) && (
-                        <Link
-                          to="/visits/new"
-                          search={{ repeatVisitId: v.id }}
-                          className="text-xs text-[var(--muted)] hover:text-[var(--teal)]"
-                          title="Start the next session with this visit's therapist, service, and condition pre-filled"
-                        >
-                          Repeat
-                        </Link>
-                      )}
-                      <button
-                        className="text-xs text-[var(--muted)] hover:text-[var(--slate)]"
-                        title="Edit visit details"
-                        onClick={() => {
-                          setError(null);
-                          setEditing(v.id);
-                        }}
-                      >
-                        Edit
-                      </button>
-                      {therapistSplit && v.actualBillPaise > 0 && (
-                        <button
-                          className="text-xs text-[var(--muted)] hover:text-[var(--moss)]"
-                          title="Share this visit's revenue with another therapist"
-                          onClick={() => {
+      {recordsView === 'visits' && visits && visits.length > 0 && (
+        <div className="space-y-4">
+          {groupVisitsByDate(visits, new Date()).map((group) => {
+            const visitCount = group.visits.length;
+            const label = `${group.label} (${visitCount} visit${visitCount === 1 ? '' : 's'})`;
+            return (
+              <div
+                key={group.group}
+                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm"
+              >
+                <div className="border-b border-[var(--border)] px-4 py-3 text-sm font-semibold text-[var(--ink)]">
+                  {label}
+                  <span className="ml-4 text-xs font-normal text-[var(--muted)]">
+                    {formatINR(group.totalBillPaise)}
+                  </span>
+                </div>
+                <div className="divide-y divide-[var(--border)]">
+                  {group.visits.map((v) => {
+                    const cardData = visitToCardData(
+                      v,
+                      patientById,
+                      therapistName,
+                      therapistNameByUserId,
+                      serviceName,
+                      syncErrorByVisitId,
+                      openPackageGroupIds,
+                      therapistSplit
+                    );
+                    return (
+                      <div key={v.id} className="px-4">
+                        <SharedVisitCard
+                          data={cardData}
+                          showDate={true}
+                          showPatient={true}
+                          onInvoice={() => {
                             setError(null);
-                            setSplitting(v);
+                            setPaidNow(true);
+                            setInvoicing({
+                              visitId: v.id,
+                              patientLabel: patientById.get(v.patientId)?.name ?? '-',
+                              serviceLabel: serviceName.get(v.serviceCatalogId) ?? '-',
+                              isPackage: Boolean(v.packageGroupId),
+                            });
                           }}
-                        >
-                          {v.sharedTherapistId ? 'Edit split' : 'Split'}
-                        </button>
-                      )}
-                      {!v.invoiceId && (
-                        <button
-                          className="text-xs text-[var(--muted)] hover:text-[var(--rust)]"
-                          title="Delete visit"
-                          onClick={() => {
+                          onSplit={
+                            therapistSplit
+                              ? () => {
+                                  setError(null);
+                                  setSplitting(v);
+                                }
+                              : undefined
+                          }
+                          onDelete={() => {
                             if (confirm('Delete this visit?')) void repos.visits.softDelete(v.id);
                           }}
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {visits?.length === 0 && (
-              <tr>
-                <td colSpan={columnCount} className="px-3 py-8 text-center text-sm text-[var(--muted)]">
-                  No visits match — log one with “New visit”.
-                </td>
-              </tr>
-            )}
-          </tbody>
-          {visits && visits.length > 0 && (
-            <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)]">
-              <tr>
-                <td colSpan={labelSpan} className="px-3 py-2 text-sm font-semibold text-[var(--ink)]">
-                  Totals ({visits.length} visit{visits.length === 1 ? '' : 's'})
-                </td>
-                <td className={tdNum}>{formatINR(totals.bill)}</td>
-                {hospitalSplit && <td className={tdNum}>{formatINR(totals.bmShare)}</td>}
-                {hospitalSplit && <td className={tdNum}>{formatINR(totals.postTax)}</td>}
-                <td className={td}></td>
-                <td className={td}></td>
-              </tr>
-            </tfoot>
-          )}
-        </table>
-      </div>
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm font-semibold text-[var(--ink)]">
+            Totals: {visits.length} visit{visits.length === 1 ? '' : 's'} · {formatINR(totals.bill)}
+          </div>
+        </div>
+      )}
+
+      {recordsView === 'visits' && visits?.length === 0 && (
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center text-sm text-[var(--muted)] shadow-sm">
+          No visits match - log one with "New visit".
+        </div>
       )}
 
       {recordsView === 'patients' &&<AllPatientsSection />}
@@ -584,7 +557,7 @@ export function VisitsPage() {
           <div className="w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5">
             <h2 className="text-sm font-semibold text-[var(--ink)]">Issue invoice</h2>
             <p className="text-sm text-[var(--muted)]">
-              {invoicing.patientLabel} — {invoicing.serviceLabel}
+              {invoicing.patientLabel} - {invoicing.serviceLabel}
               {invoicing.isPackage && ', all sessions of this package'}
             </p>
             <Field label="Payment mode">
@@ -605,12 +578,12 @@ export function VisitsPage() {
               </label>
               <label className="flex items-center gap-2">
                 <input type="radio" checked={!paidNow} onChange={() => setPaidNow(false)} />
-                Outstanding — pay later
+                Outstanding - pay later
               </label>
             </div>
             <ErrorNote message={error} />
             <p className="text-xs text-[var(--muted)]">
-              The invoice number is issued by the server and the bill becomes immutable — this
+              The invoice number is issued by the server and the bill becomes immutable - this
               needs a connection and cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
@@ -618,7 +591,7 @@ export function VisitsPage() {
                 Cancel
               </button>
               <button className={btnPrimary} disabled={busy} onClick={() => void issue()}>
-                {busy ? 'Issuing…' : 'Issue invoice'}
+                {busy ? 'Issuing...' : 'Issue invoice'}
               </button>
             </div>
           </div>
@@ -629,7 +602,7 @@ export function VisitsPage() {
         <SplitModal
           visit={splitting}
           therapists={(therapists ?? []).filter((t) => t.id !== splitting.therapistId)}
-          primaryName={therapistName.get(splitting.therapistId) ?? '—'}
+          primaryName={therapistName.get(splitting.therapistId) ?? '-'}
           onClose={() => setSplitting(null)}
         />
       )}
@@ -687,8 +660,8 @@ function SplitModal({
         <h2 className="text-sm font-semibold text-[var(--ink)]">Share visit revenue</h2>
         <p className="text-sm text-[var(--muted)]">
           Credit part of this {formatINR(visit.actualBillPaise)} visit (billed under {primaryName}) to
-          an assisting therapist. This is internal only — the billed amount, date, and therapist the
-          hospital sees don’t change.
+          an assisting therapist. This is internal only - the billed amount, date, and therapist the
+          hospital sees don't change.
         </p>
         <Field label="Assisting therapist">
           <select
@@ -696,7 +669,7 @@ function SplitModal({
             value={sharedTherapistId}
             onChange={(e) => setSharedTherapistId(e.target.value)}
           >
-            <option value="">Select…</option>
+            <option value="">Select...</option>
             {therapists.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
@@ -738,7 +711,7 @@ function SplitModal({
               disabled={busy || !sharedTherapistId || !(pctNum > 0)}
               onClick={() => void save(false)}
             >
-              {busy ? 'Saving…' : 'Save split'}
+              {busy ? 'Saving...' : 'Save split'}
             </button>
           </div>
         </div>
@@ -861,7 +834,7 @@ function AllPatientsSection() {
       const visits = await repos.visits.list({ clinicId: clinic.id, patientId: p.id });
       if (visits.length > 0) {
         alert(
-          `${p.name} has ${visits.length} visit(s) on record, so they can't be permanently deleted — keep them hidden instead.`
+          `${p.name} has ${visits.length} visit(s) on record, so they can't be permanently deleted - keep them hidden instead.`
         );
         return;
       }
@@ -870,7 +843,7 @@ function AllPatientsSection() {
       );
       if (typed === null) return;
       if (typed.trim().toLowerCase() !== p.name.trim().toLowerCase()) {
-        alert('Name did not match — nothing was deleted.');
+        alert('Name did not match - nothing was deleted.');
         return;
       }
       await patientService.hardDelete(p.id);
@@ -906,7 +879,7 @@ function AllPatientsSection() {
           </div>
           <input
             className={`${inputCls} max-w-xs`}
-            placeholder="Search by Patient ID or name…"
+            placeholder="Search by Patient ID or name..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -1023,7 +996,7 @@ function AllPatientsSection() {
                     ? 'No patients match your search.'
                     : selectedPeriod
                       ? 'No patients were seen in this period.'
-                      : 'No patients yet — they’re created from the “New visit” flow.'}
+                      : "No patients yet - they're created from the \"New visit\" flow."}
                 </td>
               </tr>
             )}
@@ -1131,7 +1104,7 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
               value={form.sex ?? ''}
               onChange={(e) => set({ sex: (e.target.value || null) as Patient['sex'] })}
             >
-              <option value="">—</option>
+              <option value="">-</option>
               <option value="M">M</option>
               <option value="F">F</option>
               <option value="Other">Other</option>
@@ -1158,7 +1131,7 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
                 })
               }
             >
-              <option value="">—</option>
+              <option value="">-</option>
               {(Object.entries(REFERRING_SOURCE_LABELS) as [ReferringSource, string][]).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -1182,7 +1155,7 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
             Cancel
           </button>
           <button className={btnPrimary} disabled={busy} onClick={() => void save()}>
-            {busy ? 'Saving…' : 'Save'}
+            {busy ? 'Saving...' : 'Save'}
           </button>
         </div>
       </div>
