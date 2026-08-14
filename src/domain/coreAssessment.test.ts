@@ -55,8 +55,8 @@ describe('computeWaistToHeightRatio', () => {
 });
 
 describe('computeDerivedFields', () => {
-  it('reads nrsScore from painProfile.nrsCurrent, not Best or Worst', () => {
-    const payload = { ...emptyPayload(), painProfile: { ...emptyPayload().painProfile, nrsCurrent: 4, nrsBest: 1, nrsWorst: 9 } };
+  it('reads nrsScore from painProfile.nrs.current, not Best or Worst', () => {
+    const payload = { ...emptyPayload(), painProfile: { ...emptyPayload().painProfile, nrs: { current: 4, best: 1, worst: 9 } } };
     expect(computeDerivedFields(payload).nrsScore).toBe(4);
   });
 });

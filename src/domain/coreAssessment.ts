@@ -107,6 +107,7 @@ export interface PsfsActivity {
 
 export interface TraumaEntry {
   date: string;
+  dateFormat?: 'month-year' | 'year-only' | 'dont-remember';
   bodyPart: string;
   nature: string;
   treatment: string;
@@ -116,10 +117,20 @@ export interface TraumaEntry {
 
 export interface SurgeryEntry {
   date: string;
+  dateFormat?: 'month-year' | 'year-only' | 'dont-remember';
   procedure: string;
   outcome: 'good' | 'fair' | 'poor';
-  complications?: string;
+  complications?: 'none' | string;
   currentStatus: 'recovered' | 'ongoing';
+}
+
+export interface PreviousPainEntry {
+  id: string;
+  region: string;
+  timelineOnset?: string;
+  timelineDuration?: string;
+  intensity?: 'mild' | 'moderate' | 'severe';
+  treatment?: string;
 }
 
 export interface PalpationEntry {
@@ -190,7 +201,14 @@ export interface CoreAssessmentPayload {
     anatomicalRegion: AnatomicalRegion | '';
     presentingProblem: string;
     primaryComplaint: string[];
-    secondaryComplaint?: string;
+    secondaryComplaints?: {
+      id: string;
+      region: string;
+      onset?: string;
+      mechanism?: string;
+      episodePattern?: string;
+      note?: string;
+    }[];
     onset: 'acute-trauma' | 'gradual-overuse' | 'insidious-no-trigger' | 'post-surgical' | '';
     postSurgical?: {
       surgeryType: string;
@@ -218,6 +236,7 @@ export interface CoreAssessmentPayload {
     allergies: string;
     traumas: TraumaEntry[];
     surgeries: SurgeryEntry[];
+    previousPainHistory?: PreviousPainEntry[];
   };
 
   screening: {
@@ -233,11 +252,7 @@ export interface CoreAssessmentPayload {
   };
 
   painProfile: {
-    /** Current is the tracked/scored value (outcome tracking, followup
-     *  trend) — Best/Worst are context only, never read for trend math. */
-    nrsCurrent: number | null;
-    nrsBest: number | null;
-    nrsWorst: number | null;
+    nrs: { current: number | null; best: number | null; worst: number | null };
     pattern: 'constant' | 'intermittent' | 'night-only' | 'morning-stiffness' | '';
     sleepDisturbed: 'no' | 'wakes-occasionally' | 'cannot-return-to-sleep' | '';
     aggravating: string;
@@ -375,6 +390,7 @@ export function emptyPayload(): CoreAssessmentPayload {
       allergies: '',
       traumas: [],
       surgeries: [],
+      previousPainHistory: [],
     },
     screening: {
       redFlags: Object.fromEntries(RED_FLAG_ITEMS.map((r) => [r, 'not-assessed'])) as CoreAssessmentPayload['screening']['redFlags'],
@@ -383,9 +399,7 @@ export function emptyPayload(): CoreAssessmentPayload {
     },
     bodyChart: { marks: [] },
     painProfile: {
-      nrsCurrent: null,
-      nrsBest: null,
-      nrsWorst: null,
+      nrs: { current: null, best: null, worst: null },
       pattern: '',
       sleepDisturbed: '',
       aggravating: '',
@@ -436,7 +450,7 @@ export function computeDerivedFields(payload: CoreAssessmentPayload): {
   const yellowConcernCount = Object.values(payload.screening.yellowFlags).filter(
     (v) => v === 'some-concern' || v === 'significant-concern'
   ).length;
-  return { nrsScore: payload.painProfile.nrsCurrent, psfsMean, redFlagCount, yellowConcernCount };
+  return { nrsScore: payload.painProfile.nrs.current, psfsMean, redFlagCount, yellowConcernCount };
 }
 
 /** BMI = weight(kg) / height(m)^2, rounded to 1 decimal. Null if either input

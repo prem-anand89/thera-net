@@ -7,10 +7,10 @@ import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
-import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus, type Visit } from '@/domain/types';
+import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
-import { EditVisitModal } from '@/features/visits/EditVisitModal';
+import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 
 const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
   draft: { tone: 'amber', label: 'Draft' },
@@ -40,12 +40,14 @@ export function PatientProfilePage() {
   const clinic = useClinic();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
   const [editOpen, setEditOpen] = useState(false);
+  const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [newPatientId, setNewPatientId] = useState<string | null>(null);
   const [selectedVisitIds, setSelectedVisitIds] = useState<Set<string>>(new Set());
   const [issuingInvoice, setIssuingInvoice] = useState(false);
   const [issueError, setIssueError] = useState<string | null>(null);
-  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
+  const editPatient = useLiveQuery(() => (editPatientId ? repos.patients.get(editPatientId) : undefined), [editPatientId]);
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
   const notes = useLiveQuery(
     () => consultationNoteService.listByPatient(clinic.id, patientId),
@@ -245,7 +247,7 @@ export function PatientProfilePage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link to="/visits/new" className={btnPrimary}>
+            <Link to="/visits/new" search={{ patientId }} className={btnPrimary}>
               New visit
             </Link>
           </div>
@@ -253,8 +255,45 @@ export function PatientProfilePage() {
       </section>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        {/* Side column — rendered first on mobile for proper ordering */}
+        <div className="order-1 space-y-4 lg:order-none lg:col-start-2">
+          <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />
+
+          <SideCard title="Care plan">
+            {patientPackages.length === 0 ? (
+              <p className="text-sm text-[var(--muted)]">No open package.</p>
+            ) : (
+              <ul className="space-y-3">
+                {patientPackages.map((p) => {
+                  const pct = Math.min(100, Math.round((p.sessionsLogged / p.packageTotal) * 100));
+                  return (
+                    <li key={p.packageGroupId}>
+                      <div className="flex items-center justify-between text-sm font-medium text-[var(--ink)]">
+                        <span>{p.serviceName}</span>
+                        {p.stale && <Pill tone="amber">⚠ Stale</Pill>}
+                      </div>
+                      <div className="my-1.5 h-2 overflow-hidden rounded-full bg-[var(--paper)]">
+                        <span
+                          className="block h-full rounded-full bg-[var(--teal)]"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <div className="font-num flex justify-between text-xs text-[var(--muted)]">
+                        <span>
+                          {p.sessionsLogged} of {p.packageTotal} sessions
+                        </span>
+                        <span>last {formatDateDMY(p.lastVisitOn)}</span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </SideCard>
+        </div>
+
         {/* Main column */}
-        <div className="space-y-4">
+        <div className="order-2 space-y-4 lg:order-none lg:col-start-1">
           <SectionLabel>Visit history</SectionLabel>
           {issueError && (
             <div className="rounded bg-[var(--rust-light)] p-2 text-sm text-[var(--rust)]">
@@ -319,7 +358,7 @@ export function PatientProfilePage() {
                           showDate={true}
                           showPatient={false}
                           onInvoice={() => {}}
-                          onEdit={() => setEditingVisitId(v.id)}
+                          onEditPatient={() => setEditPatientId(v.patientId)}
                           onDelete={() => handleVisitDelete(v.id)}
                         />
                       </div>
@@ -329,44 +368,6 @@ export function PatientProfilePage() {
               </ul>
             )}
           </section>
-        </div>
-
-        {/* Side column */}
-        <div className="space-y-4">
-          <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />
-
-          <SideCard title="Care plan">
-            {patientPackages.length === 0 ? (
-              <p className="text-sm text-[var(--muted)]">No open package.</p>
-            ) : (
-              <ul className="space-y-3">
-                {patientPackages.map((p) => {
-                  const pct = Math.min(100, Math.round((p.sessionsLogged / p.packageTotal) * 100));
-                  return (
-                    <li key={p.packageGroupId}>
-                      <div className="flex items-center justify-between text-sm font-medium text-[var(--ink)]">
-                        <span>{p.serviceName}</span>
-                        {p.stale && <Pill tone="amber">⚠ Stale</Pill>}
-                      </div>
-                      <div className="my-1.5 h-2 overflow-hidden rounded-full bg-[var(--paper)]">
-                        <span
-                          className="block h-full rounded-full bg-[var(--teal)]"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <div className="font-num flex justify-between text-xs text-[var(--muted)]">
-                        <span>
-                          {p.sessionsLogged} of {p.packageTotal} sessions
-                        </span>
-                        <span>last {formatDateDMY(p.lastVisitOn)}</span>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </SideCard>
-
         </div>
       </div>
 
@@ -381,14 +382,22 @@ export function PatientProfilePage() {
         />
       )}
 
-      {editingVisitId && (
-        <EditVisitModal
-          visitId={editingVisitId}
-          onClose={() => setEditingVisitId(null)}
-          onSave={(updated: Visit) => {
-            void repos.visits.put(updated);
-            setEditingVisitId(null);
+      {editPatientId && editPatient && (
+        <EditPatientModal
+          patient={editPatient}
+          open={true}
+          onClose={() => setEditPatientId(null)}
+          onSave={() => {
+            setEditPatientId(null);
           }}
+        />
+      )}
+
+      {newPatientId && (
+        <AddPatientDetailsModal
+          patientId={newPatientId}
+          onClose={() => setNewPatientId(null)}
+          onOpenEdit={() => setEditPatientId(newPatientId)}
         />
       )}
     </div>

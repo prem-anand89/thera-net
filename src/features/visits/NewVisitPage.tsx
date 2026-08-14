@@ -3,6 +3,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, visitService, patientService, directPaymentService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { useSession } from '@/app/useSession';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { DUPLICATE_NAME_THRESHOLD, nameSimilarity } from '@/domain/nameSimilarity';
@@ -46,9 +47,9 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
 export function NewVisitPage() {
   const clinic = useClinic();
   const navigate = useNavigate();
+  const { session } = useSession();
   const search = useSearch({ strict: false }) as {
     repeatVisitId?: string;
-    newPatient?: string;
     patientId?: string;
     prefillName?: string;
   };
@@ -56,9 +57,8 @@ export function NewVisitPage() {
   // Patient selection
   const [query, setQuery] = useState('');
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [creatingPatient, setCreatingPatient] = useState(false);
   const [newPatient, setNewPatient] = useState({
-    name: '',
+    name: search.prefillName ?? '',
     mrno: '',
     age: '',
     sex: '',
@@ -86,6 +86,10 @@ export function NewVisitPage() {
   const [busy, setBusy] = useState(false);
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
+  const myTherapistId = useMemo(
+    () => (therapists ?? []).find((t) => t.userId === session?.user?.id)?.id,
+    [therapists, session?.user?.id]
+  );
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
   const matches = useLiveQuery(
     () => (patient ? Promise.resolve([]) : repos.patients.search(clinic.id, query)),
@@ -143,13 +147,6 @@ export function NewVisitPage() {
     [search.repeatVisitId]
   );
 
-  // Workspace's "+ New patient" quick action links here with ?newPatient=1
-  // so the create-patient form is already open, skipping the search step.
-  useEffect(() => {
-    if (search.newPatient && !patient) setCreatingPatient(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search.newPatient]);
-
   // Patient Profile's "New visit" button and an Expected-today card linked
   // to a registered patient both arrive with ?patientId=… — skip search and
   // pre-select that patient directly, same as repeatVisit does below.
@@ -160,15 +157,24 @@ export function NewVisitPage() {
   useEffect(() => {
     if (!prefillPatient || patient) return;
     setPatient(prefillPatient);
+    setNewPatient((prev) => ({
+      ...prev,
+      name: prefillPatient.name,
+      mrno: prefillPatient.mrno,
+      age: prefillPatient.age ? String(prefillPatient.age) : '',
+      sex: prefillPatient.sex ?? '',
+      phone: prefillPatient.phone ?? '',
+      primaryCondition: prefillPatient.primaryCondition ?? '',
+    }));
     if (prefillPatient.primaryCondition) setCondition(prefillPatient.primaryCondition);
   }, [prefillPatient, patient]);
 
   // An Expected-today entry with no linked patient yet arrives with
-  // ?prefillName=… instead — open the new-patient form with the name
+  // ?prefillName=… instead — show the new-patient creation form with the name
   // already filled in rather than a blank search.
   useEffect(() => {
-    if (search.prefillName && !patient && !search.patientId) {
-      setCreatingPatient(true);
+    if (search.prefillName && !patient && !search.patientId && !query) {
+      setQuery(search.prefillName);
       setNewPatient((p) => (p.name ? p : { ...p, name: search.prefillName! }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,11 +193,37 @@ export function NewVisitPage() {
     })();
   }, [repeatVisit, patient]);
 
+  // Default therapist when patient is selected:
+  // - Use therapist from their most recent visit
+  // - If no previous visits, leave empty (user selects manually)
+  useEffect(() => {
+    const patientId = patient?.id;
+    if (!patientId) return;
+
+    (async () => {
+      const visits = await repos.visits.list({ clinicId: clinic.id, patientId });
+      if (visits.length > 0) {
+        const sorted = [...visits].sort((a, b) => b.visitDate.localeCompare(a.visitDate));
+        setTherapistId(sorted[0].therapistId);
+      } else {
+        // Clear therapist if patient has no prior visits
+        setTherapistId('');
+      }
+    })();
+  }, [patient?.id, clinic.id]);
+
   useEffect(() => {
     if (!repeatVisit?.packageGroupId || !openPackages?.length) return;
     const match = openPackages.find((op) => op.packageGroupId === repeatVisit.packageGroupId);
     if (match) setOpenPackageId(match.packageGroupId);
   }, [repeatVisit, openPackages]);
+
+  // Default therapist to current user's therapist when creating a new patient
+  // or selecting a patient for 'new' mode (unless therapist is already selected)
+  useEffect(() => {
+    if (!patient || therapistId || !myTherapistId) return;
+    setTherapistId(myTherapistId);
+  }, [patient, therapistId, myTherapistId]);
 
   const selectedService = useMemo(
     () => (catalog ?? []).find((c) => c.id === serviceCatalogId),
@@ -215,6 +247,21 @@ export function NewVisitPage() {
     return [...map.entries()];
   }, [catalog]);
 
+  function selectPatientFromSearch(p: Patient) {
+    setPatient(p);
+    setNewPatient((prev) => ({
+      ...prev,
+      name: p.name,
+      mrno: p.mrno,
+      age: p.age ? String(p.age) : '',
+      sex: p.sex ?? '',
+      phone: p.phone ?? '',
+      primaryCondition: p.primaryCondition ?? '',
+    }));
+    setQuery('');
+    if (p.primaryCondition) setCondition(p.primaryCondition);
+  }
+
   async function createPatient() {
     setError(null);
     try {
@@ -230,7 +277,6 @@ export function NewVisitPage() {
         referringSourceDetail: newPatient.referringSourceDetail || null,
       });
       setPatient(created);
-      setCreatingPatient(false);
       if (created.primaryCondition) setCondition(created.primaryCondition);
     } catch (e) {
       setError(toFriendlyMessage(e));
@@ -239,15 +285,33 @@ export function NewVisitPage() {
 
   async function save() {
     setError(null);
-    if (!patient) return setError('Select or create a patient first');
+    if (!newPatient.name.trim()) return setError('Patient name is required');
     if (!therapistId) return setError('Select a therapist');
     if (mode === 'new' && !serviceCatalogId) return setError('Select a service');
     if (mode === 'continuation' && !selectedPackage) return setError('Select the open package');
     setBusy(true);
     try {
+      let patientId = patient?.id ?? null;
+
+      if (!patientId) {
+        // Create new patient if one wasn't selected
+        const created = await patientService.create({
+          clinicId: clinic.id,
+          name: newPatient.name,
+          mrno: newPatient.mrno || undefined,
+          age: newPatient.age ? Number(newPatient.age) : null,
+          sex: (newPatient.sex || null) as Patient['sex'],
+          phone: newPatient.phone || null,
+          primaryCondition: newPatient.primaryCondition || null,
+          referringSource: newPatient.referringSource || null,
+          referringSourceDetail: newPatient.referringSourceDetail || null,
+        });
+        patientId = created.id;
+      }
+
       const visit = await visitService.create({
         clinicId: clinic.id,
-        patientId: patient.id,
+        patientId,
         therapistId,
         visitDate,
         serviceCatalogId: mode === 'continuation' ? selectedPackage!.serviceCatalogId : serviceCatalogId,
@@ -289,40 +353,67 @@ export function NewVisitPage() {
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
 
       <SectionCard title="Patient">
-        {patient ? (
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-display text-sm font-medium text-[var(--ink)]">{patient.name}</div>
-              <div className="text-xs text-[var(--muted)]">
-                Patient ID {patient.mrno}
-                {patient.age != null && ` · ${patient.age}y`}
-                {patient.sex && ` · ${patient.sex}`}
-              </div>
-            </div>
-            <button className={btnSecondary} onClick={() => setPatient(null)}>
-              Change
+        <div className="space-y-3">
+          <input
+            className={inputCls}
+            placeholder="Search by Patient ID or name…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+          />
+          {(matches ?? []).map((p) => (
+            <button
+              key={p.id}
+              className="flex w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)]"
+              onClick={() => selectPatientFromSearch(p)}
+            >
+              <span>{p.name}</span>
+              <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
             </button>
-          </div>
-        ) : creatingPatient ? (
+          ))}
+          {patient && (
+            <p className="text-xs text-[var(--muted)]">
+              Selected: {patient.name} <span className="font-medium">ID {patient.mrno}</span>
+              {!search.patientId && (
+                <>
+                  {' '}
+                  <button
+                    className="text-[var(--teal)] hover:underline"
+                    onClick={() => {
+                      setPatient(null);
+                      setQuery('');
+                    }}
+                  >
+                    change
+                  </button>
+                </>
+              )}
+            </p>
+          )}
+          {query.trim() && matches?.length === 0 && (
+            <p className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-2 text-xs text-[var(--muted)]">
+              No existing patient found
+            </p>
+          )}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Name *">
               <input
                 className={inputCls}
                 value={newPatient.name}
                 onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
+                placeholder="Patient name"
               />
             </Field>
             {duplicateMatch && (
-              <p className="col-span-2 rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-sm text-[var(--rust)]">
-                ⚠ A patient named "{duplicateMatch.name}" (Patient ID {duplicateMatch.mrno}) already exists.
-                If this is the same person, use "Back to search" below instead of creating a new
-                record.
+              <p className="col-span-2 rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-xs text-[var(--rust)]">
+                ⚠ A patient named "{duplicateMatch.name}" (ID {duplicateMatch.mrno}) already exists. Use search results above if this is the same person.
               </p>
             )}
-            <Field label="Patient ID (leave blank to auto-generate for walk-ins)">
+            <Field label="ID (optional)">
               <input
                 className={inputCls}
-                placeholder="Existing Patient ID, if any"
+                placeholder="Leave blank to auto-generate"
                 value={newPatient.mrno}
                 onChange={(e) => setNewPatient({ ...newPatient, mrno: e.target.value })}
               />
@@ -331,6 +422,7 @@ export function NewVisitPage() {
               <input
                 type="number"
                 className={inputCls}
+                placeholder="Optional"
                 value={newPatient.age}
                 onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
               />
@@ -350,6 +442,7 @@ export function NewVisitPage() {
             <Field label="Phone">
               <input
                 className={inputCls}
+                placeholder="Optional"
                 value={newPatient.phone}
                 onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
               />
@@ -393,49 +486,19 @@ export function NewVisitPage() {
                 />
               </Field>
             )}
-            <div className="col-span-2 flex gap-2">
-              <button
-                className={btnPrimary}
-                disabled={!newPatient.name.trim()}
-                onClick={() => void createPatient()}
-              >
-                Create patient
-              </button>
-              <button className={btnSecondary} onClick={() => setCreatingPatient(false)}>
-                Back to search
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <input
-              className={inputCls}
-              placeholder="Search by Patient ID or name…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoFocus
-            />
-            {(matches ?? []).map((p) => (
-              <button
-                key={p.id}
-                className="flex w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)]"
-                onClick={() => {
-                  setPatient(p);
-                  if (p.primaryCondition) setCondition(p.primaryCondition);
-                }}
-              >
-                <span>{p.name}</span>
-                <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-              </button>
-            ))}
-            {query.trim() && matches?.length === 0 && (
-              <p className="text-sm text-[var(--muted)]">No match.</p>
+            {!patient && (
+              <div className="col-span-2 flex gap-2">
+                <button
+                  className={btnPrimary}
+                  disabled={!newPatient.name.trim()}
+                  onClick={() => void createPatient()}
+                >
+                  Create & continue
+                </button>
+              </div>
             )}
-            <button className={btnSecondary} onClick={() => setCreatingPatient(true)}>
-              + New patient
-            </button>
           </div>
-        )}
+        </div>
       </SectionCard>
 
       <SectionCard title="Visit">

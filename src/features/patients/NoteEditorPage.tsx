@@ -699,6 +699,105 @@ export function NoteEditorPage() {
                   onChange={(e) => update('chiefComplaint', { ...payload.chiefComplaint, jobRole: e.target.value })}
                 />
               </div>
+
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Secondary complaints</label>
+                  <button
+                    className="btn-secondary"
+                    disabled={readOnly}
+                    onClick={() => {
+                      const newId = Math.random().toString(36).substr(2, 9);
+                      update('chiefComplaint', {
+                        ...payload.chiefComplaint,
+                        secondaryComplaints: [...(payload.chiefComplaint.secondaryComplaints || []), { id: newId, region: '' }]
+                      });
+                    }}
+                  >
+                    + Add
+                  </button>
+                </div>
+                {!payload.chiefComplaint.secondaryComplaints || payload.chiefComplaint.secondaryComplaints.length === 0 ? (
+                  <p className="empty-note">No secondary complaints added.</p>
+                ) : (
+                  payload.chiefComplaint.secondaryComplaints.map((complaint) => (
+                    <div key={complaint.id} className="setup-card" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          placeholder="Region"
+                          value={complaint.region}
+                          disabled={readOnly}
+                          onChange={(e) =>
+                            update('chiefComplaint', {
+                              ...payload.chiefComplaint,
+                              secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, region: e.target.value } : x))
+                            })
+                          }
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          className="kebab"
+                          disabled={readOnly}
+                          onClick={() =>
+                            update('chiefComplaint', {
+                              ...payload.chiefComplaint,
+                              secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.filter((x) => x.id !== complaint.id)
+                            })
+                          }
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div className="field-row">
+                        <input
+                          placeholder="Onset"
+                          value={complaint.onset ?? ''}
+                          disabled={readOnly}
+                          onChange={(e) =>
+                            update('chiefComplaint', {
+                              ...payload.chiefComplaint,
+                              secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, onset: e.target.value } : x))
+                            })
+                          }
+                        />
+                        <input
+                          placeholder="Mechanism"
+                          value={complaint.mechanism ?? ''}
+                          disabled={readOnly}
+                          onChange={(e) =>
+                            update('chiefComplaint', {
+                              ...payload.chiefComplaint,
+                              secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, mechanism: e.target.value } : x))
+                            })
+                          }
+                        />
+                      </div>
+                      <input
+                        placeholder="Episode pattern"
+                        value={complaint.episodePattern ?? ''}
+                        disabled={readOnly}
+                        onChange={(e) =>
+                          update('chiefComplaint', {
+                            ...payload.chiefComplaint,
+                            secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, episodePattern: e.target.value } : x))
+                          })
+                        }
+                      />
+                      <input
+                        placeholder="Notes"
+                        value={complaint.note ?? ''}
+                        disabled={readOnly}
+                        onChange={(e) =>
+                          update('chiefComplaint', {
+                            ...payload.chiefComplaint,
+                            secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, note: e.target.value } : x))
+                          })
+                        }
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
           </div>
@@ -802,6 +901,111 @@ export function NoteEditorPage() {
                   </div>
                 ))}
               </div>
+
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Previous pain history</label>
+                  <button
+                    className="btn-secondary"
+                    disabled={readOnly}
+                    onClick={() => {
+                      const newId = Math.random().toString(36).substr(2, 9);
+                      update('history', {
+                        ...payload.history,
+                        previousPainHistory: [...(payload.history.previousPainHistory || []), { id: newId, region: '' }]
+                      });
+                    }}
+                  >
+                    + Add
+                  </button>
+                </div>
+                {!payload.history.previousPainHistory || payload.history.previousPainHistory.length === 0 ? (
+                  <p className="empty-note">No previous pain history added.</p>
+                ) : (
+                  payload.history.previousPainHistory.map((entry) => (
+                    <div key={entry.id} className="setup-card" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          placeholder="Region"
+                          value={entry.region}
+                          disabled={readOnly}
+                          onChange={(e) =>
+                            update('history', {
+                              ...payload.history,
+                              previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, region: e.target.value } : x))
+                            })
+                          }
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          className="kebab"
+                          disabled={readOnly}
+                          onClick={() =>
+                            update('history', {
+                              ...payload.history,
+                              previousPainHistory: payload.history.previousPainHistory?.filter((x) => x.id !== entry.id)
+                            })
+                          }
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div className="field-row">
+                        <input
+                          placeholder="Timeline onset"
+                          value={entry.timelineOnset ?? ''}
+                          disabled={readOnly}
+                          onChange={(e) =>
+                            update('history', {
+                              ...payload.history,
+                              previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, timelineOnset: e.target.value } : x))
+                            })
+                          }
+                        />
+                        <input
+                          placeholder="Timeline duration"
+                          value={entry.timelineDuration ?? ''}
+                          disabled={readOnly}
+                          onChange={(e) =>
+                            update('history', {
+                              ...payload.history,
+                              previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, timelineDuration: e.target.value } : x))
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="field-row">
+                        <select
+                          value={entry.intensity ?? ''}
+                          disabled={readOnly}
+                          onChange={(e) =>
+                            update('history', {
+                              ...payload.history,
+                              previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, intensity: (e.target.value || undefined) as typeof entry.intensity } : x))
+                            })
+                          }
+                        >
+                          <option value="">—</option>
+                          <option value="mild">Mild</option>
+                          <option value="moderate">Moderate</option>
+                          <option value="severe">Severe</option>
+                        </select>
+                        <input
+                          placeholder="Treatment"
+                          value={entry.treatment ?? ''}
+                          disabled={readOnly}
+                          onChange={(e) =>
+                            update('history', {
+                              ...payload.history,
+                              previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, treatment: e.target.value } : x))
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
           </div>
@@ -821,8 +1025,8 @@ export function NoteEditorPage() {
                 <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Current</label>
                 <ScaleWidget
                   variant="nrs"
-                  value={payload.painProfile.nrsCurrent}
-                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrsCurrent: n })}
+                  value={payload.painProfile.nrs.current}
+                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrs: { ...payload.painProfile.nrs, current: n } })}
                   endpoints={['No pain', 'Worst imaginable']}
                   disabled={readOnly}
                 />
@@ -831,8 +1035,8 @@ export function NoteEditorPage() {
                 <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Best</label>
                 <ScaleWidget
                   variant="nrs"
-                  value={payload.painProfile.nrsBest}
-                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrsBest: n })}
+                  value={payload.painProfile.nrs.best}
+                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrs: { ...payload.painProfile.nrs, best: n } })}
                   endpoints={['No pain', 'Worst imaginable']}
                   disabled={readOnly}
                 />
@@ -841,8 +1045,8 @@ export function NoteEditorPage() {
                 <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Worst</label>
                 <ScaleWidget
                   variant="nrs"
-                  value={payload.painProfile.nrsWorst}
-                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrsWorst: n })}
+                  value={payload.painProfile.nrs.worst}
+                  onChange={(n) => update('painProfile', { ...payload.painProfile, nrs: { ...payload.painProfile.nrs, worst: n } })}
                   endpoints={['No pain', 'Worst imaginable']}
                   disabled={readOnly}
                 />

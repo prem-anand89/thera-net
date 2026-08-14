@@ -145,7 +145,17 @@ body {
   opacity: 0.5; cursor: not-allowed;
 }
 .field-block textarea { resize: vertical; min-height: 50px; font-family: var(--font-sans); }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.modal-shell { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow-2); overflow: hidden; }
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+.modal-header h2 { margin: 0; font-size: 16px; font-weight: 600; color: var(--ink); }
+.modal-close { background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+.modal-close:hover { color: var(--ink); }
+.modal-body { padding: 16px 18px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; padding: 0 18px 16px; border-top: 1px solid var(--border); }
+.field-input { border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px; font-size: 14px; font-family: var(--font-sans); color: var(--ink); background: var(--surface); width: 100%; box-sizing: border-box; }
+.field-input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal-light); }
+.field-input:disabled { background: var(--paper); color: var(--muted); cursor: not-allowed; }
+.field-label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.03em; }
 .btn-secondary {
   background: none; border: 1px solid var(--border); color: var(--ink);
   font-size: 12.5px; font-weight: 500; border-radius: 999px; padding: 8px 15px;
@@ -267,3 +277,36 @@ body {
 .bc-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
 .bc-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
 .bc-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+/* ---------- responsive breakpoints ---------- */
+/* .mobile-only / .desktop-only are global visibility toggles used across every
+   screen, some of which (.setup-accordion, .setup-layout, etc.) also set their
+   own unconditional `display` later in this file. Without !important, source
+   order alone would let those later rules win at equal specificity and defeat
+   the toggle — !important pins these as fixed regardless of where else in the
+   file `display` gets set for the same element. */
+/* mobile: phone-sized (< 720px) */
+@media (max-width: 719.98px) {
+  .desktop-only { display: none !important; }
+  .mobile-only { display: block !important; }
+}
+
+/* tablet/iPad: medium screens (720px - 999px) */
+@media (min-width: 720px) and (max-width: 999.98px) {
+  .screen-body { max-width: 900px; padding: 18px 22px; gap: 20px; }
+  .dir-toolbar { flex-direction: row; align-items: center; gap: 14px; }
+  .desktop-only { display: block !important; }
+  .mobile-only { display: none !important; }
+  .modal-card { max-width: 480px; }
+  .panel-sheet { max-width: 560px; }
+}
+
+/* desktop/laptop: large screens (1000px+) */
+@media (min-width: 1000px) {
+  .screen-body { max-width: 1000px; padding: 22px 26px; gap: 22px; }
+  .dir-toolbar { flex-direction: row; align-items: center; }
+  .desktop-only { display: block !important; }
+  .mobile-only { display: none !important; }
+  .modal-card { max-width: 500px; }
+  .panel-sheet { max-width: 600px; }
+}

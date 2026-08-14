@@ -108,7 +108,7 @@ describe('consultationNoteService', () => {
       const enrollment = await svc.getOrCreateActiveEnrollment('clinic-1', 'pat-1');
       const payload: CoreAssessmentPayload = {
         ...emptyPayload(),
-        painProfile: { ...emptyPayload().painProfile, nrsCurrent: 6 },
+        painProfile: { ...emptyPayload().painProfile, nrs: { current: 6, best: null, worst: null } },
         functionalStatus: { activities: [{ label: 'Climbing stairs', baseline: 4, baselineDate: '2026-01-01', current: 7 }] },
         freeNotes: 'Tolerated session well.',
       };

@@ -50,17 +50,17 @@ export function SharedVisitCard({
   showDate,
   showPatient,
   onInvoice,
+  onEditPatient,
   onSplit,
   onDelete,
-  onEdit,
 }: {
   data: VisitCardData;
   showDate: boolean;
   showPatient: boolean;
   onInvoice: () => void;
+  onEditPatient?: () => void;
   onSplit?: () => void;
   onDelete: () => void;
-  onEdit?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const chip = PAYMENT_CHIP[data.paymentState];
@@ -80,7 +80,7 @@ export function SharedVisitCard({
     data.treatmentNotes,
   ].filter(Boolean);
 
-  const hasMenu = data.canRepeat || (data.canSplit && onSplit) || data.canDelete || !!onEdit;
+  const hasMenu = data.canRepeat || onEditPatient || (data.canSplit && onSplit) || data.canDelete;
 
   return (
     <div className="flex items-start gap-3 py-3">
@@ -173,6 +173,18 @@ export function SharedVisitCard({
                     Repeat
                   </Link>
                 )}
+                {onEditPatient && (
+                  <button
+                    type="button"
+                    className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onEditPatient();
+                    }}
+                  >
+                    Edit patient
+                  </button>
+                )}
                 {data.canSplit && onSplit && (
                   <button
                     type="button"
@@ -183,18 +195,6 @@ export function SharedVisitCard({
                     }}
                   >
                     {data.hasSplit ? 'Edit split' : 'Split'}
-                  </button>
-                )}
-                {onEdit && (
-                  <button
-                    type="button"
-                    className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onEdit();
-                    }}
-                  >
-                    Edit
                   </button>
                 )}
                 {data.canDelete && (

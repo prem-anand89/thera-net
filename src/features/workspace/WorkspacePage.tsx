@@ -13,7 +13,7 @@ import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
 import { useClinicRole } from '@/app/useClinicRole';
 import { formatINR } from '@/domain/money';
-import type { ExpectedVisit, PaymentMethod, PaymentMode, Visit } from '@/domain/types';
+import type { ExpectedVisit, PaymentMethod, PaymentMode } from '@/domain/types';
 import type { PendingWorkItem, TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
@@ -27,8 +27,9 @@ import {
   Panel,
 } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
-import { EditVisitModal } from '@/features/visits/EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
+import { EditPatientModal } from '@/features/patients/EditPatientModal';
+import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -82,7 +83,8 @@ export function WorkspacePage() {
   const [expectedQuery, setExpectedQuery] = useState('');
   const [expectedPatientId, setExpectedPatientId] = useState<string | null>(null);
   const [expectedTimeNote, setExpectedTimeNote] = useState('');
-  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
+  const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [newPatientId, setNewPatientId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
@@ -120,6 +122,7 @@ export function WorkspacePage() {
     () => (clinic.enableExpectedToday ? repos.patients.list(clinic.id) : undefined),
     [clinic.id, clinic.enableExpectedToday]
   );
+  const editPatient = useLiveQuery(() => (editPatientId ? repos.patients.get(editPatientId) : undefined), [editPatientId]);
   const expectedPatientById = useMemo(
     () => new Map((allPatientsForExpected ?? []).map((p) => [p.id, p])),
     [allPatientsForExpected]
@@ -184,14 +187,9 @@ export function WorkspacePage() {
     <div className="space-y-5">
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Workspace</h1>
-        <div className="flex w-full gap-2 sm:w-auto">
-          <Link to="/visits/new" search={{ newPatient: '1' }} className={`${btnSecondary} flex-1 text-center sm:flex-none`}>
-            + New patient
-          </Link>
-          <Link to="/visits/new" className={`${btnPrimary} flex-1 text-center sm:flex-none`}>
-            + New visit
-          </Link>
-        </div>
+        <Link to="/visits/new" className={`${btnPrimary} w-full text-center sm:w-auto`}>
+          + New visit
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
@@ -344,7 +342,7 @@ export function WorkspacePage() {
                 showDate={false}
                 showPatient={true}
                 onInvoice={() => openInvoiceFor(todayRowToCardData(row, openPackageGroupIds))}
-                onEdit={() => setEditingVisitId(row.visitId)}
+                onEditPatient={() => setEditPatientId(row.patientId)}
                 onDelete={() => {
                   if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
                 }}
@@ -408,14 +406,22 @@ export function WorkspacePage() {
         </div>
       )}
 
-      {editingVisitId && (
-        <EditVisitModal
-          visitId={editingVisitId}
-          onClose={() => setEditingVisitId(null)}
-          onSave={(updated: Visit) => {
-            void repos.visits.put(updated);
-            setEditingVisitId(null);
+      {editPatientId && editPatient && (
+        <EditPatientModal
+          patient={editPatient}
+          open={true}
+          onClose={() => setEditPatientId(null)}
+          onSave={() => {
+            setEditPatientId(null);
           }}
+        />
+      )}
+
+      {newPatientId && (
+        <AddPatientDetailsModal
+          patientId={newPatientId}
+          onClose={() => setNewPatientId(null)}
+          onOpenEdit={() => setEditPatientId(newPatientId)}
         />
       )}
     </div>
