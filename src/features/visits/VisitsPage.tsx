@@ -35,6 +35,7 @@ import {
 } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { PatientOverview } from './PatientOverview';
+import { EditVisitModal } from './EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
@@ -94,6 +95,7 @@ export function VisitsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [expandedTreatment, setExpandedTreatment] = useState<Set<string>>(new Set());
+  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
 
   function toggleTreatment(id: string) {
     setExpandedTreatment((s) => {
@@ -522,6 +524,13 @@ export function VisitsPage() {
                           {v.sharedTherapistId ? 'Edit split' : 'Split'}
                         </button>
                       )}
+                      <button
+                        className="text-xs text-[var(--muted)] hover:text-[var(--teal)]"
+                        title="Edit visit details"
+                        onClick={() => setEditingVisitId(v.id)}
+                      >
+                        Edit
+                      </button>
                       {!v.invoiceId && (
                         <button
                           className="text-xs text-[var(--muted)] hover:text-[var(--rust)]"
@@ -619,6 +628,17 @@ export function VisitsPage() {
           therapists={(therapists ?? []).filter((t) => t.id !== splitting.therapistId)}
           primaryName={therapistName.get(splitting.therapistId) ?? '—'}
           onClose={() => setSplitting(null)}
+        />
+      )}
+
+      {editingVisitId && (
+        <EditVisitModal
+          visitId={editingVisitId}
+          onClose={() => setEditingVisitId(null)}
+          onSave={(updated: Visit) => {
+            void repos.visits.put(updated);
+            setEditingVisitId(null);
+          }}
         />
       )}
     </div>

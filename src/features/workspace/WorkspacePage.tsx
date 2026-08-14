@@ -13,7 +13,7 @@ import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
 import { useClinicRole } from '@/app/useClinicRole';
 import { formatINR } from '@/domain/money';
-import type { ExpectedVisit, PaymentMethod, PaymentMode } from '@/domain/types';
+import type { ExpectedVisit, PaymentMethod, PaymentMode, Visit } from '@/domain/types';
 import type { PendingWorkItem, TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
@@ -27,6 +27,7 @@ import {
   Panel,
 } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
+import { EditVisitModal } from '@/features/visits/EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
@@ -81,6 +82,7 @@ export function WorkspacePage() {
   const [expectedQuery, setExpectedQuery] = useState('');
   const [expectedPatientId, setExpectedPatientId] = useState<string | null>(null);
   const [expectedTimeNote, setExpectedTimeNote] = useState('');
+  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
@@ -342,6 +344,7 @@ export function WorkspacePage() {
                 showDate={false}
                 showPatient={true}
                 onInvoice={() => openInvoiceFor(todayRowToCardData(row, openPackageGroupIds))}
+                onEdit={() => setEditingVisitId(row.visitId)}
                 onDelete={() => {
                   if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
                 }}
@@ -403,6 +406,17 @@ export function WorkspacePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {editingVisitId && (
+        <EditVisitModal
+          visitId={editingVisitId}
+          onClose={() => setEditingVisitId(null)}
+          onSave={(updated: Visit) => {
+            void repos.visits.put(updated);
+            setEditingVisitId(null);
+          }}
+        />
       )}
     </div>
   );

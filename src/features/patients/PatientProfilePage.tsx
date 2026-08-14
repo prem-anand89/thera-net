@@ -7,9 +7,10 @@ import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
-import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
+import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus, type Visit } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
+import { EditVisitModal } from '@/features/visits/EditVisitModal';
 
 const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
   draft: { tone: 'amber', label: 'Draft' },
@@ -42,6 +43,7 @@ export function PatientProfilePage() {
   const [selectedVisitIds, setSelectedVisitIds] = useState<Set<string>>(new Set());
   const [issuingInvoice, setIssuingInvoice] = useState(false);
   const [issueError, setIssueError] = useState<string | null>(null);
+  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
@@ -317,6 +319,7 @@ export function PatientProfilePage() {
                           showDate={true}
                           showPatient={false}
                           onInvoice={() => {}}
+                          onEdit={() => setEditingVisitId(v.id)}
                           onDelete={() => handleVisitDelete(v.id)}
                         />
                       </div>
@@ -374,6 +377,17 @@ export function PatientProfilePage() {
           onClose={() => setEditOpen(false)}
           onSave={() => {
             setEditOpen(false);
+          }}
+        />
+      )}
+
+      {editingVisitId && (
+        <EditVisitModal
+          visitId={editingVisitId}
+          onClose={() => setEditingVisitId(null)}
+          onSave={(updated: Visit) => {
+            void repos.visits.put(updated);
+            setEditingVisitId(null);
           }}
         />
       )}
