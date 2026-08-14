@@ -94,7 +94,7 @@ export function EditVisitModal({
         <h2 className="font-display text-lg font-semibold text-[var(--ink)]">Edit visit</h2>
 
         <div className="mt-4 space-y-3">
-          {error && <ErrorNote>{error}</ErrorNote>}
+          {error && <ErrorNote message={error} />}
 
           <Field label="Date *">
             <input
