@@ -10,7 +10,7 @@ Findings that change scope from the source document:
 
 | § | Source claim | Verified reality |
 |---|---|---|
-| 3 | New Visit shows search + Name/ID/Age/Phone simultaneously | Already a 3-state machine (`NewVisitPage.tsx:292`). Only the residual items below remain. |
+| 3 | New Visit shows search + Name/ID/Age/Phone simultaneously | **Accurate as of `main`.** An earlier reading of this repo found a 3-state machine, but that predated `2ee204a` ("Refactor NewVisitPage patient selection UI: always visible form fields"), which removed it. Search box, "Selected:" line, and the full field grid now render together. §3 is in scope as written. |
 | 8 | Setup may use one page-wide save | Already 6 independent sections with per-section saves (`SetupPage.tsx:37`). Consequence caption already present (`:508`). |
 | 6 | Referrals needs a pie chart; palette needs broadening | Both built (`DashboardPage.tsx:273`, `:251`). |
 | 4 | Columns picker needs building | Exists clinic-wide in Setup (`SetupPage.tsx:502`), limited to `condition`/`treatment`. |
@@ -41,7 +41,10 @@ therefore not buildable until the role is cached.
 
 ## PR sequence
 
-### PR 1 — New Visit residual (§3)
+### PR 1 — New Visit (§3)
+- Rebuild the searching / new / confirmed state machine. `main` currently
+  renders search and the full field grid simultaneously, which is the
+  duplicate-warning confusion the source document set out to fix.
 - `local.ts:89` — extend `patients.search` to match phone (digit-normalized,
   tolerant of spacing and country prefix).
 - Duplicate detection — add exact-phone match alongside the existing
