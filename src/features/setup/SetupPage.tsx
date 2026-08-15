@@ -585,11 +585,15 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   );
 }
 
-type FeaturesFields = Pick<Clinic, 'enableExpectedToday' | 'clinicalDocsEnabled'>;
+type FeaturesFields = Pick<Clinic, 'enableExpectedToday' | 'clinicalDocsEnabled' | 'showTherapistComparison'>;
 
 function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<FeaturesFields>(
-    (c) => ({ enableExpectedToday: c.enableExpectedToday, clinicalDocsEnabled: c.clinicalDocsEnabled }),
+    (c) => ({
+      enableExpectedToday: c.enableExpectedToday,
+      clinicalDocsEnabled: c.clinicalDocsEnabled,
+      showTherapistComparison: c.showTherapistComparison ?? false,
+    }),
     onDirtyChange
   );
 
@@ -625,6 +629,23 @@ function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) =>
             className={inputCls}
             value={form.clinicalDocsEnabled ? 'yes' : 'no'}
             onChange={(e) => set({ clinicalDocsEnabled: e.target.value === 'yes' })}
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </Field>
+        <Field
+          label={
+            <>
+              Therapist comparison chart
+              <InfoTip text="When on, the Revenue and Visits comparison charts on Reports are visible to therapists too, not just admins — for clinics that want that competitive visibility. Off by default." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.showTherapistComparison ? 'yes' : 'no'}
+            onChange={(e) => set({ showTherapistComparison: e.target.value === 'yes' })}
           >
             <option value="no">No</option>
             <option value="yes">Yes</option>

@@ -267,23 +267,46 @@ export function DashboardPage() {
         )}
       </SectionCard>
 
-      {scope.isAdmin && (
-        <SectionCard title={`Therapist comparison — ${revenueLabel}`}>
+      {/* Financial aggregates are admin-only everywhere else (decision 3) —
+          this chart is the deliberate exception (decision 4), gated by a
+          clinic-wide opt-in since seeing colleagues' numbers side by side
+          isn't something every clinic wants on by default. front_desk
+          excluded: they have no clinical work of their own to compare. */}
+      {clinic.showTherapistComparison && !scope.isFrontDesk && (
+        <SectionCard title="Therapist comparison">
           {trend && !hasEnoughTrendHistory && (
             <p className="py-8 text-center text-sm text-[var(--muted)]">
               Not enough data yet — a comparison needs at least two months of visits to be meaningful.
             </p>
           )}
           {trend && hasEnoughTrendHistory && therapistNames.length > 0 && (
-            <BarChart
-              categories={categories}
-              series={therapistNames.slice(0, SERIES_COLORS.length).map((name, i) => ({
-                label: name,
-                color: SERIES_COLORS[i],
-                values: trend.map((r) => r.rows.find((row) => row.therapistName === name)?.postTaxPaise ?? 0),
-              }))}
-              formatValue={formatINR}
-            />
+            <div className="space-y-6">
+              <div>
+                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+                  {revenueLabel}
+                </h3>
+                <BarChart
+                  categories={categories}
+                  series={therapistNames.slice(0, SERIES_COLORS.length).map((name, i) => ({
+                    label: name,
+                    color: SERIES_COLORS[i],
+                    values: trend.map((r) => r.rows.find((row) => row.therapistName === name)?.postTaxPaise ?? 0),
+                  }))}
+                  formatValue={formatINR}
+                />
+              </div>
+              <div>
+                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Visits</h3>
+                <BarChart
+                  categories={categories}
+                  series={therapistNames.slice(0, SERIES_COLORS.length).map((name, i) => ({
+                    label: name,
+                    color: SERIES_COLORS[i],
+                    values: trend.map((r) => r.rows.find((row) => row.therapistName === name)?.visitCount ?? 0),
+                  }))}
+                />
+              </div>
+            </div>
           )}
           {trend && hasEnoughTrendHistory && therapistNames.length === 0 && (
             <p className="text-sm text-[var(--muted)]">No visits in the last 6 months.</p>

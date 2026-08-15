@@ -57,6 +57,13 @@ export interface Clinic {
    */
   invoicingAccess?: 'everyone' | 'billing_staff';
   /**
+   * Therapist comparison chart on Reports: visible to admin + therapist
+   * (not front_desk) when on, for competitive visibility. Off by default
+   * — an admin opts in explicitly. Optional so older cached rows default
+   * to false (original admin-only behavior).
+   */
+  showTherapistComparison?: boolean;
+  /**
    * Prefix for auto-generated walk-in MRNOs (format `{prefix}-YYMMDD-XXX`).
    * Optional so older cached rows default to 'W' (original behavior).
    */
