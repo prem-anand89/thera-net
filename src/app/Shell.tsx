@@ -82,7 +82,13 @@ export function Shell() {
   if (!session) return <LoginPage />;
 
   if (!clinic) {
-    if (!syncKicked) {
+    // `clinics`/`activeClinicId` are undefined until Dexie's own async
+    // queries resolve — that's indistinguishable from `clinic === null`
+    // below, so without this check, a hard refresh (where the session
+    // resolves from localStorage faster than Dexie opens IndexedDB) briefly
+    // renders CreateClinicForm before the real clinic loads in, since
+    // `syncKicked` only tracks whether the session is ready, not Dexie.
+    if (!syncKicked || clinics === undefined || activeClinicId === undefined) {
       return (
         <Centered>
           <div className="text-center text-sm text-[var(--muted)]">Preparing…</div>
@@ -90,7 +96,7 @@ export function Shell() {
       );
     }
 
-    // Show clinic creation form for new users
+    // Confirmed zero clinics for this account — show clinic creation form
     return (
       <CreateClinicForm
         onSuccess={() => {
