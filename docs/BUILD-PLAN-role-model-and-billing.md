@@ -227,9 +227,28 @@ Verified against the repo during the review, not assumptions:
 - Verified: typecheck, lint, vitest (231 passed), production build all
   clean.
 
-### PR 15 — Therapist comparison unlock
-- `showTherapistComparison` toggle.
-- Second chart (Visits) added alongside the existing Revenue chart, both visible to therapists when the toggle is on (decision 4).
+### PR 15 — Therapist comparison unlock — SHIPPED
+- `clinics.show_therapist_comparison`, off by default — an admin opts in
+  explicitly from Settings → Features, same yes/no-select pattern as
+  `clinicalDocsEnabled`. No server-side enforcement needed (unlike PRs
+  10/13's RLS/RPC work) — this only widens what's shown on a chart built
+  from data every clinical member can already read under existing RLS.
+- `DashboardPage`'s gate changed from `scope.isAdmin` to
+  `clinic.showTherapistComparison && !scope.isFrontDesk` — front desk
+  excluded, no clinical work of their own to compare against colleagues.
+- Second chart (Visits, `visitCount`) added alongside the existing
+  Revenue (`postTaxPaise`) chart per decision 4 — same `TherapistMonthRow`
+  trend data already being fetched, no new query. Kept as two labeled
+  sections inside one "Therapist comparison" card, and kept as two
+  separate bar charts rather than one combined chart, since ₹ and visit
+  counts are on wildly different scales.
+- Verified: migration replayed cleanly against the full history on a
+  throwaway local Postgres. typecheck, lint, vitest (231 passed),
+  production build all clean.
+
+**All 6 PRs (10–15) in this document are now shipped**, on top of the 9
+in `docs/BUILD-PLAN-compiled-changes.md` — 15 PRs total across both
+plans.
 
 ## Sequencing rationale
 
