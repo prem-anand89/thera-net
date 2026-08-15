@@ -498,19 +498,74 @@ this branch) and three more requests:
      boundary next to General health & triage's card and the screening
      banner. Fixed: wrapped in the same `.setup-card` styling.
    - The Patient Profile screenshot's apparent large empty gap between
-     the header and "Visit history" was investigated and traced to the
-     sync-status popup (open in that screenshot) overlaying the
-     Consultation notes / Care plan cards — not a layout bug.
-     `SideCard`'s CSS has no unusual sizing, and the grid's mobile
-     ordering (side content above Visit history) is an existing,
-     explicitly-documented deliberate choice, not an oversight —
-     reversing it without more specific input risked "fixing" a
-     decision that was made on purpose for a reason not visible from
-     one screenshot. Not changed; flagged back to the user instead of
-     guessing.
+     the header and "Visit history" was attributed to the sync-status
+     popup (open in that screenshot) overlaying the Consultation notes
+     / Care plan cards, and not changed. **This was wrong — see the
+     next section.** The reasoning at the time (don't reverse the
+     documented mobile ordering on the strength of one ambiguous
+     screenshot) was sound, but it stopped short: the popup was a
+     plausible explanation, not a verified one, and the grid's
+     placement rules were never actually checked.
 
 Verified: typecheck, lint, vitest (236 passed), production build all
 clean.
+
+## Layout fixes from a second screenshot round (2026-08-15)
+
+The user re-sent the Patient Profile screenshot with the sync popup
+closed and the badge reading "Synced" — the gap was still there,
+disproving the previous section's guess.
+
+**Patient Profile gap — CSS Grid auto-placement.** The side column is
+first in DOM with `lg:col-start-2`, so it occupies row 1. The main
+column then requests `lg:col-start-1`, but the auto-placement cursor
+has already advanced past that slot, and sparse packing therefore puts
+it in *row 2* — a tall blank on the left, with Visit history pushed
+below the side cards. Both columns now carry `lg:row-start-1`
+explicitly. Nothing to do with the popup, `SideCard`, or the mobile
+ordering, all of which were fine.
+
+**Assessment scroll anchoring — two colliding sticky headers.** Shell's
+app nav (`sticky top-0 z-10`) and the note editor's `.app-header`
+(`sticky top:0 z-2`) both stuck to the viewport top, overlapping rather
+than stacking. Consequences: the note header's back-link rendered
+*behind* the nav and was unreachable, and the true sticky obstruction
+(~110px) exceeded the 80px assumed by both the jump-nav's `md:top-20`
+and every section's `scroll-mt-20` — so the first rail item was clipped
+off the top and rail clicks landed sections under the header. Fixed by
+making `.app-header` non-sticky (it's used only by NoteEditorPage),
+leaving the nav as the sole sticky chrome at ~57px, which both 80px
+offsets clear.
+
+**Jump-nav grouped by SOAP.** Nine flat items reorganized into
+Subjective / Objective / Plan / Progress, matching how a physio note is
+actually structured. The `subjective` section is relabeled "Pain & Body
+Chart" (what it holds) to avoid colliding with the new group heading.
+Section order and the accordion are unchanged; a startup assertion
+fails the build if the grouping drifts from `NOTE_SECTION_KEYS`.
+
+**Notes list restructured.** Answering "how are notes organised once
+they're written": previously the latest note was a special-cased header
+(status + date) and older ones were bare dates — no note mode, and a
+silent cap at five with no indication anything was hidden. Now every
+note is one uniform row (date · Initial/Follow-up · status), capped at
+six with an explicit "+N older" line.
+
+**Settings grouped; Danger zone merged into Data.** Eight flat peer
+sections now group as Clinic / People & services / System, with
+headings rendered only in the vertical rail (the phone-width horizontal
+scroller would just lose width to them). Data and Danger zone merge
+into "Data & maintenance" — import, backup/restore, cache reset and
+wipe are one occasional-maintenance job, and splitting them across
+adjacent tabs meant guessing which held "restore a backup". This is the
+"link multiple similar settings" ask from the earlier round, which the
+first pass had explicitly declined to act on; the merge is defensible
+where the earlier candidates (splitting Partner & split) were not,
+because these two sections share a job rather than merely a screen.
+
+Verified: typecheck, lint, vitest (236 passed), production build all
+clean; confirmed in the compiled CSS that the new `tab:` variants land
+in the same 46.5rem media block as the existing ones.
 
 ## Sequencing rationale
 
