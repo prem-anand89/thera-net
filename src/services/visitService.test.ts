@@ -239,6 +239,17 @@ describe('visitService.create', () => {
     expect(v.tdsPaise).toBe(0);
     expect(v.hvPaise).toBe(0);
   });
+
+  it('leaves clinicalStatus unset when the clinic has not opted into clinical docs', async () => {
+    const v = await createVisitService(fake.repos).create(base);
+    expect(v.clinicalStatus).toBeUndefined();
+  });
+
+  it('flags a fresh visit as pending documentation when the clinic has opted in', async () => {
+    const docsFake = makeFakeRepos({ clinicalDocsEnabled: true });
+    const v = await createVisitService(docsFake.repos).create(base);
+    expect(v.clinicalStatus).toBe('pending');
+  });
 });
 
 describe('reportService.monthly', () => {

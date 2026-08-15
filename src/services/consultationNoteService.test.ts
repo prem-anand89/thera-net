@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createConsultationNoteService } from './consultationNoteService';
-import type { ConsultationNote, PatientModuleEnrollment } from '@/domain/types';
+import type { ConsultationNote, PatientModuleEnrollment, Visit } from '@/domain/types';
 import type { Repos } from '@/repositories/types';
 import type { CoreAssessmentPayload } from '@/domain/coreAssessment';
 import { emptyPayload } from '@/domain/coreAssessment';
@@ -8,6 +8,7 @@ import { emptyPayload } from '@/domain/coreAssessment';
 function makeFakeRepos() {
   const notes = new Map<string, ConsultationNote>();
   const enrollments = new Map<string, PatientModuleEnrollment>();
+  const visits = new Map<string, Visit>();
   const repos = {
     consultationNotes: {
       get: async (id: string) => notes.get(id),
@@ -39,8 +40,47 @@ function makeFakeRepos() {
         ),
       put: async (e: PatientModuleEnrollment) => void enrollments.set(e.id, e),
     },
+    visits: {
+      get: async (id: string) => visits.get(id),
+      put: async (v: Visit) => void visits.set(v.id, v),
+    },
   } as unknown as Repos;
-  return { repos, notes, enrollments };
+  return { repos, notes, enrollments, visits };
+}
+
+function seedVisit(visits: Map<string, Visit>, id: string, overrides: Partial<Visit> = {}): Visit {
+  const visit = {
+    id,
+    clinicId: 'clinic-1',
+    patientId: 'pat-1',
+    therapistId: 'ther-1',
+    visitDate: '2026-01-01',
+    condition: null,
+    treatmentNotes: null,
+    serviceCatalogId: 'svc-1',
+    catalogPricePaise: 0,
+    actualBillPaise: 0,
+    adjustmentPaise: 0,
+    adjustmentReason: null,
+    sessionIndex: null,
+    packageTotal: null,
+    packageGroupId: null,
+    bmSplitPct: 100,
+    taxPct: 0,
+    tdsBasis: 'gross_bill',
+    bmSharePaise: 0,
+    postTaxPaise: 0,
+    tdsPaise: 0,
+    hvPaise: 0,
+    invoiceId: null,
+    pendingPaymentNote: null,
+    deleted: false,
+    clinicalStatus: 'pending',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  } as Visit;
+  visits.set(id, visit);
+  return visit;
 }
 
 describe('consultationNoteService', () => {
@@ -123,6 +163,47 @@ describe('consultationNoteService', () => {
       expect(saved.notesText).toBe('Tolerated session well.');
       expect(saved.assessmentPayload).toEqual(payload);
       expect(saved.enrollmentId).toBe(enrollment.id);
+    });
+  });
+
+  describe('closing the loop with a linked visit', () => {
+    it('marks the visit documented when a note tied to it is completed', async () => {
+      seedVisit(fake.visits, 'visit-1');
+      const svc = createConsultationNoteService(fake.repos);
+      const enrollment = await svc.getOrCreateActiveEnrollment('clinic-1', 'pat-1');
+      const note = await svc.saveAssessment(
+        { clinicId: 'clinic-1', patientId: 'pat-1', therapistId: 'ther-1', visitId: 'visit-1', enrollmentId: enrollment.id, noteMode: 'initial', authorizedSessionCount: null },
+        emptyPayload(),
+        'completed'
+      );
+      const visit = fake.visits.get('visit-1')!;
+      expect(visit.clinicalStatus).toBe('documented');
+      expect(visit.consultationNoteId).toBe(note.id);
+    });
+
+    it('leaves the visit pending while the note is still a draft', async () => {
+      seedVisit(fake.visits, 'visit-1');
+      const svc = createConsultationNoteService(fake.repos);
+      const enrollment = await svc.getOrCreateActiveEnrollment('clinic-1', 'pat-1');
+      await svc.saveAssessment(
+        { clinicId: 'clinic-1', patientId: 'pat-1', therapistId: 'ther-1', visitId: 'visit-1', enrollmentId: enrollment.id, noteMode: 'initial', authorizedSessionCount: null },
+        emptyPayload(),
+        'draft'
+      );
+      const visit = fake.visits.get('visit-1')!;
+      expect(visit.clinicalStatus).toBe('pending');
+      expect(visit.consultationNoteId).toBeUndefined();
+    });
+
+    it('does nothing to the visit table when the note has no linked visit', async () => {
+      const svc = createConsultationNoteService(fake.repos);
+      const enrollment = await svc.getOrCreateActiveEnrollment('clinic-1', 'pat-1');
+      await svc.saveAssessment(
+        { clinicId: 'clinic-1', patientId: 'pat-1', therapistId: 'ther-1', visitId: null, enrollmentId: enrollment.id, noteMode: 'initial', authorizedSessionCount: null },
+        emptyPayload(),
+        'completed'
+      );
+      expect(fake.visits.size).toBe(0);
     });
   });
 });

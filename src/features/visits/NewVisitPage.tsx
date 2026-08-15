@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, visitService, patientService, directPaymentService, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
@@ -118,6 +118,12 @@ export function NewVisitPage() {
   const [pendingNote, setPendingNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Set only when the clinic has clinical docs on — swaps the form for a
+  // one-time "add a note now?" offer at the highest-intent moment, right
+  // after saving while the therapist is still on the page. Clinics that
+  // haven't opted in see no change: save still navigates straight to
+  // Workspace.
+  const [justSaved, setJustSaved] = useState<{ visitId: UUID; patientId: UUID; patientName: string } | null>(null);
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
   const myTherapistId = useMemo(
@@ -393,12 +399,39 @@ export function NewVisitPage() {
         await directPaymentService.logPayment(clinic.id, visit.id, billPaise, paymentMethod, visitDate, null);
       }
 
-      void navigate({ to: '/workspace' });
+      if (clinic.clinicalDocsEnabled) {
+        setJustSaved({ visitId: visit.id, patientId: patient.id, patientName: patient.name });
+      } else {
+        void navigate({ to: '/workspace' });
+      }
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  if (justSaved) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-4">
+        <SectionCard title="Visit logged">
+          <p className="text-sm text-[var(--ink)]">Visit saved for {justSaved.patientName}.</p>
+          <div className="mt-4 flex gap-2">
+            <Link
+              to="/patients/$patientId/notes/new"
+              params={{ patientId: justSaved.patientId }}
+              search={{ visitId: justSaved.visitId }}
+              className={btnPrimary}
+            >
+              Add clinical note
+            </Link>
+            <button className={btnSecondary} onClick={() => void navigate({ to: '/workspace' })}>
+              Done
+            </button>
+          </div>
+        </SectionCard>
+      </div>
+    );
   }
 
   return (

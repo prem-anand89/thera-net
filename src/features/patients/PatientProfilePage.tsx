@@ -340,6 +340,7 @@ export function PatientProfilePage() {
                     invoiceId: v.invoiceId ?? null,
                     canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
                     canDelete: !v.invoiceId,
+                    needsNote: v.clinicalStatus === 'pending',
                   };
                   return (
                     <li key={v.id} className="flex items-start gap-3 px-3">

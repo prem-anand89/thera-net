@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { getSupabase } from '@/lib/supabase';
@@ -162,6 +162,11 @@ export function NoteEditorPage() {
     patientId: string;
     noteId?: string;
   };
+  // Set only when this note was opened from a specific visit's "add note"
+  // nudge (New Visit's save-success offer, a Seen Today card, or the
+  // Needs-attention list) — ignored once an existing note is loaded, which
+  // carries its own visitId.
+  const { visitId: promptedVisitId } = useSearch({ strict: false }) as { visitId?: string };
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
@@ -304,7 +309,7 @@ export function NoteEditorPage() {
           clinicId: clinic.id,
           patientId,
           therapistId,
-          visitId: existingNote?.visitId ?? null,
+          visitId: existingNote?.visitId ?? promptedVisitId ?? null,
           enrollmentId,
           noteMode,
           authorizedSessionCount: null,

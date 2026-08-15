@@ -168,6 +168,7 @@ function visitToCardData(
     canSplit: therapistSplit && v.actualBillPaise > 0,
     hasSplit: v.sharedTherapistId ? true : false,
     canDelete: !v.invoiceId,
+    needsNote: v.clinicalStatus === 'pending',
   };
 }
 

@@ -98,6 +98,8 @@ const patientProfileRoute = createRoute({
 const newNoteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId/notes/new',
+  validateSearch: (search: Record<string, unknown>): { visitId?: string } =>
+    typeof search.visitId === 'string' ? { visitId: search.visitId } : {},
   component: NoteEditorPage,
 });
 

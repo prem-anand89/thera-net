@@ -66,6 +66,7 @@ function todayRowToCardData(row: TodayVisitRow, openPackageGroupIds: Set<string>
     invoiceId: row.invoiceId,
     canRepeat: Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId)),
     canDelete: !row.invoiceId,
+    needsNote: row.needsNote,
   };
 }
 
@@ -109,6 +110,33 @@ export function WorkspacePage() {
     () => new Set<string>(),
     []
   );
+  // incomplete_note items, grouped by patient for the Documentation panel.
+  // pendingWork is already sorted most-overdue-first, so the first item seen
+  // per patient during this pass is their oldest pending note — no separate
+  // sort needed, Map insertion order carries it through.
+  const notesPending = useMemo(() => {
+    const byPatient = new Map<
+      string,
+      { patientId: string; patientName: string; mrno: string; count: number; oldestVisitId: string; daysSince: number }
+    >();
+    for (const item of pendingWork ?? []) {
+      if (item.kind !== 'incomplete_note' || !item.patientId || !item.visitId) continue;
+      const existing = byPatient.get(item.patientId);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        byPatient.set(item.patientId, {
+          patientId: item.patientId,
+          patientName: item.patientName,
+          mrno: item.mrno,
+          count: 1,
+          oldestVisitId: item.visitId,
+          daysSince: item.daysSince,
+        });
+      }
+    }
+    return [...byPatient.values()];
+  }, [pendingWork]);
 
   const expectedToday = useLiveQuery(
     () => (clinic.enableExpectedToday ? expectedVisitsService.listForToday(clinic.id) : undefined),
@@ -352,6 +380,32 @@ export function WorkspacePage() {
         )}
       </SectionCard>
 
+      {clinic.clinicalDocsEnabled && notesPending.length > 0 && (
+        <SectionCard title="Documentation">
+          <ul className="divide-y divide-[var(--border)]">
+            {notesPending.map((p) => (
+              <li key={p.patientId} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                <div>
+                  <span className="font-display text-[var(--ink)]">{p.patientName}</span>{' '}
+                  <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                  <span className="ml-2 text-xs text-[var(--muted)]">
+                    {p.count} visit{p.count === 1 ? '' : 's'} awaiting notes · oldest {p.daysSince}d
+                  </span>
+                </div>
+                <Link
+                  to="/patients/$patientId/notes/new"
+                  params={{ patientId: p.patientId }}
+                  search={{ visitId: p.oldestVisitId }}
+                  className="text-xs font-medium text-[var(--amber)] hover:underline"
+                >
+                  Add note
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      )}
+
       <Panel open={attentionOpen} onClose={() => setAttentionOpen(false)} title="Needs attention">
         <ul className="divide-y divide-[var(--border)]">
           {(pendingWork ?? []).map((item, i) => (
@@ -528,6 +582,16 @@ function PendingWorkRow({ item, clinicId }: { item: PendingWorkItem; clinicId: s
               Cancel
             </button>
           </span>
+        )}
+        {item.kind === 'incomplete_note' && item.patientId && item.visitId && (
+          <Link
+            to="/patients/$patientId/notes/new"
+            params={{ patientId: item.patientId }}
+            search={{ visitId: item.visitId }}
+            className="text-xs font-medium text-[var(--amber)] hover:underline"
+          >
+            Add note
+          </Link>
         )}
         {item.patientId && (
           <Link

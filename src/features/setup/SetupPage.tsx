@@ -362,6 +362,23 @@ function ClinicProfile() {
             <option value="yes">Yes</option>
           </select>
         </Field>
+        <Field
+          label={
+            <>
+              Clinical documentation
+              <InfoTip text="When on, new visits are flagged for a clinical note until one is completed — surfaced on Workspace's Needs attention and Documentation lists. Off by default; turn on for clinics that track a note per visit." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.clinicalDocsEnabled ? 'yes' : 'no'}
+            onChange={(e) => set({ clinicalDocsEnabled: e.target.value === 'yes' })}
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </Field>
         <Field label="Address">
           <input className={inputCls} value={form.address ?? ''} onChange={(e) => set({ address: e.target.value || null })} />
         </Field>

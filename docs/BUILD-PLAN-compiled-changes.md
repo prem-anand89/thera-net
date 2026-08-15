@@ -51,10 +51,12 @@ therefore not buildable until the role is cached.
    the three sections that already have it, and add the "Carried
    forward" pill on top. Not converting all nine sections to a
    dimmed-with-pill treatment.
-9. **Notes-completion gating** — a visit is flagged for a note prompt only
-   when both `clinic.clinicalDocsEnabled` is on *and* the patient has a
-   `consultation_notes` module enrollment. Without both, every walk-in
-   massage would nag for a note that was never expected.
+9. **Notes-completion gating** — ~~a visit is flagged only when both
+   `clinicalDocsEnabled` is on *and* the patient has a `consultation_notes`
+   enrollment~~ **revised during PR 2**: gate on `clinicalDocsEnabled`
+   alone. Enrollment is only ever created lazily when the note editor is
+   first opened, so requiring it up front would mean a patient's very
+   first visit could never trigger the very first note. See PR 2 below.
 10. **Settings layout** — a left-rail sub-nav (one section visible at a
     time) at ≥768px, stacking below it, rather than accordion sections.
     Reuses the same rail pattern as PR 5's note-editor jump-nav instead of
@@ -89,25 +91,51 @@ therefore not buildable until the role is cached.
   correct therapist for the specific visit being repeated, which isn't
   always the patient's most recent one.
 
-### PR 2 — Notes-completion prompting (new — not in source document)
+### PR 2 — Notes-completion prompting (new — not in source document) — SHIPPED
 Prompted by "how do we get therapists to write notes for logged visits."
-The signal already exists in the schema and is dead:
-`Visit.clinicalStatus` (`types.ts:250`) is never written by
+The signal already existed in the schema and was dead:
+`Visit.clinicalStatus` (`types.ts:250`) was never written by
 `visitService.create`, so `dashboardService`'s `incomplete_note` item
-(`:314`) can never fire, and `NoteEditorPage.tsx:307` never links a note
+(`:314`) could never fire, and `NoteEditorPage.tsx:307` never linked a note
 back to the visit it documents.
-- Arm the signal — set `clinicalStatus: 'pending'` at visit creation, gated
-  on decision 9 (`clinicalDocsEnabled` **and** a `consultation_notes`
-  enrollment) so untracked visits don't generate false prompts.
-- Close the loop — on note save-as-completed, write
-  `visit.clinicalStatus`, `visit.consultationNoteId`, and `note.visitId`.
-- Surface it: an "Add clinical note" offer on New Visit's save success path
-  (highest-intent moment), a marker on undocumented Seen Today cards, and
-  the `incomplete_note` Needs-attention entry (already built, just
-  unreachable — `daysSince` escalation is free once the signal is real).
-- Workspace Documentation panel ("N visits awaiting notes") — resolves
-  former open item 3. In scope, sequenced as the last piece of this PR
-  since the three items above deliver the actual behavior change.
+
+**Correction to decision 9 during implementation:** the doc's gate —
+`clinicalDocsEnabled` **and** an existing `consultation_notes` enrollment —
+turned out to be backwards. `consultationNoteService.getOrCreateActiveEnrollment`
+only creates an enrollment lazily, the first time the note editor is
+opened for a patient — so gating on "enrollment exists" would mean a
+patient's very first visit could never be flagged, which defeats the
+point. **Shipped gate is `clinicalDocsEnabled` alone**, clinic-wide, per
+visit.
+
+- Armed the signal — `visitService.create` sets `clinicalStatus: 'pending'`
+  when `clinic.clinicalDocsEnabled` is on.
+- Closed the loop — `consultationNoteService.saveAssessment` now writes
+  `visit.clinicalStatus: 'documented'` and `visit.consultationNoteId` when
+  a note is saved *completed* against a linked visit. A draft save leaves
+  the visit pending on purpose. `visitService.updateBilling` was checked
+  and already spreads the existing visit first, so it can't clobber either
+  field.
+- Linked notes to visits — `/patients/$patientId/notes/new` now accepts a
+  `?visitId=` search param, threaded through to `saveAssessment`. Every
+  "add a note" entry point below passes it.
+- Surfaced it in four places: an "Add clinical note" offer on New Visit's
+  save-success screen (replaces the immediate redirect to Workspace only
+  when the clinic has the feature on); a `+ Note` link on `SharedVisitCard`
+  wherever a card shows a pending visit (Workspace, Patient Profile,
+  Ledger — one shared component, all three for free); an "Add note" action
+  on the `incomplete_note` Needs-attention row; and a new Workspace
+  **Documentation** panel below Seen Today, grouping pending visits by
+  patient and linking to the oldest one per patient.
+- **Sequencing fix**: the doc's plan put the `clinicalDocsEnabled` toggle in
+  PR 3's Settings reorg, which would have shipped this entire feature
+  behind a flag nobody could turn on. Added a minimal toggle to the
+  existing `SetupPage.tsx` now (same pattern as the neighboring `Expected
+  today` toggle); PR 3 relocates it into the new Features section, no
+  behavior change.
+- Tests: `visitService.create` (flag on/off), `consultationNoteService
+  .saveAssessment` (completed-with-visit closes the loop, draft doesn't,
+  no-visit note doesn't touch the visits table).
 
 ### PR 3 — Settings reorganization (new — not in source document)
 Prompted directly by user request — 899 lines in one scroll, one section
@@ -123,8 +151,8 @@ one save button.
 - Per-section save/Cancel with a dirty-state guard (absorbs former §8
   scope) — most sections already behave this way; this is mechanical
   extraction, not new logic.
-- A UI toggle for `clinicalDocsEnabled` (currently unset by any UI) in the
-  new Features section, needed by PR 2.
+- Relocate the `clinicalDocsEnabled` toggle (shipped early in PR 2) into
+  the new Features section, alongside `Expected today`.
 - Consequence caption per section, templated on the one that already
   exists (`SetupPage.tsx:508`).
 

@@ -43,6 +43,8 @@ export interface VisitCardData {
   canSplit?: boolean;
   hasSplit?: boolean;
   canDelete: boolean;
+  /** True when this visit is flagged for a clinical note that hasn't been completed yet. */
+  needsNote?: boolean;
 }
 
 export function SharedVisitCard({
@@ -147,6 +149,17 @@ export function SharedVisitCard({
         ) : data.billPaise > 0 ? (
           <span className="text-xs text-[var(--muted)]">Not invoiced</span>
         ) : null}
+        {data.needsNote && (
+          <Link
+            to="/patients/$patientId/notes/new"
+            params={{ patientId: data.patientId }}
+            search={{ visitId: data.visitId }}
+            className="text-xs font-medium text-[var(--amber)] hover:underline"
+            title="Clinical note not started for this visit"
+          >
+            + Note
+          </Link>
+        )}
       </div>
 
       {hasMenu && (

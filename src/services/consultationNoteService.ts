@@ -80,6 +80,23 @@ export function createConsultationNoteService(repos: Repos) {
         updatedAt: new Date().toISOString(),
       };
       await repos.consultationNotes.put(full);
+
+      // Closes the loop with the "needs a note" signal visitService.create
+      // opens: a note completed against a visit clears that visit's pending
+      // flag. A draft save deliberately does not — the note isn't finished
+      // yet, so the visit should keep prompting until it is.
+      if (status === 'completed' && full.visitId) {
+        const visit = await repos.visits.get(full.visitId);
+        if (visit) {
+          await repos.visits.put({
+            ...visit,
+            clinicalStatus: 'documented',
+            consultationNoteId: full.id,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+
       return full;
     },
   };

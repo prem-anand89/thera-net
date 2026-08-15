@@ -98,6 +98,14 @@ export function createVisitService(repos: Repos) {
         invoiceId: null,
         pendingPaymentNote: input.pendingPaymentNote?.trim() || null,
         deleted: false,
+        // Flags the visit for a clinical note until one is completed against
+        // it (see consultationNoteService.saveAssessment, which closes this
+        // out). Gated on the clinic opting in, not on the patient already
+        // having a documentation enrollment — an enrollment is only ever
+        // created lazily when a note is first opened, so gating on it would
+        // mean a patient's very first visit could never prompt for their
+        // first note.
+        ...(clinic.clinicalDocsEnabled ? { clinicalStatus: 'pending' as const } : {}),
         updatedAt: new Date().toISOString(),
       };
       await repos.visits.put(visit);
