@@ -82,6 +82,7 @@ export interface TodayVisitRow {
   mrno: string;
   condition: string | null;
   phone: string | null;
+  therapistId: UUID;
   therapistName: string;
   serviceName: string;
   treatmentNotes: string | null;
@@ -594,6 +595,7 @@ export function createDashboardService(repos: Repos) {
             mrno: patient?.mrno ?? '—',
             condition: v.condition,
             phone: patient?.phone ?? null,
+            therapistId: v.therapistId,
             therapistName: therapistNameById.get(v.therapistId) ?? '—',
             serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
             treatmentNotes: v.treatmentNotes,

@@ -26,6 +26,10 @@ const MESSAGE_PATTERNS: Array<[RegExp, string]> = [
     "You don't have access to this clinic. Try signing out and back in, or ask your admin.",
   ],
   [
+    /new row violates row-level security policy/i,
+    "You don't have permission to save this change — it may belong to another therapist. Ask your admin if this looks wrong.",
+  ],
+  [
     /one or more visits are missing, deleted, or already invoiced/i,
     'One of the selected visits is no longer available (it may already be on another invoice). Refresh and try again.',
   ],

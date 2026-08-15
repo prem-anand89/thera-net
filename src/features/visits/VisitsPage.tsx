@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
+import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
@@ -65,7 +66,9 @@ function visitToCardData(
   openPackageGroupIds: Set<UUID>,
   therapistSplit: boolean,
   statusByInvoiceId: Map<UUID, PaymentStatus>,
-  directPaymentByVisitId: Map<UUID, number>
+  directPaymentByVisitId: Map<UUID, number>,
+  isAdmin: boolean,
+  myTherapistId: UUID | undefined
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy = v.createdBy && v.updatedBy && v.createdBy !== v.updatedBy
@@ -77,6 +80,11 @@ function visitToCardData(
     directPaymentByVisitId.get(v.id) ?? 0,
     v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
   );
+  // Pre-flight mirror of visits_update/visits_delete's RLS check
+  // (is_clinic_admin or is_own_therapist) — without this, a therapist saw
+  // a clickable Delete/Split on every colleague's visit in this clinic-wide
+  // list and only found out it was blocked after the server rejected it.
+  const canModify = isAdmin || v.therapistId === myTherapistId;
 
   return {
     visitId: v.id,
@@ -96,9 +104,9 @@ function visitToCardData(
     editedBy,
     syncError: syncErrorByVisitId.get(v.id) ?? null,
     canRepeat: v.packageGroupId ? openPackageGroupIds.has(v.packageGroupId) : false,
-    canSplit: therapistSplit && v.actualBillPaise > 0,
+    canSplit: therapistSplit && v.actualBillPaise > 0 && canModify,
     hasSplit: v.sharedTherapistId ? true : false,
-    canDelete: !v.invoiceId,
+    canDelete: !v.invoiceId && canModify,
     needsNote: v.clinicalStatus === 'pending',
   };
 }
@@ -113,7 +121,8 @@ interface InvoicingTarget {
 
 export function VisitsPage() {
   const clinic = useClinic();
-  const { canBill } = usePermissions();
+  const { canBill, isAdmin } = usePermissions();
+  const { myTherapistId } = useWorkspaceScope();
   const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView };
@@ -259,7 +268,9 @@ export function VisitsPage() {
           openPackageGroupIds,
           therapistSplit,
           statusByInvoiceId,
-          directPaymentByVisitId
+          directPaymentByVisitId,
+          isAdmin,
+          myTherapistId
         )
       ),
     [
@@ -273,6 +284,8 @@ export function VisitsPage() {
       therapistSplit,
       statusByInvoiceId,
       directPaymentByVisitId,
+      isAdmin,
+      myTherapistId,
     ]
   );
 

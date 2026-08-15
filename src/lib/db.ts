@@ -26,6 +26,14 @@ export interface OutboxEntry {
   ts: number;
   /** Last push error, if any — kept visible instead of dropped */
   error?: string;
+  /**
+   * Postgrest/Postgres error code for `error`, when the rejection carried
+   * one (e.g. '42501' for an RLS permission denial). Lets the UI tell a
+   * permanent rejection (retrying will never succeed) apart from a
+   * transient one, instead of showing the same "keep retrying" copy for
+   * both — see SyncBadge.
+   */
+  errorCode?: string;
 }
 
 export interface MetaEntry {
@@ -46,6 +54,33 @@ export type SyncedTable =
   | 'consultation_notes'
   | 'patient_module_enrollments'
   | 'expected_visits';
+
+/**
+ * Every table the sync engine pushes/pulls — the single source of truth
+ * for "what data does this app cache locally," so the push/pull loop and
+ * the sign-out clear can't drift apart the way they did before (sign-out
+ * left consultation_notes/patient_module_enrollments/expected_visits
+ * behind because that list was hand-maintained separately). The
+ * `_exhaustiveCheck` line fails to typecheck if a new SyncedTable member
+ * is ever added here without being added below.
+ */
+export const ALL_SYNCED_TABLES = [
+  'clinics',
+  'therapists',
+  'service_catalog',
+  'patients',
+  'visits',
+  'invoices',
+  'invoice_payments',
+  'payments',
+  'settlements',
+  'consultation_notes',
+  'patient_module_enrollments',
+  'expected_visits',
+] as const satisfies readonly SyncedTable[];
+type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number] ? true : never;
+const _exhaustiveCheck: _AssertAllSyncedTablesCovered = true;
+void _exhaustiveCheck;
 
 /**
  * Tables the client is allowed to write. Invoices are server-issued only.

@@ -1,4 +1,4 @@
-import { db, CLIENT_WRITABLE_TABLES, type SyncedTable } from '@/lib/db';
+import { db, ALL_SYNCED_TABLES, CLIENT_WRITABLE_TABLES, type SyncedTable } from '@/lib/db';
 import { getSupabase } from '@/lib/supabase';
 import { domainToRow, rowToDomain } from '@/repositories/rowMapping';
 import { onLocalWrite } from '@/repositories/local';
@@ -15,20 +15,7 @@ import { syncStatus } from './status';
  *   and a slow fallback interval
  */
 
-const SYNC_TABLES: SyncedTable[] = [
-  'clinics',
-  'therapists',
-  'service_catalog',
-  'patients',
-  'visits',
-  'invoices',
-  'invoice_payments',
-  'payments',
-  'settlements',
-  'consultation_notes',
-  'patient_module_enrollments',
-  'expected_visits',
-];
+const SYNC_TABLES: readonly SyncedTable[] = ALL_SYNCED_TABLES;
 // ai_generation_log is deliberately excluded — online-only, per the clinical
 // docs handoff. It never appears here, in CLIENT_WRITABLE_TABLES, or in the
 // Dexie schema.
@@ -176,7 +163,7 @@ export class SyncEngine {
         await db.outbox
           .where('seq')
           .equals(entry.seq!)
-          .modify({ error: error.message });
+          .modify({ error: error.message, errorCode: error.code });
         continue;
       }
       await this.clearOutbox(entry.table, entry.rowId, maxSeq);

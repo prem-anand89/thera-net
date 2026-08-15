@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
+import { usePermissions } from '@/app/usePermissions';
 import { getSupabase } from '@/lib/supabase';
 import { ScaleWidget } from '@/components/ScaleWidget';
 import { BodyChart } from '@/components/BodyChart';
@@ -190,6 +191,7 @@ function useTreatmentConsentStatus(clinicId: string, patientId: string) {
 export function NoteEditorPage() {
   const clinic = useClinic();
   const navigate = useNavigate();
+  const { canViewClinicalNotes } = usePermissions();
   const { patientId, noteId } = useParams({ strict: false }) as {
     patientId: string;
     noteId?: string;
@@ -457,6 +459,25 @@ export function NoteEditorPage() {
   }
 
   if (!ready || patient === undefined) return null;
+
+  // Display-level gate matching PatientProfilePage's ConsultationNotePanel
+  // gating — front desk has no clinical-documentation need. RLS still
+  // allows front desk to *read* consultation_notes (the patient profile's
+  // safety-flags banner depends on that), so this route must enforce the
+  // same boundary itself rather than relying on a failed query.
+  if (!canViewClinicalNotes) {
+    return (
+      <div className="space-y-4">
+        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Clinical notes</h1>
+        <p className="text-sm text-[var(--muted)]">
+          Clinical notes are managed by clinical staff.
+        </p>
+        <Link to="/patients/$patientId" params={{ patientId }} className="text-sm text-[var(--teal)] hover:underline">
+          ← Back to patient
+        </Link>
+      </div>
+    );
+  }
 
   const readOnly = status === 'completed';
   const episodeCondition = patient?.primaryCondition || 'Episode of care';

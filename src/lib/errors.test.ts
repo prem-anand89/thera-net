@@ -33,6 +33,23 @@ describe('toFriendlyMessage', () => {
     ).toBe('A patient with this MR number already exists in this clinic.');
   });
 
+  it('gives an actionable message for an RLS rejection (e.g. editing a colleague\'s visit)', () => {
+    expect(
+      toFriendlyMessage(
+        postgrestError(
+          'new row violates row-level security policy (USING expression) for table "visits"',
+          '42501'
+        )
+      )
+    ).toBe("You don't have permission to save this change — it may belong to another therapist. Ask your admin if this looks wrong.");
+  });
+
+  it('falls back to the generic 42501 code message when the RLS wording doesn\'t match the pattern', () => {
+    expect(toFriendlyMessage(postgrestError('permission denied for table visits', '42501'))).toBe(
+      "You don't have permission to do that."
+    );
+  });
+
   it('falls back to the generic code message for an unrecognized 23505', () => {
     expect(toFriendlyMessage(postgrestError('duplicate key value violates unique constraint "some_other_key"', '23505'))).toBe(
       'That record already exists — check for a duplicate.'

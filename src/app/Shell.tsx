@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '@/lib/db';
+import { db, ALL_SYNCED_TABLES } from '@/lib/db';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { syncEngine } from '@/sync/engine';
 import { useSession } from './useSession';
@@ -48,16 +48,13 @@ export function Shell() {
       setSyncKicked(true);
     } else {
       // Clear local Dexie data when user signs out to prevent leaking
-      // cached data from one account to another
-      void db.clinics.clear();
-      void db.therapists.clear();
-      void db.service_catalog.clear();
-      void db.patients.clear();
-      void db.visits.clear();
-      void db.invoices.clear();
-      void db.invoice_payments.clear();
-      void db.payments.clear();
-      void db.settlements.clear();
+      // cached data from one account to another. Iterates every synced
+      // table (ALL_SYNCED_TABLES) rather than a hand-picked list, so a new
+      // table can't be added to the sync engine without also being cleared
+      // here — this list previously omitted consultation_notes,
+      // patient_module_enrollments, and expected_visits, leaving clinical
+      // notes readable in IndexedDB on a shared device after sign-out.
+      for (const table of ALL_SYNCED_TABLES) void db.table(table).clear();
       void db.outbox.clear();
       void db.meta.clear();
     }

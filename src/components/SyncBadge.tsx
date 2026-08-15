@@ -28,6 +28,15 @@ export function SyncBadge() {
           ? `${status.pending} pending`
           : 'Synced';
 
+  // A permission denial (RLS rejection) will never succeed by retrying —
+  // the row's ownership isn't going to change on its own. Everything else
+  // queued here (network blips, a transient constraint conflict) might
+  // clear on its own, so only this case gets "won't succeed" copy instead
+  // of "keeps retrying."
+  function isPermanentFailure(entry: OutboxEntry): boolean {
+    return entry.errorCode === '42501' || /row-level security policy/i.test(entry.error ?? '');
+  }
+
   async function discard(entry: OutboxEntry) {
     if (
       !confirm(
@@ -77,27 +86,31 @@ export function SyncBadge() {
           ) : (
             <>
               <p className="mt-2 text-xs text-[var(--muted)]">
-                These changes keep failing to reach the server. They retry automatically, so only
-                discard one if you're sure it's stuck for good (e.g. it references something that
-                no longer exists).
+                Most of these retry automatically and clear on their own. Anything labeled
+                <span className="font-medium text-[var(--rust)]"> won't succeed by retrying</span> needs a
+                discard, or an admin to fix the underlying permission.
               </p>
               <ul className="mt-2 max-h-64 space-y-2 overflow-y-auto">
-                {failed.map((e) => (
-                  <li key={e.seq} className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] p-2">
-                    <div className="text-xs font-medium text-[var(--rust)]">
-                      {e.table} · {new Date(e.ts).toLocaleString()}
-                    </div>
-                    <div className="mt-1 text-xs text-[var(--rust)]">
-                      {toFriendlyMessage(new Error(e.error ?? 'Unknown error'))}
-                    </div>
-                    <button
-                      className="mt-2 text-xs text-[var(--muted)] hover:text-[var(--rust)]"
-                      onClick={() => void discard(e)}
-                    >
-                      Discard
-                    </button>
-                  </li>
-                ))}
+                {failed.map((e) => {
+                  const permanent = isPermanentFailure(e);
+                  return (
+                    <li key={e.seq} className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] p-2">
+                      <div className="text-xs font-medium text-[var(--rust)]">
+                        {e.table} · {new Date(e.ts).toLocaleString()}
+                        {permanent && " · won't succeed by retrying"}
+                      </div>
+                      <div className="mt-1 text-xs text-[var(--rust)]">
+                        {toFriendlyMessage({ message: e.error ?? 'Unknown error', code: e.errorCode })}
+                      </div>
+                      <button
+                        className="mt-2 text-xs text-[var(--muted)] hover:text-[var(--rust)]"
+                        onClick={() => void discard(e)}
+                      >
+                        Discard
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </>
           )}

@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, consultationNoteService, invoiceService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
+import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY } from '@/domain/fiscalYear';
@@ -28,7 +29,8 @@ const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber'
  */
 export function PatientProfilePage() {
   const clinic = useClinic();
-  const { canBill } = usePermissions();
+  const { canBill, canViewClinicalNotes, isAdmin } = usePermissions();
+  const { myTherapistId } = useWorkspaceScope();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
   const [editOpen, setEditOpen] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
@@ -262,7 +264,14 @@ export function PatientProfilePage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         {/* Side column — rendered first on mobile for proper ordering */}
         <div className="order-1 space-y-4 lg:order-none lg:col-start-2">
-          <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />
+          {/* Front desk keeps read access to `notes` for the safety-flags
+              banner above (blood thinners, implants, pregnancy) — that's a
+              narrow derived subset, not clinical documentation. The full
+              note list/authoring entry point is gated separately, matching
+              canViewClinicalNotes's "reception has no clinical-documentation
+              need" (NoteEditorPage enforces the same gate for anyone who
+              navigates to a note URL directly). */}
+          {canViewClinicalNotes && <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />}
 
           <SideCard title="Care plan">
             {patientPackages.length === 0 ? (
@@ -349,7 +358,12 @@ export function PatientProfilePage() {
                     ),
                     invoiceId: v.invoiceId ?? null,
                     canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
-                    canDelete: !v.invoiceId,
+                    // Pre-flight mirror of visits_delete's RLS check
+                    // (is_clinic_admin or is_own_therapist) — a patient's
+                    // history is clinic-wide (any therapist can view it),
+                    // but only the visit's own therapist or an admin can
+                    // delete it.
+                    canDelete: !v.invoiceId && (isAdmin || v.therapistId === myTherapistId),
                     needsNote: v.clinicalStatus === 'pending',
                   };
                   return (

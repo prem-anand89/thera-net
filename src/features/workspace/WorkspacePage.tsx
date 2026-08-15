@@ -48,7 +48,12 @@ interface InvoicingTarget {
   isPackage: boolean;
 }
 
-function todayRowToCardData(row: TodayVisitRow, openPackageGroupIds: Set<string>): VisitCardData {
+function todayRowToCardData(
+  row: TodayVisitRow,
+  openPackageGroupIds: Set<string>,
+  isAdmin: boolean,
+  myTherapistId: string | undefined
+): VisitCardData {
   return {
     visitId: row.visitId,
     visitDate: new Date().toISOString().slice(0, 10),
@@ -65,7 +70,10 @@ function todayRowToCardData(row: TodayVisitRow, openPackageGroupIds: Set<string>
     paymentState: row.paymentState,
     invoiceId: row.invoiceId,
     canRepeat: Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId)),
-    canDelete: !row.invoiceId,
+    // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
+    // is_own_therapist). front_desk is never either, so this always comes
+    // out false for them — matching RLS, which rejects their delete too.
+    canDelete: !row.invoiceId && (isAdmin || row.therapistId === myTherapistId),
     needsNote: row.needsNote,
   };
 }
@@ -233,6 +241,10 @@ export function WorkspacePage() {
         </Link>
       </div>
 
+      {scope.isUnlinkedTherapist && (
+        <ErrorNote message="Your login isn't linked to a therapist record yet, so today's visits and packages aren't showing here. Ask your admin to set it from Settings → Team → Service roster → Linked login." />
+      )}
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
         {clinic.enableExpectedToday && <StatTile label="Expected" value={expectedToday?.length ?? 0} />}
         <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
@@ -383,7 +395,9 @@ export function WorkspacePage() {
           </p>
         ) : (
           <ResponsiveVisitList
-            rows={today.visits.map((row) => todayRowToCardData(row, openPackageGroupIds))}
+            rows={today.visits.map((row) =>
+              todayRowToCardData(row, openPackageGroupIds, scope.isAdmin, scope.myTherapistId)
+            )}
             showDate={false}
             showPatient={true}
             onInvoice={(row) => openInvoiceFor(row)}
