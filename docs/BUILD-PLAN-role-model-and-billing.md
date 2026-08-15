@@ -191,10 +191,41 @@ Verified against the repo during the review, not assumptions:
 - Verified: typecheck, lint, vitest (231 passed), production build all
   clean.
 
-### PR 14 — Nav restructure + Reports rename
-- `InsightsPage` → Reports, Dashboard as first tab.
-- Nav becomes role-aware per decision 7; Ledger sub-tabs become URL-addressable (`?tab=`) so the `/invoices` and `/reports` redirects from PR 8 can land on the correct sub-tab instead of always Visits.
-- Nav: `Workspace | Ledger | Patients | Reports | Settings`, filtered by role and `billingEnabled`/`invoicingAccess`.
+### PR 14 — Nav restructure + Reports rename — SHIPPED
+- `Shell.tsx`'s nav label renamed "Insights" → "Reports". Route path
+  stays `/insights` — `/reports` is already the Ledger-sub-tab redirect
+  and can't be reused. Same rename-only-where-it-matters treatment as
+  `LedgerPage`/`SettingsPage` from PR 8.
+- **Resolved a doc-internal tension**, not built as literally written:
+  decision 8's prose ("Reports is what you read periodically — overview,
+  monthly statement, settlements") reads as moving the monthly-statement
+  generator out of Ledger and under Reports. But this PR's own bullet
+  list explicitly wants the `/reports` redirect to land on a *Ledger*
+  sub-tab — those can't both be true if the generator moves out of
+  Ledger. Followed the concrete bullet list: `ReportsPage.tsx` (the
+  monthly-statement generator) stays exactly where PR 8 put it, as
+  Ledger's Reports sub-tab. "Dashboard as first tab" was already true
+  going in (PR 8 already dropped Insights' old tab switcher down to just
+  Dashboard) — no single-item tab bar added around it, since a tab you
+  can't switch away from isn't an improvement.
+- The concrete, valuable piece: Ledger's Visits/Invoices/Reports
+  sub-tabs are now URL-addressable via a `tab` search param on `/ledger`
+  (validated against a fixed set, same pattern as the existing
+  `patientId` param) — the URL is now the source of truth for which
+  sub-tab shows, replacing local `useState`. The `/reports` and
+  `/invoices` redirects from PR 8 now set `tab: 'reports'`/`tab:
+  'invoices'`, so an old bookmark lands on the right sub-tab instead of
+  always defaulting to Visits like it has since PR 8. Tab switches use
+  `replace: true` so clicking through tabs doesn't pile up back-history
+  entries. PR 13's invoicing-access-changed-mid-session guard now
+  navigates (clearing the URL's `tab`) instead of calling local
+  `setState`, since there's no local state left.
+- Nav role-awareness ("filtered by role and `billingEnabled`/
+  `invoicingAccess`") was already fully satisfied by prior PRs —
+  Settings hides for non-admins (PR 10), the Invoices sub-tab hides
+  without billing access (PR 13). Nothing new needed here.
+- Verified: typecheck, lint, vitest (231 passed), production build all
+  clean.
 
 ### PR 15 — Therapist comparison unlock
 - `showTherapistComparison` toggle.
