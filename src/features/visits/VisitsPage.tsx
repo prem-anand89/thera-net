@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, invoiceService, paymentService, visitService, patientService } from '@/services';
 import { db } from '@/lib/db';
+import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, monthName, formatDateDMY } from '@/domain/fiscalYear';
+import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import {
   clinicBillingConfig,
+  clinicShareLabels,
   referringSourceDetailLabel,
   REFERRING_SOURCE_LABELS,
   type Patient,
@@ -182,7 +185,7 @@ interface InvoicingTarget {
 
 export function VisitsPage() {
   const clinic = useClinic();
-  const { therapistSplit } = clinicBillingConfig(clinic);
+  const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string };
 
@@ -286,6 +289,63 @@ export function VisitsPage() {
       ),
     [visits]
   );
+
+  // Describes the currently-applied filter so a downloaded CSV is never
+  // ambiguous about what it's a snapshot of.
+  const filterDescription = useMemo(() => {
+    const dateLabel = DATE_PRESETS.find((p) => p.key === datePreset)?.label ?? 'Custom';
+    const rangeText =
+      from && to
+        ? `${formatDateDMY(from)}–${formatDateDMY(to)}`
+        : from
+          ? `from ${formatDateDMY(from)}`
+          : to
+            ? `through ${formatDateDMY(to)}`
+            : 'all dates';
+    const therapistText = therapistId ? (therapistName.get(therapistId) ?? 'Unknown') : 'All';
+    const patientText = filteredPatient ? `${filteredPatient.name} (${filteredPatient.mrno})` : 'All';
+    return `Ledger export — ${dateLabel} (${rangeText}) · Therapist: ${therapistText} · Patient: ${patientText} · generated ${new Date().toLocaleString()}`;
+  }, [datePreset, from, to, therapistId, therapistName, filteredPatient]);
+
+  function downloadCsv() {
+    const rows: VisitsCsvRow[] = (visits ?? []).map((v) => ({
+      visitId: v.id,
+      visitDate: v.visitDate,
+      patientName: patientById.get(v.patientId)?.name ?? '—',
+      mrno: patientById.get(v.patientId)?.mrno ?? '—',
+      therapistName: therapistName.get(v.therapistId) ?? '—',
+      serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
+      condition: v.condition,
+      billPaise: v.actualBillPaise,
+      bmSharePaise: v.bmSharePaise,
+      postTaxPaise: v.postTaxPaise,
+      invoiced: v.invoiceId != null,
+    }));
+    const csv = visitsToCsv(rows, {
+      filterDescription,
+      hospitalSplit,
+      ownShareLabel: clinicShareLabels(clinic).own,
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${clinic.invoicePrefix}-ledger-${toIsoDate(new Date())}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Sync-basis caption: unsynced local changes take priority over a
+  // last-sync timestamp, since "as of 14:02" would understate what's
+  // actually showing if newer edits are still queued.
+  const syncSnapshot = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
+  const unsyncedVisitCount = useLiveQuery(() => db.outbox.filter((e) => e.table === 'visits').count(), []) ?? 0;
+  const syncCaption =
+    unsyncedVisitCount > 0
+      ? `Includes ${unsyncedVisitCount} unsynced visit${unsyncedVisitCount === 1 ? '' : 's'}.`
+      : syncSnapshot.lastSyncAt
+        ? `As of last sync ${new Date(syncSnapshot.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
+        : null;
 
   async function issue() {
     if (!invoicing) return;
@@ -421,8 +481,13 @@ export function VisitsPage() {
                   </Field>
                 </div>
               )}
+              <button className={btnSecondary} disabled={!visits?.length} onClick={downloadCsv}>
+                Export CSV
+              </button>
             </div>
           </div>
+
+          {syncCaption && <p className="text-xs text-[var(--slate)]">{syncCaption}</p>}
 
           {filteredPatient && <PatientOverview patient={filteredPatient} />}
         </>
@@ -538,7 +603,7 @@ export function VisitsPage() {
               </div>
             );
           })}
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm font-semibold text-[var(--ink)]">
+          <div className="sticky bottom-0 z-10 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm font-semibold text-[var(--ink)] shadow-[0_-2px_6px_rgba(0,0,0,0.06)]">
             Totals: {visits.length} visit{visits.length === 1 ? '' : 's'} · {formatINR(totals.bill)}
           </div>
         </div>
