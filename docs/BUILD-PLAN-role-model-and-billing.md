@@ -153,11 +153,43 @@ Verified against the repo during the review, not assumptions:
 - Verified: typecheck, lint, vitest (231 passed, 9 new), production
   build all clean.
 
-### PR 13 — Billing access toggle
-- `billingEnabled`, `invoicingAccess` on `clinics`.
-- Enforcement inside `issue_invoice()`.
-- New Visit's payment-capture step conditionally skipped per decision 5.
-- One-time transition banner when an admin flips `invoicingAccess` and a therapist who was billing loses the tab (sourced from a settings-change diff, not a permanent UI element).
+### PR 13 — Billing access toggle — SHIPPED
+- `billingEnabled`, `invoicingAccess` (`'everyone' | 'billing_staff'`) added
+  as plain columns on `clinics`, not the existing `clinic_module_settings`/
+  `can_use_module()` Tier-1+Tier-2 mechanism that models the same shape —
+  considered it (`'invoicing'` is already a registered module key), but it
+  has zero client-side integration (no Dexie table, repo, or sync) and
+  standing that up is real, separate scope belonging to the assessment-
+  module gating it was built for, not something to bolt this onto.
+- Enforcement inside `issue_invoice()`, reading both fields off the same
+  `clinics` row already queried for `invoice_prefix`. Functionally
+  verified (not just compiled) against a throwaway local Postgres: a
+  plain therapist rejected under `billing_staff`, front desk succeeds, an
+  admin rejected outright when `billing_enabled` is false, default
+  `'everyone'` unchanged.
+- New `usePermissions().canBill`. Ledger's Invoices tab hides when it's
+  false (with a live-sync edge case handled — flipping the setting on
+  another device doesn't strand someone on a tab that just vanished).
+  `VisitCard`'s clickable "Collect ₹X" becomes a static "Awaiting billing"
+  pill for a non-billing viewer, threaded through
+  `ResponsiveVisitList`/`SharedVisitCard`/`VisitTable` into all three real
+  consumers — Ledger, Workspace's Seen-today, and Patient Profile's visit
+  history (which also had its own bulk-invoice checkbox, gated the same
+  way; a local `canInvoice` variable there was renamed to
+  `eligibleForInvoicing` to stop it colliding with the new prop).
+- New Visit's payment-capture step conditionally skipped per decision 5 —
+  with a one-line note explaining why instead of the field silently
+  vanishing. The visit still saves with its computed bill amount, just
+  with no payment logged.
+- Settings gained a "Billing module" on/off select and a "Who can issue
+  invoices" select (shown only when the module is on).
+- **Deferred, not silently dropped**: the one-time transition banner ("an
+  admin flipped `invoicingAccess` and you lost the tab"). Needs a toast/
+  banner primitive that doesn't exist in this codebase yet, plus
+  cross-session change-detection state — real, separable scope, not core
+  to the access-control fix itself.
+- Verified: typecheck, lint, vitest (231 passed), production build all
+  clean.
 
 ### PR 14 — Nav restructure + Reports rename
 - `InsightsPage` → Reports, Dashboard as first tab.
