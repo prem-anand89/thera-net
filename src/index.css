@@ -150,18 +150,37 @@ body {
   background: var(--amber-light); color: var(--amber); font-size: 11.5px; font-weight: 500;
   border-radius: 10px; padding: 8px 11px; margin-bottom: 12px;
 }
+/* ---------------------------------------------------------------------------
+   Form primitives — kept in exact visual lockstep with the Tailwind
+   equivalents in components/ui.tsx (`Field`, `inputCls`, `SectionCard`,
+   `btnPrimary`, `btnSecondary`). NoteEditorPage/BodyChart are written
+   against these plain-CSS classes while every other screen uses the
+   Tailwind ones, so any drift here shows up as two visibly different form
+   styles in the same app. Values below mirror ui.tsx literally:
+     label  = `mb-1 block text-xs font-medium text-[var(--muted)]`
+     input  = `w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm
+               focus:border-[var(--teal)] disabled:bg-[var(--paper)]`
+   If ui.tsx changes, change these too.
+   --------------------------------------------------------------------------- */
 .field-block { margin-bottom: 10px; }
-.field-block label {
-  display: block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em;
-  text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+.field-block label,
+.field-label {
+  display: block; font-size: 12px; font-weight: 500; letter-spacing: normal;
+  text-transform: none; color: var(--muted); margin-bottom: 4px;
 }
-.field-block input, .field-block select, .field-block textarea {
-  width: 100%; font-family: var(--font-sans); font-size: 13px; color: var(--ink);
-  background: var(--paper); border: 1px solid var(--border); border-radius: 8px;
-  padding: 8px 10px; box-sizing: border-box;
+.field-block input, .field-block select, .field-block textarea,
+.field-input {
+  width: 100%; font-family: var(--font-sans); font-size: 14px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 12px; box-sizing: border-box;
 }
-.field-block input:disabled, .field-block select:disabled, .field-block textarea:disabled {
-  opacity: 0.5; cursor: not-allowed;
+.field-block input:focus, .field-block select:focus, .field-block textarea:focus,
+.field-input:focus {
+  outline: none; border-color: var(--teal);
+}
+.field-block input:disabled, .field-block select:disabled, .field-block textarea:disabled,
+.field-input:disabled {
+  background: var(--paper); color: var(--muted); cursor: not-allowed;
 }
 .field-block textarea { resize: vertical; min-height: 50px; font-family: var(--font-sans); }
 .modal-shell { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow-2); overflow: hidden; }
@@ -171,50 +190,64 @@ body {
 .modal-close:hover { color: var(--ink); }
 .modal-body { padding: 16px 18px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; padding: 0 18px 16px; border-top: 1px solid var(--border); }
-.field-input { border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px; font-size: 14px; font-family: var(--font-sans); color: var(--ink); background: var(--surface); width: 100%; box-sizing: border-box; }
-.field-input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal-light); }
-.field-input:disabled { background: var(--paper); color: var(--muted); cursor: not-allowed; }
-.field-label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.03em; }
+/* Mirrors `btnSecondary` / `btnPrimary` in ui.tsx — these were pills
+   (border-radius 999px, 12.5px) while every Tailwind button in the app is
+   a 6px-radius 14px rounded rect, so the note editor's buttons read as a
+   different app. */
 .btn-secondary {
-  background: none; border: 1px solid var(--border); color: var(--ink);
-  font-size: 12.5px; font-weight: 500; border-radius: 999px; padding: 8px 15px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+  font-size: 14px; font-weight: 500; border-radius: 6px; padding: 8px 16px;
   cursor: pointer; font-family: var(--font-sans);
 }
+.btn-secondary:hover { background: var(--paper); }
+.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-primary {
   background: var(--teal); color: #fff; border: none;
-  font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 8px 16px;
+  font-size: 14px; font-weight: 500; border-radius: 6px; padding: 8px 16px;
   cursor: pointer; font-family: var(--font-sans);
 }
+.btn-primary:hover { background: var(--teal-strong); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .panel-close { background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 2px 6px; }
 
+/* Mirrors `SectionCard` in ui.tsx (rounded-2xl / p-5 / shadow-sm). */
 .setup-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
-  padding: 14px; box-shadow: var(--shadow-1);
-}
-@media (min-width: 720px) {
-  .setup-card { padding: 16px; }
-}
-.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (min-width: 720px) {
-  .field-row { gap: 12px; }
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 20px; box-shadow: var(--shadow-1);
 }
 
-.setup-accordion { display: flex; flex-direction: column; gap: 8px; }
+/* Was `1fr 1fr` unconditionally — two input columns on a 360px phone,
+   which is why fields overflowed the card and got clipped on mobile.
+   Now matches the `grid-cols-1 sm:grid-cols-2` pattern the Tailwind forms
+   use, at Tailwind's own sm: breakpoint so both stacks flip together. */
+.field-row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 640px) {
+  .field-row { grid-template-columns: 1fr 1fr; }
+}
+
+/* Title/subtitle header for the always-open blocks (General health,
+   Attending therapist) that sit outside the accordion — deliberately
+   identical to .setup-section-head's typography so they read as the same
+   kind of thing, minus the chevron since they don't collapse. */
+.ne-block-head { margin-bottom: 14px; }
+.ne-block-head h3 { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin: 0; }
+.ne-block-head .sub { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
+
+.setup-accordion { display: flex; flex-direction: column; gap: 12px; }
 .setup-section {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
   box-shadow: var(--shadow-1); overflow: hidden;
 }
 .setup-section-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 13px 14px; cursor: pointer; background: none; border: none; width: 100%; text-align: left;
+  padding: 16px 20px; cursor: pointer; background: none; border: none; width: 100%; text-align: left;
 }
-.setup-section-head h3 { font-family: var(--font-display); font-size: 14px; font-weight: 600; margin: 0; }
-.setup-section-head .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.setup-section-head h3 { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin: 0; }
+.setup-section-head .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .setup-section-head .chev { color: var(--muted); transition: transform 0.15s; font-size: 12px; }
 .setup-section.open .setup-section-head .chev { transform: rotate(90deg); }
-.setup-section-body { display: none; padding: 0 14px 14px; }
+.setup-section-body { display: none; padding: 0 20px 20px; }
 .setup-section.open .setup-section-body { display: block; }
 
 .empty-note { font-size: 13px; color: var(--muted); padding: 12px 2px; }
@@ -265,17 +298,21 @@ body {
 .carry-forward { background: var(--paper); border: 1px dashed var(--border); border-radius: 12px; padding: 10px 12px; font-size: 12px; color: var(--muted); }
 .carry-forward .cf-update { color: var(--teal-strong); font-weight: 600; cursor: pointer; background: none; border: none; padding: 0; font-family: var(--font-sans); font-size: 12px; }
 
-.screening-banner { border-radius: 14px; box-shadow: var(--shadow-1); overflow: hidden; }
-.screening-banner.clear { background: var(--moss-light); }
-.screening-banner.amber { background: var(--amber-light); }
-.screening-banner.red { background: var(--rust-light); }
-.sb-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 14px; cursor: pointer; font-size: 13px; font-weight: 600; background: none; border: none; width: 100%; text-align: left; }
+/* Same card geometry as .setup-section so screening sits in the same
+   visual rhythm as every other block on the note — it keeps its
+   status-tinted background (that colour IS the signal) but no longer has
+   its own radius/padding scale. */
+.screening-banner { border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-1); overflow: hidden; }
+.screening-banner.clear { background: var(--moss-light); border-color: transparent; }
+.screening-banner.amber { background: var(--amber-light); border-color: transparent; }
+.screening-banner.red { background: var(--rust-light); border-color: transparent; }
+.sb-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 16px 20px; cursor: pointer; font-size: 16px; font-weight: 600; font-family: var(--font-display); background: none; border: none; width: 100%; text-align: left; }
 .screening-banner.clear .sb-head { color: var(--moss); }
 .screening-banner.amber .sb-head { color: var(--amber); }
 .screening-banner.red .sb-head { color: var(--rust); }
 .sb-head .chev { transition: transform 0.15s; opacity: 0.7; }
 .screening-banner.open .sb-head .chev { transform: rotate(90deg); }
-.sb-body { display: none; padding: 0 14px 14px; }
+.sb-body { display: none; padding: 0 20px 20px; }
 .screening-banner.open .sb-body { display: block; }
 .sb-body .section-label { margin: 10px 0 6px; }
 .flag-row { display: flex; flex-wrap: wrap; gap: 6px; }
