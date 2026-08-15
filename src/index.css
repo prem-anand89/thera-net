@@ -90,13 +90,19 @@ body {
    PORT-PLAN.md §4.6). Class names mirror TheraNet-OS's mockup 1:1.
    ========================================================================== */
 
+/* Deliberately NOT sticky. It used to be `position: sticky; top: 0`, which
+   collided with Shell's app nav (also sticky at top:0, but z-10 vs this
+   z-2) -- they overlapped instead of stacking, so this header's back-link
+   sat *behind* the nav and unreachable, and the combined sticky chrome
+   (~110px) exceeded the 80px that NoteEditorPage's jump-nav (`md:top-20`)
+   and its sections (`scroll-mt-20`) both assume, cutting the first rail
+   item off the top and landing jumped-to sections under the header.
+   Non-sticky leaves the nav as the only sticky chrome (~57px), which both
+   80px offsets clear comfortably. */
 .app-header {
   padding: 16px 16px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--paper);
-  position: sticky;
-  top: 0;
-  z-index: 2;
 }
 .screen-title { font-family: var(--font-display); font-size: 21px; font-weight: 600; margin: 2px 0 0; }
 .screen-body { padding: 16px; display: flex; flex-direction: column; gap: 18px; max-width: 720px; margin: 0 auto; width: 100%; }

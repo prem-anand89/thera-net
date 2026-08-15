@@ -48,7 +48,10 @@ import {
 const SECTION_LABELS: Record<NoteSectionKey, string> = {
   chiefComplaint: 'Chief Complaint',
   history: 'History',
-  subjective: 'Subjective',
+  // "Pain & Body Chart", not "Subjective" — this section holds the pain
+  // profile and body chart specifically, and the rail now groups sections
+  // under SOAP headings where "Subjective" is the *group* name.
+  subjective: 'Pain & Body Chart',
   psfs: 'Functional Status',
   objective: 'Objective',
   treatment: 'Treatment',
@@ -56,6 +59,20 @@ const SECTION_LABELS: Record<NoteSectionKey, string> = {
   plan: 'Plan & Goals',
   outcome: 'Outcome Tracking',
 };
+
+/**
+ * Jump-nav grouping, following the SOAP structure a physiotherapy note is
+ * actually organized around — nine flat items in one undifferentiated list
+ * gave no sense of where you were in the note. Purely a rail-presentation
+ * concern: the section order and the accordion below are unchanged, and
+ * every NoteSectionKey appears exactly once (asserted at the bottom).
+ */
+const SECTION_GROUPS: { label: string; keys: NoteSectionKey[] }[] = [
+  { label: 'Subjective', keys: ['chiefComplaint', 'history', 'subjective', 'psfs'] },
+  { label: 'Objective', keys: ['objective'] },
+  { label: 'Plan', keys: ['treatment', 'hep', 'plan'] },
+  { label: 'Progress', keys: ['outcome'] },
+];
 
 /** empty=untouched, partial=in progress, complete=done, required-empty=the
  *  one field save() actually enforces (Chief Complaint's anatomical region). */
@@ -65,6 +82,14 @@ const STATUS_DOT: Record<SectionCompletion, string> = {
   complete: 'var(--moss)',
   'required-empty': 'var(--rust)',
 };
+
+// Fails the build if SECTION_GROUPS ever drifts from NOTE_SECTION_KEYS —
+// a section added to the note but missed here would silently vanish from
+// the jump-nav, which is exactly the kind of two-lists-must-agree gap that
+// has bitten this codebase before.
+if (SECTION_GROUPS.flatMap((g) => g.keys).length !== NOTE_SECTION_KEYS.length) {
+  throw new Error('SECTION_GROUPS is out of sync with NOTE_SECTION_KEYS');
+}
 
 /** How long a rail-click's scrollIntoView animation is given before the
  *  scroll-spy observer is trusted again — long enough that it doesn't
@@ -679,29 +704,43 @@ export function NoteEditorPage() {
         )}
 
         <div className="md:flex md:items-start md:gap-6">
-          <nav className="hidden md:sticky md:top-20 md:flex md:w-52 md:shrink-0 md:flex-col md:gap-0.5">
-            {NOTE_SECTION_KEYS.filter((key) => key !== 'outcome' || outcomeCards.length > 0).map((key) => {
-              const completion = sectionCompletion(key, payload);
+          <nav className="hidden md:sticky md:top-20 md:flex md:max-h-[calc(100vh-6rem)] md:w-52 md:shrink-0 md:flex-col md:gap-0.5 md:overflow-y-auto">
+            {SECTION_GROUPS.map((group) => {
+              // Outcome Tracking only exists once there's prior data to
+              // compare against — drop its whole group rather than leave a
+              // heading with nothing under it.
+              const keys = group.keys.filter((key) => key !== 'outcome' || outcomeCards.length > 0);
+              if (keys.length === 0) return null;
               return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => jumpToSection(key)}
-                  className="flex items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs font-medium"
-                  style={{
-                    background: activeSection === key ? 'var(--teal-light)' : 'transparent',
-                    color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
-                  }}
-                >
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: STATUS_DOT[completion] }} />
-                  {SECTION_LABELS[key]}
-                </button>
+                <div key={group.label} className="mb-1.5 last:mb-0">
+                  <p className="px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]/70">
+                    {group.label}
+                  </p>
+                  {keys.map((key) => {
+                    const completion = sectionCompletion(key, payload);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => jumpToSection(key)}
+                        className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs font-medium"
+                        style={{
+                          background: activeSection === key ? 'var(--teal-light)' : 'transparent',
+                          color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
+                        }}
+                      >
+                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: STATUS_DOT[completion] }} />
+                        {SECTION_LABELS[key]}
+                      </button>
+                    );
+                  })}
+                </div>
               );
             })}
             <button
               type="button"
               onClick={toggleCollapseAll}
-              className="mt-2 px-3 text-left text-xs text-[var(--teal)] hover:underline"
+              className="mt-2 shrink-0 px-3 text-left text-xs text-[var(--teal)] hover:underline"
             >
               {openSections.size > 0 ? 'Collapse all' : 'Expand all'}
             </button>
