@@ -1,3 +1,4 @@
+import { useClinic } from './clinicContext';
 import { useWorkspaceScope } from './useWorkspaceScope';
 
 export interface Permissions {
@@ -11,6 +12,14 @@ export interface Permissions {
   canViewPayouts: boolean;
   /** Clinical consultation notes — reception has no clinical-documentation need. */
   canViewClinicalNotes: boolean;
+  /**
+   * Issuing invoices / collecting payment at point of care. False for
+   * everyone when `clinic.billingEnabled` is off (the clinic doesn't use
+   * the module at all); otherwise false for a plain therapist when
+   * `clinic.invoicingAccess` is 'billing_staff'. Display-level only — the
+   * real boundary is `issue_invoice()`'s own check on the same two fields.
+   */
+  canBill: boolean;
 }
 
 /**
@@ -24,7 +33,10 @@ export interface Permissions {
  * a different question from what this hook answers.
  */
 export function usePermissions(): Permissions {
+  const clinic = useClinic();
   const scope = useWorkspaceScope();
+  const billingEnabled = clinic.billingEnabled ?? true;
+  const invoicingAccess = clinic.invoicingAccess ?? 'everyone';
   return {
     role: scope.role,
     isAdmin: scope.isAdmin,
@@ -32,5 +44,6 @@ export function usePermissions(): Permissions {
     canManageTeam: scope.isAdmin,
     canViewPayouts: scope.isAdmin,
     canViewClinicalNotes: !scope.isFrontDesk,
+    canBill: billingEnabled && (invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk),
   };
 }

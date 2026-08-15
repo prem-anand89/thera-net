@@ -313,11 +313,17 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
   );
 }
 
-type BillingFields = Pick<Clinic, 'invoicePrefix' | 'gstNo' | 'fyStartMonth'>;
+type BillingFields = Pick<Clinic, 'invoicePrefix' | 'gstNo' | 'fyStartMonth' | 'billingEnabled' | 'invoicingAccess'>;
 
 function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<BillingFields>(
-    (c) => ({ invoicePrefix: c.invoicePrefix, gstNo: c.gstNo, fyStartMonth: c.fyStartMonth }),
+    (c) => ({
+      invoicePrefix: c.invoicePrefix,
+      gstNo: c.gstNo,
+      fyStartMonth: c.fyStartMonth,
+      billingEnabled: c.billingEnabled ?? true,
+      invoicingAccess: c.invoicingAccess ?? 'everyone',
+    }),
     onDirtyChange
   );
 
@@ -344,6 +350,42 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             onChange={(e) => set({ fyStartMonth: Number(e.target.value) })}
           />
         </Field>
+        <Field
+          label={
+            <>
+              Billing module
+              <InfoTip text="Off for clinics that bill entirely through a partner hospital's own system — hides Invoices everywhere, for everyone, regardless of role." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.billingEnabled ? 'yes' : 'no'}
+            onChange={(e) => set({ billingEnabled: e.target.value === 'yes' })}
+          >
+            <option value="yes">On</option>
+            <option value="no">Off</option>
+          </select>
+        </Field>
+        {form.billingEnabled && (
+          <Field
+            label={
+              <>
+                Who can issue invoices
+                <InfoTip text="Everyone: any team member can bill a visit. Front desk and admins only: therapists log visits and clinical notes; billing happens separately." />
+              </>
+            }
+          >
+            <select
+              className={inputCls}
+              value={form.invoicingAccess}
+              onChange={(e) => set({ invoicingAccess: e.target.value as 'everyone' | 'billing_staff' })}
+            >
+              <option value="everyone">Everyone</option>
+              <option value="billing_staff">Front desk and admins only</option>
+            </select>
+          </Field>
+        )}
       </div>
       <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
     </SectionCard>

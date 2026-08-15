@@ -3,6 +3,7 @@ import { Link, useParams } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, consultationNoteService, invoiceService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { usePermissions } from '@/app/usePermissions';
 import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY } from '@/domain/fiscalYear';
@@ -27,6 +28,7 @@ const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber'
  */
 export function PatientProfilePage() {
   const clinic = useClinic();
+  const { canBill } = usePermissions();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
   const [editOpen, setEditOpen] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
@@ -325,7 +327,7 @@ export function PatientProfilePage() {
               <ul className="divide-y divide-[var(--border)]">
                 {visitRows.map((v) => {
                   const isSelected = selectedVisitIds.has(v.id);
-                  const canInvoice = !v.invoiceId;
+                  const eligibleForInvoicing = !v.invoiceId;
                   const cardData: VisitCardData = {
                     visitId: v.id,
                     visitDate: v.visitDate,
@@ -352,7 +354,7 @@ export function PatientProfilePage() {
                   };
                   return (
                     <li key={v.id} className="flex items-start gap-3 px-3">
-                      {canInvoice && (
+                      {eligibleForInvoicing && canBill && (
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -369,6 +371,7 @@ export function PatientProfilePage() {
                           onInvoice={() => {}}
                           onEditPatient={() => setEditPatientId(v.patientId)}
                           onDelete={() => handleVisitDelete(v.id)}
+                          canInvoice={canBill}
                         />
                       </div>
                     </li>

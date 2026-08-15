@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, visitService, patientService, directPaymentService, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
+import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { DUPLICATE_NAME_THRESHOLD, nameSimilarity } from '@/domain/nameSimilarity';
@@ -56,6 +57,7 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
 
 export function NewVisitPage() {
   const clinic = useClinic();
+  const { canBill } = usePermissions();
   const navigate = useNavigate();
   const { session } = useSession();
   const search = useSearch({ strict: false }) as {
@@ -372,7 +374,7 @@ export function NewVisitPage() {
               packageTotal: selectedPackage!.packageTotal,
             }
           : {}),
-        ...(billPaise > 0 && paymentChoice === 'pending'
+        ...(billPaise > 0 && canBill && paymentChoice === 'pending'
           ? { pendingPaymentNote: pendingNote || null }
           : {}),
       });
@@ -381,7 +383,10 @@ export function NewVisitPage() {
       // immediately so it counts toward "collected" without needing an
       // invoice. A ₹0 continuation session or an explicit "collect later"
       // choice skips this; the latter shows up on Workspace's pending list.
-      if (billPaise > 0 && paymentChoice === 'paid') {
+      // Skipped entirely without billing access — the visit saves as
+      // genuinely unbilled, for whoever does handle billing to collect
+      // from later (same Workspace pending-list path).
+      if (billPaise > 0 && canBill && paymentChoice === 'paid') {
         await directPaymentService.logPayment(clinic.id, visit.id, billPaise, paymentMethod, visitDate, null);
       }
 
@@ -785,7 +790,13 @@ export function NewVisitPage() {
             </Field>
           )}
 
-          {billPaise > 0 && (
+          {billPaise > 0 && !canBill && (
+            <p className="text-xs text-[var(--muted)]">
+              This visit will be saved as unbilled — billing is handled separately at this clinic.
+            </p>
+          )}
+
+          {billPaise > 0 && canBill && (
             <Field label="Payment">
               <div className="flex gap-4 text-sm">
                 <label className="flex items-center gap-2">

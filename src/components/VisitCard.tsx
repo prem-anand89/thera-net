@@ -139,12 +139,20 @@ function RowActionsMenu({
 
 /** Bill amount + payment-status chip/action + invoiced link + note nudge —
  *  shared between the card's vertical stack and the table's status cell. */
-function PaymentStatusDisplay({ data, onInvoice }: { data: VisitCardData; onInvoice: () => void }) {
+function PaymentStatusDisplay({
+  data,
+  onInvoice,
+  canInvoice,
+}: {
+  data: VisitCardData;
+  onInvoice: () => void;
+  canInvoice: boolean;
+}) {
   const chip = PAYMENT_CHIP[data.paymentState];
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
       <div className="font-num text-sm text-[var(--ink)]">{formatINR(data.billPaise)}</div>
-      {chip.actionLabel ? (
+      {chip.actionLabel && canInvoice ? (
         <button
           type="button"
           className="rounded-full bg-[var(--rust-light)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:opacity-80"
@@ -152,6 +160,10 @@ function PaymentStatusDisplay({ data, onInvoice }: { data: VisitCardData; onInvo
         >
           {chip.actionLabel(formatINR(data.billPaise))}
         </button>
+      ) : chip.actionLabel ? (
+        // Same state as the clickable case above, but this viewer can't bill
+        // — a plain label, not a greyed-out button pretending to be one.
+        <Pill tone={chip.tone}>Awaiting billing</Pill>
       ) : (
         <Pill tone={chip.tone}>{chip.label(formatINR(data.billPaise))}</Pill>
       )}
@@ -185,6 +197,7 @@ export function SharedVisitCard({
   onEditPatient,
   onSplit,
   onDelete,
+  canInvoice = true,
 }: {
   data: VisitCardData;
   showDate: boolean;
@@ -193,6 +206,8 @@ export function SharedVisitCard({
   onEditPatient?: () => void;
   onSplit?: () => void;
   onDelete: () => void;
+  /** Whether this viewer can issue an invoice / collect payment. Defaults to true for callers that don't gate billing access. */
+  canInvoice?: boolean;
 }) {
   const initials = showPatient
     ? data.patientName
@@ -254,7 +269,7 @@ export function SharedVisitCard({
         </div>
       </div>
 
-      <PaymentStatusDisplay data={data} onInvoice={onInvoice} />
+      <PaymentStatusDisplay data={data} onInvoice={onInvoice} canInvoice={canInvoice} />
       <RowActionsMenu data={data} onEditPatient={onEditPatient} onSplit={onSplit} onDelete={onDelete} />
     </div>
   );
@@ -274,6 +289,7 @@ function VisitTable({
   onEditPatient,
   onSplit,
   onDelete,
+  canInvoice,
 }: {
   rows: VisitCardData[];
   showDate: boolean;
@@ -284,6 +300,7 @@ function VisitTable({
   onEditPatient?: (row: VisitCardData) => void;
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
+  canInvoice: boolean;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -374,7 +391,7 @@ function VisitTable({
                 )}
                 <td className={tdNum}>{formatINR(row.billPaise)}</td>
                 <td className={td}>
-                  <PaymentStatusDisplay data={row} onInvoice={() => onInvoice(row)} />
+                  <PaymentStatusDisplay data={row} onInvoice={() => onInvoice(row)} canInvoice={canInvoice} />
                 </td>
                 <td className={td}>
                   <RowActionsMenu
@@ -483,6 +500,7 @@ export function ResponsiveVisitList({
   onEditPatient,
   onSplit,
   onDelete,
+  canInvoice = true,
 }: {
   rows: VisitCardData[];
   showDate: boolean;
@@ -492,6 +510,8 @@ export function ResponsiveVisitList({
   onEditPatient?: (row: VisitCardData) => void;
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
+  /** Whether this viewer can issue an invoice / collect payment. Defaults to true for callers that don't gate billing access. */
+  canInvoice?: boolean;
 }) {
   const { prefs, setPref } = useVisitColumnPrefs();
 
@@ -519,6 +539,7 @@ export function ResponsiveVisitList({
                     onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
+                    canInvoice={canInvoice}
                   />
                 ))}
               </div>
@@ -536,6 +557,7 @@ export function ResponsiveVisitList({
                 onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
                 onSplit={onSplit ? () => onSplit(row) : undefined}
                 onDelete={() => onDelete(row)}
+                canInvoice={canInvoice}
               />
             ))}
           </div>
@@ -554,6 +576,7 @@ export function ResponsiveVisitList({
           onEditPatient={onEditPatient}
           onSplit={onSplit}
           onDelete={onDelete}
+          canInvoice={canInvoice}
         />
       </div>
     </>

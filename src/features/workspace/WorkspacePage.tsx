@@ -11,6 +11,7 @@ import {
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import type { ExpectedVisit, PaymentMethod, PaymentMode } from '@/domain/types';
 import type { PendingWorkItem, TodayVisitRow } from '@/services/dashboardService';
@@ -72,6 +73,7 @@ function todayRowToCardData(row: TodayVisitRow, openPackageGroupIds: Set<string>
 export function WorkspacePage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
+  const { canBill } = usePermissions();
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
   const [paidNow, setPaidNow] = useState(true);
@@ -389,6 +391,7 @@ export function WorkspacePage() {
             onDelete={(row) => {
               if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
             }}
+            canInvoice={canBill}
           />
         )}
       </SectionCard>

@@ -1,10 +1,11 @@
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, invoiceService, paymentService, visitService } from '@/services';
 import { db } from '@/lib/db';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
+import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
@@ -112,11 +113,17 @@ interface InvoicingTarget {
 
 export function VisitsPage() {
   const clinic = useClinic();
+  const { canBill } = usePermissions();
   const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string };
 
   const [recordsView, setRecordsView] = useState<RecordsView>('visits');
+  // An admin flipping invoicingAccess mid-session (synced live from another
+  // device) shouldn't leave someone stranded on a tab that just disappeared.
+  useEffect(() => {
+    if (recordsView === 'invoices' && !canBill) setRecordsView('visits');
+  }, [recordsView, canBill]);
   const [from, setFrom] = useState(() => toIsoDate(new Date(Date.now() - 6 * 86400000)));
   const [to, setTo] = useState(() => toIsoDate(new Date()));
   const [datePreset, setDatePreset] = useState<DatePreset>('week');
@@ -382,7 +389,9 @@ export function VisitsPage() {
               { key: 'invoices', label: 'Invoices' },
               { key: 'reports', label: 'Reports' },
             ] as const
-          ).map((v) => (
+          )
+            .filter((v) => v.key !== 'invoices' || canBill)
+            .map((v) => (
             <button
               key={v.key}
               type="button"
@@ -614,6 +623,7 @@ export function VisitsPage() {
                 onDelete={(row) => {
                   if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
                 }}
+                canInvoice={canBill}
               />
               <div className="sticky bottom-0 z-10 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm font-semibold text-[var(--ink)] shadow-[0_-2px_6px_rgba(0,0,0,0.06)]">
                 Totals: {visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'} · Billed{' '}

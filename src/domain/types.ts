@@ -48,6 +48,14 @@ export interface Clinic {
   visitColumnPrefs?: Partial<Record<VisitColumnKey, boolean>> | null;
   /** Whether the clinical documentation module (consultation notes, screening, consent) is on. */
   clinicalDocsEnabled?: boolean;
+  /** Whether this clinic uses the invoice module at all. Optional so older cached rows default to true (original behavior). */
+  billingEnabled?: boolean;
+  /**
+   * Who may issue invoices when billing is on. 'everyone' = any clinical
+   * member (original behavior). 'billing_staff' = admin + front_desk only.
+   * Optional so older cached rows default to 'everyone'.
+   */
+  invoicingAccess?: 'everyone' | 'billing_staff';
   /**
    * Prefix for auto-generated walk-in MRNOs (format `{prefix}-YYMMDD-XXX`).
    * Optional so older cached rows default to 'W' (original behavior).
