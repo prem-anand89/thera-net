@@ -20,7 +20,7 @@ Verified against the repo during the review, not assumptions:
 | Settings | `SetupPage.tsx` has **zero role gating** — any signed-in clinic member can edit prices, therapist splits, and clinic financial config today. Pre-existing bug, not a hypothetical. |
 | Manual invoices | `InvoicesPage.tsx:105-115`'s "Add invoice" flow calls `visitService.create()` with `condition: 'Manual invoice'` first. That synthetic visit gets full revenue-split math and flows into therapist payouts, the therapist comparison chart, and the hospital-facing Monthly Ledger as a real patient encounter. Noted here as a related, currently out-of-sequence finding — see "Deferred" below. |
 | Ledger payment state | `visitToCardData` derives payment state from `invoiceId` alone (`VisitsPage.tsx`: `v.invoiceId ? 'paid' : v.actualBillPaise === 0 ? 'zero_session' : 'uninvoiced'`). A visit paid in cash with no invoice shows as **uninvoiced** (reads as unpaid); a visit invoiced but marked outstanding shows as **paid**. Both wrong. The `payments` table (`supabase/migrations/20260719000001_direct_payments.sql`) and `directPaymentService.logPayment` already capture cash/UPI collected without an invoice — the gap is that the Ledger UI never reads it. |
-| Responsive breakpoints | Two incompatible systems exist. `ResponsiveVisitList` (`VisitCard.tsx:472`) splits at Tailwind's `md:` (768px). A separate, older `.mobile-only`/`.desktop-only` CSS system (`index.css:288-312`, breakpoints at 720px/1000px) is used by `NoteEditorPage.tsx`. iPad Mini portrait is 744px — below `md:`, so it gets the phone card layout in Ledger/Workspace, but lands in the older system's 720–999 "tablet" bucket in the Note Editor. Same device, two different UIs. `.setup-accordion` (`index.css:185`) is dead CSS — referenced in a comment but not used by `SetupPage.tsx`, left over from before PR 3's left-rail rebuild. |
+| Responsive breakpoints | `ResponsiveVisitList` (`VisitCard.tsx:472`) splits at Tailwind's `md:` (768px). iPad Mini portrait is 744px — below `md:`, so it gets the phone card layout in Ledger/Workspace. **Corrected during PR 11**: this row originally also claimed `NoteEditorPage.tsx` runs a second, conflicting breakpoint system via `.mobile-only`/`.desktop-only` (720px/1000px) — false. Those two classes are defined in `index.css` but have zero usages anywhere in `src/`; `NoteEditorPage.tsx` has no `@media`/`matchMedia` logic of its own at all. The real (narrower) version of this finding: `.screen-body`/`.modal-card`, which *are* live (used by `NoteEditorPage.tsx` and `AddPatientDetailsModal.tsx`), had their own plain-CSS tablet threshold at 720px — which happened to already catch iPad Mini correctly, unlike `md:`. `.setup-accordion` (`index.css:185`) is **not** dead — also corrected during PR 11 — it's a live, single-use static style in `NoteEditorPage.tsx`, just confusingly named; not touched. |
 | Patients table | `PatientsPage.tsx` has no card view at all — `overflow-x-auto` at every width. The PR 6 responsive pattern was never extended to it; PR 9 moved it verbatim. |
 
 ## Locked decisions
@@ -103,11 +103,28 @@ Verified against the repo during the review, not assumptions:
   patched — a new environment or CI-based from-scratch migration replay
   will hit this until it's addressed on purpose.
 
-### PR 11 — Responsive breakpoint standardization
-- `--breakpoint-tab: 46.5rem` in the Tailwind `@theme` block.
-- Migrate `VisitCard.tsx`, `SetupPage.tsx`, `WorkspacePage.tsx` from `md:` to `tab:`.
-- Retire `.mobile-only`/`.desktop-only` in `NoteEditorPage.tsx` onto the same standard; remove dead `.setup-accordion` CSS.
-- `PatientsPage.tsx` table gains a card view below `tab:`, reusing the `ResponsiveVisitList` split pattern (not necessarily the component itself, since patient rows aren't visit rows).
+### PR 11 — Responsive breakpoint standardization — SHIPPED
+- `--breakpoint-tab: 46.5rem` (744px) added to the Tailwind `@theme` block
+  in `index.css`. Migrated `VisitCard.tsx`, `SetupPage.tsx`,
+  `WorkspacePage.tsx` from `md:` to `tab:`.
+- **Correction, not what the plan bullet said**: there was no
+  `NoteEditorPage.tsx` breakpoint system to retire, and `.setup-accordion`
+  was not dead CSS — see the corrected Findings row above. What actually
+  shipped instead: removed `.mobile-only`/`.desktop-only` (confirmed zero
+  usages) plus two other dead selectors sharing the same CSS blocks
+  (`.dir-toolbar`, `.panel-sheet`, also zero usages), and retuned
+  `.screen-body`/`.modal-card`'s real, live tablet threshold from 720px to
+  744px so it's the same number as `tab:` rather than a coincidentally
+  close one. `.setup-accordion` left untouched — it's working code.
+- `PatientsPage.tsx`'s table gains a card view below `tab:` (new
+  `PatientCard`, matching `SharedVisitCard`'s visual language — avatar
+  initials, name/mrno header, muted secondary line) — previously
+  horizontal-scroll at every width, the one screen PR 6's responsive
+  pattern never reached.
+- Verified: typecheck, lint, vitest (221 passed), production build all
+  clean, plus confirmed in the compiled CSS that all four `tab:` utilities
+  actually generated against `(min-width:46.5rem)` — not just that the
+  theme token was declared.
 
 ### PR 12 — Ledger payment-state correctness
 - Payment chip and totals bar rebuilt against `payments` + invoice status (decision 6), not `invoiceId` alone.
