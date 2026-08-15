@@ -567,6 +567,67 @@ Verified: typecheck, lint, vitest (236 passed), production build all
 clean; confirmed in the compiled CSS that the new `tab:` variants land
 in the same 46.5rem media block as the existing ones.
 
+## Design-system unification (2026-08-15)
+
+Root cause of "there's a lot of difference between the structures built
+recently vs the old ones, and it's reflected everywhere": the app has
+**two parallel design systems** that had drifted apart.
+
+- Tailwind primitives in `components/ui.tsx` (`Field`, `inputCls`,
+  `SectionCard`, `btnPrimary`, `btnSecondary`) — used by every screen
+  except the note editor.
+- Plain-CSS classes in `index.css` (`.field-block`, `.setup-card`,
+  `.btn-primary`, `.field-row`) — used by `NoteEditorPage` and
+  `BodyChart`.
+
+Same widgets, different geometry. Reconciled the CSS side to the ui.tsx
+values (they are now documented as a mirror pair, with a comment on each
+side saying so):
+
+| | was | now |
+|---|---|---|
+| input radius | 8px | 6px |
+| input bg | `--paper` | `--surface` |
+| input padding | 8/10px | 8/12px |
+| input font | 13px | 14px |
+| input focus | *none* | teal border |
+| label | 10.5px UPPERCASE 600 | 12px sentence-case 500 |
+| card radius / pad | 14px / 14–16px | 16px / 20px |
+| button | pill 999px, 12.5px | radius 6px, 14px |
+
+`.field-input` / `.field-label` were a **third** variant of the same
+controls; folded into the same rules. One input in `NoteEditorPage`
+bypassed both systems entirely with hardcoded inline styles.
+
+**The mobile clipping bug** (fields cut mid-word inside Secondary
+complaints) was `.field-row { grid-template-columns: 1fr 1fr }` applied
+unconditionally — two input columns on a 360px phone. Now single-column
+below Tailwind's `sm:` breakpoint so both stacks flip at the same width.
+Verified in a real browser at 360px and 390px: `document.scrollWidth`
+equals the viewport and no form element overflows.
+
+**Uniform block structure.** Screening, General health & triage, and
+Attending therapist were three different widget styles stacked down the
+page. They now share one card + title/subtitle header shape
+(`.ne-block-head`, deliberately matching `.setup-section-head`'s
+typography minus the chevron). Screening keeps its status tint — that
+colour *is* the signal — but loses its bespoke radius/padding scale.
+
+**Mobile section nav.** Below `md:` the jump-nav rail is `hidden`, so
+phones had no way to navigate a nine-section form except scrolling the
+whole thing. Added a sticky horizontally-scrolling chip row — the same
+pattern Settings already uses at that width — carrying the same status
+dots as the desktop rail. Section `scroll-margin` raised to 28 on mobile
+(20 at `md:`) to clear the extra sticky chrome it introduces.
+
+**Left alone, deliberately:** `.mini-table` inputs stay at 12px — they
+are dense table cells where the smaller scale is the point, not drift.
+The remaining `border-radius: 999px` rules are all chips/pills/toggles,
+which are *supposed* to be pills and match Tailwind's `Pill`.
+
+Verified: typecheck, lint, vitest (236 passed), production build clean,
+plus a real-browser render at mobile widths.
+
 ## Sequencing rationale
 
 Roles first, because every later PR keys off the role vocabulary and the
