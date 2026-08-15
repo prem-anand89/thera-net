@@ -323,9 +323,24 @@ cleanly yet:**
 - Verified: typecheck, lint, vitest (221 passed), production build all
   clean.
 
-### PR 9 — Patients tab (§1b)
-- Extract `AllPatientsSection` to `/patients`; drop the Ledger toggle.
-- Ships only after PR 8 is confirmed stable.
+### PR 9 — Patients tab (§1b) — SHIPPED
+- Extracted `AllPatientsSection` (and its own edit-patient modal) out of
+  `VisitsPage.tsx` into new `src/features/patients/PatientsPage.tsx`,
+  wired to a new `/patients` route. Ledger's tab bar drops back to
+  Visits/Invoices/Reports.
+- `Patients` becomes its own tab in `Shell.tsx`'s `NAV`, between Ledger
+  and Insights — the interim state PR 8 left in place ("Patients isn't
+  its own tab yet") is now resolved.
+- The moved modal is named `EditPatientRowModal`, not `EditPatientModal`
+  — a same-named, differently-shaped component already exists at
+  `src/features/patients/EditPatientModal.tsx` for `PatientProfilePage`
+  (different fields, different save path). Consolidating the two is out
+  of scope for an extraction-only PR; the rename just avoids two
+  same-named components in the same feature directory.
+- Verified: typecheck, lint, vitest (221 passed), production build all
+  clean. `VisitsPage`'s bundle drops from 45.4kB to 33.9kB and a new
+  ~11.2kB `PatientsPage` chunk code-splits independently, confirming
+  the move rather than a duplication.
 
 ## Deliberately unchanged
 
