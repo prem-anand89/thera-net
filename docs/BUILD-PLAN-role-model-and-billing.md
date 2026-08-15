@@ -43,12 +43,65 @@ Verified against the repo during the review, not assumptions:
 
 ## PR sequence
 
-### PR 10 — Roles + RLS enforcement
-- Migration: `role` check constraint gains `front_desk`; backfill `'staff'` → `'therapist'`.
-- `title` free-text column on `clinic_members`.
-- New RLS: scoped `update`/`delete` policies on `visits` (own `therapist_id` or admin); keep `select` clinic-wide.
-- `usePermissions()` hook (decision 10); close the `SetupPage.tsx` gating hole.
-- `useWorkspaceScope`'s admin/staff binary extends to the third role — front desk needs its own branch (no `myTherapistId`, not admin either), not a fallthrough to an empty Workspace.
+### PR 10 — Roles + RLS enforcement — SHIPPED
+- Migration (`20260815000001_role_model_and_visit_rls.sql`): `role` check
+  constraint gains `front_desk`; backfilled `'staff'` → `'therapist'`;
+  `title` free-text column added to `clinic_members`.
+- New RLS: `visits` split from one `_all` policy into
+  select/insert (clinic-wide, unchanged) and update/delete (own
+  `therapist_id`, via a new `is_own_therapist()` helper, or admin).
+- **Widened beyond the plan's literal text**: decision 2 as written said
+  "member for create/update" for `therapists`/`service_catalog`, which
+  can't coexist with its own "admin only for delete/deactivate" clause
+  under one blanket policy (Postgres RLS can't distinguish an update to
+  `active` from an update to `base_price_paise`). Resolved by making
+  `therapists`/`service_catalog` insert/update/delete **admin-only**,
+  select clinic-wide — this is what actually closes the Settings gap
+  (any member could edit prices/splits/roster through Setup, since both
+  tables had an unrestricted `_all` policy since creation). Also gated
+  `hard_delete_patient()` to `is_clinic_admin` (was `is_clinic_member`
+  only), same rule.
+- `usePermissions()` hook (`src/app/usePermissions.ts`) — `canEditSettings`,
+  `canManageTeam`, `canViewPayouts`, `canViewClinicalNotes`. `SetupPage.tsx`
+  now guards a direct URL hit; `Shell.tsx`'s nav hides Settings for
+  non-admins.
+- `useWorkspaceScope` gained `isFrontDesk` and `isClinicWideView`
+  (`isAdmin || isFrontDesk`). `WorkspacePage.tsx`/`DashboardPage.tsx`'s
+  "clinic-wide vs. mine" branches (packages tile, revenue trend, package
+  section title/copy) now key off `isClinicWideView`, not `isAdmin` —
+  front desk gets the same clinic-wide tiles an admin gets rather than
+  "My open packages: 0" / "My revenue trend: ₹0" (they have no clinical
+  work of their own to narrow to). The therapist comparison chart stays
+  `isAdmin`-gated for now — PR 15 revisits it.
+- Follow-through not in the original bullet list but required once the
+  role vocabulary changed: the Team section's invite-role `<select>`,
+  member-list role labels, and the `invite-therapist` edge function's
+  role validation all updated from admin/staff to admin/therapist/
+  front_desk. The new `title` column has no editing UI yet — deliberate
+  deferral, the migration adds the column but exposing it wasn't
+  load-bearing for this PR's access-control purpose.
+- **Verification went beyond typecheck/lint/vitest/build** (all clean,
+  221 tests): the migration was validated by actually replaying the
+  full 26-file migration history plus this one against a throwaway
+  local Postgres 16 database with a minimal Supabase shim
+  (`auth.users`/`auth.uid()`, `storage`, roles) — confirmed it applies
+  cleanly and produces exactly the intended policies (inspected via
+  `pg_policies`). Then functionally verified enforcement itself, not
+  just that it parses: switched to a non-superuser `authenticated` role
+  and confirmed a therapist editing a colleague's visit is rejected (0
+  rows updated), the same therapist editing their own visit succeeds,
+  an admin editing anyone's visit succeeds, and a non-admin inserting a
+  `service_catalog` row is rejected.
+- **Found, not fixed**: the replay also surfaced that
+  `20260801000001_catch_up_live_schema_drift.sql` doesn't apply cleanly
+  on a truly fresh database — it duplicates a trigger `20260703000001`
+  already created, and drops a `settlements` constraint/columns against
+  a shape that migration assumes exists but `20260703000001` already
+  created in its final form. Pre-existing, unrelated to this PR;
+  rewriting a migration that already ran against production isn't
+  something to do opportunistically. Flagged here, not silently
+  patched — a new environment or CI-based from-scratch migration replay
+  will hit this until it's addressed on purpose.
 
 ### PR 11 — Responsive breakpoint standardization
 - `--breakpoint-tab: 46.5rem` in the Tailwind `@theme` block.
