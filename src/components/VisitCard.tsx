@@ -44,6 +44,7 @@ export interface VisitCardData {
   editedBy?: string | null;
   syncError?: string | null;
   canRepeat: boolean;
+  canEdit?: boolean;
   canSplit?: boolean;
   hasSplit?: boolean;
   canDelete: boolean;
@@ -56,16 +57,19 @@ export interface VisitCardData {
 function RowActionsMenu({
   data,
   onEditPatient,
+  onEdit,
   onSplit,
   onDelete,
 }: {
   data: VisitCardData;
   onEditPatient?: () => void;
+  onEdit?: () => void;
   onSplit?: () => void;
   onDelete: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const hasMenu = data.canRepeat || onEditPatient || (data.canSplit && onSplit) || data.canDelete;
+  const hasMenu =
+    data.canRepeat || onEditPatient || (data.canEdit && onEdit) || (data.canSplit && onSplit) || data.canDelete;
   if (!hasMenu) return null;
 
   return (
@@ -102,6 +106,18 @@ function RowActionsMenu({
                 }}
               >
                 Edit patient
+              </button>
+            )}
+            {data.canEdit && onEdit && (
+              <button
+                type="button"
+                className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onEdit();
+                }}
+              >
+                Edit visit
               </button>
             )}
             {data.canSplit && onSplit && (
@@ -193,6 +209,7 @@ export function SharedVisitCard({
   showPatient,
   onInvoice,
   onEditPatient,
+  onEdit,
   onSplit,
   onDelete,
   canInvoice = true,
@@ -202,6 +219,7 @@ export function SharedVisitCard({
   showPatient: boolean;
   onInvoice: () => void;
   onEditPatient?: () => void;
+  onEdit?: () => void;
   onSplit?: () => void;
   onDelete: () => void;
   /** Whether this viewer can issue an invoice / collect payment. Defaults to true for callers that don't gate billing access. */
@@ -268,7 +286,7 @@ export function SharedVisitCard({
       </div>
 
       <PaymentStatusDisplay data={data} onInvoice={onInvoice} canInvoice={canInvoice} />
-      <RowActionsMenu data={data} onEditPatient={onEditPatient} onSplit={onSplit} onDelete={onDelete} />
+      <RowActionsMenu data={data} onEditPatient={onEditPatient} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
     </div>
   );
 }
@@ -285,6 +303,7 @@ function VisitTable({
   onColumnPrefsChange,
   onInvoice,
   onEditPatient,
+  onEdit,
   onSplit,
   onDelete,
   canInvoice,
@@ -296,6 +315,7 @@ function VisitTable({
   onColumnPrefsChange: (key: VisitColumnKey, visible: boolean) => void;
   onInvoice: (row: VisitCardData) => void;
   onEditPatient?: (row: VisitCardData) => void;
+  onEdit?: (row: VisitCardData) => void;
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
   canInvoice: boolean;
@@ -395,6 +415,7 @@ function VisitTable({
                   <RowActionsMenu
                     data={row}
                     onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
+                    onEdit={onEdit ? () => onEdit(row) : undefined}
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
                   />
@@ -496,6 +517,7 @@ export function ResponsiveVisitList({
   groupByDate = false,
   onInvoice,
   onEditPatient,
+  onEdit,
   onSplit,
   onDelete,
   canInvoice = true,
@@ -506,6 +528,7 @@ export function ResponsiveVisitList({
   groupByDate?: boolean;
   onInvoice: (row: VisitCardData) => void;
   onEditPatient?: (row: VisitCardData) => void;
+  onEdit?: (row: VisitCardData) => void;
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
   /** Whether this viewer can issue an invoice / collect payment. Defaults to true for callers that don't gate billing access. */
@@ -535,6 +558,7 @@ export function ResponsiveVisitList({
                     showPatient={showPatient}
                     onInvoice={() => onInvoice(row)}
                     onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
+                    onEdit={onEdit ? () => onEdit(row) : undefined}
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
                     canInvoice={canInvoice}
@@ -553,6 +577,7 @@ export function ResponsiveVisitList({
                 showPatient={showPatient}
                 onInvoice={() => onInvoice(row)}
                 onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
+                onEdit={onEdit ? () => onEdit(row) : undefined}
                 onSplit={onSplit ? () => onSplit(row) : undefined}
                 onDelete={() => onDelete(row)}
                 canInvoice={canInvoice}
@@ -572,6 +597,7 @@ export function ResponsiveVisitList({
           onColumnPrefsChange={setPref}
           onInvoice={onInvoice}
           onEditPatient={onEditPatient}
+          onEdit={onEdit}
           onSplit={onSplit}
           onDelete={onDelete}
           canInvoice={canInvoice}

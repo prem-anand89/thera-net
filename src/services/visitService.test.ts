@@ -216,6 +216,27 @@ describe('visitService.create', () => {
     await expect(svc.updateBilling(v.id, { actualBillPaise: rs(100) })).rejects.toThrow(/frozen/);
   });
 
+  it('freezes therapist reassignment and the visit date once invoiced too', async () => {
+    const svc = createVisitService(fake.repos);
+    const v = await svc.create(base);
+    fake.visits.set(v.id, { ...v, invoiceId: 'inv-1' });
+    await expect(svc.updateBilling(v.id, { therapistId: 'th-aish' })).rejects.toThrow(/frozen/);
+    await expect(svc.updateBilling(v.id, { visitDate: '2026-05-10' })).rejects.toThrow(/frozen/);
+  });
+
+  it('still allows condition/treatmentNotes edits on an invoiced visit -- only billing is frozen', async () => {
+    const svc = createVisitService(fake.repos);
+    const v = await svc.create(base);
+    fake.visits.set(v.id, { ...v, invoiceId: 'inv-1' });
+    const updated = await svc.updateBilling(v.id, {
+      condition: 'Cervical radiculopathy',
+      treatmentNotes: 'Manual therapy, cervical traction',
+    });
+    expect(updated.condition).toBe('Cervical radiculopathy');
+    expect(updated.treatmentNotes).toBe('Manual therapy, cervical traction');
+    expect(updated.actualBillPaise).toBe(v.actualBillPaise); // billing itself untouched
+  });
+
   it('recomputes splits with the ORIGINAL rate snapshot on edit', async () => {
     const svc = createVisitService(fake.repos);
     const v = await svc.create(base);

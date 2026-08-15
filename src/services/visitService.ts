@@ -129,7 +129,17 @@ export function createVisitService(repos: Repos) {
     ): Promise<Visit> {
       const visit = await repos.visits.get(visitId);
       if (!visit) throw new Error('Visit not found');
-      if (visit.invoiceId) {
+      // "Frozen" means the billed amount and who it's billed to can't move
+      // once invoiced -- it does not mean the visit's clinical record is
+      // locked. A therapist backfilling condition/treatmentNotes on an
+      // already-invoiced visit (the common case: notes get written up a
+      // day or two after the session) must still go through.
+      const changesBilling =
+        changes.actualBillPaise !== undefined ||
+        changes.adjustmentReason !== undefined ||
+        'therapistId' in changes ||
+        'visitDate' in changes;
+      if (visit.invoiceId && changesBilling) {
         throw new Error('This visit is on an issued invoice; its billing is frozen.');
       }
 

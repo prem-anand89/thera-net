@@ -104,6 +104,11 @@ function visitToCardData(
     editedBy,
     syncError: syncErrorByVisitId.get(v.id) ?? null,
     canRepeat: v.packageGroupId ? openPackageGroupIds.has(v.packageGroupId) : false,
+    // Unlike canSplit/canDelete, not gated on !v.invoiceId -- an invoiced
+    // visit's clinical fields (condition, treatmentNotes) stay editable,
+    // only its billing is frozen (visitService.updateBilling enforces
+    // that server-side too).
+    canEdit: canModify,
     canSplit: therapistSplit && v.actualBillPaise > 0 && canModify,
     hasSplit: v.sharedTherapistId ? true : false,
     canDelete: !v.invoiceId && canModify,
@@ -636,6 +641,10 @@ export function VisitsPage() {
                     serviceLabel: row.serviceName,
                     isPackage: row.packageTotal != null,
                   });
+                }}
+                onEdit={(row) => {
+                  setError(null);
+                  setEditing(row.visitId);
                 }}
                 onSplit={
                   therapistSplit
