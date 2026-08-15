@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, backupService } from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
+import { usePermissions } from '@/app/usePermissions';
 import { getSupabase } from '@/lib/supabase';
 import { SUPABASE_URL } from '@/lib/env';
 import { db } from '@/lib/db';
@@ -56,6 +57,7 @@ function toggleSet<T>(set: Set<T>, key: T, present: boolean): Set<T> {
 }
 
 export function SetupPage() {
+  const { canEditSettings } = usePermissions();
   const [activeKey, setActiveKey] = useState<SectionKey>('profile');
   const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
 
@@ -79,6 +81,22 @@ export function SetupPage() {
       return;
     }
     setActiveKey(key);
+  }
+
+  // Nav already hides the Settings link for non-admins (`Shell.tsx`); this
+  // guard covers a direct URL hit (old bookmark, typed link) instead of
+  // silently rendering the full clinic-configuration form. The real access
+  // boundary is RLS on `clinics`/`therapists`/`service_catalog` — this is
+  // just so a non-admin doesn't see a form that would fail to save.
+  if (!canEditSettings) {
+    return (
+      <div className="space-y-4">
+        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Settings</h1>
+        <p className="text-sm text-[var(--muted)]">
+          Settings are managed by your clinic admin.
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -903,6 +921,12 @@ interface ClinicMember {
   role: string;
 }
 
+const MEMBER_ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  therapist: 'Therapist',
+  front_desk: 'Front desk',
+};
+
 function Therapists() {
   const clinic = useClinic();
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
@@ -911,7 +935,7 @@ function Therapists() {
   const [membersError, setMembersError] = useState<string | null>(null);
   const [revokeInProgress, setRevokeInProgress] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'staff'>('staff');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'therapist' | 'front_desk'>('therapist');
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
@@ -987,7 +1011,7 @@ function Therapists() {
 
       setInviteSuccess(`Invitation sent to ${inviteEmail}`);
       setInviteEmail('');
-      setInviteRole('staff');
+      setInviteRole('therapist');
     } catch (e) {
       setInviteError(toFriendlyMessage(e));
     } finally {
@@ -1034,8 +1058,14 @@ function Therapists() {
           />
           <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
             Role
-            <select className={inputCls} value={inviteRole} onChange={(e) => setInviteRole(e.target.value as 'admin' | 'staff')} disabled={inviteBusy}>
-              <option value="staff">Staff therapist</option>
+            <select
+              className={inputCls}
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value as 'admin' | 'therapist' | 'front_desk')}
+              disabled={inviteBusy}
+            >
+              <option value="therapist">Therapist</option>
+              <option value="front_desk">Front desk</option>
               <option value="admin">Admin</option>
             </select>
           </label>
@@ -1055,9 +1085,7 @@ function Therapists() {
               <li key={m.userId} className="flex items-center justify-between gap-3 text-sm">
                 <div>
                   <p className="text-[var(--ink)]">{m.email}</p>
-                  <p className="text-xs text-[var(--muted)]">
-                    {m.role === 'admin' ? 'Admin' : 'Staff'}
-                  </p>
+                  <p className="text-xs text-[var(--muted)]">{MEMBER_ROLE_LABELS[m.role] ?? m.role}</p>
                 </div>
                 <button
                   className="text-xs text-[var(--rust)] hover:underline disabled:opacity-50"

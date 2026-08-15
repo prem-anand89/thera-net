@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 interface InviteRequest {
   clinicId: string;
   email: string;
-  role: 'admin' | 'staff';
+  role: 'admin' | 'therapist' | 'front_desk';
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -25,11 +25,11 @@ export default async function handler(req: Request): Promise<Response> {
       );
     }
 
-    if (!['admin', 'staff'].includes(role)) {
-      return new Response(JSON.stringify({ error: 'Invalid role: must be admin or staff' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    if (!['admin', 'therapist', 'front_desk'].includes(role)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid role: must be admin, therapist, or front_desk' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
     // Get the caller's JWT from the Authorization header

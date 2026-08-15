@@ -238,7 +238,7 @@ export function WorkspacePage() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
         <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
-        {scope.isAdmin ? (
+        {scope.isClinicWideView ? (
           <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
         ) : (
           <>

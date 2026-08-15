@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { getSupabase } from '@/lib/supabase';
 import { useSession } from './useSession';
 
-export type ClinicRole = 'admin' | 'staff' | 'unknown';
+export type ClinicRole = 'admin' | 'therapist' | 'front_desk' | 'unknown';
 
 function cacheKey(clinicId: string): string {
   return `clinicRole:${clinicId}`;
@@ -14,10 +14,12 @@ function cacheKey(clinicId: string): string {
  * The signed-in user's role for one clinic, read from `clinic_members`
  * (RLS already lets a member read their own row — see `members_select`
  * policy) and cached in Dexie's local `meta` table so it survives offline.
- * This is display scoping only — RLS remains the real access boundary
- * server-side — but without the cache, an offline admin would read as
+ * This value drives UI framing only — RLS enforces the real write
+ * boundary server-side (see `is_own_therapist` and the `visits_update`/
+ * `therapists_*`/`catalog_*` policies) regardless of what this hook
+ * returns. But without the cache, an offline admin would read as
  * `'unknown'` (the online fetch fails) and every caller treats `'unknown'`
- * the same as `'staff'`, silently narrowing an admin down to the
+ * the same as `'therapist'`, silently narrowing an admin down to the
  * therapist-scoped view the moment they lose connection. The cache is
  * cleared along with the rest of Dexie on sign-out (`Shell.tsx`), so it
  * can't leak a role across accounts sharing a device.
@@ -45,7 +47,7 @@ export function useClinicRole(clinicId: string): { role: ClinicRole; loading: bo
         .eq('user_id', userId)
         .maybeSingle()
     )
-      .then(({ data }: { data: { role: 'admin' | 'staff' } | null }) => {
+      .then(({ data }: { data: { role: 'admin' | 'therapist' | 'front_desk' } | null }) => {
         if (cancelled) return;
         const resolved: ClinicRole = data?.role ?? 'unknown';
         setFetchedRole(resolved);

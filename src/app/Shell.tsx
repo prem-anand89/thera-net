@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { syncEngine } from '@/sync/engine';
 import { useSession } from './useSession';
+import { useClinicRole } from './useClinicRole';
 import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { CreateClinicForm } from '@/features/setup/CreateClinicForm';
@@ -32,6 +33,13 @@ export function Shell() {
   const clinic =
     clinics?.find((c) => c.id === activeClinicId) ?? (clinics?.length === 1 ? clinics[0] : null);
   const logoUrl = useMemo(() => publicLogoUrl(clinic?.logoPath), [clinic?.logoPath]);
+  // Can't use usePermissions()/useWorkspaceScope() here — both need
+  // ClinicContext, and this component is the one that provides it further
+  // down. useClinicRole takes a clinicId directly instead. Nav filtering
+  // (not RLS) is display-only, same caveat as everywhere else this role
+  // value is read; the real boundary is the settings tables' RLS policies.
+  const { role } = useClinicRole(clinic?.id ?? '');
+  const nav = useMemo(() => NAV.filter((item) => item.to !== '/settings' || role === 'admin'), [role]);
 
   useEffect(() => {
     if (session) {
@@ -118,7 +126,7 @@ export function Shell() {
             </div>
             {/* Desktop nav */}
             <nav className="hidden gap-1 sm:flex">
-              {NAV.map((item) => (
+              {nav.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
@@ -159,7 +167,7 @@ export function Shell() {
           {/* Mobile nav panel */}
           {menuOpen && (
             <nav className="border-t border-[var(--border)] bg-[var(--surface)] px-2 py-2 sm:hidden">
-              {NAV.map((item) => (
+              {nav.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}

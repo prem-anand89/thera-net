@@ -104,10 +104,10 @@ export function DashboardPage() {
 
   const packagesInScope = useMemo(
     () =>
-      scope.isAdmin
+      scope.isClinicWideView
         ? (openPackages ?? [])
         : (openPackages ?? []).filter((p) => p.startedByTherapistId === scope.myTherapistId),
-    [openPackages, scope.isAdmin, scope.myTherapistId]
+    [openPackages, scope.isClinicWideView, scope.myTherapistId]
   );
   const packagesByService = useMemo(() => {
     const byService = new Map<string, { total: number; stale: number }>();
@@ -216,9 +216,9 @@ export function DashboardPage() {
         )}
       </SectionCard>
 
-      <SectionCard title={scope.isAdmin ? 'Packages' : 'My packages'}>
+      <SectionCard title={scope.isClinicWideView ? 'Packages' : 'My packages'}>
         <p className="mb-3 text-xs text-[var(--muted)]">
-          Open packages by service{scope.isAdmin ? '' : " you've started"} — how many are active,
+          Open packages by service{scope.isClinicWideView ? '' : " you've started"} — how many are active,
           and how many have gone quiet.
         </p>
         {packagesInScope.length === 0 ? (
@@ -244,7 +244,7 @@ export function DashboardPage() {
         )}
       </SectionCard>
 
-      <SectionCard title={scope.isAdmin ? `Revenue trend — last 6 months (${revenueLabel})` : `My revenue trend — last 6 months (${revenueLabel})`}>
+      <SectionCard title={scope.isClinicWideView ? `Revenue trend — last 6 months (${revenueLabel})` : `My revenue trend — last 6 months (${revenueLabel})`}>
         {trend && !hasEnoughTrendHistory && (
           <p className="py-8 text-center text-sm text-[var(--muted)]">
             Not enough data yet — a trend needs at least two months of visits to be meaningful.
@@ -257,7 +257,7 @@ export function DashboardPage() {
               {
                 label: revenueLabel,
                 color: SERIES_COLORS[0],
-                values: scope.isAdmin
+                values: scope.isClinicWideView
                   ? trend.map((r) => r.total.postTaxPaise)
                   : trend.map((r) => myMonthRow(r.rows).postTaxPaise),
               },
