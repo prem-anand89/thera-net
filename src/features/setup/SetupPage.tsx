@@ -11,11 +11,8 @@ import { formatINR } from '@/domain/money';
 import {
   clinicShareLabels,
   effectivePricePerSession,
-  visibleVisitColumns,
-  VISIT_COLUMN_LABELS,
   type CatalogItem,
   type Clinic,
-  type VisitColumnKey,
 } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
 import {
@@ -528,14 +525,13 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   );
 }
 
-type FeaturesFields = Pick<Clinic, 'enableExpectedToday' | 'clinicalDocsEnabled' | 'visitColumnPrefs'>;
+type FeaturesFields = Pick<Clinic, 'enableExpectedToday' | 'clinicalDocsEnabled'>;
 
 function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { clinic, form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<FeaturesFields>(
-    (c) => ({ enableExpectedToday: c.enableExpectedToday, clinicalDocsEnabled: c.clinicalDocsEnabled, visitColumnPrefs: c.visitColumnPrefs }),
+  const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<FeaturesFields>(
+    (c) => ({ enableExpectedToday: c.enableExpectedToday, clinicalDocsEnabled: c.clinicalDocsEnabled }),
     onDirtyChange
   );
-  const labels = clinicShareLabels(clinic);
 
   return (
     <SectionCard title="Features">
@@ -575,29 +571,10 @@ function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) =>
           </select>
         </Field>
       </div>
-
-      <div className="mt-4 border-t border-[var(--border)] pt-4">
-        <p className="mb-2 text-xs font-medium text-[var(--muted)]">
-          Visits table columns — pick which optional columns show
-        </p>
-        <div className="flex flex-wrap gap-4">
-          {(Object.keys(VISIT_COLUMN_LABELS) as VisitColumnKey[]).map((key) => (
-            <label key={key} className="flex items-center gap-2 text-sm text-[var(--ink)]">
-              <input
-                type="checkbox"
-                checked={visibleVisitColumns(form)[key]}
-                onChange={(e) => set({ visitColumnPrefs: { ...form.visitColumnPrefs, [key]: e.target.checked } })}
-              />
-              {VISIT_COLUMN_LABELS[key]}
-            </label>
-          ))}
-        </div>
-        {clinic.hasPartner && (
-          <p className="mt-2 text-xs text-[var(--muted)]">
-            The {labels.own} Share and Post-Tax columns appear in ledger and reports when a partner is configured.
-          </p>
-        )}
-      </div>
+      <p className="mt-3 text-xs text-[var(--muted)]">
+        Which Visits-table columns show is now a per-user choice, in the column picker on the
+        Ledger and Workspace tables themselves.
+      </p>
       <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
     </SectionCard>
   );

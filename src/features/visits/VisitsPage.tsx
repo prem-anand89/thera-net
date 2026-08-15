@@ -38,7 +38,7 @@ import { applySort, byNumber, byString, SortHeader, useSort } from '@/components
 import { PatientOverview } from './PatientOverview';
 import { EditVisitModal } from './EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
-import { SharedVisitCard, type VisitCardData, type VisitCardPaymentState } from '@/components/VisitCard';
+import { ResponsiveVisitList, type VisitCardData, type VisitCardPaymentState } from '@/components/VisitCard';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PATIENT_SEARCH_LIMIT = 6;
@@ -62,73 +62,6 @@ const DATE_PRESETS: { key: DatePreset; label: string }[] = [
   { key: 'custom', label: 'Custom' },
 ];
 const toIsoDate = (d: Date) => d.toISOString().slice(0, 10);
-
-type DateGroup = 'today' | 'this-week' | 'this-month' | 'last-month' | 'earlier';
-interface GroupedVisits {
-  group: DateGroup;
-  label: string;
-  visits: Visit[];
-  totalBillPaise: number;
-}
-
-function groupVisitsByDate(visits: Visit[], today: Date): GroupedVisits[] {
-  const todayStr = toIsoDate(today);
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay());
-  const startOfWeekStr = toIsoDate(startOfWeek);
-  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const startOfMonthStr = toIsoDate(startOfMonth);
-  const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-  const startOfLastMonthStr = toIsoDate(startOfLastMonth);
-  const endOfLastMonthStr = toIsoDate(endOfLastMonth);
-
-  const groups: Record<DateGroup, Visit[]> = {
-    today: [],
-    'this-week': [],
-    'this-month': [],
-    'last-month': [],
-    earlier: [],
-  };
-
-  for (const v of visits) {
-    if (v.visitDate === todayStr) {
-      groups.today.push(v);
-    } else if (v.visitDate >= startOfWeekStr && v.visitDate < todayStr) {
-      groups['this-week'].push(v);
-    } else if (v.visitDate >= startOfMonthStr && v.visitDate < startOfWeekStr) {
-      groups['this-month'].push(v);
-    } else if (v.visitDate >= startOfLastMonthStr && v.visitDate <= endOfLastMonthStr) {
-      groups['last-month'].push(v);
-    } else {
-      groups.earlier.push(v);
-    }
-  }
-
-  const result: GroupedVisits[] = [];
-  const groupLabels: Record<DateGroup, string> = {
-    today: 'Today',
-    'this-week': 'This week',
-    'this-month': 'This month',
-    'last-month': 'Last month',
-    earlier: 'Earlier',
-  };
-  const groupOrder: DateGroup[] = ['today', 'this-week', 'this-month', 'last-month', 'earlier'];
-
-  for (const group of groupOrder) {
-    if (groups[group].length > 0) {
-      const totalBillPaise = groups[group].reduce((sum, v) => sum + v.actualBillPaise, 0);
-      result.push({
-        group,
-        label: groupLabels[group],
-        visits: groups[group].sort((a, b) => b.visitDate.localeCompare(a.visitDate)),
-        totalBillPaise,
-      });
-    }
-  }
-
-  return result;
-}
 
 function visitToCardData(
   v: Visit,
@@ -248,6 +181,7 @@ export function VisitsPage() {
     [therapists]
   );
   const patientById = useMemo(() => new Map((patients ?? []).map((p) => [p.id, p])), [patients]);
+  const visitById = useMemo(() => new Map((visits ?? []).map((v) => [v.id, v])), [visits]);
   const failedVisitSyncs = useLiveQuery(
     () => db.outbox.filter((e) => e.table === 'visits' && !!e.error).toArray(),
     []
@@ -274,6 +208,23 @@ export function VisitsPage() {
   const openPackageGroupIds = useMemo(
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
+  );
+
+  const cardRows = useMemo(
+    () =>
+      (visits ?? []).map((v) =>
+        visitToCardData(
+          v,
+          patientById,
+          therapistName,
+          therapistNameByUserId,
+          serviceName,
+          syncErrorByVisitId,
+          openPackageGroupIds,
+          therapistSplit
+        )
+      ),
+    [visits, patientById, therapistName, therapistNameByUserId, serviceName, syncErrorByVisitId, openPackageGroupIds, therapistSplit]
   );
 
 
@@ -542,67 +493,35 @@ export function VisitsPage() {
 
       {recordsView === 'visits' && visits && visits.length > 0 && (
         <div className="space-y-4">
-          {groupVisitsByDate(visits, new Date()).map((group) => {
-            const visitCount = group.visits.length;
-            const label = `${group.label} (${visitCount} visit${visitCount === 1 ? '' : 's'})`;
-            return (
-              <div
-                key={group.group}
-                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm"
-              >
-                <div className="border-b border-[var(--border)] px-4 py-3 text-sm font-semibold text-[var(--ink)]">
-                  {label}
-                  <span className="ml-4 text-xs font-normal text-[var(--muted)]">
-                    {formatINR(group.totalBillPaise)}
-                  </span>
-                </div>
-                <div className="divide-y divide-[var(--border)]">
-                  {group.visits.map((v) => {
-                    const cardData = visitToCardData(
-                      v,
-                      patientById,
-                      therapistName,
-                      therapistNameByUserId,
-                      serviceName,
-                      syncErrorByVisitId,
-                      openPackageGroupIds,
-                      therapistSplit
-                    );
-                    return (
-                      <div key={v.id} className="px-4">
-                        <SharedVisitCard
-                          data={cardData}
-                          showDate={true}
-                          showPatient={true}
-                          onInvoice={() => {
-                            setError(null);
-                            setPaidNow(true);
-                            setInvoicing({
-                              visitId: v.id,
-                              patientLabel: patientById.get(v.patientId)?.name ?? '-',
-                              serviceLabel: serviceName.get(v.serviceCatalogId) ?? '-',
-                              isPackage: Boolean(v.packageGroupId),
-                            });
-                          }}
-                          onSplit={
-                            therapistSplit
-                              ? () => {
-                                  setError(null);
-                                  setSplitting(v);
-                                }
-                              : undefined
-                          }
-                          onDelete={() => {
-                            if (confirm('Delete this visit?')) void repos.visits.softDelete(v.id);
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+          <ResponsiveVisitList
+            rows={cardRows}
+            showDate={true}
+            showPatient={true}
+            groupByDate={true}
+            onInvoice={(row) => {
+              setError(null);
+              setPaidNow(true);
+              setInvoicing({
+                visitId: row.visitId,
+                patientLabel: row.patientName,
+                serviceLabel: row.serviceName,
+                isPackage: row.packageTotal != null,
+              });
+            }}
+            onSplit={
+              therapistSplit
+                ? (row) => {
+                    const v = visitById.get(row.visitId);
+                    if (!v) return;
+                    setError(null);
+                    setSplitting(v);
+                  }
+                : undefined
+            }
+            onDelete={(row) => {
+              if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+            }}
+          />
           <div className="sticky bottom-0 z-10 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm font-semibold text-[var(--ink)] shadow-[0_-2px_6px_rgba(0,0,0,0.06)]">
             Totals: {visits.length} visit{visits.length === 1 ? '' : 's'} · {formatINR(totals.bill)}
           </div>

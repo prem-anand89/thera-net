@@ -26,7 +26,7 @@ import {
   SummaryBar,
   Panel,
 } from '@/components/ui';
-import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
+import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
@@ -233,7 +233,7 @@ export function WorkspacePage() {
       {pendingWork && pendingWork.length > 0 && (
         <>
           {role === 'admin' && (
-            <div className="hidden lg:block">
+            <div className="hidden md:block">
               <SectionCard title="Needs attention">
                 <ul className="grid grid-cols-1 gap-2 md:grid-cols-3">
                   {pendingWork.map((item, i) => (
@@ -245,7 +245,7 @@ export function WorkspacePage() {
               </SectionCard>
             </div>
           )}
-          <div className={role === 'admin' ? 'lg:hidden' : ''}>
+          <div className={role === 'admin' ? 'md:hidden' : ''}>
             <SummaryBar tone="rust" label="need attention" count={pendingWork.length} onClick={() => setAttentionOpen(true)} />
           </div>
         </>
@@ -362,21 +362,16 @@ export function WorkspacePage() {
             No visits logged today — log one with &ldquo;+ New visit&rdquo;.
           </p>
         ) : (
-          <div className="divide-y divide-[var(--border)]">
-            {today.visits.map((row) => (
-              <SharedVisitCard
-                key={row.visitId}
-                data={todayRowToCardData(row, openPackageGroupIds)}
-                showDate={false}
-                showPatient={true}
-                onInvoice={() => openInvoiceFor(todayRowToCardData(row, openPackageGroupIds))}
-                onEditPatient={() => setEditPatientId(row.patientId)}
-                onDelete={() => {
-                  if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
-                }}
-              />
-            ))}
-          </div>
+          <ResponsiveVisitList
+            rows={today.visits.map((row) => todayRowToCardData(row, openPackageGroupIds))}
+            showDate={false}
+            showPatient={true}
+            onInvoice={(row) => openInvoiceFor(row)}
+            onEditPatient={(row) => setEditPatientId(row.patientId)}
+            onDelete={(row) => {
+              if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+            }}
+          />
         )}
       </SectionCard>
 
