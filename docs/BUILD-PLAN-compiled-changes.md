@@ -293,14 +293,35 @@ cleanly yet:**
   `openPackages` only ever returns *open* packages; a "completed" count
   needs a different query this PR didn't build.
 
-### PR 8 — Navigation restructure (§1a)
+### PR 8 — Navigation restructure (§1a) — SHIPPED
 - `/archive` → `/ledger`; `/setup` → `/settings`; both old paths kept as
-  permanent redirects preserving search params.
+  permanent redirects (`beforeLoad` + `redirect()`) preserving search
+  params. `VisitsPage.tsx` and `SetupPage.tsx` deliberately keep their
+  file/component names — route-path rename only, to minimize risk.
 - Invoices and Reports become Ledger sub-views as `useState` tabs
-  (decision 6); delete the orphaned `/reports` route.
-- Update `NAV` in `Shell.tsx:13`.
-- Grep Dexie `meta` for any route-keyed state before shipping.
-- Fix the stale `'Visits'` link assertion in `e2e/smoke.spec.ts:30`.
+  (decision 6) alongside the existing Visits/Patients tabs —
+  `InvoicesPage` and `ReportsPage` are unmodified, just rendered as
+  embedded tab content. A "Generate report" button on the Visits
+  sub-view switches to the Reports tab — no duplicated generation
+  logic, no pre-filled "this month/last month" shortcuts.
+- `InsightsPage` loses its now-redundant Reports tab and renders
+  `DashboardPage` directly (a single remaining tab isn't useful UI).
+- Updated `NAV` in `Shell.tsx` to Workspace / Ledger / Insights /
+  Settings.
+- Grepped Dexie `meta` for route-keyed state before shipping — found
+  only `activeClinicId`, `visitColumnPrefs`, `clinicRole:*`, `cursor:*`,
+  none of which key off a route path.
+- Fixed the stale `'Visits'` link assertion in `e2e/smoke.spec.ts` to
+  `'Ledger'`.
+- **Deviation:** the doc called for deleting `/reports` outright, but
+  its own precondition ("confirm nothing external references it
+  first") isn't something this agent can verify. Shipped as a redirect
+  to `/ledger` instead — same treatment now applied to `/invoices` for
+  the same reason. Both redirects land on Ledger's default tab (Visits),
+  not the specific sub-tab, since sub-tabs aren't URL-addressable
+  (decision 6) — an accepted tradeoff, not a bug.
+- Verified: typecheck, lint, vitest (221 passed), production build all
+  clean.
 
 ### PR 9 — Patients tab (§1b)
 - Extract `AllPatientsSection` to `/patients`; drop the Ledger toggle.
