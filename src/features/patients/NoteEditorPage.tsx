@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { getSupabase } from '@/lib/supabase';
+import { formatDateDMY } from '@/domain/fiscalYear';
 import { ScaleWidget } from '@/components/ScaleWidget';
 import { BodyChart } from '@/components/BodyChart';
 import { Pill } from '@/components/ui';
@@ -244,6 +245,17 @@ export function NoteEditorPage() {
   );
   const consentStatus = useTreatmentConsentStatus(clinic.id, patientId);
 
+  // The visit this note documents, if any — an existing note's own visitId
+  // once loaded, otherwise the visit it was opened from (see promptedVisitId
+  // above). Drives both the date shown next to "Attending therapist" and
+  // that field's auto-fill below; stays null for a note started from
+  // Patient Profile's "New note" with no visit context at all.
+  const linkedVisitId = existingNote?.visitId ?? promptedVisitId ?? null;
+  const linkedVisit = useLiveQuery(
+    () => (linkedVisitId ? repos.visits.get(linkedVisitId) : undefined),
+    [linkedVisitId]
+  );
+
   const [therapistId, setTherapistId] = useState('');
   const [noteMode, setNoteMode] = useState<'initial' | 'followup'>('initial');
   const [enrollmentId, setEnrollmentId] = useState<string | null>(null);
@@ -344,9 +356,20 @@ export function NoteEditorPage() {
   // if any level is flagged, or on manual expand.
   const [neuroExpanded, setNeuroExpanded] = useState(false);
 
+  // Default the therapist selector: to the linked visit's own therapist when
+  // this note documents one (waits for that lookup rather than guessing —
+  // a wrong first-in-list default beats nothing, but the visit's actual
+  // therapist beats both), otherwise the old first-in-list fallback. Either
+  // way this only ever fires once — the moment therapistId is non-empty
+  // (including an existing note's own saved choice, set below) it stops.
   useEffect(() => {
-    if (therapists && therapists.length > 0 && !therapistId) setTherapistId(therapists[0].id);
-  }, [therapists, therapistId]);
+    if (therapistId) return;
+    if (linkedVisitId) {
+      if (linkedVisit) setTherapistId(linkedVisit.therapistId);
+      return;
+    }
+    if (therapists && therapists.length > 0) setTherapistId(therapists[0].id);
+  }, [therapists, therapistId, linkedVisitId, linkedVisit]);
 
   // Whether the most recent prior note in this episode actually has
   // chief-complaint/history data worth carrying forward — distinct from
@@ -733,7 +756,11 @@ export function NoteEditorPage() {
         <div className="setup-card">
           <div className="ne-block-head">
             <h3>Attending therapist</h3>
-            <p className="sub">Who is recording this assessment</p>
+            <p className="sub">
+              {linkedVisit
+                ? `Visit on ${formatDateDMY(linkedVisit.visitDate)} — defaults to that visit's therapist, editable if someone else is recording this assessment`
+                : 'Who is recording this assessment — not linked to a visit'}
+            </p>
           </div>
           <div className="field-block" style={{ marginBottom: 0 }}>
             <label>Therapist</label>

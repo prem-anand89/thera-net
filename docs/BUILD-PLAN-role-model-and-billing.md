@@ -1121,3 +1121,39 @@ Verified: typecheck, lint, vitest (240 passed), production build clean,
 plus a real headless-browser render of both the mobile chip nav and
 desktop rail confirming the two new entries render with correct
 active-state and status-dot coloring alongside the existing nine.
+
+## Are notes connected to visits? (2026-08-15)
+
+Investigated in response to: "Are notes connected to Visits? There is
+only therapist assign option but no date or visit linked. Shouldn't
+therapist be automatically linked based on the visits data?"
+
+Short answer: partially, and invisibly. `ConsultationNote.visitId`
+already exists in the domain model, and gets set whenever a note is
+opened via a visit's "Add note" row action (`VisitCard.tsx` passes
+`?visitId=` through to `NoteEditorPage`). But nothing in the note editor
+ever showed that link — no date, no visit reference anywhere on the
+page — and the "Attending therapist" selector always defaulted to
+whichever therapist happened to be first in the clinic's list,
+completely independent of which visit (and which visit's therapist) the
+note was actually for. Separately, the more common "New note" entry
+point on Patient Profile passes no visit context at all, so most notes
+still won't carry a `visitId` — that's an existing model gap, not
+something this round changed (a note documents an episode/enrollment,
+not necessarily one specific visit, and there's no visit-picker UI to
+attach one after the fact).
+
+Fixed the two things actually broken: `NoteEditorPage.tsx` now looks up
+the linked visit (`existingNote.visitId` for a saved note, the
+`?visitId=` prompt for a new one) and (1) shows that visit's date in the
+Attending therapist card's subtext instead of the generic "who is
+recording this" copy, explicitly saying "not linked to a visit" when
+there isn't one, and (2) defaults the therapist selector to that visit's
+own `therapistId` rather than the first therapist in the list — still
+editable, since the person recording the assessment isn't always
+guaranteed to be the treating therapist. The old first-in-list fallback
+only applies now when there's no visit to wait for at all.
+
+Verified: typecheck, lint, vitest (240 passed), production build clean,
+plus a real headless-browser render of both the visit-linked and
+unlinked subtext states.
