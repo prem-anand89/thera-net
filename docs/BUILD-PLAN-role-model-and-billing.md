@@ -989,3 +989,31 @@ Verified: typecheck, lint, vitest (240 passed), production build clean;
 real headless-browser renders at 375px and 700px for the visit card fix,
 confirming both the bug (before) and the fix (after) rather than
 assuming from the code alone.
+
+## Fourth round: `.list-entry` still read as a different surface (2026-08-15)
+
+User feedback, correctly: after three rounds of fixes, the note editor's
+list entries still looked like "patch work" next to the plain fields
+around them. Right diagnosis of what earlier rounds got wrong — round 2
+gave `.list-entry` its own background (`--paper`, a light grey) and a
+bordered, rounded box, deliberately lighter than `.setup-card`'s heavy
+shadow-card treatment, but *any* distinct background+border+radius reads
+as a separate surface sitting inside an otherwise flat white section, no
+matter how light. Lightening a box is not the same as removing it, and
+removing it is what "matches the rest of the note" actually requires.
+
+`.list-entry` now carries no background, no border-radius, and no
+standalone border at all — just `padding` and a `border-bottom` hairline,
+the exact `divide-y` pattern already used for every other list in this
+app (invoices, the visits table, a patient's note history). A repeated
+entry's fields render with the literal same white bordered input boxes as
+every static field around them; the only visual differentiators left are
+the "+ Add" button on the group label and a thin divider line between
+multiple entries — which is the correct amount of differentiation for
+"this is a repeatable group," not "this is a different design system."
+Rendered side by side with `Current medications`/`Allergies` (plain
+fields) directly above a Trauma history entry at 500px to confirm:
+visually indistinguishable input styling, no separate box.
+
+Verified: typecheck, lint, vitest (240 passed), production build clean,
+plus the direct side-by-side render described above.

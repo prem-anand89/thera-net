@@ -1005,7 +1005,7 @@ export function NoteEditorPage() {
                   <p className="empty-note">No secondary complaints added.</p>
                 ) : (
                   payload.chiefComplaint.secondaryComplaints.map((complaint) => (
-                    <div key={complaint.id} className="list-entry" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div key={complaint.id} className="list-entry" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                         <div className="field-block" style={{ margin: 0, flex: 1 }}>
                           <label>Region</label>
@@ -1188,7 +1188,7 @@ export function NoteEditorPage() {
                   <p className="empty-note">No trauma history added.</p>
                 ) : (
                   payload.history.traumas.map((t, i) => (
-                    <div key={i} className="list-entry" style={{ marginTop: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div key={i} className="list-entry" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                         <div className="field-block" style={{ margin: 0, flex: 1 }}>
                           <label>Body part</label>
@@ -1220,7 +1220,7 @@ export function NoteEditorPage() {
                   <p className="empty-note">No surgical history added.</p>
                 ) : (
                   payload.history.surgeries.map((s, i) => (
-                    <div key={i} className="list-entry" style={{ marginTop: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div key={i} className="list-entry" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                         <div className="field-block" style={{ margin: 0, flex: 1 }}>
                           <label>Procedure</label>
@@ -1268,7 +1268,7 @@ export function NoteEditorPage() {
                   <p className="empty-note">No previous pain history added.</p>
                 ) : (
                   payload.history.previousPainHistory.map((entry) => (
-                    <div key={entry.id} className="list-entry" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div key={entry.id} className="list-entry" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                         <div className="field-block" style={{ margin: 0, flex: 1 }}>
                           <label>Region</label>
@@ -1489,7 +1489,7 @@ export function NoteEditorPage() {
           </div>
           {payload.functionalStatus.activities.length === 0 && <p className="empty-note">No activities added.</p>}
           {payload.functionalStatus.activities.map((a, i) => (
-            <div className="list-entry" key={i} style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div className="list-entry" key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                 <div className="field-block" style={{ margin: 0, flex: 1 }}>
                   <label>Activity</label>
@@ -1579,7 +1579,7 @@ export function NoteEditorPage() {
             <button className="btn-secondary" disabled={readOnly} onClick={() => update('palpation', [...payload.palpation, { region: '', findings: [], painOnPalpation: 'none', notes: '' }])}>+ Add</button>
           </div>
           {payload.palpation.map((p, i) => (
-            <div className="list-entry" key={i} style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div className="list-entry" key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                 <div className="field-block" style={{ margin: 0, flex: 1 }}>
                   <label>Region</label>
@@ -1747,7 +1747,7 @@ export function NoteEditorPage() {
             </div>
           </div>
           {payload.objective.rom.map((r, i) => (
-            <div key={i} className="list-entry" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div key={i} className="list-entry" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                 <div className="field-block" style={{ margin: 0, flex: 1 }}>
                   <label>Movement</label>
@@ -1778,7 +1778,7 @@ export function NoteEditorPage() {
             </div>
           </div>
           {payload.objective.strength.map((s, i) => (
-            <div key={i} className="list-entry" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div key={i} className="list-entry" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                 <div className="field-block" style={{ margin: 0, flex: 1 }}>
                   <label>Movement</label>
@@ -1811,7 +1811,7 @@ export function NoteEditorPage() {
             <button className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, specialTests: [...payload.objective.specialTests, { testId: '', result: 'inconclusive' }] })}>+ Add</button>
           </div>
           {payload.objective.specialTests.map((t, i) => (
-            <div key={i} className="list-entry" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div key={i} className="list-entry" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                 <div className="field-block" style={{ margin: 0, flex: 1 }}>
                   <label>Test</label>
@@ -1971,7 +1971,7 @@ export function NoteEditorPage() {
           </div>
           <p className="empty-note" style={{ marginTop: 0 }}>Manual entry only — the exercise library browser isn't built yet.</p>
           {payload.hep.exercises.map((ex, i) => (
-            <div key={i} className="list-entry" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div key={i} className="list-entry" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                 <div className="field-block" style={{ margin: 0, flex: 1 }}>
                   <label>Exercise name</label>
@@ -2058,7 +2058,7 @@ export function NoteEditorPage() {
                 <p className="empty-note">No goals added.</p>
               ) : (
                 payload.plan.goals.map((g, i) => (
-                  <div key={i} className="list-entry" style={{ marginTop: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div key={i} className="list-entry" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                       <div className="field-block" style={{ margin: 0, flex: 1 }}>
                         <label>Goal</label>

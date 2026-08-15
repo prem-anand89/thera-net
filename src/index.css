@@ -222,14 +222,21 @@ body {
   padding: 20px; box-shadow: var(--shadow-1);
 }
 
-/* One row of a repeatable list (a trauma event, a goal, a ROM entry…)
-   nested inside an already-.setup-card'd section. Deliberately lighter
-   than .setup-card — no shadow, smaller radius, a tinted (not white)
-   background — so a list of entries reads as one grouped sub-list, not a
-   stack of nested cards each competing with the section around them. */
+/* One row of a repeatable list (a trauma event, a goal, a ROM entry…).
+   Earlier attempt gave this its own background/border/radius (a lighter
+   .setup-card) -- still read as a distinct grey box sitting inside an
+   otherwise flat white section, "patchwork" against the plain fields
+   around it, no matter how light. No box at all now: same background as
+   its section (none — transparent), just a hairline divider between
+   entries, the same `divide-y` pattern already used for every other list
+   in this app (invoices, the visits table, a patient's note history) —
+   so a repeated entry is legible as "one more row," not a separate
+   surface. */
 .list-entry {
-  background: var(--paper); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 0; border-bottom: 1px solid var(--border);
 }
+.list-entry:first-child { padding-top: 0; }
+.list-entry:last-child { border-bottom: none; padding-bottom: 0; }
 
 /* Was `1fr 1fr` unconditionally — two input columns on a 360px phone,
    which is why fields overflowed the card and got clipped on mobile.
