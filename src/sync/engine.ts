@@ -2,7 +2,7 @@ import { db, ALL_SYNCED_TABLES, CLIENT_WRITABLE_TABLES, type SyncedTable } from 
 import { getSupabase } from '@/lib/supabase';
 import { domainToRow, rowToDomain } from '@/repositories/rowMapping';
 import { onLocalWrite } from '@/repositories/local';
-import { syncStatus } from './status';
+import { syncStatus, isPermanentFailure } from './status';
 
 /**
  * Offline-first sync:
@@ -11,6 +11,10 @@ import { syncStatus } from './status';
  * - pull: per-table delta on updated_at > cursor (server-authoritative
  *   timestamps); rows with a pending local edit are skipped (local wins until
  *   its push lands, then the next pull settles it — last-write-wins)
+ * - a permanently-rejected push (RLS) is the one exception to "local wins
+ *   until the push lands": it never will, so the row is fetched fresh and
+ *   overwritten immediately rather than left showing a rejected edit
+ *   indefinitely — see push()'s error branch
  * - triggers: local writes, connectivity changes, Supabase realtime events,
  *   and a slow fallback interval
  */
@@ -164,9 +168,37 @@ export class SyncEngine {
           .where('seq')
           .equals(entry.seq!)
           .modify({ error: error.message, errorCode: error.code });
+        // An RLS rejection will never succeed by retrying — the row's
+        // ownership isn't going to change on its own — so unlike every
+        // other queued failure (which might genuinely clear on retry),
+        // leaving the local row as-is would show this device's rejected
+        // edit indefinitely: pull() deliberately skips any row with a
+        // pending outbox entry, precisely so a still-retryable edit isn't
+        // clobbered mid-flight, but that same skip means a permanently
+        // failed one is never settled by a normal pull either. Revert this
+        // one row to server truth immediately instead. The outbox entry
+        // itself stays (with its error), so the "won't succeed by
+        // retrying" notice remains until discarded or the row is edited
+        // again — only the stale local *data* is what this fixes.
+        if (isPermanentFailure(error.code, error.message)) {
+          await this.revertToServerTruth(entry.table, entry.rowId);
+        }
         continue;
       }
       await this.clearOutbox(entry.table, entry.rowId, maxSeq);
+    }
+  }
+
+  private async revertToServerTruth(table: SyncedTable, rowId: string) {
+    const supabase = this.supabase!;
+    const { data, error } = await supabase.from(table).select('*').eq('id', rowId).maybeSingle();
+    if (error) return; // best-effort — next sync cycle gets another chance
+    if (data) {
+      await db.table(table).put(normalize(table, rowToDomain<Record<string, unknown>>(data)));
+    } else {
+      // No server row at all under this id (e.g. deleted by someone else) —
+      // don't leave a phantom local row with nothing to revert to.
+      await db.table(table).delete(rowId);
     }
   }
 

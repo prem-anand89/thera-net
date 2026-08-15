@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type OutboxEntry } from '@/lib/db';
-import { syncStatus } from '@/sync/status';
+import { syncStatus, isPermanentFailure } from '@/sync/status';
 import { syncEngine } from '@/sync/engine';
 import { toFriendlyMessage } from '@/lib/errors';
 
@@ -28,22 +28,16 @@ export function SyncBadge() {
           ? `${status.pending} pending`
           : 'Synced';
 
-  // A permission denial (RLS rejection) will never succeed by retrying —
-  // the row's ownership isn't going to change on its own. Everything else
-  // queued here (network blips, a transient constraint conflict) might
-  // clear on its own, so only this case gets "won't succeed" copy instead
-  // of "keeps retrying."
-  function isPermanentFailure(entry: OutboxEntry): boolean {
-    return entry.errorCode === '42501' || /row-level security policy/i.test(entry.error ?? '');
-  }
-
   async function discard(entry: OutboxEntry) {
-    if (
-      !confirm(
-        "Stop trying to save this change to the server?\n\nYour local copy stays as it is, but the server (and other devices) will never receive this specific change unless you edit that record again."
-      )
-    )
-      return;
+    // A permanent (RLS) rejection is already reverted to server truth by
+    // the time it shows up here — see SyncEngine.push() — so "discard" for
+    // one of those just dismisses the notice, nothing more to lose. A
+    // still-retrying failure hasn't been touched, so discarding it is the
+    // real decision the original confirmation text describes.
+    const message = isPermanentFailure(entry.errorCode, entry.error)
+      ? 'Dismiss this notice?\n\nThis device already matches the server for this record — dismissing just clears the notice, it doesn\'t change any data.'
+      : "Stop trying to save this change to the server?\n\nYour local copy stays as it is, but the server (and other devices) will never receive this specific change unless you edit that record again.";
+    if (!confirm(message)) return;
     await syncEngine.discard(entry.table, entry.rowId);
   }
 
@@ -87,12 +81,13 @@ export function SyncBadge() {
             <>
               <p className="mt-2 text-xs text-[var(--muted)]">
                 Most of these retry automatically and clear on their own. Anything labeled
-                <span className="font-medium text-[var(--rust)]"> won't succeed by retrying</span> needs a
-                discard, or an admin to fix the underlying permission.
+                <span className="font-medium text-[var(--rust)]"> won't succeed by retrying</span> has already
+                been reverted on this device to match the server — dismiss the notice with Discard, or ask an
+                admin if it looks wrong.
               </p>
               <ul className="mt-2 max-h-64 space-y-2 overflow-y-auto">
                 {failed.map((e) => {
-                  const permanent = isPermanentFailure(e);
+                  const permanent = isPermanentFailure(e.errorCode, e.error);
                   return (
                     <li key={e.seq} className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] p-2">
                       <div className="text-xs font-medium text-[var(--rust)]">
