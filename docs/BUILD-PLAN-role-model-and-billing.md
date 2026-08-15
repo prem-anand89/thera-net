@@ -302,6 +302,86 @@ untouched per this repo's convention.
 Verified: typecheck, lint, vitest (231 passed), production build all
 clean after every fix in this pass.
 
+## Workflow review (2026-08-15, round 2)
+
+Follow-up review, this time walking the actual end-to-end workflows for
+each role (admin, therapist, front desk) plus an architectural read of
+how the role model interacts with the offline outbox — rather than
+grepping for stale text. Found six issues, all fixed:
+
+1. **Sign-out didn't clear all clinical data.** `Shell.tsx`'s clear list
+   was hand-maintained separately from the sync engine's table list and
+   had drifted: `consultation_notes`, `patient_module_enrollments`, and
+   `expected_visits` were never cleared, so on a shared front-desk
+   machine, clinical notes stayed in IndexedDB after sign-out. Both
+   lists now derive from one export (`db.ts`'s `ALL_SYNCED_TABLES`),
+   with a type-level exhaustiveness check that fails to compile if a
+   future synced table is added without updating it — verified by
+   temporarily removing an entry and confirming the build breaks.
+
+2. **Front desk could read full clinical note content.**
+   `usePermissions` declared `canViewClinicalNotes` but nothing
+   consumed it — `ConsultationNotePanel` rendered unconditionally.
+   Now gated in `PatientProfilePage` and `NoteEditorPage` (the latter
+   guards the route directly, since RLS SELECT stays open — front
+   desk's contraindications banner is a narrow derived subset of the
+   same notes and still needs read access, so this is a UI-level gate,
+   not an RLS change).
+
+3. **`consultation_notes_update` was still `is_clinic_member`** after
+   PR 10 scoped the equivalent `visits_update` policy to owner-or-admin
+   — a therapist could edit a colleague's clinical note (a medico-legal
+   record) despite being blocked from editing that same colleague's
+   billing row. Migration `20260815000005_scope_consultation_notes_
+   update.sql` brings it in line with `visits_update`'s exact shape.
+   Verified against a live local Postgres 16 database with three
+   simulated users: the note's own therapist and an admin can update
+   it; a different therapist gets `UPDATE 0` (RLS silently rejects the
+   row) — confirmed both the write and that the row stayed untouched.
+
+4. **A permission rejection in the offline outbox looked identical to
+   a transient one.** `OutboxEntry` now keeps the Postgrest error code;
+   `errors.ts` has a friendly pattern for the RLS rejection string
+   instead of showing it raw; `SyncBadge` labels a permission-denied
+   entry "won't succeed by retrying" instead of implying it'll clear on
+   its own like every other queued failure.
+
+5. **`scopeTherapistId` conflated "clinic-wide" with "unresolved."**
+   `undefined` meant both "admin/front_desk, deliberately clinic-wide"
+   and "role is therapist but no `therapists` row is linked to this
+   login (or the link hasn't loaded yet)." `repos.visits.list`'s filter
+   only applies when `therapistId` is truthy, so the second case fell
+   through to clinic-wide — an unlinked or still-loading therapist's
+   Workspace briefly or permanently showed every other therapist's
+   visits. Now uses a sentinel UUID: truthy (so the filter still
+   applies) but never matches a real row, failing closed instead of
+   open. `WorkspacePage` also surfaces the permanently-unlinked case as
+   a visible notice pointing at Settings → Team, instead of a silently
+   empty page with no explanation.
+
+6. **Delete/Split had no ownership pre-check.** They were offered on
+   every visit in a clinic-wide list (Ledger, a patient's history,
+   admin's Today) regardless of who logged it, so a therapist would
+   click Delete on a colleague's visit and only find out it was
+   rejected after the round-trip to the server. All three call sites
+   that build `VisitCardData` now mirror `visits_update`/`delete`'s RLS
+   check (admin or the visit's own therapist) before showing the
+   action.
+
+**Found but left alone, out of scope for a bug-fix pass:**
+`EditVisitModal.tsx` is a fully built, imported component in
+`VisitsPage.tsx`, but nothing anywhere calls `setEditing()` with a real
+id — it's unreachable dead code, likely orphaned when the
+`RowActionsMenu` (Repeat/Edit patient/Split/Delete) refactor replaced
+whatever used to open it. Wiring it up or deleting it is a product
+decision, not a correctness fix, so it's flagged here rather than
+touched.
+
+Verified: typecheck, lint, vitest (233 passed — 2 new cases added for
+the RLS-message pattern), production build all clean; the new migration
+replayed cleanly against the full history and was functionally tested
+with three simulated users against a local Postgres 16 database.
+
 ## Sequencing rationale
 
 Roles first, because every later PR keys off the role vocabulary and the
