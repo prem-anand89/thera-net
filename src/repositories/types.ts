@@ -32,6 +32,8 @@ export interface ClinicRepo {
 export interface TherapistRepo {
   list(clinicId: UUID, includeInactive?: boolean): Promise<Therapist[]>;
   put(therapist: Therapist): Promise<void>;
+  /** Local cache removal after a server-side hard delete (not outboxed) */
+  removeLocal(id: UUID): Promise<void>;
 }
 
 export interface CatalogRepo {

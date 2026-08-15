@@ -61,7 +61,7 @@ function makeFakeRepos() {
 
   const repos: Repos = {
     clinics: { get: async (id) => (id === clinic.id ? clinic : undefined), list: async () => [clinic], put: async () => {}, putLocal: async () => {} },
-    therapists: { list: async () => therapists, put: async () => {} },
+    therapists: { list: async () => therapists, put: async () => {}, removeLocal: async () => {} },
     catalog: { list: async () => catalog, get: async (id) => catalog.find((c) => c.id === id), put: async () => {} },
     patients: {
       get: async (id) => patients.get(id),

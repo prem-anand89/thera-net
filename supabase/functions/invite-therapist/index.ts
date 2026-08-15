@@ -4,6 +4,12 @@ interface InviteRequest {
   clinicId: string;
   email: string;
   role: 'admin' | 'therapist' | 'front_desk';
+  /** Required when role === 'therapist' — used to create and link a
+   *  `therapists` roster row in the same request, so a new therapist shows
+   *  up correctly-scoped (their own visits, not clinic-wide) from their
+   *  first login instead of needing a separate manual "add to roster, then
+   *  link" step an admin has to remember to do afterward. */
+  name?: string;
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -16,7 +22,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   try {
     const body: InviteRequest = await req.json();
-    const { clinicId, email, role } = body;
+    const { clinicId, email, role, name } = body;
 
     if (!clinicId || !email || !role) {
       return new Response(
@@ -28,6 +34,13 @@ export default async function handler(req: Request): Promise<Response> {
     if (!['admin', 'therapist', 'front_desk'].includes(role)) {
       return new Response(
         JSON.stringify({ error: 'Invalid role: must be admin, therapist, or front_desk' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (role === 'therapist' && !name?.trim()) {
+      return new Response(
+        JSON.stringify({ error: 'A name is required to invite a therapist' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -135,6 +148,35 @@ export default async function handler(req: Request): Promise<Response> {
         }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
+    }
+
+    // A therapist also needs a `therapists` roster row (what visits/notes
+    // actually reference, and what shows in the therapist picker) linked
+    // back to their new login via user_id -- otherwise an admin has to
+    // remember a separate manual step (Settings -> Team -> Service roster
+    // -> add + "Linked login"), and until they do, this person's Workspace
+    // can't tell "clinic-wide" apart from "not linked yet" and shows
+    // nothing. Best-effort: the invite and clinic access already succeeded
+    // above, so a failure here is reported but doesn't undo either --  the
+    // existing manual roster path still works as a fallback.
+    if (role === 'therapist') {
+      const { error: therapistError } = await serviceClient.from('therapists').insert({
+        clinic_id: clinicId,
+        name: name!.trim(),
+        user_id: newUserId,
+        active: true,
+      });
+      if (therapistError) {
+        console.error(`Failed to create therapist roster row for user ${newUserId}:`, therapistError);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Invitation sent to ${email}`,
+            warning: `Could not add them to the service roster automatically: ${therapistError.message}. Add them from Settings → Team → Service roster.`,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     return new Response(

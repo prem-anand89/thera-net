@@ -74,6 +74,12 @@ describe('toFriendlyMessage', () => {
     expect(toFriendlyMessage(new Error('Supabase is not configured'))).toBe('Supabase is not configured');
   });
 
+  it('translates the hard_delete_therapist rejection', () => {
+    expect(
+      toFriendlyMessage(postgrestError('therapist has 3 linked record(s); deactivate instead of deleting', 'P0001'))
+    ).toBe('This therapist has visits, notes, or invoices on record and cannot be permanently deleted. Deactivate them instead.');
+  });
+
   it('re-maps a double-leak wrapper Error that embeds a raw Postgrest message', () => {
     expect(
       toFriendlyMessage(new Error('Could not issue invoice: patient has 3 visit(s); hide the patient instead of deleting'))

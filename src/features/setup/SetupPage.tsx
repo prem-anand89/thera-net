@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, backupService } from '@/services';
+import { repos, backupService, therapistService } from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -14,6 +14,7 @@ import {
   effectivePricePerSession,
   type CatalogItem,
   type Clinic,
+  type Therapist,
 } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
 import {
@@ -34,15 +35,23 @@ import { toFriendlyMessage } from '@/lib/errors';
 
 type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'features' | 'data' | 'danger';
 
-const SECTIONS: { key: SectionKey; label: string }[] = [
-  { key: 'profile', label: 'Clinic profile' },
-  { key: 'billing', label: 'Billing & invoicing' },
-  { key: 'partner', label: 'Partner & split' },
-  { key: 'team', label: 'Team' },
-  { key: 'services', label: 'Services' },
-  { key: 'features', label: 'Features' },
-  { key: 'data', label: 'Data' },
-  { key: 'danger', label: 'Danger zone' },
+const SECTIONS: { key: SectionKey; label: string; description: string }[] = [
+  { key: 'profile', label: 'Clinic profile', description: 'Name, address, contact info, logo, walk-in ID prefix.' },
+  {
+    key: 'billing',
+    label: 'Billing & invoicing',
+    description: 'Invoice numbering, GST/tax ID, fiscal year, who can bill.',
+  },
+  {
+    key: 'partner',
+    label: 'Partner & split',
+    description: 'Revenue share with a partner hospital, therapist splits, TDS.',
+  },
+  { key: 'team', label: 'Team', description: 'Invite and manage logins, therapist roster.' },
+  { key: 'services', label: 'Services', description: 'Catalog of billable services and package prices.' },
+  { key: 'features', label: 'Features', description: 'Optional modules — Expected today, clinical notes, comparison chart.' },
+  { key: 'data', label: 'Data', description: 'Import historical visits, export/restore a full backup.' },
+  { key: 'danger', label: 'Danger zone', description: 'Reset this device\'s cache, or wipe all clinic data.' },
 ];
 
 /** Only add/remove `key` if that actually changes membership — keeps the
@@ -123,6 +132,9 @@ export function SetupPage() {
         </nav>
 
         <div className="min-w-0 flex-1 space-y-6">
+          <p className="-mb-2 text-xs text-[var(--muted)]">
+            {SECTIONS.find((s) => s.key === activeKey)?.description}
+          </p>
           {activeKey === 'profile' && <ClinicProfileSection onDirtyChange={setProfileDirty} />}
           {activeKey === 'billing' && <BillingSection onDirtyChange={setBillingDirty} />}
           {activeKey === 'partner' && <PartnerSection onDirtyChange={setPartnerDirty} />}
@@ -337,7 +349,14 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             onChange={(e) => set({ invoicePrefix: e.target.value.toUpperCase() })}
           />
         </Field>
-        <Field label="GST / Tax ID (optional)">
+        <Field
+          label={
+            <>
+              GST / Tax ID (optional)
+              <InfoTip text="Your clinic's tax registration number, printed on invoices. Not the same as the Tax/TDS % under Partner & split, which is a revenue-share percentage." />
+            </>
+          }
+        >
           <input className={inputCls} value={form.gstNo ?? ''} onChange={(e) => set({ gstNo: e.target.value || null })} />
         </Field>
         <Field label="Fiscal year starts in month">
@@ -994,10 +1013,12 @@ function Therapists() {
   const clinic = useClinic();
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const [name, setName] = useState('');
+  const [rosterError, setRosterError] = useState<string | null>(null);
   const [members, setMembers] = useState<ClinicMember[] | null>(null);
   const [membersError, setMembersError] = useState<string | null>(null);
   const [revokeInProgress, setRevokeInProgress] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'therapist' | 'front_desk'>('therapist');
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -1036,8 +1057,36 @@ function Therapists() {
     setName('');
   }
 
+  async function deleteTherapist(t: Therapist) {
+    setRosterError(null);
+    try {
+      const visits = await repos.visits.list({ clinicId: clinic.id, therapistId: t.id });
+      if (visits.length > 0) {
+        alert(
+          `${t.name} has ${visits.length} visit(s) on record, so they can't be permanently deleted — deactivate instead.`
+        );
+        return;
+      }
+      const typed = prompt(
+        `Permanently delete ${t.name} from the roster? This cannot be undone.\n\nType their name to confirm:`
+      );
+      if (typed === null) return;
+      if (typed.trim().toLowerCase() !== t.name.trim().toLowerCase()) {
+        alert('Name did not match — nothing was deleted.');
+        return;
+      }
+      await therapistService.hardDelete(t.id);
+    } catch (e) {
+      setRosterError(toFriendlyMessage(e));
+    }
+  }
+
   async function inviteTherapist() {
     if (!inviteEmail.trim()) return;
+    if (inviteRole === 'therapist' && !inviteName.trim()) {
+      setInviteError('Enter their name');
+      return;
+    }
     setInviteError(null);
     setInviteSuccess(null);
     setInviteBusy(true);
@@ -1062,18 +1111,25 @@ function Therapists() {
             clinicId: clinic.id,
             email: inviteEmail.trim(),
             role: inviteRole,
+            ...(inviteRole === 'therapist' ? { name: inviteName.trim() } : {}),
           }),
         }
       );
 
-      const result = (await response.json()) as { success?: boolean; message?: string; error?: string };
+      const result = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+        warning?: string;
+        error?: string;
+      };
 
       if (!response.ok || result.error) {
         throw new Error(result.error || `Request failed with status ${response.status}`);
       }
 
-      setInviteSuccess(`Invitation sent to ${inviteEmail}`);
+      setInviteSuccess(result.warning ? `Invitation sent to ${inviteEmail}. ${result.warning}` : `Invitation sent to ${inviteEmail}`);
       setInviteEmail('');
+      setInviteName('');
       setInviteRole('therapist');
     } catch (e) {
       setInviteError(toFriendlyMessage(e));
@@ -1109,16 +1165,8 @@ function Therapists() {
   return (
     <SectionCard title="Therapists & team">
       <div className="mb-6 space-y-3">
-        <h3 className="text-sm font-semibold text-[var(--ink)]">Invite a therapist to this clinic</h3>
+        <h3 className="text-sm font-semibold text-[var(--ink)]">Invite a team member</h3>
         <div className="flex max-w-sm flex-col gap-2">
-          <input
-            className={inputCls}
-            type="email"
-            placeholder="Email address"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            disabled={inviteBusy}
-          />
           <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
             Role
             <select
@@ -1132,10 +1180,33 @@ function Therapists() {
               <option value="admin">Admin</option>
             </select>
           </label>
+          {inviteRole === 'therapist' && (
+            <input
+              className={inputCls}
+              placeholder="Their name — shows in the therapist picker on visits"
+              value={inviteName}
+              onChange={(e) => setInviteName(e.target.value)}
+              disabled={inviteBusy}
+            />
+          )}
+          <input
+            className={inputCls}
+            type="email"
+            placeholder="Email address"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            disabled={inviteBusy}
+          />
           <button className={btnSecondary} disabled={inviteBusy} onClick={() => void inviteTherapist()}>
             {inviteBusy ? 'Sending…' : 'Send invitation'}
           </button>
         </div>
+        {inviteRole === 'therapist' && (
+          <p className="text-xs text-[var(--muted)]">
+            Automatically added to the service roster below and linked to their login — no separate
+            setup step needed.
+          </p>
+        )}
         {inviteSuccess && <p className="text-sm text-[var(--moss)]">{inviteSuccess}</p>}
         {inviteError && <ErrorNote message={inviteError} />}
       </div>
@@ -1184,6 +1255,12 @@ function Therapists() {
               >
                 {t.active ? 'Deactivate' : 'Reactivate'}
               </button>
+              <button
+                className="text-xs text-[var(--rust)] hover:underline"
+                onClick={() => void deleteTherapist(t)}
+              >
+                Delete
+              </button>
               {members && members.length > 0 && (
                 <label className="ml-auto flex items-center gap-2 text-xs text-[var(--muted)]">
                   Linked login
@@ -1222,15 +1299,20 @@ function Therapists() {
           </button>
         </div>
         <p className="mt-2 text-xs text-[var(--muted)]">
-          Deactivating keeps history intact — past visits still show the therapist.
+          Deactivating keeps history intact — past visits still show the therapist. Delete only
+          works for someone with zero visits, notes, or invoices on record (added by mistake, or
+          left before seeing a patient) — anyone with real history can only be deactivated.
           {members && members.length > 0 && (
             <>
               {' '}
-              Linking a therapist to their own login lets edit history show their name instead of
-              "another user".
+              Inviting a therapist above links their login automatically; the login dropdown here
+              is for linking one after the fact, or for a roster entry added manually.
             </>
           )}
         </p>
+        <div className="mt-2">
+          <ErrorNote message={rosterError} />
+        </div>
       </div>
     </SectionCard>
   );

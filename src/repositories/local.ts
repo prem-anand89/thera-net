@@ -69,6 +69,9 @@ const therapists: TherapistRepo = {
       .sort((a, b) => a.name.localeCompare(b.name));
   },
   put: (t) => putWithOutbox('therapists', t),
+  removeLocal: async (id) => {
+    await db.therapists.delete(id);
+  },
 };
 
 const catalog: CatalogRepo = {
