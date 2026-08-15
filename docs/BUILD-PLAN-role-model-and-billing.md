@@ -250,6 +250,58 @@ Verified against the repo during the review, not assumptions:
 in `docs/BUILD-PLAN-compiled-changes.md` — 15 PRs total across both
 plans.
 
+## Post-ship review (2026-08-15)
+
+A full read-through of the 15-PR build for bugs, inconsistencies, and dead
+code, done after PR 15 shipped. One finding required a migration; the rest
+were small cleanups.
+
+**Critical: `clinic_module_settings.allowed_roles` still said `'staff'`
+after PR 10's role rename — silently blocking every therapist from saving
+consultation notes.** PR 10 (`20260815000001_role_model_and_visit_rls.sql`)
+renamed every `clinic_members.role` from `staff` to `therapist` and
+dropped `staff` from the check constraint, but never touched
+`clinic_module_settings.allowed_roles`, which defaults to
+`array['admin','staff']` (`module_registry.sql`) and is what every clinic's
+`consultation_notes` row — seeded true for all clinics since PR 2 — relies
+on, since none of the seed inserts specify `allowed_roles` explicitly.
+`can_use_module()` checks `m.role = any(s.allowed_roles)`, so from the
+moment PR 10 shipped, no `clinic_members` row could ever match `'staff'`
+again, and every non-admin therapist's insert/update to `consultation_notes`
+was rejected by RLS — clinical documentation, an actively used feature,
+not the still-client-unwired assessment modules this table was built for.
+Fixed in `20260815000004_fix_allowed_roles_staff_rename.sql`: backfills
+every existing row's `allowed_roles` array and changes the column default
+to `array['admin','therapist']`. Verified against a full replay on a
+throwaway local Postgres 16 database: (1) a freshly created clinic seeds
+`consultation_notes.allowed_roles = {admin,therapist}`; (2) a `therapist`-
+role user (simulated via `SET ROLE authenticated` + `set_config('app.uid',
+...)`) can insert a consultation note; (3) manually reverting one row back
+to `{admin,staff}` reproduces the exact rejection (`new row violates
+row-level security policy for table "consultation_notes"`), confirming the
+bug was live, not theoretical.
+
+Smaller fixes made in the same pass:
+- `SetupPage.tsx`'s page heading still read "Setup" after PR 8 renamed the
+  nav item to "Settings" — only the nav label had been updated at the time.
+- `WorkspacePage.tsx` had a comment pointing at "Archive's Invoices tab",
+  left over from before PR 14 renamed Archive → Ledger.
+- `VisitCard.tsx` exported `VisitCardPaymentState`, a type alias for
+  `VisitPaymentState` that became a dead re-export once PR 12 consolidated
+  payment-state derivation into `src/domain/paymentState.ts`. Removed.
+
+Checked and found *not* to be problems: the duplicate `20260807000001_*`
+migration filename prefix (two distinct files, sorts deterministically —
+cosmetic only); `useClinicRole.ts`'s separately-declared `ClinicRole` union
+type (pre-existing, still in active use, not part of this build's role
+rename). No other binary admin/staff assumptions found in client code —
+grepped for `'staff'` across `src/` and confirmed the only remaining
+references are in historical (already-applied) migrations, correctly left
+untouched per this repo's convention.
+
+Verified: typecheck, lint, vitest (231 passed), production build all
+clean after every fix in this pass.
+
 ## Sequencing rationale
 
 Roles first, because every later PR keys off the role vocabulary and the
