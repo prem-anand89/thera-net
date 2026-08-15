@@ -18,7 +18,8 @@ framework.
 ## What it does
 
 ### Visit Management & Ledger
-- **Visit entry & patient lookup** — search by MRNO/name (create-if-missing, walk-in MRNO auto-generation), visit entry with catalog price autofill, price override with mandatory adjustment reason, package session tracking (1/3, 2/3 … with ₹0 continuations).
+- **Visit entry & patient lookup** — search by MRNO/name (create-if-missing, walk-in MRNO auto-generation), visit entry with catalog price autofill, price override with mandatory adjustment reason, package session tracking (1/3, 2/3 … with ₹0 continuations). Once a patient's confirmed, a reference panel shows their last visit and open-package progress alongside the form.
+- **Edit visit** — condition, treatment notes, and (while not yet invoiced) bill amount, therapist, and date, editable after the fact from Ledger's row menu — scoped to the visit's own therapist or an admin. Clinical fields stay editable after invoicing; only billing locks.
 - **Today-first workspace** — default landing page showing today's visits with payment state at a glance (Paid / Collect ₹X / ₹0 session), open packages with stale flags, pending work (outstanding invoices, incomplete notes), and recent visits in a rolling 7/15/30 day window.
 - **Ledger** — full visit history with dense table, patient enrichment (last visit + count, treatment, condition, bill amount), therapist filter, date range search, bulk actions (invoice, repeat, split, delete). Visits/Invoices/Reports sub-tabs are URL-addressable (`/ledger?tab=invoices`); the Invoices sub-tab only appears for clinics with billing access.
 
@@ -100,6 +101,13 @@ role model: **billing access** (`billingEnabled` + who's allowed to issue
 invoices — everyone or billing staff only) and **therapist comparison**
 (off by default; widens the dashboard's revenue/visit charts to
 therapists, not just admins).
+
+**Onboarding** — inviting a `therapist` from Settings → Team creates their
+login *and* their service-roster entry (linked to that login) in one step;
+`admin`/`front_desk` invites only need the login. A therapist can always be
+**deactivated** (keeps history intact) and, once they have zero visits,
+notes, or invoices on record, **permanently deleted** — matching how
+patients work.
 
 ## Status
 

@@ -40,6 +40,12 @@ Verified against the repo during the review, not assumptions:
 
 - **Manual invoices creating synthetic visits** (see Findings table). Real correctness bug, but it wasn't part of this review's discussion thread — flagged here so it isn't lost, not sequenced into the numbered plan below. Candidate fix: either don't route manual invoices through `visitService.create()`, or tag the resulting visit (e.g. `source: 'manual_invoice'`) and exclude tagged visits from payout/comparison/hospital-ledger aggregation.
 - **Moving split columns off the visit row** into a separate `visit_financials` table, which would let per-visit amounts be hidden from colleagues without hiding the visit. Rejected for now per decision 3 — large migration touching every report, and no clinic has asked for this level of privacy yet.
+- **`EditVisitModal`'s therapist-reassignment field has no `WITH CHECK`** — a therapist who owns a visit can reassign it to any other therapist, since `visits_update`'s RLS is a `USING`-only clause by design (matches the same pattern just applied to `consultation_notes_update`). Existing behavior, not introduced by wiring the modal up — just newly *reachable* now that the modal has a trigger. Not fixed: restricting it is a product call (should a therapist be able to hand a visit to a colleague at all?), not a bug fix.
+- **`canManageTeam` and `canViewPayouts`** (`usePermissions.ts`) are declared, documented, and still never consumed anywhere — found during the workflow review, not fixed. Team management is only incidentally protected because it sits inside `canEditSettings`'s wrapper.
+- **`.mobile-only`/`.desktop-only`** (`index.css`) — dead CSS classes with zero usages anywhere in `src/`, found (and correctly *not* used) during PR 11's investigation. Never removed.
+- **`my_memberships` Dexie table** (`db.ts` version 5) — schema defined, never referenced by any repo, service, or component. Likely a leftover from an abandoned feature. Not removed — dropping a Dexie store definition needs care around already-provisioned browsers.
+- **`invite-therapist`'s `inviteUserByEmail(email, { autoConfirm: true })`** — `autoConfirm` isn't a documented option on Supabase's v2 Admin API for `inviteUserByEmail` (it's not silently harmful, since Deno doesn't type-check this at runtime — it'd just be ignored if unrecognized — but it may not be doing what the original author intended, e.g. skipping email confirmation). Not investigated further — would need a live Supabase project to confirm actual behavior, which this environment doesn't have.
+- **The offline outbox's stale-display gap** (flagged in the workflow review's item 4, not fixed there): once a write is permanently rejected (e.g. RLS), the local device keeps showing the rejected edit indefinitely — `pull()` skips rows with a pending outbox entry, and nothing currently reverts the local row to server truth after a permanent failure. The badge now correctly labels it "won't succeed by retrying," but the stale display itself is unaddressed.
 
 ## PR sequence
 
@@ -407,6 +413,63 @@ Verified: typecheck, lint, vitest (235 passed — 3 new), production
 build clean. Not verified in a live browser — no Supabase project is
 configured in this environment, so an authenticated click-through
 wasn't possible; the dev server does boot clean.
+
+## Onboarding, New Visit redesign, and therapist lifecycle (2026-08-15)
+
+Four requested changes, shipped as three commits:
+
+**Sign-in flash fix.** `Shell.tsx` showed `CreateClinicForm` whenever
+`clinic` resolved to `null` — but that value meant two different
+things: "Dexie's `clinics`/`activeClinicId` live queries haven't
+resolved yet" and "this account genuinely has zero clinics." The
+`syncKicked` guard that was supposed to cover the loading gap only
+tracked session resolution, which (from localStorage) is typically
+faster than Dexie's IndexedDB open — so on a hard refresh,
+`CreateClinicForm` could flash before the real clinic loaded in. Now
+`clinics === undefined || activeClinicId === undefined` is treated as
+part of the same "Preparing…" state.
+
+**Onboarding: auto-link the therapist roster row.** Root-caused to the
+same gap the "workflow review round 2" `isUnlinkedTherapist` fix
+detected and notified about — this fixes it at the source instead.
+Inviting a `therapist`-role member previously only created the
+`clinic_members` auth row; an admin had to separately remember a
+manual "add to roster, then link" step. The invite form now asks for a
+name when the role is `therapist`, and `invite-therapist`'s edge
+function creates and links the `therapists` row in the same request
+(best-effort — a failure here surfaces as a warning, doesn't undo the
+invite).
+
+**New Visit page redesign**, per a supplied reference mock: two-column
+layout once a patient is confirmed (reference panel left, form right,
+collapsing to stacked below `tab:`), no outstanding-balance tile (per
+explicit direction — replaced with "Last visit" and "Package" tiles),
+segmented pill toggles replacing the mode/payment radio-button rows.
+
+**Therapist hard delete**, mirroring `hard_delete_patient`'s exact
+shape: new `hard_delete_therapist` RPC, admin-only, blocked if any
+visit/note/invoice references the therapist. Verified against a live
+local Postgres 16 database: zero-history delete succeeds, a
+history-bearing therapist is blocked with a mapped friendly error, a
+non-admin is blocked outright.
+
+**Settings: a scoped simplification pass**, not a restructure. Added a
+one-line description per section (shown above the active section's
+content) so an admin doesn't have to click through all 8 tabs to find
+the right one. Disambiguated "GST / Tax ID" from "Tax / TDS %" — two
+unrelated concepts (a registration number vs. a revenue-share
+percentage) that share the word "tax" across different sections.
+Deliberately did *not* restructure "Partner & split"'s ten fields into
+smaller sections — the code already documents why they're saved
+together (`clinicBillingConfig()` reads them as one unit; splitting
+the save action risks the exact mid-edit desync that comment warns
+about) — and did not reduce the 8-section count, since collapsing
+distinct concerns to shrink a tab list isn't actually simpler.
+
+Verified: typecheck, lint, vitest (236 passed), production build all
+clean. Not verified in a live browser — no Supabase project is
+configured in this environment; the invite-therapist edge function
+change in particular hasn't been exercised end-to-end.
 
 ## Sequencing rationale
 
