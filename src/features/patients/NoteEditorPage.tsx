@@ -1006,20 +1006,20 @@ export function NoteEditorPage() {
                 ) : (
                   payload.chiefComplaint.secondaryComplaints.map((complaint) => (
                     <div key={complaint.id} className="list-entry" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <input
-                          className="field-input"
-                          placeholder="Region"
-                          value={complaint.region}
-                          disabled={readOnly}
-                          onChange={(e) =>
-                            update('chiefComplaint', {
-                              ...payload.chiefComplaint,
-                              secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, region: e.target.value } : x))
-                            })
-                          }
-                          style={{ flex: 1 }}
-                        />
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                        <div className="field-block" style={{ margin: 0, flex: 1 }}>
+                          <label>Region</label>
+                          <input
+                            value={complaint.region}
+                            disabled={readOnly}
+                            onChange={(e) =>
+                              update('chiefComplaint', {
+                                ...payload.chiefComplaint,
+                                secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, region: e.target.value } : x))
+                              })
+                            }
+                          />
+                        </div>
                         <button
                           className="kebab"
                           disabled={readOnly}
@@ -1034,56 +1034,60 @@ export function NoteEditorPage() {
                         </button>
                       </div>
                       <div className="field-row">
-                        <input
-                          className="field-input"
-                          placeholder="Onset"
-                          value={complaint.onset ?? ''}
-                          disabled={readOnly}
-                          onChange={(e) =>
-                            update('chiefComplaint', {
-                              ...payload.chiefComplaint,
-                              secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, onset: e.target.value } : x))
-                            })
-                          }
-                        />
-                        <input
-                          className="field-input"
-                          placeholder="Mechanism"
-                          value={complaint.mechanism ?? ''}
-                          disabled={readOnly}
-                          onChange={(e) =>
-                            update('chiefComplaint', {
-                              ...payload.chiefComplaint,
-                              secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, mechanism: e.target.value } : x))
-                            })
-                          }
-                        />
+                        <div className="field-block" style={{ margin: 0 }}>
+                          <label>Onset</label>
+                          <input
+                            value={complaint.onset ?? ''}
+                            disabled={readOnly}
+                            onChange={(e) =>
+                              update('chiefComplaint', {
+                                ...payload.chiefComplaint,
+                                secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, onset: e.target.value } : x))
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="field-block" style={{ margin: 0 }}>
+                          <label>Mechanism</label>
+                          <input
+                            value={complaint.mechanism ?? ''}
+                            disabled={readOnly}
+                            onChange={(e) =>
+                              update('chiefComplaint', {
+                                ...payload.chiefComplaint,
+                                secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, mechanism: e.target.value } : x))
+                              })
+                            }
+                          />
+                        </div>
                       </div>
                       <div className="field-row">
-                        <input
-                          className="field-input"
-                          placeholder="Episode pattern"
-                          value={complaint.episodePattern ?? ''}
-                          disabled={readOnly}
-                          onChange={(e) =>
-                            update('chiefComplaint', {
-                              ...payload.chiefComplaint,
-                              secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, episodePattern: e.target.value } : x))
-                            })
-                          }
-                        />
-                        <input
-                          className="field-input"
-                          placeholder="Notes"
-                          value={complaint.note ?? ''}
-                          disabled={readOnly}
-                          onChange={(e) =>
-                            update('chiefComplaint', {
-                              ...payload.chiefComplaint,
-                              secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, note: e.target.value } : x))
-                            })
-                          }
-                        />
+                        <div className="field-block" style={{ margin: 0 }}>
+                          <label>Episode pattern</label>
+                          <input
+                            value={complaint.episodePattern ?? ''}
+                            disabled={readOnly}
+                            onChange={(e) =>
+                              update('chiefComplaint', {
+                                ...payload.chiefComplaint,
+                                secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, episodePattern: e.target.value } : x))
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="field-block" style={{ margin: 0 }}>
+                          <label>Notes</label>
+                          <input
+                            value={complaint.note ?? ''}
+                            disabled={readOnly}
+                            onChange={(e) =>
+                              update('chiefComplaint', {
+                                ...payload.chiefComplaint,
+                                secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, note: e.target.value } : x))
+                              })
+                            }
+                          />
+                        </div>
                       </div>
                     </div>
                   ))
@@ -1185,13 +1189,22 @@ export function NoteEditorPage() {
                 ) : (
                   payload.history.traumas.map((t, i) => (
                     <div key={i} className="list-entry" style={{ marginTop: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <input className="field-input" placeholder="Body part" value={t.bodyPart} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, bodyPart: e.target.value } : x)) })} style={{ flex: 1 }} />
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                        <div className="field-block" style={{ margin: 0, flex: 1 }}>
+                          <label>Body part</label>
+                          <input value={t.bodyPart} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, bodyPart: e.target.value } : x)) })} />
+                        </div>
                         <button className="kebab" disabled={readOnly} onClick={() => update('history', { ...payload.history, traumas: payload.history.traumas.filter((_, j) => j !== i) })}>✕</button>
                       </div>
                       <div className="field-row">
-                        <input className="field-input" type="text" placeholder="Date/year" value={t.date} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)) })} />
-                        <input className="field-input" placeholder="Nature" value={t.nature} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, nature: e.target.value } : x)) })} />
+                        <div className="field-block" style={{ margin: 0 }}>
+                          <label>Date/year</label>
+                          <input type="text" value={t.date} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)) })} />
+                        </div>
+                        <div className="field-block" style={{ margin: 0 }}>
+                          <label>Nature</label>
+                          <input value={t.nature} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, nature: e.target.value } : x)) })} />
+                        </div>
                       </div>
                     </div>
                   ))
@@ -1208,17 +1221,26 @@ export function NoteEditorPage() {
                 ) : (
                   payload.history.surgeries.map((s, i) => (
                     <div key={i} className="list-entry" style={{ marginTop: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <input className="field-input" placeholder="Procedure" value={s.procedure} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, procedure: e.target.value } : x)) })} style={{ flex: 1 }} />
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                        <div className="field-block" style={{ margin: 0, flex: 1 }}>
+                          <label>Procedure</label>
+                          <input value={s.procedure} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, procedure: e.target.value } : x)) })} />
+                        </div>
                         <button className="kebab" disabled={readOnly} onClick={() => update('history', { ...payload.history, surgeries: payload.history.surgeries.filter((_, j) => j !== i) })}>✕</button>
                       </div>
                       <div className="field-row">
-                        <input className="field-input" type="text" placeholder="Date/year" value={s.date} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)) })} />
-                        <select className="field-input" value={s.outcome} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, outcome: e.target.value as typeof x.outcome } : x)) })}>
-                          <option value="good">Good</option>
-                          <option value="fair">Fair</option>
-                          <option value="poor">Poor</option>
-                        </select>
+                        <div className="field-block" style={{ margin: 0 }}>
+                          <label>Date/year</label>
+                          <input type="text" value={s.date} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)) })} />
+                        </div>
+                        <div className="field-block" style={{ margin: 0 }}>
+                          <label>Outcome</label>
+                          <select value={s.outcome} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, outcome: e.target.value as typeof x.outcome } : x)) })}>
+                            <option value="good">Good</option>
+                            <option value="fair">Fair</option>
+                            <option value="poor">Poor</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
                   ))
@@ -1247,20 +1269,20 @@ export function NoteEditorPage() {
                 ) : (
                   payload.history.previousPainHistory.map((entry) => (
                     <div key={entry.id} className="list-entry" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <input
-                          className="field-input"
-                          placeholder="Region"
-                          value={entry.region}
-                          disabled={readOnly}
-                          onChange={(e) =>
-                            update('history', {
-                              ...payload.history,
-                              previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, region: e.target.value } : x))
-                            })
-                          }
-                          style={{ flex: 1 }}
-                        />
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                        <div className="field-block" style={{ margin: 0, flex: 1 }}>
+                          <label>Region</label>
+                          <input
+                            value={entry.region}
+                            disabled={readOnly}
+                            onChange={(e) =>
+                              update('history', {
+                                ...payload.history,
+                                previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, region: e.target.value } : x))
+                              })
+                            }
+                          />
+                        </div>
                         <button
                           className="kebab"
                           disabled={readOnly}
@@ -1275,60 +1297,65 @@ export function NoteEditorPage() {
                         </button>
                       </div>
                       <div className="field-row">
-                        <input
-                          className="field-input"
-                          placeholder="Timeline onset"
-                          value={entry.timelineOnset ?? ''}
-                          disabled={readOnly}
-                          onChange={(e) =>
-                            update('history', {
-                              ...payload.history,
-                              previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, timelineOnset: e.target.value } : x))
-                            })
-                          }
-                        />
-                        <input
-                          className="field-input"
-                          placeholder="Timeline duration"
-                          value={entry.timelineDuration ?? ''}
-                          disabled={readOnly}
-                          onChange={(e) =>
-                            update('history', {
-                              ...payload.history,
-                              previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, timelineDuration: e.target.value } : x))
-                            })
-                          }
-                        />
+                        <div className="field-block" style={{ margin: 0 }}>
+                          <label>Timeline onset</label>
+                          <input
+                            value={entry.timelineOnset ?? ''}
+                            disabled={readOnly}
+                            onChange={(e) =>
+                              update('history', {
+                                ...payload.history,
+                                previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, timelineOnset: e.target.value } : x))
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="field-block" style={{ margin: 0 }}>
+                          <label>Timeline duration</label>
+                          <input
+                            value={entry.timelineDuration ?? ''}
+                            disabled={readOnly}
+                            onChange={(e) =>
+                              update('history', {
+                                ...payload.history,
+                                previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, timelineDuration: e.target.value } : x))
+                              })
+                            }
+                          />
+                        </div>
                       </div>
                       <div className="field-row">
-                        <select
-                          className="field-input"
-                          value={entry.intensity ?? ''}
-                          disabled={readOnly}
-                          onChange={(e) =>
-                            update('history', {
-                              ...payload.history,
-                              previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, intensity: (e.target.value || undefined) as typeof entry.intensity } : x))
-                            })
-                          }
-                        >
-                          <option value="">—</option>
-                          <option value="mild">Mild</option>
-                          <option value="moderate">Moderate</option>
-                          <option value="severe">Severe</option>
-                        </select>
-                        <input
-                          className="field-input"
-                          placeholder="Treatment"
-                          value={entry.treatment ?? ''}
-                          disabled={readOnly}
-                          onChange={(e) =>
-                            update('history', {
-                              ...payload.history,
-                              previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, treatment: e.target.value } : x))
-                            })
-                          }
-                        />
+                        <div className="field-block" style={{ margin: 0 }}>
+                          <label>Intensity</label>
+                          <select
+                            value={entry.intensity ?? ''}
+                            disabled={readOnly}
+                            onChange={(e) =>
+                              update('history', {
+                                ...payload.history,
+                                previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, intensity: (e.target.value || undefined) as typeof entry.intensity } : x))
+                              })
+                            }
+                          >
+                            <option value="">—</option>
+                            <option value="mild">Mild</option>
+                            <option value="moderate">Moderate</option>
+                            <option value="severe">Severe</option>
+                          </select>
+                        </div>
+                        <div className="field-block" style={{ margin: 0 }}>
+                          <label>Treatment</label>
+                          <input
+                            value={entry.treatment ?? ''}
+                            disabled={readOnly}
+                            onChange={(e) =>
+                              update('history', {
+                                ...payload.history,
+                                previousPainHistory: payload.history.previousPainHistory?.map((x) => (x.id === entry.id ? { ...x, treatment: e.target.value } : x))
+                              })
+                            }
+                          />
+                        </div>
                       </div>
                     </div>
                   ))
@@ -1463,19 +1490,20 @@ export function NoteEditorPage() {
           {payload.functionalStatus.activities.length === 0 && <p className="empty-note">No activities added.</p>}
           {payload.functionalStatus.activities.map((a, i) => (
             <div className="list-entry" key={i} style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  className="field-input"
-                  style={{ flex: 1 }}
-                  placeholder="Activity (e.g. climbing stairs)"
-                  value={a.label}
-                  disabled={readOnly}
-                  onChange={(e) =>
-                    update('functionalStatus', {
-                      activities: payload.functionalStatus.activities.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)),
-                    })
-                  }
-                />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <div className="field-block" style={{ margin: 0, flex: 1 }}>
+                  <label>Activity</label>
+                  <input
+                    placeholder="e.g. climbing stairs"
+                    value={a.label}
+                    disabled={readOnly}
+                    onChange={(e) =>
+                      update('functionalStatus', {
+                        activities: payload.functionalStatus.activities.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)),
+                      })
+                    }
+                  />
+                </div>
                 <button className="kebab" disabled={readOnly} onClick={() => update('functionalStatus', { activities: payload.functionalStatus.activities.filter((_, j) => j !== i) })}>✕</button>
               </div>
               <div>
@@ -1552,15 +1580,21 @@ export function NoteEditorPage() {
           </div>
           {payload.palpation.map((p, i) => (
             <div className="list-entry" key={i} style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input className="field-input" style={{ flex: 1 }} placeholder="Region" value={p.region} disabled={readOnly} onChange={(e) => update('palpation', payload.palpation.map((x, j) => (j === i ? { ...x, region: e.target.value } : x)))} />
-                <select className="field-input" value={p.painOnPalpation} disabled={readOnly} onChange={(e) => update('palpation', payload.palpation.map((x, j) => (j === i ? { ...x, painOnPalpation: e.target.value as typeof x.painOnPalpation } : x)))}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <div className="field-block" style={{ margin: 0, flex: 1 }}>
+                  <label>Region</label>
+                  <input value={p.region} disabled={readOnly} onChange={(e) => update('palpation', payload.palpation.map((x, j) => (j === i ? { ...x, region: e.target.value } : x)))} />
+                </div>
+                <button className="kebab" disabled={readOnly} onClick={() => update('palpation', payload.palpation.filter((_, j) => j !== i))}>✕</button>
+              </div>
+              <div className="field-block" style={{ margin: 0 }}>
+                <label>Pain on palpation</label>
+                <select value={p.painOnPalpation} disabled={readOnly} onChange={(e) => update('palpation', payload.palpation.map((x, j) => (j === i ? { ...x, painOnPalpation: e.target.value as typeof x.painOnPalpation } : x)))}>
                   <option value="none">None</option>
                   <option value="mild">Mild</option>
                   <option value="moderate">Moderate</option>
                   <option value="severe">Severe</option>
                 </select>
-                <button className="kebab" disabled={readOnly} onClick={() => update('palpation', payload.palpation.filter((_, j) => j !== i))}>✕</button>
               </div>
               <MultiToggle
                 options={['Tenderness', 'Muscle spasm', 'Trigger points', 'Swelling', 'Warmth', 'Crepitus']}
@@ -1714,13 +1748,22 @@ export function NoteEditorPage() {
           </div>
           {payload.objective.rom.map((r, i) => (
             <div key={i} className="list-entry" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input className="field-input" placeholder="Movement" value={r.movement} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, movement: e.target.value } : x)) })} style={{ flex: 1 }} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <div className="field-block" style={{ margin: 0, flex: 1 }}>
+                  <label>Movement</label>
+                  <input value={r.movement} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, movement: e.target.value } : x)) })} />
+                </div>
                 <button className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, rom: payload.objective.rom.filter((_, j) => j !== i) })}>✕</button>
               </div>
               <div className="field-row">
-                <input className="field-input" type="number" placeholder="Active °" value={r.active ?? ''} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, active: e.target.value ? Number(e.target.value) : null } : x)) })} />
-                <input className="field-input" type="number" placeholder="Passive °" value={r.passive ?? ''} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, passive: e.target.value ? Number(e.target.value) : null } : x)) })} />
+                <div className="field-block" style={{ margin: 0 }}>
+                  <label>Active °</label>
+                  <input type="number" value={r.active ?? ''} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, active: e.target.value ? Number(e.target.value) : null } : x)) })} />
+                </div>
+                <div className="field-block" style={{ margin: 0 }}>
+                  <label>Passive °</label>
+                  <input type="number" value={r.passive ?? ''} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, passive: e.target.value ? Number(e.target.value) : null } : x)) })} />
+                </div>
               </div>
             </div>
           ))}
@@ -1736,18 +1779,27 @@ export function NoteEditorPage() {
           </div>
           {payload.objective.strength.map((s, i) => (
             <div key={i} className="list-entry" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input className="field-input" placeholder="Movement" value={s.movement} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, movement: e.target.value } : x)) })} style={{ flex: 1 }} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <div className="field-block" style={{ margin: 0, flex: 1 }}>
+                  <label>Movement</label>
+                  <input value={s.movement} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, movement: e.target.value } : x)) })} />
+                </div>
                 <button className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, strength: payload.objective.strength.filter((_, j) => j !== i) })}>✕</button>
               </div>
               <div className="field-row">
-                <select className="field-input" value={s.grade} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, grade: e.target.value as typeof x.grade } : x)) })}>
-                  {['5/5', '4/5', '3/5', '2/5', '1/5', '0/5', 'not-tested'].map((g) => <option key={g} value={g}>{g}</option>)}
-                </select>
-                <select className="field-input" value={s.nerveRoot ?? ''} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, nerveRoot: (e.target.value || undefined) as NeuroLevel | undefined } : x)) })}>
-                  <option value="">— root</option>
-                  {NEURO_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-                </select>
+                <div className="field-block" style={{ margin: 0 }}>
+                  <label>Grade</label>
+                  <select value={s.grade} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, grade: e.target.value as typeof x.grade } : x)) })}>
+                    {['5/5', '4/5', '3/5', '2/5', '1/5', '0/5', 'not-tested'].map((g) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+                <div className="field-block" style={{ margin: 0 }}>
+                  <label>Nerve root</label>
+                  <select value={s.nerveRoot ?? ''} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, nerveRoot: (e.target.value || undefined) as NeuroLevel | undefined } : x)) })}>
+                    <option value="">—</option>
+                    {NEURO_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
           ))}
@@ -1760,15 +1812,21 @@ export function NoteEditorPage() {
           </div>
           {payload.objective.specialTests.map((t, i) => (
             <div key={i} className="list-entry" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input className="field-input" placeholder="Test (e.g. FABER)" value={t.testId} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.map((x, j) => (j === i ? { ...x, testId: e.target.value } : x)) })} style={{ flex: 1 }} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <div className="field-block" style={{ margin: 0, flex: 1 }}>
+                  <label>Test</label>
+                  <input placeholder="e.g. FABER" value={t.testId} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.map((x, j) => (j === i ? { ...x, testId: e.target.value } : x)) })} />
+                </div>
                 <button className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.filter((_, j) => j !== i) })}>✕</button>
               </div>
-              <select className="field-input" value={t.result} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.map((x, j) => (j === i ? { ...x, result: e.target.value as typeof x.result } : x)) })}>
-                <option value="negative">Negative</option>
-                <option value="positive">Positive</option>
-                <option value="inconclusive">Inconclusive</option>
-              </select>
+              <div className="field-block" style={{ margin: 0 }}>
+                <label>Result</label>
+                <select value={t.result} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.map((x, j) => (j === i ? { ...x, result: e.target.value as typeof x.result } : x)) })}>
+                  <option value="negative">Negative</option>
+                  <option value="positive">Positive</option>
+                  <option value="inconclusive">Inconclusive</option>
+                </select>
+              </div>
             </div>
           ))}
         </div>
@@ -1914,8 +1972,11 @@ export function NoteEditorPage() {
           <p className="empty-note" style={{ marginTop: 0 }}>Manual entry only — the exercise library browser isn't built yet.</p>
           {payload.hep.exercises.map((ex, i) => (
             <div key={i} className="list-entry" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input className="field-input" placeholder="e.g. Wall slides" value={ex.name} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} style={{ flex: 1 }} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <div className="field-block" style={{ margin: 0, flex: 1 }}>
+                  <label>Exercise name</label>
+                  <input placeholder="e.g. Wall slides" value={ex.name} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
+                </div>
                 <button className="kebab" disabled={readOnly} onClick={() => update('hep', { ...payload.hep, exercises: payload.hep.exercises.filter((_, j) => j !== i) })}>✕</button>
               </div>
               <div className="field-row">
@@ -1930,7 +1991,7 @@ export function NoteEditorPage() {
               </div>
               <div className="field-block" style={{ margin: 0 }}>
                 <label>Frequency / hold</label>
-                <input className="field-input" placeholder="e.g. Daily, hold 30s" value={ex.frequency} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, frequency: e.target.value } : x)) })} />
+                <input placeholder="e.g. Daily, hold 30s" value={ex.frequency} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, frequency: e.target.value } : x)) })} />
               </div>
             </div>
           ))}
@@ -1998,17 +2059,26 @@ export function NoteEditorPage() {
               ) : (
                 payload.plan.goals.map((g, i) => (
                   <div key={i} className="list-entry" style={{ marginTop: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input className="field-input" placeholder="Goal" value={g.text} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) })} style={{ flex: 1 }} />
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                      <div className="field-block" style={{ margin: 0, flex: 1 }}>
+                        <label>Goal</label>
+                        <input value={g.text} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) })} />
+                      </div>
                       <button className="kebab" disabled={readOnly} onClick={() => update('plan', { ...payload.plan, goals: payload.plan.goals.filter((_, j) => j !== i) })}>✕</button>
                     </div>
                     <div className="field-row">
-                      <select className="field-input" value={g.targetTerm} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, targetTerm: e.target.value as 'short-term' | 'long-term' | '' } : x)) })}>
-                        <option value="">Term…</option>
-                        <option value="short-term">Short-term</option>
-                        <option value="long-term">Long-term</option>
-                      </select>
-                      <input className="field-input" type="date" value={g.targetDate ?? ''} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, targetDate: e.target.value } : x)) })} />
+                      <div className="field-block" style={{ margin: 0 }}>
+                        <label>Target term</label>
+                        <select value={g.targetTerm} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, targetTerm: e.target.value as 'short-term' | 'long-term' | '' } : x)) })}>
+                          <option value="">—</option>
+                          <option value="short-term">Short-term</option>
+                          <option value="long-term">Long-term</option>
+                        </select>
+                      </div>
+                      <div className="field-block" style={{ margin: 0 }}>
+                        <label>Target date</label>
+                        <input type="date" value={g.targetDate ?? ''} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, targetDate: e.target.value } : x)) })} />
+                      </div>
                     </div>
                   </div>
                 ))

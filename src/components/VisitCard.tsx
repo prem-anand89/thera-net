@@ -271,53 +271,70 @@ export function SharedVisitCard({
     data.treatmentNotes,
   ].filter(Boolean);
 
-  return (
-    <div className="flex items-start gap-3 py-3">
-      {showDate && (
-        <div className="w-14 shrink-0 pt-0.5 text-xs text-[var(--muted)]">
-          {formatDateDMY(data.visitDate)}
-          {data.editedBy && (
-            <span className="ml-1" title={`Edited by ${data.editedBy}`}>
-              ✎
-            </span>
-          )}
-          {data.syncError && (
-            <span className="ml-1 text-[var(--rust)]" title={`Sync issue: ${data.syncError}`}>
-              ⚠
-            </span>
-          )}
-        </div>
-      )}
-
+  const nameBlock = (
+    <div className="min-w-0 flex-1">
       {showPatient && (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
-          {initials || '?'}
-        </div>
+        <Link to="/patients/$patientId" params={{ patientId: data.patientId }} className="font-display text-sm font-medium text-[var(--ink)] hover:underline">
+          {data.patientName} <span className="text-xs font-normal text-[var(--muted)]">{data.mrno}</span>
+        </Link>
       )}
+      <div className="text-xs text-[var(--muted)]" style={{ whiteSpace: 'normal' }}>
+        {secondaryParts.map((part, i) => (
+          <span key={i}>
+            {i > 0 && ' · '}
+            {part}
+            {i === 1 && data.sessionIndex && data.packageTotal && (
+              <span className="ml-1 align-middle">
+                <PackageThread sessionIndex={data.sessionIndex} packageTotal={data.packageTotal} />
+              </span>
+            )}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 
-      <div className="min-w-0 flex-1">
-        {showPatient && (
-          <Link to="/patients/$patientId" params={{ patientId: data.patientId }} className="font-display text-sm font-medium text-[var(--ink)] hover:underline">
-            {data.patientName} <span className="text-xs font-normal text-[var(--muted)]">{data.mrno}</span>
-          </Link>
+  return (
+    // Below sm:, date + avatar + name share one row and payment info +
+    // actions share a second, full-width row — cramming all five into one
+    // flex row left the name/details column with almost no space on a
+    // narrow phone, forcing every word onto its own line. sm: and up
+    // (still card view below tab:, e.g. a wider phone or small tablet)
+    // reverts to the original single-row layout via sm:contents, which has
+    // room for it.
+    <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:gap-3">
+      <div className="flex items-start gap-3">
+        {showDate && (
+          <div className="w-14 shrink-0 pt-0.5 text-xs text-[var(--muted)]">
+            {formatDateDMY(data.visitDate)}
+            {data.editedBy && (
+              <span className="ml-1" title={`Edited by ${data.editedBy}`}>
+                ✎
+              </span>
+            )}
+            {data.syncError && (
+              <span className="ml-1 text-[var(--rust)]" title={`Sync issue: ${data.syncError}`}>
+                ⚠
+              </span>
+            )}
+          </div>
         )}
-        <div className="text-xs text-[var(--muted)]" style={{ whiteSpace: 'normal' }}>
-          {secondaryParts.map((part, i) => (
-            <span key={i}>
-              {i > 0 && ' · '}
-              {part}
-              {i === 1 && data.sessionIndex && data.packageTotal && (
-                <span className="ml-1 align-middle">
-                  <PackageThread sessionIndex={data.sessionIndex} packageTotal={data.packageTotal} />
-                </span>
-              )}
-            </span>
-          ))}
-        </div>
+
+        {showPatient && (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
+            {initials || '?'}
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1 sm:hidden">{nameBlock}</div>
       </div>
 
-      <PaymentStatusDisplay data={data} onInvoice={onInvoice} canInvoice={canInvoice} />
-      <RowActionsMenu data={data} onEditPatient={onEditPatient} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
+      <div className="hidden sm:contents">{nameBlock}</div>
+
+      <div className="flex items-center justify-between gap-2 sm:contents">
+        <PaymentStatusDisplay data={data} onInvoice={onInvoice} canInvoice={canInvoice} />
+        <RowActionsMenu data={data} onEditPatient={onEditPatient} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
+      </div>
     </div>
   );
 }

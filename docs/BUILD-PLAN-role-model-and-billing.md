@@ -942,3 +942,50 @@ say `'staff'` — the critical consultation-notes-blocking bug from the
 "Post-ship review" section above is now actually fixed in production,
 not just in this branch. Security advisor shows nothing new introduced
 by the deploy.
+
+## Third review pass: note-editor labeling, cramped visit cards (2026-08-15)
+
+Two more real issues from a fresh screenshot.
+
+**List entries still read as a different system — because they were.**
+The previous two rounds fixed the box styling (`.setup-card` →
+`.list-entry`) and the layout (hardcoded grids → responsive `.field-row`),
+but never touched the actual labeling mechanism: every static field in
+the note (Medical conditions, Pregnant, Current medications…) uses a
+persistent `<label>` above its input, via `.field-block`. Every dynamic
+list-entry field (Region, Onset, Mechanism, Body part, Movement, Goal…)
+used `placeholder=` text *only* — the instant you type something in, the
+only clue to what the field means disappears. That's a structural
+difference no amount of border/shadow matching could fix. Converted
+every sub-field across all 11 repeated-entry widgets (Secondary
+complaints, Trauma/Surgical history, Previous pain history, Functional
+status activities, Palpation, ROM, Strength/MMT, Special tests, HEP
+exercises, Goals) from bare `placeholder`-only inputs to the same
+`.field-block` + `<label>` pattern used everywhere else in the note. Four
+`placeholder=` attributes remain, deliberately — format hints (*"e.g.
+Wall slides"*) underneath a real label, the same pattern already used
+elsewhere in this file (e.g. the walk-in ID prefix field in Settings).
+
+**The Ledger/Workspace mobile visit card was genuinely broken, not just
+dense.** `SharedVisitCard` (`VisitCard.tsx`, shared by every mobile visit
+list in the app — Ledger, Workspace's Seen Today, Recent visits) packed
+five elements into one unconditional flex row: a fixed-width date column,
+a fixed-width avatar, the patient name/details, a payment-status column,
+and an actions-menu button. On a 375px phone, the four fixed/shrink-0
+elements alone ate roughly 250px before the flexible name/details column
+got anything — rendered and measured directly (not just estimated): the
+patient name wrapped mid-surname, and every word of the secondary detail
+line ("Shoulder Pain · Physiotherapy 7 Days (3/7) · Prem · FM An/Re S,S")
+landed on its own line, a dozen lines tall for what should be one. Fixed
+by splitting the row below `sm:` (640px) into two: date + avatar + name
+on one line, payment info + actions spread across a second full-width
+line — reverting to the original single-row layout at `sm:` and up via
+`sm:contents`, where there's actually room for it. Verified with a real
+render at both 375px (now one clean name line, readable wrapped detail
+text) and 700px (unchanged single-row layout) — zero horizontal overflow
+at either width.
+
+Verified: typecheck, lint, vitest (240 passed), production build clean;
+real headless-browser renders at 375px and 700px for the visit card fix,
+confirming both the bug (before) and the fix (after) rather than
+assuming from the code alone.
