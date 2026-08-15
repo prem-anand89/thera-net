@@ -471,6 +471,47 @@ clean. Not verified in a live browser — no Supabase project is
 configured in this environment; the invite-therapist edge function
 change in particular hasn't been exercised end-to-end.
 
+## Screenshot-driven follow-ups (2026-08-15)
+
+The user shared two live screenshots (an actual deployed build, not
+this branch) and three more requests:
+
+1. **New Visit's structure changed drastically once a patient was
+   picked.** Confirmed as a real regression in the two-column redesign
+   above: the page jumped from one full-width column to two columns
+   the moment `patient` went from null to set. Fixed — the two-column
+   shape is now constant; only the left panel's *content* changes.
+   `NewVisitPage.tsx`.
+2. **No way to write a note from Workspace or Ledger.** Traced to
+   `needsNote` only ever being true when `clinicalDocsEnabled` is on
+   *and* the visit predates a completed note — a clinic with the
+   feature off, or any visit whose note is already done, had zero
+   notes affordance outside Patient Profile. Added an always-available
+   "Add note" / "View note" row action, gated by `canViewClinicalNotes`.
+   `VisitCard.tsx`, `dashboardService.ts`, `WorkspacePage.tsx`,
+   `VisitsPage.tsx`.
+3. **"Fix the alignment/organisation/structure" of Patient Profile and
+   the clinical note.** Investigated both against the actual
+   screenshots rather than guessing blind:
+   - `NoteEditorPage.tsx`'s Therapist selector was a bare label+select
+     with no card wrapper — the one piece of the page with no visual
+     boundary next to General health & triage's card and the screening
+     banner. Fixed: wrapped in the same `.setup-card` styling.
+   - The Patient Profile screenshot's apparent large empty gap between
+     the header and "Visit history" was investigated and traced to the
+     sync-status popup (open in that screenshot) overlaying the
+     Consultation notes / Care plan cards — not a layout bug.
+     `SideCard`'s CSS has no unusual sizing, and the grid's mobile
+     ordering (side content above Visit history) is an existing,
+     explicitly-documented deliberate choice, not an oversight —
+     reversing it without more specific input risked "fixing" a
+     decision that was made on purpose for a reason not visible from
+     one screenshot. Not changed; flagged back to the user instead of
+     guessing.
+
+Verified: typecheck, lint, vitest (236 passed), production build all
+clean.
+
 ## Sequencing rationale
 
 Roles first, because every later PR keys off the role vocabulary and the
