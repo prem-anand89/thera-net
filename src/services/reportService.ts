@@ -49,10 +49,16 @@ export function createReportService(repos: Repos) {
   return {
     async monthly(clinicId: UUID, month: FyMonth): Promise<MonthlyReport> {
       const { from, to } = monthDateRange(month);
-      const [visits, therapists] = await Promise.all([
+      const [allVisits, therapists] = await Promise.all([
         repos.visits.list({ clinicId, from, to }),
         repos.therapists.list(clinicId, true),
       ]);
+      // A manual invoice's synthetic visit (InvoicesPage's "Add invoice"
+      // flow) isn't a clinical encounter — excluded here, not just from
+      // this report's own rows, but from the Dashboard's revenue trend and
+      // therapist comparison chart too, since both read this same monthly()
+      // report (dashboardService.revenueTrend() calls it once per month).
+      const visits = allVisits.filter((v) => !v.isManualInvoice);
       const therapistName = new Map(therapists.map((t) => [t.id, t.name]));
 
       const rowsById = new Map<string, TherapistMonthRow>();

@@ -101,7 +101,12 @@ export function InvoicesPage() {
         throw new Error('Invalid bill amount');
       }
 
-      // Auto-create a minimal visit
+      // Auto-create a minimal visit — the only way to attach a standalone
+      // invoice, per issue_invoice()'s design. isManualInvoice: true is the
+      // real signal excluding it from reportService.monthly()'s per-
+      // therapist aggregation (and, via that shared source, the Dashboard's
+      // revenue trend and comparison chart); condition/treatmentNotes stay
+      // as a human-readable label in the Ledger table, not a lookup key.
       const visit = await visitService.create({
         clinicId: clinic.id,
         patientId: formData.patientId,
@@ -112,6 +117,7 @@ export function InvoicesPage() {
         condition: 'Manual invoice',
         treatmentNotes: 'Manual invoice',
         adjustmentReason: 'Custom billing amount',
+        isManualInvoice: true,
       });
 
       // Create invoice for the visit

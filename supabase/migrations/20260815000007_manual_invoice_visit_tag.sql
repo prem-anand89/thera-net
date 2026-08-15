@@ -1,0 +1,21 @@
+-- ---------------------------------------------------------------------------
+-- InvoicesPage's "Add invoice" flow (createManualInvoice()) auto-creates a
+-- minimal Visit under the hood to attach an invoice to -- there is no other
+-- way to issue one, per issue_invoice()'s design. That synthetic visit was
+-- only ever distinguishable by condition/treatment_notes being the literal
+-- string 'Manual invoice' -- a UI convention, not a real signal -- and
+-- carries full revenue-split math, so it flows into the per-therapist
+-- Monthly report (reportService.monthly()), which is also the shared data
+-- source behind the Dashboard's revenue trend and therapist comparison
+-- chart (dashboardService.revenueTrend() calls reportService.monthly() for
+-- each month). A quick manual invoice for a supplementary charge therefore
+-- inflated a therapist's visit count, unique-patient count, and take-home
+-- figures as if it were real clinical work.
+--
+-- A proper boolean tag replaces the string-matching convention so the
+-- application layer can filter it out of that shared aggregation without
+-- relying on free-text fields a real patient's condition could coincidentally
+-- match.
+-- ---------------------------------------------------------------------------
+alter table public.visits
+  add column if not exists is_manual_invoice boolean not null default false;

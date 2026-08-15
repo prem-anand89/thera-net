@@ -261,6 +261,17 @@ export interface Visit {
   clinicalStatus?: 'pending' | 'documented' | 'reviewed';
   consultationNoteId?: UUID | null;
   reauthorizationRequired?: boolean;
+  /**
+   * True for the synthetic visit InvoicesPage's "Add invoice" flow creates
+   * to attach a standalone invoice to (there's no other way to issue one).
+   * Excluded from reportService.monthly()'s per-therapist aggregation —
+   * and therefore from the Dashboard's revenue trend and therapist
+   * comparison chart, which both read that same report — so a quick
+   * manual invoice doesn't inflate a therapist's visit/patient counts or
+   * take-home figures as if it were real clinical work. Optional: older
+   * cached rows predate this field and default to false (real visit).
+   */
+  isManualInvoice?: boolean;
   updatedAt: string;
   /** Auth user who created/last touched this row. Optional: older cached rows lack the key. */
   createdBy?: UUID | null;
