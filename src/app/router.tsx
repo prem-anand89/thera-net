@@ -69,11 +69,15 @@ const workspaceRoute = createRoute({
   component: WorkspacePage,
 });
 
+const LEDGER_TABS = ['visits', 'invoices', 'reports'] as const;
+
 const ledgerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/ledger',
-  validateSearch: (search: Record<string, unknown>): { patientId?: string } =>
-    typeof search.patientId === 'string' ? { patientId: search.patientId } : {},
+  validateSearch: (search: Record<string, unknown>): { patientId?: string; tab?: (typeof LEDGER_TABS)[number] } => ({
+    ...(typeof search.patientId === 'string' ? { patientId: search.patientId } : {}),
+    ...(LEDGER_TABS.includes(search.tab as (typeof LEDGER_TABS)[number]) ? { tab: search.tab as (typeof LEDGER_TABS)[number] } : {}),
+  }),
   component: LedgerPage,
 });
 
@@ -130,16 +134,15 @@ const noteEditorRoute = createRoute({
 });
 
 // Reports moved fully under Ledger as a sub-view (VisitsPage.tsx's
-// `recordsView`, not a nested route — sub-views don't need bookmarkable
-// URLs). This standalone route becomes a redirect rather than a hard
-// delete-to-404: nothing in the app links here anymore, but an external
-// bookmark or shared link might, and there's no way to be certain none
-// exist.
+// `recordsView`, now URL-addressable via `?tab=` — see ledgerRoute). This
+// standalone route becomes a redirect rather than a hard delete-to-404:
+// nothing in the app links here anymore, but an external bookmark or
+// shared link might, and there's no way to be certain none exist.
 const reportsRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports',
   beforeLoad: () => {
-    throw redirect({ to: '/ledger' });
+    throw redirect({ to: '/ledger', search: { tab: 'reports' } });
   },
 });
 
@@ -187,6 +190,10 @@ const importVisitsRedirectRoute = createRoute({
   },
 });
 
+// Nav label is "Reports" (renamed from "Insights") — path stays /insights
+// since /reports is already the Ledger-sub-tab redirect above and can't be
+// reused. Same rename-only-where-it-matters pattern as LedgerPage/
+// SettingsPage: the label people see changed, the URL didn't need to.
 const insightsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/insights',
@@ -194,12 +201,15 @@ const insightsRoute = createRoute({
 });
 
 // Invoices moved fully under Ledger as a sub-view (same reasoning as
-// Reports above) — redirect rather than delete, for the same reason.
+// Reports above) — redirect rather than delete, for the same reason. Lands
+// on the Visits tab instead if the viewer can't bill (VisitsPage.tsx resets
+// an invalid `tab` — same guard PR 13 added for invoicingAccess changing
+// mid-session).
 const invoicesRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/invoices',
   beforeLoad: () => {
-    throw redirect({ to: '/ledger' });
+    throw redirect({ to: '/ledger', search: { tab: 'invoices' } });
   },
 });
 

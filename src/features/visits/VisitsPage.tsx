@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, invoiceService, paymentService, visitService } from '@/services';
@@ -116,14 +116,28 @@ export function VisitsPage() {
   const { canBill } = usePermissions();
   const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { patientId?: string };
+  const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView };
 
-  const [recordsView, setRecordsView] = useState<RecordsView>('visits');
+  // URL is the source of truth (not local state) so the /invoices and
+  // /reports redirects, and any bookmark/shared link with ?tab=, land on
+  // the right sub-tab instead of always Visits. replace: true so tab
+  // switches don't pile up browser-back history entries.
+  const recordsView: RecordsView = search.tab ?? 'visits';
+  const setRecordsView = useCallback(
+    (next: RecordsView) => {
+      void navigate({
+        to: '/ledger',
+        search: { patientId: search.patientId, tab: next === 'visits' ? undefined : next },
+        replace: true,
+      });
+    },
+    [navigate, search.patientId]
+  );
   // An admin flipping invoicingAccess mid-session (synced live from another
   // device) shouldn't leave someone stranded on a tab that just disappeared.
   useEffect(() => {
     if (recordsView === 'invoices' && !canBill) setRecordsView('visits');
-  }, [recordsView, canBill]);
+  }, [recordsView, canBill, setRecordsView]);
   const [from, setFrom] = useState(() => toIsoDate(new Date(Date.now() - 6 * 86400000)));
   const [to, setTo] = useState(() => toIsoDate(new Date()));
   const [datePreset, setDatePreset] = useState<DatePreset>('week');

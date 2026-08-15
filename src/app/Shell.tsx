@@ -15,7 +15,7 @@ const NAV = [
   { to: '/workspace', label: 'Workspace' },
   { to: '/ledger', label: 'Ledger' },
   { to: '/patients', label: 'Patients' },
-  { to: '/insights', label: 'Insights' },
+  { to: '/insights', label: 'Reports' },
   { to: '/settings', label: 'Settings' },
 ] as const;
 
