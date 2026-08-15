@@ -10,8 +10,7 @@ import {
   expectedVisitsService,
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { useSession } from '@/app/useSession';
-import { useClinicRole } from '@/app/useClinicRole';
+import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import type { ExpectedVisit, PaymentMethod, PaymentMode } from '@/domain/types';
 import type { PendingWorkItem, TodayVisitRow } from '@/services/dashboardService';
@@ -72,8 +71,7 @@ function todayRowToCardData(row: TodayVisitRow, openPackageGroupIds: Set<string>
 
 export function WorkspacePage() {
   const clinic = useClinic();
-  const { session } = useSession();
-  const { role } = useClinicRole(clinic.id);
+  const scope = useWorkspaceScope();
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
   const [paidNow, setPaidNow] = useState(true);
@@ -88,24 +86,37 @@ export function WorkspacePage() {
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
-  const myTherapistId = useMemo(
-    () => (therapists ?? []).find((t) => t.userId === session?.user?.id)?.id,
-    [therapists, session?.user?.id]
-  );
   // Staff (therapist) tier sees only their own visits in the today-scoped
-  // stats; admin sees the whole clinic. While role hasn't resolved yet
-  // ('unknown'), default to the narrower staff-scoped view rather than
-  // flashing clinic-wide data. Content below the stat row (Needs-attention,
-  // Seen today, Recently-seen) stays clinic-wide for everyone — only the
-  // stat pills are tier-scoped.
-  const myScopeTherapistId = role === 'admin' ? undefined : myTherapistId;
+  // stats and Seen today (one shared query drives both); admin sees the
+  // whole clinic. While role hasn't resolved yet ('unknown'), useWorkspaceScope
+  // defaults to the narrower staff-scoped view rather than flashing
+  // clinic-wide data. Needs-attention and Documentation stay clinic-wide
+  // for everyone — those are billing/documentation follow-ups an admin
+  // needs full visibility into regardless of who logged the visit.
   const today = useLiveQuery(
-    () => dashboardService.todayWorklist(clinic.id, new Date(), myScopeTherapistId),
-    [clinic.id, myScopeTherapistId]
+    () => dashboardService.todayWorklist(clinic.id, new Date(), scope.scopeTherapistId),
+    [clinic.id, scope.scopeTherapistId]
   );
   const pendingWork = useLiveQuery(() => dashboardService.pendingWork(clinic.id), [clinic.id]);
   const monthlyNew = useLiveQuery(() => dashboardService.monthlyNewCounts(clinic.id), [clinic.id]);
+  // Only fetched for the "My open packages" / "My sessions this week"
+  // tiles, which only render for a non-admin — cheap to skip entirely
+  // once role has resolved to admin.
+  const openPackages = useLiveQuery(
+    () => (scope.isAdmin ? undefined : dashboardService.openPackages(clinic.id)),
+    [clinic.id, scope.isAdmin]
+  );
+  const myOpenPackageCount = useMemo(
+    () => (openPackages ?? []).filter((p) => p.startedByTherapistId === scope.myTherapistId).length,
+    [openPackages, scope.myTherapistId]
+  );
+  const myWeekly = useLiveQuery(
+    () =>
+      scope.isAdmin || !scope.myTherapistId
+        ? undefined
+        : dashboardService.weeklySummary(clinic.id, new Date(), scope.myTherapistId),
+    [clinic.id, scope.isAdmin, scope.myTherapistId]
+  );
   const openPackageGroupIds = useMemo(
     () => new Set<string>(),
     []
@@ -227,12 +238,19 @@ export function WorkspacePage() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
         <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
-        <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
+        {scope.isAdmin ? (
+          <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
+        ) : (
+          <>
+            <StatTile label="My open packages" value={openPackages === undefined ? '—' : myOpenPackageCount} />
+            <StatTile label="My sessions this week" value={myWeekly?.visitCount ?? 0} />
+          </>
+        )}
       </div>
 
       {pendingWork && pendingWork.length > 0 && (
         <>
-          {role === 'admin' && (
+          {scope.isAdmin && (
             <div className="hidden md:block">
               <SectionCard title="Needs attention">
                 <ul className="grid grid-cols-1 gap-2 md:grid-cols-3">
@@ -245,7 +263,7 @@ export function WorkspacePage() {
               </SectionCard>
             </div>
           )}
-          <div className={role === 'admin' ? 'md:hidden' : ''}>
+          <div className={scope.isAdmin ? 'md:hidden' : ''}>
             <SummaryBar tone="rust" label="need attention" count={pendingWork.length} onClick={() => setAttentionOpen(true)} />
           </div>
         </>

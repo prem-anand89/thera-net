@@ -33,6 +33,7 @@ import {
   Pill,
   PackageThread,
   SectionCard,
+  StatTile,
 } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { PatientOverview } from './PatientOverview';
@@ -209,6 +210,7 @@ export function VisitsPage() {
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
   );
+  const outstanding = useLiveQuery(() => dashboardService.outstandingInvoices(clinic.id), [clinic.id]);
 
   const cardRows = useMemo(
     () =>
@@ -483,6 +485,50 @@ export function VisitsPage() {
                         View
                       </Link>
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      )}
+
+      {recordsView === 'visits' && outstanding && outstanding.rows.length > 0 && (
+        <SectionCard title="Outstanding payments">
+          <div className="mb-4 flex gap-4">
+            <StatTile label="Total outstanding" value={formatINR(outstanding.totalPaise)} />
+            <StatTile label="Invoices" value={outstanding.count} />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-[var(--border)] text-sm">
+              <thead>
+                <tr>
+                  <th className={th}>Invoice №</th>
+                  <th className={th}>Patient</th>
+                  <th className={thNum}>Amount</th>
+                  <th className={th}>Issued</th>
+                  <th className={thNum}>Days outstanding</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {outstanding.rows.map((r) => (
+                  <tr key={r.invoiceId} className="hover:bg-[var(--paper)]">
+                    <td className={td}>
+                      <Link
+                        to="/invoices/$invoiceId/print"
+                        params={{ invoiceId: r.invoiceId }}
+                        className="text-[var(--teal)] hover:underline"
+                      >
+                        {r.invoiceNo}
+                      </Link>
+                    </td>
+                    <td className={td}>
+                      <span className="font-display">{r.patientName}</span>{' '}
+                      <span className="text-xs text-[var(--muted)]">{r.mrno}</span>
+                    </td>
+                    <td className={tdNum}>{formatINR(r.totalPaise)}</td>
+                    <td className={td}>{formatDateDMY(r.issuedAt)}</td>
+                    <td className={tdNum}>{r.daysOutstanding}</td>
                   </tr>
                 ))}
               </tbody>

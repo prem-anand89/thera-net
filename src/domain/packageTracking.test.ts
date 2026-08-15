@@ -69,6 +69,18 @@ describe('groupOpenPackages', () => {
     });
   });
 
+  it('attributes startedByTherapistId to whoever logged the earliest session, not visit insertion order', () => {
+    const visits = [
+      // Inserted out of date order, and with a different therapist than
+      // whoever logged the actual first session — startedByTherapistId
+      // must resolve by date, not by array position.
+      makeVisit({ id: 'v2', visitDate: '2026-06-10', packageGroupId: 'g1', packageTotal: 5, therapistId: 'th-2' }),
+      makeVisit({ id: 'v1', visitDate: '2026-06-01', packageGroupId: 'g1', packageTotal: 5, therapistId: 'th-1' }),
+    ];
+    const [group] = groupOpenPackages(visits);
+    expect(group.startedByTherapistId).toBe('th-1');
+  });
+
   it('tracks multiple distinct open packages independently', () => {
     const visits = [
       makeVisit({ id: 'v1', visitDate: '2026-06-01', packageGroupId: 'g1', packageTotal: 3 }),

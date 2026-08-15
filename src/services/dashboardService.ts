@@ -17,6 +17,8 @@ export interface OpenPackageRow {
   lastVisitOn: string;
   daysSinceLastVisit: number;
   stale: boolean;
+  /** Therapist who logged the package's first session — for "my open packages" scoping. */
+  startedByTherapistId: UUID;
 }
 
 export interface OutstandingInvoiceRow {
@@ -202,6 +204,7 @@ export function createDashboardService(repos: Repos) {
             lastVisitOn: g.lastVisitOn,
             daysSinceLastVisit: daysSince(g.lastVisitOn),
             stale: isStale(g.lastVisitOn),
+            startedByTherapistId: g.startedByTherapistId,
           };
         })
         .sort((a, b) => b.daysSinceLastVisit - a.daysSinceLastVisit);
@@ -502,9 +505,9 @@ export function createDashboardService(repos: Repos) {
      * take-home for those that are invoiced AND paid (absence of a payment
      * row reads as paid, matching InvoicePayment's convention).
      */
-    async weeklySummary(clinicId: UUID, asOf = new Date()): Promise<WeeklySummary> {
+    async weeklySummary(clinicId: UUID, asOf = new Date(), therapistId?: UUID): Promise<WeeklySummary> {
       const [visits, payments] = await Promise.all([
-        repos.visits.list({ clinicId }),
+        repos.visits.list({ clinicId, therapistId }),
         repos.invoicePayments.list(clinicId),
       ]);
       const { from, to } = currentWeekRange(asOf);

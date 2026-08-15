@@ -3,10 +3,12 @@ import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import { monthName, formatDateDMY } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
-import { SectionCard, StatTile, th, thNum, td, tdNum } from '@/components/ui';
+import type { TherapistMonthRow } from '@/services/reportService';
+import { SectionCard, StatTile, Pill } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
 import { PieChart } from '@/components/PieChart';
 
@@ -24,14 +26,39 @@ const SERIES_COLORS = [
   '#eb6834', // orange
 ];
 
+const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> = {
+  billPaise: 0,
+  bmSharePaise: 0,
+  tdsPaise: 0,
+  postTaxPaise: 0,
+  hvPaise: 0,
+  adjustmentPaise: 0,
+  sharedPaise: 0,
+  netPostTaxPaise: 0,
+  visitCount: 0,
+  uniquePatients: 0,
+};
+
+/** Buckets a list of counts-with-a-number into fixed ranges for a small
+ *  histogram — the shape both "single-visit patients" and "regulars" need
+ *  (how overdue, how many visits), just with different bucket edges. */
+function bucketCounts(values: number[], edges: { max: number; label: string }[]): number[] {
+  const counts = new Array(edges.length).fill(0) as number[];
+  for (const v of values) {
+    const idx = edges.findIndex((e) => v <= e.max);
+    counts[idx === -1 ? edges.length - 1 : idx]++;
+  }
+  return counts;
+}
+
 export function DashboardPage() {
   const clinic = useClinic();
+  const scope = useWorkspaceScope();
   const labels = clinicShareLabels(clinic);
   const { hospitalSplit } = clinicBillingConfig(clinic);
   const revenueLabel = hospitalSplit ? `Post-Tax ${labels.own}` : 'Revenue';
 
   const trend = useLiveQuery(() => dashboardService.revenueTrend(clinic.id), [clinic.id]);
-  const outstanding = useLiveQuery(() => dashboardService.outstandingInvoices(clinic.id), [clinic.id]);
   const singleVisitPatients = useLiveQuery(
     () => dashboardService.singleVisitPatients(clinic.id),
     [clinic.id]
@@ -44,6 +71,7 @@ export function DashboardPage() {
     () => dashboardService.referralSourceStats(clinic.id),
     [clinic.id]
   );
+  const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
 
   const categories = useMemo(
     () => (trend ?? []).map((r) => `${monthName(r.month.month).slice(0, 3)} '${String(r.month.year).slice(2)}`),
@@ -55,6 +83,62 @@ export function DashboardPage() {
     [trend]
   );
 
+  // A trend line built mostly from months with zero activity (a clinic only
+  // a few weeks old, or a therapist who just joined) reads as a dramatic
+  // spike rather than what it actually is — not enough history yet.
+  const monthsWithActivity = useMemo(
+    () => (trend ?? []).filter((r) => r.total.visitCount > 0).length,
+    [trend]
+  );
+  const hasEnoughTrendHistory = monthsWithActivity >= 2;
+
+  // For a therapist, "the trend" is their own row each month — falling back
+  // to an explicit zero row for a month they had no visits in, rather than
+  // the whole clinic's total.
+  const myMonthRow = (rows: TherapistMonthRow[]): TherapistMonthRow =>
+    rows.find((row) => row.therapistId === scope.myTherapistId) ?? {
+      ...ZERO_MONTH_ROW,
+      therapistId: scope.myTherapistId ?? 'none',
+      therapistName: '',
+    };
+
+  const packagesInScope = useMemo(
+    () =>
+      scope.isAdmin
+        ? (openPackages ?? [])
+        : (openPackages ?? []).filter((p) => p.startedByTherapistId === scope.myTherapistId),
+    [openPackages, scope.isAdmin, scope.myTherapistId]
+  );
+  const packagesByService = useMemo(() => {
+    const byService = new Map<string, { total: number; stale: number }>();
+    for (const p of packagesInScope) {
+      const entry = byService.get(p.serviceName) ?? { total: 0, stale: 0 };
+      entry.total += 1;
+      if (p.stale) entry.stale += 1;
+      byService.set(p.serviceName, entry);
+    }
+    return [...byService.entries()].sort((a, b) => b[1].total - a[1].total);
+  }, [packagesInScope]);
+
+  const singleVisitBuckets = useMemo(
+    () =>
+      bucketCounts((singleVisitPatients ?? []).map((p) => p.daysSince), [
+        { max: 30, label: '15–30d' },
+        { max: 60, label: '31–60d' },
+        { max: Infinity, label: '60d+' },
+      ]),
+    [singleVisitPatients]
+  );
+  const recurringBuckets = useMemo(
+    () =>
+      bucketCounts((recurringPatients ?? []).map((p) => p.visitCount), [
+        { max: 4, label: '3–4' },
+        { max: 9, label: '5–9' },
+        { max: Infinity, label: '10+' },
+      ]),
+    [recurringPatients]
+  );
+
   return (
     <div className="space-y-6">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Dashboard</h1>
@@ -64,206 +148,148 @@ export function DashboardPage() {
           Exactly one visit on record, more than 14 days ago — worth a call to find out why, or a
           reminder to book again.
         </p>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-            <thead>
-              <tr>
-                <th className={th}>Patient</th>
-                <th className={th}>Service</th>
-                <th className={th}>Visited on</th>
-                <th className={thNum}>Days since</th>
-                <th className={th}></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {(singleVisitPatients ?? []).map((p) => (
-                <tr key={p.patientId} className="hover:bg-[var(--paper)]">
-                  <td className={td}>
-                    <span className="font-display">{p.patientName}</span>{' '}
-                    <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                  </td>
-                  <td className={td}>{p.serviceName}</td>
-                  <td className={td}>{formatDateDMY(p.visitDate)}</td>
-                  <td className={tdNum}>{p.daysSince}</td>
-                  <td className={td}>
-                    <Link
-                      to="/archive"
-                      search={{ patientId: p.patientId }}
-                      className="font-medium text-[var(--teal)] hover:underline"
-                    >
-                      View
-                    </Link>
-                  </td>
-                </tr>
+        {singleVisitPatients === undefined ? null : singleVisitPatients.length === 0 ? (
+          <p className="py-6 text-center text-sm text-[var(--muted)]">No lapsed single-visit patients right now.</p>
+        ) : (
+          <>
+            <div className="mb-4 flex flex-wrap items-center gap-4">
+              <StatTile label="Total" value={singleVisitPatients.length} />
+              <div className="min-w-0 flex-1">
+                <BarChart
+                  categories={['15–30d', '31–60d', '60d+']}
+                  series={[{ label: 'Patients', color: SERIES_COLORS[0], values: singleVisitBuckets }]}
+                  height={140}
+                />
+              </div>
+            </div>
+            <ul className="flex flex-wrap gap-1.5">
+              {singleVisitPatients.slice(0, 20).map((p) => (
+                <li key={p.patientId}>
+                  <Link
+                    to="/archive"
+                    search={{ patientId: p.patientId }}
+                    className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
+                    title={`${p.serviceName} — last seen ${formatDateDMY(p.visitDate)}, ${p.daysSince}d ago`}
+                  >
+                    {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                  </Link>
+                </li>
               ))}
-              {singleVisitPatients?.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-sm text-[var(--muted)]">
-                    No lapsed single-visit patients right now.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            </ul>
+          </>
+        )}
       </SectionCard>
 
       <SectionCard title="Regulars — last 30 days">
         <p className="mb-3 text-xs text-[var(--muted)]">
           Three or more visits in the last month — your most engaged patients right now.
         </p>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-            <thead>
-              <tr>
-                <th className={th}>Patient</th>
-                <th className={thNum}>Visits</th>
-                <th className={th}>Last visit</th>
-                <th className={th}></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {(recurringPatients ?? []).map((p) => (
-                <tr key={p.patientId} className="hover:bg-[var(--paper)]">
-                  <td className={td}>
-                    <span className="font-display">{p.patientName}</span>{' '}
-                    <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                  </td>
-                  <td className={tdNum}>{p.visitCount}</td>
-                  <td className={td}>{formatDateDMY(p.lastVisitOn)}</td>
-                  <td className={td}>
-                    <Link
-                      to="/archive"
-                      search={{ patientId: p.patientId }}
-                      className="font-medium text-[var(--teal)] hover:underline"
-                    >
-                      View
-                    </Link>
-                  </td>
-                </tr>
+        {recurringPatients === undefined ? null : recurringPatients.length === 0 ? (
+          <p className="py-6 text-center text-sm text-[var(--muted)]">No one has visited 3+ times in the last 30 days yet.</p>
+        ) : (
+          <>
+            <div className="mb-4 flex flex-wrap items-center gap-4">
+              <StatTile label="Total" value={recurringPatients.length} />
+              <div className="min-w-0 flex-1">
+                <BarChart
+                  categories={['3–4 visits', '5–9 visits', '10+ visits']}
+                  series={[{ label: 'Patients', color: SERIES_COLORS[1], values: recurringBuckets }]}
+                  height={140}
+                />
+              </div>
+            </div>
+            <ul className="flex flex-wrap gap-1.5">
+              {recurringPatients.slice(0, 20).map((p) => (
+                <li key={p.patientId}>
+                  <Link
+                    to="/archive"
+                    search={{ patientId: p.patientId }}
+                    className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
+                    title={`${p.visitCount} visits — last seen ${formatDateDMY(p.lastVisitOn)}`}
+                  >
+                    {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                  </Link>
+                </li>
               ))}
-              {recurringPatients?.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-sm text-[var(--muted)]">
-                    No one has visited 3+ times in the last 30 days yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            </ul>
+          </>
+        )}
       </SectionCard>
 
-      <SectionCard title="Outstanding payments">
-        <div className="mb-4 flex gap-4">
-          <StatTile label="Total outstanding" value={formatINR(outstanding?.totalPaise ?? 0)} />
-          <StatTile label="Invoices" value={outstanding?.count ?? 0} />
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-            <thead>
-              <tr>
-                <th className={th}>Invoice №</th>
-                <th className={th}>Patient</th>
-                <th className={thNum}>Amount</th>
-                <th className={th}>Issued</th>
-                <th className={thNum}>Days outstanding</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {(outstanding?.rows ?? []).map((r) => (
-                <tr key={r.invoiceId} className="hover:bg-[var(--paper)]">
-                  <td className={td}>
-                    <Link
-                      to="/invoices/$invoiceId/print"
-                      params={{ invoiceId: r.invoiceId }}
-                      className="text-[var(--teal)] hover:underline"
-                    >
-                      {r.invoiceNo}
-                    </Link>
-                  </td>
-                  <td className={td}>
-                    <span className="font-display">{r.patientName}</span> <span className="text-xs text-[var(--muted)]">{r.mrno}</span>
-                  </td>
-                  <td className={tdNum}>{formatINR(r.totalPaise)}</td>
-                  <td className={td}>{formatDateDMY(r.issuedAt)}</td>
-                  <td className={tdNum}>{r.daysOutstanding}</td>
-                </tr>
+      <SectionCard title={scope.isAdmin ? 'Packages' : 'My packages'}>
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          Open packages by service{scope.isAdmin ? '' : " you've started"} — how many are active,
+          and how many have gone quiet.
+        </p>
+        {packagesInScope.length === 0 ? (
+          <p className="py-6 text-center text-sm text-[var(--muted)]">No open packages right now.</p>
+        ) : (
+          <>
+            <div className="mb-4 flex gap-4">
+              <StatTile label="Open packages" value={packagesInScope.length} />
+              <StatTile label="Stale (14d+)" value={packagesInScope.filter((p) => p.stale).length} />
+            </div>
+            <ul className="space-y-2">
+              {packagesByService.map(([service, counts]) => (
+                <li key={service} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-[var(--ink)]">{service}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-num text-[var(--muted)]">{counts.total}</span>
+                    {counts.stale > 0 && <Pill tone="amber">{counts.stale} stale</Pill>}
+                  </span>
+                </li>
               ))}
-              {outstanding?.rows.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-sm text-[var(--muted)]">
-                    Nothing outstanding.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            </ul>
+          </>
+        )}
       </SectionCard>
 
-      <SectionCard title={`Revenue trend — last 6 months (${revenueLabel})`}>
-        {trend && (
+      <SectionCard title={scope.isAdmin ? `Revenue trend — last 6 months (${revenueLabel})` : `My revenue trend — last 6 months (${revenueLabel})`}>
+        {trend && !hasEnoughTrendHistory && (
+          <p className="py-8 text-center text-sm text-[var(--muted)]">
+            Not enough data yet — a trend needs at least two months of visits to be meaningful.
+          </p>
+        )}
+        {trend && hasEnoughTrendHistory && (
           <BarChart
             categories={categories}
             series={[
               {
                 label: revenueLabel,
                 color: SERIES_COLORS[0],
-                values: trend.map((r) => r.total.postTaxPaise),
+                values: scope.isAdmin
+                  ? trend.map((r) => r.total.postTaxPaise)
+                  : trend.map((r) => myMonthRow(r.rows).postTaxPaise),
               },
             ]}
             formatValue={formatINR}
           />
         )}
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-            <thead>
-              <tr>
-                <th className={th}>Month</th>
-                <th className={thNum}>Bill</th>
-                {hospitalSplit && <th className={thNum}>{labels.own} Share</th>}
-                {hospitalSplit && <th className={thNum}>TDS</th>}
-                {hospitalSplit && <th className={thNum}>Post Tax</th>}
-                {hospitalSplit && <th className={thNum}>{labels.partner}</th>}
-                <th className={thNum}>Visits</th>
-                <th className={thNum}>Patients</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {(trend ?? []).map((r, i) => (
-                <tr key={i} className="hover:bg-[var(--paper)]">
-                  <td className={td}>{categories[i]}</td>
-                  <td className={tdNum}>{formatINR(r.total.billPaise)}</td>
-                  {hospitalSplit && <td className={tdNum}>{formatINR(r.total.bmSharePaise)}</td>}
-                  {hospitalSplit && <td className={tdNum}>{formatINR(r.total.tdsPaise)}</td>}
-                  {hospitalSplit && <td className={tdNum}>{formatINR(r.total.postTaxPaise)}</td>}
-                  {hospitalSplit && <td className={tdNum}>{formatINR(r.total.hvPaise)}</td>}
-                  <td className={tdNum}>{r.total.visitCount}</td>
-                  <td className={tdNum}>{r.total.uniquePatients}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </SectionCard>
 
-      <SectionCard title={`Therapist comparison — ${revenueLabel}`}>
-        {trend && therapistNames.length > 0 && (
-          <BarChart
-            categories={categories}
-            series={therapistNames.slice(0, SERIES_COLORS.length).map((name, i) => ({
-              label: name,
-              color: SERIES_COLORS[i],
-              values: trend.map((r) => r.rows.find((row) => row.therapistName === name)?.postTaxPaise ?? 0),
-            }))}
-            formatValue={formatINR}
-          />
-        )}
-        {trend && therapistNames.length === 0 && (
-          <p className="text-sm text-[var(--muted)]">No visits in the last 6 months.</p>
-        )}
-      </SectionCard>
+      {scope.isAdmin && (
+        <SectionCard title={`Therapist comparison — ${revenueLabel}`}>
+          {trend && !hasEnoughTrendHistory && (
+            <p className="py-8 text-center text-sm text-[var(--muted)]">
+              Not enough data yet — a comparison needs at least two months of visits to be meaningful.
+            </p>
+          )}
+          {trend && hasEnoughTrendHistory && therapistNames.length > 0 && (
+            <BarChart
+              categories={categories}
+              series={therapistNames.slice(0, SERIES_COLORS.length).map((name, i) => ({
+                label: name,
+                color: SERIES_COLORS[i],
+                values: trend.map((r) => r.rows.find((row) => row.therapistName === name)?.postTaxPaise ?? 0),
+              }))}
+              formatValue={formatINR}
+            />
+          )}
+          {trend && hasEnoughTrendHistory && therapistNames.length === 0 && (
+            <p className="text-sm text-[var(--muted)]">No visits in the last 6 months.</p>
+          )}
+        </SectionCard>
+      )}
 
       <SectionCard title="Referral sources">
         <p className="mb-4 text-xs text-[var(--muted)]">
