@@ -89,10 +89,20 @@ const patients: PatientRepo = {
   async search(clinicId, query, limit = 15) {
     const q = query.trim().toLowerCase();
     if (!q) return [];
+    // Phone matching runs on digits only, so "98765 43210", "+91 98765-43210",
+    // and "9876543210" all find the same patient regardless of how either
+    // side was formatted. A short query (e.g. "98") still requires 3+ digits
+    // to avoid matching every record's area code by accident.
+    const qDigits = q.replace(/\D/g, '');
     const all = await db.patients.where('clinicId').equals(clinicId).toArray();
     return all
       .filter((p) => !p.deletedAt)
-      .filter((p) => p.mrno.toLowerCase().startsWith(q) || p.name.toLowerCase().includes(q))
+      .filter(
+        (p) =>
+          p.mrno.toLowerCase().startsWith(q) ||
+          p.name.toLowerCase().includes(q) ||
+          (qDigits.length >= 3 && (p.phone ?? '').replace(/\D/g, '').includes(qDigits))
+      )
       .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, limit);
   },
