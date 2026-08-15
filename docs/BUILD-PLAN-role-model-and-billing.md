@@ -1083,3 +1083,41 @@ drift):
 Verified: typecheck, lint, vitest (240 passed), production build clean,
 plus a real headless-browser render of the new bottom tab bar at 375px
 confirming legible icons and correct active-state coloring.
+
+## Sixth round: repeat-visit pre-fill, and screening/general health in the jump-nav (2026-08-15)
+
+**Repeat visit** — `NewVisitPage.tsx`'s repeat-visit effect (triggered by
+`?repeatVisitId=` from `VisitCard.tsx`'s "Repeat" action) unconditionally
+set `mode` to `'continuation'`, regardless of whether the repeated visit
+actually belonged to a package. For a plain one-off repeat this left the
+form stuck showing an "Open package" selector with nothing in it — a
+dead end — and never carried over the service or bill amount either, so
+"Repeat visit" saved no time for the common non-package case. Fixed:
+mode is now derived from whether the repeated visit has a
+`packageGroupId`, service + bill are pre-filled unconditionally in both
+cases, and the package-matching effect falls back to `'new'` mode if the
+original package has since closed (no longer present in the open-package
+list) instead of leaving the form pointed at a package that's gone.
+
+**Screening / General health in the note's jump-nav** — both sections
+sat above the note's accordion with no way to jump back to them once
+scrolled past, unlike every other section. Added them as two extra
+entries (`EXTRA_JUMP_TARGETS`) in both the mobile chip nav and the
+desktop rail in `NoteEditorPage.tsx`, sharing the exact same
+active/status-dot styling as the nine `NoteSectionKey` entries. They
+aren't part of the Core Assessment payload's SOAP structure and were
+deliberately kept out of the `NoteSectionKey` domain type — instead
+`activeSection`/`sectionRefs` were widened to a locally-scoped `JumpKey =
+NoteSectionKey | 'generalHealth' | 'screening'` union, so the scroll-spy
+mechanism treats all eleven the same without touching
+`coreAssessment.ts`'s exhaustiveness-checked domain list. Status dot for
+the two extras is hand-derived (`extraJumpDot`) rather than reusing
+`sectionCompletion`, which is defined over `NoteSectionKey` only:
+Screening mirrors the red/amber/clear the banner itself already shows,
+General health reads complete once any vital (weight/height/waist) has
+been entered.
+
+Verified: typecheck, lint, vitest (240 passed), production build clean,
+plus a real headless-browser render of both the mobile chip nav and
+desktop rail confirming the two new entries render with correct
+active-state and status-dot coloring alongside the existing nine.

@@ -283,7 +283,17 @@ export function NewVisitPage() {
         setCondition(repeatVisit.condition ?? p.primaryCondition ?? '');
       }
       setTherapistId(repeatVisit.therapistId);
-      setMode('continuation');
+      // Same service and bill as the visit being repeated either way — for
+      // a package continuation this just seeds sensible values before the
+      // effect below (once openPackages has loaded) switches the mode and
+      // picks the matching package; for an ordinary one-off repeat (no
+      // package involved) this IS the whole pre-fill, which used to be
+      // skipped entirely — every repeat got forced into continuation mode
+      // regardless of whether there was a package to continue, landing on
+      // an empty, unpickable "Open package" field for a plain repeat visit.
+      setServiceCatalogId(repeatVisit.serviceCatalogId);
+      setBillOverride(repeatVisit.actualBillPaise);
+      setMode(repeatVisit.packageGroupId ? 'continuation' : 'new');
     })();
   }, [repeatVisit, patient]);
 
@@ -322,9 +332,18 @@ export function NewVisitPage() {
   }, [patient, patientVisits, lastVisit?.therapistId, search.repeatVisitId]);
 
   useEffect(() => {
-    if (!repeatVisit?.packageGroupId || !openPackages?.length) return;
+    if (!repeatVisit?.packageGroupId || openPackages === undefined) return;
     const match = openPackages.find((op) => op.packageGroupId === repeatVisit.packageGroupId);
-    if (match) setOpenPackageId(match.packageGroupId);
+    if (match) {
+      setOpenPackageId(match.packageGroupId);
+    } else {
+      // The package this visit belonged to has since closed (every session
+      // logged) — fall back to a plain repeat of the same service instead
+      // of leaving the form on continuation mode with no open package left
+      // to pick. Service and bill were already pre-filled by the effect
+      // above.
+      setMode('new');
+    }
   }, [repeatVisit, openPackages]);
 
   // Default therapist to current user's therapist when creating a new patient

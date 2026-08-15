@@ -74,6 +74,15 @@ const SECTION_GROUPS: { label: string; keys: NoteSectionKey[] }[] = [
   { label: 'Progress', keys: ['outcome'] },
 ];
 
+/** Jump-nav targets that aren't NoteSectionKeys — see the note on
+ *  activeSection below for why these two are handled separately rather
+ *  than folded into SECTION_GROUPS. */
+type JumpKey = NoteSectionKey | 'generalHealth' | 'screening';
+const EXTRA_JUMP_TARGETS: { key: 'generalHealth' | 'screening'; label: string }[] = [
+  { key: 'generalHealth', label: 'General health' },
+  { key: 'screening', label: 'Screening' },
+];
+
 /** empty=untouched, partial=in progress, complete=done, required-empty=the
  *  one field save() actually enforces (Chief Complaint's anatomical region). */
 const STATUS_DOT: Record<SectionCompletion, string> = {
@@ -283,8 +292,16 @@ export function NoteEditorPage() {
   // tracks which section is currently in view via IntersectionObserver;
   // a rail click overrides that immediately and suppresses the observer
   // briefly so it doesn't fight the programmatic scroll.
-  const [activeSection, setActiveSection] = useState<NoteSectionKey>(NOTE_SECTION_KEYS[0]);
-  const sectionRefs = useRef(new Map<NoteSectionKey, HTMLDivElement>());
+  //
+  // General health & triage and Screening aren't NoteSectionKeys — they're
+  // not part of the Core Assessment payload's SOAP structure, always
+  // visible rather than a collapsible accordion section — but they used to
+  // sit above the nav entirely with no way to jump back to them once
+  // scrolled past, unlike literally everything else on the page. Widened
+  // locally to JumpKey rather than touching NoteSectionKey itself, which
+  // stays exactly what the domain model (coreAssessment.ts) says it is.
+  const [activeSection, setActiveSection] = useState<JumpKey>(NOTE_SECTION_KEYS[0]);
+  const sectionRefs = useRef(new Map<JumpKey, HTMLDivElement>());
   const suppressSpyRef = useRef(false);
 
   useEffect(() => {
@@ -298,9 +315,7 @@ export function NoteEditorPage() {
         const visible = entries.filter((e) => e.isIntersecting);
         if (visible.length === 0) return;
         const topMost = visible.reduce((a, b) => (a.boundingClientRect.top <= b.boundingClientRect.top ? a : b));
-        const key = ([...sectionRefs.current.entries()].find(([, el]) => el === topMost.target)?.[0]) as
-          | NoteSectionKey
-          | undefined;
+        const key = [...sectionRefs.current.entries()].find(([, el]) => el === topMost.target)?.[0];
         if (key) setActiveSection(key);
       },
       { rootMargin: '-15% 0px -70% 0px', threshold: 0 }
@@ -309,7 +324,7 @@ export function NoteEditorPage() {
     return () => observer.disconnect();
   }, []);
 
-  function jumpToSection(key: NoteSectionKey) {
+  function jumpToSection(key: JumpKey) {
     setOpenSections((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
     setActiveSection(key);
     suppressSpyRef.current = true;
@@ -401,6 +416,23 @@ export function NoteEditorPage() {
   ).length;
   const bmi = computeBmi(payload.generalHealth?.weightKg, payload.generalHealth?.heightCm);
   const waistToHeight = computeWaistToHeightRatio(payload.generalHealth?.waistCm, payload.generalHealth?.heightCm);
+
+  /** Status dot for the two EXTRA_JUMP_TARGETS — neither has a
+   *  sectionCompletion() of its own (that's defined over NoteSectionKey),
+   *  so this mirrors its empty/partial/complete meaning by hand: Screening
+   *  reuses the same red/amber/clear read the banner itself shows, General
+   *  health is complete once any vital has been entered. */
+  function extraJumpDot(key: 'generalHealth' | 'screening'): string {
+    if (key === 'screening') {
+      return derived.redFlagCount > 0
+        ? 'var(--rust)'
+        : derived.yellowConcernCount > 0
+          ? 'var(--amber)'
+          : 'var(--moss)';
+    }
+    const g = payload.generalHealth;
+    return g?.weightKg != null || g?.heightCm != null || g?.waistCm != null ? 'var(--moss)' : 'var(--border)';
+  }
 
   const neuroFlagged = NEURO_LEVELS.some((l) => {
     const d = payload.neurologicalScreen.dermatomes[l];
@@ -582,8 +614,16 @@ export function NoteEditorPage() {
             Uses the same card + title/subtitle header shape as the accordion
             sections below (just always-open, no chevron), so the run of
             blocks down this page reads as one structure rather than three
-            unrelated widget styles. */}
-        <div className="setup-card">
+            unrelated widget styles. A jump target (see EXTRA_JUMP_TARGETS)
+            even though it isn't a NoteSectionKey, so it's reachable from the
+            nav instead of only by scrolling. */}
+        <div
+          ref={(el) => {
+            if (el) sectionRefs.current.set('generalHealth', el);
+            else sectionRefs.current.delete('generalHealth');
+          }}
+          className="setup-card scroll-mt-28 md:scroll-mt-20"
+        >
           <div className="ne-block-head">
             <h3>General health &amp; triage</h3>
             <p className="sub">Weight, height, waist — BMI and waist/height derive automatically</p>
@@ -625,7 +665,13 @@ export function NoteEditorPage() {
           </div>
         </div>
 
-        <div className={`screening-banner ${derived.redFlagCount > 0 ? 'red' : derived.yellowConcernCount > 0 ? 'amber' : 'clear'} ${screeningOpen ? 'open' : ''}`}>
+        <div
+          ref={(el) => {
+            if (el) sectionRefs.current.set('screening', el);
+            else sectionRefs.current.delete('screening');
+          }}
+          className={`screening-banner scroll-mt-28 md:scroll-mt-20 ${derived.redFlagCount > 0 ? 'red' : derived.yellowConcernCount > 0 ? 'amber' : 'clear'} ${screeningOpen ? 'open' : ''}`}
+        >
           <button type="button" className="sb-head" onClick={() => setScreeningOpen((v) => !v)}>
             <span>
               🛡 Screening — {derived.redFlagCount > 0
@@ -718,6 +764,22 @@ export function NoteEditorPage() {
             — a second bar down there would compete with it), same status
             dots as the desktop rail. */}
         <nav className="sticky top-14 z-[1] -mx-4 mb-3 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--paper)] px-4 py-2 md:hidden">
+          {EXTRA_JUMP_TARGETS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => jumpToSection(key)}
+              className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium"
+              style={{
+                background: activeSection === key ? 'var(--teal-light)' : 'var(--surface)',
+                borderColor: activeSection === key ? 'transparent' : 'var(--border)',
+                color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
+              }}
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: extraJumpDot(key) }} />
+              {label}
+            </button>
+          ))}
           {SECTION_GROUPS.flatMap((group) =>
             group.keys.filter((key) => key !== 'outcome' || outcomeCards.length > 0)
           ).map((key) => {
@@ -743,6 +805,23 @@ export function NoteEditorPage() {
 
         <div className="md:flex md:items-start md:gap-6">
           <nav className="hidden md:sticky md:top-20 md:flex md:max-h-[calc(100vh-6rem)] md:w-52 md:shrink-0 md:flex-col md:gap-0.5 md:overflow-y-auto">
+            <div className="mb-1.5">
+              {EXTRA_JUMP_TARGETS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => jumpToSection(key)}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs font-medium"
+                  style={{
+                    background: activeSection === key ? 'var(--teal-light)' : 'transparent',
+                    color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
+                  }}
+                >
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: extraJumpDot(key) }} />
+                  {label}
+                </button>
+              ))}
+            </div>
             {SECTION_GROUPS.map((group) => {
               // Outcome Tracking only exists once there's prior data to
               // compare against — drop its whole group rather than leave a
