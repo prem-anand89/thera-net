@@ -33,7 +33,22 @@ import {
 } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
 
-type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'features' | 'data' | 'danger';
+type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'features' | 'data';
+
+/**
+ * Grouped into the three jobs an admin actually comes here to do, rather
+ * than one flat list of eight peers where "Clinic profile" and "Danger
+ * zone" sat at the same level. Data and Danger zone also merged into one
+ * "Data & maintenance" section — import, backup/restore, cache reset, and
+ * wipe are all the same occasional-maintenance job, and splitting them
+ * meant an admin looking for "restore a backup" had to guess which of two
+ * adjacent tabs held it.
+ */
+const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
+  { label: 'Clinic', keys: ['profile', 'billing', 'partner'] },
+  { label: 'People & services', keys: ['team', 'services'] },
+  { label: 'System', keys: ['features', 'data'] },
+];
 
 const SECTIONS: { key: SectionKey; label: string; description: string }[] = [
   { key: 'profile', label: 'Clinic profile', description: 'Name, address, contact info, logo, walk-in ID prefix.' },
@@ -50,9 +65,17 @@ const SECTIONS: { key: SectionKey; label: string; description: string }[] = [
   { key: 'team', label: 'Team', description: 'Invite and manage logins, therapist roster.' },
   { key: 'services', label: 'Services', description: 'Catalog of billable services and package prices.' },
   { key: 'features', label: 'Features', description: 'Optional modules — Expected today, clinical notes, comparison chart.' },
-  { key: 'data', label: 'Data', description: 'Import historical visits, export/restore a full backup.' },
-  { key: 'danger', label: 'Danger zone', description: 'Reset this device\'s cache, or wipe all clinic data.' },
+  {
+    key: 'data',
+    label: 'Data & maintenance',
+    description: 'Import historical visits, back up or restore, reset this device, wipe clinic data.',
+  },
 ];
+
+// Same two-lists-must-agree guard as the note editor's jump-nav.
+if (SECTION_GROUPS.flatMap((g) => g.keys).length !== SECTIONS.length) {
+  throw new Error('SECTION_GROUPS is out of sync with SECTIONS');
+}
 
 /** Only add/remove `key` if that actually changes membership — keeps the
  *  Set reference stable across no-op updates so dirty-tracking effects
@@ -113,21 +136,34 @@ export function SetupPage() {
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Settings</h1>
 
       <div className="tab:flex tab:items-start tab:gap-6">
-        <nav className="mb-4 flex gap-1 overflow-x-auto tab:mb-0 tab:w-44 tab:shrink-0 tab:flex-col tab:gap-0.5">
-          {SECTIONS.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => selectSection(s.key)}
-              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm font-medium ${
-                activeKey === s.key
-                  ? 'bg-[var(--teal-light)] text-[var(--teal)]'
-                  : 'text-[var(--muted)] hover:bg-[var(--paper)]'
-              }`}
-            >
-              {s.label}
-              {dirtyKeys.has(s.key) && <span className="ml-1.5 text-[var(--rust)]">•</span>}
-            </button>
+        {/* Group headings only render in the vertical (tab:) rail — the
+            horizontal scroller on phones stays a flat row, where headings
+            would just eat scroll width. */}
+        <nav className="mb-4 flex gap-1 overflow-x-auto tab:mb-0 tab:w-48 tab:shrink-0 tab:flex-col tab:gap-0.5 tab:overflow-visible">
+          {SECTION_GROUPS.map((group) => (
+            <div key={group.label} className="contents tab:mb-1.5 tab:block">
+              <p className="hidden px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]/70 tab:block">
+                {group.label}
+              </p>
+              {group.keys.map((key) => {
+                const s = SECTIONS.find((x) => x.key === key)!;
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => selectSection(s.key)}
+                    className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm font-medium tab:block tab:w-full ${
+                      activeKey === s.key
+                        ? 'bg-[var(--teal-light)] text-[var(--teal)]'
+                        : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+                    }`}
+                  >
+                    {s.label}
+                    {dirtyKeys.has(s.key) && <span className="ml-1.5 text-[var(--rust)]">•</span>}
+                  </button>
+                );
+              })}
+            </div>
           ))}
         </nav>
 
@@ -145,9 +181,9 @@ export function SetupPage() {
             <>
               <HistoricalData />
               <DataBackup />
+              <DangerZone />
             </>
           )}
-          {activeKey === 'danger' && <DangerZone />}
         </div>
       </div>
     </div>
