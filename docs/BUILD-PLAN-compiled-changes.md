@@ -222,24 +222,76 @@ their internals unchanged, just relocated under the new rail.
   each heading. Screening's own bespoke collapse UI (the red/amber/clear
   banner) already communicates carried-forward status and was left as is.
 
-### PR 6 — Seen Today / Ledger parity (§4)
-- Extract a shared visit table so both surfaces read one column config.
-- Below 768px: existing `SharedVisitCard`. At 768px and above: table.
-- Migrate `Needs attention` from `lg:` to `md:`.
-- Per-user column prefs in Dexie, migrating from `clinic.visitColumnPrefs`.
-- Widen `VisitColumnKey` past `condition`/`treatment`.
+### PR 6 — Seen Today / Ledger parity (§4) — SHIPPED
+- Extracted `RowActionsMenu` and `PaymentStatusDisplay` out of
+  `SharedVisitCard` into their own subcomponents, added `VisitTable` on top
+  of them, and wrapped both in `ResponsiveVisitList`: cards below `md:`,
+  table with a Columns picker at `md:` and up. Ledger keeps its
+  today/this-week/this-month card grouping below `md:`; table mode drops
+  the group headers for a plain Date column instead — a table already
+  carries that information natively.
+- Both `WorkspacePage`'s Seen Today and `VisitsPage`'s Ledger visit list now
+  go through `ResponsiveVisitList` instead of each hand-rolling its own
+  `SharedVisitCard` loop, so they read from one column config. Removed
+  `VisitsPage`'s now-redundant `groupVisitsByDate`/grouping code, superseded
+  by the equivalent helper co-located with the new table.
+- `Needs attention` migrated `lg:` → `md:`.
+- Column prefs moved to per-user Dexie storage (`useVisitColumnPrefs`).
+  `Clinic.visitColumnPrefs` turned out to have been fully dead — no table
+  existed to apply it to when it was added — so the now-nonfunctional
+  picker was removed from Settings' Features section rather than left
+  showing a control with no effect. `VisitColumnKey` widened to include
+  `therapist` and `service` alongside `condition`/`treatment`.
 
-### PR 7 — Role scoping (§2, §6)
-- Cache clinic role in Dexie; `useClinicRole` reads cache when offline
-  (decision 3).
-- Shared scope hook returning role, own therapist id, and the resulting
-  query scope — one implementation used by both Workspace tiles and
-  Insights, per the source document's closing note.
-- Tiles scoped per the source document's table.
-- Insights: same hook, plus packages breakdown. Outstanding-payments table
-  moves to Ledger; single-visit/regulars stay, charted (decision 5). Chart
+### PR 7 — Role scoping (§2, §6) — SHIPPED
+- Cached clinic role in Dexie (decision 3) — `useClinicRole` now falls back
+  to the cached role when the live fetch hasn't resolved (offline, or still
+  loading), instead of reading `'unknown'` and every caller silently
+  narrowing to the staff view.
+- `useWorkspaceScope` (new, `src/app/`) is the one role +
+  own-therapist-id + resulting query-scope hook, replacing
+  `WorkspacePage`'s inline version so Insights uses the identical logic
+  rather than a second implementation.
+- Workspace tiles scoped per the source table: Collected today was already
+  scoped (now reads from the shared hook); Packages this month becomes "My
+  open packages" for a therapist — a genuinely different metric (currently
+  open regardless of start date, not new-this-month), using a new
+  `startedByTherapistId` field threaded through `groupOpenPackages` /
+  `openPackages`, attributed to whoever logged the earliest session (tested
+  against insertion-order vs. date-order to make sure it's not just
+  `group[0]`). A new "My sessions this week" tile appears for non-admins,
+  backed by `weeklySummary` gaining an optional `therapistId` filter (it
+  was clinic-wide only, and unused by any screen until now). `Expected` is
+  the one tile **not** scoped — see Deferred below.
+- Insights: revenue trend and the therapist-comparison chart use the shared
+  hook (therapist sees their own trend; the comparison chart is admin-only,
+  since comparing yourself to nobody isn't a comparison). Added a
+  Packages breakdown (by service, active vs. stale — not "completed," see
+  Deferred). Outstanding payments moved to Ledger (decision 5). Chart
   colours unchanged (decision 7).
-- Thin-data empty states.
+- Thin-data guard: a trend built from fewer than two active months shows a
+  placeholder instead of a chart that reads as a spike.
+- **Reinterpreted, not skipped — single-visit patients / Regulars
+  "charted" (decision 5)**: a literal chart doesn't fit a fundamentally
+  actionable name list, and inventing one risked losing the click-through
+  a receptionist actually uses. Shipped as a stat count + a small histogram
+  (days-since-visit / visit-count buckets) + a compact linked chip list,
+  replacing the 5-column table without losing per-patient access.
+
+**Deferred, not silently dropped — the data model doesn't support these
+cleanly yet:**
+- `Expected` tile / Expected-today are **not** scoped by therapist.
+  `ExpectedVisit` has no therapist attribution at all (deliberately — it's
+  a shared front-desk queue, not a per-therapist appointment book), so "their
+  own expected patients" doesn't map onto the schema without adding a real
+  assign-a-therapist feature. Out of scope for a role-*scoping* PR.
+- Single-visit patients / Regulars are **not** scoped by therapist. A
+  patient can see multiple therapists over their history, so unlike
+  packages (which now have `startedByTherapistId`), there's no clean
+  single-therapist attribution for "this patient's list" to filter on.
+- Packages breakdown shows active vs. stale, not active/completed/stale —
+  `openPackages` only ever returns *open* packages; a "completed" count
+  needs a different query this PR didn't build.
 
 ### PR 8 — Navigation restructure (§1a)
 - `/archive` → `/ledger`; `/setup` → `/settings`; both old paths kept as
