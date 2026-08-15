@@ -201,7 +201,7 @@ export function WorkspacePage() {
         await paymentService.setStatus(invoice.id, clinic.id, paidNow ? 'paid' : 'outstanding');
       } catch (statusError) {
         // Non-fatal: the invoice IS issued, and a missing status row reads
-        // as Paid — correctable anytime from Archive's Invoices tab.
+        // as Paid — correctable anytime from Ledger's Invoices tab.
         console.error('Could not record payment status', statusError);
       }
       setInvoicing(null);

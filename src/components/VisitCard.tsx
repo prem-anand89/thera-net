@@ -8,10 +8,8 @@ import type { VisitPaymentState } from '@/domain/paymentState';
 import { Pill, PackageThread, th, thNum, td, tdNum } from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 
-export type VisitCardPaymentState = VisitPaymentState;
-
 export const PAYMENT_CHIP: Record<
-  VisitCardPaymentState,
+  VisitPaymentState,
   { tone: 'green' | 'amber' | 'slate'; label: (bill: string) => string; actionLabel?: (bill: string) => string }
 > = {
   paid: { tone: 'green', label: () => 'Paid' },
@@ -40,7 +38,7 @@ export interface VisitCardData {
   therapistName: string;
   treatmentNotes: string | null;
   billPaise: Paise;
-  paymentState: VisitCardPaymentState;
+  paymentState: VisitPaymentState;
   invoiceId: UUID | null;
   /** Set when someone other than the original author last touched this row. */
   editedBy?: string | null;
