@@ -81,6 +81,15 @@ create policy visits_delete on public.visits
 -- through Settings, not just admins.
 -- ---------------------------------------------------------------------------
 drop policy therapists_all on public.therapists;
+-- Defensive: a therapists_insert policy referencing the not-yet-existing
+-- 'therapist' role value was found live on the production project during
+-- deploy, untracked by any migration in this history (likely added
+-- directly via the dashboard at some point) -- dormant today (therapists_all
+-- already permitted inserts to any member, so this extra permissive policy
+-- changed nothing in practice), but it collides with the create below on a
+-- fresh apply. Drop it if present so this migration is safe to run against
+-- either a clean database or this specific drifted one.
+drop policy if exists therapists_insert on public.therapists;
 
 create policy therapists_select on public.therapists
   for select using (is_clinic_member(clinic_id));

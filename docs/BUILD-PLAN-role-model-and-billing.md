@@ -902,3 +902,43 @@ landed in the same transaction. Real headless-browser render at 375px
 confirmed the description-spacing fix (positive gap, not text-on-border)
 and the `.list-entry` card now reading as a lighter sub-group rather than
 a nested card.
+
+## Migrations deployed to production (2026-08-15)
+
+At the user's request, applied the 7 new migrations
+(`20260815000001`-`20260816000001`) directly to the connected Supabase
+project rather than waiting for the normal merge/deploy path. Not a
+blind replay: the remote's tracked migration history uses different
+names and a different order than this repo's filenames (bootstrapped
+through some other process at an earlier point, unrelated to this
+session), so each migration's assumed starting schema — constraint
+definitions, column presence, policy sets — was checked against the
+live database's actual current state via direct SQL before applying
+anything, and the end state re-verified after each one.
+
+That check surfaced one genuine piece of drift: a `therapists_insert`
+policy existed live with no corresponding migration anywhere in this
+repo's history — added directly against the database at some point,
+outside the tracked file set. Its check expression referenced a
+`'therapist'` role value that didn't even exist yet in
+`clinic_members`'s check constraint at the time, so it was inert (never
+matched anything beyond what the pre-existing `therapists_all` policy
+already permitted) — but it collided by name with migration 1's own
+`create policy therapists_insert`. Fixed in the migration file itself
+(`drop policy if exists therapists_insert` added before the create),
+not just patched for this one apply, so a future fresh replay handles
+either a clean database or this specific drifted one without
+intervention.
+
+Verified against the live project after applying: `hard_delete_therapist`
+/`create_clinic_with_admin`/`issue_invoice` all present;
+`clinic_members_role_check` allows admin/therapist/front_desk (zero rows
+needed the `'staff'`→`'therapist'` backfill — this clinic had no `staff`
+members going in); `visits`/`therapists`/`service_catalog`/
+`consultation_notes` each carry exactly their new intended policy set,
+no leftover `_all` or drifted policies; `clinics` has all three new
+columns with correct defaults; zero `clinic_module_settings` rows still
+say `'staff'` — the critical consultation-notes-blocking bug from the
+"Post-ship review" section above is now actually fixed in production,
+not just in this branch. Security advisor shows nothing new introduced
+by the deploy.
