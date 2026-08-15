@@ -651,13 +651,19 @@ export function NoteEditorPage() {
           </div>
         </div>
 
-        <div className="field-block">
-          <label>Therapist</label>
-          <select value={therapistId} onChange={(e) => setTherapistId(e.target.value)} disabled={readOnly}>
-            {(therapists ?? []).map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
+        {/* Same card treatment as General health & triage above -- without
+            it this was a bare label+select floating between the screening
+            banner and the jump-nav/accordion split, the only piece of the
+            page with no visual boundary of its own. */}
+        <div className="setup-card">
+          <div className="field-block">
+            <label>Therapist</label>
+            <select value={therapistId} onChange={(e) => setTherapistId(e.target.value)} disabled={readOnly}>
+              {(therapists ?? []).map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {noteMode === 'followup' && ready && !priorNoteHasCarryForwardData && (

@@ -50,6 +50,21 @@ export interface VisitCardData {
   canDelete: boolean;
   /** True when this visit is flagged for a clinical note that hasn't been completed yet. */
   needsNote?: boolean;
+  /**
+   * Whether this viewer can open the note editor for this visit's patient
+   * at all (mirrors `usePermissions().canViewClinicalNotes` — false for
+   * front desk). Independent of `needsNote`: `needsNote` only lights up
+   * when the clinic has clinicalDocsEnabled *and* the visit predates a
+   * completed note, so a clinic that has it off, or a visit whose note is
+   * already done, previously had no notes entry point at all outside
+   * Patient Profile.
+   */
+  canViewNotes?: boolean;
+  /** Set once this visit's note is completed — routes the row action to
+   *  view it instead of starting a new one. Unset for a draft-in-progress
+   *  note too (drafts don't populate this field, same gap `needsNote`'s
+   *  own "+ Note" link already has) — both route to /notes/new. */
+  consultationNoteId?: UUID | null;
 }
 
 /** Row actions kebab menu — shared between the card and table renderings so
@@ -69,7 +84,12 @@ function RowActionsMenu({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const hasMenu =
-    data.canRepeat || onEditPatient || (data.canEdit && onEdit) || (data.canSplit && onSplit) || data.canDelete;
+    data.canRepeat ||
+    onEditPatient ||
+    (data.canEdit && onEdit) ||
+    data.canViewNotes ||
+    (data.canSplit && onSplit) ||
+    data.canDelete;
   if (!hasMenu) return null;
 
   return (
@@ -119,6 +139,17 @@ function RowActionsMenu({
               >
                 Edit visit
               </button>
+            )}
+            {data.canViewNotes && (
+              <Link
+                to={data.consultationNoteId ? '/patients/$patientId/notes/$noteId' : '/patients/$patientId/notes/new'}
+                params={data.consultationNoteId ? { patientId: data.patientId, noteId: data.consultationNoteId } : { patientId: data.patientId }}
+                search={data.consultationNoteId ? undefined : { visitId: data.visitId }}
+                className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
+                onClick={() => setMenuOpen(false)}
+              >
+                {data.consultationNoteId ? 'View note' : 'Add note'}
+              </Link>
             )}
             {data.canSplit && onSplit && (
               <button

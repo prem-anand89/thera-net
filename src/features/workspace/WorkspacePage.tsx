@@ -52,7 +52,8 @@ function todayRowToCardData(
   row: TodayVisitRow,
   openPackageGroupIds: Set<string>,
   isAdmin: boolean,
-  myTherapistId: string | undefined
+  myTherapistId: string | undefined,
+  canViewClinicalNotes: boolean
 ): VisitCardData {
   return {
     visitId: row.visitId,
@@ -75,13 +76,15 @@ function todayRowToCardData(
     // out false for them — matching RLS, which rejects their delete too.
     canDelete: !row.invoiceId && (isAdmin || row.therapistId === myTherapistId),
     needsNote: row.needsNote,
+    canViewNotes: canViewClinicalNotes,
+    consultationNoteId: row.consultationNoteId,
   };
 }
 
 export function WorkspacePage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
-  const { canBill } = usePermissions();
+  const { canBill, canViewClinicalNotes } = usePermissions();
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
   const [paidNow, setPaidNow] = useState(true);
@@ -396,7 +399,7 @@ export function WorkspacePage() {
         ) : (
           <ResponsiveVisitList
             rows={today.visits.map((row) =>
-              todayRowToCardData(row, openPackageGroupIds, scope.isAdmin, scope.myTherapistId)
+              todayRowToCardData(row, openPackageGroupIds, scope.isAdmin, scope.myTherapistId, canViewClinicalNotes)
             )}
             showDate={false}
             showPatient={true}

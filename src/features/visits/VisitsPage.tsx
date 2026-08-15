@@ -68,7 +68,8 @@ function visitToCardData(
   statusByInvoiceId: Map<UUID, PaymentStatus>,
   directPaymentByVisitId: Map<UUID, number>,
   isAdmin: boolean,
-  myTherapistId: UUID | undefined
+  myTherapistId: UUID | undefined,
+  canViewClinicalNotes: boolean
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy = v.createdBy && v.updatedBy && v.createdBy !== v.updatedBy
@@ -113,6 +114,8 @@ function visitToCardData(
     hasSplit: v.sharedTherapistId ? true : false,
     canDelete: !v.invoiceId && canModify,
     needsNote: v.clinicalStatus === 'pending',
+    canViewNotes: canViewClinicalNotes,
+    consultationNoteId: v.consultationNoteId ?? null,
   };
 }
 
@@ -126,7 +129,7 @@ interface InvoicingTarget {
 
 export function VisitsPage() {
   const clinic = useClinic();
-  const { canBill, isAdmin } = usePermissions();
+  const { canBill, isAdmin, canViewClinicalNotes } = usePermissions();
   const { myTherapistId } = useWorkspaceScope();
   const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
@@ -275,7 +278,8 @@ export function VisitsPage() {
           statusByInvoiceId,
           directPaymentByVisitId,
           isAdmin,
-          myTherapistId
+          myTherapistId,
+          canViewClinicalNotes
         )
       ),
     [
@@ -291,6 +295,7 @@ export function VisitsPage() {
       directPaymentByVisitId,
       isAdmin,
       myTherapistId,
+      canViewClinicalNotes,
     ]
   );
 

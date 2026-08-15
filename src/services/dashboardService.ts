@@ -94,6 +94,8 @@ export interface TodayVisitRow {
   paymentState: TodayPaymentState;
   /** True when this visit is flagged for a clinical note that hasn't been completed yet. */
   needsNote: boolean;
+  /** Set once this visit's note is completed. */
+  consultationNoteId: UUID | null;
 }
 
 export interface TodayWorklist {
@@ -606,6 +608,7 @@ export function createDashboardService(repos: Repos) {
             invoiceId: v.invoiceId,
             paymentState,
             needsNote: v.clinicalStatus === 'pending',
+            consultationNoteId: v.consultationNoteId ?? null,
           };
         })
         .sort((a, b) => a.patientName.localeCompare(b.patientName));
