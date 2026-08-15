@@ -132,14 +132,17 @@ export function SetupPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-16 tab:pb-0">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Settings</h1>
 
       <div className="tab:flex tab:items-start tab:gap-6">
-        {/* Group headings only render in the vertical (tab:) rail — the
-            horizontal scroller on phones stays a flat row, where headings
-            would just eat scroll width. */}
-        <nav className="mb-4 flex gap-1 overflow-x-auto tab:mb-0 tab:w-48 tab:shrink-0 tab:flex-col tab:gap-0.5 tab:overflow-visible">
+        {/* Below tab:, the section switcher docks to the bottom of the
+            viewport as a fixed bar (thumb-reachable, and it can't get cut
+            off mid-scroll the way a top scroller can) — reverts to the
+            normal in-flow vertical rail at tab: and above. Group headings
+            only render in that rail; the bottom bar stays a flat row, where
+            headings would just eat scroll width. */}
+        <nav className="fixed inset-x-0 bottom-0 z-10 flex gap-1 overflow-x-auto border-t border-[var(--border)] bg-[var(--surface)] px-2 py-2 tab:static tab:mb-0 tab:w-48 tab:shrink-0 tab:flex-col tab:gap-0.5 tab:overflow-visible tab:border-t-0 tab:bg-transparent tab:p-0">
           {SECTION_GROUPS.map((group) => (
             <div key={group.label} className="contents tab:mb-1.5 tab:block">
               <p className="hidden px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]/70 tab:block">
@@ -319,7 +322,7 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
 
   return (
     <SectionCard title="Clinic profile">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Clinic name">
           <input className={inputCls} value={form.name} onChange={(e) => set({ name: e.target.value })} />
         </Field>
@@ -377,7 +380,7 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
 
   return (
     <SectionCard title="Billing & invoicing">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Invoice prefix">
           <input
             className={inputCls}
@@ -501,7 +504,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
 
   return (
     <SectionCard title="Partner & split">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field
           label={
             <>
@@ -654,7 +657,7 @@ function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) =>
 
   return (
     <SectionCard title="Features">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field
           label={
             <>

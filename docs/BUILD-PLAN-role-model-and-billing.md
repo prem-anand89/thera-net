@@ -729,3 +729,78 @@ the grid drops to one column below `sm:`.
 Verified: typecheck, lint, vitest (240 passed — down from 242, the two
 manual-invoice-specific `reportService.test.ts` cases were removed along
 with the feature), production build all clean.
+
+## Note editor cell audit + bottom-docked mobile tabs (2026-08-15)
+
+A fresh screenshot round on `NoteEditorPage.tsx` surfaced exactly what
+"few cells were added by haiku" meant: Trauma history, Surgical history,
+and Goals rendered their dynamic list rows with **no styling class at
+all** — bare `<input>`/`<select>` elements with neither `.field-input`
+nor a `.field-block` ancestor, so they picked up zero border/background/
+padding from either design system. Next to Previous Pain History's
+properly-boxed card (added later, correctly styled), they looked like a
+completely different, unstyled widget — which is exactly what the
+screenshot showed. Same three widgets also hardcoded a fixed multi-column
+`gridTemplateColumns` (`90px 1fr 1fr auto`, `1fr 120px 140px auto`)
+bypassing `.field-row`'s own responsive breakpoint entirely, so on a
+narrow phone the later columns (a third input, the delete button)
+overflowed off the right edge instead of wrapping — the literal "text
+crossing off the box."
+
+Audited the whole file programmatically (every `<input>`/`<select>`/
+`<textarea>` checked for a `.field-input` class or a `.field-block`/
+`.mini-table` ancestor) rather than fixing only what a screenshot
+happened to catch. Found and fixed the same two bugs (missing class,
+hardcoded grid) in: Secondary complaints' Onset/Mechanism/Episode
+pattern/Notes, Previous pain history's Timeline onset/duration/intensity/
+treatment, Palpation's Region/painOnPalpation, ROM/Strength-MMT/Special
+tests (objective exam), HEP exercises, and the Pain Profile/PSFS NRS
+scale triplets (`repeat(3, 1fr)` inline override, same class of bug).
+Five stray labels using the pre-unification inline style (`fontSize:
+10.5, uppercase`) switched to the shared `.field-label` class. Left
+alone, confirmed correct: `.mini-table` inputs (dense table cells, 12px
+by design, already have their own CSS rule) and one `.stat-row` pinned
+at 2 columns (matches its own responsive base, doesn't scale up like
+siblings, but that's a density choice not a mobile bug).
+
+Root-caused a second, separate bug from the same screenshots:
+`SetupPage.tsx`'s four `grid-cols-2 gap-3 lg:grid-cols-3` section grids
+(Clinic profile, Billing & invoicing, Partner & settlement, Features)
+had no `sm:` step — 2 columns unconditionally, including on a 360–375px
+phone. Wrongly cleared earlier in the design-system-unification round by
+pattern-matching against a different, genuinely-safe 2-col stat-tile grid
+elsewhere without checking what these actually contained (real form
+fields, not stat tiles). The visible symptom: a native `<input
+type="file">`'s "Choose File / No file chosen" text doesn't shrink,
+so squeezed into a ~165px half-width column it overflowed its box.
+Fixed to `grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3`, matching the
+pattern used correctly everywhere else in the app.
+
+**Mobile tab bars moved to the bottom of the viewport**, per explicit
+request — both Settings' section switcher and the note editor's mobile
+section-jump chips were a horizontally-scrolling row pinned to the top
+(cut off mid-label at the viewport edge in both screenshots). Both are
+now `fixed inset-x-0 bottom-0`, reverting to their normal in-flow
+position (vertical rail / desktop sidebar) at `tab:`/`md:` and above.
+Each page's root gained `pb-16` (mobile only) so the fixed bar doesn't
+cover the last field on screen. The note editor's mobile-only
+`scroll-mt-28` (extra clearance for the old top-pinned chip nav)
+reverted to the same `scroll-mt-20` used at every other breakpoint, since
+nothing sticky sits at the top of the viewport below `md:` anymore
+(Shell's own header is the only thing left to clear, already accounted
+for). Jump-to-section behavior is unaffected — `scroll-mt` clearance is
+about the target section, not where the nav triggering the jump sits.
+
+`NewVisitPage.tsx` was checked against the same "old build" complaint
+and came back clean — zero unstyled form controls (confirmed
+programmatically), the two-column patient/visit layout consistent
+throughout. If it still looks misaligned on the deployed preview after
+this round, that's most likely a stale deployment rather than a source
+issue worth chasing blind.
+
+Verified: typecheck, lint, vitest (240 passed), production build clean,
+plus a real headless-browser render at 375px width for both the Settings
+grid (fields now stack to one column, file input fits its box, tab bar
+docked at bottom) and the note editor's Trauma history card (now
+properly boxed, matching Previous Pain History) — zero horizontal
+overflow measured on both.

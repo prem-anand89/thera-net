@@ -168,7 +168,7 @@ function MovementQuickPick({
 }) {
   if (!region) return null;
   return (
-    <select value="" disabled={disabled} onChange={(e) => e.target.value && onPick(e.target.value)} style={{ maxWidth: 150 }}>
+    <select className="field-input" value="" disabled={disabled} onChange={(e) => e.target.value && onPick(e.target.value)} style={{ maxWidth: 150 }}>
       <option value="">Quick pick…</option>
       {ROM_MOVEMENTS_BY_REGION[region].map((m) => (
         <option key={m} value={m}>{m}</option>
@@ -538,7 +538,7 @@ export function NoteEditorPage() {
         <h1 className="screen-title">Assessment</h1>
       </header>
 
-      <div className="screen-body">
+      <div className="screen-body pb-16 md:pb-0">
         {error && (
           <div className="frozen-note" style={{ background: 'var(--rust-light)', color: 'var(--rust)' }}>
             {error}
@@ -713,11 +713,13 @@ export function NoteEditorPage() {
 
         {/* Mobile section nav. Below md: the sidebar rail is hidden, which
             left phones with no way to move around a nine-section form
-            except scrolling the whole thing. Same horizontally-scrolling
-            pattern Settings already uses at this width, sticky under the
-            app nav so it stays reachable, with the same status dots as the
-            desktop rail. */}
-        <nav className="sticky top-14 z-[1] -mx-4 mb-3 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--paper)] px-4 py-2 md:hidden">
+            except scrolling the whole thing. Docked to the bottom of the
+            viewport (thumb-reachable, and it can't get cut off mid-scroll
+            the way a top scroller can) — same pattern Settings uses at this
+            width, same status dots as the desktop rail. Jump targets are
+            unaffected by where the nav itself sits: scroll-mt on each
+            section is what clears Shell's sticky header, not this bar. */}
+        <nav className="fixed inset-x-0 bottom-0 z-10 flex gap-1.5 overflow-x-auto border-t border-[var(--border)] bg-[var(--paper)] px-4 py-2 md:hidden">
           {SECTION_GROUPS.flatMap((group) =>
             group.keys.filter((key) => key !== 'outcome' || outcomeCards.length > 0)
           ).map((key) => {
@@ -792,7 +794,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('chiefComplaint', el);
             else sectionRefs.current.delete('chiefComplaint');
           }}
-          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('chiefComplaint') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-20 ${openSections.has('chiefComplaint') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('chiefComplaint')}>
             <div>
@@ -984,7 +986,7 @@ export function NoteEditorPage() {
 
               <div style={{ marginTop: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Secondary complaints</label>
+                  <label className="field-label">Secondary complaints</label>
                   <button
                     className="btn-secondary"
                     disabled={readOnly}
@@ -1006,6 +1008,7 @@ export function NoteEditorPage() {
                     <div key={complaint.id} className="setup-card" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <input
+                          className="field-input"
                           placeholder="Region"
                           value={complaint.region}
                           disabled={readOnly}
@@ -1032,6 +1035,7 @@ export function NoteEditorPage() {
                       </div>
                       <div className="field-row">
                         <input
+                          className="field-input"
                           placeholder="Onset"
                           value={complaint.onset ?? ''}
                           disabled={readOnly}
@@ -1043,6 +1047,7 @@ export function NoteEditorPage() {
                           }
                         />
                         <input
+                          className="field-input"
                           placeholder="Mechanism"
                           value={complaint.mechanism ?? ''}
                           disabled={readOnly}
@@ -1054,28 +1059,32 @@ export function NoteEditorPage() {
                           }
                         />
                       </div>
-                      <input
-                        placeholder="Episode pattern"
-                        value={complaint.episodePattern ?? ''}
-                        disabled={readOnly}
-                        onChange={(e) =>
-                          update('chiefComplaint', {
-                            ...payload.chiefComplaint,
-                            secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, episodePattern: e.target.value } : x))
-                          })
-                        }
-                      />
-                      <input
-                        placeholder="Notes"
-                        value={complaint.note ?? ''}
-                        disabled={readOnly}
-                        onChange={(e) =>
-                          update('chiefComplaint', {
-                            ...payload.chiefComplaint,
-                            secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, note: e.target.value } : x))
-                          })
-                        }
-                      />
+                      <div className="field-row">
+                        <input
+                          className="field-input"
+                          placeholder="Episode pattern"
+                          value={complaint.episodePattern ?? ''}
+                          disabled={readOnly}
+                          onChange={(e) =>
+                            update('chiefComplaint', {
+                              ...payload.chiefComplaint,
+                              secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, episodePattern: e.target.value } : x))
+                            })
+                          }
+                        />
+                        <input
+                          className="field-input"
+                          placeholder="Notes"
+                          value={complaint.note ?? ''}
+                          disabled={readOnly}
+                          onChange={(e) =>
+                            update('chiefComplaint', {
+                              ...payload.chiefComplaint,
+                              secondaryComplaints: payload.chiefComplaint.secondaryComplaints?.map((x) => (x.id === complaint.id ? { ...x, note: e.target.value } : x))
+                            })
+                          }
+                        />
+                      </div>
                     </div>
                   ))
                 )}
@@ -1091,7 +1100,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('history', el);
             else sectionRefs.current.delete('history');
           }}
-          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('history') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-20 ${openSections.has('history') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('history')}>
             <div>
@@ -1168,41 +1177,57 @@ export function NoteEditorPage() {
 
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Trauma history</label>
+                  <label className="field-label">Trauma history</label>
                   <button className="btn-secondary" disabled={readOnly} onClick={() => update('history', { ...payload.history, traumas: [...payload.history.traumas, { date: '', bodyPart: '', nature: '', treatment: '', sequelae: 'none' }] })}>+ Add</button>
                 </div>
-                {payload.history.traumas.map((t, i) => (
-                  <div key={i} className="field-row" style={{ marginTop: 6, alignItems: 'center', gridTemplateColumns: '90px 1fr 1fr auto' }}>
-                    <input type="text" placeholder="Date/year" value={t.date} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)) })} />
-                    <input placeholder="Body part" value={t.bodyPart} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, bodyPart: e.target.value } : x)) })} />
-                    <input placeholder="Nature" value={t.nature} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, nature: e.target.value } : x)) })} />
-                    <button className="kebab" disabled={readOnly} onClick={() => update('history', { ...payload.history, traumas: payload.history.traumas.filter((_, j) => j !== i) })}>✕</button>
-                  </div>
-                ))}
+                {payload.history.traumas.length === 0 ? (
+                  <p className="empty-note">No trauma history added.</p>
+                ) : (
+                  payload.history.traumas.map((t, i) => (
+                    <div key={i} className="setup-card" style={{ marginTop: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input className="field-input" placeholder="Body part" value={t.bodyPart} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, bodyPart: e.target.value } : x)) })} style={{ flex: 1 }} />
+                        <button className="kebab" disabled={readOnly} onClick={() => update('history', { ...payload.history, traumas: payload.history.traumas.filter((_, j) => j !== i) })}>✕</button>
+                      </div>
+                      <div className="field-row">
+                        <input className="field-input" type="text" placeholder="Date/year" value={t.date} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)) })} />
+                        <input className="field-input" placeholder="Nature" value={t.nature} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, nature: e.target.value } : x)) })} />
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Surgical history</label>
+                  <label className="field-label">Surgical history</label>
                   <button className="btn-secondary" disabled={readOnly} onClick={() => update('history', { ...payload.history, surgeries: [...payload.history.surgeries, { date: '', procedure: '', outcome: 'good', currentStatus: 'recovered' }] })}>+ Add</button>
                 </div>
-                {payload.history.surgeries.map((s, i) => (
-                  <div key={i} className="field-row" style={{ marginTop: 6, alignItems: 'center', gridTemplateColumns: '90px 1fr 1fr auto' }}>
-                    <input type="text" placeholder="Date/year" value={s.date} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)) })} />
-                    <input placeholder="Procedure" value={s.procedure} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, procedure: e.target.value } : x)) })} />
-                    <select value={s.outcome} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, outcome: e.target.value as typeof x.outcome } : x)) })}>
-                      <option value="good">Good</option>
-                      <option value="fair">Fair</option>
-                      <option value="poor">Poor</option>
-                    </select>
-                    <button className="kebab" disabled={readOnly} onClick={() => update('history', { ...payload.history, surgeries: payload.history.surgeries.filter((_, j) => j !== i) })}>✕</button>
-                  </div>
-                ))}
+                {payload.history.surgeries.length === 0 ? (
+                  <p className="empty-note">No surgical history added.</p>
+                ) : (
+                  payload.history.surgeries.map((s, i) => (
+                    <div key={i} className="setup-card" style={{ marginTop: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input className="field-input" placeholder="Procedure" value={s.procedure} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, procedure: e.target.value } : x)) })} style={{ flex: 1 }} />
+                        <button className="kebab" disabled={readOnly} onClick={() => update('history', { ...payload.history, surgeries: payload.history.surgeries.filter((_, j) => j !== i) })}>✕</button>
+                      </div>
+                      <div className="field-row">
+                        <input className="field-input" type="text" placeholder="Date/year" value={s.date} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)) })} />
+                        <select className="field-input" value={s.outcome} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, outcome: e.target.value as typeof x.outcome } : x)) })}>
+                          <option value="good">Good</option>
+                          <option value="fair">Fair</option>
+                          <option value="poor">Poor</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div style={{ marginTop: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Previous pain history</label>
+                  <label className="field-label">Previous pain history</label>
                   <button
                     className="btn-secondary"
                     disabled={readOnly}
@@ -1224,6 +1249,7 @@ export function NoteEditorPage() {
                     <div key={entry.id} className="setup-card" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <input
+                          className="field-input"
                           placeholder="Region"
                           value={entry.region}
                           disabled={readOnly}
@@ -1250,6 +1276,7 @@ export function NoteEditorPage() {
                       </div>
                       <div className="field-row">
                         <input
+                          className="field-input"
                           placeholder="Timeline onset"
                           value={entry.timelineOnset ?? ''}
                           disabled={readOnly}
@@ -1261,6 +1288,7 @@ export function NoteEditorPage() {
                           }
                         />
                         <input
+                          className="field-input"
                           placeholder="Timeline duration"
                           value={entry.timelineDuration ?? ''}
                           disabled={readOnly}
@@ -1274,6 +1302,7 @@ export function NoteEditorPage() {
                       </div>
                       <div className="field-row">
                         <select
+                          className="field-input"
                           value={entry.intensity ?? ''}
                           disabled={readOnly}
                           onChange={(e) =>
@@ -1289,6 +1318,7 @@ export function NoteEditorPage() {
                           <option value="severe">Severe</option>
                         </select>
                         <input
+                          className="field-input"
                           placeholder="Treatment"
                           value={entry.treatment ?? ''}
                           disabled={readOnly}
@@ -1315,7 +1345,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('subjective', el);
             else sectionRefs.current.delete('subjective');
           }}
-          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('subjective') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-20 ${openSections.has('subjective') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('subjective')}>
             <div><h3>Subjective</h3><div className="sub">Body chart, pain profile</div></div>
@@ -1324,9 +1354,9 @@ export function NoteEditorPage() {
           <div className="setup-section-body">
           <p className="section-label">Pain profile</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div className="field-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
-                <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Current</label>
+                <label className="field-label">Current</label>
                 <ScaleWidget
                   variant="nrs"
                   value={payload.painProfile.nrs.current}
@@ -1336,7 +1366,7 @@ export function NoteEditorPage() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Best</label>
+                <label className="field-label">Best</label>
                 <ScaleWidget
                   variant="nrs"
                   value={payload.painProfile.nrs.best}
@@ -1346,7 +1376,7 @@ export function NoteEditorPage() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Worst</label>
+                <label className="field-label">Worst</label>
                 <ScaleWidget
                   variant="nrs"
                   value={payload.painProfile.nrs.worst}
@@ -1404,7 +1434,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('psfs', el);
             else sectionRefs.current.delete('psfs');
           }}
-          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('psfs') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-20 ${openSections.has('psfs') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('psfs')}>
             <div><h3>Functional Status (PSFS)</h3><div className="sub">{payload.functionalStatus.activities.length} activit{payload.functionalStatus.activities.length === 1 ? 'y' : 'ies'} tracked</div></div>
@@ -1449,7 +1479,7 @@ export function NoteEditorPage() {
                 <button className="kebab" disabled={readOnly} onClick={() => update('functionalStatus', { activities: payload.functionalStatus.activities.filter((_, j) => j !== i) })}>✕</button>
               </div>
               <div>
-                <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>
+                <label className="field-label">
                   Baseline ({a.baselineDate})
                 </label>
                 <ScaleWidget
@@ -1461,7 +1491,7 @@ export function NoteEditorPage() {
                 />
               </div>
               <div>
-                <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Current</label>
+                <label className="field-label">Current</label>
                 <ScaleWidget
                   variant="psfs"
                   value={a.current}
@@ -1481,7 +1511,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('objective', el);
             else sectionRefs.current.delete('objective');
           }}
-          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('objective') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-20 ${openSections.has('objective') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('objective')}>
             <div>
@@ -1523,8 +1553,8 @@ export function NoteEditorPage() {
           {payload.palpation.map((p, i) => (
             <div className="setup-card" key={i} style={{ marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', gap: 8 }}>
-                <input style={{ flex: 1 }} placeholder="Region" value={p.region} disabled={readOnly} onChange={(e) => update('palpation', payload.palpation.map((x, j) => (j === i ? { ...x, region: e.target.value } : x)))} />
-                <select value={p.painOnPalpation} disabled={readOnly} onChange={(e) => update('palpation', payload.palpation.map((x, j) => (j === i ? { ...x, painOnPalpation: e.target.value as typeof x.painOnPalpation } : x)))}>
+                <input className="field-input" style={{ flex: 1 }} placeholder="Region" value={p.region} disabled={readOnly} onChange={(e) => update('palpation', payload.palpation.map((x, j) => (j === i ? { ...x, region: e.target.value } : x)))} />
+                <select className="field-input" value={p.painOnPalpation} disabled={readOnly} onChange={(e) => update('palpation', payload.palpation.map((x, j) => (j === i ? { ...x, painOnPalpation: e.target.value as typeof x.painOnPalpation } : x)))}>
                   <option value="none">None</option>
                   <option value="mild">Mild</option>
                   <option value="moderate">Moderate</option>
@@ -1683,11 +1713,15 @@ export function NoteEditorPage() {
             </div>
           </div>
           {payload.objective.rom.map((r, i) => (
-            <div key={i} className="field-row" style={{ marginBottom: 6, alignItems: 'center' }}>
-              <input placeholder="Movement" value={r.movement} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, movement: e.target.value } : x)) })} />
-              <input type="number" placeholder="Active °" value={r.active ?? ''} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, active: e.target.value ? Number(e.target.value) : null } : x)) })} />
-              <input type="number" placeholder="Passive °" value={r.passive ?? ''} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, passive: e.target.value ? Number(e.target.value) : null } : x)) })} />
-              <button className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, rom: payload.objective.rom.filter((_, j) => j !== i) })}>✕</button>
+            <div key={i} className="setup-card" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="field-input" placeholder="Movement" value={r.movement} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, movement: e.target.value } : x)) })} style={{ flex: 1 }} />
+                <button className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, rom: payload.objective.rom.filter((_, j) => j !== i) })}>✕</button>
+              </div>
+              <div className="field-row">
+                <input className="field-input" type="number" placeholder="Active °" value={r.active ?? ''} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, active: e.target.value ? Number(e.target.value) : null } : x)) })} />
+                <input className="field-input" type="number" placeholder="Passive °" value={r.passive ?? ''} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, passive: e.target.value ? Number(e.target.value) : null } : x)) })} />
+              </div>
             </div>
           ))}
         </div>
@@ -1701,16 +1735,20 @@ export function NoteEditorPage() {
             </div>
           </div>
           {payload.objective.strength.map((s, i) => (
-            <div key={i} className="field-row" style={{ marginBottom: 6, alignItems: 'center' }}>
-              <input placeholder="Movement" value={s.movement} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, movement: e.target.value } : x)) })} />
-              <select value={s.grade} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, grade: e.target.value as typeof x.grade } : x)) })}>
-                {['5/5', '4/5', '3/5', '2/5', '1/5', '0/5', 'not-tested'].map((g) => <option key={g} value={g}>{g}</option>)}
-              </select>
-              <select value={s.nerveRoot ?? ''} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, nerveRoot: (e.target.value || undefined) as NeuroLevel | undefined } : x)) })}>
-                <option value="">— root</option>
-                {NEURO_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-              </select>
-              <button className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, strength: payload.objective.strength.filter((_, j) => j !== i) })}>✕</button>
+            <div key={i} className="setup-card" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="field-input" placeholder="Movement" value={s.movement} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, movement: e.target.value } : x)) })} style={{ flex: 1 }} />
+                <button className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, strength: payload.objective.strength.filter((_, j) => j !== i) })}>✕</button>
+              </div>
+              <div className="field-row">
+                <select className="field-input" value={s.grade} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, grade: e.target.value as typeof x.grade } : x)) })}>
+                  {['5/5', '4/5', '3/5', '2/5', '1/5', '0/5', 'not-tested'].map((g) => <option key={g} value={g}>{g}</option>)}
+                </select>
+                <select className="field-input" value={s.nerveRoot ?? ''} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, nerveRoot: (e.target.value || undefined) as NeuroLevel | undefined } : x)) })}>
+                  <option value="">— root</option>
+                  {NEURO_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
             </div>
           ))}
         </div>
@@ -1721,14 +1759,16 @@ export function NoteEditorPage() {
             <button className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, specialTests: [...payload.objective.specialTests, { testId: '', result: 'inconclusive' }] })}>+ Add</button>
           </div>
           {payload.objective.specialTests.map((t, i) => (
-            <div key={i} className="field-row" style={{ marginBottom: 6, alignItems: 'center' }}>
-              <input placeholder="Test (e.g. FABER)" value={t.testId} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.map((x, j) => (j === i ? { ...x, testId: e.target.value } : x)) })} />
-              <select value={t.result} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.map((x, j) => (j === i ? { ...x, result: e.target.value as typeof x.result } : x)) })}>
+            <div key={i} className="setup-card" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="field-input" placeholder="Test (e.g. FABER)" value={t.testId} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.map((x, j) => (j === i ? { ...x, testId: e.target.value } : x)) })} style={{ flex: 1 }} />
+                <button className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.filter((_, j) => j !== i) })}>✕</button>
+              </div>
+              <select className="field-input" value={t.result} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.map((x, j) => (j === i ? { ...x, result: e.target.value as typeof x.result } : x)) })}>
                 <option value="negative">Negative</option>
                 <option value="positive">Positive</option>
                 <option value="inconclusive">Inconclusive</option>
               </select>
-              <button className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.filter((_, j) => j !== i) })}>✕</button>
             </div>
           ))}
         </div>
@@ -1741,7 +1781,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('treatment', el);
             else sectionRefs.current.delete('treatment');
           }}
-          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('treatment') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-20 ${openSections.has('treatment') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('treatment')}>
             <div><h3>Treatment / Intervention</h3><div className="sub">Today's session, load management</div></div>
@@ -1753,7 +1793,7 @@ export function NoteEditorPage() {
             <MultiToggle options={['Joint mobilisation', 'Manipulation', 'MFR', 'Taping', 'Dry needling']} value={payload.treatment.session.manualTherapy} onChange={(v) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, manualTherapy: v } })} />
             <MultiToggle options={['Strengthening', 'Stretching', 'ROM', 'Neuromuscular', 'Balance', 'Plyometric']} value={payload.treatment.session.therapeuticExercise} onChange={(v) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, therapeuticExercise: v } })} />
             <MultiToggle options={['Ultrasound', 'TENS', 'IFC', 'Heat/ice', 'Laser', 'Shockwave']} value={payload.treatment.session.modalities} onChange={(v) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, modalities: v } })} />
-            <div className="field-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="field-block">
                 <label>Session duration</label>
                 <select value={payload.treatment.session.duration} disabled={readOnly} onChange={(e) => update('treatment', { ...payload.treatment, session: { ...payload.treatment.session, duration: e.target.value } })}>
@@ -1860,7 +1900,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('hep', el);
             else sectionRefs.current.delete('hep');
           }}
-          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('hep') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-20 ${openSections.has('hep') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('hep')}>
             <div><h3>Home Exercise Program</h3><div className="sub">{payload.hep.exercises.length} exercise{payload.hep.exercises.length === 1 ? '' : 's'} prescribed</div></div>
@@ -1873,24 +1913,25 @@ export function NoteEditorPage() {
           </div>
           <p className="empty-note" style={{ marginTop: 0 }}>Manual entry only — the exercise library browser isn't built yet.</p>
           {payload.hep.exercises.map((ex, i) => (
-            <div key={i} className="field-row" style={{ marginBottom: 10, alignItems: 'end', gridTemplateColumns: 'repeat(4, 1fr) auto' }}>
-              <div className="field-block" style={{ margin: 0 }}>
-                <label>Exercise name</label>
-                <input placeholder="e.g. Wall slides" value={ex.name} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
+            <div key={i} className="setup-card" style={{ marginBottom: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="field-input" placeholder="e.g. Wall slides" value={ex.name} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} style={{ flex: 1 }} />
+                <button className="kebab" disabled={readOnly} onClick={() => update('hep', { ...payload.hep, exercises: payload.hep.exercises.filter((_, j) => j !== i) })}>✕</button>
               </div>
-              <div className="field-block" style={{ margin: 0 }}>
-                <label>Sets</label>
-                <input type="number" value={ex.sets} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, sets: Number(e.target.value) } : x)) })} />
-              </div>
-              <div className="field-block" style={{ margin: 0 }}>
-                <label>Reps</label>
-                <input type="number" value={ex.reps} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, reps: Number(e.target.value) } : x)) })} />
+              <div className="field-row">
+                <div className="field-block" style={{ margin: 0 }}>
+                  <label>Sets</label>
+                  <input type="number" value={ex.sets} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, sets: Number(e.target.value) } : x)) })} />
+                </div>
+                <div className="field-block" style={{ margin: 0 }}>
+                  <label>Reps</label>
+                  <input type="number" value={ex.reps} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, reps: Number(e.target.value) } : x)) })} />
+                </div>
               </div>
               <div className="field-block" style={{ margin: 0 }}>
                 <label>Frequency / hold</label>
-                <input placeholder="e.g. Daily, hold 30s" value={ex.frequency} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, frequency: e.target.value } : x)) })} />
+                <input className="field-input" placeholder="e.g. Daily, hold 30s" value={ex.frequency} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, frequency: e.target.value } : x)) })} />
               </div>
-              <button className="kebab" disabled={readOnly} onClick={() => update('hep', { ...payload.hep, exercises: payload.hep.exercises.filter((_, j) => j !== i) })}>✕</button>
             </div>
           ))}
           <div className="field-block">
@@ -1913,7 +1954,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('plan', el);
             else sectionRefs.current.delete('plan');
           }}
-          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('plan') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-20 ${openSections.has('plan') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('plan')}>
             <div><h3>Plan &amp; Goals</h3><div className="sub">{payload.plan.goals.length} goal{payload.plan.goals.length === 1 ? '' : 's'}</div></div>
@@ -1949,21 +1990,29 @@ export function NoteEditorPage() {
             </div>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--muted)' }}>Goals</label>
+                <label className="field-label">Goals</label>
                 <button className="btn-secondary" disabled={readOnly} onClick={() => update('plan', { ...payload.plan, goals: [...payload.plan.goals, { text: '', targetTerm: '' }] })}>+ Add</button>
               </div>
-              {payload.plan.goals.map((g, i) => (
-                <div key={i} className="field-row" style={{ marginTop: 6, alignItems: 'center', gridTemplateColumns: '1fr 120px 140px auto' }}>
-                  <input placeholder="Goal" value={g.text} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) })} />
-                  <select value={g.targetTerm} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, targetTerm: e.target.value as 'short-term' | 'long-term' | '' } : x)) })}>
-                    <option value="">Term…</option>
-                    <option value="short-term">Short-term</option>
-                    <option value="long-term">Long-term</option>
-                  </select>
-                  <input type="date" value={g.targetDate ?? ''} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, targetDate: e.target.value } : x)) })} />
-                  <button className="kebab" disabled={readOnly} onClick={() => update('plan', { ...payload.plan, goals: payload.plan.goals.filter((_, j) => j !== i) })}>✕</button>
-                </div>
-              ))}
+              {payload.plan.goals.length === 0 ? (
+                <p className="empty-note">No goals added.</p>
+              ) : (
+                payload.plan.goals.map((g, i) => (
+                  <div key={i} className="setup-card" style={{ marginTop: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input className="field-input" placeholder="Goal" value={g.text} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) })} style={{ flex: 1 }} />
+                      <button className="kebab" disabled={readOnly} onClick={() => update('plan', { ...payload.plan, goals: payload.plan.goals.filter((_, j) => j !== i) })}>✕</button>
+                    </div>
+                    <div className="field-row">
+                      <select className="field-input" value={g.targetTerm} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, targetTerm: e.target.value as 'short-term' | 'long-term' | '' } : x)) })}>
+                        <option value="">Term…</option>
+                        <option value="short-term">Short-term</option>
+                        <option value="long-term">Long-term</option>
+                      </select>
+                      <input className="field-input" type="date" value={g.targetDate ?? ''} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, targetDate: e.target.value } : x)) })} />
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
             <div className="field-block" style={{ margin: 0 }}>
               <label>Patient education</label>
@@ -1980,7 +2029,7 @@ export function NoteEditorPage() {
               if (el) sectionRefs.current.set('outcome', el);
               else sectionRefs.current.delete('outcome');
             }}
-            className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('outcome') ? 'open' : ''}`}
+            className={`setup-section scroll-mt-20 ${openSections.has('outcome') ? 'open' : ''}`}
           >
             <button type="button" className="setup-section-head" onClick={() => toggleSection('outcome')}>
               <div><h3>Outcome Tracking</h3><div className="sub">PSFS &amp; NRS trend</div></div>
