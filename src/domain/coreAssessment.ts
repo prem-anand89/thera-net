@@ -485,3 +485,113 @@ export function outcomeTrend(direction: OutcomeDirection, previous: number, late
   const better = direction === 'higher-is-better' ? increased : !increased;
   return better ? 'improving' : 'declining';
 }
+
+/** The nine Core Assessment accordion sections, in on-screen order. */
+export const NOTE_SECTION_KEYS = [
+  'chiefComplaint',
+  'history',
+  'subjective',
+  'psfs',
+  'objective',
+  'treatment',
+  'hep',
+  'plan',
+  'outcome',
+] as const;
+export type NoteSectionKey = (typeof NOTE_SECTION_KEYS)[number];
+
+export type SectionCompletion = 'empty' | 'partial' | 'complete' | 'required-empty';
+
+function classify(filled: number, total: number, requiredEmpty: boolean): SectionCompletion {
+  if (requiredEmpty) return 'required-empty';
+  if (filled <= 0) return 'empty';
+  if (filled >= total) return 'complete';
+  return 'partial';
+}
+
+/**
+ * A coarse fill-level per section, for the jump-nav rail's status dots —
+ * not a validation result. `anatomicalRegion` is the only field saving
+ * actually requires (see NoteEditorPage's save()), so Chief Complaint is
+ * the only section that can read `required-empty`; every other section is
+ * optional documentation and only ever reads empty/partial/complete.
+ * Boolean/enum fields with a meaningful default (priorSurgery,
+ * pregnancyStatus, …) are deliberately excluded from the "filled" counts
+ * below — a default value can't be told apart from an untouched one, so
+ * counting it would read as progress that was never actually made.
+ */
+export function sectionCompletion(key: NoteSectionKey, payload: CoreAssessmentPayload): SectionCompletion {
+  switch (key) {
+    case 'chiefComplaint': {
+      const cc = payload.chiefComplaint;
+      const filled = [!!cc.presentingProblem, cc.primaryComplaint.length > 0, !!cc.onset].filter(Boolean).length;
+      return classify(filled, 3, !cc.anatomicalRegion);
+    }
+    case 'history': {
+      const h = payload.history;
+      const filled = [
+        h.medicalConditions.length > 0,
+        !!h.medications,
+        !!h.allergies,
+        h.traumas.length > 0 || h.surgeries.length > 0,
+        (h.previousPainHistory?.length ?? 0) > 0,
+      ].filter(Boolean).length;
+      return classify(filled, 5, false);
+    }
+    case 'subjective': {
+      const filled = [
+        payload.painProfile.nrs.current != null,
+        !!payload.painProfile.pattern,
+        !!(payload.painProfile.aggravating || payload.painProfile.easing),
+        payload.bodyChart.marks.length > 0,
+      ].filter(Boolean).length;
+      return classify(filled, 4, false);
+    }
+    case 'psfs': {
+      const n = payload.functionalStatus.activities.length;
+      return classify(Math.min(n, 2), 2, false);
+    }
+    case 'objective': {
+      const o = payload.objective;
+      const n = payload.neurologicalScreen;
+      const neuroTouched =
+        Object.keys(n.dermatomes).length > 0 ||
+        Object.keys(n.myotomes).length > 0 ||
+        Object.keys(n.reflexes).length > 0 ||
+        n.upperMotorNeuronSigns.present;
+      const filled = [
+        payload.gaitPosture.gait.length > 0 || payload.gaitPosture.posture.length > 0,
+        payload.palpation.length > 0,
+        o.rom.length > 0 || o.strength.length > 0,
+        o.specialTests.length > 0,
+        neuroTouched,
+      ].filter(Boolean).length;
+      return classify(filled, 5, false);
+    }
+    case 'treatment': {
+      const s = payload.treatment.session;
+      const filled = [
+        s.manualTherapy.length > 0 || s.therapeuticExercise.length > 0 || s.modalities.length > 0,
+        !!(s.duration || s.timeSpent),
+        !!s.response,
+        !!payload.treatment.notes,
+      ].filter(Boolean).length;
+      return classify(filled, 4, false);
+    }
+    case 'hep': {
+      const filled = [payload.hep.exercises.length > 0, !!payload.hep.compliance].filter(Boolean).length;
+      return classify(filled, 2, false);
+    }
+    case 'plan': {
+      const p = payload.plan;
+      const filled = [!!p.phase, p.goals.length > 0, !!p.estimatedSessions, p.patientEducation.length > 0].filter(
+        Boolean
+      ).length;
+      return classify(filled, 4, false);
+    }
+    case 'outcome': {
+      const hasData = payload.painProfile.nrs.current != null || payload.functionalStatus.activities.length > 0;
+      return hasData ? 'complete' : 'empty';
+    }
+  }
+}

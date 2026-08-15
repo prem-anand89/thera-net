@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { getSupabase } from '@/lib/supabase';
 import { ScaleWidget } from '@/components/ScaleWidget';
 import { BodyChart } from '@/components/BodyChart';
+import { Pill } from '@/components/ui';
 import { repos, consultationNoteService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import {
@@ -37,7 +38,38 @@ import {
   type MyotomeResult,
   type ReflexResult,
   type RomEntry,
+  NOTE_SECTION_KEYS,
+  sectionCompletion,
+  type NoteSectionKey,
+  type SectionCompletion,
 } from '@/domain/coreAssessment';
+
+const SECTION_LABELS: Record<NoteSectionKey, string> = {
+  chiefComplaint: 'Chief Complaint',
+  history: 'History',
+  subjective: 'Subjective',
+  psfs: 'Functional Status',
+  objective: 'Objective',
+  treatment: 'Treatment',
+  hep: 'Home Exercise Program',
+  plan: 'Plan & Goals',
+  outcome: 'Outcome Tracking',
+};
+
+/** empty=untouched, partial=in progress, complete=done, required-empty=the
+ *  one field save() actually enforces (Chief Complaint's anatomical region). */
+const STATUS_DOT: Record<SectionCompletion, string> = {
+  empty: 'var(--border)',
+  partial: 'var(--amber)',
+  complete: 'var(--moss)',
+  'required-empty': 'var(--rust)',
+};
+
+/** How long a rail-click's scrollIntoView animation is given before the
+ *  scroll-spy observer is trusted again — long enough that it doesn't
+ *  fight the click by re-highlighting whatever section scrolls past on
+ *  the way to the target. */
+const SCROLL_SPY_SUPPRESS_MS = 700;
 
 /** Toggle-chip multi-select: value is the array of selected labels. */
 function MultiToggle({ options, value, onChange }: { options: readonly string[]; value: string[]; onChange: (next: string[]) => void }) {
@@ -201,8 +233,11 @@ export function NoteEditorPage() {
   }
 
   // Accordion open/close (Setup-style .setup-accordion), independent of the
-  // carry-forward collapse above.
-  const [openSections, setOpenSections] = useState<Set<string>>(new Set(['chiefComplaint', 'subjective']));
+  // carry-forward collapse above. Sections start expanded — the jump-nav
+  // rail below is the intended way to navigate a long note, and "everything
+  // open" is what makes its status dots and click-to-jump useful; collapse
+  // all is the escape hatch for anyone who wants the short view.
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set(NOTE_SECTION_KEYS));
   function toggleSection(key: string) {
     setOpenSections((prev) => {
       const next = new Set(prev);
@@ -211,7 +246,57 @@ export function NoteEditorPage() {
       return next;
     });
   }
+  function toggleCollapseAll() {
+    setOpenSections((prev) => (prev.size > 0 ? new Set() : new Set(NOTE_SECTION_KEYS)));
+  }
   const [screeningOpen, setScreeningOpen] = useState(false);
+
+  // Jump-nav rail (md: and up only — not a stepper, free jumping between
+  // sections since clinical documentation is non-linear). activeSection
+  // tracks which section is currently in view via IntersectionObserver;
+  // a rail click overrides that immediately and suppresses the observer
+  // briefly so it doesn't fight the programmatic scroll.
+  const [activeSection, setActiveSection] = useState<NoteSectionKey>(NOTE_SECTION_KEYS[0]);
+  const sectionRefs = useRef(new Map<NoteSectionKey, HTMLDivElement>());
+  const suppressSpyRef = useRef(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (suppressSpyRef.current) return;
+        // The entry whose top is closest to (but not past) the observer's
+        // near-top trigger line is the section currently "in view" for
+        // navigation purposes — matches how a reading position, not just
+        // any intersection, is usually meant by "current section."
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length === 0) return;
+        const topMost = visible.reduce((a, b) => (a.boundingClientRect.top <= b.boundingClientRect.top ? a : b));
+        const key = ([...sectionRefs.current.entries()].find(([, el]) => el === topMost.target)?.[0]) as
+          | NoteSectionKey
+          | undefined;
+        if (key) setActiveSection(key);
+      },
+      { rootMargin: '-15% 0px -70% 0px', threshold: 0 }
+    );
+    for (const el of sectionRefs.current.values()) observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  function jumpToSection(key: NoteSectionKey) {
+    setOpenSections((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+    setActiveSection(key);
+    suppressSpyRef.current = true;
+    // Opening a closed section changes the page's layout (its body was
+    // display:none), so the scroll has to happen after that reflow lands,
+    // not in the same tick — otherwise it scrolls to where the heading
+    // used to be.
+    requestAnimationFrame(() => {
+      sectionRefs.current.get(key)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    setTimeout(() => {
+      suppressSpyRef.current = false;
+    }, SCROLL_SPY_SUPPRESS_MS);
+  }
 
   // Neurological screen: collapsed by default once WNL, expands automatically
   // if any level is flagged, or on manual expand.
@@ -220,6 +305,14 @@ export function NoteEditorPage() {
   useEffect(() => {
     if (therapists && therapists.length > 0 && !therapistId) setTherapistId(therapists[0].id);
   }, [therapists, therapistId]);
+
+  // Whether the most recent prior note in this episode actually has
+  // chief-complaint/history data worth carrying forward — distinct from
+  // noteMode: a note can be correctly classified 'followup' (a prior note
+  // exists) while that prior note itself is a data gap (an empty draft,
+  // one predating this field). Only meaningful once ready; left true for
+  // an Initial note so the "no prior note" banner never shows there.
+  const [priorNoteHasCarryForwardData, setPriorNoteHasCarryForwardData] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -243,7 +336,30 @@ export function NoteEditorPage() {
       if (cancelled) return;
       setEnrollmentId(enrollment.id);
       setNoteMode(mode);
-      if (mode === 'followup') setExpanded(new Set());
+      if (mode === 'followup') {
+        setExpanded(new Set());
+        // A fresh follow-up note otherwise starts from emptyPayload() —
+        // nothing upstream ever copies the prior note's stable fields in,
+        // which would make the collapsed "carried forward" summary always
+        // read as empty regardless of what the prior note actually had.
+        // Chief complaint and history carry forward (stable across an
+        // episode); subjective/objective/treatment/plan intentionally
+        // don't — those are today's findings, not yesterday's.
+        const priorInEnrollment = await repos.consultationNotes.listByEnrollment(enrollment.id);
+        const previous = priorInEnrollment[priorInEnrollment.length - 1];
+        const prevPayload = previous?.assessmentPayload ? upcastPayload(previous.assessmentPayload) : null;
+        const hasData =
+          !!prevPayload &&
+          (!!prevPayload.chiefComplaint.anatomicalRegion ||
+            prevPayload.history.medicalConditions.length > 0 ||
+            !!prevPayload.history.medications ||
+            !!prevPayload.history.allergies);
+        if (cancelled) return;
+        setPriorNoteHasCarryForwardData(hasData);
+        if (prevPayload) {
+          setPayload((p) => ({ ...p, chiefComplaint: prevPayload.chiefComplaint, history: prevPayload.history }));
+        }
+      }
       setReady(true);
     }
     void init();
@@ -523,12 +639,69 @@ export function NoteEditorPage() {
           </select>
         </div>
 
-        <div className="setup-accordion">
+        {noteMode === 'followup' && ready && !priorNoteHasCarryForwardData && (
+          <div
+            className="rounded-md px-3 py-2 text-xs"
+            style={{ background: 'var(--slate-light)', color: 'var(--slate)', marginBottom: 12 }}
+          >
+            This is a follow-up visit, but there's no usable prior Chief Complaint/History data to
+            carry forward — a data gap, or the first note on record for this episode. Chief
+            Complaint and History start blank below rather than silently showing empty as if it
+            were meant that way.
+          </div>
+        )}
+
+        <div className="md:flex md:items-start md:gap-6">
+          <nav className="hidden md:sticky md:top-20 md:flex md:w-52 md:shrink-0 md:flex-col md:gap-0.5">
+            {NOTE_SECTION_KEYS.filter((key) => key !== 'outcome' || outcomeCards.length > 0).map((key) => {
+              const completion = sectionCompletion(key, payload);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => jumpToSection(key)}
+                  className="flex items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs font-medium"
+                  style={{
+                    background: activeSection === key ? 'var(--teal-light)' : 'transparent',
+                    color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
+                  }}
+                >
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: STATUS_DOT[completion] }} />
+                  {SECTION_LABELS[key]}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={toggleCollapseAll}
+              className="mt-2 px-3 text-left text-xs text-[var(--teal)] hover:underline"
+            >
+              {openSections.size > 0 ? 'Collapse all' : 'Expand all'}
+            </button>
+          </nav>
+
+          <div className="setup-accordion min-w-0 flex-1">
 
         {/* 1. Chief Complaint */}
-        <div className={`setup-section ${openSections.has('chiefComplaint') ? 'open' : ''}`}>
+        <div
+          ref={(el) => {
+            if (el) sectionRefs.current.set('chiefComplaint', el);
+            else sectionRefs.current.delete('chiefComplaint');
+          }}
+          className={`setup-section scroll-mt-20 ${openSections.has('chiefComplaint') ? 'open' : ''}`}
+        >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('chiefComplaint')}>
-            <div><h3>Chief Complaint</h3><div className="sub">Region, timeline, occupation/activity context</div></div>
+            <div>
+              <h3>
+                Chief Complaint
+                {isCollapsed('chiefComplaint') && (
+                  <span style={{ marginLeft: 8, verticalAlign: 'middle' }}>
+                    <Pill tone="slate">Carried forward</Pill>
+                  </span>
+                )}
+              </h3>
+              <div className="sub">Region, timeline, occupation/activity context</div>
+            </div>
             <span className="chev">›</span>
           </button>
           <div className="setup-section-body">
@@ -809,9 +982,25 @@ export function NoteEditorPage() {
         </div>
 
         {/* 2. History */}
-        <div className={`setup-section ${openSections.has('history') ? 'open' : ''}`}>
+        <div
+          ref={(el) => {
+            if (el) sectionRefs.current.set('history', el);
+            else sectionRefs.current.delete('history');
+          }}
+          className={`setup-section scroll-mt-20 ${openSections.has('history') ? 'open' : ''}`}
+        >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('history')}>
-            <div><h3>Medical, Trauma &amp; Surgical History</h3><div className="sub">Conditions, safety flags, past trauma/surgery</div></div>
+            <div>
+              <h3>
+                Medical, Trauma &amp; Surgical History
+                {isCollapsed('history') && (
+                  <span style={{ marginLeft: 8, verticalAlign: 'middle' }}>
+                    <Pill tone="slate">Carried forward</Pill>
+                  </span>
+                )}
+              </h3>
+              <div className="sub">Conditions, safety flags, past trauma/surgery</div>
+            </div>
             <span className="chev">›</span>
           </button>
           <div className="setup-section-body">
@@ -1017,7 +1206,13 @@ export function NoteEditorPage() {
         </div>
 
         {/* 4. Subjective — Pain Profile + Body chart */}
-        <div className={`setup-section ${openSections.has('subjective') ? 'open' : ''}`}>
+        <div
+          ref={(el) => {
+            if (el) sectionRefs.current.set('subjective', el);
+            else sectionRefs.current.delete('subjective');
+          }}
+          className={`setup-section scroll-mt-20 ${openSections.has('subjective') ? 'open' : ''}`}
+        >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('subjective')}>
             <div><h3>Subjective</h3><div className="sub">Body chart, pain profile</div></div>
             <span className="chev">›</span>
@@ -1100,7 +1295,13 @@ export function NoteEditorPage() {
         </div>
 
         {/* 5. Functional Status (PSFS) */}
-        <div className={`setup-section ${openSections.has('psfs') ? 'open' : ''}`}>
+        <div
+          ref={(el) => {
+            if (el) sectionRefs.current.set('psfs', el);
+            else sectionRefs.current.delete('psfs');
+          }}
+          className={`setup-section scroll-mt-20 ${openSections.has('psfs') ? 'open' : ''}`}
+        >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('psfs')}>
             <div><h3>Functional Status (PSFS)</h3><div className="sub">{payload.functionalStatus.activities.length} activit{payload.functionalStatus.activities.length === 1 ? 'y' : 'ies'} tracked</div></div>
             <span className="chev">›</span>
@@ -1170,7 +1371,13 @@ export function NoteEditorPage() {
         </div>
 
         {/* 6. Objective */}
-        <div className={`setup-section ${openSections.has('objective') ? 'open' : ''}`}>
+        <div
+          ref={(el) => {
+            if (el) sectionRefs.current.set('objective', el);
+            else sectionRefs.current.delete('objective');
+          }}
+          className={`setup-section scroll-mt-20 ${openSections.has('objective') ? 'open' : ''}`}
+        >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('objective')}>
             <div>
               <h3>Objective</h3>
@@ -1424,7 +1631,13 @@ export function NoteEditorPage() {
         </div>
 
         {/* 7. Treatment */}
-        <div className={`setup-section ${openSections.has('treatment') ? 'open' : ''}`}>
+        <div
+          ref={(el) => {
+            if (el) sectionRefs.current.set('treatment', el);
+            else sectionRefs.current.delete('treatment');
+          }}
+          className={`setup-section scroll-mt-20 ${openSections.has('treatment') ? 'open' : ''}`}
+        >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('treatment')}>
             <div><h3>Treatment / Intervention</h3><div className="sub">Today's session, load management</div></div>
             <span className="chev">›</span>
@@ -1537,7 +1750,13 @@ export function NoteEditorPage() {
         </div>
 
         {/* 8. HEP — manual entry, no library browser yet */}
-        <div className={`setup-section ${openSections.has('hep') ? 'open' : ''}`}>
+        <div
+          ref={(el) => {
+            if (el) sectionRefs.current.set('hep', el);
+            else sectionRefs.current.delete('hep');
+          }}
+          className={`setup-section scroll-mt-20 ${openSections.has('hep') ? 'open' : ''}`}
+        >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('hep')}>
             <div><h3>Home Exercise Program</h3><div className="sub">{payload.hep.exercises.length} exercise{payload.hep.exercises.length === 1 ? '' : 's'} prescribed</div></div>
             <span className="chev">›</span>
@@ -1584,7 +1803,13 @@ export function NoteEditorPage() {
         </div>
 
         {/* 9. Plan & Goals */}
-        <div className={`setup-section ${openSections.has('plan') ? 'open' : ''}`}>
+        <div
+          ref={(el) => {
+            if (el) sectionRefs.current.set('plan', el);
+            else sectionRefs.current.delete('plan');
+          }}
+          className={`setup-section scroll-mt-20 ${openSections.has('plan') ? 'open' : ''}`}
+        >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('plan')}>
             <div><h3>Plan &amp; Goals</h3><div className="sub">{payload.plan.goals.length} goal{payload.plan.goals.length === 1 ? '' : 's'}</div></div>
             <span className="chev">›</span>
@@ -1645,7 +1870,13 @@ export function NoteEditorPage() {
 
         {/* 10. Outcome tracking */}
         {outcomeCards.length > 0 && (
-          <div className={`setup-section ${openSections.has('outcome') ? 'open' : ''}`}>
+          <div
+            ref={(el) => {
+              if (el) sectionRefs.current.set('outcome', el);
+              else sectionRefs.current.delete('outcome');
+            }}
+            className={`setup-section scroll-mt-20 ${openSections.has('outcome') ? 'open' : ''}`}
+          >
             <button type="button" className="setup-section-head" onClick={() => toggleSection('outcome')}>
               <div><h3>Outcome Tracking</h3><div className="sub">PSFS &amp; NRS trend</div></div>
               <span className="chev">›</span>
@@ -1689,6 +1920,7 @@ export function NoteEditorPage() {
           </div>
         )}
 
+          </div>
         </div>
 
         <div>
