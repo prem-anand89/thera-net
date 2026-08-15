@@ -15,6 +15,10 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 
+/** How many notes the side panel lists before collapsing the rest into a
+ *  "+N older" line — the full history stays reachable by opening any note. */
+const NOTE_LIST_LIMIT = 6;
+
 const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
   draft: { tone: 'amber', label: 'Draft' },
   completed: { tone: 'green', label: 'Completed' },
@@ -261,9 +265,14 @@ export function PatientProfilePage() {
         </div>
       </section>
 
+      {/* Both columns pin to row 1 explicitly. Without `lg:row-start-1`,
+          grid auto-placement puts the side column (first in DOM, at
+          col-start-2) in row 1, then finds its cursor already past column 1
+          and drops the main column to row 2 — leaving a tall blank gap on
+          the left and pushing Visit history below the side cards. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         {/* Side column — rendered first on mobile for proper ordering */}
-        <div className="order-1 space-y-4 lg:order-none lg:col-start-2">
+        <div className="order-1 space-y-4 lg:order-none lg:col-start-2 lg:row-start-1">
           {/* Front desk keeps read access to `notes` for the safety-flags
               banner above (blood thinners, implants, pregnancy) — that's a
               narrow derived subset, not clinical documentation. The full
@@ -307,7 +316,7 @@ export function PatientProfilePage() {
         </div>
 
         {/* Main column */}
-        <div className="order-2 space-y-4 lg:order-none lg:col-start-1">
+        <div className="order-2 space-y-4 lg:order-none lg:col-start-1 lg:row-start-1">
           <SectionLabel>Visit history</SectionLabel>
           {issueError && (
             <div className="rounded bg-[var(--rust-light)] p-2 text-sm text-[var(--rust)]">
@@ -444,8 +453,8 @@ function ConsultationNotePanel({
   notes: ConsultationNote[];
 }) {
   const draft = notes.find((n) => n.status === 'draft');
-  const latest = notes[0]; // notes are pre-sorted most-recently-updated first
-  const pill = latest ? NOTE_STATUS_PILL[latest.status] : null;
+  const visible = notes.slice(0, NOTE_LIST_LIMIT);
+  const hiddenCount = notes.length - visible.length;
 
   return (
     <SideCard
@@ -460,33 +469,38 @@ function ConsultationNotePanel({
         </Link>
       }
     >
-      {!latest ? (
+      {notes.length === 0 ? (
         <p className="text-sm text-[var(--muted)]">No notes yet.</p>
       ) : (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            {pill && <Pill tone={pill.tone}>{pill.label}</Pill>}
-            <span className="font-num text-xs text-[var(--muted)]">
-              updated {formatDateDMY(latest.updatedAt.slice(0, 10))}
-            </span>
-          </div>
-          {notes.length > 1 && (
-            <ul className="space-y-1 border-t border-[var(--border)] pt-2 text-xs">
-              {notes.slice(1, 5).map((n) => (
-                <li key={n.id} className="flex items-center justify-between">
-                  <Link
-                    to="/patients/$patientId/notes/$noteId"
-                    params={{ patientId, noteId: n.id }}
-                    className="text-[var(--muted)] hover:text-[var(--ink)]"
-                  >
-                    {formatDateDMY(n.updatedAt.slice(0, 10))}
-                  </Link>
-                  <Pill tone={NOTE_STATUS_PILL[n.status].tone}>{NOTE_STATUS_PILL[n.status].label}</Pill>
-                </li>
-              ))}
-            </ul>
+        // Every note gets the same row shape — date, Initial/Follow-up,
+        // status — instead of the previous "latest note is a special
+        // header, older ones are bare dates" split, which gave the older
+        // entries no mode and no way to tell an evaluation from a
+        // follow-up without opening each one.
+        <ul className="divide-y divide-[var(--border)] text-xs">
+          {visible.map((n) => (
+            <li key={n.id} className="py-1.5 first:pt-0 last:pb-0">
+              <Link
+                to="/patients/$patientId/notes/$noteId"
+                params={{ patientId, noteId: n.id }}
+                className="flex items-center justify-between gap-2 hover:underline"
+              >
+                <span className="min-w-0">
+                  <span className="font-num text-[var(--ink)]">{formatDateDMY(n.updatedAt.slice(0, 10))}</span>
+                  <span className="ml-1.5 text-[var(--muted)]">
+                    {n.noteMode === 'followup' ? 'Follow-up' : 'Initial'}
+                  </span>
+                </span>
+                <Pill tone={NOTE_STATUS_PILL[n.status].tone}>{NOTE_STATUS_PILL[n.status].label}</Pill>
+              </Link>
+            </li>
+          ))}
+          {hiddenCount > 0 && (
+            <li className="pt-1.5 text-[var(--muted)]">
+              +{hiddenCount} older note{hiddenCount === 1 ? '' : 's'}
+            </li>
           )}
-        </div>
+        </ul>
       )}
     </SideCard>
   );
