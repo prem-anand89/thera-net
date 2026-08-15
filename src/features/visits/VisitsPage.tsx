@@ -129,7 +129,7 @@ interface InvoicingTarget {
 
 export function VisitsPage() {
   const clinic = useClinic();
-  const { canBill, isAdmin, canViewClinicalNotes } = usePermissions();
+  const { canBill, isAdmin, canViewClinicalNotes, canViewPayouts } = usePermissions();
   const { myTherapistId } = useWorkspaceScope();
   const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
@@ -155,6 +155,15 @@ export function VisitsPage() {
   useEffect(() => {
     if (recordsView === 'invoices' && !canBill) setRecordsView('visits');
   }, [recordsView, canBill, setRecordsView]);
+  // Reports is the full per-therapist Bill/BM Share/TDS/Post-Tax/HV
+  // monthly breakdown -- a colleague's individual earnings, not a
+  // per-visit bill amount, so it's canViewPayouts-gated the same way
+  // Invoices is canBill-gated (nothing here has an RLS boundary of its
+  // own to fall back on: visits reads are deliberately clinic-wide per
+  // decision 2, same as the therapist comparison chart's own data).
+  useEffect(() => {
+    if (recordsView === 'reports' && !canViewPayouts) setRecordsView('visits');
+  }, [recordsView, canViewPayouts, setRecordsView]);
   const [from, setFrom] = useState(() => toIsoDate(new Date(Date.now() - 6 * 86400000)));
   const [to, setTo] = useState(() => toIsoDate(new Date()));
   const [datePreset, setDatePreset] = useState<DatePreset>('week');
@@ -427,7 +436,7 @@ export function VisitsPage() {
               { key: 'reports', label: 'Reports' },
             ] as const
           )
-            .filter((v) => v.key !== 'invoices' || canBill)
+            .filter((v) => (v.key !== 'invoices' || canBill) && (v.key !== 'reports' || canViewPayouts))
             .map((v) => (
             <button
               key={v.key}
@@ -688,7 +697,7 @@ export function VisitsPage() {
 
       {recordsView === 'invoices' && <InvoicesPage />}
 
-      {recordsView === 'reports' && <ReportsPage />}
+      {recordsView === 'reports' && canViewPayouts && <ReportsPage />}
 
       {invoicing && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">

@@ -6,9 +6,11 @@ export interface Permissions {
   isAdmin: boolean;
   /** Editing clinic profile/billing config/features, and the therapist/service roster. */
   canEditSettings: boolean;
-  /** Inviting, revoking, and changing the role of team members. */
-  canManageTeam: boolean;
-  /** Payout- and settlement-shaped aggregates — a colleague's earnings, not a per-visit bill amount. */
+  /**
+   * Payout- and settlement-shaped aggregates — a colleague's earnings, not
+   * a per-visit bill amount. Gates Ledger's Reports sub-tab (the full
+   * per-therapist Bill/BM Share/TDS/Post-Tax/HV monthly breakdown).
+   */
   canViewPayouts: boolean;
   /** Clinical consultation notes — reception has no clinical-documentation need. */
   canViewClinicalNotes: boolean;
@@ -41,7 +43,6 @@ export function usePermissions(): Permissions {
     role: scope.role,
     isAdmin: scope.isAdmin,
     canEditSettings: scope.isAdmin,
-    canManageTeam: scope.isAdmin,
     canViewPayouts: scope.isAdmin,
     canViewClinicalNotes: !scope.isFrontDesk,
     canBill: billingEnabled && (invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk),
