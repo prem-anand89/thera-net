@@ -166,7 +166,7 @@ export function DashboardPage() {
               {singleVisitPatients.slice(0, 20).map((p) => (
                 <li key={p.patientId}>
                   <Link
-                    to="/archive"
+                    to="/ledger"
                     search={{ patientId: p.patientId }}
                     className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
                     title={`${p.serviceName} — last seen ${formatDateDMY(p.visitDate)}, ${p.daysSince}d ago`}
@@ -202,7 +202,7 @@ export function DashboardPage() {
               {recurringPatients.slice(0, 20).map((p) => (
                 <li key={p.patientId}>
                   <Link
-                    to="/archive"
+                    to="/ledger"
                     search={{ patientId: p.patientId }}
                     className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
                     title={`${p.visitCount} visits — last seen ${formatDateDMY(p.lastVisitOn)}`}

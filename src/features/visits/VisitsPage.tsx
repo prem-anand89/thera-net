@@ -40,11 +40,13 @@ import { PatientOverview } from './PatientOverview';
 import { EditVisitModal } from './EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
 import { ResponsiveVisitList, type VisitCardData, type VisitCardPaymentState } from '@/components/VisitCard';
+import { InvoicesPage } from '@/features/invoices/InvoicesPage';
+import { ReportsPage } from '@/features/reports/ReportsPage';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PATIENT_SEARCH_LIMIT = 6;
 
-type RecordsView = 'visits' | 'patients';
+type RecordsView = 'visits' | 'invoices' | 'reports' | 'patients';
 
 type PatientSortKey = 'name' | 'mrno' | 'age' | 'condition';
 const PATIENT_COMPARATORS = {
@@ -327,11 +329,11 @@ export function VisitsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Archive</h1>
+          <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Ledger</h1>
           {filteredPatient && (
             <span className="rounded-full bg-[var(--teal-light)] px-3 py-1 text-xs text-[var(--teal)]">
               {filteredPatient.name} ({filteredPatient.mrno})
-              <Link to="/archive" className="ml-2 font-medium">
+              <Link to="/ledger" className="ml-2 font-medium">
                 ✕
               </Link>
             </span>
@@ -346,6 +348,8 @@ export function VisitsPage() {
           {(
             [
               { key: 'visits', label: 'Visits' },
+              { key: 'invoices', label: 'Invoices' },
+              { key: 'reports', label: 'Reports' },
               { key: 'patients', label: 'Patients' },
             ] as const
           ).map((v) => (
@@ -387,7 +391,7 @@ export function VisitsPage() {
                       onMouseDown={(e) => {
                         e.preventDefault();
                         setPatientQuery('');
-                        void navigate({ to: '/archive', search: { patientId: p.id } });
+                        void navigate({ to: '/ledger', search: { patientId: p.id } });
                       }}
                     >
                       <span className="font-display">{p.name}</span>{' '}
@@ -437,6 +441,9 @@ export function VisitsPage() {
               <button className={btnSecondary} disabled={!visits?.length} onClick={downloadCsv}>
                 Export CSV
               </button>
+              <button className={btnSecondary} onClick={() => setRecordsView('reports')}>
+                Generate report
+              </button>
             </div>
           </div>
 
@@ -478,7 +485,7 @@ export function VisitsPage() {
                     <td className={tdNum}>{p.daysSinceLastVisit}</td>
                     <td className={td}>
                       <Link
-                        to="/archive"
+                        to="/ledger"
                         search={{ patientId: p.patientId }}
                         className="font-medium text-[var(--teal)] hover:underline"
                       >
@@ -579,6 +586,10 @@ export function VisitsPage() {
           No visits match - log one with "New visit".
         </div>
       )}
+
+      {recordsView === 'invoices' && <InvoicesPage />}
+
+      {recordsView === 'reports' && <ReportsPage />}
 
       {recordsView === 'patients' &&<AllPatientsSection />}
 

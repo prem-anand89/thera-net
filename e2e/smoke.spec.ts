@@ -25,7 +25,7 @@ test.describe('authenticated flow', () => {
     await page.getByLabel('Email').fill(process.env.E2E_EMAIL!);
     await page.getByLabel('Password').fill(process.env.E2E_PASSWORD!);
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('link', { name: 'Visits' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Ledger' })).toBeVisible();
 
     // Offline drill: create a patient + visit with no connection
     await context.setOffline(true);

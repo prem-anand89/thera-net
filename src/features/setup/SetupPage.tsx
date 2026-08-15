@@ -586,7 +586,7 @@ function HistoricalData() {
       <p className="mb-3 text-xs text-[var(--muted)]">
         One-time import of visits logged before go-live in the Excel ledger.
       </p>
-      <Link to="/setup/import-visits" className="text-sm text-[var(--teal)] hover:underline">
+      <Link to="/settings/import-visits" className="text-sm text-[var(--teal)] hover:underline">
         Import historical visits from Excel →
       </Link>
     </SectionCard>
