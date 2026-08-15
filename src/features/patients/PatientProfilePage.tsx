@@ -7,6 +7,7 @@ import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
+import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
@@ -17,18 +18,6 @@ const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber'
   completed: { tone: 'green', label: 'Completed' },
   archived: { tone: 'slate', label: 'Archived' },
 };
-
-type VisitPaymentState = 'paid' | 'outstanding' | 'uninvoiced' | 'zero_session';
-
-function visitPaymentState(
-  billPaise: number,
-  invoiceId: string | null,
-  statusByInvoiceId: Map<string, string>
-): VisitPaymentState {
-  if (billPaise === 0) return 'zero_session';
-  if (!invoiceId) return 'uninvoiced';
-  return statusByInvoiceId.get(invoiceId) === 'outstanding' ? 'outstanding' : 'paid';
-}
 
 
 /**
@@ -61,7 +50,7 @@ export function PatientProfilePage() {
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
   const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
-  const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
+  const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
 
   const therapistName = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
@@ -72,6 +61,16 @@ export function PatientProfilePage() {
     () => new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status])),
     [invoicePayments]
   );
+  // Same fact-set as Ledger's payment chip (domain/paymentState.ts) — a
+  // direct payment counts as collected even if the invoice's own status
+  // row still says outstanding, or there's no invoice at all.
+  const directPaymentByVisitId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of directPayments ?? []) {
+      map.set(p.visitId, (map.get(p.visitId) ?? 0) + p.amountPaise);
+    }
+    return map;
+  }, [directPayments]);
   const visitRows = useMemo(
     () => [...(visits ?? [])].filter((v) => !v.deleted).sort((a, b) => b.visitDate.localeCompare(a.visitDate)),
     [visits]
@@ -83,16 +82,20 @@ export function PatientProfilePage() {
   );
 
   const outstandingBalance = useMemo(() => {
-    if (!visits || !invoices) return 0;
-    const invoiceStatusMap = new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status]));
+    if (!visits) return 0;
     let total = 0;
     for (const v of visits) {
-      if (!v.deleted && v.invoiceId && invoiceStatusMap.get(v.invoiceId) === 'outstanding') {
-        total += v.actualBillPaise;
-      }
+      if (v.deleted) continue;
+      const state = computeVisitPaymentState(
+        v.actualBillPaise,
+        v.invoiceId ?? null,
+        directPaymentByVisitId.get(v.id) ?? 0,
+        v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+      );
+      if (!isCollected(state) && state !== 'zero_session') total += v.actualBillPaise;
     }
     return total;
-  }, [visits, invoices, invoicePayments]);
+  }, [visits, statusByInvoiceId, directPaymentByVisitId]);
 
   const openPackageIds = useMemo(
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
@@ -336,7 +339,12 @@ export function PatientProfilePage() {
                     therapistName: therapistName.get(v.therapistId) ?? '—',
                     treatmentNotes: v.treatmentNotes ?? null,
                     billPaise: v.actualBillPaise,
-                    paymentState: visitPaymentState(v.actualBillPaise, v.invoiceId, statusByInvoiceId),
+                    paymentState: computeVisitPaymentState(
+                      v.actualBillPaise,
+                      v.invoiceId ?? null,
+                      directPaymentByVisitId.get(v.id) ?? 0,
+                      v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+                    ),
                     invoiceId: v.invoiceId ?? null,
                     canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
                     canDelete: !v.invoiceId,

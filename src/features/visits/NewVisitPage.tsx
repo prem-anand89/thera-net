@@ -29,32 +29,13 @@ import {
   PackageThread,
 } from '@/components/ui';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
-import type { VisitCardPaymentState } from '@/components/VisitCard';
+import { PAYMENT_CHIP } from '@/components/VisitCard';
+import { computeVisitPaymentState } from '@/domain/paymentState';
 
 /** Digits only, so "98765 43210" and "+91-98765-43210" compare equal. */
 function phoneDigits(s: string): string {
   return s.replace(/\D/g, '');
 }
-
-function lastVisitPaymentState(
-  billPaise: number,
-  invoiceId: UUID | null,
-  statusByInvoiceId: Map<UUID, string>
-): VisitCardPaymentState {
-  if (billPaise === 0) return 'zero_session';
-  if (!invoiceId) return 'uninvoiced';
-  return statusByInvoiceId.get(invoiceId) === 'outstanding' ? 'outstanding' : 'paid';
-}
-
-// Same tone/label shape as VisitCard's PAYMENT_CHIP (not exported there) —
-// kept local rather than adding a cross-module export for one shared
-// constant across two files.
-const PAYMENT_STATE_LABEL: Record<VisitCardPaymentState, { tone: 'green' | 'amber' | 'slate'; label: (bill: string) => string }> = {
-  paid: { tone: 'green', label: () => 'Paid' },
-  outstanding: { tone: 'amber', label: (bill) => `Outstanding ${bill}` },
-  uninvoiced: { tone: 'amber', label: (bill) => `Collect ${bill}` },
-  zero_session: { tone: 'slate', label: () => '₹0 session' },
-};
 
 interface OpenPackage {
   packageGroupId: UUID;
@@ -275,6 +256,11 @@ export function NewVisitPage() {
     () => new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status])),
     [invoicePayments]
   );
+  const lastVisitDirectPayments = useLiveQuery(
+    () => (lastVisit ? repos.payments.listByVisit(lastVisit.id) : undefined),
+    [lastVisit?.id]
+  );
+  const lastVisitDirectPaymentPaise = (lastVisitDirectPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0);
   const catalogNameById = useMemo(() => new Map((catalog ?? []).map((c) => [c.id, c.name])), [catalog]);
 
   // Default therapist when patient is selected: whoever saw them last, or
@@ -478,8 +464,13 @@ export function NewVisitPage() {
               <div className="mt-2 border-t border-[var(--border)] pt-2 text-xs text-[var(--muted)]">
                 {lastVisit ? (
                   (() => {
-                    const state = lastVisitPaymentState(lastVisit.actualBillPaise, lastVisit.invoiceId, statusByInvoiceId);
-                    const chip = PAYMENT_STATE_LABEL[state];
+                    const state = computeVisitPaymentState(
+                      lastVisit.actualBillPaise,
+                      lastVisit.invoiceId,
+                      lastVisitDirectPaymentPaise,
+                      lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
+                    );
+                    const chip = PAYMENT_CHIP[state];
                     return (
                       <span className="flex flex-wrap items-center gap-1.5">
                         Last session {formatDateDMY(lastVisit.visitDate)} —{' '}

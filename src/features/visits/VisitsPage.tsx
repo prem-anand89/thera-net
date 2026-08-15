@@ -8,11 +8,13 @@ import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
+import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import {
   clinicBillingConfig,
   clinicShareLabels,
   type Patient,
   type PaymentMode,
+  type PaymentStatus,
   type Therapist,
   type UUID,
   type Visit,
@@ -33,7 +35,7 @@ import {
 import { PatientOverview } from './PatientOverview';
 import { EditVisitModal } from './EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
-import { ResponsiveVisitList, type VisitCardData, type VisitCardPaymentState } from '@/components/VisitCard';
+import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { InvoicesPage } from '@/features/invoices/InvoicesPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
 
@@ -60,17 +62,20 @@ function visitToCardData(
   serviceName: Map<UUID, string>,
   syncErrorByVisitId: Map<UUID, string>,
   openPackageGroupIds: Set<UUID>,
-  therapistSplit: boolean
+  therapistSplit: boolean,
+  statusByInvoiceId: Map<UUID, PaymentStatus>,
+  directPaymentByVisitId: Map<UUID, number>
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy = v.createdBy && v.updatedBy && v.createdBy !== v.updatedBy
     ? therapistNameByUserId.get(v.updatedBy) ?? 'another user'
     : null;
-  const paymentState: VisitCardPaymentState = v.invoiceId
-    ? 'paid'
-    : v.actualBillPaise === 0
-    ? 'zero_session'
-    : 'uninvoiced';
+  const paymentState = computeVisitPaymentState(
+    v.actualBillPaise,
+    v.invoiceId ?? null,
+    directPaymentByVisitId.get(v.id) ?? 0,
+    v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+  );
 
   return {
     visitId: v.id,
@@ -116,6 +121,7 @@ export function VisitsPage() {
   const [to, setTo] = useState(() => toIsoDate(new Date()));
   const [datePreset, setDatePreset] = useState<DatePreset>('week');
   const [therapistId, setTherapistId] = useState('');
+  const [onlyCollectedNoReceipt, setOnlyCollectedNoReceipt] = useState(false);
   const [patientQuery, setPatientQuery] = useState('');
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [splitting, setSplitting] = useState<Visit | null>(null);
@@ -182,6 +188,25 @@ export function VisitsPage() {
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
   const serviceName = useMemo(() => new Map((catalog ?? []).map((c) => [c.id, c.name])), [catalog]);
 
+  // Payment state needs both facts a bare `invoiceId` check misses: whether
+  // the invoice itself was ever marked paid (statusByInvoiceId), and
+  // whether money was collected directly with no invoice at all
+  // (directPaymentByVisitId) — same two lookups dashboardService.todayWorklist
+  // already builds for Workspace's "Seen today" list.
+  const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
+  const statusByInvoiceId = useMemo(
+    () => new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status])),
+    [invoicePayments]
+  );
+  const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
+  const directPaymentByVisitId = useMemo(() => {
+    const map = new Map<UUID, number>();
+    for (const p of directPayments ?? []) {
+      map.set(p.visitId, (map.get(p.visitId) ?? 0) + p.amountPaise);
+    }
+    return map;
+  }, [directPayments]);
+
   const filteredPatient = search.patientId ? patientById.get(search.patientId) : undefined;
 
   const patientMatches = useMemo(() => {
@@ -211,24 +236,44 @@ export function VisitsPage() {
           serviceName,
           syncErrorByVisitId,
           openPackageGroupIds,
-          therapistSplit
+          therapistSplit,
+          statusByInvoiceId,
+          directPaymentByVisitId
         )
       ),
-    [visits, patientById, therapistName, therapistNameByUserId, serviceName, syncErrorByVisitId, openPackageGroupIds, therapistSplit]
+    [
+      visits,
+      patientById,
+      therapistName,
+      therapistNameByUserId,
+      serviceName,
+      syncErrorByVisitId,
+      openPackageGroupIds,
+      therapistSplit,
+      statusByInvoiceId,
+      directPaymentByVisitId,
+    ]
   );
 
+  const visibleRows = useMemo(
+    () => (onlyCollectedNoReceipt ? cardRows.filter((r) => r.paymentState === 'collected_no_receipt') : cardRows),
+    [cardRows, onlyCollectedNoReceipt]
+  );
 
+  // Billed = every visit's bill amount, same as before. Collected/outstanding
+  // now read the same paymentState the chips show, rather than being
+  // (accidentally) impossible to tell apart from "has an invoiceId".
   const totals = useMemo(
     () =>
-      (visits ?? []).reduce(
-        (acc, v) => ({
-          bill: acc.bill + v.actualBillPaise,
-          bmShare: acc.bmShare + v.bmSharePaise,
-          postTax: acc.postTax + v.postTaxPaise,
+      visibleRows.reduce(
+        (acc, r) => ({
+          bill: acc.bill + r.billPaise,
+          collected: acc.collected + (isCollected(r.paymentState) ? r.billPaise : 0),
+          outstanding: acc.outstanding + (!isCollected(r.paymentState) && r.paymentState !== 'zero_session' ? r.billPaise : 0),
         }),
-        { bill: 0, bmShare: 0, postTax: 0 }
+        { bill: 0, collected: 0, outstanding: 0 }
       ),
-    [visits]
+    [visibleRows]
   );
 
   // Describes the currently-applied filter so a downloaded CSV is never
@@ -396,6 +441,14 @@ export function VisitsPage() {
                 ))}
               </select>
             </Field>
+            <label className="flex items-center gap-1.5 pb-2 text-xs text-[var(--muted)]">
+              <input
+                type="checkbox"
+                checked={onlyCollectedNoReceipt}
+                onChange={(e) => setOnlyCollectedNoReceipt(e.target.checked)}
+              />
+              Collected, no receipt
+            </label>
             <div className="ml-auto flex flex-wrap items-end gap-2">
               <div className="flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
                 {DATE_PRESETS.map((p) => (
@@ -531,38 +584,48 @@ export function VisitsPage() {
 
       {recordsView === 'visits' && visits && visits.length > 0 && (
         <div className="space-y-4">
-          <ResponsiveVisitList
-            rows={cardRows}
-            showDate={true}
-            showPatient={true}
-            groupByDate={true}
-            onInvoice={(row) => {
-              setError(null);
-              setPaidNow(true);
-              setInvoicing({
-                visitId: row.visitId,
-                patientLabel: row.patientName,
-                serviceLabel: row.serviceName,
-                isPackage: row.packageTotal != null,
-              });
-            }}
-            onSplit={
-              therapistSplit
-                ? (row) => {
-                    const v = visitById.get(row.visitId);
-                    if (!v) return;
-                    setError(null);
-                    setSplitting(v);
-                  }
-                : undefined
-            }
-            onDelete={(row) => {
-              if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
-            }}
-          />
-          <div className="sticky bottom-0 z-10 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm font-semibold text-[var(--ink)] shadow-[0_-2px_6px_rgba(0,0,0,0.06)]">
-            Totals: {visits.length} visit{visits.length === 1 ? '' : 's'} · {formatINR(totals.bill)}
-          </div>
+          {visibleRows.length > 0 ? (
+            <>
+              <ResponsiveVisitList
+                rows={visibleRows}
+                showDate={true}
+                showPatient={true}
+                groupByDate={true}
+                onInvoice={(row) => {
+                  setError(null);
+                  setPaidNow(true);
+                  setInvoicing({
+                    visitId: row.visitId,
+                    patientLabel: row.patientName,
+                    serviceLabel: row.serviceName,
+                    isPackage: row.packageTotal != null,
+                  });
+                }}
+                onSplit={
+                  therapistSplit
+                    ? (row) => {
+                        const v = visitById.get(row.visitId);
+                        if (!v) return;
+                        setError(null);
+                        setSplitting(v);
+                      }
+                    : undefined
+                }
+                onDelete={(row) => {
+                  if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+                }}
+              />
+              <div className="sticky bottom-0 z-10 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm font-semibold text-[var(--ink)] shadow-[0_-2px_6px_rgba(0,0,0,0.06)]">
+                Totals: {visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'} · Billed{' '}
+                {formatINR(totals.bill)} · Collected {formatINR(totals.collected)} · Outstanding{' '}
+                {formatINR(totals.outstanding)}
+              </div>
+            </>
+          ) : (
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center text-sm text-[var(--muted)] shadow-sm">
+              No visits match "Collected, no receipt" in this range.
+            </div>
+          )}
         </div>
       )}
 

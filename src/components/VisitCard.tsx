@@ -4,15 +4,20 @@ import { VISIT_COLUMN_LABELS, type UUID, type VisitColumnKey } from '@/domain/ty
 import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
+import type { VisitPaymentState } from '@/domain/paymentState';
 import { Pill, PackageThread, th, thNum, td, tdNum } from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 
-export type VisitCardPaymentState = 'paid' | 'outstanding' | 'uninvoiced' | 'zero_session';
+export type VisitCardPaymentState = VisitPaymentState;
 
-const PAYMENT_CHIP: Record<VisitCardPaymentState, { tone: 'green' | 'amber' | 'slate'; label: (bill: string) => string }> = {
+export const PAYMENT_CHIP: Record<
+  VisitCardPaymentState,
+  { tone: 'green' | 'amber' | 'slate'; label: (bill: string) => string; actionLabel?: (bill: string) => string }
+> = {
   paid: { tone: 'green', label: () => 'Paid' },
+  collected_no_receipt: { tone: 'green', label: () => 'Collected' },
   outstanding: { tone: 'amber', label: (bill) => `Outstanding ${bill}` },
-  uninvoiced: { tone: 'amber', label: (bill) => `Collect ${bill}` },
+  uninvoiced: { tone: 'amber', label: (bill) => `Collect ${bill}`, actionLabel: (bill) => `Collect ${bill}` },
   zero_session: { tone: 'slate', label: () => '₹0 session' },
 };
 
@@ -139,13 +144,13 @@ function PaymentStatusDisplay({ data, onInvoice }: { data: VisitCardData; onInvo
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
       <div className="font-num text-sm text-[var(--ink)]">{formatINR(data.billPaise)}</div>
-      {data.paymentState === 'uninvoiced' ? (
+      {chip.actionLabel ? (
         <button
           type="button"
           className="rounded-full bg-[var(--rust-light)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:opacity-80"
           onClick={onInvoice}
         >
-          {chip.label(formatINR(data.billPaise))}
+          {chip.actionLabel(formatINR(data.billPaise))}
         </button>
       ) : (
         <Pill tone={chip.tone}>{chip.label(formatINR(data.billPaise))}</Pill>

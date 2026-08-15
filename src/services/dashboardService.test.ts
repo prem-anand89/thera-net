@@ -471,6 +471,22 @@ describe('dashboardService.recentVisits', () => {
     const svc = createDashboardService(fake.repos);
     expect((await svc.recentVisits('clinic-1'))[0].outstandingPaise).toBe(0);
   });
+
+  it('reports zero outstanding when a direct payment was logged with no invoice', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: null }));
+    fake.payments.set('pay-1', {
+      id: 'pay-1',
+      clinicId: 'clinic-1',
+      visitId: 'v1',
+      amountPaise: rs(500),
+      method: 'cash',
+      receivedDate: '2026-06-01',
+      notes: null,
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    expect((await svc.recentVisits('clinic-1'))[0].outstandingPaise).toBe(0);
+  });
 });
 
 describe('dashboardService.recentVisitsWindow', () => {
@@ -645,6 +661,25 @@ describe('dashboardService.todayWorklist', () => {
     const result = await svc.todayWorklist('clinic-1', today);
     expect(result.visits[0].paymentState).toBe('paid');
     expect(result.collectedPaise).toBe(rs(1500));
+  });
+
+  it('marks a billed visit with a direct payment but no invoice as collected_no_receipt', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr, actualBillPaise: rs(1500) }));
+    fake.payments.set('pay-1', {
+      id: 'pay-1',
+      clinicId: 'clinic-1',
+      visitId: 'v1',
+      amountPaise: rs(1500),
+      method: 'cash',
+      receivedDate: todayStr,
+      notes: null,
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    const result = await svc.todayWorklist('clinic-1', today);
+    expect(result.visits[0].paymentState).toBe('collected_no_receipt');
+    expect(result.collectedPaise).toBe(rs(1500));
+    expect(result.outstandingPaise).toBe(0);
   });
 
   it('marks an invoiced visit with an explicit outstanding row as outstanding', async () => {

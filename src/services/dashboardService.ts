@@ -2,6 +2,7 @@ import type { UUID, Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { currentWeekRange, type FyMonth } from '@/domain/fiscalYear';
 import { daysSince, groupOpenPackages, isStale, STALE_PACKAGE_DAYS } from '@/domain/packageTracking';
+import { computeVisitPaymentState, isCollected, type VisitPaymentState } from '@/domain/paymentState';
 import type { Repos } from '@/repositories/types';
 import { createReportService, type MonthlyReport } from './reportService';
 
@@ -72,7 +73,7 @@ export interface MonthlyNewCounts {
   newPatients: number;
 }
 
-export type TodayPaymentState = 'paid' | 'outstanding' | 'uninvoiced' | 'zero_session';
+export type TodayPaymentState = VisitPaymentState;
 
 export interface TodayVisitRow {
   visitId: UUID;
@@ -338,23 +339,34 @@ export function createDashboardService(repos: Repos) {
 
     /** Most recent visits first, for an at-a-glance strip — not filtered by date. */
     async recentVisits(clinicId: UUID, limit = 8): Promise<RecentVisitRow[]> {
-      const [visits, patients, therapists, catalog, invoicePayments] = await Promise.all([
+      const [visits, patients, therapists, catalog, invoicePayments, directPayments] = await Promise.all([
         repos.visits.list({ clinicId }),
         repos.patients.list(clinicId),
         repos.therapists.list(clinicId, true),
         repos.catalog.list(clinicId, true),
         repos.invoicePayments.list(clinicId),
+        repos.payments.list(clinicId),
       ]);
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
       const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
+      const directPaymentByVisitId = new Map<UUID, Paise>();
+      directPayments.forEach((p) => {
+        directPaymentByVisitId.set(p.visitId, (directPaymentByVisitId.get(p.visitId) ?? 0) + p.amountPaise);
+      });
 
       return [...visits]
         .sort((a, b) => b.visitDate.localeCompare(a.visitDate))
         .slice(0, limit)
         .map((v) => {
-          const outstanding = !v.invoiceId || statusByInvoiceId.get(v.invoiceId) === 'outstanding';
+          const state = computeVisitPaymentState(
+            v.actualBillPaise,
+            v.invoiceId,
+            directPaymentByVisitId.get(v.id) ?? 0,
+            v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+          );
+          const outstanding = !isCollected(state) && state !== 'zero_session';
           return {
             visitId: v.id,
             visitDate: v.visitDate,
@@ -390,23 +402,34 @@ export function createDashboardService(repos: Repos) {
       const cutoff = new Date(asOf);
       cutoff.setDate(cutoff.getDate() - days);
       const fromStr = cutoff.toISOString().slice(0, 10);
-      const [visits, patients, therapists, catalog, invoicePayments] = await Promise.all([
+      const [visits, patients, therapists, catalog, invoicePayments, directPayments] = await Promise.all([
         repos.visits.list({ clinicId, from: fromStr }),
         repos.patients.list(clinicId),
         repos.therapists.list(clinicId, true),
         repos.catalog.list(clinicId, true),
         repos.invoicePayments.list(clinicId),
+        repos.payments.list(clinicId),
       ]);
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
       const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
+      const directPaymentByVisitId = new Map<UUID, Paise>();
+      directPayments.forEach((p) => {
+        directPaymentByVisitId.set(p.visitId, (directPaymentByVisitId.get(p.visitId) ?? 0) + p.amountPaise);
+      });
 
       return visits
         .filter((v) => v.visitDate < todayStr)
         .sort((a, b) => b.visitDate.localeCompare(a.visitDate))
         .map((v) => {
-          const outstanding = !v.invoiceId || statusByInvoiceId.get(v.invoiceId) === 'outstanding';
+          const state = computeVisitPaymentState(
+            v.actualBillPaise,
+            v.invoiceId,
+            directPaymentByVisitId.get(v.id) ?? 0,
+            v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+          );
+          const outstanding = !isCollected(state) && state !== 'zero_session';
           return {
             visitId: v.id,
             visitDate: v.visitDate,
@@ -557,11 +580,12 @@ export function createDashboardService(repos: Repos) {
           const patient = patientById.get(v.patientId);
           const directPaymentAmount = directPaymentByVisitId.get(v.id) ?? 0;
 
-          let paymentState: TodayPaymentState;
-          if (v.actualBillPaise === 0) paymentState = 'zero_session';
-          else if (directPaymentAmount > 0) paymentState = 'paid'; // Direct payment received
-          else if (!v.invoiceId) paymentState = 'uninvoiced';
-          else paymentState = statusByInvoiceId.get(v.invoiceId) === 'outstanding' ? 'outstanding' : 'paid';
+          const paymentState = computeVisitPaymentState(
+            v.actualBillPaise,
+            v.invoiceId,
+            directPaymentAmount,
+            v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+          );
 
           return {
             visitId: v.id,
@@ -586,7 +610,7 @@ export function createDashboardService(repos: Repos) {
 
       // Collected = invoice payments + direct payments
       const collectedPaise = rows
-        .filter((r) => r.paymentState === 'paid')
+        .filter((r) => isCollected(r.paymentState))
         .reduce((sum, r) => sum + r.billPaise, 0);
       const outstandingPaise = rows
         .filter((r) => r.paymentState === 'outstanding' || r.paymentState === 'uninvoiced')
