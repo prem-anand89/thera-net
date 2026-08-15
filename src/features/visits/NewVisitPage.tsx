@@ -560,8 +560,12 @@ export function NewVisitPage() {
           // Creating — no existing match; capture the new patient. Only
           // name and phone are asked for up front, everything else is
           // explicitly optional and can be filled in later from the profile.
+          // Single column, not sm:grid-cols-2 -- this always renders in the
+          // fixed-width side panel now, and sm: is a viewport breakpoint,
+          // not a container one, so it would force two columns into a
+          // panel too narrow for them on any normal-width screen.
           <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3">
               <Field label="Name *">
                 <input
                   className={inputCls}
@@ -915,26 +919,18 @@ export function NewVisitPage() {
   );
 
   return (
-    <div className={`mx-auto space-y-4 ${patient ? 'max-w-4xl' : 'max-w-2xl'}`}>
+    <div className="mx-auto max-w-4xl space-y-4">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
 
-      {patient ? (
-        // Patient confirmed — side-by-side reference panel + form, so the
-        // last-visit/package context stays visible while filling in the
-        // rest. Collapses back to stacked below tab: width.
-        <div className="tab:flex tab:items-start tab:gap-4">
-          <div className="tab:w-72 tab:shrink-0">{patientPanel}</div>
-          <div className="mt-4 min-w-0 flex-1 tab:mt-0">{visitPanel}</div>
-        </div>
-      ) : (
-        // No patient yet — full-width single column; the create-patient
-        // form's two-column field grid needs the room, and a narrow side
-        // panel has nothing useful to show before a patient is picked.
-        <div className="space-y-4">
-          {patientPanel}
-          {visitPanel}
-        </div>
-      )}
+      {/* Same two-column shape (reference panel left, form right) whether or
+          not a patient is picked yet — the *content* inside the left panel
+          changes (search/create UI vs. confirmed-patient tiles), but the
+          page's own structure doesn't, so picking a patient doesn't cause a
+          jarring column-count/width jump. Collapses to stacked below tab:. */}
+      <div className="tab:flex tab:items-start tab:gap-4">
+        <div className="tab:w-80 tab:shrink-0">{patientPanel}</div>
+        <div className="mt-4 min-w-0 flex-1 tab:mt-0">{visitPanel}</div>
+      </div>
 
       {patient && editingPatient && (
         <EditPatientModal
