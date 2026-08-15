@@ -10,13 +10,10 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import { CreateClinicForm } from '@/features/setup/CreateClinicForm';
 import { SyncBadge } from '@/components/SyncBadge';
 
-// Patients isn't its own tab yet — AllPatientsSection still lives as a
-// sub-view inside Ledger (VisitsPage.tsx's `recordsView`). Extracting it to
-// a standalone /patients route is a separate, later change so it can ship
-// once this rename is confirmed stable.
 const NAV = [
   { to: '/workspace', label: 'Workspace' },
   { to: '/ledger', label: 'Ledger' },
+  { to: '/patients', label: 'Patients' },
   { to: '/insights', label: 'Insights' },
   { to: '/settings', label: 'Settings' },
 ] as const;

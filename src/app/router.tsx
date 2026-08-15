@@ -21,6 +21,9 @@ const NewVisitPage = lazy(() =>
 const LedgerPage = lazy(() =>
   import('@/features/visits/VisitsPage').then((m) => ({ default: m.VisitsPage }))
 );
+const PatientsPage = lazy(() =>
+  import('@/features/patients/PatientsPage').then((m) => ({ default: m.PatientsPage }))
+);
 const PatientProfilePage = lazy(() =>
   import('@/features/patients/PatientProfilePage').then((m) => ({ default: m.PatientProfilePage }))
 );
@@ -98,6 +101,12 @@ const newVisitRoute = createRoute({
     ...(typeof search.prefillName === 'string' ? { prefillName: search.prefillName } : {}),
   }),
   component: NewVisitPage,
+});
+
+const patientsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients',
+  component: PatientsPage,
 });
 
 const patientProfileRoute = createRoute({
@@ -206,6 +215,7 @@ const routeTree = rootRoute.addChildren([
   ledgerRoute,
   archiveRedirectRoute,
   newVisitRoute,
+  patientsRoute,
   patientProfileRoute,
   newNoteRoute,
   noteEditorRoute,
