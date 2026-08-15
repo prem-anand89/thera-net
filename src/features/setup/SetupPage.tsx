@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, backupService } from '@/services';
@@ -34,24 +34,585 @@ import {
 } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
 
+type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'features' | 'data' | 'danger';
+
+const SECTIONS: { key: SectionKey; label: string }[] = [
+  { key: 'profile', label: 'Clinic profile' },
+  { key: 'billing', label: 'Billing & invoicing' },
+  { key: 'partner', label: 'Partner & split' },
+  { key: 'team', label: 'Team' },
+  { key: 'services', label: 'Services' },
+  { key: 'features', label: 'Features' },
+  { key: 'data', label: 'Data' },
+  { key: 'danger', label: 'Danger zone' },
+];
+
+/** Only add/remove `key` if that actually changes membership — keeps the
+ *  Set reference stable across no-op updates so dirty-tracking effects
+ *  downstream don't re-fire needlessly. */
+function toggleSet<T>(set: Set<T>, key: T, present: boolean): Set<T> {
+  if (present === set.has(key)) return set;
+  const next = new Set(set);
+  if (present) next.add(key);
+  else next.delete(key);
+  return next;
+}
+
 export function SetupPage() {
+  const [activeKey, setActiveKey] = useState<SectionKey>('profile');
+  const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
+
+  // Left-rail sections that edit the clinic row report their dirty state up
+  // here, so switching tabs with unsaved changes can warn before discarding
+  // them — the risk splitting one big form into independently-saved
+  // sections actually introduces (there was nowhere to "navigate away to"
+  // before). Team/Services/Data/Danger zone act immediately per row/button
+  // and never register as dirty.
+  const setProfileDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'profile', d)), []);
+  const setBillingDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'billing', d)), []);
+  const setPartnerDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'partner', d)), []);
+  const setFeaturesDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'features', d)), []);
+
+  function selectSection(key: SectionKey) {
+    if (key === activeKey) return;
+    if (
+      dirtyKeys.has(activeKey) &&
+      !confirm('This section has unsaved changes. Discard them and switch?')
+    ) {
+      return;
+    }
+    setActiveKey(key);
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Setup</h1>
-      <ClinicProfile />
-      <Catalog />
-      <Therapists />
-      <SectionCard title="Historical data">
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          One-time import of visits logged before go-live in the Excel ledger.
-        </p>
-        <Link to="/setup/import-visits" className="text-sm text-[var(--teal)] hover:underline">
-          Import historical visits from Excel →
-        </Link>
-      </SectionCard>
-      <DataBackup />
-      <DangerZone />
+
+      <div className="md:flex md:items-start md:gap-6">
+        <nav className="mb-4 flex gap-1 overflow-x-auto md:mb-0 md:w-44 md:shrink-0 md:flex-col md:gap-0.5">
+          {SECTIONS.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => selectSection(s.key)}
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm font-medium ${
+                activeKey === s.key
+                  ? 'bg-[var(--teal-light)] text-[var(--teal)]'
+                  : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+              }`}
+            >
+              {s.label}
+              {dirtyKeys.has(s.key) && <span className="ml-1.5 text-[var(--rust)]">•</span>}
+            </button>
+          ))}
+        </nav>
+
+        <div className="min-w-0 flex-1 space-y-6">
+          {activeKey === 'profile' && <ClinicProfileSection onDirtyChange={setProfileDirty} />}
+          {activeKey === 'billing' && <BillingSection onDirtyChange={setBillingDirty} />}
+          {activeKey === 'partner' && <PartnerSection onDirtyChange={setPartnerDirty} />}
+          {activeKey === 'team' && <Therapists />}
+          {activeKey === 'services' && <Catalog />}
+          {activeKey === 'features' && <FeaturesSection onDirtyChange={setFeaturesDirty} />}
+          {activeKey === 'data' && (
+            <>
+              <HistoricalData />
+              <DataBackup />
+            </>
+          )}
+          {activeKey === 'danger' && <DangerZone />}
+        </div>
+      </div>
     </div>
+  );
+}
+
+/**
+ * Shared save mechanics for a section that edits a slice of the Clinic row.
+ * Re-fetches the current row at save time and merges just this section's
+ * fields into it, rather than writing back a form snapshot that could be
+ * stale for fields another section owns — the Clinic row has no partial-
+ * patch API, so a naive "write the whole form" save would silently revert
+ * whatever another section saved in between.
+ */
+function useClinicSectionForm<F extends Partial<Clinic>>(
+  pick: (clinic: Clinic) => F,
+  onDirtyChange: (dirty: boolean) => void
+) {
+  const clinic = useClinic();
+  const initial = useMemo(() => pick(clinic), [clinic]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [form, setForm] = useState<F>(initial);
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => setForm(initial), [initial]);
+
+  const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(initial), [form, initial]);
+  // Cleanup clears the flag on unmount too — switching tabs away from a
+  // dirty section (after confirming the discard) unmounts it, and without
+  // this the rail's dot would keep showing dirty for a section that no
+  // longer has any unsaved state to lose.
+  useEffect(() => {
+    onDirtyChange(dirty);
+    return () => onDirtyChange(false);
+  }, [dirty, onDirtyChange]);
+
+  function set(patch: Partial<F>) {
+    setSaved(false);
+    setForm((f) => ({ ...f, ...patch }));
+  }
+
+  async function save() {
+    setError(null);
+    setBusy(true);
+    try {
+      const current = await repos.clinics.get(clinic.id);
+      if (!current) throw new Error('Clinic not found');
+      await repos.clinics.put({ ...current, ...form, updatedAt: new Date().toISOString() });
+      setSaved(true);
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function cancel() {
+    setForm(initial);
+    setError(null);
+  }
+
+  /** Writes one field immediately (e.g. after a logo upload finishes) and
+   *  folds it into local state so the dirty check doesn't flag it as an
+   *  unsaved edit — it's already persisted. */
+  async function saveFieldNow(patch: Partial<F>) {
+    const current = await repos.clinics.get(clinic.id);
+    if (!current) return;
+    await repos.clinics.put({ ...current, ...patch, updatedAt: new Date().toISOString() });
+    setForm((f) => ({ ...f, ...patch }));
+  }
+
+  return { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError };
+}
+
+function SectionSaveBar({
+  dirty,
+  saved,
+  busy,
+  onSave,
+  onCancel,
+  error,
+}: {
+  dirty: boolean;
+  saved: boolean;
+  busy: boolean;
+  onSave: () => void;
+  onCancel: () => void;
+  error: string | null;
+}) {
+  return (
+    <>
+      <div className="mt-4 flex items-center gap-3">
+        <button className={btnPrimary} disabled={busy || !dirty} onClick={onSave}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button className={btnSecondary} disabled={!dirty} onClick={onCancel}>
+          Cancel
+        </button>
+        {saved && !dirty && <span className="text-sm text-[var(--moss)]">Saved ✓</span>}
+      </div>
+      <div className="mt-2">
+        <ErrorNote message={error} />
+      </div>
+    </>
+  );
+}
+
+type ProfileFields = Pick<Clinic, 'name' | 'address' | 'phone' | 'email' | 'walkInMrnoPrefix' | 'logoPath'>;
+
+function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =
+    useClinicSectionForm<ProfileFields>(
+      (c) => ({ name: c.name, address: c.address, phone: c.phone, email: c.email, walkInMrnoPrefix: c.walkInMrnoPrefix, logoPath: c.logoPath }),
+      onDirtyChange
+    );
+
+  async function uploadLogo(file: File) {
+    setError(null);
+    const supabase = getSupabase();
+    if (!supabase || !navigator.onLine) {
+      setError('Logo upload needs a connection.');
+      return;
+    }
+    const path = `${clinic.id}/logo-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, file);
+    if (uploadError) {
+      setError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
+      return;
+    }
+    await saveFieldNow({ logoPath: path } as Partial<ProfileFields>);
+  }
+
+  return (
+    <SectionCard title="Clinic profile">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <Field label="Clinic name">
+          <input className={inputCls} value={form.name} onChange={(e) => set({ name: e.target.value })} />
+        </Field>
+        <Field
+          label={
+            <>
+              Walk-in patient ID prefix
+              <InfoTip text="Used for auto-generated Patient IDs when a walk-in has no existing ID (format: PREFIX-YYMMDD-XXX). Defaults to 'W'." />
+            </>
+          }
+        >
+          <input
+            className={inputCls}
+            placeholder="W"
+            value={form.walkInMrnoPrefix ?? ''}
+            onChange={(e) => set({ walkInMrnoPrefix: e.target.value.toUpperCase() || null })}
+          />
+        </Field>
+        <Field label="Address">
+          <input className={inputCls} value={form.address ?? ''} onChange={(e) => set({ address: e.target.value || null })} />
+        </Field>
+        <Field label="Phone">
+          <input className={inputCls} value={form.phone ?? ''} onChange={(e) => set({ phone: e.target.value || null })} />
+        </Field>
+        <Field label="Email">
+          <input className={inputCls} value={form.email ?? ''} onChange={(e) => set({ email: e.target.value || null })} />
+        </Field>
+        <Field label="Clinic logo">
+          <input
+            type="file"
+            accept="image/*"
+            className={inputCls}
+            onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])}
+          />
+        </Field>
+      </div>
+      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
+    </SectionCard>
+  );
+}
+
+type BillingFields = Pick<Clinic, 'invoicePrefix' | 'gstNo' | 'fyStartMonth'>;
+
+function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<BillingFields>(
+    (c) => ({ invoicePrefix: c.invoicePrefix, gstNo: c.gstNo, fyStartMonth: c.fyStartMonth }),
+    onDirtyChange
+  );
+
+  return (
+    <SectionCard title="Billing & invoicing">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <Field label="Invoice prefix">
+          <input
+            className={inputCls}
+            value={form.invoicePrefix}
+            onChange={(e) => set({ invoicePrefix: e.target.value.toUpperCase() })}
+          />
+        </Field>
+        <Field label="GST / Tax ID (optional)">
+          <input className={inputCls} value={form.gstNo ?? ''} onChange={(e) => set({ gstNo: e.target.value || null })} />
+        </Field>
+        <Field label="Fiscal year starts in month">
+          <input
+            type="number"
+            min={1}
+            max={12}
+            className={inputCls}
+            value={form.fyStartMonth}
+            onChange={(e) => set({ fyStartMonth: Number(e.target.value) })}
+          />
+        </Field>
+      </div>
+      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
+    </SectionCard>
+  );
+}
+
+type PartnerFields = Pick<
+  Clinic,
+  | 'clinicType'
+  | 'hasPartner'
+  | 'enableTherapistSplit'
+  | 'partnerHospitalName'
+  | 'partnerHospitalLogoPath'
+  | 'ownShareLabel'
+  | 'partnerShareLabel'
+  | 'bmSplitPct'
+  | 'taxPct'
+  | 'tdsBasis'
+>;
+
+// These fields are read together by clinicBillingConfig() to determine
+// hospitalSplit/therapistSplit — kept in one section/save so they can never
+// go out of sync with each other mid-edit.
+function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =
+    useClinicSectionForm<PartnerFields>(
+      (c) => ({
+        clinicType: c.clinicType,
+        hasPartner: c.hasPartner,
+        enableTherapistSplit: c.enableTherapistSplit,
+        partnerHospitalName: c.partnerHospitalName,
+        partnerHospitalLogoPath: c.partnerHospitalLogoPath,
+        ownShareLabel: c.ownShareLabel,
+        partnerShareLabel: c.partnerShareLabel,
+        bmSplitPct: c.bmSplitPct,
+        taxPct: c.taxPct,
+        tdsBasis: c.tdsBasis,
+      }),
+      onDirtyChange
+    );
+  const labels = clinicShareLabels(form);
+
+  async function uploadPartnerLogo(file: File) {
+    setError(null);
+    const supabase = getSupabase();
+    if (!supabase || !navigator.onLine) {
+      setError('Logo upload needs a connection.');
+      return;
+    }
+    const path = `${clinic.id}/partner-logo-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, file);
+    if (uploadError) {
+      setError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
+      return;
+    }
+    await saveFieldNow({ partnerHospitalLogoPath: path } as Partial<PartnerFields>);
+  }
+
+  return (
+    <SectionCard title="Partner & split">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <Field
+          label={
+            <>
+              Therapist setup
+              <InfoTip text="Individual: single therapist practice. Multiple: clinic with multiple therapists. This affects billing and reporting." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.clinicType ?? 'multiple'}
+            onChange={(e) => set({ clinicType: e.target.value as Clinic['clinicType'] })}
+          >
+            <option value="individual">Individual Therapist</option>
+            <option value="multiple">Multiple Therapists</option>
+          </select>
+        </Field>
+        <Field
+          label={
+            <>
+              Partner with therapist/external org
+              <InfoTip text="Enable if your clinic partners with a therapist or external organization (hospital, etc.) for revenue sharing, tax deduction, or other arrangements." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.hasPartner ? 'yes' : 'no'}
+            onChange={(e) => set({ hasPartner: e.target.value === 'yes' })}
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </Field>
+        <Field
+          label={
+            <>
+              Track therapist splits
+              <InfoTip text="Lets a visit's revenue be credited between two therapists (a Split action + Shared/Net report columns). Turn off if you don't attribute revenue across therapists." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.enableTherapistSplit === false ? 'no' : 'yes'}
+            onChange={(e) => set({ enableTherapistSplit: e.target.value === 'yes' })}
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </Field>
+        {form.hasPartner && (
+          <>
+            <Field label="Partner name (prints on invoices if set)">
+              <input
+                className={inputCls}
+                value={form.partnerHospitalName ?? ''}
+                onChange={(e) => set({ partnerHospitalName: e.target.value || null })}
+              />
+            </Field>
+            <Field label="Your share label (report column, e.g. BM)">
+              <input
+                className={inputCls}
+                placeholder="BM"
+                value={form.ownShareLabel ?? ''}
+                onChange={(e) => set({ ownShareLabel: e.target.value || null })}
+              />
+            </Field>
+            <Field label="Partner share label (report column, e.g. HV)">
+              <input
+                className={inputCls}
+                placeholder="HV"
+                value={form.partnerShareLabel ?? ''}
+                onChange={(e) => set({ partnerShareLabel: e.target.value || null })}
+              />
+            </Field>
+            <Field label={`Your share % (${labels.own} split)`}>
+              <input
+                type="number"
+                className={inputCls}
+                value={form.bmSplitPct}
+                onChange={(e) => set({ bmSplitPct: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Partner logo">
+              <input
+                type="file"
+                accept="image/*"
+                className={inputCls}
+                onChange={(e) => e.target.files?.[0] && void uploadPartnerLogo(e.target.files[0])}
+              />
+            </Field>
+          </>
+        )}
+        <Field
+          label={
+            <>
+              Tax / TDS % (optional)
+              <InfoTip text="Tax Deducted at Source — the % withheld from payouts. Leave blank if not applicable. When enabled with a partner, TDS is calculated based on the TDS basis below." />
+            </>
+          }
+        >
+          <input
+            type="number"
+            className={inputCls}
+            placeholder="0"
+            value={form.taxPct ?? ''}
+            onChange={(e) => set({ taxPct: e.target.value === '' ? 0 : Number(e.target.value) })}
+          />
+        </Field>
+        {form.hasPartner && form.taxPct > 0 && (
+          <Field
+            label={
+              <>
+                TDS basis
+                <InfoTip text="Whether the tax % is calculated on the full bill (matches most hospital sheets) or only on the clinic's own share. Both produce the same final clinic payout." />
+              </>
+            }
+          >
+            <select
+              className={inputCls}
+              value={form.tdsBasis}
+              onChange={(e) => set({ tdsBasis: e.target.value as TdsBasis })}
+            >
+              <option value="gross_bill">{form.taxPct}% of gross bill (matches {labels.partner} sheet)</option>
+              <option value="bm_share">On clinic share only</option>
+            </select>
+          </Field>
+        )}
+      </div>
+      <p className="mt-3 text-xs text-[var(--muted)]">
+        Split/tax changes apply to NEW visits only — past visits keep the rates they were billed under.
+      </p>
+      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
+    </SectionCard>
+  );
+}
+
+type FeaturesFields = Pick<Clinic, 'enableExpectedToday' | 'clinicalDocsEnabled' | 'visitColumnPrefs'>;
+
+function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const { clinic, form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<FeaturesFields>(
+    (c) => ({ enableExpectedToday: c.enableExpectedToday, clinicalDocsEnabled: c.clinicalDocsEnabled, visitColumnPrefs: c.visitColumnPrefs }),
+    onDirtyChange
+  );
+  const labels = clinicShareLabels(clinic);
+
+  return (
+    <SectionCard title="Features">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <Field
+          label={
+            <>
+              Expected today
+              <InfoTip text="Shows a lightweight 'who's coming in today' list on Workspace, for clinics that track informal walk-in/appointment expectations. Not a booking system — no calendar, no availability checking." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.enableExpectedToday ? 'yes' : 'no'}
+            onChange={(e) => set({ enableExpectedToday: e.target.value === 'yes' })}
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </Field>
+        <Field
+          label={
+            <>
+              Clinical documentation
+              <InfoTip text="When on, new visits are flagged for a clinical note until one is completed — surfaced on Workspace's Needs attention and Documentation lists. Off by default; turn on for clinics that track a note per visit." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.clinicalDocsEnabled ? 'yes' : 'no'}
+            onChange={(e) => set({ clinicalDocsEnabled: e.target.value === 'yes' })}
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </Field>
+      </div>
+
+      <div className="mt-4 border-t border-[var(--border)] pt-4">
+        <p className="mb-2 text-xs font-medium text-[var(--muted)]">
+          Visits table columns — pick which optional columns show
+        </p>
+        <div className="flex flex-wrap gap-4">
+          {(Object.keys(VISIT_COLUMN_LABELS) as VisitColumnKey[]).map((key) => (
+            <label key={key} className="flex items-center gap-2 text-sm text-[var(--ink)]">
+              <input
+                type="checkbox"
+                checked={visibleVisitColumns(form)[key]}
+                onChange={(e) => set({ visitColumnPrefs: { ...form.visitColumnPrefs, [key]: e.target.checked } })}
+              />
+              {VISIT_COLUMN_LABELS[key]}
+            </label>
+          ))}
+        </div>
+        {clinic.hasPartner && (
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            The {labels.own} Share and Post-Tax columns appear in ledger and reports when a partner is configured.
+          </p>
+        )}
+      </div>
+      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
+    </SectionCard>
+  );
+}
+
+function HistoricalData() {
+  return (
+    <SectionCard title="Historical data">
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        One-time import of visits logged before go-live in the Excel ledger.
+      </p>
+      <Link to="/setup/import-visits" className="text-sm text-[var(--teal)] hover:underline">
+        Import historical visits from Excel →
+      </Link>
+    </SectionCard>
   );
 }
 
@@ -218,313 +779,6 @@ function DangerZone() {
           {busy ? 'Wiping…' : 'Wipe ALL clinic data…'}
         </button>
       </div>
-      <div className="mt-2">
-        <ErrorNote message={error} />
-      </div>
-    </SectionCard>
-  );
-}
-
-function ClinicProfile() {
-  const clinic = useClinic();
-  const [form, setForm] = useState<Clinic>(clinic);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const labels = clinicShareLabels(form);
-
-  useEffect(() => setForm(clinic), [clinic]);
-
-  const set = (patch: Partial<Clinic>) => {
-    setSaved(false);
-    setForm((f) => ({ ...f, ...patch }));
-  };
-
-  async function uploadLogo(file: File, field: 'logoPath' | 'partnerHospitalLogoPath') {
-    setError(null);
-    const supabase = getSupabase();
-    if (!supabase || !navigator.onLine) {
-      setError('Logo upload needs a connection.');
-      return;
-    }
-    const path = `${clinic.id}/${field === 'logoPath' ? 'logo' : 'partner-logo'}-${Date.now()}.${file.name.split('.').pop()}`;
-    const { error } = await supabase.storage.from('clinic-assets').upload(path, file);
-    if (error) {
-      setError(`Upload failed: ${toFriendlyMessage(error)}`);
-      return;
-    }
-    const updated = { ...form, [field]: path, updatedAt: new Date().toISOString() };
-    setForm(updated);
-    await repos.clinics.put(updated);
-  }
-
-  async function save() {
-    setError(null);
-    await repos.clinics.put({ ...form, updatedAt: new Date().toISOString() });
-    setSaved(true);
-  }
-
-  return (
-    <SectionCard title="Clinic profile & letterhead">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <Field label="Clinic name">
-          <input className={inputCls} value={form.name} onChange={(e) => set({ name: e.target.value })} />
-        </Field>
-        <Field label="Invoice prefix">
-          <input
-            className={inputCls}
-            value={form.invoicePrefix}
-            onChange={(e) => set({ invoicePrefix: e.target.value.toUpperCase() })}
-          />
-        </Field>
-        <Field label="GST / Tax ID (optional)">
-          <input className={inputCls} value={form.gstNo ?? ''} onChange={(e) => set({ gstNo: e.target.value || null })} />
-        </Field>
-        <Field
-          label={
-            <>
-              Walk-in patient ID prefix
-              <InfoTip text="Used for auto-generated Patient IDs when a walk-in has no existing ID (format: PREFIX-YYMMDD-XXX). Defaults to 'W'." />
-            </>
-          }
-        >
-          <input
-            className={inputCls}
-            placeholder="W"
-            value={form.walkInMrnoPrefix ?? ''}
-            onChange={(e) => set({ walkInMrnoPrefix: e.target.value.toUpperCase() || null })}
-          />
-        </Field>
-        <Field
-          label={
-            <>
-              Therapist setup
-              <InfoTip text="Individual: single therapist practice. Multiple: clinic with multiple therapists. This affects billing and reporting." />
-            </>
-          }
-        >
-          <select
-            className={inputCls}
-            value={form.clinicType ?? 'multiple'}
-            onChange={(e) => set({ clinicType: e.target.value as Clinic['clinicType'] })}
-          >
-            <option value="individual">Individual Therapist</option>
-            <option value="multiple">Multiple Therapists</option>
-          </select>
-        </Field>
-        <Field
-          label={
-            <>
-              Partner with therapist/external org
-              <InfoTip text="Enable if your clinic partners with a therapist or external organization (hospital, etc.) for revenue sharing, tax deduction, or other arrangements." />
-            </>
-          }
-        >
-          <select
-            className={inputCls}
-            value={form.hasPartner ? 'yes' : 'no'}
-            onChange={(e) => set({ hasPartner: e.target.value === 'yes' })}
-          >
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
-        </Field>
-        <Field
-          label={
-            <>
-              Track therapist splits
-              <InfoTip text="Lets a visit's revenue be credited between two therapists (a Split action + Shared/Net report columns). Turn off if you don't attribute revenue across therapists." />
-            </>
-          }
-        >
-          <select
-            className={inputCls}
-            value={form.enableTherapistSplit === false ? 'no' : 'yes'}
-            onChange={(e) => set({ enableTherapistSplit: e.target.value === 'yes' })}
-          >
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
-        </Field>
-        <Field
-          label={
-            <>
-              Expected today
-              <InfoTip text="Shows a lightweight 'who's coming in today' list on Workspace, for clinics that track informal walk-in/appointment expectations. Not a booking system — no calendar, no availability checking." />
-            </>
-          }
-        >
-          <select
-            className={inputCls}
-            value={form.enableExpectedToday ? 'yes' : 'no'}
-            onChange={(e) => set({ enableExpectedToday: e.target.value === 'yes' })}
-          >
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
-        </Field>
-        <Field
-          label={
-            <>
-              Clinical documentation
-              <InfoTip text="When on, new visits are flagged for a clinical note until one is completed — surfaced on Workspace's Needs attention and Documentation lists. Off by default; turn on for clinics that track a note per visit." />
-            </>
-          }
-        >
-          <select
-            className={inputCls}
-            value={form.clinicalDocsEnabled ? 'yes' : 'no'}
-            onChange={(e) => set({ clinicalDocsEnabled: e.target.value === 'yes' })}
-          >
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
-        </Field>
-        <Field label="Address">
-          <input className={inputCls} value={form.address ?? ''} onChange={(e) => set({ address: e.target.value || null })} />
-        </Field>
-        <Field label="Phone">
-          <input className={inputCls} value={form.phone ?? ''} onChange={(e) => set({ phone: e.target.value || null })} />
-        </Field>
-        <Field label="Email">
-          <input className={inputCls} value={form.email ?? ''} onChange={(e) => set({ email: e.target.value || null })} />
-        </Field>
-        {form.hasPartner && (
-          <>
-            <Field label="Partner name (prints on invoices if set)">
-              <input
-                className={inputCls}
-                value={form.partnerHospitalName ?? ''}
-                onChange={(e) => set({ partnerHospitalName: e.target.value || null })}
-              />
-            </Field>
-            <Field label="Your share label (report column, e.g. BM)">
-              <input
-                className={inputCls}
-                placeholder="BM"
-                value={form.ownShareLabel ?? ''}
-                onChange={(e) => set({ ownShareLabel: e.target.value || null })}
-              />
-            </Field>
-            <Field label="Partner share label (report column, e.g. HV)">
-              <input
-                className={inputCls}
-                placeholder="HV"
-                value={form.partnerShareLabel ?? ''}
-                onChange={(e) => set({ partnerShareLabel: e.target.value || null })}
-              />
-            </Field>
-            <Field label={`Your share % (${labels.own} split)`}>
-              <input
-                type="number"
-                className={inputCls}
-                value={form.bmSplitPct}
-                onChange={(e) => set({ bmSplitPct: Number(e.target.value) })}
-              />
-            </Field>
-          </>
-        )}
-        <Field
-          label={
-            <>
-              Tax / TDS % (optional)
-              <InfoTip text="Tax Deducted at Source — the % withheld from payouts. Leave blank if not applicable. When enabled with a partner, TDS is calculated based on the TDS basis below." />
-            </>
-          }
-        >
-          <input
-            type="number"
-            className={inputCls}
-            placeholder="0"
-            value={form.taxPct ?? ''}
-            onChange={(e) => set({ taxPct: e.target.value === '' ? 0 : Number(e.target.value) })}
-          />
-        </Field>
-        {form.hasPartner && form.taxPct > 0 && (
-          <Field
-            label={
-              <>
-                TDS basis
-                <InfoTip text="Whether the tax % is calculated on the full bill (matches most hospital sheets) or only on the clinic's own share. Both produce the same final clinic payout." />
-              </>
-            }
-          >
-            <select
-              className={inputCls}
-              value={form.tdsBasis}
-              onChange={(e) => set({ tdsBasis: e.target.value as TdsBasis })}
-            >
-              <option value="gross_bill">{form.taxPct}% of gross bill (matches {labels.partner} sheet)</option>
-              <option value="bm_share">On clinic share only</option>
-            </select>
-          </Field>
-        )}
-        <Field label="Fiscal year starts in month">
-          <input
-            type="number"
-            min={1}
-            max={12}
-            className={inputCls}
-            value={form.fyStartMonth}
-            onChange={(e) => set({ fyStartMonth: Number(e.target.value) })}
-          />
-        </Field>
-        <Field label="Clinic logo">
-          <input
-            type="file"
-            accept="image/*"
-            className={inputCls}
-            onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0], 'logoPath')}
-          />
-        </Field>
-        {form.hasPartner && (
-          <Field label="Partner logo">
-            <input
-              type="file"
-              accept="image/*"
-              className={inputCls}
-              onChange={(e) =>
-                e.target.files?.[0] && void uploadLogo(e.target.files[0], 'partnerHospitalLogoPath')
-              }
-            />
-          </Field>
-        )}
-      </div>
-
-      <div className="mt-4 border-t border-[var(--border)] pt-4">
-        <p className="mb-2 text-xs font-medium text-[var(--muted)]">
-          Visits table columns — pick which optional columns show
-        </p>
-        <div className="flex flex-wrap gap-4">
-          {(Object.keys(VISIT_COLUMN_LABELS) as VisitColumnKey[]).map((key) => (
-            <label key={key} className="flex items-center gap-2 text-sm text-[var(--ink)]">
-              <input
-                type="checkbox"
-                checked={visibleVisitColumns(form)[key]}
-                onChange={(e) =>
-                  set({ visitColumnPrefs: { ...form.visitColumnPrefs, [key]: e.target.checked } })
-                }
-              />
-              {VISIT_COLUMN_LABELS[key]}
-            </label>
-          ))}
-        </div>
-        {form.hasPartner && (
-          <p className="mt-2 text-xs text-[var(--muted)]">
-            The {labels.own} Share and Post-Tax columns appear in ledger and reports when a partner is configured.
-          </p>
-        )}
-      </div>
-
-      <div className="mt-4 flex items-center gap-3">
-        <button className={btnPrimary} onClick={() => void save()}>
-          Save clinic settings
-        </button>
-        {saved && <span className="text-sm text-[var(--moss)]">Saved ✓</span>}
-      </div>
-      <p className="mt-2 text-xs text-[var(--muted)]">
-        Split/tax changes apply to NEW visits only — past visits keep the rates they were billed
-        under.
-      </p>
       <div className="mt-2">
         <ErrorNote message={error} />
       </div>
@@ -913,4 +1167,3 @@ function Therapists() {
     </SectionCard>
   );
 }
-

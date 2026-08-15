@@ -137,24 +137,48 @@ visit.
   .saveAssessment` (completed-with-visit closes the loop, draft doesn't,
   no-visit note doesn't touch the visits table).
 
-### PR 3 — Settings reorganization (new — not in source document)
+### PR 3 — Settings reorganization (new — not in source document) — SHIPPED
 Prompted directly by user request — 899 lines in one scroll, one section
-(`ClinicProfile`, `SetupPage.tsx:267`) carrying ~20 unrelated fields behind
-one save button.
-- Left-rail sub-nav at ≥768px (decision 10), stacking below it. Same rail
-  component PR 5 builds for the note editor — one pattern in two places.
-- Split into 8 sections: Clinic profile · Billing & invoicing · Partner &
-  split · Team · Services · Features · Data · Danger zone. Interdependent
-  billing fields (`hasPartner`, `bmSplitPct`, `tdsBasis`, …) stay together
-  in Partner & split so one section's save can't leave the clinic in a
-  half-consistent state.
-- Per-section save/Cancel with a dirty-state guard (absorbs former §8
-  scope) — most sections already behave this way; this is mechanical
-  extraction, not new logic.
-- Relocate the `clinicalDocsEnabled` toggle (shipped early in PR 2) into
-  the new Features section, alongside `Expected today`.
-- Consequence caption per section, templated on the one that already
-  exists (`SetupPage.tsx:508`).
+(`ClinicProfile`, then `SetupPage.tsx:267`) carrying ~20 unrelated fields
+behind one save button. On inspection, that monolith was the only actual
+offender — `Catalog`/`Therapists` were already independent, instant-commit
+sections with nothing to guard (no pending form, nothing to discard), and
+`DataBackup`/`DangerZone` are one-shot actions, not forms. All four kept
+their internals unchanged, just relocated under the new rail.
+
+- Left-rail sub-nav (buttons, not routes — same `useState`-tabs reasoning
+  as decision 6) that stacks as a horizontal scrollable pill row above the
+  content below `md:`, sits beside it as a sidebar at `md:` and up.
+- Split the monolith into 8 sections: **Clinic profile** (name, address,
+  phone, email, logo, walk-in ID prefix) · **Billing & invoicing**
+  (invoice prefix, GST, fiscal year start) · **Partner & split** (clinic
+  type, partner toggle + fields, therapist-split toggle, split %, tax %,
+  TDS basis) · **Team** (`Therapists`, unchanged) · **Services**
+  (`Catalog`, unchanged) · **Features** (Expected today,
+  `clinicalDocsEnabled`, visit-column defaults) · **Data** (historical
+  import + backup/restore) · **Danger zone** (unchanged).
+  `clinicType`/`hasPartner`/`enableTherapistSplit` stay together in
+  Partner & split because `clinicBillingConfig()` reads all three as one
+  unit — splitting them further would let the split computation see an
+  inconsistent combination mid-edit.
+- **Architecture correction made during implementation**: the Clinic row
+  has no partial-patch API (`repos.clinics.put()` writes the whole row).
+  Four independently-saved sections holding four independent snapshots of
+  that row is a real data-loss trap — saving section A with its own stale
+  copy of section B's fields would silently revert whatever B had already
+  saved. Fixed by having every section's save re-fetch the current row and
+  merge in only the fields that section owns
+  (`useClinicSectionForm`/`saveFieldNow` in `SetupPage.tsx`), never
+  round-tripping a full-row snapshot. Same fix applied to logo uploads,
+  which previously wrote the entire in-progress form as a side effect of
+  picking a file.
+- Per-section Save/Cancel, disabled until dirty; a rust dot on the rail tab
+  marks a section with unsaved changes; switching tabs away from a dirty
+  section prompts to discard. Scoped to switching sections *within* the
+  page — a full browser-navigation/tab-close guard (`beforeunload`) was
+  considered and deliberately deferred as separate, larger scope.
+- Consequence caption on Partner & split, carried over from the original
+  form's caption.
 
 ### PR 4 — Ledger hygiene (§7)
 - CSV export for the Visits table (none exists today; `ReportsPage.tsx:38`
