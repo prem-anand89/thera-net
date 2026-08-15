@@ -382,6 +382,32 @@ the RLS-message pattern), production build all clean; the new migration
 replayed cleanly against the full history and was functionally tested
 with three simulated users against a local Postgres 16 database.
 
+## EditVisitModal wired up (2026-08-15, follow-up)
+
+Product decision on the item flagged above: wire it up, so a therapist
+can go back and fill in a visit's condition/treatment notes they missed
+at point of care — the request that prompted this. Added an "Edit
+visit" row action alongside Repeat/Edit patient/Split/Delete, gated by
+the same admin-or-own-therapist pre-flight check as Split/Delete —
+Ledger-only, matching where Split already lives rather than adding it
+to every visit list in the app.
+
+Not gated on invoice status the way Split/Delete are: a visit's
+clinical fields should stay editable after invoicing, only its billing
+shouldn't. That exposed a second, independent bug in
+`visitService.updateBilling` — its "frozen" guard rejected *any* change
+to an invoiced visit, including a clinical-only one, contradicting
+`EditVisitModal`'s own "only billing is frozen" docstring (which was
+apparently never actually true). Now the guard only fires when a
+billing-affecting field (bill amount, adjustment reason, therapist
+reassignment, visit date) is part of the change; two new tests cover
+both the still-frozen and now-allowed cases.
+
+Verified: typecheck, lint, vitest (235 passed — 3 new), production
+build clean. Not verified in a live browser — no Supabase project is
+configured in this environment, so an authenticated click-through
+wasn't possible; the dev server does boot clean.
+
 ## Sequencing rationale
 
 Roles first, because every later PR keys off the role vocabulary and the
