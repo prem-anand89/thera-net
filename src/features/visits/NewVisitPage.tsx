@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, visitService, patientService, directPaymentService, dashboardService } from '@/services';
@@ -54,6 +54,52 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: 'bank_transfer', label: 'Bank transfer' },
   { value: 'cheque', label: 'Cheque' },
 ];
+
+/** Compact reference card for the patient side panel — last visit / open
+ *  package are more decision-relevant here than an outstanding-balance
+ *  figure (that's a billing/collections concern, already surfaced on the
+ *  Ledger table and Patient Profile). */
+function SummaryTile({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
+      <div className="mt-1 text-sm text-[var(--ink)]">{children}</div>
+    </div>
+  );
+}
+
+/** Two/three-way pill toggle — replaces a radio-button row where the choice
+ *  is really "pick one of these modes", not a form field in the accessible-
+ *  radio-group sense. */
+function SegmentedToggle<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: T; label: ReactNode; disabled?: boolean }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex rounded-md border border-[var(--border)] p-0.5 text-sm">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          disabled={opt.disabled}
+          onClick={() => onChange(opt.value)}
+          className={`flex-1 rounded px-3 py-1.5 text-center font-medium transition-colors ${
+            value === opt.value
+              ? 'bg-[var(--teal-light)] text-[var(--teal)]'
+              : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+          } ${opt.disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function NewVisitPage() {
   const clinic = useClinic();
@@ -425,75 +471,92 @@ export function NewVisitPage() {
     );
   }
 
-  return (
-    <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className="font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
-
-      <SectionCard title="Patient">
-        {patient ? (
-          // Confirmed — collapsed to a summary chip, no open editable
-          // fields. Last-session detail is more decision-relevant here than
-          // an outstanding-balance figure (that's a billing/collections
-          // concern, surfaced instead on the Ledger table and Patient
-          // Profile).
-          <div className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="font-display text-sm font-medium text-[var(--ink)]">{patient.name}</div>
-                <div className="text-xs text-[var(--muted)]">
-                  Patient ID {patient.mrno}
-                  {patient.age != null && ` · ${patient.age}y`}
-                  {patient.sex && ` · ${patient.sex}`}
-                  {patient.primaryCondition && ` · ${patient.primaryCondition}`}
-                </div>
-              </div>
-              <div className="flex shrink-0 gap-3 text-xs">
-                <button className="text-[var(--teal)] hover:underline" onClick={() => setEditingPatient(true)}>
-                  Edit details
-                </button>
-                {!search.patientId && (
-                  <button
-                    className="text-[var(--muted)] hover:underline"
-                    onClick={() => {
-                      setPatient(null);
-                      setCreatingPatient(false);
-                      setQuery('');
-                    }}
-                  >
-                    Change
-                  </button>
-                )}
+  const patientPanel = (
+    <SectionCard title="Patient">
+      {patient ? (
+        // Confirmed — collapsed to an identity header, reference tiles, and
+        // a single way back to search. No outstanding-balance figure here
+        // (that's a billing/collections concern, already surfaced on the
+        // Ledger table and Patient Profile) — last visit and open-package
+        // progress are what's actually decision-relevant while logging a
+        // new one.
+        <div className="space-y-3">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="font-display text-sm font-medium text-[var(--ink)]">{patient.name}</div>
+              <div className="text-xs text-[var(--muted)]">
+                Patient ID {patient.mrno}
+                {patient.age != null && ` · ${patient.age}y`}
+                {patient.sex && ` · ${patient.sex}`}
+                {patient.primaryCondition && ` · ${patient.primaryCondition}`}
               </div>
             </div>
-            {patientVisits !== undefined && (
-              <div className="mt-2 border-t border-[var(--border)] pt-2 text-xs text-[var(--muted)]">
-                {lastVisit ? (
-                  (() => {
-                    const state = computeVisitPaymentState(
-                      lastVisit.actualBillPaise,
-                      lastVisit.invoiceId,
-                      lastVisitDirectPaymentPaise,
-                      lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
-                    );
-                    const chip = PAYMENT_CHIP[state];
-                    return (
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        Last session {formatDateDMY(lastVisit.visitDate)} —{' '}
-                        {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
-                        {lastVisit.sessionIndex && lastVisit.packageTotal && (
-                          <PackageThread sessionIndex={lastVisit.sessionIndex} packageTotal={lastVisit.packageTotal} />
-                        )}
-                        <Pill tone={chip.tone}>{chip.label(formatINR(lastVisit.actualBillPaise))}</Pill>
-                      </span>
-                    );
-                  })()
-                ) : (
-                  'No previous visits on record.'
-                )}
-              </div>
-            )}
+            <button
+              className="shrink-0 text-xs text-[var(--teal)] hover:underline"
+              onClick={() => setEditingPatient(true)}
+            >
+              Edit details
+            </button>
           </div>
-        ) : creatingPatient ? (
+
+          {patientVisits !== undefined && (
+            <SummaryTile label="Last visit">
+              {lastVisit ? (
+                (() => {
+                  const state = computeVisitPaymentState(
+                    lastVisit.actualBillPaise,
+                    lastVisit.invoiceId,
+                    lastVisitDirectPaymentPaise,
+                    lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
+                  );
+                  const chip = PAYMENT_CHIP[state];
+                  return (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span>
+                        {formatDateDMY(lastVisit.visitDate)} — {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
+                      </span>
+                      <Pill tone={chip.tone}>{chip.label(formatINR(lastVisit.actualBillPaise))}</Pill>
+                    </div>
+                  );
+                })()
+              ) : (
+                <span className="text-[var(--muted)]">No previous visits on record</span>
+              )}
+            </SummaryTile>
+          )}
+
+          {openPackages !== undefined && (
+            <SummaryTile label="Package">
+              {openPackages.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span>
+                    {openPackages[0].serviceName} — {openPackages[0].logged} of {openPackages[0].packageTotal} used
+                  </span>
+                  <PackageThread sessionIndex={openPackages[0].logged + 1} packageTotal={openPackages[0].packageTotal} />
+                  <span className="text-xs text-[var(--muted)]">
+                    started {formatDateDMY(openPackages[0].startedOn)}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-[var(--muted)]">No open package</span>
+              )}
+            </SummaryTile>
+          )}
+
+          {!search.patientId && (
+            <button
+              className={`${btnSecondary} w-full`}
+              onClick={() => {
+                setPatient(null);
+                setCreatingPatient(false);
+                setQuery('');
+              }}
+            >
+              Change patient
+            </button>
+          )}
+        </div>
+      ) : creatingPatient ? (
           // Creating — no existing match; capture the new patient. Only
           // name and phone are asked for up front, everything else is
           // explicitly optional and can be filled in later from the profile.
@@ -669,7 +732,10 @@ export function NewVisitPage() {
           </div>
         )}
       </SectionCard>
+  );
 
+  const visitPanel = (
+    <div className="space-y-4">
       <SectionCard title="Visit">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Date">
@@ -695,33 +761,22 @@ export function NewVisitPage() {
             </select>
           </Field>
 
-          <div className="col-span-2 flex gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={mode === 'new'}
-                onChange={() => {
-                  setMode('new');
-                  setBillOverride(null);
-                }}
-              />
-              New service / package
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                checked={mode === 'continuation'}
-                disabled={!openPackages?.length}
-                onChange={() => {
-                  setMode('continuation');
-                  setBillOverride(null);
-                }}
-              />
-              Package continuation (₹0){' '}
-              {patient && !openPackages?.length && (
-                <span className="text-xs text-[var(--muted)]">— no open packages</span>
-              )}
-            </label>
+          <div className="col-span-2">
+            <SegmentedToggle
+              value={mode}
+              onChange={(v) => {
+                setMode(v);
+                setBillOverride(null);
+              }}
+              options={[
+                { value: 'new', label: 'New service / package' },
+                {
+                  value: 'continuation',
+                  label: `Continuation (₹0)${patient && !openPackages?.length ? ' — none open' : ''}`,
+                  disabled: !openPackages?.length,
+                },
+              ]}
+            />
           </div>
 
           {mode === 'new' ? (
@@ -798,20 +853,14 @@ export function NewVisitPage() {
 
           {billPaise > 0 && canBill && (
             <Field label="Payment">
-              <div className="flex gap-4 text-sm">
-                <label className="flex items-center gap-2">
-                  <input type="radio" checked={paymentChoice === 'paid'} onChange={() => setPaymentChoice('paid')} />
-                  Paid now
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    checked={paymentChoice === 'pending'}
-                    onChange={() => setPaymentChoice('pending')}
-                  />
-                  Pending — collect later
-                </label>
-              </div>
+              <SegmentedToggle
+                value={paymentChoice}
+                onChange={setPaymentChoice}
+                options={[
+                  { value: 'paid', label: 'Paid now' },
+                  { value: 'pending', label: 'Collect later' },
+                ]}
+              />
               {paymentChoice === 'paid' ? (
                 <select
                   className={`${inputCls} mt-2`}
@@ -862,6 +911,30 @@ export function NewVisitPage() {
           Cancel
         </button>
       </div>
+    </div>
+  );
+
+  return (
+    <div className={`mx-auto space-y-4 ${patient ? 'max-w-4xl' : 'max-w-2xl'}`}>
+      <h1 className="font-display text-lg font-semibold text-[var(--ink)]">New visit</h1>
+
+      {patient ? (
+        // Patient confirmed — side-by-side reference panel + form, so the
+        // last-visit/package context stays visible while filling in the
+        // rest. Collapses back to stacked below tab: width.
+        <div className="tab:flex tab:items-start tab:gap-4">
+          <div className="tab:w-72 tab:shrink-0">{patientPanel}</div>
+          <div className="mt-4 min-w-0 flex-1 tab:mt-0">{visitPanel}</div>
+        </div>
+      ) : (
+        // No patient yet — full-width single column; the create-patient
+        // form's two-column field grid needs the room, and a narrow side
+        // panel has nothing useful to show before a patient is picked.
+        <div className="space-y-4">
+          {patientPanel}
+          {visitPanel}
+        </div>
+      )}
 
       {patient && editingPatient && (
         <EditPatientModal
