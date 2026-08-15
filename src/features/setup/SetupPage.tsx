@@ -103,8 +103,8 @@ export function SetupPage() {
     <div className="space-y-4">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Setup</h1>
 
-      <div className="md:flex md:items-start md:gap-6">
-        <nav className="mb-4 flex gap-1 overflow-x-auto md:mb-0 md:w-44 md:shrink-0 md:flex-col md:gap-0.5">
+      <div className="tab:flex tab:items-start tab:gap-6">
+        <nav className="mb-4 flex gap-1 overflow-x-auto tab:mb-0 tab:w-44 tab:shrink-0 tab:flex-col tab:gap-0.5">
           {SECTIONS.map((s) => (
             <button
               key={s.key}

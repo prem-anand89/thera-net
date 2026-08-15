@@ -251,9 +251,9 @@ export function WorkspacePage() {
       {pendingWork && pendingWork.length > 0 && (
         <>
           {scope.isAdmin && (
-            <div className="hidden md:block">
+            <div className="hidden tab:block">
               <SectionCard title="Needs attention">
-                <ul className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                <ul className="grid grid-cols-1 gap-2 tab:grid-cols-3">
                   {pendingWork.map((item, i) => (
                     <li key={i} className="rounded-lg border border-[var(--border)] p-3">
                       <PendingWorkRow item={item} clinicId={clinic.id} />
@@ -263,7 +263,7 @@ export function WorkspacePage() {
               </SectionCard>
             </div>
           )}
-          <div className={scope.isAdmin ? 'md:hidden' : ''}>
+          <div className={scope.isAdmin ? 'tab:hidden' : ''}>
             <SummaryBar tone="rust" label="need attention" count={pendingWork.length} onClick={() => setAttentionOpen(true)} />
           </div>
         </>

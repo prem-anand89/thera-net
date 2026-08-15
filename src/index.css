@@ -1,6 +1,19 @@
 @import 'tailwindcss';
 
 /*
+ * `tab:` breakpoint — 744px, not Tailwind's default `md:` (768px).
+ * Deliberately custom: iPad Mini's portrait width is 744px, just under
+ * `md:`, so screens using `md:` for the phone/tablet split were putting
+ * it in the phone-card layout by accident. `tab:` is the one breakpoint
+ * every "does this count as a working tablet" decision in the app should
+ * use, so that answer stays consistent everywhere rather than each screen
+ * picking its own threshold.
+ */
+@theme {
+  --breakpoint-tab: 46.5rem;
+}
+
+/*
  * Design tokens. Neutrals (paper/surface/ink/muted/border) are true neutral
  * gray — only the accents carry hue. Teal is the one primary action color
  * (buttons, active nav, links); rust is reserved for attention states only
@@ -279,34 +292,26 @@ body {
 .bc-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 
 /* ---------- responsive breakpoints ---------- */
-/* .mobile-only / .desktop-only are global visibility toggles used across every
-   screen, some of which (.setup-accordion, .setup-layout, etc.) also set their
-   own unconditional `display` later in this file. Without !important, source
-   order alone would let those later rules win at equal specificity and defeat
-   the toggle — !important pins these as fixed regardless of where else in the
-   file `display` gets set for the same element. */
-/* mobile: phone-sized (< 720px) */
-@media (max-width: 719.98px) {
-  .desktop-only { display: none !important; }
-  .mobile-only { display: block !important; }
-}
+/* Tablet threshold aligned to 744px (`--breakpoint-tab` above), so
+   NoteEditorPage/AddPatientDetailsModal's plain-CSS sizing agrees with
+   every `tab:` Tailwind utility elsewhere on what counts as a tablet —
+   this used to be 720px, a few pixels under iPad Mini's 744px portrait
+   width, so a device right at that edge could get the desktop-sized
+   dialog here while getting the phone-card Ledger layout elsewhere.
+   (.mobile-only/.desktop-only/.dir-toolbar/.panel-sheet, previously
+   defined in these blocks, had zero usages anywhere in src/ — removed
+   rather than migrated. Below 744px, `.screen-body` falls back to its
+   unqualified base rule above; `.modal-card` has no base rule and is
+   simply unconstrained on phones, same as before this change.) */
 
-/* tablet/iPad: medium screens (720px - 999px) */
-@media (min-width: 720px) and (max-width: 999.98px) {
+/* tablet/iPad: medium screens (744px - 999px) */
+@media (min-width: 744px) and (max-width: 999.98px) {
   .screen-body { max-width: 900px; padding: 18px 22px; gap: 20px; }
-  .dir-toolbar { flex-direction: row; align-items: center; gap: 14px; }
-  .desktop-only { display: block !important; }
-  .mobile-only { display: none !important; }
   .modal-card { max-width: 480px; }
-  .panel-sheet { max-width: 560px; }
 }
 
 /* desktop/laptop: large screens (1000px+) */
 @media (min-width: 1000px) {
   .screen-body { max-width: 1000px; padding: 22px 26px; gap: 22px; }
-  .dir-toolbar { flex-direction: row; align-items: center; }
-  .desktop-only { display: block !important; }
-  .mobile-only { display: none !important; }
   .modal-card { max-width: 500px; }
-  .panel-sheet { max-width: 600px; }
 }

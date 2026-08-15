@@ -219,110 +219,129 @@ function AllPatientsSection() {
 
       <ErrorNote message={error} />
 
-      <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-        <table className="min-w-full divide-y divide-[var(--border)]">
-          <thead className="bg-[var(--paper)]">
-            <tr>
-              <SortHeader label="Patient ID" k="mrno" sort={sort} />
-              <SortHeader label="Name" k="name" sort={sort} />
-              <SortHeader label="Primary condition" k="condition" sort={sort} />
-              <th className={th}>Last visit</th>
-              <th className={th}>Therapist</th>
-              <th className={th}>Treatment</th>
-              <th className={th}>Bill</th>
-              <th className={th}>Phone</th>
-              <th className={th}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border)]">
-            {rows.map((p) => {
-              const stats = visitStatsByPatient.get(p.id);
-              const pkg = openPackageByPatient.get(p.id);
-              const isOutstanding = outstandingMrnos.has(p.mrno);
-              return (
-                <tr key={p.id} className="hover:bg-[var(--paper)]">
-                  <td className={td}>
-                    {p.mrno}
-                    {p.mrnoSource === 'auto' && (
-                      <span className="ml-1.5">
-                        <Pill tone="slate">walk-in</Pill>
-                      </span>
-                    )}
-                  </td>
-                  <td className={`${td} font-display`}>
-                    <Link to="/patients/$patientId" params={{ patientId: p.id }} className="hover:underline">
-                      {p.name}
-                    </Link>
-                    {(p.age || p.sex) && (
-                      <div className="text-xs text-[var(--muted)]">
-                        {p.age ?? '-'} / {p.sex ?? '-'}
-                      </div>
-                    )}
-                  </td>
-                  <td className={td}>{p.primaryCondition ?? '-'}</td>
-                  <td className={td}>
-                    {stats ? (
-                      <>
-                        <div className="font-num text-xs text-[var(--ink)]">
-                          {formatDateDMY(stats.lastVisitOn)}
-                          <span className="text-[var(--muted)]"> · {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}</span>
-                        </div>
-                        {(pkg || isOutstanding) && (
-                          <div className="mt-1 flex items-center gap-1.5">
-                            {pkg && (
-                              <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />
-                            )}
-                            {isOutstanding && <Pill tone="amber">Outstanding</Pill>}
+      {rows.length === 0 ? (
+        <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-8 text-center text-sm text-[var(--muted)]">
+          {q
+            ? 'No patients match your search.'
+            : selectedPeriod
+              ? 'No patients were seen in this period.'
+              : "No patients yet - they're created from the \"New visit\" flow."}
+        </div>
+      ) : (
+        <>
+          {/* Below tab: (744px) — the same card/table split ResponsiveVisitList
+              uses for Ledger, on the same breakpoint, so a table this wide
+              doesn't force horizontal scrolling on a phone. */}
+          <div className="tab:hidden divide-y divide-[var(--border)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+            {rows.map((p) => (
+              <PatientCard
+                key={p.id}
+                patient={p}
+                stats={visitStatsByPatient.get(p.id)}
+                pkg={openPackageByPatient.get(p.id)}
+                isOutstanding={outstandingMrnos.has(p.mrno)}
+                therapistName={therapistName}
+                onEdit={() => setEditing(p)}
+                onHide={() => void hide(p)}
+              />
+            ))}
+          </div>
+
+          <div className="hidden tab:block overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+            <table className="min-w-full divide-y divide-[var(--border)]">
+              <thead className="bg-[var(--paper)]">
+                <tr>
+                  <SortHeader label="Patient ID" k="mrno" sort={sort} />
+                  <SortHeader label="Name" k="name" sort={sort} />
+                  <SortHeader label="Primary condition" k="condition" sort={sort} />
+                  <th className={th}>Last visit</th>
+                  <th className={th}>Therapist</th>
+                  <th className={th}>Treatment</th>
+                  <th className={th}>Bill</th>
+                  <th className={th}>Phone</th>
+                  <th className={th}></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {rows.map((p) => {
+                  const stats = visitStatsByPatient.get(p.id);
+                  const pkg = openPackageByPatient.get(p.id);
+                  const isOutstanding = outstandingMrnos.has(p.mrno);
+                  return (
+                    <tr key={p.id} className="hover:bg-[var(--paper)]">
+                      <td className={td}>
+                        {p.mrno}
+                        {p.mrnoSource === 'auto' && (
+                          <span className="ml-1.5">
+                            <Pill tone="slate">walk-in</Pill>
+                          </span>
+                        )}
+                      </td>
+                      <td className={`${td} font-display`}>
+                        <Link to="/patients/$patientId" params={{ patientId: p.id }} className="hover:underline">
+                          {p.name}
+                        </Link>
+                        {(p.age || p.sex) && (
+                          <div className="text-xs text-[var(--muted)]">
+                            {p.age ?? '-'} / {p.sex ?? '-'}
                           </div>
                         )}
-                      </>
-                    ) : (
-                      <span className="text-xs text-[var(--muted)]">No visits yet</span>
-                    )}
-                  </td>
-                  <td className={td}>
-                    {stats?.latestVisit ? therapistName.get(stats.latestVisit.therapistId) ?? '-' : '-'}
-                  </td>
-                  <td className={td}>
-                    {stats?.latestVisit?.treatmentNotes ? (
-                      <span className="text-xs">{stats.latestVisit.treatmentNotes}</span>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td className={`${td} font-num text-right`}>
-                    {stats?.latestVisit ? (
-                      <span className="text-sm">INR {Math.round(stats.latestVisit.actualBillPaise / 100)}</span>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td className={td}>{p.phone ?? '-'}</td>
-                  <td className={`${td} whitespace-nowrap`}>
-                    <button className="text-xs text-[var(--muted)] hover:text-[var(--teal)]" onClick={() => setEditing(p)}>
-                      Edit
-                    </button>
-                    <button className="ml-3 text-xs text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => void hide(p)}>
-                      Hide
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-sm text-[var(--muted)]">
-                  {q
-                    ? 'No patients match your search.'
-                    : selectedPeriod
-                      ? 'No patients were seen in this period.'
-                      : "No patients yet - they're created from the \"New visit\" flow."}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                      </td>
+                      <td className={td}>{p.primaryCondition ?? '-'}</td>
+                      <td className={td}>
+                        {stats ? (
+                          <>
+                            <div className="font-num text-xs text-[var(--ink)]">
+                              {formatDateDMY(stats.lastVisitOn)}
+                              <span className="text-[var(--muted)]"> · {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}</span>
+                            </div>
+                            {(pkg || isOutstanding) && (
+                              <div className="mt-1 flex items-center gap-1.5">
+                                {pkg && (
+                                  <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />
+                                )}
+                                {isOutstanding && <Pill tone="amber">Outstanding</Pill>}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xs text-[var(--muted)]">No visits yet</span>
+                        )}
+                      </td>
+                      <td className={td}>
+                        {stats?.latestVisit ? therapistName.get(stats.latestVisit.therapistId) ?? '-' : '-'}
+                      </td>
+                      <td className={td}>
+                        {stats?.latestVisit?.treatmentNotes ? (
+                          <span className="text-xs">{stats.latestVisit.treatmentNotes}</span>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td className={`${td} font-num text-right`}>
+                        {stats?.latestVisit ? (
+                          <span className="text-sm">INR {Math.round(stats.latestVisit.actualBillPaise / 100)}</span>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td className={td}>{p.phone ?? '-'}</td>
+                      <td className={`${td} whitespace-nowrap`}>
+                        <button className="text-xs text-[var(--muted)] hover:text-[var(--teal)]" onClick={() => setEditing(p)}>
+                          Edit
+                        </button>
+                        <button className="ml-3 text-xs text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => void hide(p)}>
+                          Hide
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {hidden.length > 0 && (
         <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
@@ -362,6 +381,86 @@ function AllPatientsSection() {
 
       {editing && <EditPatientRowModal patient={editing} onClose={() => setEditing(null)} />}
     </SectionCard>
+  );
+}
+
+/** Phone-width row for the patients list — same visual language as
+ *  SharedVisitCard (VisitCard.tsx): avatar initials, name/mrno header,
+ *  a muted secondary line, actions at the end. */
+function PatientCard({
+  patient: p,
+  stats,
+  pkg,
+  isOutstanding,
+  therapistName,
+  onEdit,
+  onHide,
+}: {
+  patient: Patient;
+  stats: { lastVisitOn: string; visitCount: number; latestVisit: Visit } | undefined;
+  pkg: { sessionsLogged: number; packageTotal: number } | undefined;
+  isOutstanding: boolean;
+  therapistName: Map<string, string>;
+  onEdit: () => void;
+  onHide: () => void;
+}) {
+  const initials = p.name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+
+  const secondaryParts = [
+    p.primaryCondition,
+    stats ? therapistName.get(stats.latestVisit.therapistId) : null,
+    p.phone,
+  ].filter(Boolean);
+
+  return (
+    <div className="flex items-start gap-3 px-3 py-3">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
+        {initials || '?'}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <Link
+          to="/patients/$patientId"
+          params={{ patientId: p.id }}
+          className="font-display text-sm font-medium text-[var(--ink)] hover:underline"
+        >
+          {p.name} <span className="text-xs font-normal text-[var(--muted)]">{p.mrno}</span>
+        </Link>
+        {p.mrnoSource === 'auto' && (
+          <span className="ml-1.5 align-middle">
+            <Pill tone="slate">walk-in</Pill>
+          </span>
+        )}
+
+        {secondaryParts.length > 0 && (
+          <div className="text-xs text-[var(--muted)]">{secondaryParts.join(' · ')}</div>
+        )}
+
+        {stats ? (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">
+            <span className="font-num text-[var(--ink)]">{formatDateDMY(stats.lastVisitOn)}</span>
+            <span>· {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}</span>
+            {pkg && <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />}
+            {isOutstanding && <Pill tone="amber">Outstanding</Pill>}
+          </div>
+        ) : (
+          <div className="mt-1 text-xs text-[var(--muted)]">No visits yet</div>
+        )}
+      </div>
+
+      <div className="flex shrink-0 flex-col items-end gap-1 whitespace-nowrap text-xs">
+        <button className="text-[var(--muted)] hover:text-[var(--teal)]" onClick={onEdit}>
+          Edit
+        </button>
+        <button className="text-[var(--muted)] hover:text-[var(--rust)]" onClick={onHide}>
+          Hide
+        </button>
+      </div>
+    </div>
   );
 }
 

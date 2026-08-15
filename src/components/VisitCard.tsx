@@ -462,8 +462,8 @@ function groupRowsByDate(rows: VisitCardData[], today: Date): DateGroupedRows[] 
 }
 
 /**
- * Below md: the existing card list (grouped by date if `groupByDate` is
- * set — Ledger wants that, Workspace's flat "Seen today" doesn't). At md:
+ * Below tab: the existing card list (grouped by date if `groupByDate` is
+ * set — Ledger wants that, Workspace's flat "Seen today" doesn't). At tab:
  * and up, a table with a per-user Columns picker, backed by the same rows
  * and callbacks. One column config for both surfaces, per the callers
  * simply handing over normalized VisitCardData instead of each maintaining
@@ -492,7 +492,7 @@ export function ResponsiveVisitList({
 
   return (
     <>
-      <div className="md:hidden">
+      <div className="tab:hidden">
         {groupByDate ? (
           groupRowsByDate(rows, new Date()).map((group) => (
             <div
@@ -538,7 +538,7 @@ export function ResponsiveVisitList({
         {rows.length === 0 && <p className="py-8 text-center text-sm text-[var(--muted)]">No visits to show.</p>}
       </div>
 
-      <div className="hidden md:block">
+      <div className="hidden tab:block">
         <VisitTable
           rows={rows}
           showDate={showDate}
