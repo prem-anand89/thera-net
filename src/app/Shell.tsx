@@ -11,12 +11,59 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import { CreateClinicForm } from '@/features/setup/CreateClinicForm';
 import { SyncBadge } from '@/components/SyncBadge';
 
+/** Minimal stroke icons, one per main nav item — same visual language as
+ *  the existing hamburger/close glyphs (currentColor, ~1.6px stroke,
+ *  round caps, no fill). */
+function IconWorkspace({ className }: { className?: string }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <path d="M3.5 9.5L10 4l6.5 5.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5.5 8.5V15a1 1 0 001 1h3v-4.5h1V16h3a1 1 0 001-1V8.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IconLedger({ className }: { className?: string }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <rect x="4.5" y="3" width="11" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M7 7.2h6M7 10h6M7 12.8h3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconPatients({ className }: { className?: string }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <circle cx="7.3" cy="6.3" r="2.3" stroke="currentColor" strokeWidth="1.6" />
+      <circle cx="13.2" cy="7" r="1.9" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M2.5 16c.5-3 2.5-4.7 4.8-4.7s4.3 1.7 4.8 4.7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M12.3 11.6c1.9.2 3.4 1.7 3.8 4.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconReports({ className }: { className?: string }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <path d="M4 16.5V11M10 16.5V4M16 16.5V8.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M3 16.5h14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconSettings({ className }: { className?: string }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <path d="M4 5.5h7.5M4 10h11M4 14.5h7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="14" cy="5.5" r="1.7" fill="var(--surface)" stroke="currentColor" strokeWidth="1.6" />
+      <circle cx="8.5" cy="14.5" r="1.7" fill="var(--surface)" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
 const NAV = [
-  { to: '/workspace', label: 'Workspace' },
-  { to: '/ledger', label: 'Ledger' },
-  { to: '/patients', label: 'Patients' },
-  { to: '/insights', label: 'Reports' },
-  { to: '/settings', label: 'Settings' },
+  { to: '/workspace', label: 'Workspace', Icon: IconWorkspace },
+  { to: '/ledger', label: 'Ledger', Icon: IconLedger },
+  { to: '/patients', label: 'Patients', Icon: IconPatients },
+  { to: '/insights', label: 'Reports', Icon: IconReports },
+  { to: '/settings', label: 'Settings', Icon: IconSettings },
 ] as const;
 
 export function Shell() {
@@ -140,14 +187,16 @@ export function Shell() {
               {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto shrink-0 object-contain" />}
               <div className="font-display truncate text-lg font-semibold text-[var(--ink)]">{clinic.name}</div>
             </div>
-            {/* Desktop nav */}
+            {/* Desktop nav — the same items reappear as the bottom tab bar
+                below sm:, so this one only needs to render at sm: and up. */}
             <nav className="hidden gap-1 sm:flex">
               {nav.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="rounded-md px-3 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--paper)] [&.active]:bg-[var(--teal-light)] [&.active]:font-medium [&.active]:text-[var(--teal)]"
+                  className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--paper)] [&.active]:bg-[var(--teal-light)] [&.active]:font-medium [&.active]:text-[var(--teal)]"
                 >
+                  <item.Icon className="shrink-0" />
                   {item.label}
                 </Link>
               ))}
@@ -163,50 +212,63 @@ export function Shell() {
                   Sign out
                 </button>
               </div>
-              {/* Mobile menu toggle */}
-              <button
-                className="rounded-md p-1.5 text-[var(--muted)] hover:bg-[var(--paper)] sm:hidden"
-                aria-label="Menu"
-                aria-expanded={menuOpen}
-                onClick={() => setMenuOpen((o) => !o)}
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  {menuOpen ? (
-                    <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  ) : (
-                    <path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  )}
-                </svg>
-              </button>
+              {/* Mobile account menu — navigation itself lives in the
+                  bottom tab bar now, so this toggle is scoped to just the
+                  account (who's signed in, sign out), not the full nav. */}
+              <div className="relative sm:hidden">
+                <button
+                  className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--paper)]"
+                  aria-label="Account"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((o) => !o)}
+                >
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <circle cx="10" cy="7" r="2.6" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M3.5 16c.7-3.4 3-5.2 6.5-5.2s5.8 1.8 6.5 5.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                </button>
+                {menuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                    <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 shadow-lg">
+                      <div className="mb-2 truncate text-xs text-[var(--muted)]">{session.user?.email}</div>
+                      <button
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--muted)] hover:bg-[var(--paper)]"
+                        onClick={() => getSupabase()?.auth.signOut()}
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-          {/* Mobile nav panel */}
-          {menuOpen && (
-            <nav className="border-t border-[var(--border)] bg-[var(--surface)] px-2 py-2 sm:hidden">
-              {nav.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setMenuOpen(false)}
-                  className="block rounded-md px-3 py-2 text-sm text-[var(--muted)] hover:bg-[var(--paper)] [&.active]:bg-[var(--teal-light)] [&.active]:font-medium [&.active]:text-[var(--teal)]"
-                >
-                  {item.label}
-                </Link>
-              ))}
-              <button
-                className="mt-1 block w-full rounded-md px-3 py-2 text-left text-sm text-[var(--muted)] hover:bg-[var(--paper)]"
-                onClick={() => getSupabase()?.auth.signOut()}
-              >
-                Sign out
-              </button>
-            </nav>
-          )}
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-6">
+        <main className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:pb-6">
           <Suspense fallback={<div className="py-16 text-center text-sm text-[var(--muted)]">Loading…</div>}>
             <Outlet />
           </Suspense>
         </main>
+        {/* Bottom tab bar — primary navigation on mobile. Fixed, not
+            sticky, so it stays reachable regardless of scroll position,
+            the same way a native app's tab bar would; main gets matching
+            bottom padding (pb-24 above) so the last bit of every page's
+            content doesn't sit underneath it. Doesn't intercept touch
+            events outside its own bar, so the browser's native
+            back-swipe/back-button gesture is untouched. */}
+        <nav className="no-print fixed inset-x-0 bottom-0 z-10 flex border-t border-[var(--border)] bg-[var(--surface)] sm:hidden">
+          {nav.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              className="flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium text-[var(--muted)] [&.active]:text-[var(--teal)]"
+            >
+              <item.Icon />
+              {item.label}
+            </Link>
+          ))}
+        </nav>
       </div>
     </ClinicContext.Provider>
   );

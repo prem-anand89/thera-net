@@ -233,7 +233,7 @@ export function PatientProfilePage() {
             </div>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-[var(--muted)]">
               <span>
-                <span className="text-[var(--muted)]/70">MRN</span>{' '}
+                <span className="text-[var(--muted)]/70">Patient ID</span>{' '}
                 <span className="font-num">{patient.mrno}</span>
               </span>
               {meta.length > 0 && <span className="font-num">{meta.join(' · ')}</span>}

@@ -75,8 +75,6 @@ export function InvoicesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Invoices & Billing</h1>
-
       <div className="flex flex-wrap gap-3">
         <div className="flex-1 min-w-64 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Total Collected</div>

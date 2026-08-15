@@ -741,7 +741,16 @@ export function NewVisitPage() {
   const visitPanel = (
     <div className="space-y-4">
       <SectionCard title="Visit">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {/* Single column throughout, matching the Patient panel above —
+            the previous sm:grid-cols-2 paired up whichever two fields
+            happened to land in the same row by grid auto-placement, which
+            shifted depending on runtime state (adjustment reason showing
+            or not, payment section showing or not): unrelated fields at
+            different heights ended up side by side, and a long dynamic
+            label (e.g. "Adjustment reason * (discount of ₹500)") had to
+            wrap inside a half-width column, visually crowding its own
+            input. One column removes the ambiguity entirely. */}
+        <div className="grid grid-cols-1 gap-3">
           <Field label="Date">
             <input
               type="date"
@@ -765,23 +774,21 @@ export function NewVisitPage() {
             </select>
           </Field>
 
-          <div className="col-span-2">
-            <SegmentedToggle
-              value={mode}
-              onChange={(v) => {
-                setMode(v);
-                setBillOverride(null);
-              }}
-              options={[
-                { value: 'new', label: 'New service / package' },
-                {
-                  value: 'continuation',
-                  label: `Continuation (₹0)${patient && !openPackages?.length ? ' — none open' : ''}`,
-                  disabled: !openPackages?.length,
-                },
-              ]}
-            />
-          </div>
+          <SegmentedToggle
+            value={mode}
+            onChange={(v) => {
+              setMode(v);
+              setBillOverride(null);
+            }}
+            options={[
+              { value: 'new', label: 'New service / package' },
+              {
+                value: 'continuation',
+                label: `Continuation (₹0)${patient && !openPackages?.length ? ' — none open' : ''}`,
+                disabled: !openPackages?.length,
+              },
+            ]}
+          />
 
           {mode === 'new' ? (
             <Field label="Service *">

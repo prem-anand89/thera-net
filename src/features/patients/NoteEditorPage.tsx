@@ -493,9 +493,9 @@ export function NoteEditorPage() {
   if (!canViewClinicalNotes) {
     return (
       <div className="space-y-4">
-        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Clinical notes</h1>
+        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Assessment</h1>
         <p className="text-sm text-[var(--muted)]">
-          Clinical notes are managed by clinical staff.
+          Assessments are managed by clinical staff.
         </p>
         <Link to="/patients/$patientId" params={{ patientId }} className="text-sm text-[var(--teal)] hover:underline">
           ← Back to patient
@@ -538,7 +538,7 @@ export function NoteEditorPage() {
         <h1 className="screen-title">Assessment</h1>
       </header>
 
-      <div className="screen-body pb-16 md:pb-0">
+      <div className="screen-body">
         {error && (
           <div className="frozen-note" style={{ background: 'var(--rust-light)', color: 'var(--rust)' }}>
             {error}
@@ -713,13 +713,11 @@ export function NoteEditorPage() {
 
         {/* Mobile section nav. Below md: the sidebar rail is hidden, which
             left phones with no way to move around a nine-section form
-            except scrolling the whole thing. Docked to the bottom of the
-            viewport (thumb-reachable, and it can't get cut off mid-scroll
-            the way a top scroller can) — same pattern Settings uses at this
-            width, same status dots as the desktop rail. Jump targets are
-            unaffected by where the nav itself sits: scroll-mt on each
-            section is what clears Shell's sticky header, not this bar. */}
-        <nav className="fixed inset-x-0 bottom-0 z-10 flex gap-1.5 overflow-x-auto border-t border-[var(--border)] bg-[var(--paper)] px-4 py-2 md:hidden">
+            except scrolling the whole thing. Sticky under Shell's own
+            header (Shell's bottom tab bar owns the bottom of the viewport
+            — a second bar down there would compete with it), same status
+            dots as the desktop rail. */}
+        <nav className="sticky top-14 z-[1] -mx-4 mb-3 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--paper)] px-4 py-2 md:hidden">
           {SECTION_GROUPS.flatMap((group) =>
             group.keys.filter((key) => key !== 'outcome' || outcomeCards.length > 0)
           ).map((key) => {
@@ -794,7 +792,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('chiefComplaint', el);
             else sectionRefs.current.delete('chiefComplaint');
           }}
-          className={`setup-section scroll-mt-20 ${openSections.has('chiefComplaint') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('chiefComplaint') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('chiefComplaint')}>
             <div>
@@ -1104,7 +1102,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('history', el);
             else sectionRefs.current.delete('history');
           }}
-          className={`setup-section scroll-mt-20 ${openSections.has('history') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('history') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('history')}>
             <div>
@@ -1372,7 +1370,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('subjective', el);
             else sectionRefs.current.delete('subjective');
           }}
-          className={`setup-section scroll-mt-20 ${openSections.has('subjective') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('subjective') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('subjective')}>
             <div><h3>Subjective</h3><div className="sub">Body chart, pain profile</div></div>
@@ -1461,7 +1459,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('psfs', el);
             else sectionRefs.current.delete('psfs');
           }}
-          className={`setup-section scroll-mt-20 ${openSections.has('psfs') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('psfs') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('psfs')}>
             <div><h3>Functional Status (PSFS)</h3><div className="sub">{payload.functionalStatus.activities.length} activit{payload.functionalStatus.activities.length === 1 ? 'y' : 'ies'} tracked</div></div>
@@ -1539,7 +1537,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('objective', el);
             else sectionRefs.current.delete('objective');
           }}
-          className={`setup-section scroll-mt-20 ${openSections.has('objective') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('objective') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('objective')}>
             <div>
@@ -1839,7 +1837,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('treatment', el);
             else sectionRefs.current.delete('treatment');
           }}
-          className={`setup-section scroll-mt-20 ${openSections.has('treatment') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('treatment') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('treatment')}>
             <div><h3>Treatment / Intervention</h3><div className="sub">Today's session, load management</div></div>
@@ -1958,7 +1956,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('hep', el);
             else sectionRefs.current.delete('hep');
           }}
-          className={`setup-section scroll-mt-20 ${openSections.has('hep') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('hep') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('hep')}>
             <div><h3>Home Exercise Program</h3><div className="sub">{payload.hep.exercises.length} exercise{payload.hep.exercises.length === 1 ? '' : 's'} prescribed</div></div>
@@ -2015,7 +2013,7 @@ export function NoteEditorPage() {
             if (el) sectionRefs.current.set('plan', el);
             else sectionRefs.current.delete('plan');
           }}
-          className={`setup-section scroll-mt-20 ${openSections.has('plan') ? 'open' : ''}`}
+          className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('plan') ? 'open' : ''}`}
         >
           <button type="button" className="setup-section-head" onClick={() => toggleSection('plan')}>
             <div><h3>Plan &amp; Goals</h3><div className="sub">{payload.plan.goals.length} goal{payload.plan.goals.length === 1 ? '' : 's'}</div></div>
@@ -2099,7 +2097,7 @@ export function NoteEditorPage() {
               if (el) sectionRefs.current.set('outcome', el);
               else sectionRefs.current.delete('outcome');
             }}
-            className={`setup-section scroll-mt-20 ${openSections.has('outcome') ? 'open' : ''}`}
+            className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('outcome') ? 'open' : ''}`}
           >
             <button type="button" className="setup-section-head" onClick={() => toggleSection('outcome')}>
               <div><h3>Outcome Tracking</h3><div className="sub">PSFS &amp; NRS trend</div></div>

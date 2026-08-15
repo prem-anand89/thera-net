@@ -124,8 +124,6 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Dashboard</h1>
-
       <SectionCard title="Single-visit patients">
         <p className="mb-3 text-xs text-[var(--muted)]">
           Exactly one visit on record, more than 14 days ago — worth a call to find out why, or a

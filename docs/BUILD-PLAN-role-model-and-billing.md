@@ -1017,3 +1017,69 @@ visually indistinguishable input styling, no separate box.
 
 Verified: typecheck, lint, vitest (240 passed), production build clean,
 plus the direct side-by-side render described above.
+
+## Fifth round: New Visit's grid, bottom nav, and naming audit (2026-08-15)
+
+**New Visit's "Visit" card had the same auto-placement bug as Patient
+Profile's gap, one round earlier in a different shape.** `grid-cols-1
+sm:grid-cols-2` paired up whichever two fields happened to land in the
+same row by grid auto-placement — stable while the form's shape was
+fixed, but three of its fields (Adjustment reason, the Payment section,
+an "unbilled" note) render conditionally. Depending on which combination
+was active, unrelated fields of different heights landed side by side,
+and a long dynamic label ("Adjustment reason * (discount of ₹500)") had
+to wrap inside a half-width column, visually crowding its own input —
+matching both "misaligned" and "text pushing the boxes." Dropped to a
+single column throughout, matching the Patient panel above it exactly
+(explicit ask: "build it mimicking the upper section"), removing the
+row-pairing ambiguity entirely rather than trying to patch the grid
+further.
+
+**Bottom bar reconsidered — it was the wrong nav that moved.** The
+earlier "shift tabs to bottom" request got applied to Settings' section
+switcher and the note editor's jump-chips (both *secondary*, in-page
+navigation). What was actually meant: the *primary* app nav
+(Workspace/Ledger/Patients/Reports/Settings, previously a hamburger
+dropdown on mobile) belongs at the bottom, native-app-tab-bar style, and
+the secondary nav bars should revert to the top now that the bottom of
+the viewport is spoken for. `Shell.tsx`'s mobile hamburger + dropdown is
+gone; a fixed bottom tab bar with one icon+label per nav item takes its
+place, `sm:hidden` (desktop keeps the header nav, now with matching
+icons). The hamburger's old job — account info, sign out — moved to a
+small standalone account-icon menu in the header, decoupled from
+navigation. `<main>` gained matching bottom padding (`pb-24 sm:pb-6`) so
+page content never sits under the fixed bar. Doesn't intercept touch
+outside the bar itself, so native back-swipe/back-button gestures are
+unaffected. Settings' section switcher and the note editor's jump-chips
+both reverted to their pre-"bottom" state (top horizontal scroller /
+sticky-under-header respectively), including the note editor's
+`scroll-mt-28` mobile clearance that only makes sense with a top-pinned
+chip nav.
+
+Five simple stroke icons (home/document/people/bar-chart/sliders) built
+inline in `Shell.tsx`, matching the existing hamburger glyph's visual
+language (currentColor, ~1.6px stroke, round caps, no fill) rather than
+pulling in an icon library for five glyphs.
+
+**Naming audit** — the concrete, high-confidence fixes (declined to
+homogenize genuinely-different concepts, e.g. patients "Hide" vs.
+therapists/services "Deactivate" — different real-world meaning, not
+drift):
+- `NoteEditorPage.tsx` called itself "Assessment" when accessible and
+  "Clinical notes" in its own permission-denied guard — same page, same
+  feature, self-contradictory. Guard now says "Assessment" too.
+- `PatientProfilePage.tsx`'s patient-header chip said "MRN"; all 13+
+  other occurrences across the app (search boxes, tables, forms, print
+  documents) say "Patient ID" for the exact same field. Fixed to match.
+- Three components that used to be standalone top-level routes
+  (`InvoicesPage`, `DashboardPage`, `ReportsPage`) kept their own `<h1>`
+  after becoming permanently-embedded sub-tabs of Ledger/Reports —
+  redundant under the parent page's own heading, and drifted from the
+  tab label used to reach them ("Overview" tab → "Dashboard" heading;
+  "Monthly statement" tab → "Monthly report" heading). Confirmed via
+  grep that none of the three is ever rendered standalone anymore before
+  removing/demoting their headings.
+
+Verified: typecheck, lint, vitest (240 passed), production build clean,
+plus a real headless-browser render of the new bottom tab bar at 375px
+confirming legible icons and correct active-state coloring.
