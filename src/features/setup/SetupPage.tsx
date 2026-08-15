@@ -171,7 +171,13 @@ export function SetupPage() {
         </nav>
 
         <div className="min-w-0 flex-1 space-y-6">
-          <p className="-mb-2 text-xs text-[var(--muted)]">
+          {/* Tailwind v4's space-y-6 applies margin-bottom to this <p> (not
+              margin-top to the next sibling, unlike v3) via a zero-specificity
+              :where() rule — a same-element margin class here doesn't add to
+              that, it overrides it outright. The old `-mb-2` therefore wasn't
+              "8px less than the 24px default," it replaced the 24px with a
+              literal -8px, pulling the card's border up into the text. */}
+          <p className="mb-2 text-xs text-[var(--muted)]">
             {SECTIONS.find((s) => s.key === activeKey)?.description}
           </p>
           {activeKey === 'profile' && <ClinicProfileSection onDirtyChange={setProfileDirty} />}
@@ -1099,10 +1105,23 @@ function Therapists() {
   async function deleteTherapist(t: Therapist) {
     setRosterError(null);
     try {
-      const visits = await repos.visits.list({ clinicId: clinic.id, therapistId: t.id });
-      if (visits.length > 0) {
+      // Mirrors hard_delete_therapist()'s exact check (20260815000006) so a
+      // therapist that looks deletable here doesn't just fail server-side
+      // with a less specific error after the confirm prompt: visits where
+      // they're the primary OR shared therapist, plus consultation notes
+      // and invoices attributed to them.
+      const [allVisits, allNotes, allInvoices] = await Promise.all([
+        repos.visits.list({ clinicId: clinic.id }),
+        repos.consultationNotes.listByClinic(clinic.id),
+        repos.invoices.list(clinic.id),
+      ]);
+      const linkedVisits = allVisits.filter((v) => v.therapistId === t.id || v.sharedTherapistId === t.id).length;
+      const linkedNotes = allNotes.filter((n) => n.therapistId === t.id).length;
+      const linkedInvoices = allInvoices.filter((i) => i.therapistId === t.id).length;
+      const linked = linkedVisits + linkedNotes + linkedInvoices;
+      if (linked > 0) {
         alert(
-          `${t.name} has ${visits.length} visit(s) on record, so they can't be permanently deleted — deactivate instead.`
+          `${t.name} has ${linked} linked record(s) (visits, notes, or invoices), so they can't be permanently deleted — deactivate instead.`
         );
         return;
       }

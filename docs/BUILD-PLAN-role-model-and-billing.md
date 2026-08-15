@@ -804,3 +804,101 @@ grid (fields now stack to one column, file input fits its box, tab bar
 docked at bottom) and the note editor's Trauma history card (now
 properly boxed, matching Previous Pain History) — zero horizontal
 overflow measured on both.
+
+## Second review pass: lighter list-entry cards, real bugs found (2026-08-15)
+
+Four more items from a follow-up screenshot review.
+
+**"Even the newly-fixed cells don't match."** True — the previous round
+made Trauma/Surgical history *consistent with Previous Pain History*, but
+never questioned whether that shared pattern (`.setup-card`: 16px radius,
+20px padding, a shadow) belonged on a *repeated entry* at all. It's
+`SectionCard`'s mirror — meant for one top-level page section, not a card
+nested inside a section that's already a card. Every one of these
+repeatable-entry widgets was rendering as a card-inside-a-card, visually
+a different "system" from the flat `.field-block` fields around it (e.g.
+Current medications, Allergies) even once internally consistent with
+each other. New `.list-entry` class: same border, no shadow, 8px radius
+(not 16), `--paper` background (not `--surface`) — reads as a grouped
+sub-list, not a competing card. Swapped onto all 11 repeated-entry usages
+(Secondary complaints, Trauma/Surgical history, Previous pain history,
+Functional status activities, Palpation, ROM, Strength/MMT, Special
+tests, HEP exercises, Goals); left `.setup-card` itself untouched on its
+two genuine top-level uses (General health & triage, Attending
+therapist) and the Free notes textarea, which isn't a repeated entry.
+
+**The note editor really was narrower than every other page on mobile —
+a real, separate bug.** `.app-header`/`.screen-body` (NoteEditorPage's
+only two consumers, both plain-CSS, predating this session) carried
+their own horizontal padding, stacked on top of `Shell.tsx`'s `<main
+className="px-4">` which every page already sits inside. Every other
+screen gets Shell's 16px once; the note editor was getting 16+16=32px
+each side — 64px of its 375px viewport gone before content even started.
+Likely predates the `<main>` wrapper becoming universal and nobody
+caught it since. Dropped the redundant horizontal component at all three
+breakpoint tiers, keeping the vertical rhythm as authored.
+
+**Settings' description line sitting on the card border — an actual
+Tailwind v4 semantics bug, not a typo.** `space-y-6` in this Tailwind
+version applies `margin-bottom` to each non-last child via a
+zero-specificity `:where()` selector (v3 used `margin-top` on
+*subsequent* siblings — different mechanism entirely). The description
+`<p>` had its own `-mb-2`, written under the v3 mental model of "trim 8px
+off the incoming 24px gap." Under v4, a same-element class doesn't add to
+the `:where()` rule, it fully overrides it — so the actual computed
+margin was a literal **-8px**, not 16. Changed to `mb-2` (positive),
+still tighter than the 24px default (matching the apparent original
+intent) but no longer negative. Worth a quick grep for any other
+`-m*`-style classes riding on `space-y-*` elsewhere before assuming this
+pattern is safe to reuse — none found this pass.
+
+**Therapist hard-delete: two separate, real problems, not one.**
+1. Confirmed directly against the connected Supabase project
+   (`select proname from pg_proc where proname = 'hard_delete_therapist'`
+   → empty) — the RPC genuinely does not exist there yet. This branch's
+   migrations, including this one, are not deployed (same fact already
+   noted in the deferred list) — deleting a therapist can't work at all
+   pre-deploy, full stop, not a code bug.
+2. Independent of that: `deleteTherapist()`'s client-side pre-check only
+   counted the therapist's own `visits` — the RPC's actual rule (visits
+   where they're primary *or shared* therapist, plus consultation notes,
+   plus invoices) is wider. A therapist with zero primary visits but a
+   shared-split visit, a note, or an invoice would have passed the
+   client check, gone through the confirm-by-typing-the-name prompt, and
+   only then hit a less specific rejection from the server. Fixed the
+   client check to fetch and count the same three sources the RPC does,
+   so the same accurate "N linked records" message shows up-front.
+
+**Service catalog: the seed data was one real clinic's real business,
+not example data — and new clinics got nothing at all.**
+`supabase/seed.sql` was never applied to production (it's a local-dev
+`supabase db reset` fixture) but it hardcoded the actual pricing sheet
+and clinic identity visible in the live screenshots — wrong to ship as
+if it were generic sample data. Separately, and not previously covered
+by any plan doc: `create_clinic_with_admin()` — the real self-service
+signup path — inserted zero `service_catalog` rows, so every new clinic
+started completely empty and had to build a price list from scratch
+before logging a first visit. New migration
+(`20260816000001_starter_service_catalog.sql`) seeds six clearly-generic
+starter services (Initial/Follow-up Consultation, Physiotherapy
+Session/Package, Manual Therapy, Exercise Therapy) in the same RPC
+transaction that creates the clinic — editable/deactivatable from
+Settings -> Services like any catalog item, same as before. `seed.sql`
+itself rewritten to equally generic placeholder data ("Example
+Physiotherapy Clinic," round example prices) so the checked-in dev
+fixture no longer doubles as a real clinic's business records. The
+user's *live* production catalog was deliberately left untouched — that's
+real, currently-referenced billing data, and self-service
+deactivate/edit from Settings -> Services already covers "I don't want
+to see these active going forward" without a destructive server-side
+action.
+
+Verified: typecheck, lint, vitest (240 passed), production build clean;
+the new `create_clinic_with_admin()` was functionally verified against a
+throwaway local Postgres 16 replay of the full 33-migration history —
+called the RPC as an authenticated user, confirmed both the admin
+membership (via the existing trigger) and the six starter catalog rows
+landed in the same transaction. Real headless-browser render at 375px
+confirmed the description-spacing fix (positive gap, not text-on-border)
+and the `.list-entry` card now reading as a lighter sub-group rather than
+a nested card.
