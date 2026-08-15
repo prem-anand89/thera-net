@@ -180,24 +180,47 @@ their internals unchanged, just relocated under the new rail.
 - Consequence caption on Partner & split, carried over from the original
   form's caption.
 
-### PR 4 — Ledger hygiene (§7)
-- CSV export for the Visits table (none exists today; `ReportsPage.tsx:38`
-  is monthly-report only), with the active filter described in the header
-  row.
-- Totals row pinned so it survives scroll.
-- Sync-basis caption sourced from `syncStatus` plus outbox count.
+### PR 4 — Ledger hygiene (§7) — SHIPPED
+- CSV export for the Visits table (`domain/visitsCsv.ts`, a pure function
+  with 6 tests) — none existed before this; `ReportsPage.tsx:38` is a
+  different, monthly-aggregated shape. First line is the active filter
+  description (date range/preset, therapist, patient), followed by a
+  header row, per-visit rows, and a totals line.
+- Totals row is now `sticky bottom-0`, surviving scroll.
+- A `--slate` sync-basis caption above the visit list: unsynced visit
+  count when there are any (takes priority — a stale "as of" time would
+  understate what's actually showing), otherwise last-sync time. Sourced
+  from the existing `syncStatus` store and the outbox table, same data
+  `SyncBadge` already reads.
 
-### PR 5 — Note editor navigation (§5)
-- Sticky jump-nav rail at `md:` and above, one row per section (9 exist and
-  match the source document's list).
-- Four-state status dot per section using `--border` / `--amber` /
-  `--moss` / `--rust`.
-- `scroll-margin-top` on section headings; suppress scroll-spy briefly
-  after a rail click.
-- Collapse-all toggle.
-- `--slate` banner for the repeat-visit-with-no-prior-note case.
-- Carry-forward: keep the existing collapse-to-summary on
-  `NoteEditorPage.tsx:89`'s three sections, add the pill (decision 8).
+### PR 5 — Note editor navigation (§5) — SHIPPED
+- Sticky jump-nav rail (`md:` and up; hidden below it, not a stepper — free
+  jumping between sections), one row per section, all 9 present.
+- Four-state status dot per section, driven by `sectionCompletion()` — new
+  pure function in `domain/coreAssessment.ts` (7 tests), following that
+  file's existing pattern (`computeDerivedFields`, `outcomeTrend`). Only
+  Chief Complaint can read `required-empty`; every other section only has
+  empty/partial/complete since nothing else is validation-required.
+- Sections now default to expanded (previously 2 of 9 were) with a
+  Collapse all / Expand all toggle.
+- `scroll-mt-20` on each section clears Shell's sticky app header; a rail
+  click opens the target section and suppresses the
+  IntersectionObserver-driven active-section highlight briefly so it
+  doesn't fight the programmatic scroll.
+- **Correction found while wiring the carry-forward pill**: a fresh
+  follow-up note started from `emptyPayload()` with nothing copying the
+  prior note's Chief Complaint/History into it — the collapsed "carried
+  forward" summary always read as empty regardless of what the prior note
+  actually had. That's precisely the gap the "no usable prior note" banner
+  was supposed to flag as an *exception*, except every follow-up note
+  would have hit it. Fixed: a fresh follow-up note now copies those two
+  sections forward from the most recent prior note in the same enrollment;
+  the `--slate` banner shows only when there's genuinely nothing to carry
+  (data gap, or first note on record).
+- Carry-forward pill (decision 8): kept the existing collapse-to-summary
+  on Chief Complaint and History, added the "Carried forward" pill next to
+  each heading. Screening's own bespoke collapse UI (the red/amber/clear
+  banner) already communicates carried-forward status and was left as is.
 
 ### PR 6 — Seen Today / Ledger parity (§4)
 - Extract a shared visit table so both surfaces read one column config.
