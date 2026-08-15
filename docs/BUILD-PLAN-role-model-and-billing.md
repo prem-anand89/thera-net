@@ -126,10 +126,32 @@ Verified against the repo during the review, not assumptions:
   actually generated against `(min-width:46.5rem)` — not just that the
   theme token was declared.
 
-### PR 12 — Ledger payment-state correctness
-- Payment chip and totals bar rebuilt against `payments` + invoice status (decision 6), not `invoiceId` alone.
-- "Collected, no receipt" filter.
-- No schema change — `payments` and `pendingPaymentNote` already exist and are already written to by New Visit and Workspace.
+### PR 12 — Ledger payment-state correctness — SHIPPED
+- New `src/domain/paymentState.ts`: `computeVisitPaymentState()`, a pure,
+  unit-tested function implementing decision 6's three-fact model
+  (Billed/Collected/Receipted) as five states — `paid`,
+  `collected_no_receipt`, `outstanding`, `uninvoiced`, `zero_session` —
+  plus `isCollected()`. Ledger's payment chip and totals bar rebuilt
+  against it; new "Collected, no receipt" filter checkbox. No schema
+  change, as planned — `payments` and `pendingPaymentNote` already
+  existed and were already written to by New Visit and Workspace.
+- **Scope grew well beyond "Ledger's chip and totals bar"**: the exact
+  same bug — payment state (or an "outstanding" amount) derived from
+  `invoiceId`/invoice-status alone, blind to direct payments — turned
+  out to be independently reimplemented in four more places: New
+  Visit's "last session" chip, Patient Profile's visit history *and*
+  its outstanding-balance total, and
+  `dashboardService.recentVisits`/`recentVisitsWindow` (Workspace's
+  "Recently seen" panel). All four now call the shared function instead
+  of their own copy. Also exported `VisitCard`'s `PAYMENT_CHIP` — it had
+  been deliberately kept un-exported ("rather than adding a cross-module
+  export for one shared constant across two files") until New Visit's
+  own duplicate copy of it turned up needing the same fix a second time.
+  Duplicated business logic is exactly how the bug reached five places
+  instead of one; consolidating removes the trap, not just this one
+  instance of it.
+- Verified: typecheck, lint, vitest (231 passed, 9 new), production
+  build all clean.
 
 ### PR 13 — Billing access toggle
 - `billingEnabled`, `invoicingAccess` on `clinics`.
