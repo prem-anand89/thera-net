@@ -27,6 +27,7 @@ import {
   Panel,
 } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
+import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
@@ -438,6 +439,13 @@ export function WorkspacePage() {
           </ul>
         </SectionCard>
       )}
+
+      {/* A plain therapist can't reach the Reports nav tab (admin/front_desk
+          only, decision 3) — this is the one financial-aggregate exception
+          they do get (decision 4), so it surfaces here instead. Admin and
+          front_desk see it on Reports instead, not here, so it never shows
+          twice. */}
+      {!scope.isClinicWideView && <TherapistComparisonCard />}
 
       <Panel open={attentionOpen} onClose={() => setAttentionOpen(false)} title="Needs attention">
         <ul className="divide-y divide-[var(--border)]">

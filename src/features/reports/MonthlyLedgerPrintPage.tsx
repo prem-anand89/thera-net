@@ -50,7 +50,7 @@ export function MonthlyLedgerPrintPage() {
       <style>{`@page { size: A4 landscape; margin: 12mm; }`}</style>
 
       <div className="no-print mx-auto flex max-w-6xl items-center gap-2 px-4 py-3">
-        <Link to="/ledger" className={btnSecondary}>
+        <Link to="/insights" search={{ tab: 'monthly' }} className={btnSecondary}>
           ← Back
         </Link>
         <button className={`${btnPrimary} ml-auto`} onClick={() => window.print()}>

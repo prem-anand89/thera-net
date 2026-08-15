@@ -39,7 +39,20 @@ export function Shell() {
   // (not RLS) is display-only, same caveat as everywhere else this role
   // value is read; the real boundary is the settings tables' RLS policies.
   const { role } = useClinicRole(clinic?.id ?? '');
-  const nav = useMemo(() => NAV.filter((item) => item.to !== '/settings' || role === 'admin'), [role]);
+  // Reports (Dashboard + monthly statement) is admin/front_desk only —
+  // aggregates stay off-limits to a plain therapist (decision 3), same
+  // conservative default as Settings: hidden during 'unknown' role
+  // resolution too, not just for a confirmed therapist, so the item never
+  // flashes visible before role settles.
+  const nav = useMemo(
+    () =>
+      NAV.filter(
+        (item) =>
+          (item.to !== '/settings' || role === 'admin') &&
+          (item.to !== '/insights' || role === 'admin' || role === 'front_desk')
+      ),
+    [role]
+  );
 
   useEffect(() => {
     if (session) {

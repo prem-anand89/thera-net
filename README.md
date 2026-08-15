@@ -21,7 +21,7 @@ framework.
 - **Visit entry & patient lookup** — search by MRNO/name (create-if-missing, walk-in MRNO auto-generation), visit entry with catalog price autofill, price override with mandatory adjustment reason, package session tracking (1/3, 2/3 … with ₹0 continuations). Once a patient's confirmed, a reference panel shows their last visit and open-package progress alongside the form.
 - **Edit visit** — condition, treatment notes, and (while not yet invoiced) bill amount, therapist, and date, editable after the fact from Ledger's row menu — scoped to the visit's own therapist or an admin. Clinical fields stay editable after invoicing; only billing locks.
 - **Today-first workspace** — default landing page showing today's visits with payment state at a glance (Paid / Collect ₹X / ₹0 session), open packages with stale flags, pending work (outstanding invoices, incomplete notes), and recent visits in a rolling 7/15/30 day window.
-- **Ledger** — full visit history with dense table, patient enrichment (last visit + count, treatment, condition, bill amount), therapist filter, date range search, bulk actions (invoice, repeat, split, delete). Visits/Invoices/Reports sub-tabs are URL-addressable (`/ledger?tab=invoices`); the Invoices sub-tab only appears for clinics with billing access.
+- **Ledger** — full visit history with dense table, patient enrichment (last visit + count, treatment, condition, bill amount), therapist filter, date range search, bulk actions (invoice, repeat, split, delete). Visits/Invoices sub-tabs are URL-addressable (`/ledger?tab=invoices`); the Invoices sub-tab only appears for clinics with billing access. Invoices are only ever issued against a real visit — there's no standalone "manual invoice" path.
 
 ### Clinical Assessment & Notes
 - **Core Assessment (Initial/Follow-up)** — comprehensive consultation notes with automatic episode-of-care tracking via patient enrollments. Follow-up notes collapse read-only carry-forward sections (medical history, screening) while narrowing objective examination to new findings.
@@ -57,9 +57,9 @@ src/sync/              outbox push / delta pull engine against Supabase
 src/services/          visit/invoice/report/patient/dashboard/consultation-note orchestration — no React imports
 src/features/          UI pages and components (React + TanStack Router)
   ├── workspace/       WorkspacePage (default landing: Today, Recent, Open Packages, Pending Work)
-  ├── visits/          VisitsPage, served at /ledger (Visits/Invoices/Reports sub-tabs, URL-addressable)
+  ├── visits/          VisitsPage, served at /ledger (Visits/Invoices sub-tabs, URL-addressable)
   ├── patients/        PatientProfilePage with clinical notes, visit history
-  ├── insights/        Reports and analytics, served at /insights (nav label is "Reports")
+  ├── insights/        Dashboard + monthly statement, served at /insights (nav label is "Reports"; admin/front_desk only)
   ├── setup/           SetupPage, served at /settings (clinic configuration; nav label is "Settings")
   └── patients/notes/  NoteEditorPage (Core Assessment: Initial/Follow-up consultation notes)
 src/components/        Shared UI components (BodyChart, ScaleWidget, TreatmentNote, ColumnsPicker, etc.)
@@ -68,10 +68,10 @@ supabase/              SQL migrations (schema, RLS, RPCs, realtime publications)
 
 **App Routes:**
 - `/workspace` (default, `/` redirects here) — today's work, recent history, open packages, pending items
-- `/ledger` — historical visit records, invoices, and reports as URL-addressable sub-tabs (`?tab=visits|invoices|reports`); the Invoices tab is hidden without billing access
+- `/ledger` — historical visit records and invoices as URL-addressable sub-tabs (`?tab=visits|invoices`); the Invoices tab is hidden without billing access
 - `/patients/$patientId` — individual patient profile with clinical notes history
 - `/patients/$patientId/notes/$noteId` — Core Assessment note editor (Initial/Follow-up consultation notes)
-- `/insights` — reports and revenue analytics (nav label: "Reports")
+- `/insights` — Dashboard + monthly per-therapist statement (nav label: "Reports"; `?tab=monthly` for the statement). Hidden from plain therapists — a colleague's individual earnings stay admin/front_desk-only, same as the monthly statement always has been. The one exception, the therapist comparison chart, surfaces on `/workspace` instead so therapists can still reach it.
 - `/settings` — clinic configuration, MRNO settings, billing mode, rate setup, feature toggles (nav label: "Settings")
 - `/archive`, `/setup`, `/invoices`, `/reports` — legacy paths, kept as redirects to the routes above for old bookmarks
 

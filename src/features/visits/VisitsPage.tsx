@@ -39,12 +39,11 @@ import { EditVisitModal } from './EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { InvoicesPage } from '@/features/invoices/InvoicesPage';
-import { ReportsPage } from '@/features/reports/ReportsPage';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PATIENT_SEARCH_LIMIT = 6;
 
-type RecordsView = 'visits' | 'invoices' | 'reports';
+type RecordsView = 'visits' | 'invoices';
 
 type DatePreset = 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
 const DATE_PRESETS: { key: DatePreset; label: string }[] = [
@@ -135,10 +134,10 @@ export function VisitsPage() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView };
 
-  // URL is the source of truth (not local state) so the /invoices and
-  // /reports redirects, and any bookmark/shared link with ?tab=, land on
-  // the right sub-tab instead of always Visits. replace: true so tab
-  // switches don't pile up browser-back history entries.
+  // URL is the source of truth (not local state) so the /invoices redirect,
+  // and any bookmark/shared link with ?tab=, land on the right sub-tab
+  // instead of always Visits. replace: true so tab switches don't pile up
+  // browser-back history entries.
   const recordsView: RecordsView = search.tab ?? 'visits';
   const setRecordsView = useCallback(
     (next: RecordsView) => {
@@ -155,15 +154,6 @@ export function VisitsPage() {
   useEffect(() => {
     if (recordsView === 'invoices' && !canBill) setRecordsView('visits');
   }, [recordsView, canBill, setRecordsView]);
-  // Reports is the full per-therapist Bill/BM Share/TDS/Post-Tax/HV
-  // monthly breakdown -- a colleague's individual earnings, not a
-  // per-visit bill amount, so it's canViewPayouts-gated the same way
-  // Invoices is canBill-gated (nothing here has an RLS boundary of its
-  // own to fall back on: visits reads are deliberately clinic-wide per
-  // decision 2, same as the therapist comparison chart's own data).
-  useEffect(() => {
-    if (recordsView === 'reports' && !canViewPayouts) setRecordsView('visits');
-  }, [recordsView, canViewPayouts, setRecordsView]);
   const [from, setFrom] = useState(() => toIsoDate(new Date(Date.now() - 6 * 86400000)));
   const [to, setTo] = useState(() => toIsoDate(new Date()));
   const [datePreset, setDatePreset] = useState<DatePreset>('week');
@@ -433,10 +423,9 @@ export function VisitsPage() {
             [
               { key: 'visits', label: 'Visits' },
               { key: 'invoices', label: 'Invoices' },
-              { key: 'reports', label: 'Reports' },
             ] as const
           )
-            .filter((v) => (v.key !== 'invoices' || canBill) && (v.key !== 'reports' || canViewPayouts))
+            .filter((v) => v.key !== 'invoices' || canBill)
             .map((v) => (
             <button
               key={v.key}
@@ -534,9 +523,11 @@ export function VisitsPage() {
               <button className={btnSecondary} disabled={!visits?.length} onClick={downloadCsv}>
                 Export CSV
               </button>
-              <button className={btnSecondary} onClick={() => setRecordsView('reports')}>
-                Generate report
-              </button>
+              {canViewPayouts && (
+                <Link to="/insights" search={{ tab: 'monthly' }} className={btnSecondary}>
+                  Generate report
+                </Link>
+              )}
             </div>
           </div>
 
@@ -696,8 +687,6 @@ export function VisitsPage() {
       )}
 
       {recordsView === 'invoices' && <InvoicesPage />}
-
-      {recordsView === 'reports' && canViewPayouts && <ReportsPage />}
 
       {invoicing && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">

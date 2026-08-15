@@ -69,7 +69,7 @@ const workspaceRoute = createRoute({
   component: WorkspacePage,
 });
 
-const LEDGER_TABS = ['visits', 'invoices', 'reports'] as const;
+const LEDGER_TABS = ['visits', 'invoices'] as const;
 
 const ledgerRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -133,16 +133,16 @@ const noteEditorRoute = createRoute({
   component: NoteEditorPage,
 });
 
-// Reports moved fully under Ledger as a sub-view (VisitsPage.tsx's
-// `recordsView`, now URL-addressable via `?tab=` — see ledgerRoute). This
-// standalone route becomes a redirect rather than a hard delete-to-404:
-// nothing in the app links here anymore, but an external bookmark or
-// shared link might, and there's no way to be certain none exist.
+// The monthly statement lives under the Reports nav tab (/insights), not
+// Ledger — see InsightsPage.tsx. This standalone route becomes a redirect
+// rather than a hard delete-to-404: nothing in the app links here anymore,
+// but an external bookmark or shared link might, and there's no way to be
+// certain none exist.
 const reportsRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports',
   beforeLoad: () => {
-    throw redirect({ to: '/ledger', search: { tab: 'reports' } });
+    throw redirect({ to: '/insights', search: { tab: 'monthly' } });
   },
 });
 
@@ -191,20 +191,22 @@ const importVisitsRedirectRoute = createRoute({
 });
 
 // Nav label is "Reports" (renamed from "Insights") — path stays /insights
-// since /reports is already the Ledger-sub-tab redirect above and can't be
-// reused. Same rename-only-where-it-matters pattern as LedgerPage/
+// since /reports is already the monthly-statement redirect above and can't
+// be reused. Same rename-only-where-it-matters pattern as LedgerPage/
 // SettingsPage: the label people see changed, the URL didn't need to.
 const insightsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/insights',
+  validateSearch: (search: Record<string, unknown>): { tab?: 'monthly' } =>
+    search.tab === 'monthly' ? { tab: 'monthly' } : {},
   component: InsightsPage,
 });
 
-// Invoices moved fully under Ledger as a sub-view (same reasoning as
-// Reports above) — redirect rather than delete, for the same reason. Lands
-// on the Visits tab instead if the viewer can't bill (VisitsPage.tsx resets
-// an invalid `tab` — same guard PR 13 added for invoicingAccess changing
-// mid-session).
+// Invoices moved fully under Ledger as a sub-view — redirect rather than
+// delete, since nothing in the app links here anymore but an external
+// bookmark or shared link might. Lands on the Visits tab instead if the
+// viewer can't bill (VisitsPage.tsx resets an invalid `tab` — same guard
+// PR 13 added for invoicingAccess changing mid-session).
 const invoicesRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/invoices',

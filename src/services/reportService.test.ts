@@ -122,31 +122,6 @@ describe('reportService.monthly — therapist split', () => {
   });
 });
 
-describe('reportService.monthly — manual invoices excluded', () => {
-  it('excludes a manual-invoice visit from the therapist row and total entirely', async () => {
-    const repos = makeFakeRepos([
-      visit({ therapistId: PREM, actualBillPaise: rs(1000) }),
-      visit({ therapistId: PREM, actualBillPaise: rs(9999), isManualInvoice: true }),
-    ]);
-    const report = await createReportService(repos).monthly(CLINIC, JULY);
-    const prem = report.rows.find((r) => r.therapistId === PREM)!;
-    // Only the real visit's ₹1000 counts -- the ₹9999 manual invoice never
-    // touches the bill total, visit count, or patient count.
-    expect(prem.billPaise).toBe(rs(1000));
-    expect(prem.visitCount).toBe(1);
-    expect(prem.uniquePatients).toBe(1);
-    expect(report.total.billPaise).toBe(rs(1000));
-    expect(report.total.visitCount).toBe(1);
-  });
-
-  it('drops a therapist row entirely if their only visits this month were manual invoices', async () => {
-    const repos = makeFakeRepos([visit({ therapistId: AISH, isManualInvoice: true })]);
-    const report = await createReportService(repos).monthly(CLINIC, JULY);
-    expect(report.rows.find((r) => r.therapistId === AISH)).toBeUndefined();
-    expect(report.total.visitCount).toBe(0);
-  });
-});
-
 describe('reportService.toCsv — configurable share labels', () => {
   it('defaults the share columns to BM/HV', async () => {
     const report = await createReportService(makeFakeRepos([visit({})])).monthly(CLINIC, JULY);

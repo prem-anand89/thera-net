@@ -40,13 +40,13 @@ Verified against the repo during the review, not assumptions:
 
 Status as of the 2026-08-15 deferred-list follow-through — three items resolved, one confirmed already resolved earlier than tracked, two re-confirmed as correctly left alone (not silently forgotten):
 
-- ~~**Manual invoices creating synthetic visits**~~ — **RESOLVED.** New `is_manual_invoice` column (migration `20260815000007`) plus a filter in `reportService.monthly()`, which is the shared source behind the Monthly report, the Dashboard's revenue trend, and the therapist comparison chart. `visitService.create()` also skips flagging a manual invoice's synthetic visit as needing a clinical note.
+- ~~**Manual invoices creating synthetic visits**~~ — **RESOLVED, then superseded.** First pass added an `is_manual_invoice` column plus a `reportService.monthly()` filter to stop the synthetic visit from polluting reports. User review round (2026-08-15) went further: the "Add invoice" flow already required patient+therapist+service (same fields as a real visit) and only existed to skip New Visit's intake screen — now genuinely redundant with issuing an invoice from a real visit, which already works from three places (Workspace, Ledger, Patient Profile). Removed entirely rather than patched further; `is_manual_invoice` and its never-applied migration (`20260815000007`) were deleted outright rather than left as dead infrastructure, since nothing set the flag anymore.
 - ~~**`canManageTeam` and `canViewPayouts` never consumed anywhere**~~ — **RESOLVED**, and worth the read: `canViewPayouts` gates Ledger's Reports sub-tab now (the full per-therapist Bill/BM Share/TDS/Post-Tax/HV monthly breakdown had **zero** permission gating — any therapist could already see every colleague's individual earnings). `canManageTeam` was removed rather than wired up — it was never referenced outside its own declaration, and the Team section it was meant to gate already sits fully behind `canEditSettings` (also `isAdmin`); there's no third role tier in this app that would ever make the two diverge.
 - ~~**The offline outbox's stale-display gap**~~ — **RESOLVED.** `SyncEngine.push()` now reverts a permanently-rejected row to server truth immediately instead of leaving it stale until the next pull that will never come (`pull()` deliberately skips rows with a pending outbox entry). The outbox entry itself — and the "won't succeed by retrying" notice — stays until discarded or the row is edited again; only the stale local data is what this fixes. `isPermanentFailure` extracted to `sync/status.ts` as a shared, tested function so the engine and `SyncBadge` can't drift onto two different definitions of "permanent."
 - ~~**`.mobile-only`/`.desktop-only` dead CSS**~~ — **Already resolved**, just not marked as such here: PR 11's own responsive-breakpoint pass removed them outright ("removed rather than migrated" — see the comment at `index.css`'s responsive-breakpoints section). This list entry was stale, not the code.
 - **`my_memberships` Dexie table** — re-investigated, still correctly left alone. Confirmed (again) zero references anywhere in `src/` beyond its own schema declaration, and no class property on `ClinicDB` even exposes it. The risk in removing it is real, not hypothetical: Dexie version blocks are a migration history, and editing what an already-shipped version declares needs care around browsers that already went through it — for a table that costs nothing sitting empty and unused, that risk isn't worth taking just for cosmetic cleanup.
 - **`EditVisitModal`'s therapist-reassignment field has no `WITH CHECK`** — still a product call, not a bug fix (should a therapist be able to hand a visit to a colleague at all?). Not touched.
-- **`invite-therapist`'s `inviteUserByEmail(email, { autoConfirm: true })`** — still needs a live Supabase project to verify actual behavior, which this environment doesn't have. Not touched.
+- **`invite-therapist`'s `inviteUserByEmail(email, { autoConfirm: true })`** — not touched. Correction: an earlier round of this list claimed this environment has no live Supabase project to verify against — wrong. `mcp__Supabase__list_projects` confirms a connected, `ACTIVE_HEALTHY` project (`thera-net`, `kzsldbdjrignwxjgbqof`); its migration history simply hasn't caught up to this branch yet (stops before `20260815000001`, since none of this session's migrations are deployed — expected for an unmerged draft PR). Still not investigated, but for lack of time/priority, not lack of access.
 - **Moving split columns off the visit row** — still rejected per decision 3, unchanged.
 
 ## PR sequence
@@ -216,6 +216,13 @@ Status as of the 2026-08-15 deferred-list follow-through — three items resolve
   going in (PR 8 already dropped Insights' old tab switcher down to just
   Dashboard) — no single-item tab bar added around it, since a tab you
   can't switch away from isn't an improvement.
+  **Corrected 2026-08-15 (user review round)**: this call was wrong. The
+  user confirmed decision 8's literal reading was the intended one —
+  `ReportsPage.tsx` moved to `/insights` as a second tab ("Monthly
+  statement") alongside Dashboard ("Overview"); `/reports` now redirects
+  to `/insights?tab=monthly` instead of `/ledger?tab=reports`; Ledger's
+  own Reports sub-tab and its `canViewPayouts`-redirect guard were
+  removed. See "Reports relocated" below.
 - The concrete, valuable piece: Ledger's Visits/Invoices/Reports
   sub-tabs are now URL-addressable via a `tab` search param on `/ledger`
   (validated against a fixed set, same pattern as the existing
@@ -640,3 +647,85 @@ retrofitted. Payment-state before billing-access, since PR 13 needs
 accurate Collected data to make the "who bills what" split legible in the
 first place. Nav and the comparison-chart unlock go last, once the roles
 and toggles they display actually exist.
+
+## User review round (2026-08-15)
+
+Six questions from a user review of the deferred-list round, three of
+which changed code:
+
+**Manual invoice removed, not just excluded.** The prior round stopped
+short — `is_manual_invoice` kept the synthetic visit out of reports, but
+the "Add invoice" flow itself stayed. On inspection it already required
+patient+therapist+service (same fields as a real visit), so it was never
+really "invoice without a visit" — it just skipped New Visit's intake
+screen and issue-invoice-from-a-real-visit already works from three other
+places. Removed the whole flow from `InvoicesPage.tsx`, along with
+`Visit.isManualInvoice`, its `reportService.monthly()` filter, and the
+never-deployed migration that added the column.
+
+**Reports relocated from Ledger to the Reports nav tab.** PR 14 (see its
+entry above) made a call that turned out wrong: it kept the monthly
+per-therapist statement (`ReportsPage.tsx`) as a Ledger sub-tab, reasoning
+that its own bullet list demanded the `/reports` redirect land there. User
+confirmed decision 8's literal reading — Reports (`/insights`) should hold
+both "what you read periodically": Dashboard (now the "Overview" tab) and
+the monthly statement (now "Monthly statement", still `canViewPayouts`
+i.e. admin-gated). `InsightsPage.tsx` grew a small tab switcher mirroring
+Ledger's; `/reports` now redirects to `/insights?tab=monthly`;
+`VisitsPage.tsx`'s Reports sub-tab, its `canViewPayouts` redirect guard,
+and the "Generate report" button's `setRecordsView('reports')` (now a
+`<Link to="/insights">`) all came out of Ledger.
+
+**Reports/Dashboard hidden from plain therapists, not just scoped down.**
+Before this round, `/insights` had zero nav-level role gating — a
+therapist could open it and see "My revenue trend" / "My packages" (scoped
+to their own data, same pattern as front desk's clinic-wide view). User
+clarified the intent was full hide, not scope-down: Ledger (visits,
+bills) stays clinic-wide for every clinical role per decision 2 — that was
+never in question — but Reports' aggregates are admin/front_desk only,
+full stop, per decision 3. `Shell.tsx`'s nav now filters `/insights` to
+`role === 'admin' || role === 'front_desk'`; `InsightsPage.tsx` gained the
+same direct-URL guard pattern `SetupPage.tsx` already uses for Settings.
+The one deliberate exception is the therapist comparison chart (decision
+4) — extracted into `TherapistComparisonCard.tsx` (also moved
+`SERIES_COLORS` into a shared `chartColors.ts` so Dashboard and this card
+can't drift onto two palettes) and rendered on `/workspace` instead for a
+plain therapist, since they can no longer reach it via Reports. Admin and
+front_desk still see it once, on Reports, not duplicated onto Workspace.
+
+**Confirmed Supabase is connected.** An earlier deferred-list entry
+claimed this environment had no live Supabase project to check
+`invite-therapist`'s `autoConfirm` behavior against — wrong.
+`mcp__Supabase__list_projects` shows a connected, healthy `thera-net`
+project; it just hasn't had this branch's migrations applied yet (expected
+for an unmerged draft PR — its migration history stops before
+`20260815000001`). The `autoConfirm` question itself remains
+uninvestigated, now correctly recorded as a priority gap, not an access
+gap.
+
+**Three answered without a code change:** "Collected, no receipt" (Ledger
+Visits filter) is decision 6's three-facts payment model working as
+designed — cash/UPI logged directly against a visit with no invoice raised
+yet, meant for front desk/admin to catch before month-end. Patient-to-
+therapist assignment has no persistent concept in this app — it's decided
+fresh per visit at New Visit intake (defaults to whoever saw the patient
+last, or the creating user), which any clinical role can set; there's no
+admin-exclusive "assign a patient" action separate from that. Visit-edit
+scoping (`isAdmin || v.therapistId === myTherapistId`, `VisitsPage.tsx`)
+was confirmed already matching the described behavior — other therapists
+can't edit a colleague's visit at all, which is what RLS's
+`visits_update`/`visits_delete` policies enforce server-side too.
+
+**Found and fixed while auditing for residual design drift:**
+`EditPatientModal.tsx` (used from Patient Profile, Workspace, and New
+Visit) had a fixed `w-96` shell with no responsive downgrade and an
+unconditional `grid-cols-2` Age/Sex row — the same bug class as the
+`.field-row` mobile-clipping fix from the design-system-unification round,
+just in a file no screenshot had covered. Shell now scales
+(`w-full max-w-sm`, `p-4` on the overlay for viewport margin,
+`max-h-[90vh] overflow-y-auto` matching `EditVisitModal.tsx`'s pattern);
+the grid drops to one column below `sm:`.
+
+Verified: typecheck, lint, vitest (240 passed — down from 242, the two
+manual-invoice-specific `reportService.test.ts` cases were removed along
+with the feature), production build all clean.

@@ -11,20 +11,8 @@ import type { TherapistMonthRow } from '@/services/reportService';
 import { SectionCard, StatTile, Pill } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
 import { PieChart } from '@/components/PieChart';
-
-// Reference categorical palette — all 8 validated slots in fixed order,
-// assigned by index and never cycled (a 9th series would repeat hues and
-// break CVD separation; fold into "Other" before that ever happens).
-const SERIES_COLORS = [
-  '#2a78d6', // blue
-  '#1baf7a', // aqua
-  '#eda100', // yellow
-  '#008300', // green
-  '#4a3aa7', // violet
-  '#e34948', // red
-  '#e87ba4', // magenta
-  '#eb6834', // orange
-];
+import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
+import { SERIES_COLORS } from '@/components/chartColors';
 
 const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> = {
   billPaise: 0,
@@ -75,11 +63,6 @@ export function DashboardPage() {
 
   const categories = useMemo(
     () => (trend ?? []).map((r) => `${monthName(r.month.month).slice(0, 3)} '${String(r.month.year).slice(2)}`),
-    [trend]
-  );
-
-  const therapistNames = useMemo(
-    () => [...new Set((trend ?? []).flatMap((r) => r.rows.map((row) => row.therapistName)))].sort(),
     [trend]
   );
 
@@ -267,52 +250,7 @@ export function DashboardPage() {
         )}
       </SectionCard>
 
-      {/* Financial aggregates are admin-only everywhere else (decision 3) —
-          this chart is the deliberate exception (decision 4), gated by a
-          clinic-wide opt-in since seeing colleagues' numbers side by side
-          isn't something every clinic wants on by default. front_desk
-          excluded: they have no clinical work of their own to compare. */}
-      {clinic.showTherapistComparison && !scope.isFrontDesk && (
-        <SectionCard title="Therapist comparison">
-          {trend && !hasEnoughTrendHistory && (
-            <p className="py-8 text-center text-sm text-[var(--muted)]">
-              Not enough data yet — a comparison needs at least two months of visits to be meaningful.
-            </p>
-          )}
-          {trend && hasEnoughTrendHistory && therapistNames.length > 0 && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-                  {revenueLabel}
-                </h3>
-                <BarChart
-                  categories={categories}
-                  series={therapistNames.slice(0, SERIES_COLORS.length).map((name, i) => ({
-                    label: name,
-                    color: SERIES_COLORS[i],
-                    values: trend.map((r) => r.rows.find((row) => row.therapistName === name)?.postTaxPaise ?? 0),
-                  }))}
-                  formatValue={formatINR}
-                />
-              </div>
-              <div>
-                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Visits</h3>
-                <BarChart
-                  categories={categories}
-                  series={therapistNames.slice(0, SERIES_COLORS.length).map((name, i) => ({
-                    label: name,
-                    color: SERIES_COLORS[i],
-                    values: trend.map((r) => r.rows.find((row) => row.therapistName === name)?.visitCount ?? 0),
-                  }))}
-                />
-              </div>
-            </div>
-          )}
-          {trend && hasEnoughTrendHistory && therapistNames.length === 0 && (
-            <p className="text-sm text-[var(--muted)]">No visits in the last 6 months.</p>
-          )}
-        </SectionCard>
-      )}
+      <TherapistComparisonCard />
 
       <SectionCard title="Referral sources">
         <p className="mb-4 text-xs text-[var(--muted)]">
