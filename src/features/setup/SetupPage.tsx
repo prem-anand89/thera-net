@@ -478,14 +478,7 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             </>
           }
         >
-          <select
-            className={inputCls}
-            value={form.billingEnabled ? 'yes' : 'no'}
-            onChange={(e) => set({ billingEnabled: e.target.value === 'yes' })}
-          >
-            <option value="yes">On</option>
-            <option value="no">Off</option>
-          </select>
+          <BoolToggle value={form.billingEnabled ?? true} onChange={(v) => set({ billingEnabled: v })} />
         </Field>
         {form.billingEnabled && (
           <Field
@@ -592,14 +585,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             </>
           }
         >
-          <select
-            className={inputCls}
-            value={form.hasPartner ? 'yes' : 'no'}
-            onChange={(e) => set({ hasPartner: e.target.value === 'yes' })}
-          >
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
+          <BoolToggle value={form.hasPartner ?? false} onChange={(v) => set({ hasPartner: v })} />
         </Field>
         <Field
           label={
@@ -609,14 +595,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             </>
           }
         >
-          <select
-            className={inputCls}
-            value={form.enableTherapistSplit === false ? 'no' : 'yes'}
-            onChange={(e) => set({ enableTherapistSplit: e.target.value === 'yes' })}
-          >
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
+          <BoolToggle value={form.enableTherapistSplit !== false} onChange={(v) => set({ enableTherapistSplit: v })} />
         </Field>
         {form.hasPartner && (
           <>
@@ -707,6 +686,36 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
 
 type FeaturesFields = Pick<Clinic, 'enableExpectedToday' | 'clinicalDocsEnabled' | 'showTherapistComparison'>;
 
+/** Two-option pill toggle — same selected/unselected visual language as
+ *  Team's invite-role picker (border/background/color keyed off a boolean
+ *  instead of a 3-way role), so a feature flag reads the same way a role
+ *  or status does elsewhere in Settings, instead of as a plain browser
+ *  &lt;select&gt;. */
+function BoolToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex gap-1.5">
+      {([false, true] as const).map((v) => {
+        const selected = value === v;
+        return (
+          <button
+            key={String(v)}
+            type="button"
+            onClick={() => onChange(v)}
+            className="flex-1 rounded-lg border px-2 py-1.5 text-center text-xs font-semibold"
+            style={{
+              borderColor: selected ? 'var(--teal)' : 'var(--border)',
+              background: selected ? 'var(--teal-light)' : 'var(--surface)',
+              color: selected ? 'var(--teal)' : 'var(--muted)',
+            }}
+          >
+            {v ? 'On' : 'Off'}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<FeaturesFields>(
     (c) => ({
@@ -728,14 +737,7 @@ function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) =>
             </>
           }
         >
-          <select
-            className={inputCls}
-            value={form.enableExpectedToday ? 'yes' : 'no'}
-            onChange={(e) => set({ enableExpectedToday: e.target.value === 'yes' })}
-          >
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
+          <BoolToggle value={form.enableExpectedToday ?? false} onChange={(v) => set({ enableExpectedToday: v })} />
         </Field>
         <Field
           label={
@@ -745,14 +747,7 @@ function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) =>
             </>
           }
         >
-          <select
-            className={inputCls}
-            value={form.clinicalDocsEnabled ? 'yes' : 'no'}
-            onChange={(e) => set({ clinicalDocsEnabled: e.target.value === 'yes' })}
-          >
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
+          <BoolToggle value={form.clinicalDocsEnabled ?? false} onChange={(v) => set({ clinicalDocsEnabled: v })} />
         </Field>
         <Field
           label={
@@ -762,14 +757,7 @@ function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) =>
             </>
           }
         >
-          <select
-            className={inputCls}
-            value={form.showTherapistComparison ? 'yes' : 'no'}
-            onChange={(e) => set({ showTherapistComparison: e.target.value === 'yes' })}
-          >
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
+          <BoolToggle value={form.showTherapistComparison ?? false} onChange={(v) => set({ showTherapistComparison: v })} />
         </Field>
       </div>
       <p className="mt-3 text-xs text-[var(--muted)]">
