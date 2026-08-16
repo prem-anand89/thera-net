@@ -1157,3 +1157,36 @@ only applies now when there's no visit to wait for at all.
 Verified: typecheck, lint, vitest (240 passed), production build clean,
 plus a real headless-browser render of both the visit-linked and
 unlinked subtext states.
+
+## Mobile homescreen app icon (2026-08-15)
+
+The app had no manifest, no favicon, no apple-touch-icon at all —
+`index.html` linked nothing beyond the Google Fonts stylesheet, and
+there was no `public/` directory. Added one from scratch off a design
+brief: an "Rx" monogram in the app's own Fraunces display serif (the
+same family every page heading already uses) on the app's actual teal
+(`#2c5f63`, matching `--teal`), rather than a generic sans-serif
+prescription-pad graphic — reads as this app's mark specifically, not a
+generic medical icon, and a single glyph stays legible down to a 16px
+favicon where a literal pad-and-lines illustration would turn to mush.
+
+Generated as PNGs (favicon 16/32, apple-touch-icon 180, icon 192/512,
+plus a 512 maskable variant) by rendering the design in a real headless
+Chromium at each target viewport size rather than resizing a master
+image — no image-manipulation library was available in this
+environment, and rendering natively at each size keeps every asset
+pixel-crisp. The maskable variant reuses the same 512 file: measured
+the glyph's bounding-box diagonal from center (≈37% of the icon's half-
+width) against Android's 40%-radius maskable safe zone before deciding
+a second, more-padded design wasn't needed.
+
+`public/manifest.json` added (name, theme/background colors matching
+`--teal`/`--paper`, standalone display, all three icon entries).
+`index.html` gained favicon/apple-touch-icon/manifest links plus
+`theme-color` and `apple-mobile-web-app-*` meta tags.
+
+Verified: production build copies all assets into `dist/` correctly;
+served the build and loaded it in headless Chromium, confirming
+`manifest.json` resolves, the favicon/apple-touch-icon `<link>` tags
+resolve to 200s, and no new console errors. Preview images at 512/192/32
+sent to the user for sign-off on the design before committing.
