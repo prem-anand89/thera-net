@@ -6,7 +6,7 @@ import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import { monthName, formatDateDMY, fiscalYearOf, monthsOfFiscalYear, type FyMonth } from '@/domain/fiscalYear';
-import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
+import { clinicBillingConfig, clinicShareLabels, referringSourceDetailLabel } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
 import { SectionCard, StatTile, Pill, PackageThread, th, td, tdNum, thNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
@@ -266,6 +266,29 @@ export function DashboardPage() {
     () => (pkgStatusFilter === 'all' ? packagesInScope : packagesInScope.filter((p) => p.stale === (pkgStatusFilter === 'stale'))),
     [packagesInScope, pkgStatusFilter]
   );
+
+  // Referral sources — a slice is always "active" (defaults to the top
+  // source) so the detail panel never goes blank; clicking re-picks which
+  // one, but never toggles off to nothing (that's what PieChart's own
+  // deselect-to-null would otherwise do on a second click of the same slice).
+  const [referralSelectedIdx, setReferralSelectedIdx] = useState<number | null>(null);
+  const referralActiveIdx = referralSelectedIdx ?? 0;
+  const referralActive = referralSources?.[referralActiveIdx];
+  const referralNeedsDetail =
+    referralActive?.source === 'Hospital referral' || referralActive?.source === 'Doctor referral';
+  const referralDetailGroups = useMemo(() => {
+    if (!referralActive || !referralNeedsDetail) return [];
+    const byDetail = new Map<string, { patients: number; visits: number; revenuePaise: number }>();
+    for (const p of referralActive.patients) {
+      const key = p.detail?.trim() || 'Unspecified';
+      const entry = byDetail.get(key) ?? { patients: 0, visits: 0, revenuePaise: 0 };
+      entry.patients += 1;
+      entry.visits += p.visitCount;
+      entry.revenuePaise += p.revenuePaise;
+      byDetail.set(key, entry);
+    }
+    return [...byDetail.entries()].sort((a, b) => b[1].revenuePaise - a[1].revenuePaise);
+  }, [referralActive, referralNeedsDetail]);
 
   const singleVisitBuckets = useMemo(
     () =>
@@ -631,32 +654,75 @@ export function DashboardPage() {
           >
             <SectionCard title="Referral sources">
               <p className="mb-4 text-xs text-[var(--muted)]">
-                Where your patients are coming from, and how much revenue each source has actually brought in.
+                Click a slice — Doctor/Hospital referral break down by name; everything else lists its patients.
               </p>
-              {referralSources && referralSources.length > 0 ? (
+              {referralSources && referralSources.length > 0 && referralActive ? (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <PieChart
-                    data={referralSources.map((r) => ({
-                      label: r.source,
-                      value: r.count,
-                    }))}
+                    data={referralSources.map((r) => ({ label: r.source, value: r.count }))}
+                    showPercent
+                    selectedIndex={referralActiveIdx}
+                    onSelect={(i) => {
+                      if (i != null) setReferralSelectedIdx(i);
+                    }}
                   />
-                  <ul className="space-y-2">
-                    {referralSources.map((r) => (
-                      <li key={r.source} className="flex items-center justify-between gap-3 text-sm">
-                        <span className="text-[var(--ink)]">{r.source}</span>
-                        <span className="flex items-center gap-3">
-                          <span className="font-num text-[var(--muted)]">{r.count} visits</span>
-                          <span className="font-num text-[var(--muted)]" title="Total revenue from this source">
-                            {formatINR(r.revenuePaise)}
-                          </span>
-                          <span className="font-num text-[var(--muted)]" title="Average revenue per visit from this source">
-                            avg {formatINR(r.avgRevenuePaise)}
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div>
+                    <div className="mb-2 flex items-baseline justify-between gap-2">
+                      <h3 className="text-sm font-medium text-[var(--ink)]">{referralActive.source}</h3>
+                      <span className="text-xs text-[var(--muted)]">
+                        {referralActive.patients.length} patient{referralActive.patients.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+                      <table className="min-w-full divide-y divide-[var(--border)]">
+                        {referralNeedsDetail ? (
+                          <>
+                            <thead className="bg-[var(--paper)]">
+                              <tr>
+                                <th className={th}>{referringSourceDetailLabel(
+                                  referralActive.source === 'Doctor referral' ? 'doctor_referral' : 'hospital_referral'
+                                ) ?? 'Name'}</th>
+                                <th className={thNum}>Patients</th>
+                                <th className={thNum}>Visits</th>
+                                <th className={thNum}>Revenue</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--border)]">
+                              {referralDetailGroups.map(([name, g]) => (
+                                <tr key={name}>
+                                  <td className={td}>{name}</td>
+                                  <td className={tdNum}>{g.patients}</td>
+                                  <td className={tdNum}>{g.visits}</td>
+                                  <td className={tdNum}>{formatINR(g.revenuePaise)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </>
+                        ) : (
+                          <>
+                            <thead className="bg-[var(--paper)]">
+                              <tr>
+                                <th className={th}>Patient</th>
+                                <th className={thNum}>Visits</th>
+                                <th className={thNum}>Revenue</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--border)]">
+                              {referralActive.patients.map((p) => (
+                                <tr key={p.patientId}>
+                                  <td className={td}>
+                                    {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                                  </td>
+                                  <td className={tdNum}>{p.visitCount}</td>
+                                  <td className={tdNum}>{formatINR(p.revenuePaise)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </>
+                        )}
+                      </table>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <p className="py-8 text-center text-sm text-[var(--muted)]">No referral data yet.</p>

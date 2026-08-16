@@ -1,4 +1,4 @@
-import type { UUID, Visit } from '@/domain/types';
+import { REFERRING_SOURCE_LABELS, type UUID, type Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { currentWeekRange, monthDateRange, type FyMonth } from '@/domain/fiscalYear';
 import { daysSince, groupOpenPackages, isStale, STALE_PACKAGE_DAYS } from '@/domain/packageTracking';
@@ -67,6 +67,24 @@ export interface ServiceUsageRow {
 export interface ModalityUsageRow {
   modality: string;
   count: number;
+}
+
+export interface ReferralSourcePatientRow {
+  patientId: UUID;
+  patientName: string;
+  mrno: string;
+  /** patient.referringSourceDetail — the doctor/hospital name for those two sources, free text otherwise. */
+  detail: string | null;
+  visitCount: number;
+  revenuePaise: Paise;
+}
+
+export interface ReferralSourceStat {
+  source: string;
+  count: number;
+  revenuePaise: Paise;
+  avgRevenuePaise: Paise;
+  patients: ReferralSourcePatientRow[];
 }
 
 export interface RecentVisitRow {
@@ -781,30 +799,49 @@ export function createDashboardService(repos: Repos) {
       return { newPackages, newPatients };
     },
 
-    async referralSourceStats(
-      clinicId: UUID
-    ): Promise<Array<{ source: string; count: number; revenuePaise: Paise; avgRevenuePaise: Paise }>> {
+    /**
+     * Per-source visit/revenue totals, plus each source's contributing
+     * patients (with their referringSourceDetail free text) so the
+     * dashboard can drill down: Doctor/Hospital referral break down by
+     * the referring doctor/hospital name, every other source lists its
+     * patients directly. Referral source lives on Patient (one current
+     * value, not per-visit), so "revenue from a source" sums every visit
+     * by patients currently tagged with it.
+     */
+    async referralSourceStats(clinicId: UUID): Promise<ReferralSourceStat[]> {
       const visits = await repos.visits.list({ clinicId });
       const patients = await repos.patients.list(clinicId);
       const patientById = new Map(patients.map((p) => [p.id, p]));
 
-      const bySource = new Map<string, { count: number; revenuePaise: number }>();
+      const bySource = new Map<string, { count: number; revenuePaise: number; patients: Map<UUID, ReferralSourcePatientRow> }>();
       for (const v of visits) {
         const patient = patientById.get(v.patientId);
         const source = patient?.referringSource ?? null;
-        const sourceLabel = source ? (source === 'hospital_referral' ? 'Hospital referral' : source === 'doctor_referral' ? 'Doctor referral' : source) : 'Unknown';
-        const entry = bySource.get(sourceLabel) ?? { count: 0, revenuePaise: 0 };
+        const sourceLabel = source ? REFERRING_SOURCE_LABELS[source] : 'Unknown';
+        const entry = bySource.get(sourceLabel) ?? { count: 0, revenuePaise: 0, patients: new Map() };
         entry.count += 1;
         entry.revenuePaise += v.actualBillPaise;
+        const patientRow = entry.patients.get(v.patientId) ?? {
+          patientId: v.patientId,
+          patientName: patient?.name ?? 'Unknown',
+          mrno: patient?.mrno ?? '—',
+          detail: patient?.referringSourceDetail ?? null,
+          visitCount: 0,
+          revenuePaise: 0 as Paise,
+        };
+        patientRow.visitCount += 1;
+        patientRow.revenuePaise = (patientRow.revenuePaise + v.actualBillPaise) as Paise;
+        entry.patients.set(v.patientId, patientRow);
         bySource.set(sourceLabel, entry);
       }
 
       return Array.from(bySource.entries())
-        .map(([source, { count, revenuePaise }]) => ({
+        .map(([source, { count, revenuePaise, patients: patientRows }]) => ({
           source,
           count,
           revenuePaise: revenuePaise as Paise,
           avgRevenuePaise: Math.round(revenuePaise / count) as Paise,
+          patients: [...patientRows.values()].sort((a, b) => b.revenuePaise - a.revenuePaise),
         }))
         .sort((a, b) => b.count - a.count);
     },
