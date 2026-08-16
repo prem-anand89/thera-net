@@ -1,7 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDashboardService } from './dashboardService';
 import type { Repos, VisitFilter } from '@/repositories/types';
-import type { CatalogItem, Clinic, Invoice, InvoicePayment, Payment, Patient, Therapist, Visit } from '@/domain/types';
+import type {
+  CatalogItem,
+  Clinic,
+  ConsultationNote,
+  Invoice,
+  InvoicePayment,
+  Payment,
+  Patient,
+  Therapist,
+  Visit,
+} from '@/domain/types';
 import { rupeesToPaise as rs } from '@/domain/money';
 
 function makeFakeRepos() {
@@ -58,6 +68,7 @@ function makeFakeRepos() {
   const invoices = new Map<string, Invoice>();
   const invoicePayments = new Map<string, InvoicePayment>();
   const payments = new Map<string, Payment>();
+  const consultationNotesStore = new Map<string, ConsultationNote>();
 
   const repos: Repos = {
     clinics: { get: async (id) => (id === clinic.id ? clinic : undefined), list: async () => [clinic], put: async () => {}, putLocal: async () => {} },
@@ -116,12 +127,12 @@ function makeFakeRepos() {
       put: async () => {},
     },
     consultationNotes: {
-      get: async () => undefined,
+      get: async (id) => consultationNotesStore.get(id),
       listByPatient: async () => [],
-      listByClinic: async () => [],
+      listByClinic: async (clinicId) => [...consultationNotesStore.values()].filter((n) => n.clinicId === clinicId),
       getOpenDraft: async () => undefined,
       listByEnrollment: async () => [],
-      put: async () => {},
+      put: async (n) => void consultationNotesStore.set(n.id, n),
     },
     patientModuleEnrollments: {
       get: async () => undefined,
@@ -134,7 +145,7 @@ function makeFakeRepos() {
       put: async () => {},
     },
   };
-  return { repos, visits, invoices, invoicePayments, payments, patients };
+  return { repos, visits, invoices, invoicePayments, payments, patients, consultationNotes: consultationNotesStore };
 }
 
 const baseVisit = (id: string, overrides: Partial<Visit>): Visit => ({
@@ -343,6 +354,113 @@ describe('dashboardService.monthlyCollection', () => {
     const svc = createDashboardService(fake.repos);
     const summary = await svc.monthlyCollection('clinic-1', { year: 2026, month: 6 }, 'th-prem');
     expect(summary.billedPaise).toBe(rs(1000));
+  });
+});
+
+describe('dashboardService.repeatVisits', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+
+  it('counts a visit as repeat when the same patient was seen ≤30 days earlier', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-05-20', patientId: 'pat-1' }));
+    fake.visits.set('v2', baseVisit('v2', { visitDate: '2026-06-10', patientId: 'pat-1' }));
+    const svc = createDashboardService(fake.repos);
+    const stats = await svc.repeatVisits('clinic-1', { year: 2026, month: 6 });
+    expect(stats.repeatCount).toBe(1);
+    expect(stats.totalVisits).toBe(1);
+    expect(stats.ratePct).toBe(100);
+  });
+
+  it('does not count a visit whose only prior visit was more than 30 days earlier', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-04-01', patientId: 'pat-1' }));
+    fake.visits.set('v2', baseVisit('v2', { visitDate: '2026-06-10', patientId: 'pat-1' }));
+    const svc = createDashboardService(fake.repos);
+    const stats = await svc.repeatVisits('clinic-1', { year: 2026, month: 6 });
+    expect(stats.repeatCount).toBe(0);
+    expect(stats.totalVisits).toBe(1);
+    expect(stats.ratePct).toBe(0);
+  });
+
+  it('does not count a patient\'s first-ever visit as a repeat', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-10', patientId: 'pat-1' }));
+    const svc = createDashboardService(fake.repos);
+    const stats = await svc.repeatVisits('clinic-1', { year: 2026, month: 6 });
+    expect(stats.repeatCount).toBe(0);
+    expect(stats.ratePct).toBe(0);
+  });
+
+  it('returns null ratePct when there were no visits that month', async () => {
+    const svc = createDashboardService(fake.repos);
+    const stats = await svc.repeatVisits('clinic-1', { year: 2026, month: 6 });
+    expect(stats.ratePct).toBeNull();
+  });
+});
+
+describe('dashboardService.serviceUsage', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+
+  it('ranks services by visit count, most-used first', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-05', serviceCatalogId: 'svc-1', actualBillPaise: rs(1000) }));
+    fake.visits.set('v2', baseVisit('v2', { visitDate: '2026-06-06', serviceCatalogId: 'svc-1', actualBillPaise: rs(1000) }));
+    fake.visits.set('v3', baseVisit('v3', { visitDate: '2026-06-07', serviceCatalogId: 'svc-2', actualBillPaise: rs(500) }));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.serviceUsage('clinic-1', { year: 2026, month: 6 });
+    expect(rows[0].serviceId).toBe('svc-1');
+    expect(rows[0].visitCount).toBe(2);
+    expect(rows[0].totalBilledPaise).toBe(rs(2000));
+  });
+});
+
+describe('dashboardService.modalityUsage', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+
+  const baseNote = (id: string, overrides: Partial<ConsultationNote>): ConsultationNote => ({
+    id,
+    clinicId: 'clinic-1',
+    patientId: 'pat-1',
+    therapistId: 'th-prem',
+    visitId: null,
+    enrollmentId: null,
+    authorizedSessionCount: null,
+    notesText: null,
+    assessmentPayload: null,
+    noteMode: null,
+    nrsScore: null,
+    psfsMean: null,
+    redFlagCount: 0,
+    status: 'completed',
+    updatedAt: '',
+    ...overrides,
+  });
+
+  it('tallies modalities across every note, most-used first', async () => {
+    fake.consultationNotes.set(
+      'n1',
+      baseNote('n1', { assessmentPayload: { treatment: { session: { modalities: ['TENS', 'Ultrasound'] } } } })
+    );
+    fake.consultationNotes.set(
+      'n2',
+      baseNote('n2', { assessmentPayload: { treatment: { session: { modalities: ['TENS'] } } } })
+    );
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.modalityUsage('clinic-1');
+    expect(rows[0]).toEqual({ modality: 'TENS', count: 2 });
+    expect(rows[1]).toEqual({ modality: 'Ultrasound', count: 1 });
+  });
+
+  it('skips a note with no modalities recorded rather than throwing', async () => {
+    fake.consultationNotes.set('n1', baseNote('n1', {}));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.modalityUsage('clinic-1');
+    expect(rows).toEqual([]);
   });
 });
 

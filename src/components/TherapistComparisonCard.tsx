@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { dashboardService } from '@/services';
+import { dashboardService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
@@ -31,6 +31,18 @@ export function TherapistComparisonCard() {
     () => (clinic.showTherapistComparison && !scope.isFrontDesk ? dashboardService.revenueTrend(clinic.id) : undefined),
     [clinic.id, clinic.showTherapistComparison, scope.isFrontDesk]
   );
+  // Packages don't come back keyed by therapist name the way trend's rows
+  // do (openPackages only has startedByTherapistId, a real id) — fetch the
+  // roster once to resolve it, same join every other packages-by-therapist
+  // spot in the app already needs.
+  const openPackages = useLiveQuery(
+    () => (clinic.showTherapistComparison && !scope.isFrontDesk ? dashboardService.openPackages(clinic.id) : undefined),
+    [clinic.id, clinic.showTherapistComparison, scope.isFrontDesk]
+  );
+  const therapists = useLiveQuery(
+    () => (clinic.showTherapistComparison && !scope.isFrontDesk ? repos.therapists.list(clinic.id, true) : undefined),
+    [clinic.id, clinic.showTherapistComparison, scope.isFrontDesk]
+  );
 
   const categories = useMemo(
     () => (trend ?? []).map((r) => `${monthName(r.month.month).slice(0, 3)} '${String(r.month.year).slice(2)}`),
@@ -47,6 +59,22 @@ export function TherapistComparisonCard() {
     () => (trend ?? []).filter((r) => r.total.visitCount > 0).length >= 2,
     [trend]
   );
+
+  // Avg charge/session per therapist, latest month only (not averaged
+  // across the 6-month window) — same "this month" framing as the
+  // Dashboard's own clinic-wide version of this metric.
+  const latestRows = trend?.[trend.length - 1]?.rows ?? [];
+  const avgChargeByName = new Map(
+    latestRows.map((r) => [r.therapistName, r.visitCount > 0 ? Math.round(r.billPaise / r.visitCount) : 0])
+  );
+
+  const nameByTherapistId = new Map((therapists ?? []).map((t) => [t.id, t.name]));
+  const openPackageCountByName = new Map<string, number>();
+  for (const p of openPackages ?? []) {
+    const name = nameByTherapistId.get(p.startedByTherapistId);
+    if (!name) continue;
+    openPackageCountByName.set(name, (openPackageCountByName.get(name) ?? 0) + 1);
+  }
 
   if (!clinic.showTherapistComparison || scope.isFrontDesk) return null;
 
@@ -82,6 +110,38 @@ export function TherapistComparisonCard() {
                 color: SERIES_COLORS[i],
                 values: trend.map((r) => r.rows.find((row) => row.therapistName === name)?.visitCount ?? 0),
               }))}
+            />
+          </div>
+          {/* These two are one-value-per-therapist snapshots (this month,
+              right now), not a 6-month trend like the two above — one bar
+              per therapist rather than one series per therapist. */}
+          <div>
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+              Avg charge/session — this month
+            </h3>
+            <BarChart
+              categories={therapistNames}
+              series={[
+                {
+                  label: 'Avg charge',
+                  color: SERIES_COLORS[0],
+                  values: therapistNames.map((name) => avgChargeByName.get(name) ?? 0),
+                },
+              ]}
+              formatValue={formatINR}
+            />
+          </div>
+          <div>
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Open packages</h3>
+            <BarChart
+              categories={therapistNames}
+              series={[
+                {
+                  label: 'Open packages',
+                  color: SERIES_COLORS[1],
+                  values: therapistNames.map((name) => openPackageCountByName.get(name) ?? 0),
+                },
+              ]}
             />
           </div>
         </div>

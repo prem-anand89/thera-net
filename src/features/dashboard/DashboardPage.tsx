@@ -26,6 +26,8 @@ const DASHBOARD_SECTIONS: { key: string; label: string }[] = [
   { key: 'packages', label: 'Packages' },
   { key: 'revenue', label: 'Revenue trend' },
   { key: 'therapistComparison', label: 'Therapist comparison' },
+  { key: 'serviceUsage', label: 'Frequently used services' },
+  { key: 'modalityUsage', label: 'Treatment modalities' },
   { key: 'referralSources', label: 'Referral sources' },
 ];
 
@@ -117,6 +119,14 @@ export function DashboardPage() {
     [clinic.id]
   );
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
+  const serviceUsage = useLiveQuery(
+    () => dashboardService.serviceUsage(clinic.id, { year: new Date().getFullYear(), month: new Date().getMonth() + 1 }, scope.scopeTherapistId),
+    [clinic.id, scope.scopeTherapistId]
+  );
+  const modalityUsage = useLiveQuery(
+    () => (clinic.clinicalDocsEnabled ? dashboardService.modalityUsage(clinic.id) : undefined),
+    [clinic.id, clinic.clinicalDocsEnabled]
+  );
 
   // KPI strip data — current calendar month, plus one month back for the
   // trend badges. now/prevMonth are recomputed each render (cheap, plain
@@ -124,9 +134,9 @@ export function DashboardPage() {
   // feed the query deps, so a re-render mid-month doesn't refetch.
   const now = new Date();
   const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const collectionThisMonth = useLiveQuery(
+  const repeatVisitsThisMonth = useLiveQuery(
     () =>
-      dashboardService.monthlyCollection(
+      dashboardService.repeatVisits(
         clinic.id,
         { year: now.getFullYear(), month: now.getMonth() + 1 },
         scope.scopeTherapistId
@@ -166,13 +176,23 @@ export function DashboardPage() {
       therapistName: '',
     };
 
-  // Revenue vs last month, from the 6-month trend already being fetched
-  // for the chart below — its last two entries are this month and last,
-  // so no extra query for the KPI card.
+  // Revenue and packages-this-month vs last month, from the 6-month trend
+  // and monthlyNewCounts pair already being fetched for the chart/other
+  // KPIs — their last two entries are this month and last, so no extra
+  // query for either KPI card.
   const revenueRow = (report: MonthlyReport | undefined) =>
     report ? (scope.isClinicWideView ? report.total.postTaxPaise : myMonthRow(report.rows).postTaxPaise) : null;
   const revenueThisMonth = trend ? revenueRow(trend[trend.length - 1]) : null;
   const revenueLastMonth = trend && trend.length > 1 ? revenueRow(trend[trend.length - 2]) : null;
+
+  // Average charge/session — always the clinic-wide figure, not scoped to
+  // just one therapist (per request: "a clinic overall metric"), from the
+  // same latest trend entry.
+  const latestReport = trend?.[trend.length - 1];
+  const avgChargePerSession =
+    latestReport && latestReport.total.visitCount > 0
+      ? Math.round(latestReport.total.billPaise / latestReport.total.visitCount)
+      : null;
 
   // Jump-nav: mobile chips + desktop rail, same sticky/IntersectionObserver
   // pattern as the note editor's — a flat list here (no SOAP-style
@@ -207,7 +227,11 @@ export function DashboardPage() {
   }
 
   const showTherapistComparison = scope.isAdmin && clinic.showTherapistComparison;
-  const jumpTargets = DASHBOARD_SECTIONS.filter((s) => s.key !== 'therapistComparison' || showTherapistComparison);
+  const jumpTargets = DASHBOARD_SECTIONS.filter(
+    (s) =>
+      (s.key !== 'therapistComparison' || showTherapistComparison) &&
+      (s.key !== 'modalityUsage' || clinic.clinicalDocsEnabled)
+  );
 
   const packagesInScope = useMemo(
     () =>
@@ -253,7 +277,7 @@ export function DashboardPage() {
           sense of "how's this month going" without reading the revenue
           chart. Trend badges compare to the prior calendar month; null
           (not a literal "0%") when there's nothing to compare against yet. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <KpiCard
           label={scope.isClinicWideView ? revenueLabel : `My ${revenueLabel}`}
           value={revenueThisMonth != null ? formatINR(revenueThisMonth) : '—'}
@@ -261,11 +285,16 @@ export function DashboardPage() {
           trendLabel="vs last month"
         />
         <KpiCard
-          label="Collection rate"
-          value={collectionThisMonth?.collectionRatePct != null ? `${collectionThisMonth.collectionRatePct}%` : '—'}
+          label="Avg charge/session"
+          value={avgChargePerSession != null ? formatINR(avgChargePerSession) : '—'}
+          trendLabel="clinic-wide, this month"
+        />
+        <KpiCard
+          label={scope.isClinicWideView ? 'Repeat visits (30d)' : 'My repeat visits (30d)'}
+          value={repeatVisitsThisMonth?.ratePct != null ? `${repeatVisitsThisMonth.ratePct}%` : '—'}
           trendLabel={
-            collectionThisMonth
-              ? `${formatINR(collectionThisMonth.collectedPaise)} of ${formatINR(collectionThisMonth.billedPaise)} billed`
+            repeatVisitsThisMonth
+              ? `${repeatVisitsThisMonth.repeatCount} of ${repeatVisitsThisMonth.totalVisits} visits`
               : undefined
           }
         />
@@ -280,19 +309,23 @@ export function DashboardPage() {
           trendLabel="vs last month"
         />
         <KpiCard
-          label={scope.isClinicWideView ? 'Open packages' : 'My open packages'}
-          value={packagesInScope.length}
-          trendLabel={
-            packagesInScope.some((p) => p.stale)
-              ? `${packagesInScope.filter((p) => p.stale).length} gone quiet`
-              : undefined
+          label={scope.isClinicWideView ? 'Packages this month' : 'My packages this month'}
+          value={newPatientsThisMonth?.newPackages ?? '—'}
+          trendPct={
+            newPatientsThisMonth && newPatientsLastMonth
+              ? pctChange(newPatientsThisMonth.newPackages, newPatientsLastMonth.newPackages)
+              : null
           }
+          trendLabel="vs last month"
         />
       </div>
 
-      {/* Mobile jump-nav — sticky under Shell's own header, same pattern
-          the note editor uses. */}
-      <nav className="sticky top-14 z-[1] -mx-4 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--paper)] px-4 py-2 md:hidden">
+      {/* Jump-nav — sticky under Shell's own header, same pattern the note
+          editor uses. A horizontal chip row at every width now (used to be
+          mobile-only, with a persistent left-side rail taking sidebar
+          space on desktop) — the rail cost more room than a page of
+          reference cards, glanced at rather than edited, actually needed. */}
+      <nav className="sticky top-14 z-[1] -mx-4 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--paper)] px-4 py-2">
         {jumpTargets.map(({ key, label }) => (
           <button
             key={key}
@@ -310,25 +343,7 @@ export function DashboardPage() {
         ))}
       </nav>
 
-      <div className="md:flex md:items-start md:gap-6">
-        <nav className="hidden md:sticky md:top-20 md:flex md:w-48 md:shrink-0 md:flex-col md:gap-0.5">
-          {jumpTargets.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => jumpToSection(key)}
-              className="flex w-full items-center rounded-md px-3 py-1.5 text-left text-xs font-medium"
-              style={{
-                background: activeSection === key ? 'var(--teal-light)' : 'transparent',
-                color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="min-w-0 flex-1 space-y-6">
+      <div className="space-y-6">
           <div
             ref={(el) => {
               if (el) sectionRefs.current.set('singleVisit', el);
@@ -499,6 +514,62 @@ export function DashboardPage() {
 
           <div
             ref={(el) => {
+              if (el) sectionRefs.current.set('serviceUsage', el);
+              else sectionRefs.current.delete('serviceUsage');
+            }}
+            className="scroll-mt-28 md:scroll-mt-20"
+          >
+            <SectionCard title={scope.isClinicWideView ? 'Frequently used services — this month' : 'My frequently used services — this month'}>
+              <p className="mb-3 text-xs text-[var(--muted)]">
+                Which billable services actually got used this month, most-visited first.
+              </p>
+              {serviceUsage === undefined ? null : serviceUsage.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--muted)]">No visits logged yet this month.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {serviceUsage.slice(0, 8).map((s) => (
+                    <li key={s.serviceId} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-[var(--ink)]">{s.serviceName}</span>
+                      <span className="flex items-center gap-3">
+                        <span className="font-num text-[var(--muted)]">{s.visitCount} visits</span>
+                        <span className="font-num text-[var(--muted)]">{formatINR(s.totalBilledPaise)}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </SectionCard>
+          </div>
+
+          {clinic.clinicalDocsEnabled && (
+            <div
+              ref={(el) => {
+                if (el) sectionRefs.current.set('modalityUsage', el);
+                else sectionRefs.current.delete('modalityUsage');
+              }}
+              className="scroll-mt-28 md:scroll-mt-20"
+            >
+              <SectionCard title="Treatment modalities">
+                <p className="mb-3 text-xs text-[var(--muted)]">
+                  How often each modality gets picked in clinical notes, across everyone on record — a look
+                  at which techniques actually get used, not just what's offered.
+                </p>
+                {modalityUsage === undefined ? null : modalityUsage.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-[var(--muted)]">
+                    No modalities recorded in any clinical note yet.
+                  </p>
+                ) : (
+                  <BarChart
+                    categories={modalityUsage.map((m) => m.modality)}
+                    series={[{ label: 'Times used', color: SERIES_COLORS[2], values: modalityUsage.map((m) => m.count) }]}
+                  />
+                )}
+              </SectionCard>
+            </div>
+          )}
+
+          <div
+            ref={(el) => {
               if (el) sectionRefs.current.set('referralSources', el);
               else sectionRefs.current.delete('referralSources');
             }}
@@ -521,7 +592,6 @@ export function DashboardPage() {
             </SectionCard>
           </div>
         </div>
-      </div>
     </div>
   );
 }

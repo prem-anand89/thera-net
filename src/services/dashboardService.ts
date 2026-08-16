@@ -47,6 +47,27 @@ export interface MonthlyCollection {
   collectionRatePct: number | null;
 }
 
+export interface RepeatVisitStats {
+  /** Visits this month where the same patient's immediately preceding
+   *  visit (any time before, not just within the month) was ≤30 days
+   *  earlier. */
+  repeatCount: number;
+  totalVisits: number;
+  ratePct: number | null;
+}
+
+export interface ServiceUsageRow {
+  serviceId: UUID;
+  serviceName: string;
+  visitCount: number;
+  totalBilledPaise: Paise;
+}
+
+export interface ModalityUsageRow {
+  modality: string;
+  count: number;
+}
+
 export interface RecentVisitRow {
   visitId: UUID;
   visitDate: string;
@@ -292,6 +313,92 @@ export function createDashboardService(repos: Repos) {
         collectedPaise,
         collectionRatePct: billedPaise > 0 ? Math.round((collectedPaise / billedPaise) * 100) : null,
       };
+    },
+
+    /**
+     * Of the visits logged this month, how many were a prompt follow-up —
+     * the same patient's immediately preceding visit (which may fall
+     * before the month started) was 30 days ago or less. A retention
+     * signal distinct from "New patients": this counts existing patients
+     * coming back quickly, not new ones showing up at all. Needs a 30-day
+     * lookback before the month starts so a visit on the 3rd can still see
+     * a prior visit from the previous month.
+     */
+    async repeatVisits(clinicId: UUID, month: FyMonth, therapistId?: UUID): Promise<RepeatVisitStats> {
+      const { from, to } = monthDateRange(month);
+      const lookbackDate = new Date(`${from}T00:00:00`);
+      lookbackDate.setDate(lookbackDate.getDate() - 30);
+      const lookbackFrom = lookbackDate.toISOString().slice(0, 10);
+
+      const visits = await repos.visits.list({ clinicId, from: lookbackFrom, to, therapistId });
+      const inMonth = visits.filter((v) => v.visitDate >= from && v.visitDate <= to);
+      const byPatient = groupByPatient(visits);
+
+      let repeatCount = 0;
+      for (const v of inMonth) {
+        const priorDates = (byPatient.get(v.patientId) ?? [])
+          .filter((pv) => pv.id !== v.id && pv.visitDate < v.visitDate)
+          .map((pv) => pv.visitDate)
+          .sort();
+        const mostRecentPrior = priorDates.at(-1);
+        if (mostRecentPrior && daysSince(mostRecentPrior, v.visitDate) <= 30) repeatCount++;
+      }
+
+      return {
+        repeatCount,
+        totalVisits: inMonth.length,
+        ratePct: inMonth.length > 0 ? Math.round((repeatCount / inMonth.length) * 100) : null,
+      };
+    },
+
+    /** Which billable services actually got used this month, most-visited
+     *  first — "frequently used services." Scoped the same way every other
+     *  monthly metric here is (clinic-wide for admin/front_desk, this
+     *  therapist's own visits otherwise). */
+    async serviceUsage(clinicId: UUID, month: FyMonth, therapistId?: UUID): Promise<ServiceUsageRow[]> {
+      const { from, to } = monthDateRange(month);
+      const [visits, catalog] = await Promise.all([
+        repos.visits.list({ clinicId, from, to, therapistId }),
+        repos.catalog.list(clinicId, true),
+      ]);
+      const nameById = new Map(catalog.map((c) => [c.id, c.name]));
+      const byService = new Map<UUID, { visitCount: number; totalBilledPaise: Paise }>();
+      for (const v of visits) {
+        const entry = byService.get(v.serviceCatalogId) ?? { visitCount: 0, totalBilledPaise: 0 };
+        entry.visitCount += 1;
+        entry.totalBilledPaise += v.actualBillPaise;
+        byService.set(v.serviceCatalogId, entry);
+      }
+      return [...byService.entries()]
+        .map(([serviceId, stats]) => ({ serviceId, serviceName: nameById.get(serviceId) ?? 'Unknown', ...stats }))
+        .sort((a, b) => b.visitCount - a.visitCount);
+    },
+
+    /**
+     * How often each treatment modality (Ultrasound/TENS/IFC/Heat-ice/
+     * Laser/Shockwave — the same preset list NoteEditorPage's Treatment
+     * section already offers as a multi-select, see coreAssessment.ts) was
+     * picked, across every consultation note on record — all-time, not
+     * month-scoped, matching referralSourceStats' own convention rather
+     * than adding a note→visit date join just for this. Only meaningful
+     * for a clinic with clinicalDocsEnabled; callers should gate on that
+     * rather than this returning an empty list either way.
+     */
+    async modalityUsage(clinicId: UUID): Promise<ModalityUsageRow[]> {
+      const notes = await repos.consultationNotes.listByClinic(clinicId);
+      const counts = new Map<string, number>();
+      for (const n of notes) {
+        const payload = n.assessmentPayload as { treatment?: { session?: { modalities?: unknown } } } | null;
+        const modalities = payload?.treatment?.session?.modalities;
+        if (!Array.isArray(modalities)) continue;
+        for (const m of modalities) {
+          if (typeof m !== 'string') continue;
+          counts.set(m, (counts.get(m) ?? 0) + 1);
+        }
+      }
+      return [...counts.entries()]
+        .map(([modality, count]) => ({ modality, count }))
+        .sort((a, b) => b.count - a.count);
     },
 
     /**

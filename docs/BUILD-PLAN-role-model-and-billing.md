@@ -1500,3 +1500,64 @@ plus real headless-browser renders of the KPI strip at both desktop
 fixed one bug in the *verification mockup itself* (a fixed-width wrapper
 that made the responsive grid look broken when it wasn't) before trusting
 the result.
+
+## Trends round 2: drop the rail, swap KPIs, add usage sections (2026-08-16)
+
+Follow-up to the restructure above, same day.
+
+**Rail removed.** The new desktop sidebar rail was itself the complaint —
+"occupying space unnecessarily." Dropped it entirely rather than shrinking
+it; the mobile chip nav (sticky, horizontal, `md:hidden` before this)
+lost that breakpoint restriction instead and now runs at every width. A
+scrolling chip row costs a couple of lines of vertical space regardless
+of viewport; a persistent sidebar cost a fixed column of horizontal space
+whether or not anyone was using it to navigate.
+
+**KPI swaps.** Collection rate → **Repeat visits (30d)**: of this month's
+visits, what fraction had that same patient back within 30 days of their
+prior one (`dashboardService.repeatVisits`, needs a 30-day lookback
+before the month starts so a visit on the 3rd can still see a late-May
+prior visit). Open packages → **Packages this month vs. last month**:
+reused the `monthlyNewCounts` pair already being fetched for the New
+Patients KPI (it returns `newPackages` alongside `newPatients` — no new
+query). Added **Avg charge/session**, clinic-wide only per request (not
+scoped to the viewing therapist, unlike every other KPI here) — `billPaise
+/ visitCount` from the trend data already on the page. `monthlyCollection`
+itself wasn't deleted, just unused from the KPI strip now — fully tested,
+reasonable it resurfaces somewhere else later.
+
+**Two new sections.** *Frequently used services* — `serviceUsage()`
+ranks this month's services by visit count (ranked list, matching the
+Packages section's existing pattern rather than a new chart shape).
+*Treatment modalities* — `modalityUsage()` tallies how often each preset
+modality got picked across every clinical note on record (all-time, like
+`referralSourceStats`, not month-scoped — avoided a note→visit date join
+just for this). Turns out the "preset dropdown for modalities" asked
+about already exists: `NoteEditorPage`'s Treatment section has had a
+multi-select (`Ultrasound`/`TENS`/`IFC`/`Heat/ice`/`Laser`/`Shockwave`)
+since Core Assessment shipped — this section just aggregates data that
+was already being captured but never surfaced anywhere. Gated on
+`clinic.clinicalDocsEnabled`, both in the section itself and the jump-nav
+entry, since a clinic without clinical notes turned on has no notes to
+aggregate.
+
+**Therapist comparison additions.** Two more one-bar-per-therapist
+snapshots alongside the existing 6-month revenue/visits trend charts:
+*Avg charge/session* (latest month, per therapist) and *Open packages*
+(needs a `therapists.list()` fetch to resolve `startedByTherapistId` to a
+name, since `openPackages()` rows don't carry one — the same join every
+other packages-by-therapist spot in the app already does). Utilization
+rate/ratio — asked about, deliberately not built: there's no scheduling/
+capacity data in this app (visits are logged after the fact, not booked
+against slots), so a literal "% of available capacity used" isn't
+computable from anything on record. Flagged as a recommendation rather
+than shipped guessing at a proxy definition (visits-per-working-day, say)
+the user hadn't actually asked for.
+
+Verified: typecheck, lint, vitest (252 passed — 7 new tests: 4 for
+`repeatVisits`, 1 for `serviceUsage`, 2 for `modalityUsage`, the last
+needing the test file's shared fake-repos fixture extended with a real
+`consultationNotes` backing store since it had only ever hardcoded an
+empty list), production build clean, real headless-browser renders of
+the 5-tile KPI strip and rail-free jump-nav at both desktop and mobile
+widths.
