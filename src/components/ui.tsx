@@ -62,12 +62,15 @@ export function RupeeInput({
   );
 }
 
-/** Small caption-over-number tile for summary strips. */
+/** Small caption-over-number tile for summary strips. Deliberately compact
+ *  — sized to sit three-plus across even on a phone, not one per row — so a
+ *  strip of them reads as a glanceable stat bar instead of eating most of
+ *  the screen before any actual content shows. */
 export function StatTile({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="min-w-36 flex-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-sm">
-      <div className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
-      <div className="font-num mt-1 text-2xl font-semibold text-[var(--ink)]">{value}</div>
+    <div className="min-w-[86px] flex-1 basis-[86px] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 shadow-sm">
+      <div className="truncate text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
+      <div className="font-num mt-0.5 text-base font-semibold text-[var(--ink)]">{value}</div>
     </div>
   );
 }

@@ -23,7 +23,6 @@ import {
   Field,
   SectionCard,
   StatTile,
-  SummaryBar,
   Panel,
 } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
@@ -249,12 +248,15 @@ export function WorkspacePage() {
         <ErrorNote message="Your login isn't linked to a therapist record yet, so today's visits and packages aren't showing here. Ask your admin to set it from Settings → Team → Service roster → Linked login." />
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
+      {/* One compact row, not two stacked grids — auto-fill sizes every
+          tile off the same column width, so a wrapped last item stays
+          tile-sized instead of a flex-wrap row's last (lonely) item
+          stretching to fill the whole row on its own. Each StatTile is
+          small enough that even 5 of them fit densely on a phone instead
+          of stacking one-per-row and pushing everything else off screen. */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(86px,1fr))] gap-2">
         {clinic.enableExpectedToday && <StatTile label="Expected" value={expectedToday?.length ?? 0} />}
         <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
         <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
         {scope.isClinicWideView ? (
           <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
@@ -266,34 +268,48 @@ export function WorkspacePage() {
         )}
       </div>
 
+      {/* A compact preview, not the full actionable row (PendingWorkRow) —
+          that stays reserved for the Panel bottom-sheet below, where there's
+          room for its inline "Mark paid"/"Add note" actions. Same treatment
+          at every width and for every role (this used to split into an
+          admin-only full-width grid at tab: and up vs. a tap-to-open chip
+          everywhere else) so "needs attention" is always glanceable on the
+          page itself, never hidden behind a tap, without the old grid's
+          per-row padding eating most of a tablet screen. */}
       {pendingWork && pendingWork.length > 0 && (
-        <>
-          {scope.isAdmin && (
-            <div className="hidden tab:block">
-              <SectionCard title="Needs attention">
-                <ul className="grid grid-cols-1 gap-2 tab:grid-cols-3">
-                  {pendingWork.map((item, i) => (
-                    <li key={i} className="rounded-lg border border-[var(--border)] p-3">
-                      <PendingWorkRow item={item} clinicId={clinic.id} />
-                    </li>
-                  ))}
-                </ul>
-              </SectionCard>
-            </div>
-          )}
-          <div className={scope.isAdmin ? 'tab:hidden' : ''}>
-            <SummaryBar tone="rust" label="need attention" count={pendingWork.length} onClick={() => setAttentionOpen(true)} />
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <h2 className="font-display text-sm font-semibold text-[var(--ink)]">Needs attention</h2>
+            {pendingWork.length > 3 && (
+              <button
+                type="button"
+                className="text-xs font-medium text-[var(--teal)] hover:underline"
+                onClick={() => setAttentionOpen(true)}
+              >
+                View all {pendingWork.length}
+              </button>
+            )}
           </div>
-        </>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {pendingWork.slice(0, 3).map((item, i) => (
+              <NeedsAttentionPreviewCard key={i} item={item} onClick={() => setAttentionOpen(true)} />
+            ))}
+          </div>
+        </div>
       )}
 
+      {/* List only — the manual "+ Add expected" entry form lives in its
+          own card near the bottom of the page (see AddExpectedCard) instead
+          of tacked onto this one, so this stays a short glanceable list at
+          the top instead of growing by a whole form's height every time
+          someone's mid-entry. */}
       {clinic.enableExpectedToday && (
         <SectionCard title="Expected today">
-          {(expectedToday ?? []).length === 0 && !addingExpected && (
+          {(expectedToday ?? []).length === 0 && (
             <p className="text-sm text-[var(--muted)]">Nobody expected yet today.</p>
           )}
           {expectedToday && expectedToday.length > 0 && (
-            <ul className="mb-2 divide-y divide-[var(--border)]">
+            <ul className="divide-y divide-[var(--border)]">
               {expectedToday.map((entry) => {
                 const linked = entry.patientId ? expectedPatientById.get(entry.patientId) : undefined;
                 const name = linked?.name ?? entry.patientName ?? 'Unnamed';
@@ -331,6 +347,74 @@ export function WorkspacePage() {
               })}
             </ul>
           )}
+        </SectionCard>
+      )}
+
+      <SectionCard title="Seen today">
+        {!today || today.visits.length === 0 ? (
+          <p className="text-sm text-[var(--muted)]">
+            No visits logged today — log one with &ldquo;+ New visit&rdquo;.
+          </p>
+        ) : (
+          <ResponsiveVisitList
+            rows={today.visits.map((row) =>
+              todayRowToCardData(row, openPackageGroupIds, scope.isAdmin, scope.myTherapistId, canViewClinicalNotes)
+            )}
+            showDate={false}
+            showPatient={true}
+            onInvoice={(row) => openInvoiceFor(row)}
+            onEditPatient={(row) => setEditPatientId(row.patientId)}
+            onDelete={(row) => {
+              if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+            }}
+            canInvoice={canBill}
+          />
+        )}
+      </SectionCard>
+
+      {clinic.clinicalDocsEnabled && notesPending.length > 0 && (
+        <SectionCard title="Documentation">
+          <ul className="divide-y divide-[var(--border)]">
+            {notesPending.map((p) => (
+              <li key={p.patientId} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                <div>
+                  <span className="font-display text-[var(--ink)]">{p.patientName}</span>{' '}
+                  <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                  <span className="ml-2 text-xs text-[var(--muted)]">
+                    {p.count} visit{p.count === 1 ? '' : 's'} awaiting notes · oldest {p.daysSince}d
+                  </span>
+                </div>
+                <Link
+                  to="/patients/$patientId/notes/new"
+                  params={{ patientId: p.patientId }}
+                  search={{ visitId: p.oldestVisitId }}
+                  className="text-xs font-medium text-[var(--amber)] hover:underline"
+                >
+                  Add note
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      )}
+
+      {/* A plain therapist can't reach the Reports nav tab (admin/front_desk
+          only, decision 3) — this is the one financial-aggregate exception
+          they do get (decision 4), so it surfaces here instead. Admin and
+          front_desk see it on Reports instead, not here, so it never shows
+          twice. */}
+      {!scope.isClinicWideView && <TherapistComparisonCard />}
+
+      {/* Manual entry for "Expected today" — placed last since it's the
+          page's least time-sensitive action (logging who to expect, not
+          reacting to who's here), and keeping it out of the way here is
+          what lets the list itself stay short at the top. This whole card
+          is a placeholder for a real appointment-booking system: once one
+          exists, "Expected today" should populate itself from confirmed
+          bookings for the day and this manual add becomes the fallback for
+          walk-ins/phone bookings only, not the only path in. */}
+      {clinic.enableExpectedToday && (
+        <SectionCard title="Add an expected visit">
           {addingExpected ? (
             <div className="space-y-2">
               <input
@@ -391,61 +475,6 @@ export function WorkspacePage() {
           )}
         </SectionCard>
       )}
-
-      <SectionCard title="Seen today">
-        {!today || today.visits.length === 0 ? (
-          <p className="text-sm text-[var(--muted)]">
-            No visits logged today — log one with &ldquo;+ New visit&rdquo;.
-          </p>
-        ) : (
-          <ResponsiveVisitList
-            rows={today.visits.map((row) =>
-              todayRowToCardData(row, openPackageGroupIds, scope.isAdmin, scope.myTherapistId, canViewClinicalNotes)
-            )}
-            showDate={false}
-            showPatient={true}
-            onInvoice={(row) => openInvoiceFor(row)}
-            onEditPatient={(row) => setEditPatientId(row.patientId)}
-            onDelete={(row) => {
-              if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
-            }}
-            canInvoice={canBill}
-          />
-        )}
-      </SectionCard>
-
-      {clinic.clinicalDocsEnabled && notesPending.length > 0 && (
-        <SectionCard title="Documentation">
-          <ul className="divide-y divide-[var(--border)]">
-            {notesPending.map((p) => (
-              <li key={p.patientId} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
-                <div>
-                  <span className="font-display text-[var(--ink)]">{p.patientName}</span>{' '}
-                  <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                  <span className="ml-2 text-xs text-[var(--muted)]">
-                    {p.count} visit{p.count === 1 ? '' : 's'} awaiting notes · oldest {p.daysSince}d
-                  </span>
-                </div>
-                <Link
-                  to="/patients/$patientId/notes/new"
-                  params={{ patientId: p.patientId }}
-                  search={{ visitId: p.oldestVisitId }}
-                  className="text-xs font-medium text-[var(--amber)] hover:underline"
-                >
-                  Add note
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </SectionCard>
-      )}
-
-      {/* A plain therapist can't reach the Reports nav tab (admin/front_desk
-          only, decision 3) — this is the one financial-aggregate exception
-          they do get (decision 4), so it surfaces here instead. Admin and
-          front_desk see it on Reports instead, not here, so it never shows
-          twice. */}
-      {!scope.isClinicWideView && <TherapistComparisonCard />}
 
       <Panel open={attentionOpen} onClose={() => setAttentionOpen(false)} title="Needs attention">
         <ul className="divide-y divide-[var(--border)]">
@@ -520,6 +549,27 @@ export function WorkspacePage() {
         />
       )}
     </div>
+  );
+}
+
+/** Glance-only card for the top-of-page preview — tapping it opens the
+ *  Panel bottom-sheet where PendingWorkRow's actual actions live, rather
+ *  than cramming "Mark paid"/"Add note" buttons into a card this narrow. */
+function NeedsAttentionPreviewCard({ item, onClick }: { item: PendingWorkItem; onClick: () => void }) {
+  const badge = PENDING_KIND[item.kind];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg border-y border-r border-[var(--border)] bg-[var(--surface)] py-2 pl-2.5 pr-3 text-left shadow-sm"
+      style={{ borderLeft: `3px solid ${badge.fg}` }}
+    >
+      <div className="text-[10px] font-medium" style={{ color: badge.fg }}>
+        {badge.label(item)}
+      </div>
+      <div className="mt-0.5 truncate text-sm font-medium text-[var(--ink)]">{item.patientName}</div>
+      <div className="truncate text-xs text-[var(--muted)]">{item.detail}</div>
+    </button>
   );
 }
 

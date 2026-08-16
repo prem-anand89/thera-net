@@ -632,14 +632,125 @@ export function NoteEditorPage() {
           </div>
         )}
 
-        {/* General Health & Triage — moved up near basic info (§1), not part
-            of the accordion, always visible/editable regardless of note mode.
-            Uses the same card + title/subtitle header shape as the accordion
-            sections below (just always-open, no chevron), so the run of
-            blocks down this page reads as one structure rather than three
-            unrelated widget styles. A jump target (see EXTRA_JUMP_TARGETS)
-            even though it isn't a NoteSectionKey, so it's reachable from the
-            nav instead of only by scrolling. */}
+        {/* Jump-nav tabs sit directly under the patient header, above
+            General Health/Screening/Attending therapist as well as the
+            accordion — previously this nav only appeared after those three
+            cards, so scrolling (or needing to jump) through them had no tab
+            bar visible at all. Sticky under Shell's own header so it stays
+            on screen through the whole page, not just the accordion. */}
+        <nav className="sticky top-14 z-[1] -mx-4 mb-3 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--paper)] px-4 py-2 md:hidden">
+          {EXTRA_JUMP_TARGETS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => jumpToSection(key)}
+              className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium"
+              style={{
+                background: activeSection === key ? 'var(--teal-light)' : 'var(--surface)',
+                borderColor: activeSection === key ? 'transparent' : 'var(--border)',
+                color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
+              }}
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: extraJumpDot(key) }} />
+              {label}
+            </button>
+          ))}
+          {SECTION_GROUPS.flatMap((group) =>
+            group.keys.filter((key) => key !== 'outcome' || outcomeCards.length > 0)
+          ).map((key) => {
+            const completion = sectionCompletion(key, payload);
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => jumpToSection(key)}
+                className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium"
+                style={{
+                  background: activeSection === key ? 'var(--teal-light)' : 'var(--surface)',
+                  borderColor: activeSection === key ? 'transparent' : 'var(--border)',
+                  color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
+                }}
+              >
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: STATUS_DOT[completion] }} />
+                {SECTION_LABELS[key]}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="md:flex md:items-start md:gap-6">
+          <nav className="hidden md:sticky md:top-20 md:flex md:max-h-[calc(100vh-6rem)] md:w-52 md:shrink-0 md:flex-col md:gap-0.5 md:overflow-y-auto">
+            <div className="mb-1.5">
+              {EXTRA_JUMP_TARGETS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => jumpToSection(key)}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs font-medium"
+                  style={{
+                    background: activeSection === key ? 'var(--teal-light)' : 'transparent',
+                    color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
+                  }}
+                >
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: extraJumpDot(key) }} />
+                  {label}
+                </button>
+              ))}
+            </div>
+            {SECTION_GROUPS.map((group) => {
+              // Outcome Tracking only exists once there's prior data to
+              // compare against — drop its whole group rather than leave a
+              // heading with nothing under it.
+              const keys = group.keys.filter((key) => key !== 'outcome' || outcomeCards.length > 0);
+              if (keys.length === 0) return null;
+              return (
+                <div key={group.label} className="mb-1.5 last:mb-0">
+                  <p className="px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]/70">
+                    {group.label}
+                  </p>
+                  {keys.map((key) => {
+                    const completion = sectionCompletion(key, payload);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => jumpToSection(key)}
+                        className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs font-medium"
+                        style={{
+                          background: activeSection === key ? 'var(--teal-light)' : 'transparent',
+                          color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
+                        }}
+                      >
+                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: STATUS_DOT[completion] }} />
+                        {SECTION_LABELS[key]}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              onClick={toggleCollapseAll}
+              className="mt-2 shrink-0 px-3 text-left text-xs text-[var(--teal)] hover:underline"
+            >
+              {openSections.size > 0 ? 'Collapse all' : 'Expand all'}
+            </button>
+          </nav>
+
+          <div className="setup-accordion min-w-0 flex-1">
+
+        {/* General Health & Triage — not part of the accordion, always
+            visible/editable regardless of note mode. Uses the same card +
+            title/subtitle header shape as the accordion sections below
+            (just always-open, no chevron), so the run of blocks down this
+            page reads as one structure rather than three unrelated widget
+            styles. A jump target (see EXTRA_JUMP_TARGETS) even though it
+            isn't a NoteSectionKey, so it's reachable from the nav instead
+            of only by scrolling. Lives inside the accordion's own column
+            (not above it, alongside the rail) so the sticky mobile/desktop
+            nav actually covers it while scrolling — it used to sit above
+            both nav bars, where neither stayed visible past it. */}
         <div
           ref={(el) => {
             if (el) sectionRefs.current.set('generalHealth', el);
@@ -783,114 +894,6 @@ export function NoteEditorPage() {
             were meant that way.
           </div>
         )}
-
-        {/* Mobile section nav. Below md: the sidebar rail is hidden, which
-            left phones with no way to move around a nine-section form
-            except scrolling the whole thing. Sticky under Shell's own
-            header (Shell's bottom tab bar owns the bottom of the viewport
-            — a second bar down there would compete with it), same status
-            dots as the desktop rail. */}
-        <nav className="sticky top-14 z-[1] -mx-4 mb-3 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--paper)] px-4 py-2 md:hidden">
-          {EXTRA_JUMP_TARGETS.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => jumpToSection(key)}
-              className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium"
-              style={{
-                background: activeSection === key ? 'var(--teal-light)' : 'var(--surface)',
-                borderColor: activeSection === key ? 'transparent' : 'var(--border)',
-                color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
-              }}
-            >
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: extraJumpDot(key) }} />
-              {label}
-            </button>
-          ))}
-          {SECTION_GROUPS.flatMap((group) =>
-            group.keys.filter((key) => key !== 'outcome' || outcomeCards.length > 0)
-          ).map((key) => {
-            const completion = sectionCompletion(key, payload);
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => jumpToSection(key)}
-                className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium"
-                style={{
-                  background: activeSection === key ? 'var(--teal-light)' : 'var(--surface)',
-                  borderColor: activeSection === key ? 'transparent' : 'var(--border)',
-                  color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
-                }}
-              >
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: STATUS_DOT[completion] }} />
-                {SECTION_LABELS[key]}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="md:flex md:items-start md:gap-6">
-          <nav className="hidden md:sticky md:top-20 md:flex md:max-h-[calc(100vh-6rem)] md:w-52 md:shrink-0 md:flex-col md:gap-0.5 md:overflow-y-auto">
-            <div className="mb-1.5">
-              {EXTRA_JUMP_TARGETS.map(({ key, label }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => jumpToSection(key)}
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs font-medium"
-                  style={{
-                    background: activeSection === key ? 'var(--teal-light)' : 'transparent',
-                    color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
-                  }}
-                >
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: extraJumpDot(key) }} />
-                  {label}
-                </button>
-              ))}
-            </div>
-            {SECTION_GROUPS.map((group) => {
-              // Outcome Tracking only exists once there's prior data to
-              // compare against — drop its whole group rather than leave a
-              // heading with nothing under it.
-              const keys = group.keys.filter((key) => key !== 'outcome' || outcomeCards.length > 0);
-              if (keys.length === 0) return null;
-              return (
-                <div key={group.label} className="mb-1.5 last:mb-0">
-                  <p className="px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]/70">
-                    {group.label}
-                  </p>
-                  {keys.map((key) => {
-                    const completion = sectionCompletion(key, payload);
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => jumpToSection(key)}
-                        className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs font-medium"
-                        style={{
-                          background: activeSection === key ? 'var(--teal-light)' : 'transparent',
-                          color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
-                        }}
-                      >
-                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: STATUS_DOT[completion] }} />
-                        {SECTION_LABELS[key]}
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
-            <button
-              type="button"
-              onClick={toggleCollapseAll}
-              className="mt-2 shrink-0 px-3 text-left text-xs text-[var(--teal)] hover:underline"
-            >
-              {openSections.size > 0 ? 'Collapse all' : 'Expand all'}
-            </button>
-          </nav>
-
-          <div className="setup-accordion min-w-0 flex-1">
 
         {/* 1. Chief Complaint */}
         <div

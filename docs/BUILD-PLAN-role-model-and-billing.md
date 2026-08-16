@@ -1190,3 +1190,69 @@ served the build and loaded it in headless Chromium, confirming
 `manifest.json` resolves, the favicon/apple-touch-icon `<link>` tags
 resolve to 200s, and no new console errors. Preview images at 512/192/32
 sent to the user for sign-off on the design before committing.
+
+## Seventh round: icon redraw, note-nav placement, Workspace density (2026-08-16)
+
+Four requests this round, three implemented directly:
+
+**Icon redraw.** The user sent reference images (a notepad-with-pen glyph)
+and asked to replace the "Rx" monogram with that concept, improved. Redrew
+as flat vector shapes (ruled notepad + a pencil resting at its corner,
+tip on the last line) in the same teal/cream palette as the Rx version,
+scaled 0.82x from center so the composition's farthest point (the
+pencil's eraser cap, ~41% from center unscaled) clears Android's 40%
+maskable safe radius. Regenerated all sizes the same way as before
+(headless Chromium at each target viewport, no image library needed) and
+replaced every file in `public/`.
+
+**Note editor jump-nav placement.** "Shift the tabs... above the general
+health so it stays on top always visible" — the jump-nav (mobile chips
+and desktop rail, added two rounds ago) sat *after* General
+Health/Screening/Attending therapist, so scrolling through those three
+cards had no nav visible at all; it only appeared once you'd already
+scrolled past them. Restructured `NoteEditorPage.tsx` so all three cards
+now live inside the accordion's own column (after the desktop rail, after
+the mobile chip nav) instead of above both — the mobile nav is `sticky
+top-14` and the desktop rail `sticky top-20`, so now that General
+Health/Screening/Attending are inside the same scroll extent as the
+accordion, both stay visible through the whole page, not just the SOAP
+sections. No visual change to the cards themselves, purely a DOM reorder.
+
+**Workspace density.** Three related complaints — stat tiles "occupy the
+entire screen," Needs Attention "missed out," Expected Today's manual-add
+form crowding the list — traced to one root cause: `StatTile` was sized
+for a handful of tiles in a loose flex row, but on a phone (`grid-cols-1`
+below `sm:`) each tile took its own full-width row, so 4 stacked tiles
+really could fill a phone screen before any real content appeared.
+Shrunk `StatTile` (rounded-xl, `px-2.5 py-2`, value down from `text-2xl`
+to `text-base`) and switched Workspace's stat row to
+`grid-cols-[repeat(auto-fill,minmax(86px,1fr))]` — sized off a fixed
+column width so tiles pack 3-4 to a row on a phone and a wrapped last
+tile stays tile-sized instead of a flex row's lone leftover item
+stretching to fill its own row alone (tried `flex flex-wrap` first,
+confirmed via a real render that this was exactly that failure mode).
+
+Needs Attention used to split into an admin-only full grid at `tab:` and
+up vs. a tap-to-open summary chip everywhere else — replaced both with
+one glance-level treatment for every role/width: up to 3 compact cards
+(colored left border by kind, patient name, one line of detail) inline
+on the page, tapping one opens the existing bottom-sheet Panel where
+`PendingWorkRow`'s full actions (Mark paid, Add note, View) still live.
+Never hidden behind a tap now, and no longer a per-role/per-breakpoint
+split to reason about.
+
+Expected Today's manual "+ Add expected" form used to render inside the
+same card as the list, so mid-entry the list-you're-scanning and the
+form-you're-filling competed for the same space. Split into two cards:
+"Expected today" (list only, stays near the top) and "Add an expected
+visit" (the form, moved to the bottom of the page — the least
+time-sensitive action here, unlike reacting to who's actually arrived).
+Left a comment on the new card flagging it as a placeholder: once a real
+appointment-booking system exists, "Expected today" should populate
+itself from confirmed bookings for the day, and this manual form becomes
+the walk-in/phone-booking fallback rather than the only path in.
+
+Verified: typecheck, lint, vitest (240 passed), production build clean,
+plus a real headless-browser render of the full redesigned Workspace at
+390px confirming the compact tile row, the three Needs Attention preview
+cards, and the list/form split all render coherently together.
