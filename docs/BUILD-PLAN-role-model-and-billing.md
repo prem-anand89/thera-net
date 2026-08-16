@@ -1663,3 +1663,56 @@ verified via direct query (all 3 clinics now `bm_split_pct=100,
 tax_pct=0`). Browser render not done this round — the dashboard sits
 behind Supabase auth and no test credentials were available in this
 environment; typecheck/lint/test/build is the verification that ran.
+
+## Settings/Team visual redesign, applied across every tab (2026-08-16)
+
+Asked to confirm the previously-mocked Team panel design (colored role
+pills, avatar-per-role member cards, pill-based invite role picker) and
+extend the same visual language to the rest of Settings. Given the choice
+of scoping this to Team first vs. all seven tabs in one pass, chose the
+full pass — accepted the tradeoff that this environment has no login
+credentials for the live Supabase-backed app, so verification stops at
+typecheck/lint/test/build plus a static-markup render (below), not a real
+interactive session.
+
+**Rail nav** (`SetupPage.tsx`): every section — not just Team — now gets
+a small colored icon badge (teal profile, amber billing, rust partner,
+moss team, teal services, slate features/data) instead of a uniform gray
+row, matching the mockup's rail. This is the one change that reaches
+every tab at once, since all seven share the same nav.
+
+**Team → Members**: the flat text list became a responsive card grid
+(1/2/3 columns) — role-colored circular avatar (admin teal, therapist
+moss, front_desk amber), name, email, and a matching role pill, edit/
+revoke actions on a hairline divider at the card's bottom. Existing
+inline-edit behavior (swap the card body for a name/role form) is
+unchanged, just restyled. **Invite panel**: the role `<select>` became a
+three-way pill picker (Therapist/Front desk/Admin), same accent colors as
+the member cards, so picking a role while inviting looks like the role
+you're about to assign. **Service roster**: rows gained an Active/
+Inactive status pill (previously just a strikethrough on the name) —
+functionally identical (photo upload, deactivate/delete, linked-login
+dropdown all unchanged), and reordered to Members → Invite → Service
+roster to match the mockup and to put "who has a login" before "invite
+someone" before "who's on the billing roster."
+
+**Services tab**: catalog rows gained the same Active/Inactive pill next
+to their existing Deactivate/Reactivate link, for the same status-at-a-
+glance consistency — the one other tab with a real active/inactive
+concept. Clinic profile/Billing/Partner/Features/Data are plain
+single-entity forms with no list of people or role-like statuses to
+apply card/pill treatment to; their share of "similar design" is the
+rail-nav icon badge above, which already touches them.
+
+Verified: typecheck clean, lint clean, vitest (252 passed, unaffected —
+this round touched only presentation, no service-layer logic), production
+build clean. Rendered the new Team markup (rail nav + member cards +
+invite pills + service roster) in a real headless-browser pass using the
+project's actual compiled Tailwind CSS, at both a 1180px desktop width
+and a 390px mobile width — confirmed the card grid collapses to one
+column, the rail nav collapses to the existing horizontal chip scroller,
+and no text or icon overflow at either width. This was a static-markup
+render built to match the new JSX class-for-class, not the live
+interactive app (no auth in this environment) — worth a real click-through
+once credentials are available, particularly the inline member-edit form
+and the invite-role pill picker's click behavior.

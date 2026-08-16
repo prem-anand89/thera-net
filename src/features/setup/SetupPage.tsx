@@ -52,31 +52,85 @@ const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
   { label: 'System', keys: ['features', 'data'] },
 ];
 
-const SECTIONS: { key: SectionKey; label: string; description: string }[] = [
-  { key: 'profile', label: 'Clinic profile', description: 'Name, address, contact info, logo, walk-in ID prefix.' },
+/** One accent color per section, matching the reviewed Team-panel mockup's
+ *  rail — an icon badge next to every rail item, colored per section
+ *  rather than a single uniform gray. */
+type Accent = 'teal' | 'amber' | 'rust' | 'moss' | 'slate';
+
+const SECTIONS: { key: SectionKey; label: string; description: string; accent: Accent }[] = [
+  { key: 'profile', label: 'Clinic profile', description: 'Name, address, contact info, logo, walk-in ID prefix.', accent: 'teal' },
   {
     key: 'billing',
     label: 'Billing & invoicing',
     description: 'Invoice numbering, GST/tax ID, fiscal year, who can bill.',
+    accent: 'amber',
   },
   {
     key: 'partner',
     label: 'Partner & split',
     description: 'Revenue share with a partner hospital, therapist splits, TDS.',
+    accent: 'rust',
   },
-  { key: 'team', label: 'Team', description: 'Invite and manage logins, therapist roster.' },
-  { key: 'services', label: 'Services', description: 'Catalog of billable services and package prices.' },
-  { key: 'features', label: 'Features', description: 'Optional modules — Expected today, clinical notes, comparison chart.' },
+  { key: 'team', label: 'Team', description: 'Invite and manage logins, therapist roster.', accent: 'moss' },
+  { key: 'services', label: 'Services', description: 'Catalog of billable services and package prices.', accent: 'teal' },
+  {
+    key: 'features',
+    label: 'Features',
+    description: 'Optional modules — Expected today, clinical notes, comparison chart.',
+    accent: 'slate',
+  },
   {
     key: 'data',
     label: 'Data & maintenance',
     description: 'Import historical visits, back up or restore, reset this device, wipe clinic data.',
+    accent: 'slate',
   },
 ];
 
 // Same two-lists-must-agree guard as the note editor's jump-nav.
 if (SECTION_GROUPS.flatMap((g) => g.keys).length !== SECTIONS.length) {
   throw new Error('SECTION_GROUPS is out of sync with SECTIONS');
+}
+
+const ACCENT_VARS: Record<Accent, { color: string; light: string }> = {
+  teal: { color: 'var(--teal)', light: 'var(--teal-light)' },
+  amber: { color: 'var(--amber)', light: 'var(--amber-light)' },
+  rust: { color: 'var(--rust)', light: 'var(--rust-light)' },
+  moss: { color: 'var(--moss)', light: 'var(--moss-light)' },
+  slate: { color: 'var(--slate)', light: 'var(--slate-light)' },
+};
+
+const SECTION_ICON_PATHS: Record<SectionKey, string> = {
+  profile: 'M2.5 3h11v10h-11zM5.5 6h5M5.5 8.3h5M5.5 10.6h3',
+  billing: 'M2.5 6.5L8 2.8l5.5 3.7M3.7 5.8V12a1 1 0 001 1h6.6a1 1 0 001-1V5.8',
+  partner: 'M8 2.5l1.4 3.1 3.4.4-2.5 2.3.7 3.4L8 10l-3 1.7.7-3.4-2.5-2.3 3.4-.4L8 2.5z',
+  team: 'M2.3 13c.4-2.5 2-3.9 3.9-3.9s3.5 1.4 3.9 3.9M9.9 9.5c1.6.2 2.8 1.4 3.1 3.5',
+  services: 'M3 4h10M3 8h10M3 12h6',
+  features: 'M8 2.5v1.8M8 11.7v1.8M13.5 8h-1.8M4.3 8H2.5M11.8 4.2l-1.3 1.3M5.5 10.5l-1.3 1.3M11.8 11.8l-1.3-1.3M5.5 5.5L4.2 4.2',
+  data: 'M3 5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2zM3 5v6c0 1.1 2.2 2 5 2s5-.9 5-2V5M3 8c0 1.1 2.2 2 5 2s5-.9 5-2',
+};
+
+/** Small colored icon badge for a settings section — same 28px rounded
+ *  square + accent-tinted background as the rail-nav mockup. `team` and
+ *  `partner` need an extra circle for their people/star glyphs since a
+ *  single path can't express both. */
+function SectionIcon({ sectionKey, accent }: { sectionKey: SectionKey; accent: Accent }) {
+  const { color, light } = ACCENT_VARS[accent];
+  return (
+    <span
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
+      style={{ background: light, color }}
+    >
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+        {sectionKey === 'team' && <circle cx="6" cy="5.3" r="2" stroke="currentColor" strokeWidth="1.4" />}
+        {sectionKey === 'partner' ? (
+          <path d={SECTION_ICON_PATHS[sectionKey]} stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+        ) : (
+          <path d={SECTION_ICON_PATHS[sectionKey]} stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        )}
+      </svg>
+    </span>
+  );
 }
 
 /** Only add/remove `key` if that actually changes membership — keeps the
@@ -152,19 +206,19 @@ export function SetupPage() {
               </p>
               {group.keys.map((key) => {
                 const s = SECTIONS.find((x) => x.key === key)!;
+                const active = activeKey === s.key;
+                const accent = ACCENT_VARS[s.accent];
                 return (
                   <button
                     key={s.key}
                     type="button"
                     onClick={() => selectSection(s.key)}
-                    className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm font-medium tab:block tab:w-full ${
-                      activeKey === s.key
-                        ? 'bg-[var(--teal-light)] text-[var(--teal)]'
-                        : 'text-[var(--muted)] hover:bg-[var(--paper)]'
-                    }`}
+                    className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm font-medium tab:w-full"
+                    style={active ? { background: accent.light, color: accent.color } : { color: 'var(--muted)' }}
                   >
+                    <SectionIcon sectionKey={s.key} accent={s.accent} />
                     {s.label}
-                    {dirtyKeys.has(s.key) && <span className="ml-1.5 text-[var(--rust)]">•</span>}
+                    {dirtyKeys.has(s.key) && <span className="text-[var(--rust)]">•</span>}
                   </button>
                 );
               })}
@@ -984,12 +1038,24 @@ function Catalog() {
                 </td>
                 <td className={tdNum}>{formatINR(effectivePricePerSession(item))}</td>
                 <td className={td}>
-                  <button
-                    className="text-xs text-[var(--teal)] hover:underline"
-                    onClick={() => void toggleActive(item)}
-                  >
-                    {item.active ? 'Deactivate' : 'Reactivate'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+                      style={
+                        item.active
+                          ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
+                          : { background: 'var(--paper)', color: 'var(--muted)' }
+                      }
+                    >
+                      {item.active ? 'Active' : 'Inactive'}
+                    </span>
+                    <button
+                      className="text-xs text-[var(--teal)] hover:underline"
+                      onClick={() => void toggleActive(item)}
+                    >
+                      {item.active ? 'Deactivate' : 'Reactivate'}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1049,6 +1115,26 @@ interface ClinicMember {
   email: string;
   role: string;
   displayName: string | null;
+}
+
+/** Same accent per role everywhere a role shows up as a colored pill or
+ *  avatar in Settings → Team — admin teal, therapist moss, front_desk amber. */
+const ROLE_ACCENT: Record<Exclude<ClinicRole, 'unknown'>, Accent> = {
+  admin: 'teal',
+  therapist: 'moss',
+  front_desk: 'amber',
+};
+
+function RolePill({ role }: { role: Exclude<ClinicRole, 'unknown'> }) {
+  const { color, light } = ACCENT_VARS[ROLE_ACCENT[role]];
+  return (
+    <span
+      className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+      style={{ background: light, color }}
+    >
+      {CLINIC_ROLE_LABELS[role]}
+    </span>
+  );
 }
 
 /** Same split-on-whitespace, first-two-initials logic already duplicated
@@ -1258,62 +1344,19 @@ function Therapists() {
     }
   }
 
+  const inviteRoles: Exclude<ClinicRole, 'unknown'>[] = ['therapist', 'front_desk', 'admin'];
+
   return (
     <SectionCard title="Therapists & team">
-      <div className="mb-6 space-y-3">
-        <h3 className="text-sm font-semibold text-[var(--ink)]">Invite a team member</h3>
-        <div className="flex max-w-sm flex-col gap-2">
-          <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
-            Role
-            <select
-              className={inputCls}
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as 'admin' | 'therapist' | 'front_desk')}
-              disabled={inviteBusy}
-            >
-              <option value="therapist">Therapist</option>
-              <option value="front_desk">Front desk</option>
-              <option value="admin">Admin</option>
-            </select>
-          </label>
-          <input
-            className={inputCls}
-            placeholder={
-              inviteRole === 'therapist'
-                ? 'Their name — shows in the therapist picker on visits'
-                : 'Their name — shown in the app instead of their email'
-            }
-            value={inviteName}
-            onChange={(e) => setInviteName(e.target.value)}
-            disabled={inviteBusy}
-          />
-          <input
-            className={inputCls}
-            type="email"
-            placeholder="Email address"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            disabled={inviteBusy}
-          />
-          <button className={btnSecondary} disabled={inviteBusy} onClick={() => void inviteTherapist()}>
-            {inviteBusy ? 'Sending…' : 'Send invitation'}
-          </button>
+      <div className="mb-6">
+        <div className="mb-3 flex items-baseline justify-between gap-2">
+          <h3 className="text-sm font-semibold text-[var(--ink)]">Members</h3>
+          {members && <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2 py-0.5 font-mono text-[11px] text-[var(--muted)]">{members.length}</span>}
         </div>
-        <p className="text-xs text-[var(--muted)]">
-          {inviteRole === 'therapist'
-            ? "Automatically added to the service roster below and linked to their login — no separate setup step needed. They can rename themselves from the account menu once they've signed in."
-            : "They can rename themselves from the account menu once they've signed in — this is just the starting name."}
-        </p>
-        {inviteSuccess && <p className="text-sm text-[var(--moss)]">{inviteSuccess}</p>}
-        {inviteError && <ErrorNote message={inviteError} />}
-      </div>
-
-      <div className="border-t border-[var(--border)] pt-6">
-        <h3 className="mb-3 text-sm font-semibold text-[var(--ink)]">Team members</h3>
         {members && members.length > 0 ? (
-          <ul className="space-y-2">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {members.map((m) => (
-              <MemberRow
+              <MemberCard
                 key={m.userId}
                 member={m}
                 clinicId={clinic.id}
@@ -1322,7 +1365,7 @@ function Therapists() {
                 onSaved={() => void refetchMembers()}
               />
             ))}
-          </ul>
+          </div>
         ) : (
           <p className="text-xs text-[var(--muted)]">No team members yet.</p>
         )}
@@ -1330,10 +1373,79 @@ function Therapists() {
       </div>
 
       <div className="border-t border-[var(--border)] pt-6">
-        <h3 className="mb-3 text-sm font-semibold text-[var(--ink)]">Service roster</h3>
-        <ul className="mb-3 space-y-2">
+        <h3 className="mb-3 text-sm font-semibold text-[var(--ink)]">Invite a team member</h3>
+        <div className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4">
+          <div className="mb-3 flex gap-2">
+            {inviteRoles.map((r) => {
+              const { color, light } = ACCENT_VARS[ROLE_ACCENT[r]];
+              const selected = inviteRole === r;
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  disabled={inviteBusy}
+                  onClick={() => setInviteRole(r)}
+                  className="flex-1 rounded-lg border px-2 py-2 text-center text-xs font-semibold"
+                  style={{
+                    borderColor: selected ? color : 'var(--border)',
+                    background: selected ? light : 'var(--surface)',
+                    color: selected ? color : 'var(--muted)',
+                  }}
+                >
+                  {CLINIC_ROLE_LABELS[r]}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-col gap-2">
+            <input
+              className={inputCls}
+              placeholder={
+                inviteRole === 'therapist'
+                  ? 'Their name — shows in the therapist picker on visits'
+                  : 'Their name — shown in the app instead of their email'
+              }
+              value={inviteName}
+              onChange={(e) => setInviteName(e.target.value)}
+              disabled={inviteBusy}
+            />
+            <input
+              className={inputCls}
+              type="email"
+              placeholder="Email address"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              disabled={inviteBusy}
+            />
+            <button className={btnPrimary} disabled={inviteBusy} onClick={() => void inviteTherapist()}>
+              {inviteBusy ? 'Sending…' : 'Send invitation'}
+            </button>
+          </div>
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            {inviteRole === 'therapist'
+              ? "Automatically added to the service roster below and linked to their login — no separate setup step needed. They can rename themselves from the account menu once they've signed in."
+              : "They can rename themselves from the account menu once they've signed in — this is just the starting name."}
+          </p>
+        </div>
+        {inviteSuccess && <p className="mt-2 text-sm text-[var(--moss)]">{inviteSuccess}</p>}
+        {inviteError && <ErrorNote message={inviteError} />}
+      </div>
+
+      <div className="border-t border-[var(--border)] pt-6">
+        <div className="mb-3 flex items-baseline justify-between gap-2">
+          <h3 className="text-sm font-semibold text-[var(--ink)]">Service roster</h3>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2 py-0.5 font-mono text-[11px] text-[var(--muted)]">
+            {(therapists ?? []).filter((t) => t.active).length} active
+          </span>
+        </div>
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          Who patients get billed against and assigned to on a visit — every Member above with the
+          "Therapist" role gets a roster entry automatically; add one manually here for a therapist
+          who doesn't need a login of their own.
+        </p>
+        <div className="mb-3 divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] bg-[var(--surface)]">
           {(therapists ?? []).map((t) => (
-            <li key={t.id} className="flex flex-wrap items-center gap-3 text-sm">
+            <div key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
               <label
                 className="block h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-full border border-[var(--border)] bg-[var(--paper)]"
                 title="Change photo"
@@ -1352,7 +1464,17 @@ function Therapists() {
                   onChange={(e) => e.target.files?.[0] && void uploadTherapistPhoto(t, e.target.files[0])}
                 />
               </label>
-              <span className={`min-w-32 ${t.active ? '' : 'text-[var(--muted)] line-through'}`}>{t.name}</span>
+              <span className="min-w-32 text-[var(--ink)]">{t.name}</span>
+              <span
+                className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+                style={
+                  t.active
+                    ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
+                    : { background: 'var(--paper)', color: 'var(--muted)' }
+                }
+              >
+                {t.active ? 'Active' : 'Inactive'}
+              </span>
               <button
                 className="text-xs text-[var(--teal)] hover:underline"
                 onClick={() =>
@@ -1394,9 +1516,9 @@ function Therapists() {
                   </select>
                 </label>
               )}
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
         <div className="flex max-w-sm gap-2">
           <input
             className={inputCls}
@@ -1428,12 +1550,13 @@ function Therapists() {
   );
 }
 
-/** One "Team members" row — view state shows display name (falling back to
- *  email if the member hasn't set one) + role; edit state lets an admin
- *  change either. This is the admin-side counterpart to the self-service
- *  name editor in Shell.tsx's account menu — a member can always rename
- *  themselves, and now an admin can also rename or reassign anyone. */
-function MemberRow({
+/** One "Members" card — view state shows a role-colored avatar, display
+ *  name (falling back to email if the member hasn't set one), and a role
+ *  pill; edit state swaps the card body for a small inline form. This is
+ *  the admin-side counterpart to the self-service name editor in
+ *  Shell.tsx's account menu — a member can always rename themselves, and
+ *  now an admin can also rename or reassign anyone. */
+function MemberCard({
   member,
   clinicId,
   revoking,
@@ -1451,6 +1574,8 @@ function MemberRow({
   const [roleDraft, setRoleDraft] = useState<ClinicRole>(member.role as Exclude<ClinicRole, 'unknown'>);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const role = (member.role as Exclude<ClinicRole, 'unknown'>) ?? 'therapist';
+  const { color, light } = ACCENT_VARS[ROLE_ACCENT[role] ?? 'slate'];
 
   async function save() {
     setSaving(true);
@@ -1475,7 +1600,7 @@ function MemberRow({
 
   if (editing) {
     return (
-      <li className="space-y-2 rounded-md border border-[var(--border)] p-2.5 text-sm">
+      <div className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
         <input
           className={inputCls}
           placeholder="Display name"
@@ -1497,32 +1622,40 @@ function MemberRow({
           </button>
         </div>
         <ErrorNote message={error} />
-      </li>
+      </div>
     );
   }
 
+  const displayName = member.displayName ?? member.email;
+
   return (
-    <li className="flex items-center justify-between gap-3 text-sm">
-      <div className="min-w-0">
-        <p className="truncate text-[var(--ink)]">{member.displayName ?? member.email}</p>
-        <p className="truncate text-xs text-[var(--muted)]">
-          {CLINIC_ROLE_LABELS[member.role as Exclude<ClinicRole, 'unknown'>] ?? member.role}
-          {member.displayName ? ` · ${member.email}` : ''}
-        </p>
+    <div className="flex flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+      <div className="flex items-center gap-2.5">
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-sm font-semibold"
+          style={{ background: color, color: '#fff', boxShadow: `0 0 0 3px ${light}` }}
+        >
+          {therapistInitials(displayName)}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-[var(--ink)]">{displayName}</p>
+          <p className="truncate text-[11.5px] text-[var(--muted)]">{member.email}</p>
+        </div>
       </div>
-      <div className="flex shrink-0 gap-3 text-xs">
+      <RolePill role={role} />
+      <div className="flex gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
         <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setEditing(true)}>
           Edit
         </button>
         <button
           type="button"
-          className="text-[var(--rust)] hover:underline disabled:opacity-50"
+          className="ml-auto text-[var(--rust)] hover:underline disabled:opacity-50"
           disabled={revoking}
           onClick={onRevoke}
         >
           {revoking ? 'Revoking…' : 'Revoke'}
         </button>
       </div>
-    </li>
+    </div>
   );
 }
