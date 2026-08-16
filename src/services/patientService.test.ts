@@ -12,9 +12,10 @@ function makeFakeRepos() {
     },
     patients: {
       get: async (id: string) => patients.get(id),
-      getByMrno: async (_c: string, mrno: string) => [...patients.values()].find((p) => p.mrno === mrno),
+      getByMrno: async (clinicId: string, mrno: string) =>
+        [...patients.values()].find((p) => p.clinicId === clinicId && p.mrno === mrno),
       search: async () => [],
-      list: async () => [...patients.values()],
+      list: async (clinicId: string) => [...patients.values()].filter((p) => p.clinicId === clinicId),
       put: async (p: Patient) => void patients.set(p.id, p),
       removeLocal: async (id: string) => void patients.delete(id),
     },
@@ -60,10 +61,11 @@ describe('patientService.create', () => {
     expect(patient.referringSourceDetail).toBeNull();
   });
 
-  it('auto-generates a walk-in MRNO with the default "W" prefix when the clinic has no override', async () => {
+  it('auto-generates a sequential walk-in MRNO with the default "W" prefix when the clinic has no override', async () => {
     const fake = makeFakeRepos();
     const patient = await createPatientService(fake.repos).create({ clinicId: 'clinic-1', name: 'Walk-in' });
-    expect(patient.mrno).toMatch(/^W-\d{6}-[A-Z0-9]{3}$/);
+    const yy = String(new Date().getFullYear()).slice(2);
+    expect(patient.mrno).toBe(`W${yy}-0001`);
     expect(patient.mrnoSource).toBe('auto');
   });
 
@@ -71,7 +73,40 @@ describe('patientService.create', () => {
     const fake = makeFakeRepos();
     fake.repos.clinics.get = async () => ({ walkInMrnoPrefix: 'BM' }) as never;
     const patient = await createPatientService(fake.repos).create({ clinicId: 'clinic-1', name: 'Walk-in' });
-    expect(patient.mrno).toMatch(/^BM-\d{6}-[A-Z0-9]{3}$/);
+    const yy = String(new Date().getFullYear()).slice(2);
+    expect(patient.mrno).toBe(`BM${yy}-0001`);
+  });
+
+  it('continues the sequence from the highest existing walk-in MRNO this year, ignoring other clinics and years', async () => {
+    const fake = makeFakeRepos();
+    const yy = String(new Date().getFullYear()).slice(2);
+    seedPatient(fake.patients, { id: 'p1', clinicId: 'clinic-1', mrno: `W${yy}-0003`, mrnoSource: 'auto' });
+    seedPatient(fake.patients, { id: 'p2', clinicId: 'clinic-1', mrno: `W${yy}-0007`, mrnoSource: 'auto' });
+    // A different clinic's higher number, and a hospital-issued MRNO that
+    // happens to look similar — neither should influence clinic-1's count.
+    seedPatient(fake.patients, { id: 'p3', clinicId: 'clinic-2', mrno: `W${yy}-0099`, mrnoSource: 'auto' });
+    seedPatient(fake.patients, { id: 'p4', clinicId: 'clinic-1', mrno: `W19-0050`, mrnoSource: 'auto' });
+    const patient = await createPatientService(fake.repos).create({ clinicId: 'clinic-1', name: 'Walk-in' });
+    expect(patient.mrno).toBe(`W${yy}-0008`);
+  });
+
+  it('skips a colliding number and keeps incrementing until a free one is found', async () => {
+    const fake = makeFakeRepos();
+    const yy = String(new Date().getFullYear()).slice(2);
+    seedPatient(fake.patients, { id: 'p1', clinicId: 'clinic-1', mrno: `W${yy}-0001`, mrnoSource: 'auto' });
+    // Simulates a same-numbered row that predates maxWalkInSeq's view
+    // (e.g. another offline device) by pre-occupying the very next slot too.
+    seedPatient(fake.patients, { id: 'p2', clinicId: 'clinic-1', mrno: `W${yy}-0002`, mrnoSource: 'auto' });
+    const patient = await createPatientService(fake.repos).create({ clinicId: 'clinic-1', name: 'Walk-in' });
+    expect(patient.mrno).toBe(`W${yy}-0003`);
+  });
+
+  it('auto-widens past 4 digits once a clinic passes 9999 walk-ins in a year', async () => {
+    const fake = makeFakeRepos();
+    const yy = String(new Date().getFullYear()).slice(2);
+    seedPatient(fake.patients, { id: 'p1', clinicId: 'clinic-1', mrno: `W${yy}-9999`, mrnoSource: 'auto' });
+    const patient = await createPatientService(fake.repos).create({ clinicId: 'clinic-1', name: 'Walk-in' });
+    expect(patient.mrno).toBe(`W${yy}-10000`);
   });
 });
 

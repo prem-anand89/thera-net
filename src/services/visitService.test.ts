@@ -382,7 +382,7 @@ describe('visitService.setSplit', () => {
 });
 
 describe('patientService MRNO fallback', () => {
-  it('uses the typed hospital MRNO when given, generates W- prefixed otherwise', async () => {
+  it('uses the typed hospital MRNO when given, generates W-prefixed sequential otherwise', async () => {
     const fake = makeFakeRepos();
     const svc = createPatientService(fake.repos);
     const hospital = await svc.create({ clinicId: 'clinic-1', mrno: 'HV12345', name: 'Asha' });
@@ -390,7 +390,8 @@ describe('patientService MRNO fallback', () => {
     expect(hospital.mrnoSource).toBe('hospital');
 
     const walkIn = await svc.create({ clinicId: 'clinic-1', name: 'Ravi' });
-    expect(walkIn.mrno).toMatch(/^W-\d{6}-[A-Z0-9]{3}$/);
+    const yy = String(new Date().getFullYear()).slice(2);
+    expect(walkIn.mrno).toBe(`W${yy}-0001`);
     expect(walkIn.mrnoSource).toBe('auto');
 
     await expect(svc.create({ clinicId: 'clinic-1', mrno: 'HV12345', name: 'Dup' })).rejects.toThrow(

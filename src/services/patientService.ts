@@ -30,12 +30,29 @@ export interface UpdatePatientInput {
  * and it is typed in; walk-ins without a hospital registration get an
  * app-generated one, visibly prefixed so the two never collide. The prefix
  * itself is a per-clinic Setup preference (defaults to 'W').
+ *
+ * Format: {prefix}{YY}-{seq}, e.g. W26-0001 — sequential per clinic per
+ * calendar year, not the effectively-unguessable date+random suffix this
+ * used to be. Reset each January (new YY means the pattern below no longer
+ * matches last year's rows, so the scan starts back at 1); the sequence is
+ * zero-padded to 4 digits and auto-widens past 9999 for a clinic large
+ * enough to need it — padStart is a no-op once the number is already
+ * longer than the pad width, so no separate "large clinic" setting exists
+ * or is needed for that.
  */
-function generateWalkInMrno(prefix: string): string {
-  const d = new Date();
-  const ymd = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-  const rand = Math.random().toString(36).slice(2, 5).toUpperCase();
-  return `${prefix}-${ymd}-${rand}`;
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Highest {prefix}{YY}-NNNN sequence already used by this clinic this year, or 0 if none. */
+function maxWalkInSeq(mrnos: string[], prefix: string, yy: string): number {
+  const pattern = new RegExp(`^${escapeRegExp(prefix)}${yy}-(\\d+)$`);
+  let max = 0;
+  for (const mrno of mrnos) {
+    const match = pattern.exec(mrno);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return max;
 }
 
 export function createPatientService(repos: Repos) {
@@ -52,8 +69,14 @@ export function createPatientService(repos: Repos) {
       } else {
         const clinic = await repos.clinics.get(input.clinicId);
         const prefix = clinic?.walkInMrnoPrefix?.trim() || 'W';
+        const yy = String(new Date().getFullYear()).slice(2);
+        // Includes hidden patients (repos.patients.list does) so a hidden
+        // duplicate never frees up its number for reuse.
+        const existingMrnos = (await repos.patients.list(input.clinicId)).map((p) => p.mrno);
+        let seq = maxWalkInSeq(existingMrnos, prefix, yy) + 1;
         do {
-          mrno = generateWalkInMrno(prefix);
+          mrno = `${prefix}${yy}-${String(seq).padStart(4, '0')}`;
+          seq += 1;
         } while (await repos.patients.getByMrno(input.clinicId, mrno));
         mrnoSource = 'auto';
       }
