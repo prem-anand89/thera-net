@@ -743,40 +743,6 @@ describe('dashboardService.singleVisitPatients', () => {
   });
 });
 
-describe('dashboardService.recurringPatients', () => {
-  let fake: ReturnType<typeof makeFakeRepos>;
-  beforeEach(() => {
-    fake = makeFakeRepos();
-  });
-
-  it('surfaces a patient with 3+ visits in the last 30 days', async () => {
-    const today = new Date();
-    for (let i = 0; i < 3; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i * 5);
-      fake.visits.set(`v${i}`, baseVisit(`v${i}`, { visitDate: d.toISOString().slice(0, 10) }));
-    }
-    const svc = createDashboardService(fake.repos);
-    const rows = await svc.recurringPatients('clinic-1');
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ patientName: 'Test Patient', mrno: '1001', visitCount: 3 });
-  });
-
-  it('excludes a patient under the minimum visit count', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: new Date().toISOString().slice(0, 10) }));
-    const svc = createDashboardService(fake.repos);
-    expect(await svc.recurringPatients('clinic-1')).toEqual([]);
-  });
-
-  it('ignores visits outside the rolling window', async () => {
-    for (let i = 0; i < 3; i++) {
-      fake.visits.set(`v${i}`, baseVisit(`v${i}`, { visitDate: '2020-01-0' + (i + 1) }));
-    }
-    const svc = createDashboardService(fake.repos);
-    expect(await svc.recurringPatients('clinic-1')).toEqual([]);
-  });
-});
-
 describe('dashboardService.weeklySummary', () => {
   let fake: ReturnType<typeof makeFakeRepos>;
   beforeEach(() => {

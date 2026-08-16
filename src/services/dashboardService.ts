@@ -20,6 +20,7 @@ export interface OpenPackageRow {
   stale: boolean;
   /** Therapist who logged the package's first session — for "my open packages" scoping. */
   startedByTherapistId: UUID;
+  startedByTherapistName: string;
 }
 
 export interface OutstandingInvoiceRow {
@@ -146,14 +147,6 @@ export interface SingleVisitPatientRow {
   daysSince: number;
 }
 
-export interface RecurringPatientRow {
-  patientId: UUID;
-  patientName: string;
-  mrno: string;
-  visitCount: number;
-  lastVisitOn: string;
-}
-
 export type PendingWorkKind = 'stale_package' | 'outstanding_payment' | 'incomplete_note';
 
 /**
@@ -219,13 +212,15 @@ export function createDashboardService(repos: Repos) {
       // package's earlier sessions and miscount its progress (or resurrect
       // a completed package as open). Volume is small; visits.list scans
       // the clinic index either way.
-      const [visits, catalog, patients] = await Promise.all([
+      const [visits, catalog, patients, therapists] = await Promise.all([
         repos.visits.list({ clinicId }),
         repos.catalog.list(clinicId, true),
         repos.patients.list(clinicId),
+        repos.therapists.list(clinicId, true),
       ]);
       const serviceName = new Map(catalog.map((c) => [c.id, c.name]));
       const patientById = new Map(patients.map((p) => [p.id, p]));
+      const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
 
       return groupOpenPackages(visits)
         .map((g) => {
@@ -243,6 +238,7 @@ export function createDashboardService(repos: Repos) {
             daysSinceLastVisit: daysSince(g.lastVisitOn),
             stale: isStale(g.lastVisitOn),
             startedByTherapistId: g.startedByTherapistId,
+            startedByTherapistName: therapistNameById.get(g.startedByTherapistId) ?? 'Unknown',
           };
         })
         .sort((a, b) => b.daysSinceLastVisit - a.daysSinceLastVisit);
@@ -651,41 +647,6 @@ export function createDashboardService(repos: Repos) {
         });
       }
       return rows.sort((a, b) => b.daysSince - a.daysSince);
-    },
-
-    /**
-     * Patients with several visits in a recent rolling window — the clinic's
-     * currently-engaged regulars, surfaced for recognition or an upsell
-     * conversation rather than a retention worry.
-     */
-    async recurringPatients(
-      clinicId: UUID,
-      minVisits = 3,
-      windowDays = 30
-    ): Promise<RecurringPatientRow[]> {
-      const [visits, patients] = await Promise.all([
-        repos.visits.list({ clinicId }),
-        repos.patients.list(clinicId),
-      ]);
-      const patientById = new Map(patients.map((p) => [p.id, p]));
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - windowDays);
-      const cutoffStr = cutoff.toISOString().slice(0, 10);
-      const recent = visits.filter((v) => v.visitDate >= cutoffStr);
-
-      const rows: RecurringPatientRow[] = [];
-      for (const [patientId, patientVisits] of groupByPatient(recent)) {
-        if (patientVisits.length < minVisits) continue;
-        const patient = patientById.get(patientId);
-        rows.push({
-          patientId,
-          patientName: patient?.name ?? 'Unknown',
-          mrno: patient?.mrno ?? '—',
-          visitCount: patientVisits.length,
-          lastVisitOn: patientVisits.map((v) => v.visitDate).sort().at(-1)!,
-        });
-      }
-      return rows.sort((a, b) => b.visitCount - a.visitCount);
     },
 
     /**

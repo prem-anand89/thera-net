@@ -8,7 +8,7 @@ import { formatINR } from '@/domain/money';
 import { monthName, formatDateDMY, fiscalYearOf, monthsOfFiscalYear, type FyMonth } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
-import { SectionCard, StatTile, Pill } from '@/components/ui';
+import { SectionCard, StatTile, Pill, PackageThread, th, td, tdNum, thNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
 import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
@@ -22,7 +22,6 @@ import { SERIES_COLORS } from '@/components/chartColors';
  *  filtered per-render rather than being a fixed list. */
 const DASHBOARD_SECTIONS: { key: string; label: string }[] = [
   { key: 'singleVisit', label: 'Single-visit patients' },
-  { key: 'regulars', label: 'Regulars' },
   { key: 'packages', label: 'Packages' },
   { key: 'revenue', label: 'Revenue trend' },
   { key: 'therapistComparison', label: 'Therapist comparison' },
@@ -131,10 +130,6 @@ export function DashboardPage() {
   );
   const singleVisitPatients = useLiveQuery(
     () => dashboardService.singleVisitPatients(clinic.id),
-    [clinic.id]
-  );
-  const recurringPatients = useLiveQuery(
-    () => dashboardService.recurringPatients(clinic.id),
     [clinic.id]
   );
   const referralSources = useLiveQuery(
@@ -266,16 +261,11 @@ export function DashboardPage() {
         : (openPackages ?? []).filter((p) => p.startedByTherapistId === scope.myTherapistId),
     [openPackages, scope.isClinicWideView, scope.myTherapistId]
   );
-  const packagesByService = useMemo(() => {
-    const byService = new Map<string, { total: number; stale: number }>();
-    for (const p of packagesInScope) {
-      const entry = byService.get(p.serviceName) ?? { total: 0, stale: 0 };
-      entry.total += 1;
-      if (p.stale) entry.stale += 1;
-      byService.set(p.serviceName, entry);
-    }
-    return [...byService.entries()].sort((a, b) => b[1].total - a[1].total);
-  }, [packagesInScope]);
+  const [pkgStatusFilter, setPkgStatusFilter] = useState<'open' | 'stale' | 'all'>('open');
+  const filteredPackages = useMemo(
+    () => (pkgStatusFilter === 'all' ? packagesInScope : packagesInScope.filter((p) => p.stale === (pkgStatusFilter === 'stale'))),
+    [packagesInScope, pkgStatusFilter]
+  );
 
   const singleVisitBuckets = useMemo(
     () =>
@@ -286,16 +276,6 @@ export function DashboardPage() {
       ]),
     [singleVisitPatients]
   );
-  const recurringBuckets = useMemo(
-    () =>
-      bucketCounts((recurringPatients ?? []).map((p) => p.visitCount), [
-        { max: 4, label: '3–4' },
-        { max: 9, label: '5–9' },
-        { max: Infinity, label: '10+' },
-      ]),
-    [recurringPatients]
-  );
-
   return (
     <div className="space-y-5">
       {/* "At a glance" KPI strip — the top-of-page hierarchy this page
@@ -411,50 +391,6 @@ export function DashboardPage() {
 
           <div
             ref={(el) => {
-              if (el) sectionRefs.current.set('regulars', el);
-              else sectionRefs.current.delete('regulars');
-            }}
-            className="scroll-mt-28 md:scroll-mt-20"
-          >
-            <SectionCard title="Regulars — last 30 days">
-              <p className="mb-3 text-xs text-[var(--muted)]">
-                Three or more visits in the last month — your most engaged patients right now.
-              </p>
-              {recurringPatients === undefined ? null : recurringPatients.length === 0 ? (
-                <p className="py-6 text-center text-sm text-[var(--muted)]">No one has visited 3+ times in the last 30 days yet.</p>
-              ) : (
-                <>
-                  <div className="mb-4 flex flex-wrap items-center gap-4">
-                    <StatTile label="Total" value={recurringPatients.length} />
-                    <div className="min-w-0 flex-1">
-                      <BarChart
-                        categories={['3–4 visits', '5–9 visits', '10+ visits']}
-                        series={[{ label: 'Patients', color: SERIES_COLORS[1], values: recurringBuckets }]}
-                        height={140}
-                      />
-                    </div>
-                  </div>
-                  <ul className="flex flex-wrap gap-1.5">
-                    {recurringPatients.slice(0, 20).map((p) => (
-                      <li key={p.patientId}>
-                        <Link
-                          to="/ledger"
-                          search={{ patientId: p.patientId }}
-                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                          title={`${p.visitCount} visits — last seen ${formatDateDMY(p.lastVisitOn)}`}
-                        >
-                          {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </SectionCard>
-          </div>
-
-          <div
-            ref={(el) => {
               if (el) sectionRefs.current.set('packages', el);
               else sectionRefs.current.delete('packages');
             }}
@@ -462,29 +398,73 @@ export function DashboardPage() {
           >
             <SectionCard title={scope.isClinicWideView ? 'Packages' : 'My packages'}>
               <p className="mb-3 text-xs text-[var(--muted)]">
-                Open packages by service{scope.isClinicWideView ? '' : " you've started"} — how many are active,
-                and how many have gone quiet.
+                Every patient on a package{scope.isClinicWideView ? '' : " you've started"} — who's still owed
+                sessions, and whose package has gone quiet.
               </p>
-              {packagesInScope.length === 0 ? (
-                <p className="py-6 text-center text-sm text-[var(--muted)]">No open packages right now.</p>
+              <div className="mb-3 flex items-center gap-1.5">
+                {(
+                  [
+                    { key: 'open', label: 'Open' },
+                    { key: 'stale', label: 'Stale' },
+                    { key: 'all', label: 'All' },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setPkgStatusFilter(opt.key)}
+                    className="rounded-full border px-3 py-1 text-xs font-medium"
+                    style={{
+                      background: pkgStatusFilter === opt.key ? 'var(--teal-light)' : 'var(--surface)',
+                      borderColor: pkgStatusFilter === opt.key ? 'transparent' : 'var(--border)',
+                      color: pkgStatusFilter === opt.key ? 'var(--teal)' : 'var(--muted)',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <span className="ml-1 text-xs text-[var(--muted)]">
+                  {filteredPackages.length} package{filteredPackages.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              {filteredPackages.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--muted)]">No packages match this filter.</p>
               ) : (
-                <>
-                  <div className="mb-4 flex gap-4">
-                    <StatTile label="Open packages" value={packagesInScope.length} />
-                    <StatTile label="Stale (14d+)" value={packagesInScope.filter((p) => p.stale).length} />
-                  </div>
-                  <ul className="space-y-2">
-                    {packagesByService.map(([service, counts]) => (
-                      <li key={service} className="flex items-center justify-between gap-3 text-sm">
-                        <span className="text-[var(--ink)]">{service}</span>
-                        <span className="flex items-center gap-2">
-                          <span className="font-num text-[var(--muted)]">{counts.total}</span>
-                          {counts.stale > 0 && <Pill tone="amber">{counts.stale} stale</Pill>}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-[var(--border)]">
+                    <thead className="bg-[var(--paper)]">
+                      <tr>
+                        <th className={th}>Patient</th>
+                        <th className={th}>Package</th>
+                        <th className={th}>Therapist</th>
+                        <th className={thNum}>Sessions</th>
+                        <th className={th}>Last visit</th>
+                        <th className={th}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border)]">
+                      {filteredPackages.map((p) => (
+                        <tr key={p.packageGroupId}>
+                          <td className={td}>
+                            {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                          </td>
+                          <td className={td}>{p.serviceName}</td>
+                          <td className={td}>{p.startedByTherapistName}</td>
+                          <td className={tdNum}>
+                            <span className="inline-flex items-center gap-1.5">
+                              <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
+                              {p.sessionsLogged} / {p.packageTotal}
+                            </span>
+                          </td>
+                          <td className={td}>{p.daysSinceLastVisit}d ago</td>
+                          <td className={td}>
+                            <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </SectionCard>
           </div>
