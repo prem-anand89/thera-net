@@ -163,6 +163,8 @@ export interface SingleVisitPatientRow {
   serviceName: string;
   visitDate: string;
   daysSince: number;
+  phone: string | null;
+  primaryCondition: string | null;
 }
 
 export type PendingWorkKind = 'stale_package' | 'outstanding_payment' | 'incomplete_note';
@@ -662,6 +664,8 @@ export function createDashboardService(repos: Repos) {
           serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
           visitDate: v.visitDate,
           daysSince: since,
+          phone: patient?.phone ?? null,
+          primaryCondition: patient?.primaryCondition ?? null,
         });
       }
       return rows.sort((a, b) => b.daysSince - a.daysSince);

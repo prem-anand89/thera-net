@@ -86,8 +86,7 @@ const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> =
 };
 
 /** Buckets a list of counts-with-a-number into fixed ranges for a small
- *  histogram — the shape both "single-visit patients" and "regulars" need
- *  (how overdue, how many visits), just with different bucket edges. */
+ *  histogram — the shape "single-visit patients" needs (how overdue). */
 function bucketCounts(values: number[], edges: { max: number; label: string }[]): number[] {
   const counts = new Array(edges.length).fill(0) as number[];
   for (const v of values) {
@@ -96,6 +95,19 @@ function bucketCounts(values: number[], edges: { max: number; label: string }[])
   }
   return counts;
 }
+
+/** Which bucket index a single value falls into, for filtering a list by
+ *  the same edges a BarChart derived from bucketCounts is showing. */
+function bucketIndexOf(value: number, edges: { max: number }[]): number {
+  const idx = edges.findIndex((e) => value <= e.max);
+  return idx === -1 ? edges.length - 1 : idx;
+}
+
+const SINGLE_VISIT_BUCKET_EDGES = [
+  { max: 30, label: '15–30d' },
+  { max: 60, label: '31–60d' },
+  { max: Infinity, label: '60d+' },
+];
 
 export function DashboardPage() {
   const clinic = useClinic();
@@ -291,14 +303,19 @@ export function DashboardPage() {
   }, [referralActive, referralNeedsDetail]);
 
   const singleVisitBuckets = useMemo(
-    () =>
-      bucketCounts((singleVisitPatients ?? []).map((p) => p.daysSince), [
-        { max: 30, label: '15–30d' },
-        { max: 60, label: '31–60d' },
-        { max: Infinity, label: '60d+' },
-      ]),
+    () => bucketCounts((singleVisitPatients ?? []).map((p) => p.daysSince), SINGLE_VISIT_BUCKET_EDGES),
     [singleVisitPatients]
   );
+  // Clicking a histogram bar filters the list below to that day-range;
+  // null means "show everyone" (the default, and the BarChart itself has
+  // no "all" bar to click back to, so a Clear affordance covers that).
+  const [singleVisitBucketFilter, setSingleVisitBucketFilter] = useState<number | null>(null);
+  const filteredSingleVisit = useMemo(() => {
+    const rows = singleVisitPatients ?? [];
+    if (singleVisitBucketFilter == null) return rows;
+    return rows.filter((p) => bucketIndexOf(p.daysSince, SINGLE_VISIT_BUCKET_EDGES) === singleVisitBucketFilter);
+  }, [singleVisitPatients, singleVisitBucketFilter]);
+
   return (
     <div className="space-y-5">
       {/* "At a glance" KPI strip — the top-of-page hierarchy this page
@@ -376,8 +393,8 @@ export function DashboardPage() {
           >
             <SectionCard title="Single-visit patients">
               <p className="mb-3 text-xs text-[var(--muted)]">
-                Exactly one visit on record, more than 14 days ago — worth a call to find out why, or a
-                reminder to book again.
+                Exactly one visit on record, more than 14 days ago — click a bar to filter, call from the
+                list, or clear to see everyone.
               </p>
               {singleVisitPatients === undefined ? null : singleVisitPatients.length === 0 ? (
                 <p className="py-6 text-center text-sm text-[var(--muted)]">No lapsed single-visit patients right now.</p>
@@ -387,26 +404,53 @@ export function DashboardPage() {
                     <StatTile label="Total" value={singleVisitPatients.length} />
                     <div className="min-w-0 flex-1">
                       <BarChart
-                        categories={['15–30d', '31–60d', '60d+']}
+                        categories={SINGLE_VISIT_BUCKET_EDGES.map((e) => e.label)}
                         series={[{ label: 'Patients', color: SERIES_COLORS[0], values: singleVisitBuckets }]}
                         height={140}
+                        selectedCategoryIndex={singleVisitBucketFilter}
+                        onCategoryClick={(i) => setSingleVisitBucketFilter((prev) => (prev === i ? null : i))}
                       />
                     </div>
                   </div>
-                  <ul className="flex flex-wrap gap-1.5">
-                    {singleVisitPatients.slice(0, 20).map((p) => (
-                      <li key={p.patientId}>
-                        <Link
-                          to="/ledger"
-                          search={{ patientId: p.patientId }}
-                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                          title={`${p.serviceName} — last seen ${formatDateDMY(p.visitDate)}, ${p.daysSince}d ago`}
-                        >
-                          {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
-                        </Link>
-                      </li>
+                  {singleVisitBucketFilter != null && (
+                    <button
+                      type="button"
+                      onClick={() => setSingleVisitBucketFilter(null)}
+                      className="mb-2 text-xs font-medium text-[var(--teal)] hover:underline"
+                    >
+                      Showing {SINGLE_VISIT_BUCKET_EDGES[singleVisitBucketFilter].label} only — clear filter
+                    </button>
+                  )}
+                  <div className="max-h-96 divide-y divide-[var(--border)] overflow-y-auto rounded-lg border border-[var(--border)]">
+                    {filteredSingleVisit.slice(0, 50).map((p) => (
+                      <div key={p.patientId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                        <div className="min-w-0">
+                          <Link to="/ledger" search={{ patientId: p.patientId }} className="text-sm font-medium text-[var(--ink)] hover:underline">
+                            {p.patientName}
+                          </Link>
+                          <div className="text-xs text-[var(--muted)]">
+                            {p.mrno} · last seen {formatDateDMY(p.visitDate)} · {p.daysSince}d ago
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {p.primaryCondition && <Pill tone="slate">{p.primaryCondition}</Pill>}
+                          {p.phone && (
+                            <a
+                              href={`tel:${p.phone}`}
+                              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                            >
+                              📞 {p.phone}
+                            </a>
+                          )}
+                        </div>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
+                  {filteredSingleVisit.length > 50 && (
+                    <p className="mt-2 text-center text-xs text-[var(--muted)]">
+                      Showing 50 of {filteredSingleVisit.length}.
+                    </p>
+                  )}
                 </>
               )}
             </SectionCard>
