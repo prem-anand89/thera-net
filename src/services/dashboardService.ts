@@ -1,6 +1,6 @@
 import type { UUID, Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
-import { currentWeekRange, type FyMonth } from '@/domain/fiscalYear';
+import { currentWeekRange, monthDateRange, type FyMonth } from '@/domain/fiscalYear';
 import { daysSince, groupOpenPackages, isStale, STALE_PACKAGE_DAYS } from '@/domain/packageTracking';
 import { computeVisitPaymentState, isCollected, type VisitPaymentState } from '@/domain/paymentState';
 import type { Repos } from '@/repositories/types';
@@ -36,6 +36,15 @@ export interface OutstandingSummary {
   rows: OutstandingInvoiceRow[];
   totalPaise: Paise;
   count: number;
+}
+
+export interface MonthlyCollection {
+  billedPaise: Paise;
+  collectedPaise: Paise;
+  /** null when nothing was billed that month — a rate of the empty set
+   *  isn't 0%, it's undefined, and showing "0%" would read as a bad month
+   *  rather than an inactive one. */
+  collectionRatePct: number | null;
 }
 
 export interface RecentVisitRow {
@@ -239,6 +248,49 @@ export function createDashboardService(repos: Repos) {
         rows,
         totalPaise: rows.reduce((sum, r) => sum + r.totalPaise, 0),
         count: rows.length,
+      };
+    },
+
+    /**
+     * Billed vs. actually collected for one calendar month — the "how much
+     * of what we billed did we actually get paid" number the reporting
+     * pages never surfaced (revenueTrend/MonthlyReport track the BM
+     * split/tax rollup, not collection status at all). Reuses
+     * computeVisitPaymentState per visit — the same source of truth
+     * VisitCard's payment chips and pendingWork's outstanding-payment
+     * items already use — rather than a second, possibly-diverging
+     * definition of "collected".
+     */
+    async monthlyCollection(clinicId: UUID, month: FyMonth, therapistId?: UUID): Promise<MonthlyCollection> {
+      const { from, to } = monthDateRange(month);
+      const [visits, invoicePayments, directPayments] = await Promise.all([
+        repos.visits.list({ clinicId, from, to, therapistId }),
+        repos.invoicePayments.list(clinicId),
+        repos.payments.list(clinicId),
+      ]);
+      const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
+      const directByVisitId = new Map<UUID, Paise>();
+      for (const p of directPayments) {
+        directByVisitId.set(p.visitId, (directByVisitId.get(p.visitId) ?? 0) + p.amountPaise);
+      }
+
+      let billedPaise = 0;
+      let collectedPaise = 0;
+      for (const v of visits) {
+        billedPaise += v.actualBillPaise;
+        const state = computeVisitPaymentState(
+          v.actualBillPaise,
+          v.invoiceId,
+          directByVisitId.get(v.id) ?? 0,
+          v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+        );
+        if (isCollected(state)) collectedPaise += v.actualBillPaise;
+      }
+
+      return {
+        billedPaise,
+        collectedPaise,
+        collectionRatePct: billedPaise > 0 ? Math.round((collectedPaise / billedPaise) * 100) : null,
       };
     },
 

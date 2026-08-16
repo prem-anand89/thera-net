@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService } from '@/services';
@@ -7,12 +7,69 @@ import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import { monthName, formatDateDMY } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
-import type { TherapistMonthRow } from '@/services/reportService';
+import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
 import { SectionCard, StatTile, Pill } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
 import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { SERIES_COLORS } from '@/components/chartColors';
+
+/** Jump-nav sections, in the order they appear on the page — the "Full page
+ *  restructure" this became: a long undifferentiated scroll of 6 cards had
+ *  no way to jump to a specific one, same complaint the note editor had
+ *  before its own jump-nav. "Therapist comparison" is conditional (only
+ *  when TherapistComparisonCard itself would render something), so it's
+ *  filtered per-render rather than being a fixed list. */
+const DASHBOARD_SECTIONS: { key: string; label: string }[] = [
+  { key: 'singleVisit', label: 'Single-visit patients' },
+  { key: 'regulars', label: 'Regulars' },
+  { key: 'packages', label: 'Packages' },
+  { key: 'revenue', label: 'Revenue trend' },
+  { key: 'therapistComparison', label: 'Therapist comparison' },
+  { key: 'referralSources', label: 'Referral sources' },
+];
+
+/** Small helper for the KPI strip's up/down badge — null (not 0%) when the
+ *  previous period was zero, since "up from nothing" isn't a meaningful
+ *  percentage and showing one (often a huge or infinite number) would be
+ *  actively misleading rather than just uninformative. */
+function pctChange(current: number, previous: number): number | null {
+  if (previous === 0) return null;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+/** One "at a glance" KPI — value plus an optional trend badge versus the
+ *  prior period. A plain StatTile has no room for the trend half of "more/
+ *  better charts"; this is that shape without becoming a full chart component. */
+function KpiCard({
+  label,
+  value,
+  trendPct,
+  trendLabel,
+}: {
+  label: string;
+  value: ReactNode;
+  trendPct?: number | null;
+  trendLabel?: string;
+}) {
+  return (
+    <div className="min-w-[140px] flex-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-sm">
+      <div className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <span className="font-num text-2xl font-semibold text-[var(--ink)]">{value}</span>
+        {trendPct != null && (
+          <span
+            className="font-num text-xs font-semibold"
+            style={{ color: trendPct >= 0 ? 'var(--moss)' : 'var(--rust)' }}
+          >
+            {trendPct >= 0 ? '▲' : '▼'} {Math.abs(trendPct)}%
+          </span>
+        )}
+      </div>
+      {trendLabel && <div className="mt-0.5 text-[11px] text-[var(--muted)]">{trendLabel}</div>}
+    </div>
+  );
+}
 
 const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> = {
   billPaise: 0,
@@ -61,6 +118,30 @@ export function DashboardPage() {
   );
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
 
+  // KPI strip data — current calendar month, plus one month back for the
+  // trend badges. now/prevMonth are recomputed each render (cheap, plain
+  // Date math) rather than memoized; only their derived year/month numbers
+  // feed the query deps, so a re-render mid-month doesn't refetch.
+  const now = new Date();
+  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const collectionThisMonth = useLiveQuery(
+    () =>
+      dashboardService.monthlyCollection(
+        clinic.id,
+        { year: now.getFullYear(), month: now.getMonth() + 1 },
+        scope.scopeTherapistId
+      ),
+    [clinic.id, now.getFullYear(), now.getMonth(), scope.scopeTherapistId]
+  );
+  const newPatientsThisMonth = useLiveQuery(
+    () => dashboardService.monthlyNewCounts(clinic.id, now, scope.scopeTherapistId),
+    [clinic.id, now.getFullYear(), now.getMonth(), scope.scopeTherapistId]
+  );
+  const newPatientsLastMonth = useLiveQuery(
+    () => dashboardService.monthlyNewCounts(clinic.id, prevMonthDate, scope.scopeTherapistId),
+    [clinic.id, prevMonthDate.getFullYear(), prevMonthDate.getMonth(), scope.scopeTherapistId]
+  );
+
   const categories = useMemo(
     () => (trend ?? []).map((r) => `${monthName(r.month.month).slice(0, 3)} '${String(r.month.year).slice(2)}`),
     [trend]
@@ -84,6 +165,49 @@ export function DashboardPage() {
       therapistId: scope.myTherapistId ?? 'none',
       therapistName: '',
     };
+
+  // Revenue vs last month, from the 6-month trend already being fetched
+  // for the chart below — its last two entries are this month and last,
+  // so no extra query for the KPI card.
+  const revenueRow = (report: MonthlyReport | undefined) =>
+    report ? (scope.isClinicWideView ? report.total.postTaxPaise : myMonthRow(report.rows).postTaxPaise) : null;
+  const revenueThisMonth = trend ? revenueRow(trend[trend.length - 1]) : null;
+  const revenueLastMonth = trend && trend.length > 1 ? revenueRow(trend[trend.length - 2]) : null;
+
+  // Jump-nav: mobile chips + desktop rail, same sticky/IntersectionObserver
+  // pattern as the note editor's — a flat list here (no SOAP-style
+  // grouping) since six items reads fine as one row/column without it.
+  const [activeSection, setActiveSection] = useState(DASHBOARD_SECTIONS[0].key);
+  const sectionRefs = useRef(new Map<string, HTMLDivElement>());
+  const suppressSpyRef = useRef(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (suppressSpyRef.current) return;
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length === 0) return;
+        const topMost = visible.reduce((a, b) => (a.boundingClientRect.top <= b.boundingClientRect.top ? a : b));
+        const key = [...sectionRefs.current.entries()].find(([, el]) => el === topMost.target)?.[0];
+        if (key) setActiveSection(key);
+      },
+      { rootMargin: '-15% 0px -70% 0px', threshold: 0 }
+    );
+    for (const el of sectionRefs.current.values()) observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  function jumpToSection(key: string) {
+    setActiveSection(key);
+    suppressSpyRef.current = true;
+    sectionRefs.current.get(key)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => {
+      suppressSpyRef.current = false;
+    }, 600);
+  }
+
+  const showTherapistComparison = scope.isAdmin && clinic.showTherapistComparison;
+  const jumpTargets = DASHBOARD_SECTIONS.filter((s) => s.key !== 'therapistComparison' || showTherapistComparison);
 
   const packagesInScope = useMemo(
     () =>
@@ -123,148 +247,281 @@ export function DashboardPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <SectionCard title="Single-visit patients">
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          Exactly one visit on record, more than 14 days ago — worth a call to find out why, or a
-          reminder to book again.
-        </p>
-        {singleVisitPatients === undefined ? null : singleVisitPatients.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">No lapsed single-visit patients right now.</p>
-        ) : (
-          <>
-            <div className="mb-4 flex flex-wrap items-center gap-4">
-              <StatTile label="Total" value={singleVisitPatients.length} />
-              <div className="min-w-0 flex-1">
+    <div className="space-y-5">
+      {/* "At a glance" KPI strip — the top-of-page hierarchy this page
+          otherwise lacked entirely; a long scroll of section cards gave no
+          sense of "how's this month going" without reading the revenue
+          chart. Trend badges compare to the prior calendar month; null
+          (not a literal "0%") when there's nothing to compare against yet. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <KpiCard
+          label={scope.isClinicWideView ? revenueLabel : `My ${revenueLabel}`}
+          value={revenueThisMonth != null ? formatINR(revenueThisMonth) : '—'}
+          trendPct={revenueThisMonth != null && revenueLastMonth != null ? pctChange(revenueThisMonth, revenueLastMonth) : null}
+          trendLabel="vs last month"
+        />
+        <KpiCard
+          label="Collection rate"
+          value={collectionThisMonth?.collectionRatePct != null ? `${collectionThisMonth.collectionRatePct}%` : '—'}
+          trendLabel={
+            collectionThisMonth
+              ? `${formatINR(collectionThisMonth.collectedPaise)} of ${formatINR(collectionThisMonth.billedPaise)} billed`
+              : undefined
+          }
+        />
+        <KpiCard
+          label={scope.isClinicWideView ? 'New patients' : 'My new patients'}
+          value={newPatientsThisMonth?.newPatients ?? '—'}
+          trendPct={
+            newPatientsThisMonth && newPatientsLastMonth
+              ? pctChange(newPatientsThisMonth.newPatients, newPatientsLastMonth.newPatients)
+              : null
+          }
+          trendLabel="vs last month"
+        />
+        <KpiCard
+          label={scope.isClinicWideView ? 'Open packages' : 'My open packages'}
+          value={packagesInScope.length}
+          trendLabel={
+            packagesInScope.some((p) => p.stale)
+              ? `${packagesInScope.filter((p) => p.stale).length} gone quiet`
+              : undefined
+          }
+        />
+      </div>
+
+      {/* Mobile jump-nav — sticky under Shell's own header, same pattern
+          the note editor uses. */}
+      <nav className="sticky top-14 z-[1] -mx-4 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--paper)] px-4 py-2 md:hidden">
+        {jumpTargets.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => jumpToSection(key)}
+            className="flex shrink-0 items-center rounded-full border px-3 py-1.5 text-xs font-medium"
+            style={{
+              background: activeSection === key ? 'var(--teal-light)' : 'var(--surface)',
+              borderColor: activeSection === key ? 'transparent' : 'var(--border)',
+              color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="md:flex md:items-start md:gap-6">
+        <nav className="hidden md:sticky md:top-20 md:flex md:w-48 md:shrink-0 md:flex-col md:gap-0.5">
+          {jumpTargets.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => jumpToSection(key)}
+              className="flex w-full items-center rounded-md px-3 py-1.5 text-left text-xs font-medium"
+              style={{
+                background: activeSection === key ? 'var(--teal-light)' : 'transparent',
+                color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="min-w-0 flex-1 space-y-6">
+          <div
+            ref={(el) => {
+              if (el) sectionRefs.current.set('singleVisit', el);
+              else sectionRefs.current.delete('singleVisit');
+            }}
+            className="scroll-mt-28 md:scroll-mt-20"
+          >
+            <SectionCard title="Single-visit patients">
+              <p className="mb-3 text-xs text-[var(--muted)]">
+                Exactly one visit on record, more than 14 days ago — worth a call to find out why, or a
+                reminder to book again.
+              </p>
+              {singleVisitPatients === undefined ? null : singleVisitPatients.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--muted)]">No lapsed single-visit patients right now.</p>
+              ) : (
+                <>
+                  <div className="mb-4 flex flex-wrap items-center gap-4">
+                    <StatTile label="Total" value={singleVisitPatients.length} />
+                    <div className="min-w-0 flex-1">
+                      <BarChart
+                        categories={['15–30d', '31–60d', '60d+']}
+                        series={[{ label: 'Patients', color: SERIES_COLORS[0], values: singleVisitBuckets }]}
+                        height={140}
+                      />
+                    </div>
+                  </div>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {singleVisitPatients.slice(0, 20).map((p) => (
+                      <li key={p.patientId}>
+                        <Link
+                          to="/ledger"
+                          search={{ patientId: p.patientId }}
+                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
+                          title={`${p.serviceName} — last seen ${formatDateDMY(p.visitDate)}, ${p.daysSince}d ago`}
+                        >
+                          {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </SectionCard>
+          </div>
+
+          <div
+            ref={(el) => {
+              if (el) sectionRefs.current.set('regulars', el);
+              else sectionRefs.current.delete('regulars');
+            }}
+            className="scroll-mt-28 md:scroll-mt-20"
+          >
+            <SectionCard title="Regulars — last 30 days">
+              <p className="mb-3 text-xs text-[var(--muted)]">
+                Three or more visits in the last month — your most engaged patients right now.
+              </p>
+              {recurringPatients === undefined ? null : recurringPatients.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--muted)]">No one has visited 3+ times in the last 30 days yet.</p>
+              ) : (
+                <>
+                  <div className="mb-4 flex flex-wrap items-center gap-4">
+                    <StatTile label="Total" value={recurringPatients.length} />
+                    <div className="min-w-0 flex-1">
+                      <BarChart
+                        categories={['3–4 visits', '5–9 visits', '10+ visits']}
+                        series={[{ label: 'Patients', color: SERIES_COLORS[1], values: recurringBuckets }]}
+                        height={140}
+                      />
+                    </div>
+                  </div>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {recurringPatients.slice(0, 20).map((p) => (
+                      <li key={p.patientId}>
+                        <Link
+                          to="/ledger"
+                          search={{ patientId: p.patientId }}
+                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
+                          title={`${p.visitCount} visits — last seen ${formatDateDMY(p.lastVisitOn)}`}
+                        >
+                          {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </SectionCard>
+          </div>
+
+          <div
+            ref={(el) => {
+              if (el) sectionRefs.current.set('packages', el);
+              else sectionRefs.current.delete('packages');
+            }}
+            className="scroll-mt-28 md:scroll-mt-20"
+          >
+            <SectionCard title={scope.isClinicWideView ? 'Packages' : 'My packages'}>
+              <p className="mb-3 text-xs text-[var(--muted)]">
+                Open packages by service{scope.isClinicWideView ? '' : " you've started"} — how many are active,
+                and how many have gone quiet.
+              </p>
+              {packagesInScope.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--muted)]">No open packages right now.</p>
+              ) : (
+                <>
+                  <div className="mb-4 flex gap-4">
+                    <StatTile label="Open packages" value={packagesInScope.length} />
+                    <StatTile label="Stale (14d+)" value={packagesInScope.filter((p) => p.stale).length} />
+                  </div>
+                  <ul className="space-y-2">
+                    {packagesByService.map(([service, counts]) => (
+                      <li key={service} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-[var(--ink)]">{service}</span>
+                        <span className="flex items-center gap-2">
+                          <span className="font-num text-[var(--muted)]">{counts.total}</span>
+                          {counts.stale > 0 && <Pill tone="amber">{counts.stale} stale</Pill>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </SectionCard>
+          </div>
+
+          <div
+            ref={(el) => {
+              if (el) sectionRefs.current.set('revenue', el);
+              else sectionRefs.current.delete('revenue');
+            }}
+            className="scroll-mt-28 md:scroll-mt-20"
+          >
+            <SectionCard title={scope.isClinicWideView ? `Revenue trend — last 6 months (${revenueLabel})` : `My revenue trend — last 6 months (${revenueLabel})`}>
+              {trend && !hasEnoughTrendHistory && (
+                <p className="py-8 text-center text-sm text-[var(--muted)]">
+                  Not enough data yet — a trend needs at least two months of visits to be meaningful.
+                </p>
+              )}
+              {trend && hasEnoughTrendHistory && (
                 <BarChart
-                  categories={['15–30d', '31–60d', '60d+']}
-                  series={[{ label: 'Patients', color: SERIES_COLORS[0], values: singleVisitBuckets }]}
-                  height={140}
+                  categories={categories}
+                  series={[
+                    {
+                      label: revenueLabel,
+                      color: SERIES_COLORS[0],
+                      values: scope.isClinicWideView
+                        ? trend.map((r) => r.total.postTaxPaise)
+                        : trend.map((r) => myMonthRow(r.rows).postTaxPaise),
+                    },
+                  ]}
+                  formatValue={formatINR}
                 />
-              </div>
-            </div>
-            <ul className="flex flex-wrap gap-1.5">
-              {singleVisitPatients.slice(0, 20).map((p) => (
-                <li key={p.patientId}>
-                  <Link
-                    to="/ledger"
-                    search={{ patientId: p.patientId }}
-                    className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                    title={`${p.serviceName} — last seen ${formatDateDMY(p.visitDate)}, ${p.daysSince}d ago`}
-                  >
-                    {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </SectionCard>
+              )}
+            </SectionCard>
+          </div>
 
-      <SectionCard title="Regulars — last 30 days">
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          Three or more visits in the last month — your most engaged patients right now.
-        </p>
-        {recurringPatients === undefined ? null : recurringPatients.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">No one has visited 3+ times in the last 30 days yet.</p>
-        ) : (
-          <>
-            <div className="mb-4 flex flex-wrap items-center gap-4">
-              <StatTile label="Total" value={recurringPatients.length} />
-              <div className="min-w-0 flex-1">
-                <BarChart
-                  categories={['3–4 visits', '5–9 visits', '10+ visits']}
-                  series={[{ label: 'Patients', color: SERIES_COLORS[1], values: recurringBuckets }]}
-                  height={140}
+          {showTherapistComparison && (
+            <div
+              ref={(el) => {
+                if (el) sectionRefs.current.set('therapistComparison', el);
+                else sectionRefs.current.delete('therapistComparison');
+              }}
+              className="scroll-mt-28 md:scroll-mt-20"
+            >
+              <TherapistComparisonCard />
+            </div>
+          )}
+
+          <div
+            ref={(el) => {
+              if (el) sectionRefs.current.set('referralSources', el);
+              else sectionRefs.current.delete('referralSources');
+            }}
+            className="scroll-mt-28 md:scroll-mt-20"
+          >
+            <SectionCard title="Referral sources">
+              <p className="mb-4 text-xs text-[var(--muted)]">
+                Where your patients are coming from — hospital referrals, doctor referrals, and other sources.
+              </p>
+              {referralSources && referralSources.length > 0 ? (
+                <PieChart
+                  data={referralSources.map((r) => ({
+                    label: r.source,
+                    value: r.count,
+                  }))}
                 />
-              </div>
-            </div>
-            <ul className="flex flex-wrap gap-1.5">
-              {recurringPatients.slice(0, 20).map((p) => (
-                <li key={p.patientId}>
-                  <Link
-                    to="/ledger"
-                    search={{ patientId: p.patientId }}
-                    className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                    title={`${p.visitCount} visits — last seen ${formatDateDMY(p.lastVisitOn)}`}
-                  >
-                    {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </SectionCard>
-
-      <SectionCard title={scope.isClinicWideView ? 'Packages' : 'My packages'}>
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          Open packages by service{scope.isClinicWideView ? '' : " you've started"} — how many are active,
-          and how many have gone quiet.
-        </p>
-        {packagesInScope.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">No open packages right now.</p>
-        ) : (
-          <>
-            <div className="mb-4 flex gap-4">
-              <StatTile label="Open packages" value={packagesInScope.length} />
-              <StatTile label="Stale (14d+)" value={packagesInScope.filter((p) => p.stale).length} />
-            </div>
-            <ul className="space-y-2">
-              {packagesByService.map(([service, counts]) => (
-                <li key={service} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-[var(--ink)]">{service}</span>
-                  <span className="flex items-center gap-2">
-                    <span className="font-num text-[var(--muted)]">{counts.total}</span>
-                    {counts.stale > 0 && <Pill tone="amber">{counts.stale} stale</Pill>}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </SectionCard>
-
-      <SectionCard title={scope.isClinicWideView ? `Revenue trend — last 6 months (${revenueLabel})` : `My revenue trend — last 6 months (${revenueLabel})`}>
-        {trend && !hasEnoughTrendHistory && (
-          <p className="py-8 text-center text-sm text-[var(--muted)]">
-            Not enough data yet — a trend needs at least two months of visits to be meaningful.
-          </p>
-        )}
-        {trend && hasEnoughTrendHistory && (
-          <BarChart
-            categories={categories}
-            series={[
-              {
-                label: revenueLabel,
-                color: SERIES_COLORS[0],
-                values: scope.isClinicWideView
-                  ? trend.map((r) => r.total.postTaxPaise)
-                  : trend.map((r) => myMonthRow(r.rows).postTaxPaise),
-              },
-            ]}
-            formatValue={formatINR}
-          />
-        )}
-      </SectionCard>
-
-      <TherapistComparisonCard />
-
-      <SectionCard title="Referral sources">
-        <p className="mb-4 text-xs text-[var(--muted)]">
-          Where your patients are coming from — hospital referrals, doctor referrals, and other sources.
-        </p>
-        {referralSources && referralSources.length > 0 ? (
-          <PieChart
-            data={referralSources.map((r) => ({
-              label: r.source,
-              value: r.count,
-            }))}
-          />
-        ) : (
-          <p className="py-8 text-center text-sm text-[var(--muted)]">No referral data yet.</p>
-        )}
-      </SectionCard>
+              ) : (
+                <p className="py-8 text-center text-sm text-[var(--muted)]">No referral data yet.</p>
+              )}
+            </SectionCard>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

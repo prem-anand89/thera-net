@@ -278,6 +278,74 @@ describe('dashboardService.outstandingInvoices', () => {
   });
 });
 
+describe('dashboardService.monthlyCollection', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+
+  it('returns null collectionRatePct when nothing was billed that month', async () => {
+    const svc = createDashboardService(fake.repos);
+    const summary = await svc.monthlyCollection('clinic-1', { year: 2026, month: 6 });
+    expect(summary.billedPaise).toBe(0);
+    expect(summary.collectionRatePct).toBeNull();
+  });
+
+  it('counts a direct-payment visit (no invoice) as fully collected', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-05', actualBillPaise: rs(1000), invoiceId: null }));
+    fake.payments.set('pay1', {
+      id: 'pay1',
+      clinicId: 'clinic-1',
+      visitId: 'v1',
+      amountPaise: rs(1000),
+      method: 'cash',
+      receivedDate: '2026-06-05',
+      notes: null,
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    const summary = await svc.monthlyCollection('clinic-1', { year: 2026, month: 6 });
+    expect(summary.billedPaise).toBe(rs(1000));
+    expect(summary.collectedPaise).toBe(rs(1000));
+    expect(summary.collectionRatePct).toBe(100);
+  });
+
+  it('excludes an outstanding invoice from collected but still counts it as billed', async () => {
+    fake.invoices.set('inv-1', baseInvoice('inv-1', { totalPaise: rs(1500) }));
+    fake.invoicePayments.set('p1', {
+      id: 'p1',
+      clinicId: 'clinic-1',
+      invoiceId: 'inv-1',
+      status: 'outstanding',
+      paidAt: null,
+      updatedAt: '',
+    });
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-05', actualBillPaise: rs(1500), invoiceId: 'inv-1' })
+    );
+    const svc = createDashboardService(fake.repos);
+    const summary = await svc.monthlyCollection('clinic-1', { year: 2026, month: 6 });
+    expect(summary.billedPaise).toBe(rs(1500));
+    expect(summary.collectedPaise).toBe(0);
+    expect(summary.collectionRatePct).toBe(0);
+  });
+
+  it('scopes to one therapist when therapistId is passed', async () => {
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-05', therapistId: 'th-prem', actualBillPaise: rs(1000), invoiceId: null })
+    );
+    fake.visits.set(
+      'v2',
+      baseVisit('v2', { visitDate: '2026-06-06', therapistId: 'th-other', actualBillPaise: rs(2000), invoiceId: null })
+    );
+    const svc = createDashboardService(fake.repos);
+    const summary = await svc.monthlyCollection('clinic-1', { year: 2026, month: 6 }, 'th-prem');
+    expect(summary.billedPaise).toBe(rs(1000));
+  });
+});
+
 describe('dashboardService.pendingWork', () => {
   let fake: ReturnType<typeof makeFakeRepos>;
   beforeEach(() => {

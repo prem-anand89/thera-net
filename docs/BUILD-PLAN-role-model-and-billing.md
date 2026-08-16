@@ -1447,3 +1447,56 @@ both light and dark theme via headless Chromium before publishing —
 caught and fixed one real bug in the process (a `@media` block nested
 *inside* a `:root` selector instead of the reverse, which silently no-
 opped the entire dark-theme token override).
+
+## Insights/Trends full restructure (2026-08-16)
+
+Last item from the round: user picked "missing metrics + layout/nav +
+better charts" for what Insights needed, then "full page restructure"
+over a lighter option when asked to scope it.
+
+**New metric: collection rate.** Genuinely didn't exist anywhere —
+`MonthlyReport`/`revenueTrend` track the BM-split/tax rollup, not payment
+status at all. Added `dashboardService.monthlyCollection(clinicId, month,
+therapistId?)`: sums `actualBillPaise` as billed, and for each visit reuses
+`computeVisitPaymentState` (the exact same function VisitCard's payment
+chips and `pendingWork`'s outstanding-payment items already use) to decide
+whether it's collected — one definition of "collected" instead of a second
+one invented for this card that could drift from the first.
+`collectionRatePct` is `null`, not `0`, when nothing was billed that
+month — a rate of the empty set isn't a bad month, it's not a month yet.
+4 new tests (direct-payment visit fully collected, outstanding-invoice
+visit billed-not-collected, empty month, therapist scoping).
+
+**New KPI strip.** Four `KpiCard`s at the top of the page — Revenue (this
+month vs. last, using entries already in the existing 6-month `trend`
+fetch, no new query), Collection rate, New patients (vs. last month, two
+`monthlyNewCounts` calls), Open packages (+ a "N gone quiet" hint instead
+of a trend badge, since packages aren't a time-bucketed metric — there's
+no meaningful "vs last month" for a live open count). Trend badges use
+`pctChange()`, which returns `null` rather than a number when the prior
+period was zero — "up from nothing" isn't a percentage worth showing.
+
+**Jump-nav.** The 6 section cards (Single-visit patients, Regulars,
+Packages, Revenue trend, Therapist comparison, Referral sources) were one
+undifferentiated scroll with no way to jump to a specific one — same
+complaint the note editor had before its own jump-nav, so this reuses
+that exact mechanism (sticky mobile chips, sticky desktop rail,
+IntersectionObserver-driven active state) rather than inventing a second
+pattern. Flat list, no SOAP-style grouping — six items reads fine as one
+row. "Therapist comparison" is filtered out of the nav (and its own ref
+wrapper skipped entirely) when `TherapistComparisonCard` itself wouldn't
+render anything, mirroring its internal `!clinic.showTherapistComparison
+|| scope.isFrontDesk` gate rather than adding a dead link.
+
+**Naming.** The tab said "Overview" — renamed to "Trends", matching how
+the user described this page ("Trends/insights/analytics") and what it
+actually is: patient retention, packages, revenue trend, referral
+sources. "Monthly statement" (the per-therapist payout breakdown)
+untouched — it's a different job (accounting handoff, not browsing).
+
+Verified: typecheck, lint, vitest (245 passed), production build clean,
+plus real headless-browser renders of the KPI strip at both desktop
+(4-across) and mobile (2×2) widths and the jump-nav chip row — caught and
+fixed one bug in the *verification mockup itself* (a fixed-width wrapper
+that made the responsive grid look broken when it wasn't) before trusting
+the result.

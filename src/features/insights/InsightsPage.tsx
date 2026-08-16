@@ -9,7 +9,9 @@ type InsightsView = 'overview' | 'monthly';
 
 /**
  * Reports nav tab: what you read periodically, as opposed to Ledger (what
- * you act on daily). Overview is the Dashboard; Monthly statement is the
+ * you act on daily). Trends is the Dashboard (patient retention, packages,
+ * revenue trend, referral sources — an "insights" page in substance, so it
+ * now says so); Monthly statement is the
  * full per-therapist Bill/BM Share/TDS/Post-Tax/HV breakdown, gated on
  * canViewPayouts (admin-only) the same way Ledger's Invoices sub-tab is
  * gated on canBill — a colleague's individual earnings, not a per-visit
@@ -58,7 +60,7 @@ export function InsightsPage() {
       <div className="flex w-fit gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
         {(
           [
-            { key: 'overview', label: 'Overview' },
+            { key: 'overview', label: 'Trends' },
             { key: 'monthly', label: 'Monthly statement' },
           ] as const
         )
