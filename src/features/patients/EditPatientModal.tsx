@@ -46,8 +46,8 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="modal-shell w-96" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="modal-shell w-full max-w-sm max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Edit patient</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
@@ -71,7 +71,7 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="field-block">
               <label className="field-label">Age</label>
               <input

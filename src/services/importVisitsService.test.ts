@@ -73,6 +73,7 @@ function makeFakeRepos() {
     therapists: {
       list: async () => therapists,
       put: async () => {},
+      removeLocal: async () => {},
     },
     catalog: {
       list: async () => catalog,

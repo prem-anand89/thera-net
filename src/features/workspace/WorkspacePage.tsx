@@ -10,8 +10,8 @@ import {
   expectedVisitsService,
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { useSession } from '@/app/useSession';
-import { useClinicRole } from '@/app/useClinicRole';
+import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import type { ExpectedVisit, PaymentMethod, PaymentMode } from '@/domain/types';
 import type { PendingWorkItem, TodayVisitRow } from '@/services/dashboardService';
@@ -23,10 +23,10 @@ import {
   Field,
   SectionCard,
   StatTile,
-  SummaryBar,
   Panel,
 } from '@/components/ui';
-import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
+import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
+import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
@@ -48,7 +48,13 @@ interface InvoicingTarget {
   isPackage: boolean;
 }
 
-function todayRowToCardData(row: TodayVisitRow, openPackageGroupIds: Set<string>): VisitCardData {
+function todayRowToCardData(
+  row: TodayVisitRow,
+  openPackageGroupIds: Set<string>,
+  isAdmin: boolean,
+  myTherapistId: string | undefined,
+  canViewClinicalNotes: boolean
+): VisitCardData {
   return {
     visitId: row.visitId,
     visitDate: new Date().toISOString().slice(0, 10),
@@ -65,14 +71,20 @@ function todayRowToCardData(row: TodayVisitRow, openPackageGroupIds: Set<string>
     paymentState: row.paymentState,
     invoiceId: row.invoiceId,
     canRepeat: Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId)),
-    canDelete: !row.invoiceId,
+    // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
+    // is_own_therapist). front_desk is never either, so this always comes
+    // out false for them — matching RLS, which rejects their delete too.
+    canDelete: !row.invoiceId && (isAdmin || row.therapistId === myTherapistId),
+    needsNote: row.needsNote,
+    canViewNotes: canViewClinicalNotes,
+    consultationNoteId: row.consultationNoteId,
   };
 }
 
 export function WorkspacePage() {
   const clinic = useClinic();
-  const { session } = useSession();
-  const { role } = useClinicRole(clinic.id);
+  const scope = useWorkspaceScope();
+  const { canBill, canViewClinicalNotes } = usePermissions();
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
   const [paidNow, setPaidNow] = useState(true);
@@ -87,28 +99,66 @@ export function WorkspacePage() {
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
-  const myTherapistId = useMemo(
-    () => (therapists ?? []).find((t) => t.userId === session?.user?.id)?.id,
-    [therapists, session?.user?.id]
-  );
   // Staff (therapist) tier sees only their own visits in the today-scoped
-  // stats; admin sees the whole clinic. While role hasn't resolved yet
-  // ('unknown'), default to the narrower staff-scoped view rather than
-  // flashing clinic-wide data. Content below the stat row (Needs-attention,
-  // Seen today, Recently-seen) stays clinic-wide for everyone — only the
-  // stat pills are tier-scoped.
-  const myScopeTherapistId = role === 'admin' ? undefined : myTherapistId;
+  // stats and Seen today (one shared query drives both); admin sees the
+  // whole clinic. While role hasn't resolved yet ('unknown'), useWorkspaceScope
+  // defaults to the narrower staff-scoped view rather than flashing
+  // clinic-wide data. Needs-attention and Documentation stay clinic-wide
+  // for everyone — those are billing/documentation follow-ups an admin
+  // needs full visibility into regardless of who logged the visit.
   const today = useLiveQuery(
-    () => dashboardService.todayWorklist(clinic.id, new Date(), myScopeTherapistId),
-    [clinic.id, myScopeTherapistId]
+    () => dashboardService.todayWorklist(clinic.id, new Date(), scope.scopeTherapistId),
+    [clinic.id, scope.scopeTherapistId]
   );
   const pendingWork = useLiveQuery(() => dashboardService.pendingWork(clinic.id), [clinic.id]);
-  const monthlyNew = useLiveQuery(() => dashboardService.monthlyNewCounts(clinic.id), [clinic.id]);
+  // Clinic-wide for admin/front_desk, scoped to just this therapist's own
+  // visits otherwise — matches "Collected today" above, which already
+  // scopes the same way via scope.scopeTherapistId.
+  const monthlyNew = useLiveQuery(
+    () => dashboardService.monthlyNewCounts(clinic.id, new Date(), scope.scopeTherapistId),
+    [clinic.id, scope.scopeTherapistId]
+  );
+  // Only fetched for the "My open packages" tile, which only renders for a
+  // non-admin — cheap to skip entirely once role has resolved to admin.
+  const openPackages = useLiveQuery(
+    () => (scope.isAdmin ? undefined : dashboardService.openPackages(clinic.id)),
+    [clinic.id, scope.isAdmin]
+  );
+  const myOpenPackageCount = useMemo(
+    () => (openPackages ?? []).filter((p) => p.startedByTherapistId === scope.myTherapistId).length,
+    [openPackages, scope.myTherapistId]
+  );
   const openPackageGroupIds = useMemo(
     () => new Set<string>(),
     []
   );
+  // incomplete_note items, grouped by patient for the Documentation panel.
+  // pendingWork is already sorted most-overdue-first, so the first item seen
+  // per patient during this pass is their oldest pending note — no separate
+  // sort needed, Map insertion order carries it through.
+  const notesPending = useMemo(() => {
+    const byPatient = new Map<
+      string,
+      { patientId: string; patientName: string; mrno: string; count: number; oldestVisitId: string; daysSince: number }
+    >();
+    for (const item of pendingWork ?? []) {
+      if (item.kind !== 'incomplete_note' || !item.patientId || !item.visitId) continue;
+      const existing = byPatient.get(item.patientId);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        byPatient.set(item.patientId, {
+          patientId: item.patientId,
+          patientName: item.patientName,
+          mrno: item.mrno,
+          count: 1,
+          oldestVisitId: item.visitId,
+          daysSince: item.daysSince,
+        });
+      }
+    }
+    return [...byPatient.values()];
+  }, [pendingWork]);
 
   const expectedToday = useLiveQuery(
     () => (clinic.enableExpectedToday ? expectedVisitsService.listForToday(clinic.id) : undefined),
@@ -160,7 +210,7 @@ export function WorkspacePage() {
         await paymentService.setStatus(invoice.id, clinic.id, paidNow ? 'paid' : 'outstanding');
       } catch (statusError) {
         // Non-fatal: the invoice IS issued, and a missing status row reads
-        // as Paid — correctable anytime from Archive's Invoices tab.
+        // as Paid — correctable anytime from Ledger's Invoices tab.
         console.error('Could not record payment status', statusError);
       }
       setInvoicing(null);
@@ -192,44 +242,74 @@ export function WorkspacePage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
-        {clinic.enableExpectedToday && <StatTile label="Expected" value={expectedToday?.length ?? 0} />}
-        <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
-        <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
-        <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
-      </div>
-
-      {pendingWork && pendingWork.length > 0 && (
-        <>
-          {role === 'admin' && (
-            <div className="hidden lg:block">
-              <SectionCard title="Needs attention">
-                <ul className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                  {pendingWork.map((item, i) => (
-                    <li key={i} className="rounded-lg border border-[var(--border)] p-3">
-                      <PendingWorkRow item={item} clinicId={clinic.id} />
-                    </li>
-                  ))}
-                </ul>
-              </SectionCard>
-            </div>
-          )}
-          <div className={role === 'admin' ? 'lg:hidden' : ''}>
-            <SummaryBar tone="rust" label="need attention" count={pendingWork.length} onClick={() => setAttentionOpen(true)} />
-          </div>
-        </>
+      {scope.isUnlinkedTherapist && (
+        <ErrorNote message="Your login isn't linked to a therapist record yet, so today's visits and packages aren't showing here. Ask your admin to set it from Settings → Team → Service roster → Linked login." />
       )}
 
+      {/* Always exactly 3 tiles — a fixed 3-column grid rather than the
+          previous auto-fill row, which packed tiles densely on a phone but
+          left them small and clustered on a wide screen (auto-fill keeps
+          generating empty tracks past the last real tile, so the 1fr share
+          those tiles actually got was computed against a much wider column
+          count than there was content for). "Expected" was dropped — it's
+          redundant with the Expected Today list right below. Admin/front
+          desk see clinic-wide numbers; a therapist sees the same three
+          metrics scoped to just their own visits (scope.scopeTherapistId
+          already drives that for Collected today and New patients this
+          month; My open packages is filtered separately below since
+          openPackages() doesn't take a therapist filter itself). */}
+      <div className="grid grid-cols-3 gap-2">
+        <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
+        <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
+        {scope.isClinicWideView ? (
+          <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
+        ) : (
+          <StatTile label="My open packages" value={openPackages === undefined ? '—' : myOpenPackageCount} />
+        )}
+      </div>
+
+      {/* A compact preview, not the full actionable row (PendingWorkRow) —
+          that stays reserved for the Panel bottom-sheet below, where there's
+          room for its inline "Mark paid"/"Add note" actions. Same treatment
+          at every width and for every role (this used to split into an
+          admin-only full-width grid at tab: and up vs. a tap-to-open chip
+          everywhere else) so "needs attention" is always glanceable on the
+          page itself, never hidden behind a tap, without the old grid's
+          per-row padding eating most of a tablet screen. */}
+      {pendingWork && pendingWork.length > 0 && (
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <h2 className="font-display text-sm font-semibold text-[var(--ink)]">Needs attention</h2>
+            {pendingWork.length > 3 && (
+              <button
+                type="button"
+                className="text-xs font-medium text-[var(--teal)] hover:underline"
+                onClick={() => setAttentionOpen(true)}
+              >
+                View all {pendingWork.length}
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {pendingWork.slice(0, 3).map((item, i) => (
+              <NeedsAttentionPreviewCard key={i} item={item} onClick={() => setAttentionOpen(true)} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* List only — the manual "+ Add expected" entry form lives in its
+          own card near the bottom of the page (see AddExpectedCard) instead
+          of tacked onto this one, so this stays a short glanceable list at
+          the top instead of growing by a whole form's height every time
+          someone's mid-entry. */}
       {clinic.enableExpectedToday && (
         <SectionCard title="Expected today">
-          {(expectedToday ?? []).length === 0 && !addingExpected && (
+          {(expectedToday ?? []).length === 0 && (
             <p className="text-sm text-[var(--muted)]">Nobody expected yet today.</p>
           )}
           {expectedToday && expectedToday.length > 0 && (
-            <ul className="mb-2 divide-y divide-[var(--border)]">
+            <ul className="divide-y divide-[var(--border)]">
               {expectedToday.map((entry) => {
                 const linked = entry.patientId ? expectedPatientById.get(entry.patientId) : undefined;
                 const name = linked?.name ?? entry.patientName ?? 'Unnamed';
@@ -267,6 +347,74 @@ export function WorkspacePage() {
               })}
             </ul>
           )}
+        </SectionCard>
+      )}
+
+      <SectionCard title="Seen today">
+        {!today || today.visits.length === 0 ? (
+          <p className="text-sm text-[var(--muted)]">
+            No visits logged today — log one with &ldquo;+ New visit&rdquo;.
+          </p>
+        ) : (
+          <ResponsiveVisitList
+            rows={today.visits.map((row) =>
+              todayRowToCardData(row, openPackageGroupIds, scope.isAdmin, scope.myTherapistId, canViewClinicalNotes)
+            )}
+            showDate={false}
+            showPatient={true}
+            onInvoice={(row) => openInvoiceFor(row)}
+            onEditPatient={(row) => setEditPatientId(row.patientId)}
+            onDelete={(row) => {
+              if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+            }}
+            canInvoice={canBill}
+          />
+        )}
+      </SectionCard>
+
+      {clinic.clinicalDocsEnabled && notesPending.length > 0 && (
+        <SectionCard title="Documentation">
+          <ul className="divide-y divide-[var(--border)]">
+            {notesPending.map((p) => (
+              <li key={p.patientId} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                <div>
+                  <span className="font-display text-[var(--ink)]">{p.patientName}</span>{' '}
+                  <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                  <span className="ml-2 text-xs text-[var(--muted)]">
+                    {p.count} visit{p.count === 1 ? '' : 's'} awaiting notes · oldest {p.daysSince}d
+                  </span>
+                </div>
+                <Link
+                  to="/patients/$patientId/notes/new"
+                  params={{ patientId: p.patientId }}
+                  search={{ visitId: p.oldestVisitId }}
+                  className="text-xs font-medium text-[var(--amber)] hover:underline"
+                >
+                  Add note
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      )}
+
+      {/* A plain therapist can't reach the Reports nav tab (admin/front_desk
+          only, decision 3) — this is the one financial-aggregate exception
+          they do get (decision 4), so it surfaces here instead. Admin and
+          front_desk see it on Reports instead, not here, so it never shows
+          twice. */}
+      {!scope.isClinicWideView && <TherapistComparisonCard />}
+
+      {/* Manual entry for "Expected today" — placed last since it's the
+          page's least time-sensitive action (logging who to expect, not
+          reacting to who's here), and keeping it out of the way here is
+          what lets the list itself stay short at the top. This whole card
+          is a placeholder for a real appointment-booking system: once one
+          exists, "Expected today" should populate itself from confirmed
+          bookings for the day and this manual add becomes the fallback for
+          walk-ins/phone bookings only, not the only path in. */}
+      {clinic.enableExpectedToday && (
+        <SectionCard title="Add an expected visit">
           {addingExpected ? (
             <div className="space-y-2">
               <input
@@ -327,30 +475,6 @@ export function WorkspacePage() {
           )}
         </SectionCard>
       )}
-
-      <SectionCard title="Seen today">
-        {!today || today.visits.length === 0 ? (
-          <p className="text-sm text-[var(--muted)]">
-            No visits logged today — log one with &ldquo;+ New visit&rdquo;.
-          </p>
-        ) : (
-          <div className="divide-y divide-[var(--border)]">
-            {today.visits.map((row) => (
-              <SharedVisitCard
-                key={row.visitId}
-                data={todayRowToCardData(row, openPackageGroupIds)}
-                showDate={false}
-                showPatient={true}
-                onInvoice={() => openInvoiceFor(todayRowToCardData(row, openPackageGroupIds))}
-                onEditPatient={() => setEditPatientId(row.patientId)}
-                onDelete={() => {
-                  if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
-                }}
-              />
-            ))}
-          </div>
-        )}
-      </SectionCard>
 
       <Panel open={attentionOpen} onClose={() => setAttentionOpen(false)} title="Needs attention">
         <ul className="divide-y divide-[var(--border)]">
@@ -425,6 +549,27 @@ export function WorkspacePage() {
         />
       )}
     </div>
+  );
+}
+
+/** Glance-only card for the top-of-page preview — tapping it opens the
+ *  Panel bottom-sheet where PendingWorkRow's actual actions live, rather
+ *  than cramming "Mark paid"/"Add note" buttons into a card this narrow. */
+function NeedsAttentionPreviewCard({ item, onClick }: { item: PendingWorkItem; onClick: () => void }) {
+  const badge = PENDING_KIND[item.kind];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg border-y border-r border-[var(--border)] bg-[var(--surface)] py-2 pl-2.5 pr-3 text-left shadow-sm"
+      style={{ borderLeft: `3px solid ${badge.fg}` }}
+    >
+      <div className="text-[10px] font-medium" style={{ color: badge.fg }}>
+        {badge.label(item)}
+      </div>
+      <div className="mt-0.5 truncate text-sm font-medium text-[var(--ink)]">{item.patientName}</div>
+      <div className="truncate text-xs text-[var(--muted)]">{item.detail}</div>
+    </button>
   );
 }
 
@@ -528,6 +673,16 @@ function PendingWorkRow({ item, clinicId }: { item: PendingWorkItem; clinicId: s
               Cancel
             </button>
           </span>
+        )}
+        {item.kind === 'incomplete_note' && item.patientId && item.visitId && (
+          <Link
+            to="/patients/$patientId/notes/new"
+            params={{ patientId: item.patientId }}
+            search={{ visitId: item.visitId }}
+            className="text-xs font-medium text-[var(--amber)] hover:underline"
+          >
+            Add note
+          </Link>
         )}
         {item.patientId && (
           <Link

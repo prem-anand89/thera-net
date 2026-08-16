@@ -3,32 +3,27 @@ import { Link, useParams } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, consultationNoteService, invoiceService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { usePermissions } from '@/app/usePermissions';
+import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
+import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
+
+/** How many notes the side panel lists before collapsing the rest into a
+ *  "+N older" line — the full history stays reachable by opening any note. */
+const NOTE_LIST_LIMIT = 6;
 
 const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
   draft: { tone: 'amber', label: 'Draft' },
   completed: { tone: 'green', label: 'Completed' },
   archived: { tone: 'slate', label: 'Archived' },
 };
-
-type VisitPaymentState = 'paid' | 'outstanding' | 'uninvoiced' | 'zero_session';
-
-function visitPaymentState(
-  billPaise: number,
-  invoiceId: string | null,
-  statusByInvoiceId: Map<string, string>
-): VisitPaymentState {
-  if (billPaise === 0) return 'zero_session';
-  if (!invoiceId) return 'uninvoiced';
-  return statusByInvoiceId.get(invoiceId) === 'outstanding' ? 'outstanding' : 'paid';
-}
 
 
 /**
@@ -38,6 +33,8 @@ function visitPaymentState(
  */
 export function PatientProfilePage() {
   const clinic = useClinic();
+  const { canBill, canViewClinicalNotes, isAdmin } = usePermissions();
+  const { myTherapistId } = useWorkspaceScope();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
   const [editOpen, setEditOpen] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
@@ -61,7 +58,7 @@ export function PatientProfilePage() {
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
   const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
-  const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
+  const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
 
   const therapistName = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
@@ -72,6 +69,16 @@ export function PatientProfilePage() {
     () => new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status])),
     [invoicePayments]
   );
+  // Same fact-set as Ledger's payment chip (domain/paymentState.ts) — a
+  // direct payment counts as collected even if the invoice's own status
+  // row still says outstanding, or there's no invoice at all.
+  const directPaymentByVisitId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of directPayments ?? []) {
+      map.set(p.visitId, (map.get(p.visitId) ?? 0) + p.amountPaise);
+    }
+    return map;
+  }, [directPayments]);
   const visitRows = useMemo(
     () => [...(visits ?? [])].filter((v) => !v.deleted).sort((a, b) => b.visitDate.localeCompare(a.visitDate)),
     [visits]
@@ -83,16 +90,20 @@ export function PatientProfilePage() {
   );
 
   const outstandingBalance = useMemo(() => {
-    if (!visits || !invoices) return 0;
-    const invoiceStatusMap = new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status]));
+    if (!visits) return 0;
     let total = 0;
     for (const v of visits) {
-      if (!v.deleted && v.invoiceId && invoiceStatusMap.get(v.invoiceId) === 'outstanding') {
-        total += v.actualBillPaise;
-      }
+      if (v.deleted) continue;
+      const state = computeVisitPaymentState(
+        v.actualBillPaise,
+        v.invoiceId ?? null,
+        directPaymentByVisitId.get(v.id) ?? 0,
+        v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+      );
+      if (!isCollected(state) && state !== 'zero_session') total += v.actualBillPaise;
     }
     return total;
-  }, [visits, invoices, invoicePayments]);
+  }, [visits, statusByInvoiceId, directPaymentByVisitId]);
 
   const openPackageIds = useMemo(
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
@@ -222,7 +233,7 @@ export function PatientProfilePage() {
             </div>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-[var(--muted)]">
               <span>
-                <span className="text-[var(--muted)]/70">MRN</span>{' '}
+                <span className="text-[var(--muted)]/70">Patient ID</span>{' '}
                 <span className="font-num">{patient.mrno}</span>
               </span>
               {meta.length > 0 && <span className="font-num">{meta.join(' · ')}</span>}
@@ -254,10 +265,22 @@ export function PatientProfilePage() {
         </div>
       </section>
 
+      {/* Both columns pin to row 1 explicitly. Without `lg:row-start-1`,
+          grid auto-placement puts the side column (first in DOM, at
+          col-start-2) in row 1, then finds its cursor already past column 1
+          and drops the main column to row 2 — leaving a tall blank gap on
+          the left and pushing Visit history below the side cards. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         {/* Side column — rendered first on mobile for proper ordering */}
-        <div className="order-1 space-y-4 lg:order-none lg:col-start-2">
-          <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />
+        <div className="order-1 space-y-4 lg:order-none lg:col-start-2 lg:row-start-1">
+          {/* Front desk keeps read access to `notes` for the safety-flags
+              banner above (blood thinners, implants, pregnancy) — that's a
+              narrow derived subset, not clinical documentation. The full
+              note list/authoring entry point is gated separately, matching
+              canViewClinicalNotes's "reception has no clinical-documentation
+              need" (NoteEditorPage enforces the same gate for anyone who
+              navigates to a note URL directly). */}
+          {canViewClinicalNotes && <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />}
 
           <SideCard title="Care plan">
             {patientPackages.length === 0 ? (
@@ -293,7 +316,7 @@ export function PatientProfilePage() {
         </div>
 
         {/* Main column */}
-        <div className="order-2 space-y-4 lg:order-none lg:col-start-1">
+        <div className="order-2 space-y-4 lg:order-none lg:col-start-1 lg:row-start-1">
           <SectionLabel>Visit history</SectionLabel>
           {issueError && (
             <div className="rounded bg-[var(--rust-light)] p-2 text-sm text-[var(--rust)]">
@@ -322,7 +345,7 @@ export function PatientProfilePage() {
               <ul className="divide-y divide-[var(--border)]">
                 {visitRows.map((v) => {
                   const isSelected = selectedVisitIds.has(v.id);
-                  const canInvoice = !v.invoiceId;
+                  const eligibleForInvoicing = !v.invoiceId;
                   const cardData: VisitCardData = {
                     visitId: v.id,
                     visitDate: v.visitDate,
@@ -336,14 +359,25 @@ export function PatientProfilePage() {
                     therapistName: therapistName.get(v.therapistId) ?? '—',
                     treatmentNotes: v.treatmentNotes ?? null,
                     billPaise: v.actualBillPaise,
-                    paymentState: visitPaymentState(v.actualBillPaise, v.invoiceId, statusByInvoiceId),
+                    paymentState: computeVisitPaymentState(
+                      v.actualBillPaise,
+                      v.invoiceId ?? null,
+                      directPaymentByVisitId.get(v.id) ?? 0,
+                      v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+                    ),
                     invoiceId: v.invoiceId ?? null,
                     canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
-                    canDelete: !v.invoiceId,
+                    // Pre-flight mirror of visits_delete's RLS check
+                    // (is_clinic_admin or is_own_therapist) — a patient's
+                    // history is clinic-wide (any therapist can view it),
+                    // but only the visit's own therapist or an admin can
+                    // delete it.
+                    canDelete: !v.invoiceId && (isAdmin || v.therapistId === myTherapistId),
+                    needsNote: v.clinicalStatus === 'pending',
                   };
                   return (
                     <li key={v.id} className="flex items-start gap-3 px-3">
-                      {canInvoice && (
+                      {eligibleForInvoicing && canBill && (
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -360,6 +394,7 @@ export function PatientProfilePage() {
                           onInvoice={() => {}}
                           onEditPatient={() => setEditPatientId(v.patientId)}
                           onDelete={() => handleVisitDelete(v.id)}
+                          canInvoice={canBill}
                         />
                       </div>
                     </li>
@@ -418,8 +453,8 @@ function ConsultationNotePanel({
   notes: ConsultationNote[];
 }) {
   const draft = notes.find((n) => n.status === 'draft');
-  const latest = notes[0]; // notes are pre-sorted most-recently-updated first
-  const pill = latest ? NOTE_STATUS_PILL[latest.status] : null;
+  const visible = notes.slice(0, NOTE_LIST_LIMIT);
+  const hiddenCount = notes.length - visible.length;
 
   return (
     <SideCard
@@ -434,33 +469,38 @@ function ConsultationNotePanel({
         </Link>
       }
     >
-      {!latest ? (
+      {notes.length === 0 ? (
         <p className="text-sm text-[var(--muted)]">No notes yet.</p>
       ) : (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            {pill && <Pill tone={pill.tone}>{pill.label}</Pill>}
-            <span className="font-num text-xs text-[var(--muted)]">
-              updated {formatDateDMY(latest.updatedAt.slice(0, 10))}
-            </span>
-          </div>
-          {notes.length > 1 && (
-            <ul className="space-y-1 border-t border-[var(--border)] pt-2 text-xs">
-              {notes.slice(1, 5).map((n) => (
-                <li key={n.id} className="flex items-center justify-between">
-                  <Link
-                    to="/patients/$patientId/notes/$noteId"
-                    params={{ patientId, noteId: n.id }}
-                    className="text-[var(--muted)] hover:text-[var(--ink)]"
-                  >
-                    {formatDateDMY(n.updatedAt.slice(0, 10))}
-                  </Link>
-                  <Pill tone={NOTE_STATUS_PILL[n.status].tone}>{NOTE_STATUS_PILL[n.status].label}</Pill>
-                </li>
-              ))}
-            </ul>
+        // Every note gets the same row shape — date, Initial/Follow-up,
+        // status — instead of the previous "latest note is a special
+        // header, older ones are bare dates" split, which gave the older
+        // entries no mode and no way to tell an evaluation from a
+        // follow-up without opening each one.
+        <ul className="divide-y divide-[var(--border)] text-xs">
+          {visible.map((n) => (
+            <li key={n.id} className="py-1.5 first:pt-0 last:pb-0">
+              <Link
+                to="/patients/$patientId/notes/$noteId"
+                params={{ patientId, noteId: n.id }}
+                className="flex items-center justify-between gap-2 hover:underline"
+              >
+                <span className="min-w-0">
+                  <span className="font-num text-[var(--ink)]">{formatDateDMY(n.updatedAt.slice(0, 10))}</span>
+                  <span className="ml-1.5 text-[var(--muted)]">
+                    {n.noteMode === 'followup' ? 'Follow-up' : 'Initial'}
+                  </span>
+                </span>
+                <Pill tone={NOTE_STATUS_PILL[n.status].tone}>{NOTE_STATUS_PILL[n.status].label}</Pill>
+              </Link>
+            </li>
+          ))}
+          {hiddenCount > 0 && (
+            <li className="pt-1.5 text-[var(--muted)]">
+              +{hiddenCount} older note{hiddenCount === 1 ? '' : 's'}
+            </li>
           )}
-        </div>
+        </ul>
       )}
     </SideCard>
   );

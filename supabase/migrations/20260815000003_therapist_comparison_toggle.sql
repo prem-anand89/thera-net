@@ -1,0 +1,16 @@
+-- ---------------------------------------------------------------------------
+-- Therapist comparison chart: the explicit exception to "financial
+-- aggregates are admin-only" (decision 3 in
+-- docs/BUILD-PLAN-role-model-and-billing.md) — deliberately visible to
+-- therapists too when a clinic opts in, for competitive visibility.
+-- Off by default so no existing clinic's non-admins suddenly see
+-- colleague-comparison data they couldn't see before; an admin turns it
+-- on explicitly from Settings. Same pattern as clinical_docs_enabled.
+--
+-- No server-side enforcement needed here, unlike the role/billing work in
+-- 20260815000001/20260815000002 -- this only ever widens what's shown on
+-- a read-only chart built from data (visits, revenue splits) every
+-- clinical member can already read under existing RLS. There's nothing to
+-- authorize that isn't already authorized.
+-- ---------------------------------------------------------------------------
+alter table public.clinics add column show_therapist_comparison boolean not null default false;

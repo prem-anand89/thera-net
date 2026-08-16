@@ -1,13 +1,4 @@
-const COLORS = [
-  '#2a78d6', // blue
-  '#1baf7a', // aqua
-  '#eda100', // yellow
-  '#008300', // green
-  '#4a3aa7', // violet
-  '#e34948', // red
-  '#e87ba4', // magenta
-  '#eb6834', // orange
-];
+import { SERIES_COLORS } from '@/components/chartColors';
 
 interface PieChartProps {
   data: Array<{ label: string; value: number }>;
@@ -52,7 +43,7 @@ export function PieChart({ data, width = 200, height = 200 }: PieChartProps) {
     currentAngle = endAngle;
 
     return (
-      <path key={i} d={path} fill={COLORS[i % COLORS.length]} className="hover:opacity-80 transition-opacity" />
+      <path key={i} d={path} fill={SERIES_COLORS[i % SERIES_COLORS.length]} className="hover:opacity-80 transition-opacity" />
     );
   });
 
@@ -64,7 +55,7 @@ export function PieChart({ data, width = 200, height = 200 }: PieChartProps) {
       <div className="space-y-2 text-xs">
         {data.map((d, i) => (
           <div key={i} className="flex items-center gap-2">
-            <div className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+            <div className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: SERIES_COLORS[i % SERIES_COLORS.length] }} />
             <span className="text-[var(--ink)]">
               {d.label} ({d.value})
             </span>

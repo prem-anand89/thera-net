@@ -163,8 +163,8 @@ export function ImportVisitsPage() {
             <li>{stage.summary.rowsSkipped} rows skipped</li>
           </ul>
           <div className="mt-4 flex gap-2">
-            <Link to="/archive" className={btnPrimary}>
-              Go to Archive
+            <Link to="/ledger" className={btnPrimary}>
+              Go to Ledger
             </Link>
             <Link to="/workspace" className={btnSecondary}>
               Go to Workspace

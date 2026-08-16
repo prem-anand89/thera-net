@@ -51,7 +51,7 @@ export function ReportsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Monthly report</h1>
+        <h2 className="font-display text-base font-semibold text-[var(--ink)]">Monthly statement</h2>
         <div className="ml-auto flex items-end gap-2">
           <select
             className={inputCls}

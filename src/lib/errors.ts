@@ -26,6 +26,10 @@ const MESSAGE_PATTERNS: Array<[RegExp, string]> = [
     "You don't have access to this clinic. Try signing out and back in, or ask your admin.",
   ],
   [
+    /new row violates row-level security policy/i,
+    "You don't have permission to save this change — it may belong to another therapist. Ask your admin if this looks wrong.",
+  ],
+  [
     /one or more visits are missing, deleted, or already invoiced/i,
     'One of the selected visits is no longer available (it may already be on another invoice). Refresh and try again.',
   ],
@@ -34,6 +38,15 @@ const MESSAGE_PATTERNS: Array<[RegExp, string]> = [
     'This patient has recorded visits and cannot be permanently deleted. Use "Hide" instead.',
   ],
   [/patient not found/i, 'This patient could not be found. They may have been removed already — try refreshing.'],
+  [
+    /therapist has \d+ linked record\(s\); deactivate instead/i,
+    'This therapist has visits, notes, or invoices on record and cannot be permanently deleted. Deactivate them instead.',
+  ],
+  [/therapist not found/i, 'This therapist could not be found. They may have been removed already — try refreshing.'],
+  [
+    /only clinic admins can permanently delete a therapist/i,
+    'Only clinic admins can do this. Ask an admin if you need it done.',
+  ],
   [/only clinic admins can wipe clinic data/i, 'Only clinic admins can do this. Ask an admin if you need it done.'],
   [
     /duplicate key value violates unique constraint "patients_clinic_id_mrno_key"/i,

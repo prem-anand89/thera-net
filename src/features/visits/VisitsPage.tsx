@@ -1,18 +1,22 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService, invoiceService, paymentService, visitService, patientService } from '@/services';
+import { repos, dashboardService, invoiceService, paymentService, visitService } from '@/services';
 import { db } from '@/lib/db';
+import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
+import { usePermissions } from '@/app/usePermissions';
+import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
-import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, monthName, formatDateDMY } from '@/domain/fiscalYear';
+import { formatDateDMY } from '@/domain/fiscalYear';
+import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
+import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import {
   clinicBillingConfig,
-  referringSourceDetailLabel,
-  REFERRING_SOURCE_LABELS,
+  clinicShareLabels,
   type Patient,
   type PaymentMode,
-  type ReferringSource,
+  type PaymentStatus,
   type Therapist,
   type UUID,
   type Visit,
@@ -27,28 +31,19 @@ import {
   tdNum,
   ErrorNote,
   Field,
-  Pill,
-  PackageThread,
   SectionCard,
+  StatTile,
 } from '@/components/ui';
-import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { PatientOverview } from './PatientOverview';
 import { EditVisitModal } from './EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
-import { SharedVisitCard, type VisitCardData, type VisitCardPaymentState } from '@/components/VisitCard';
+import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
+import { InvoicesPage } from '@/features/invoices/InvoicesPage';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PATIENT_SEARCH_LIMIT = 6;
 
-type RecordsView = 'visits' | 'patients';
-
-type PatientSortKey = 'name' | 'mrno' | 'age' | 'condition';
-const PATIENT_COMPARATORS = {
-  name: byString<Patient>((p) => p.name),
-  mrno: byString<Patient>((p) => p.mrno),
-  age: byNumber<Patient>((p) => p.age ?? -1),
-  condition: byString<Patient>((p) => p.primaryCondition ?? ''),
-};
+type RecordsView = 'visits' | 'invoices';
 
 type DatePreset = 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
 const DATE_PRESETS: { key: DatePreset; label: string }[] = [
@@ -60,73 +55,6 @@ const DATE_PRESETS: { key: DatePreset; label: string }[] = [
 ];
 const toIsoDate = (d: Date) => d.toISOString().slice(0, 10);
 
-type DateGroup = 'today' | 'this-week' | 'this-month' | 'last-month' | 'earlier';
-interface GroupedVisits {
-  group: DateGroup;
-  label: string;
-  visits: Visit[];
-  totalBillPaise: number;
-}
-
-function groupVisitsByDate(visits: Visit[], today: Date): GroupedVisits[] {
-  const todayStr = toIsoDate(today);
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay());
-  const startOfWeekStr = toIsoDate(startOfWeek);
-  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const startOfMonthStr = toIsoDate(startOfMonth);
-  const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-  const startOfLastMonthStr = toIsoDate(startOfLastMonth);
-  const endOfLastMonthStr = toIsoDate(endOfLastMonth);
-
-  const groups: Record<DateGroup, Visit[]> = {
-    today: [],
-    'this-week': [],
-    'this-month': [],
-    'last-month': [],
-    earlier: [],
-  };
-
-  for (const v of visits) {
-    if (v.visitDate === todayStr) {
-      groups.today.push(v);
-    } else if (v.visitDate >= startOfWeekStr && v.visitDate < todayStr) {
-      groups['this-week'].push(v);
-    } else if (v.visitDate >= startOfMonthStr && v.visitDate < startOfWeekStr) {
-      groups['this-month'].push(v);
-    } else if (v.visitDate >= startOfLastMonthStr && v.visitDate <= endOfLastMonthStr) {
-      groups['last-month'].push(v);
-    } else {
-      groups.earlier.push(v);
-    }
-  }
-
-  const result: GroupedVisits[] = [];
-  const groupLabels: Record<DateGroup, string> = {
-    today: 'Today',
-    'this-week': 'This week',
-    'this-month': 'This month',
-    'last-month': 'Last month',
-    earlier: 'Earlier',
-  };
-  const groupOrder: DateGroup[] = ['today', 'this-week', 'this-month', 'last-month', 'earlier'];
-
-  for (const group of groupOrder) {
-    if (groups[group].length > 0) {
-      const totalBillPaise = groups[group].reduce((sum, v) => sum + v.actualBillPaise, 0);
-      result.push({
-        group,
-        label: groupLabels[group],
-        visits: groups[group].sort((a, b) => b.visitDate.localeCompare(a.visitDate)),
-        totalBillPaise,
-      });
-    }
-  }
-
-  return result;
-}
-
 function visitToCardData(
   v: Visit,
   patientById: Map<UUID, Patient>,
@@ -135,17 +63,28 @@ function visitToCardData(
   serviceName: Map<UUID, string>,
   syncErrorByVisitId: Map<UUID, string>,
   openPackageGroupIds: Set<UUID>,
-  therapistSplit: boolean
+  therapistSplit: boolean,
+  statusByInvoiceId: Map<UUID, PaymentStatus>,
+  directPaymentByVisitId: Map<UUID, number>,
+  isAdmin: boolean,
+  myTherapistId: UUID | undefined,
+  canViewClinicalNotes: boolean
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy = v.createdBy && v.updatedBy && v.createdBy !== v.updatedBy
     ? therapistNameByUserId.get(v.updatedBy) ?? 'another user'
     : null;
-  const paymentState: VisitCardPaymentState = v.invoiceId
-    ? 'paid'
-    : v.actualBillPaise === 0
-    ? 'zero_session'
-    : 'uninvoiced';
+  const paymentState = computeVisitPaymentState(
+    v.actualBillPaise,
+    v.invoiceId ?? null,
+    directPaymentByVisitId.get(v.id) ?? 0,
+    v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+  );
+  // Pre-flight mirror of visits_update/visits_delete's RLS check
+  // (is_clinic_admin or is_own_therapist) — without this, a therapist saw
+  // a clickable Delete/Split on every colleague's visit in this clinic-wide
+  // list and only found out it was blocked after the server rejected it.
+  const canModify = isAdmin || v.therapistId === myTherapistId;
 
   return {
     visitId: v.id,
@@ -165,9 +104,17 @@ function visitToCardData(
     editedBy,
     syncError: syncErrorByVisitId.get(v.id) ?? null,
     canRepeat: v.packageGroupId ? openPackageGroupIds.has(v.packageGroupId) : false,
-    canSplit: therapistSplit && v.actualBillPaise > 0,
+    // Unlike canSplit/canDelete, not gated on !v.invoiceId -- an invoiced
+    // visit's clinical fields (condition, treatmentNotes) stay editable,
+    // only its billing is frozen (visitService.updateBilling enforces
+    // that server-side too).
+    canEdit: canModify,
+    canSplit: therapistSplit && v.actualBillPaise > 0 && canModify,
     hasSplit: v.sharedTherapistId ? true : false,
-    canDelete: !v.invoiceId,
+    canDelete: !v.invoiceId && canModify,
+    needsNote: v.clinicalStatus === 'pending',
+    canViewNotes: canViewClinicalNotes,
+    consultationNoteId: v.consultationNoteId ?? null,
   };
 }
 
@@ -181,15 +128,37 @@ interface InvoicingTarget {
 
 export function VisitsPage() {
   const clinic = useClinic();
-  const { therapistSplit } = clinicBillingConfig(clinic);
+  const { canBill, isAdmin, canViewClinicalNotes, canViewPayouts } = usePermissions();
+  const { myTherapistId } = useWorkspaceScope();
+  const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { patientId?: string };
+  const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView };
 
-  const [recordsView, setRecordsView] = useState<RecordsView>('visits');
+  // URL is the source of truth (not local state) so the /invoices redirect,
+  // and any bookmark/shared link with ?tab=, land on the right sub-tab
+  // instead of always Visits. replace: true so tab switches don't pile up
+  // browser-back history entries.
+  const recordsView: RecordsView = search.tab ?? 'visits';
+  const setRecordsView = useCallback(
+    (next: RecordsView) => {
+      void navigate({
+        to: '/ledger',
+        search: { patientId: search.patientId, tab: next === 'visits' ? undefined : next },
+        replace: true,
+      });
+    },
+    [navigate, search.patientId]
+  );
+  // An admin flipping invoicingAccess mid-session (synced live from another
+  // device) shouldn't leave someone stranded on a tab that just disappeared.
+  useEffect(() => {
+    if (recordsView === 'invoices' && !canBill) setRecordsView('visits');
+  }, [recordsView, canBill, setRecordsView]);
   const [from, setFrom] = useState(() => toIsoDate(new Date(Date.now() - 6 * 86400000)));
   const [to, setTo] = useState(() => toIsoDate(new Date()));
   const [datePreset, setDatePreset] = useState<DatePreset>('week');
   const [therapistId, setTherapistId] = useState('');
+  const [onlyCollectedNoReceipt, setOnlyCollectedNoReceipt] = useState(false);
   const [patientQuery, setPatientQuery] = useState('');
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [splitting, setSplitting] = useState<Visit | null>(null);
@@ -244,6 +213,7 @@ export function VisitsPage() {
     [therapists]
   );
   const patientById = useMemo(() => new Map((patients ?? []).map((p) => [p.id, p])), [patients]);
+  const visitById = useMemo(() => new Map((visits ?? []).map((v) => [v.id, v])), [visits]);
   const failedVisitSyncs = useLiveQuery(
     () => db.outbox.filter((e) => e.table === 'visits' && !!e.error).toArray(),
     []
@@ -254,6 +224,25 @@ export function VisitsPage() {
   );
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
   const serviceName = useMemo(() => new Map((catalog ?? []).map((c) => [c.id, c.name])), [catalog]);
+
+  // Payment state needs both facts a bare `invoiceId` check misses: whether
+  // the invoice itself was ever marked paid (statusByInvoiceId), and
+  // whether money was collected directly with no invoice at all
+  // (directPaymentByVisitId) — same two lookups dashboardService.todayWorklist
+  // already builds for Workspace's "Seen today" list.
+  const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
+  const statusByInvoiceId = useMemo(
+    () => new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status])),
+    [invoicePayments]
+  );
+  const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
+  const directPaymentByVisitId = useMemo(() => {
+    const map = new Map<UUID, number>();
+    for (const p of directPayments ?? []) {
+      map.set(p.visitId, (map.get(p.visitId) ?? 0) + p.amountPaise);
+    }
+    return map;
+  }, [directPayments]);
 
   const filteredPatient = search.patientId ? patientById.get(search.patientId) : undefined;
 
@@ -271,20 +260,121 @@ export function VisitsPage() {
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
   );
+  const outstanding = useLiveQuery(() => dashboardService.outstandingInvoices(clinic.id), [clinic.id]);
 
+  const cardRows = useMemo(
+    () =>
+      (visits ?? []).map((v) =>
+        visitToCardData(
+          v,
+          patientById,
+          therapistName,
+          therapistNameByUserId,
+          serviceName,
+          syncErrorByVisitId,
+          openPackageGroupIds,
+          therapistSplit,
+          statusByInvoiceId,
+          directPaymentByVisitId,
+          isAdmin,
+          myTherapistId,
+          canViewClinicalNotes
+        )
+      ),
+    [
+      visits,
+      patientById,
+      therapistName,
+      therapistNameByUserId,
+      serviceName,
+      syncErrorByVisitId,
+      openPackageGroupIds,
+      therapistSplit,
+      statusByInvoiceId,
+      directPaymentByVisitId,
+      isAdmin,
+      myTherapistId,
+      canViewClinicalNotes,
+    ]
+  );
 
+  const visibleRows = useMemo(
+    () => (onlyCollectedNoReceipt ? cardRows.filter((r) => r.paymentState === 'collected_no_receipt') : cardRows),
+    [cardRows, onlyCollectedNoReceipt]
+  );
+
+  // Billed = every visit's bill amount, same as before. Collected/outstanding
+  // now read the same paymentState the chips show, rather than being
+  // (accidentally) impossible to tell apart from "has an invoiceId".
   const totals = useMemo(
     () =>
-      (visits ?? []).reduce(
-        (acc, v) => ({
-          bill: acc.bill + v.actualBillPaise,
-          bmShare: acc.bmShare + v.bmSharePaise,
-          postTax: acc.postTax + v.postTaxPaise,
+      visibleRows.reduce(
+        (acc, r) => ({
+          bill: acc.bill + r.billPaise,
+          collected: acc.collected + (isCollected(r.paymentState) ? r.billPaise : 0),
+          outstanding: acc.outstanding + (!isCollected(r.paymentState) && r.paymentState !== 'zero_session' ? r.billPaise : 0),
         }),
-        { bill: 0, bmShare: 0, postTax: 0 }
+        { bill: 0, collected: 0, outstanding: 0 }
       ),
-    [visits]
+    [visibleRows]
   );
+
+  // Describes the currently-applied filter so a downloaded CSV is never
+  // ambiguous about what it's a snapshot of.
+  const filterDescription = useMemo(() => {
+    const dateLabel = DATE_PRESETS.find((p) => p.key === datePreset)?.label ?? 'Custom';
+    const rangeText =
+      from && to
+        ? `${formatDateDMY(from)}–${formatDateDMY(to)}`
+        : from
+          ? `from ${formatDateDMY(from)}`
+          : to
+            ? `through ${formatDateDMY(to)}`
+            : 'all dates';
+    const therapistText = therapistId ? (therapistName.get(therapistId) ?? 'Unknown') : 'All';
+    const patientText = filteredPatient ? `${filteredPatient.name} (${filteredPatient.mrno})` : 'All';
+    return `Ledger export — ${dateLabel} (${rangeText}) · Therapist: ${therapistText} · Patient: ${patientText} · generated ${new Date().toLocaleString()}`;
+  }, [datePreset, from, to, therapistId, therapistName, filteredPatient]);
+
+  function downloadCsv() {
+    const rows: VisitsCsvRow[] = (visits ?? []).map((v) => ({
+      visitId: v.id,
+      visitDate: v.visitDate,
+      patientName: patientById.get(v.patientId)?.name ?? '—',
+      mrno: patientById.get(v.patientId)?.mrno ?? '—',
+      therapistName: therapistName.get(v.therapistId) ?? '—',
+      serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
+      condition: v.condition,
+      billPaise: v.actualBillPaise,
+      bmSharePaise: v.bmSharePaise,
+      postTaxPaise: v.postTaxPaise,
+      invoiced: v.invoiceId != null,
+    }));
+    const csv = visitsToCsv(rows, {
+      filterDescription,
+      hospitalSplit,
+      ownShareLabel: clinicShareLabels(clinic).own,
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${clinic.invoicePrefix}-ledger-${toIsoDate(new Date())}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Sync-basis caption: unsynced local changes take priority over a
+  // last-sync timestamp, since "as of 14:02" would understate what's
+  // actually showing if newer edits are still queued.
+  const syncSnapshot = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
+  const unsyncedVisitCount = useLiveQuery(() => db.outbox.filter((e) => e.table === 'visits').count(), []) ?? 0;
+  const syncCaption =
+    unsyncedVisitCount > 0
+      ? `Includes ${unsyncedVisitCount} unsynced visit${unsyncedVisitCount === 1 ? '' : 's'}.`
+      : syncSnapshot.lastSyncAt
+        ? `As of last sync ${new Date(syncSnapshot.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
+        : null;
 
   async function issue() {
     if (!invoicing) return;
@@ -313,11 +403,11 @@ export function VisitsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Archive</h1>
+          <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Ledger</h1>
           {filteredPatient && (
             <span className="rounded-full bg-[var(--teal-light)] px-3 py-1 text-xs text-[var(--teal)]">
               {filteredPatient.name} ({filteredPatient.mrno})
-              <Link to="/archive" className="ml-2 font-medium">
+              <Link to="/ledger" className="ml-2 font-medium">
                 ✕
               </Link>
             </span>
@@ -332,9 +422,11 @@ export function VisitsPage() {
           {(
             [
               { key: 'visits', label: 'Visits' },
-              { key: 'patients', label: 'Patients' },
+              { key: 'invoices', label: 'Invoices' },
             ] as const
-          ).map((v) => (
+          )
+            .filter((v) => v.key !== 'invoices' || canBill)
+            .map((v) => (
             <button
               key={v.key}
               type="button"
@@ -373,7 +465,7 @@ export function VisitsPage() {
                       onMouseDown={(e) => {
                         e.preventDefault();
                         setPatientQuery('');
-                        void navigate({ to: '/archive', search: { patientId: p.id } });
+                        void navigate({ to: '/ledger', search: { patientId: p.id } });
                       }}
                     >
                       <span className="font-display">{p.name}</span>{' '}
@@ -393,6 +485,14 @@ export function VisitsPage() {
                 ))}
               </select>
             </Field>
+            <label className="flex items-center gap-1.5 pb-2 text-xs text-[var(--muted)]">
+              <input
+                type="checkbox"
+                checked={onlyCollectedNoReceipt}
+                onChange={(e) => setOnlyCollectedNoReceipt(e.target.checked)}
+              />
+              Collected, no receipt
+            </label>
             <div className="ml-auto flex flex-wrap items-end gap-2">
               <div className="flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
                 {DATE_PRESETS.map((p) => (
@@ -420,8 +520,18 @@ export function VisitsPage() {
                   </Field>
                 </div>
               )}
+              <button className={btnSecondary} disabled={!visits?.length} onClick={downloadCsv}>
+                Export CSV
+              </button>
+              {canViewPayouts && (
+                <Link to="/insights" search={{ tab: 'monthly' }} className={btnSecondary}>
+                  Generate report
+                </Link>
+              )}
             </div>
           </div>
+
+          {syncCaption && <p className="text-xs text-[var(--slate)]">{syncCaption}</p>}
 
           {filteredPatient && <PatientOverview patient={filteredPatient} />}
         </>
@@ -459,7 +569,7 @@ export function VisitsPage() {
                     <td className={tdNum}>{p.daysSinceLastVisit}</td>
                     <td className={td}>
                       <Link
-                        to="/archive"
+                        to="/ledger"
                         search={{ patientId: p.patientId }}
                         className="font-medium text-[var(--teal)] hover:underline"
                       >
@@ -474,72 +584,99 @@ export function VisitsPage() {
         </SectionCard>
       )}
 
+      {recordsView === 'visits' && outstanding && outstanding.rows.length > 0 && (
+        <SectionCard title="Outstanding payments">
+          <div className="mb-4 flex gap-4">
+            <StatTile label="Total outstanding" value={formatINR(outstanding.totalPaise)} />
+            <StatTile label="Invoices" value={outstanding.count} />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-[var(--border)] text-sm">
+              <thead>
+                <tr>
+                  <th className={th}>Invoice №</th>
+                  <th className={th}>Patient</th>
+                  <th className={thNum}>Amount</th>
+                  <th className={th}>Issued</th>
+                  <th className={thNum}>Days outstanding</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {outstanding.rows.map((r) => (
+                  <tr key={r.invoiceId} className="hover:bg-[var(--paper)]">
+                    <td className={td}>
+                      <Link
+                        to="/invoices/$invoiceId/print"
+                        params={{ invoiceId: r.invoiceId }}
+                        className="text-[var(--teal)] hover:underline"
+                      >
+                        {r.invoiceNo}
+                      </Link>
+                    </td>
+                    <td className={td}>
+                      <span className="font-display">{r.patientName}</span>{' '}
+                      <span className="text-xs text-[var(--muted)]">{r.mrno}</span>
+                    </td>
+                    <td className={tdNum}>{formatINR(r.totalPaise)}</td>
+                    <td className={td}>{formatDateDMY(r.issuedAt)}</td>
+                    <td className={tdNum}>{r.daysOutstanding}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      )}
+
       {recordsView === 'visits' && visits && visits.length > 0 && (
         <div className="space-y-4">
-          {groupVisitsByDate(visits, new Date()).map((group) => {
-            const visitCount = group.visits.length;
-            const label = `${group.label} (${visitCount} visit${visitCount === 1 ? '' : 's'})`;
-            return (
-              <div
-                key={group.group}
-                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm"
-              >
-                <div className="border-b border-[var(--border)] px-4 py-3 text-sm font-semibold text-[var(--ink)]">
-                  {label}
-                  <span className="ml-4 text-xs font-normal text-[var(--muted)]">
-                    {formatINR(group.totalBillPaise)}
-                  </span>
-                </div>
-                <div className="divide-y divide-[var(--border)]">
-                  {group.visits.map((v) => {
-                    const cardData = visitToCardData(
-                      v,
-                      patientById,
-                      therapistName,
-                      therapistNameByUserId,
-                      serviceName,
-                      syncErrorByVisitId,
-                      openPackageGroupIds,
-                      therapistSplit
-                    );
-                    return (
-                      <div key={v.id} className="px-4">
-                        <SharedVisitCard
-                          data={cardData}
-                          showDate={true}
-                          showPatient={true}
-                          onInvoice={() => {
-                            setError(null);
-                            setPaidNow(true);
-                            setInvoicing({
-                              visitId: v.id,
-                              patientLabel: patientById.get(v.patientId)?.name ?? '-',
-                              serviceLabel: serviceName.get(v.serviceCatalogId) ?? '-',
-                              isPackage: Boolean(v.packageGroupId),
-                            });
-                          }}
-                          onSplit={
-                            therapistSplit
-                              ? () => {
-                                  setError(null);
-                                  setSplitting(v);
-                                }
-                              : undefined
-                          }
-                          onDelete={() => {
-                            if (confirm('Delete this visit?')) void repos.visits.softDelete(v.id);
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
+          {visibleRows.length > 0 ? (
+            <>
+              <ResponsiveVisitList
+                rows={visibleRows}
+                showDate={true}
+                showPatient={true}
+                groupByDate={true}
+                onInvoice={(row) => {
+                  setError(null);
+                  setPaidNow(true);
+                  setInvoicing({
+                    visitId: row.visitId,
+                    patientLabel: row.patientName,
+                    serviceLabel: row.serviceName,
+                    isPackage: row.packageTotal != null,
+                  });
+                }}
+                onEdit={(row) => {
+                  setError(null);
+                  setEditing(row.visitId);
+                }}
+                onSplit={
+                  therapistSplit
+                    ? (row) => {
+                        const v = visitById.get(row.visitId);
+                        if (!v) return;
+                        setError(null);
+                        setSplitting(v);
+                      }
+                    : undefined
+                }
+                onDelete={(row) => {
+                  if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+                }}
+                canInvoice={canBill}
+              />
+              <div className="sticky bottom-0 z-10 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm font-semibold text-[var(--ink)] shadow-[0_-2px_6px_rgba(0,0,0,0.06)]">
+                Totals: {visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'} · Billed{' '}
+                {formatINR(totals.bill)} · Collected {formatINR(totals.collected)} · Outstanding{' '}
+                {formatINR(totals.outstanding)}
               </div>
-            );
-          })}
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm font-semibold text-[var(--ink)]">
-            Totals: {visits.length} visit{visits.length === 1 ? '' : 's'} · {formatINR(totals.bill)}
-          </div>
+            </>
+          ) : (
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center text-sm text-[var(--muted)] shadow-sm">
+              No visits match "Collected, no receipt" in this range.
+            </div>
+          )}
         </div>
       )}
 
@@ -549,8 +686,7 @@ export function VisitsPage() {
         </div>
       )}
 
-      {recordsView === 'patients' &&<AllPatientsSection />}
-
+      {recordsView === 'invoices' && <InvoicesPage />}
 
       {invoicing && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">
@@ -720,442 +856,3 @@ function SplitModal({
   );
 }
 
-function AllPatientsSection() {
-  const clinic = useClinic();
-  const [query, setQuery] = useState('');
-  const [showHidden, setShowHidden] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Patient | null>(null);
-  const sort = useSort<PatientSortKey>('name');
-
-  const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
-  const [fyStartYear, setFyStartYear] = useState(currentFy.startYear);
-  const [month, setMonth] = useState(''); // '' = all time
-
-  const months = useMemo(
-    () => monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth),
-    [fyStartYear, clinic.fyStartMonth]
-  );
-  const selectedPeriod = useMemo(() => {
-    if (!month) return null;
-    const [y, m] = month.split('-').map(Number);
-    return { year: y, month: m };
-  }, [month]);
-
-  const periodVisits = useLiveQuery(() => {
-    if (!selectedPeriod) return Promise.resolve(null);
-    const { from, to } = monthDateRange(selectedPeriod);
-    return repos.visits.list({ clinicId: clinic.id, from, to });
-  }, [clinic.id, selectedPeriod?.year, selectedPeriod?.month]);
-  const periodPatientIds = useMemo(
-    () => (periodVisits ? new Set(periodVisits.map((v) => v.patientId)) : null),
-    [periodVisits]
-  );
-
-  const all = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
-  const allVisits = useLiveQuery(() => repos.visits.list({ clinicId: clinic.id }), [clinic.id]);
-  const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
-  const outstanding = useLiveQuery(() => dashboardService.outstandingInvoices(clinic.id), [clinic.id]);
-  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
-
-  const therapistName = useMemo(
-    () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
-    [therapists]
-  );
-
-  const visitStatsByPatient = useMemo(() => {
-    const map = new Map<string, { lastVisitOn: string; visitCount: number; latestVisit: Visit }>();
-    for (const v of allVisits ?? []) {
-      if (v.deleted) continue;
-      const cur = map.get(v.patientId);
-      if (!cur) {
-        map.set(v.patientId, { lastVisitOn: v.visitDate, visitCount: 1, latestVisit: v });
-      } else {
-        cur.visitCount += 1;
-        if (v.visitDate > cur.lastVisitOn) {
-          cur.lastVisitOn = v.visitDate;
-          cur.latestVisit = v;
-        }
-      }
-    }
-    return map;
-  }, [allVisits]);
-
-  const openPackageByPatient = useMemo(() => {
-    const map = new Map<string, { sessionsLogged: number; packageTotal: number }>();
-    for (const p of openPackages ?? []) {
-      if (!map.has(p.patientId)) map.set(p.patientId, { sessionsLogged: p.sessionsLogged, packageTotal: p.packageTotal });
-    }
-    return map;
-  }, [openPackages]);
-
-  const outstandingMrnos = useMemo(
-    () => new Set((outstanding?.rows ?? []).map((r) => r.mrno)),
-    [outstanding]
-  );
-
-  const q = query.trim().toLowerCase();
-  const active = (all ?? []).filter(
-    (p) =>
-      !p.deletedAt &&
-      (!q || p.mrno.toLowerCase().startsWith(q) || p.name.toLowerCase().includes(q)) &&
-      (periodPatientIds === null || periodPatientIds.has(p.id))
-  );
-  const hidden = (all ?? []).filter((p) => p.deletedAt);
-  const rows = applySort(active, PATIENT_COMPARATORS, sort);
-
-  async function hide(p: Patient) {
-    if (
-      !confirm(
-        `Hide ${p.name} (${p.mrno})?\n\nThey disappear from search and pickers; their visits stay in the records. You can restore them anytime from "Hidden patients" below.`
-      )
-    )
-      return;
-    setError(null);
-    try {
-      await patientService.hide(p.id);
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    }
-  }
-
-  async function restore(p: Patient) {
-    setError(null);
-    try {
-      await patientService.restore(p.id);
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    }
-  }
-
-  async function hardDelete(p: Patient) {
-    setError(null);
-    try {
-      const visits = await repos.visits.list({ clinicId: clinic.id, patientId: p.id });
-      if (visits.length > 0) {
-        alert(
-          `${p.name} has ${visits.length} visit(s) on record, so they can't be permanently deleted - keep them hidden instead.`
-        );
-        return;
-      }
-      const typed = prompt(
-        `Permanently delete ${p.name} (${p.mrno})? This cannot be undone.\n\nType the patient's name to confirm:`
-      );
-      if (typed === null) return;
-      if (typed.trim().toLowerCase() !== p.name.trim().toLowerCase()) {
-        alert('Name did not match - nothing was deleted.');
-        return;
-      }
-      await patientService.hardDelete(p.id);
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    }
-  }
-
-  return (
-    <SectionCard title="All Patients">
-      <div className="mb-3 flex flex-wrap items-end gap-3">
-        <div className="ml-auto flex flex-wrap items-end gap-2">
-          <div className="flex gap-2">
-            <select
-              className={inputCls}
-              value={fyStartYear}
-              onChange={(e) => setFyStartYear(Number(e.target.value))}
-            >
-              {[currentFy.startYear - 2, currentFy.startYear - 1, currentFy.startYear].map((y) => (
-                <option key={y} value={y}>
-                  FY {fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label}
-                </option>
-              ))}
-            </select>
-            <select className={inputCls} value={month} onChange={(e) => setMonth(e.target.value)}>
-              <option value="">All time</option>
-              {months.map((m) => (
-                <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
-                  {monthName(m.month)} {m.year}
-                </option>
-              ))}
-            </select>
-          </div>
-          <input
-            className={`${inputCls} max-w-xs`}
-            placeholder="Search by Patient ID or name..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-      </div>
-      {selectedPeriod && (
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          Showing patients seen in {monthName(selectedPeriod.month)} {selectedPeriod.year}.{' '}
-          <button className="font-medium text-[var(--teal)] hover:underline" onClick={() => setMonth('')}>
-            Show all time
-          </button>
-        </p>
-      )}
-
-      <ErrorNote message={error} />
-
-      <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-        <table className="min-w-full divide-y divide-[var(--border)]">
-          <thead className="bg-[var(--paper)]">
-            <tr>
-              <SortHeader label="Patient ID" k="mrno" sort={sort} />
-              <SortHeader label="Name" k="name" sort={sort} />
-              <SortHeader label="Primary condition" k="condition" sort={sort} />
-              <th className={th}>Last visit</th>
-              <th className={th}>Therapist</th>
-              <th className={th}>Treatment</th>
-              <th className={th}>Bill</th>
-              <th className={th}>Phone</th>
-              <th className={th}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border)]">
-            {rows.map((p) => {
-              const stats = visitStatsByPatient.get(p.id);
-              const pkg = openPackageByPatient.get(p.id);
-              const isOutstanding = outstandingMrnos.has(p.mrno);
-              return (
-                <tr key={p.id} className="hover:bg-[var(--paper)]">
-                  <td className={td}>
-                    {p.mrno}
-                    {p.mrnoSource === 'auto' && (
-                      <span className="ml-1.5">
-                        <Pill tone="slate">walk-in</Pill>
-                      </span>
-                    )}
-                  </td>
-                  <td className={`${td} font-display`}>
-                    <Link to="/patients/$patientId" params={{ patientId: p.id }} className="hover:underline">
-                      {p.name}
-                    </Link>
-                    {(p.age || p.sex) && (
-                      <div className="text-xs text-[var(--muted)]">
-                        {p.age ?? '-'} / {p.sex ?? '-'}
-                      </div>
-                    )}
-                  </td>
-                  <td className={td}>{p.primaryCondition ?? '-'}</td>
-                  <td className={td}>
-                    {stats ? (
-                      <>
-                        <div className="font-num text-xs text-[var(--ink)]">
-                          {formatDateDMY(stats.lastVisitOn)}
-                          <span className="text-[var(--muted)]"> · {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}</span>
-                        </div>
-                        {(pkg || isOutstanding) && (
-                          <div className="mt-1 flex items-center gap-1.5">
-                            {pkg && (
-                              <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />
-                            )}
-                            {isOutstanding && <Pill tone="amber">Outstanding</Pill>}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-xs text-[var(--muted)]">No visits yet</span>
-                    )}
-                  </td>
-                  <td className={td}>
-                    {stats?.latestVisit ? therapistName.get(stats.latestVisit.therapistId) ?? '-' : '-'}
-                  </td>
-                  <td className={td}>
-                    {stats?.latestVisit?.treatmentNotes ? (
-                      <span className="text-xs">{stats.latestVisit.treatmentNotes}</span>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td className={`${td} font-num text-right`}>
-                    {stats?.latestVisit ? (
-                      <span className="text-sm">INR {Math.round(stats.latestVisit.actualBillPaise / 100)}</span>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td className={td}>{p.phone ?? '-'}</td>
-                  <td className={`${td} whitespace-nowrap`}>
-                    <button className="text-xs text-[var(--muted)] hover:text-[var(--teal)]" onClick={() => setEditing(p)}>
-                      Edit
-                    </button>
-                    <button className="ml-3 text-xs text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => void hide(p)}>
-                      Hide
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-sm text-[var(--muted)]">
-                  {q
-                    ? 'No patients match your search.'
-                    : selectedPeriod
-                      ? 'No patients were seen in this period.'
-                      : "No patients yet - they're created from the \"New visit\" flow."}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {hidden.length > 0 && (
-        <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-          <button
-            className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
-            onClick={() => setShowHidden((s) => !s)}
-          >
-            <span>Hidden patients ({hidden.length})</span>
-            <span className="text-xs text-[var(--muted)]">{showHidden ? 'Collapse' : 'Show'}</span>
-          </button>
-          {showHidden && (
-            <table className="min-w-full divide-y divide-[var(--border)] border-t border-[var(--border)]">
-              <tbody className="divide-y divide-[var(--border)]">
-                {hidden.map((p) => (
-                  <tr key={p.id} className="hover:bg-[var(--paper)]">
-                    <td className={td}>
-                      <span className="font-display">{p.name}</span> <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                    </td>
-                    <td className={td}>
-                      <Pill tone="slate">Hidden {p.deletedAt && formatDateDMY(p.deletedAt)}</Pill>
-                    </td>
-                    <td className={`${td} whitespace-nowrap text-right`}>
-                      <button className="text-xs text-[var(--teal)] hover:underline" onClick={() => void restore(p)}>
-                        Restore
-                      </button>
-                      <button className="ml-3 text-xs text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => void hardDelete(p)}>
-                        Delete permanently
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {editing && <EditPatientModal patient={editing} onClose={() => setEditing(null)} />}
-    </SectionCard>
-  );
-}
-
-function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () => void }) {
-  const [form, setForm] = useState(patient);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => setForm(patient), [patient]);
-
-  const set = (patch: Partial<Patient>) => setForm((f) => ({ ...f, ...patch }));
-
-  async function save() {
-    setError(null);
-    if (form.mrno.trim() !== patient.mrno && !confirm(`Change Patient ID from ${patient.mrno} to ${form.mrno.trim()}?`)) {
-      return;
-    }
-    setBusy(true);
-    try {
-      await patientService.update(patient.id, {
-        mrno: form.mrno,
-        name: form.name,
-        age: form.age,
-        sex: form.sex,
-        phone: form.phone,
-        primaryCondition: form.primaryCondition,
-        referringSource: form.referringSource,
-        referringSourceDetail: form.referringSourceDetail,
-      });
-      onClose();
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">
-      <div className="w-full max-w-md space-y-4 rounded-[10px] bg-[var(--surface)] p-5">
-        <h2 className="text-sm font-semibold text-[var(--ink)]">Edit patient</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Name">
-            <input className={inputCls} value={form.name} onChange={(e) => set({ name: e.target.value })} />
-          </Field>
-          <Field label="Patient ID">
-            <input className={inputCls} value={form.mrno} onChange={(e) => set({ mrno: e.target.value })} />
-          </Field>
-          <Field label="Age">
-            <input
-              type="number"
-              className={inputCls}
-              value={form.age ?? ''}
-              onChange={(e) => set({ age: e.target.value === '' ? null : Number(e.target.value) })}
-            />
-          </Field>
-          <Field label="Sex">
-            <select
-              className={inputCls}
-              value={form.sex ?? ''}
-              onChange={(e) => set({ sex: (e.target.value || null) as Patient['sex'] })}
-            >
-              <option value="">-</option>
-              <option value="M">M</option>
-              <option value="F">F</option>
-              <option value="Other">Other</option>
-            </select>
-          </Field>
-          <Field label="Phone">
-            <input className={inputCls} value={form.phone ?? ''} onChange={(e) => set({ phone: e.target.value || null })} />
-          </Field>
-          <Field label="Primary condition">
-            <input
-              className={inputCls}
-              value={form.primaryCondition ?? ''}
-              onChange={(e) => set({ primaryCondition: e.target.value || null })}
-            />
-          </Field>
-          <Field label="Referring source">
-            <select
-              className={inputCls}
-              value={form.referringSource ?? ''}
-              onChange={(e) =>
-                set({
-                  referringSource: (e.target.value || null) as ReferringSource | null,
-                  referringSourceDetail: null,
-                })
-              }
-            >
-              <option value="">-</option>
-              {(Object.entries(REFERRING_SOURCE_LABELS) as [ReferringSource, string][]).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {referringSourceDetailLabel(form.referringSource) && (
-            <Field label={referringSourceDetailLabel(form.referringSource)!}>
-              <input
-                className={inputCls}
-                value={form.referringSourceDetail ?? ''}
-                onChange={(e) => set({ referringSourceDetail: e.target.value })}
-              />
-            </Field>
-          )}
-        </div>
-        <ErrorNote message={error} />
-        <div className="flex justify-end gap-2">
-          <button className={btnSecondary} onClick={onClose}>
-            Cancel
-          </button>
-          <button className={btnPrimary} disabled={busy} onClick={() => void save()}>
-            {busy ? 'Saving...' : 'Save'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}

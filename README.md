@@ -18,9 +18,10 @@ framework.
 ## What it does
 
 ### Visit Management & Ledger
-- **Visit entry & patient lookup** — search by MRNO/name (create-if-missing, walk-in MRNO auto-generation), visit entry with catalog price autofill, price override with mandatory adjustment reason, package session tracking (1/3, 2/3 … with ₹0 continuations).
+- **Visit entry & patient lookup** — search by MRNO/name (create-if-missing, walk-in MRNO auto-generation), visit entry with catalog price autofill, price override with mandatory adjustment reason, package session tracking (1/3, 2/3 … with ₹0 continuations). Once a patient's confirmed, a reference panel shows their last visit and open-package progress alongside the form.
+- **Edit visit** — condition, treatment notes, and (while not yet invoiced) bill amount, therapist, and date, editable after the fact from Ledger's row menu — scoped to the visit's own therapist or an admin. Clinical fields stay editable after invoicing; only billing locks.
 - **Today-first workspace** — default landing page showing today's visits with payment state at a glance (Paid / Collect ₹X / ₹0 session), open packages with stale flags, pending work (outstanding invoices, incomplete notes), and recent visits in a rolling 7/15/30 day window.
-- **Archive & historical records** — full visit history with dense table, patient enrichment (last visit + count, treatment, condition, bill amount), therapist filter, date range search, bulk actions (invoice, repeat, split, delete).
+- **Ledger** — full visit history with dense table, patient enrichment (last visit + count, treatment, condition, bill amount), therapist filter, date range search, bulk actions (invoice, repeat, split, delete). Visits/Invoices sub-tabs are URL-addressable (`/ledger?tab=invoices`); the Invoices sub-tab only appears for clinics with billing access. Invoices are only ever issued against a real visit — there's no standalone "manual invoice" path.
 
 ### Clinical Assessment & Notes
 - **Core Assessment (Initial/Follow-up)** — comprehensive consultation notes with automatic episode-of-care tracking via patient enrollments. Follow-up notes collapse read-only carry-forward sections (medical history, screening) while narrowing objective examination to new findings.
@@ -35,7 +36,8 @@ framework.
 ### Revenue & Invoicing
 - **Revenue split** — per visit, computed at billing time and stored with the rate snapshot: BM Share (75%), Post-Tax (90% of share), TDS (configurable basis: % of gross bill or % of BM share), HV share. Rounding: half-up to the rupee, once per visit — rollups reconcile by construction.
 - **Invoices** — server-issued, gap-free sequential numbers per clinic per FY (`BM/26-27/0001`), immutable once issued (DB triggers), printable A4/A5 with clinic letterhead + optional partner-hospital branding.
-- **Payment status & HV settlement** — simple paid/outstanding status per invoice with quick "Mark paid" action from Workspace pending feed. Monthly report shows HV settlement card for variance tracking.
+- **Payment status & HV settlement** — a three-fact payment model (Billed / Collected / Receipted) distinguishes cash collected without a receipt from an issued-but-unpaid invoice, so neither reads as the other; quick "Mark paid" action from Workspace pending feed. Monthly report shows HV settlement card for variance tracking.
+- **Billing access control** — clinics can restrict who is allowed to issue invoices ("everyone" vs. "billing staff only"), enforced server-side inside `issue_invoice()`, not just hidden in the UI.
 - **Monthly report** — fiscal-year-aware (Apr–Mar), per-therapist Bill / BM Share / TDS / Post-Tax / HV / unique patients + total, CSV export.
 
 ### Data & Offline
@@ -43,7 +45,8 @@ framework.
 - **Historical import** (Setup → Import historical visits) — one-time import of pre-go-live visits from the clinic's Excel ledger: matches/creates patients by MRNO, parses freeform service names into catalog items and package sessions, and flags anything it can't confidently resolve for manual review before committing.
 
 ### Analytics & Dashboard
-- **Dashboard** — rolling last-6-months view: Post-Tax BM revenue trend, therapist-vs-therapist comparison, open packages sorted by days since last visit (flagged stale past 14 days), outstanding invoices summary. Charts are hand-built SVG (no charting dependency), colored from validated categorical palette.
+- **Dashboard** — rolling last-6-months view: Post-Tax BM revenue trend, open packages sorted by days since last visit (flagged stale past 14 days), outstanding invoices summary. Charts are hand-built SVG (no charting dependency), colored from validated categorical palette.
+- **Therapist comparison** — opt-in chart (off by default; an admin enables it in Settings → Features) showing revenue and visit-count side-by-side per therapist. Visible to therapists too, not just admins — the deliberate exception to "financial aggregates are admin-only."
 
 ## Architecture
 
@@ -54,11 +57,10 @@ src/sync/              outbox push / delta pull engine against Supabase
 src/services/          visit/invoice/report/patient/dashboard/consultation-note orchestration — no React imports
 src/features/          UI pages and components (React + TanStack Router)
   ├── workspace/       WorkspacePage (default landing: Today, Recent, Open Packages, Pending Work)
-  ├── visits/          ArchivePage (historical records: Visits/Patients tabs with filters)
+  ├── visits/          VisitsPage, served at /ledger (Visits/Invoices sub-tabs, URL-addressable)
   ├── patients/        PatientProfilePage with clinical notes, visit history
-  ├── invoices/        Invoice management
-  ├── insights/        Reports and analytics
-  ├── setup/           Clinic configuration
+  ├── insights/        Dashboard + monthly statement, served at /insights (nav label is "Reports"; admin/front_desk only)
+  ├── setup/           SetupPage, served at /settings (clinic configuration; nav label is "Settings")
   └── patients/notes/  NoteEditorPage (Core Assessment: Initial/Follow-up consultation notes)
 src/components/        Shared UI components (BodyChart, ScaleWidget, TreatmentNote, ColumnsPicker, etc.)
 supabase/              SQL migrations (schema, RLS, RPCs, realtime publications), seed
@@ -66,20 +68,52 @@ supabase/              SQL migrations (schema, RLS, RPCs, realtime publications)
 
 **App Routes:**
 - `/workspace` (default, `/` redirects here) — today's work, recent history, open packages, pending items
-- `/archive` — historical visit records and patient search with enriched columns
+- `/ledger` — historical visit records and invoices as URL-addressable sub-tabs (`?tab=visits|invoices`); the Invoices tab is hidden without billing access
 - `/patients/$patientId` — individual patient profile with clinical notes history
 - `/patients/$patientId/notes/$noteId` — Core Assessment note editor (Initial/Follow-up consultation notes)
-- `/invoices` — invoice management and payment tracking
-- `/insights` — reports and revenue analytics
-- `/setup` — clinic configuration, MRNO settings, billing mode, rate setup
+- `/insights` — Dashboard + monthly per-therapist statement (nav label: "Reports"; `?tab=monthly` for the statement). Hidden from plain therapists — a colleague's individual earnings stay admin/front_desk-only, same as the monthly statement always has been. The one exception, the therapist comparison chart, surfaces on `/workspace` instead so therapists can still reach it.
+- `/settings` — clinic configuration, MRNO settings, billing mode, rate setup, feature toggles (nav label: "Settings")
+- `/archive`, `/setup`, `/invoices`, `/reports` — legacy paths, kept as redirects to the routes above for old bookmarks
 
 Business logic never imports Supabase or Dexie — swapping the backend means
 reimplementing the repository interfaces, nothing above them.
+
+## Roles & permissions
+
+Three roles per clinic membership, enforced server-side via Postgres RLS
+(not just hidden in the UI):
+
+- **admin** — full read/write on everything in the clinic: roster, service
+  catalog, all therapists' visits, billing settings, feature toggles.
+- **therapist** — clinic-wide reads, but writes (edit/delete) are scoped to
+  their own visits and notes only. Cannot touch the roster or service
+  catalog pricing.
+- **front_desk** — reads and visit/invoice entry, no clinical-notes access,
+  no roster/catalog writes. Excluded from clinical dashboards (e.g. the
+  therapist comparison chart) since they have no clinical work to compare.
+
+`useWorkspaceScope()` / `usePermissions()` centralize these checks
+client-side for UI framing; the RLS policies and `SECURITY DEFINER` RPCs
+in `supabase/migrations/` are the actual enforcement boundary.
+
+Two clinic-level toggles (Settings → Features/Billing) layer on top of the
+role model: **billing access** (`billingEnabled` + who's allowed to issue
+invoices — everyone or billing staff only) and **therapist comparison**
+(off by default; widens the dashboard's revenue/visit charts to
+therapists, not just admins).
+
+**Onboarding** — inviting a `therapist` from Settings → Team creates their
+login *and* their service-roster entry (linked to that login) in one step;
+`admin`/`front_desk` invites only need the login. A therapist can always be
+**deactivated** (keeps history intact) and, once they have zero visits,
+notes, or invoices on record, **permanently deleted** — matching how
+patients work.
 
 ## Status
 
 **Phase 1 (Ledger & Revenue): Complete ✅** Merged to main and deployed.
 **Phase 2 (Core Assessment): Complete ✅** Merged to main and deployed.
+**Phase 3 (Role model, billing access & nav overhaul): Complete ✅** See below.
 
 ### Phase 1 Deliverables (LIVE)
 
@@ -91,7 +125,7 @@ reimplementing the repository interfaces, nothing above them.
 - **Pending Work feed** — unresolved items (stale packages, outstanding invoices, incomplete notes) with "Mark paid" actions for quick invoice payment recording
 - **Stat strip** — Today's visits count, collected today, new patients this month, packages this month
 
-**Archive Page (`/archive`)**
+**Archive Page (`/archive`, since renamed to Ledger at `/ledger` — see Phase 3)**
 - Renamed from Visits page, serves as historical records hub
 - **Records toggle** — Visits tab (all-time visit history with dense table) and Patients tab (enriched patient list)
 - **Visits tab columns** — Date, Patient ID, Name, Service, Package, Bill, Invoice Status, Therapist, actions
@@ -142,7 +176,34 @@ reimplementing the repository interfaces, nothing above them.
 
 ---
 
-### Phase 3: Future (TBD)
+### Phase 3 Deliverables (LIVE)
+
+15 PRs across two build plans (`docs/BUILD-PLAN-compiled-changes.md`,
+`docs/BUILD-PLAN-role-model-and-billing.md`):
+
+- **Server-side role enforcement** — a third role (`front_desk`) and RLS
+  policies that actually scope writes (previously any clinic member could
+  write any other therapist's visits/roster/pricing; see Roles &
+  permissions above).
+- **Nav restructure** — `/archive` → `/ledger`, `/setup` → `/settings`,
+  "Insights" → "Reports" in the nav (path stays `/insights`); Ledger's
+  Visits/Invoices/Reports sub-tabs became URL-addressable.
+- **Payment-state correctness** — the three-fact Billed/Collected/
+  Receipted model, replacing an `invoiceId`-only check that had
+  independently drifted wrong in five places across the codebase.
+- **Billing access control** — clinics can gate who's allowed to issue
+  invoices, enforced inside the `issue_invoice()` RPC.
+- **Therapist comparison chart** — opt-in dashboard chart visible to
+  therapists, not just admins.
+- **Responsive breakpoint fix** — a dedicated `tab:` (744px) Tailwind
+  token so iPad Mini gets the tablet layout instead of the phone layout.
+- Plus a New Visit rebuild, notes-completion prompting, Ledger hygiene,
+  and Patients extracted to its own route. Full detail and shipped
+  corrections are in the two build-plan docs.
+
+---
+
+### Phase 4: Future (TBD)
 
 Candidates for future phases:
 - Region Modules (FaCE Scale, Facial Palsy assessment plugins within Core Assessment framework)

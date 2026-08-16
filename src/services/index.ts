@@ -11,6 +11,7 @@ import { createPatientActivityService } from './patientActivityService';
 import { createBackupService } from './backupService';
 import { createConsultationNoteService } from './consultationNoteService';
 import { createExpectedVisitsService } from './expectedVisitsService';
+import { createTherapistService } from './therapistService';
 
 export const patientService = createPatientService(repos);
 export const visitService = createVisitService(repos);
@@ -25,4 +26,5 @@ export const patientActivityService = createPatientActivityService(repos);
 export const backupService = createBackupService(repos);
 export const consultationNoteService = createConsultationNoteService(repos);
 export const expectedVisitsService = createExpectedVisitsService(repos);
+export const therapistService = createTherapistService(repos);
 export { repos };

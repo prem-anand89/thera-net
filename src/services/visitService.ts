@@ -98,6 +98,14 @@ export function createVisitService(repos: Repos) {
         invoiceId: null,
         pendingPaymentNote: input.pendingPaymentNote?.trim() || null,
         deleted: false,
+        // Flags the visit for a clinical note until one is completed against
+        // it (see consultationNoteService.saveAssessment, which closes this
+        // out). Gated on the clinic opting in, not on the patient already
+        // having a documentation enrollment — an enrollment is only ever
+        // created lazily when a note is first opened, so gating on it would
+        // mean a patient's very first visit could never prompt for their
+        // first note.
+        ...(clinic.clinicalDocsEnabled ? { clinicalStatus: 'pending' as const } : {}),
         updatedAt: new Date().toISOString(),
       };
       await repos.visits.put(visit);
@@ -121,7 +129,17 @@ export function createVisitService(repos: Repos) {
     ): Promise<Visit> {
       const visit = await repos.visits.get(visitId);
       if (!visit) throw new Error('Visit not found');
-      if (visit.invoiceId) {
+      // "Frozen" means the billed amount and who it's billed to can't move
+      // once invoiced -- it does not mean the visit's clinical record is
+      // locked. A therapist backfilling condition/treatmentNotes on an
+      // already-invoiced visit (the common case: notes get written up a
+      // day or two after the session) must still go through.
+      const changesBilling =
+        changes.actualBillPaise !== undefined ||
+        changes.adjustmentReason !== undefined ||
+        'therapistId' in changes ||
+        'visitDate' in changes;
+      if (visit.invoiceId && changesBilling) {
         throw new Error('This visit is on an issued invoice; its billing is frozen.');
       }
 

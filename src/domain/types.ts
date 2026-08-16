@@ -40,13 +40,29 @@ export interface Clinic {
   /** Whether the internal therapist revenue-split feature is available. */
   enableTherapistSplit?: boolean;
   /**
-   * Per-clinic show/hide for the optional Visits-table columns. Missing keys
-   * fall back to the defaults in `visibleVisitColumns`. Optional so older
-   * cached rows are unaffected.
+   * Legacy: clinic-wide Visits-table column show/hide. Superseded by
+   * per-user prefs (useVisitColumnPrefs, stored in Dexie) — this was never
+   * actually read by any table, since none existed yet when it was added.
+   * Kept on the type for older cached/server rows; no UI reads or writes it.
    */
   visitColumnPrefs?: Partial<Record<VisitColumnKey, boolean>> | null;
   /** Whether the clinical documentation module (consultation notes, screening, consent) is on. */
   clinicalDocsEnabled?: boolean;
+  /** Whether this clinic uses the invoice module at all. Optional so older cached rows default to true (original behavior). */
+  billingEnabled?: boolean;
+  /**
+   * Who may issue invoices when billing is on. 'everyone' = any clinical
+   * member (original behavior). 'billing_staff' = admin + front_desk only.
+   * Optional so older cached rows default to 'everyone'.
+   */
+  invoicingAccess?: 'everyone' | 'billing_staff';
+  /**
+   * Therapist comparison chart on Reports: visible to admin + therapist
+   * (not front_desk) when on, for competitive visibility. Off by default
+   * — an admin opts in explicitly. Optional so older cached rows default
+   * to false (original admin-only behavior).
+   */
+  showTherapistComparison?: boolean;
   /**
    * Prefix for auto-generated walk-in MRNOs (format `{prefix}-YYMMDD-XXX`).
    * Optional so older cached rows default to 'W' (original behavior).
@@ -57,35 +73,30 @@ export interface Clinic {
   updatedAt: string;
 }
 
-/** Optional (toggleable) Visits-table columns — the essentials aren't listed. */
-export type VisitColumnKey = 'condition' | 'treatment';
+/** Optional (toggleable) Visits-table columns — the essentials (patient, bill, status) aren't listed. */
+export type VisitColumnKey = 'condition' | 'treatment' | 'therapist' | 'service';
 
 export const VISIT_COLUMN_LABELS: Record<VisitColumnKey, string> = {
   condition: 'Condition',
   treatment: 'Treatment',
+  therapist: 'Therapist',
+  service: 'Service',
 };
 
-/**
- * Which optional Visits columns a clinic shows. Condition and treatment are on.
- * Stored prefs override these per clinic.
- */
-export function visibleVisitColumns(
-  clinic: Pick<Clinic, 'visitColumnPrefs'>
-): Record<VisitColumnKey, boolean> {
-  const prefs = clinic.visitColumnPrefs ?? {};
-  return {
-    condition: prefs.condition ?? true,
-    treatment: prefs.treatment ?? true,
-  };
-}
+export const DEFAULT_VISIT_COLUMN_PREFS: Record<VisitColumnKey, boolean> = {
+  condition: true,
+  treatment: true,
+  therapist: true,
+  service: true,
+};
 
-/** Resolve a clinic's share-label abbreviations, defaulting to BM/HV. */
+/** Resolve a clinic's share-label abbreviations, defaulting to clinic-neutral labels. */
 export function clinicShareLabels(
   clinic: Pick<Clinic, 'ownShareLabel' | 'partnerShareLabel'>
 ): { own: string; partner: string } {
   return {
-    own: clinic.ownShareLabel?.trim() || 'BM',
-    partner: clinic.partnerShareLabel?.trim() || 'HV',
+    own: clinic.ownShareLabel?.trim() || 'Clinic',
+    partner: clinic.partnerShareLabel?.trim() || 'Partner',
   };
 }
 
@@ -119,6 +130,9 @@ export interface Therapist {
   active: boolean;
   /** Linked Supabase auth user, if this therapist also logs in themselves. */
   userId?: UUID | null;
+  /** Path into the `clinic-assets` bucket (same pattern as Clinic.logoPath),
+   *  not the image itself. Optional: most existing rows predate this field. */
+  photoPath?: string | null;
   updatedAt: string;
 }
 

@@ -10,22 +10,25 @@ import { WorkspacePage } from '@/features/workspace/WorkspacePage';
 
 // Code-split every route except the default post-login landing page
 // (Workspace) — that one stays eager so the most common path pays no extra
-// chunk fetch. Everything else (archive, insights, print pages, the Excel
-// import UI, setup) only loads when actually visited.
+// chunk fetch. Everything else (ledger, insights, print pages, the Excel
+// import UI, settings) only loads when actually visited.
 const NewVisitPage = lazy(() =>
   import('@/features/visits/NewVisitPage').then((m) => ({ default: m.NewVisitPage }))
 );
-const ArchivePage = lazy(() =>
+// VisitsPage.tsx is the Ledger screen — file/component name predates the
+// /archive -> /ledger rename; left as-is per the plan doc (route rename
+// only, no component rewrite).
+const LedgerPage = lazy(() =>
   import('@/features/visits/VisitsPage').then((m) => ({ default: m.VisitsPage }))
+);
+const PatientsPage = lazy(() =>
+  import('@/features/patients/PatientsPage').then((m) => ({ default: m.PatientsPage }))
 );
 const PatientProfilePage = lazy(() =>
   import('@/features/patients/PatientProfilePage').then((m) => ({ default: m.PatientProfilePage }))
 );
 const NoteEditorPage = lazy(() =>
   import('@/features/patients/NoteEditorPage').then((m) => ({ default: m.NoteEditorPage }))
-);
-const ReportsPage = lazy(() =>
-  import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage }))
 );
 const MonthlyLedgerPrintPage = lazy(() =>
   import('@/features/reports/MonthlyLedgerPrintPage').then((m) => ({
@@ -35,7 +38,9 @@ const MonthlyLedgerPrintPage = lazy(() =>
 const InvoicePrintPage = lazy(() =>
   import('@/features/invoices/InvoicePrintPage').then((m) => ({ default: m.InvoicePrintPage }))
 );
-const SetupPage = lazy(() =>
+// SetupPage.tsx is the Settings screen — same rename-only situation as
+// LedgerPage above.
+const SettingsPage = lazy(() =>
   import('@/features/setup/SetupPage').then((m) => ({ default: m.SetupPage }))
 );
 const ImportVisitsPage = lazy(() =>
@@ -43,9 +48,6 @@ const ImportVisitsPage = lazy(() =>
 );
 const InsightsPage = lazy(() =>
   import('@/features/insights/InsightsPage').then((m) => ({ default: m.InsightsPage }))
-);
-const InvoicesPage = lazy(() =>
-  import('@/features/invoices/InvoicesPage').then((m) => ({ default: m.InvoicesPage }))
 );
 const ResetPasswordPage = lazy(() =>
   import('@/features/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage }))
@@ -67,12 +69,28 @@ const workspaceRoute = createRoute({
   component: WorkspacePage,
 });
 
-const archiveRoute = createRoute({
+const LEDGER_TABS = ['visits', 'invoices'] as const;
+
+const ledgerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/ledger',
+  validateSearch: (search: Record<string, unknown>): { patientId?: string; tab?: (typeof LEDGER_TABS)[number] } => ({
+    ...(typeof search.patientId === 'string' ? { patientId: search.patientId } : {}),
+    ...(LEDGER_TABS.includes(search.tab as (typeof LEDGER_TABS)[number]) ? { tab: search.tab as (typeof LEDGER_TABS)[number] } : {}),
+  }),
+  component: LedgerPage,
+});
+
+// Permanent redirect, not a 404 — preserves patientId for existing
+// bookmarks/shared links pointing at the old path.
+const archiveRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/archive',
   validateSearch: (search: Record<string, unknown>): { patientId?: string } =>
     typeof search.patientId === 'string' ? { patientId: search.patientId } : {},
-  component: ArchivePage,
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: '/ledger', search });
+  },
 });
 
 const newVisitRoute = createRoute({
@@ -89,6 +107,12 @@ const newVisitRoute = createRoute({
   component: NewVisitPage,
 });
 
+const patientsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients',
+  component: PatientsPage,
+});
+
 const patientProfileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId',
@@ -98,6 +122,8 @@ const patientProfileRoute = createRoute({
 const newNoteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId/notes/new',
+  validateSearch: (search: Record<string, unknown>): { visitId?: string } =>
+    typeof search.visitId === 'string' ? { visitId: search.visitId } : {},
   component: NoteEditorPage,
 });
 
@@ -107,10 +133,17 @@ const noteEditorRoute = createRoute({
   component: NoteEditorPage,
 });
 
-const reportsRoute = createRoute({
+// The monthly statement lives under the Reports nav tab (/insights), not
+// Ledger — see InsightsPage.tsx. This standalone route becomes a redirect
+// rather than a hard delete-to-404: nothing in the app links here anymore,
+// but an external bookmark or shared link might, and there's no way to be
+// certain none exist.
+const reportsRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports',
-  component: ReportsPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/insights', search: { tab: 'monthly' } });
+  },
 });
 
 const reportsPrintRoute = createRoute({
@@ -129,28 +162,57 @@ const invoicePrintRoute = createRoute({
   component: InvoicePrintPage,
 });
 
-const setupRoute = createRoute({
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings',
+  component: SettingsPage,
+});
+
+const setupRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/setup',
-  component: SetupPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/settings' });
+  },
 });
 
 const importVisitsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/setup/import-visits',
+  path: '/settings/import-visits',
   component: ImportVisitsPage,
 });
 
+const importVisitsRedirectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/setup/import-visits',
+  beforeLoad: () => {
+    throw redirect({ to: '/settings/import-visits' });
+  },
+});
+
+// Nav label is "Reports" (renamed from "Insights") — path stays /insights
+// since /reports is already the monthly-statement redirect above and can't
+// be reused. Same rename-only-where-it-matters pattern as LedgerPage/
+// SettingsPage: the label people see changed, the URL didn't need to.
 const insightsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/insights',
+  validateSearch: (search: Record<string, unknown>): { tab?: 'monthly' } =>
+    search.tab === 'monthly' ? { tab: 'monthly' } : {},
   component: InsightsPage,
 });
 
-const invoicesRoute = createRoute({
+// Invoices moved fully under Ledger as a sub-view — redirect rather than
+// delete, since nothing in the app links here anymore but an external
+// bookmark or shared link might. Lands on the Visits tab instead if the
+// viewer can't bill (VisitsPage.tsx resets an invalid `tab` — same guard
+// PR 13 added for invoicingAccess changing mid-session).
+const invoicesRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/invoices',
-  component: InvoicesPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/ledger', search: { tab: 'invoices' } });
+  },
 });
 
 const resetPasswordRoute = createRoute({
@@ -162,17 +224,21 @@ const resetPasswordRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   workspaceRoute,
-  archiveRoute,
+  ledgerRoute,
+  archiveRedirectRoute,
   newVisitRoute,
+  patientsRoute,
   patientProfileRoute,
   newNoteRoute,
   noteEditorRoute,
-  reportsRoute,
+  reportsRedirectRoute,
   reportsPrintRoute,
   invoicePrintRoute,
-  invoicesRoute,
-  setupRoute,
+  invoicesRedirectRoute,
+  settingsRoute,
+  setupRedirectRoute,
   importVisitsRoute,
+  importVisitsRedirectRoute,
   insightsRoute,
   resetPasswordRoute,
 ]);
