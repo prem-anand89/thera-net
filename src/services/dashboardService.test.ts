@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDashboardService } from './dashboardService';
+import { createDashboardService, CONDITION_TOP_N } from './dashboardService';
 import type { Repos, VisitFilter } from '@/repositories/types';
 import type {
   CatalogItem,
@@ -461,6 +461,46 @@ describe('dashboardService.modalityUsage', () => {
     const svc = createDashboardService(fake.repos);
     const rows = await svc.modalityUsage('clinic-1');
     expect(rows).toEqual([]);
+  });
+});
+
+describe('dashboardService.conditionUsage', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+
+  it('groups by condition, most-visited first, with a patient drill-down', async () => {
+    fake.visits.set('v1', baseVisit('v1', { condition: 'Low back pain', actualBillPaise: rs(1000) }));
+    fake.visits.set('v2', baseVisit('v2', { condition: 'Low back pain', actualBillPaise: rs(1000) }));
+    fake.visits.set('v3', baseVisit('v3', { condition: 'Frozen shoulder', actualBillPaise: rs(1500) }));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.conditionUsage('clinic-1');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ condition: 'Low back pain', count: 2 });
+    expect(rows[0].patients[0]).toMatchObject({ patientName: 'Test Patient', visitCount: 2, revenuePaise: rs(2000) });
+    expect(rows[1]).toMatchObject({ condition: 'Frozen shoulder', count: 1 });
+  });
+
+  it('blank/missing condition becomes "Unspecified"', async () => {
+    fake.visits.set('v1', baseVisit('v1', { condition: null }));
+    fake.visits.set('v2', baseVisit('v2', { condition: '   ' }));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.conditionUsage('clinic-1');
+    expect(rows).toEqual([{ condition: 'Unspecified', count: 2, patients: expect.any(Array) }]);
+  });
+
+  it('folds conditions past the top N into "Other" instead of fragmenting', async () => {
+    // 9 distinct single-visit conditions — one more than CONDITION_TOP_N (7).
+    for (let i = 0; i < 9; i++) {
+      fake.visits.set(`v${i}`, baseVisit(`v${i}`, { condition: `Condition ${i}`, actualBillPaise: rs(100) }));
+    }
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.conditionUsage('clinic-1');
+    expect(rows).toHaveLength(CONDITION_TOP_N + 1); // top 7 + one "Other" row
+    const other = rows.find((r) => r.condition === 'Other');
+    expect(other).toMatchObject({ count: 2 }); // the 2 conditions that didn't make the top 7
+    expect(other?.patients[0].visitCount).toBe(2); // same patient contributed both folded visits
   });
 });
 

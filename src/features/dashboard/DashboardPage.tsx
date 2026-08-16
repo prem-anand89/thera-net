@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService } from '@/services';
+import { CONDITION_TOP_N } from '@/services/dashboardService';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
@@ -28,6 +29,7 @@ const DASHBOARD_SECTIONS: { key: string; label: string }[] = [
   { key: 'therapistComparison', label: 'Therapist comparison' },
   { key: 'serviceUsage', label: 'Frequently used services' },
   { key: 'modalityUsage', label: 'Treatment modalities' },
+  { key: 'conditionUsage', label: 'Conditions' },
   { key: 'referralSources', label: 'Referral sources' },
 ];
 
@@ -163,6 +165,7 @@ export function DashboardPage() {
     () => (clinic.clinicalDocsEnabled ? dashboardService.modalityUsage(clinic.id) : undefined),
     [clinic.id, clinic.clinicalDocsEnabled]
   );
+  const conditionUsage = useLiveQuery(() => dashboardService.conditionUsage(clinic.id), [clinic.id]);
 
   // KPI strip data — current calendar month, plus one month back for the
   // trend badges. now/prevMonth are recomputed each render (cheap, plain
@@ -307,6 +310,11 @@ export function DashboardPage() {
     }
     return [...byDetail.entries()].sort((a, b) => b[1].revenuePaise - a[1].revenuePaise);
   }, [referralActive, referralNeedsDetail]);
+
+  // Conditions — unlike referral sources, no default slice: nothing is
+  // selected until clicked, since there's no one "always relevant" answer.
+  const [conditionSelectedIdx, setConditionSelectedIdx] = useState<number | null>(null);
+  const conditionActive = conditionSelectedIdx != null ? conditionUsage?.[conditionSelectedIdx] : undefined;
 
   const singleVisitBuckets = useMemo(
     () => bucketCounts((singleVisitPatients ?? []).map((p) => p.daysSince), SINGLE_VISIT_BUCKET_EDGES),
@@ -684,6 +692,68 @@ export function DashboardPage() {
               </SectionCard>
             </div>
           )}
+
+          <div
+            ref={(el) => {
+              if (el) sectionRefs.current.set('conditionUsage', el);
+              else sectionRefs.current.delete('conditionUsage');
+            }}
+            className="scroll-mt-28 md:scroll-mt-20"
+          >
+            <SectionCard title="Conditions">
+              <p className="mb-4 text-xs text-[var(--muted)]">
+                What you're actually treating, all-time — click a slice for the patient list. Free-text
+                conditions past the top {CONDITION_TOP_N} fold into "Other" rather than fragmenting.
+              </p>
+              {conditionUsage === undefined ? null : conditionUsage.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--muted)]">No visits logged yet.</p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <PieChart
+                    data={conditionUsage.map((c) => ({ label: c.condition, value: c.count }))}
+                    selectedIndex={conditionSelectedIdx}
+                    onSelect={setConditionSelectedIdx}
+                  />
+                  {conditionActive ? (
+                    <div>
+                      <div className="mb-2 flex items-baseline justify-between gap-2">
+                        <h3 className="text-sm font-medium text-[var(--ink)]">{conditionActive.condition}</h3>
+                        <span className="text-xs text-[var(--muted)]">
+                          {conditionActive.patients.length} patient{conditionActive.patients.length === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      <div className="max-h-72 overflow-y-auto rounded-lg border border-[var(--border)]">
+                        <table className="min-w-full divide-y divide-[var(--border)]">
+                          <thead className="sticky top-0 bg-[var(--paper)]">
+                            <tr>
+                              <th className={th}>Patient</th>
+                              <th className={thNum}>Visits</th>
+                              <th className={thNum}>Revenue</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[var(--border)]">
+                            {conditionActive.patients.map((p) => (
+                              <tr key={p.patientId}>
+                                <td className={td}>
+                                  {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                                </td>
+                                <td className={tdNum}>{p.visitCount}</td>
+                                <td className={tdNum}>{formatINR(p.revenuePaise)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="flex items-center justify-center py-8 text-center text-sm text-[var(--muted)]">
+                      Click a slice to see who's being treated for it.
+                    </p>
+                  )}
+                </div>
+              )}
+            </SectionCard>
+          </div>
 
           <div
             ref={(el) => {

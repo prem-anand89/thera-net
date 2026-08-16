@@ -69,6 +69,26 @@ export interface ModalityUsageRow {
   count: number;
 }
 
+export interface ConditionUsagePatientRow {
+  patientId: UUID;
+  patientName: string;
+  mrno: string;
+  visitCount: number;
+  revenuePaise: Paise;
+}
+
+export interface ConditionUsageRow {
+  condition: string;
+  count: number;
+  patients: ConditionUsagePatientRow[];
+}
+
+/** condition is free text (therapists type it in, no fixed list) — capping
+ *  to the top N and folding the rest into "Other" keeps this chartable
+ *  without inventing a taxonomy that doesn't exist. One slot short of
+ *  SERIES_COLORS' 8 so "Other" itself gets its own stable color. */
+export const CONDITION_TOP_N = 7;
+
 export interface ReferralSourcePatientRow {
   patientId: UUID;
   patientName: string;
@@ -419,6 +439,76 @@ export function createDashboardService(repos: Repos) {
       return [...counts.entries()]
         .map(([modality, count]) => ({ modality, count }))
         .sort((a, b) => b.count - a.count);
+    },
+
+    /**
+     * What's actually being treated, all-time — grouped by Visit.condition
+     * (free text, trimmed only, no other normalization since anything
+     * fuzzier risks merging genuinely different conditions). Top
+     * CONDITION_TOP_N by visit count keep their own slice; everything else
+     * folds into "Other" rather than fragmenting into a long low-value
+     * tail. Each row carries its contributing patients (name/mrno/visits/
+     * revenue) for a drill-down list, "Other"'s patients spanning every
+     * folded condition.
+     */
+    async conditionUsage(clinicId: UUID): Promise<ConditionUsageRow[]> {
+      const [visits, patients] = await Promise.all([
+        repos.visits.list({ clinicId }),
+        repos.patients.list(clinicId),
+      ]);
+      const patientById = new Map(patients.map((p) => [p.id, p]));
+
+      const byCondition = new Map<string, { count: number; patients: Map<UUID, ConditionUsagePatientRow> }>();
+      for (const v of visits) {
+        const condition = v.condition?.trim() || 'Unspecified';
+        const entry = byCondition.get(condition) ?? { count: 0, patients: new Map() };
+        entry.count += 1;
+        const patient = patientById.get(v.patientId);
+        const patientRow = entry.patients.get(v.patientId) ?? {
+          patientId: v.patientId,
+          patientName: patient?.name ?? 'Unknown',
+          mrno: patient?.mrno ?? '—',
+          visitCount: 0,
+          revenuePaise: 0 as Paise,
+        };
+        patientRow.visitCount += 1;
+        patientRow.revenuePaise = (patientRow.revenuePaise + v.actualBillPaise) as Paise;
+        entry.patients.set(v.patientId, patientRow);
+        byCondition.set(condition, entry);
+      }
+
+      const ranked = [...byCondition.entries()].sort((a, b) => b[1].count - a[1].count);
+      const top = ranked.slice(0, CONDITION_TOP_N);
+      const rest = ranked.slice(CONDITION_TOP_N);
+
+      const rows: ConditionUsageRow[] = top.map(([condition, { count, patients: patientRows }]) => ({
+        condition,
+        count,
+        patients: [...patientRows.values()].sort((a, b) => b.revenuePaise - a.revenuePaise),
+      }));
+
+      if (rest.length > 0) {
+        const otherPatients = new Map<UUID, ConditionUsagePatientRow>();
+        let otherCount = 0;
+        for (const [, { count, patients: patientRows }] of rest) {
+          otherCount += count;
+          for (const [patientId, row] of patientRows) {
+            const existing = otherPatients.get(patientId);
+            otherPatients.set(patientId, {
+              ...row,
+              visitCount: (existing?.visitCount ?? 0) + row.visitCount,
+              revenuePaise: ((existing?.revenuePaise ?? 0) + row.revenuePaise) as Paise,
+            });
+          }
+        }
+        rows.push({
+          condition: 'Other',
+          count: otherCount,
+          patients: [...otherPatients.values()].sort((a, b) => b.revenuePaise - a.revenuePaise),
+        });
+      }
+
+      return rows;
     },
 
     /**
