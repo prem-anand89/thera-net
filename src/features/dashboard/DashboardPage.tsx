@@ -10,6 +10,7 @@ import { clinicBillingConfig, clinicShareLabels, referringSourceDetailLabel } fr
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
 import { SectionCard, StatTile, Pill, PackageThread, th, td, tdNum, thNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
+import { IndexedTrendChart } from '@/components/IndexedTrendChart';
 import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { SERIES_COLORS } from '@/components/chartColors';
@@ -120,10 +121,15 @@ export function DashboardPage() {
   // ever read the final two entries, which stay the same regardless of how
   // far back the window extends, so one query serves both the KPI strip and
   // the trend chart below.
-  const [trendPeriod, setTrendPeriod] = useState<'6m' | '1y' | 'fy'>('6m');
+  const [trendPeriod, setTrendPeriod] = useState<'6m' | 'ytd' | 'fy'>('6m');
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
   const trendMonthsArg = useMemo((): number | FyMonth[] => {
-    if (trendPeriod === '1y') return 12;
+    if (trendPeriod === 'ytd') {
+      const now = new Date();
+      const months: FyMonth[] = [];
+      for (let m = 1; m <= now.getMonth() + 1; m++) months.push({ year: now.getFullYear(), month: m });
+      return months;
+    }
     if (trendPeriod === 'fy') {
       const now = new Date();
       const nowKey = now.getFullYear() * 12 + now.getMonth() + 1;
@@ -134,7 +140,7 @@ export function DashboardPage() {
     return 6;
   }, [trendPeriod, currentFy.startYear, clinic.fyStartMonth]);
   const trendPeriodLabel =
-    trendPeriod === '6m' ? 'last 6 months' : trendPeriod === '1y' ? 'last 12 months' : `FY ${currentFy.label}`;
+    trendPeriod === '6m' ? 'last 6 months' : trendPeriod === 'ytd' ? `YTD ${new Date().getFullYear()}` : `FY ${currentFy.label}`;
 
   const trend = useLiveQuery(
     () => dashboardService.revenueTrend(clinic.id, trendMonthsArg),
@@ -550,7 +556,7 @@ export function DashboardPage() {
                 {(
                   [
                     { key: '6m', label: '6 months' },
-                    { key: '1y', label: '1 year' },
+                    { key: 'ytd', label: 'YTD' },
                     { key: 'fy', label: `FY ${currentFy.label}` },
                   ] as const
                 ).map((opt) => (
@@ -575,48 +581,38 @@ export function DashboardPage() {
                 </p>
               )}
               {trend && hasEnoughTrendHistory && (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-                      {revenueLabel}
-                    </h3>
-                    <BarChart
-                      categories={categories}
-                      series={[
-                        {
-                          label: revenueLabel,
-                          color: SERIES_COLORS[0],
-                          values: scope.isClinicWideView
-                            ? trend.map((r) => (hospitalSplit ? r.total.postTaxPaise : r.total.billPaise))
-                            : trend.map((r) => {
-                                const row = myMonthRow(r.rows);
-                                return hospitalSplit ? row.postTaxPaise : row.billPaise;
-                              }),
-                        },
-                      ]}
-                      formatValue={formatINR}
-                    />
+                <>
+                  <IndexedTrendChart
+                    categories={categories}
+                    barLabel={revenueLabel}
+                    barColor={SERIES_COLORS[0]}
+                    formatBarValue={formatINR}
+                    barValues={
+                      scope.isClinicWideView
+                        ? trend.map((r) => (hospitalSplit ? r.total.postTaxPaise : r.total.billPaise))
+                        : trend.map((r) => {
+                            const row = myMonthRow(r.rows);
+                            return hospitalSplit ? row.postTaxPaise : row.billPaise;
+                          })
+                    }
+                    lineLabel="Visits"
+                    lineColor={SERIES_COLORS[1]}
+                    lineValues={
+                      scope.isClinicWideView
+                        ? trend.map((r) => r.total.visitCount)
+                        : trend.map((r) => myMonthRow(r.rows).visitCount)
+                    }
+                  />
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-3 text-xs text-[var(--muted)]">
+                    <span aria-hidden="true">ⓘ</span>
+                    <span>
+                      Both lines are indexed to the first active month = 100, not plotted in rupees/visits on two
+                      different scales. A true dual-axis chart lets you pick the scales, which can make any two
+                      lines look correlated whether or not they are — indexing keeps the comparison honest while
+                      still showing which moved more. Hover a point for the real rupee/visit figure.
+                    </span>
                   </div>
-                  {/* Alongside revenue, not folded into the same chart — visit
-                      count and rupee totals are wildly different scales, and
-                      seeing both shapes side by side is what actually answers
-                      "did revenue move because of price or volume". */}
-                  <div>
-                    <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Visits</h3>
-                    <BarChart
-                      categories={categories}
-                      series={[
-                        {
-                          label: 'Visits',
-                          color: SERIES_COLORS[1],
-                          values: scope.isClinicWideView
-                            ? trend.map((r) => r.total.visitCount)
-                            : trend.map((r) => myMonthRow(r.rows).visitCount),
-                        },
-                      ]}
-                    />
-                  </div>
-                </div>
+                </>
               )}
             </SectionCard>
           </div>
