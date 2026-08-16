@@ -50,12 +50,19 @@ export function BarChart({
   formatValue = (v: number) => String(v),
   height = 220,
   showValueLabels = true,
+  onCategoryClick,
+  selectedCategoryIndex = null,
 }: {
   categories: string[];
   series: BarChartSeries[];
   formatValue?: (v: number) => string;
   height?: number;
   showValueLabels?: boolean;
+  /** Optional — turns bars into buttons that filter/select by category
+   *  (e.g. a histogram driving a list below). Omit to keep the chart
+   *  purely informational, unchanged from before this prop existed. */
+  onCategoryClick?: (categoryIndex: number) => void;
+  selectedCategoryIndex?: number | null;
 }) {
   const [hovered, setHovered] = useState<HoveredBar | null>(null);
 
@@ -116,7 +123,9 @@ export function BarChart({
                   const x = groupX + barGap + si * (barW + barGap);
                   const y = baseline - h;
                   const isHovered = hovered?.categoryIndex === ci && hovered?.seriesIndex === si;
-                  const dimmed = hovered !== null && !isHovered;
+                  const isSelected = selectedCategoryIndex === ci;
+                  const dimmed = (hovered !== null && !isHovered) || (selectedCategoryIndex != null && !isSelected);
+                  const handleClick = onCategoryClick ? () => onCategoryClick(ci) : undefined;
                   return (
                     <g key={s.label}>
                       {value > 0 ? (
@@ -128,6 +137,7 @@ export function BarChart({
                           onMouseEnter={() =>
                             setHovered({ categoryIndex: ci, seriesIndex: si, cx: x + barW / 2, cy: y })
                           }
+                          onClick={handleClick}
                         />
                       ) : (
                         // Explicit zero: a flat tick so "no revenue" reads as
@@ -143,6 +153,7 @@ export function BarChart({
                           onMouseEnter={() =>
                             setHovered({ categoryIndex: ci, seriesIndex: si, cx: x + barW / 2, cy: baseline - 4 })
                           }
+                          onClick={handleClick}
                         />
                       )}
                       {showValueLabels && series.length === 1 && value > 0 && (

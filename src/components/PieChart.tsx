@@ -4,9 +4,16 @@ interface PieChartProps {
   data: Array<{ label: string; value: number }>;
   width?: number;
   height?: number;
+  /** Legend shows each slice's share of the total instead of its raw value. */
+  showPercent?: boolean;
+  /** Controlled selection — clicking a slice or legend row calls onSelect with
+   *  its index, or null if the already-selected one was clicked again. Omit
+   *  both props to keep the chart non-interactive (existing callers). */
+  selectedIndex?: number | null;
+  onSelect?: (index: number | null) => void;
 }
 
-export function PieChart({ data, width = 200, height = 200 }: PieChartProps) {
+export function PieChart({ data, width = 200, height = 200, showPercent = false, selectedIndex = null, onSelect }: PieChartProps) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
   if (total === 0) {
     return <div className="py-8 text-center text-sm text-[var(--muted)]">No data</div>;
@@ -15,6 +22,11 @@ export function PieChart({ data, width = 200, height = 200 }: PieChartProps) {
   const radius = Math.min(width, height) / 2 - 10;
   const centerX = width / 2;
   const centerY = height / 2;
+  const interactive = onSelect != null;
+
+  function toggle(i: number) {
+    onSelect?.(selectedIndex === i ? null : i);
+  }
 
   let currentAngle = -90; // Start at top
 
@@ -41,9 +53,17 @@ export function PieChart({ data, width = 200, height = 200 }: PieChartProps) {
     ].join(' ');
 
     currentAngle = endAngle;
+    const dimmed = interactive && selectedIndex != null && selectedIndex !== i;
 
     return (
-      <path key={i} d={path} fill={SERIES_COLORS[i % SERIES_COLORS.length]} className="hover:opacity-80 transition-opacity" />
+      <path
+        key={i}
+        d={path}
+        fill={SERIES_COLORS[i % SERIES_COLORS.length]}
+        opacity={dimmed ? 0.35 : 1}
+        onClick={interactive ? () => toggle(i) : undefined}
+        className={`transition-opacity ${interactive ? 'cursor-pointer' : 'hover:opacity-80'}`}
+      />
     );
   });
 
@@ -52,15 +72,29 @@ export function PieChart({ data, width = 200, height = 200 }: PieChartProps) {
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0">
         {paths}
       </svg>
-      <div className="space-y-2 text-xs">
-        {data.map((d, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <div className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: SERIES_COLORS[i % SERIES_COLORS.length] }} />
-            <span className="text-[var(--ink)]">
-              {d.label} ({d.value})
-            </span>
-          </div>
-        ))}
+      <div className="space-y-1 text-xs">
+        {data.map((d, i) => {
+          const valueLabel = showPercent ? `${Math.round((d.value / total) * 100)}%` : d.value;
+          const Row = interactive ? 'button' : 'div';
+          return (
+            <Row
+              key={i}
+              type={interactive ? 'button' : undefined}
+              onClick={interactive ? () => toggle(i) : undefined}
+              className={`flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left ${
+                interactive ? 'cursor-pointer hover:bg-[var(--paper)]' : ''
+              } ${selectedIndex === i ? 'bg-[var(--teal-light)]' : ''}`}
+            >
+              <span
+                className="h-3 w-3 shrink-0 rounded-sm"
+                style={{ backgroundColor: SERIES_COLORS[i % SERIES_COLORS.length] }}
+              />
+              <span className="text-[var(--ink)]">
+                {d.label} ({valueLabel})
+              </span>
+            </Row>
+          );
+        })}
       </div>
     </div>
   );

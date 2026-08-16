@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDashboardService } from './dashboardService';
+import { createDashboardService, CONDITION_TOP_N } from './dashboardService';
 import type { Repos, VisitFilter } from '@/repositories/types';
 import type {
   CatalogItem,
@@ -7,6 +7,7 @@ import type {
   ConsultationNote,
   Invoice,
   InvoicePayment,
+  NoReturnReasonItem,
   Payment,
   Patient,
   Therapist,
@@ -64,6 +65,7 @@ function makeFakeRepos() {
       },
     ],
   ]);
+  const reasons = new Map<string, NoReturnReasonItem>();
   const visits = new Map<string, Visit>();
   const invoices = new Map<string, Invoice>();
   const invoicePayments = new Map<string, InvoicePayment>();
@@ -74,6 +76,12 @@ function makeFakeRepos() {
     clinics: { get: async (id) => (id === clinic.id ? clinic : undefined), list: async () => [clinic], put: async () => {}, putLocal: async () => {} },
     therapists: { list: async () => therapists, put: async () => {}, removeLocal: async () => {} },
     catalog: { list: async () => catalog, get: async (id) => catalog.find((c) => c.id === id), put: async () => {} },
+    noReturnReasonCatalog: {
+      list: async (_c, includeInactive = false) =>
+        [...reasons.values()].filter((r) => includeInactive || r.active),
+      get: async (id) => reasons.get(id),
+      put: async (r) => void reasons.set(r.id, r),
+    },
     patients: {
       get: async (id) => patients.get(id),
       getByMrno: async (_c, mrno) => [...patients.values()].find((p) => p.mrno === mrno),
@@ -145,7 +153,7 @@ function makeFakeRepos() {
       put: async () => {},
     },
   };
-  return { repos, visits, invoices, invoicePayments, payments, patients, consultationNotes: consultationNotesStore };
+  return { repos, visits, invoices, invoicePayments, payments, patients, reasons, consultationNotes: consultationNotesStore };
 }
 
 const baseVisit = (id: string, overrides: Partial<Visit>): Visit => ({
@@ -464,6 +472,46 @@ describe('dashboardService.modalityUsage', () => {
   });
 });
 
+describe('dashboardService.conditionUsage', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+
+  it('groups by condition, most-visited first, with a patient drill-down', async () => {
+    fake.visits.set('v1', baseVisit('v1', { condition: 'Low back pain', actualBillPaise: rs(1000) }));
+    fake.visits.set('v2', baseVisit('v2', { condition: 'Low back pain', actualBillPaise: rs(1000) }));
+    fake.visits.set('v3', baseVisit('v3', { condition: 'Frozen shoulder', actualBillPaise: rs(1500) }));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.conditionUsage('clinic-1');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ condition: 'Low back pain', count: 2 });
+    expect(rows[0].patients[0]).toMatchObject({ patientName: 'Test Patient', visitCount: 2, revenuePaise: rs(2000) });
+    expect(rows[1]).toMatchObject({ condition: 'Frozen shoulder', count: 1 });
+  });
+
+  it('blank/missing condition becomes "Unspecified"', async () => {
+    fake.visits.set('v1', baseVisit('v1', { condition: null }));
+    fake.visits.set('v2', baseVisit('v2', { condition: '   ' }));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.conditionUsage('clinic-1');
+    expect(rows).toEqual([{ condition: 'Unspecified', count: 2, patients: expect.any(Array) }]);
+  });
+
+  it('folds conditions past the top N into "Other" instead of fragmenting', async () => {
+    // 9 distinct single-visit conditions — one more than CONDITION_TOP_N (7).
+    for (let i = 0; i < 9; i++) {
+      fake.visits.set(`v${i}`, baseVisit(`v${i}`, { condition: `Condition ${i}`, actualBillPaise: rs(100) }));
+    }
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.conditionUsage('clinic-1');
+    expect(rows).toHaveLength(CONDITION_TOP_N + 1); // top 7 + one "Other" row
+    const other = rows.find((r) => r.condition === 'Other');
+    expect(other).toMatchObject({ count: 2 }); // the 2 conditions that didn't make the top 7
+    expect(other?.patients[0].visitCount).toBe(2); // same patient contributed both folded visits
+  });
+});
+
 describe('dashboardService.pendingWork', () => {
   let fake: ReturnType<typeof makeFakeRepos>;
   beforeEach(() => {
@@ -741,39 +789,37 @@ describe('dashboardService.singleVisitPatients', () => {
     const svc = createDashboardService(fake.repos);
     expect(await svc.singleVisitPatients('clinic-1')).toEqual([]);
   });
-});
 
-describe('dashboardService.recurringPatients', () => {
-  let fake: ReturnType<typeof makeFakeRepos>;
-  beforeEach(() => {
-    fake = makeFakeRepos();
+  it('joins the patient\'s no-return reason when set', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2020-01-01' }));
+    fake.reasons.set('r1', {
+      id: 'r1',
+      clinicId: 'clinic-1',
+      name: 'Relocated',
+      isClosed: true,
+      active: true,
+      updatedAt: '',
+    });
+    const patient = await fake.repos.patients.get('pat-1');
+    await fake.repos.patients.put({ ...patient!, noReturnReasonId: 'r1' });
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.singleVisitPatients('clinic-1');
+    expect(rows[0]).toMatchObject({
+      noReturnReasonId: 'r1',
+      noReturnReasonName: 'Relocated',
+      noReturnReasonClosed: true,
+    });
   });
 
-  it('surfaces a patient with 3+ visits in the last 30 days', async () => {
-    const today = new Date();
-    for (let i = 0; i < 3; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i * 5);
-      fake.visits.set(`v${i}`, baseVisit(`v${i}`, { visitDate: d.toISOString().slice(0, 10) }));
-    }
+  it('leaves the reason fields null when nothing is set', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2020-01-01' }));
     const svc = createDashboardService(fake.repos);
-    const rows = await svc.recurringPatients('clinic-1');
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ patientName: 'Test Patient', mrno: '1001', visitCount: 3 });
-  });
-
-  it('excludes a patient under the minimum visit count', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: new Date().toISOString().slice(0, 10) }));
-    const svc = createDashboardService(fake.repos);
-    expect(await svc.recurringPatients('clinic-1')).toEqual([]);
-  });
-
-  it('ignores visits outside the rolling window', async () => {
-    for (let i = 0; i < 3; i++) {
-      fake.visits.set(`v${i}`, baseVisit(`v${i}`, { visitDate: '2020-01-0' + (i + 1) }));
-    }
-    const svc = createDashboardService(fake.repos);
-    expect(await svc.recurringPatients('clinic-1')).toEqual([]);
+    const rows = await svc.singleVisitPatients('clinic-1');
+    expect(rows[0]).toMatchObject({
+      noReturnReasonId: null,
+      noReturnReasonName: null,
+      noReturnReasonClosed: false,
+    });
   });
 });
 

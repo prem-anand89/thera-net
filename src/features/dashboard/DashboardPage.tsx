@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { dashboardService } from '@/services';
+import { dashboardService, repos } from '@/services';
+import { CONDITION_TOP_N } from '@/services/dashboardService';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import { monthName, formatDateDMY, fiscalYearOf, monthsOfFiscalYear, type FyMonth } from '@/domain/fiscalYear';
-import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
+import { clinicBillingConfig, clinicShareLabels, referringSourceDetailLabel, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
-import { SectionCard, StatTile, Pill } from '@/components/ui';
+import { SectionCard, StatTile, Pill, PackageThread, th, td, tdNum, thNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
+import { IndexedTrendChart } from '@/components/IndexedTrendChart';
 import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { SERIES_COLORS } from '@/components/chartColors';
@@ -22,12 +24,12 @@ import { SERIES_COLORS } from '@/components/chartColors';
  *  filtered per-render rather than being a fixed list. */
 const DASHBOARD_SECTIONS: { key: string; label: string }[] = [
   { key: 'singleVisit', label: 'Single-visit patients' },
-  { key: 'regulars', label: 'Regulars' },
   { key: 'packages', label: 'Packages' },
   { key: 'revenue', label: 'Revenue trend' },
   { key: 'therapistComparison', label: 'Therapist comparison' },
   { key: 'serviceUsage', label: 'Frequently used services' },
   { key: 'modalityUsage', label: 'Treatment modalities' },
+  { key: 'conditionUsage', label: 'Conditions' },
   { key: 'referralSources', label: 'Referral sources' },
 ];
 
@@ -87,8 +89,7 @@ const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> =
 };
 
 /** Buckets a list of counts-with-a-number into fixed ranges for a small
- *  histogram — the shape both "single-visit patients" and "regulars" need
- *  (how overdue, how many visits), just with different bucket edges. */
+ *  histogram — the shape "single-visit patients" needs (how overdue). */
 function bucketCounts(values: number[], edges: { max: number; label: string }[]): number[] {
   const counts = new Array(edges.length).fill(0) as number[];
   for (const v of values) {
@@ -97,6 +98,19 @@ function bucketCounts(values: number[], edges: { max: number; label: string }[])
   }
   return counts;
 }
+
+/** Which bucket index a single value falls into, for filtering a list by
+ *  the same edges a BarChart derived from bucketCounts is showing. */
+function bucketIndexOf(value: number, edges: { max: number }[]): number {
+  const idx = edges.findIndex((e) => value <= e.max);
+  return idx === -1 ? edges.length - 1 : idx;
+}
+
+const SINGLE_VISIT_BUCKET_EDGES = [
+  { max: 30, label: '15–30d' },
+  { max: 60, label: '31–60d' },
+  { max: Infinity, label: '60d+' },
+];
 
 export function DashboardPage() {
   const clinic = useClinic();
@@ -109,10 +123,15 @@ export function DashboardPage() {
   // ever read the final two entries, which stay the same regardless of how
   // far back the window extends, so one query serves both the KPI strip and
   // the trend chart below.
-  const [trendPeriod, setTrendPeriod] = useState<'6m' | '1y' | 'fy'>('6m');
+  const [trendPeriod, setTrendPeriod] = useState<'6m' | 'ytd' | 'fy'>('6m');
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
   const trendMonthsArg = useMemo((): number | FyMonth[] => {
-    if (trendPeriod === '1y') return 12;
+    if (trendPeriod === 'ytd') {
+      const now = new Date();
+      const months: FyMonth[] = [];
+      for (let m = 1; m <= now.getMonth() + 1; m++) months.push({ year: now.getFullYear(), month: m });
+      return months;
+    }
     if (trendPeriod === 'fy') {
       const now = new Date();
       const nowKey = now.getFullYear() * 12 + now.getMonth() + 1;
@@ -123,7 +142,7 @@ export function DashboardPage() {
     return 6;
   }, [trendPeriod, currentFy.startYear, clinic.fyStartMonth]);
   const trendPeriodLabel =
-    trendPeriod === '6m' ? 'last 6 months' : trendPeriod === '1y' ? 'last 12 months' : `FY ${currentFy.label}`;
+    trendPeriod === '6m' ? 'last 6 months' : trendPeriod === 'ytd' ? `YTD ${new Date().getFullYear()}` : `FY ${currentFy.label}`;
 
   const trend = useLiveQuery(
     () => dashboardService.revenueTrend(clinic.id, trendMonthsArg),
@@ -131,10 +150,6 @@ export function DashboardPage() {
   );
   const singleVisitPatients = useLiveQuery(
     () => dashboardService.singleVisitPatients(clinic.id),
-    [clinic.id]
-  );
-  const recurringPatients = useLiveQuery(
-    () => dashboardService.recurringPatients(clinic.id),
     [clinic.id]
   );
   const referralSources = useLiveQuery(
@@ -150,6 +165,7 @@ export function DashboardPage() {
     () => (clinic.clinicalDocsEnabled ? dashboardService.modalityUsage(clinic.id) : undefined),
     [clinic.id, clinic.clinicalDocsEnabled]
   );
+  const conditionUsage = useLiveQuery(() => dashboardService.conditionUsage(clinic.id), [clinic.id]);
 
   // KPI strip data — current calendar month, plus one month back for the
   // trend badges. now/prevMonth are recomputed each render (cheap, plain
@@ -266,35 +282,95 @@ export function DashboardPage() {
         : (openPackages ?? []).filter((p) => p.startedByTherapistId === scope.myTherapistId),
     [openPackages, scope.isClinicWideView, scope.myTherapistId]
   );
-  const packagesByService = useMemo(() => {
-    const byService = new Map<string, { total: number; stale: number }>();
-    for (const p of packagesInScope) {
-      const entry = byService.get(p.serviceName) ?? { total: 0, stale: 0 };
-      entry.total += 1;
-      if (p.stale) entry.stale += 1;
-      byService.set(p.serviceName, entry);
+  const [pkgStatusFilter, setPkgStatusFilter] = useState<'open' | 'stale' | 'all'>('open');
+  const filteredPackages = useMemo(
+    () => (pkgStatusFilter === 'all' ? packagesInScope : packagesInScope.filter((p) => p.stale === (pkgStatusFilter === 'stale'))),
+    [packagesInScope, pkgStatusFilter]
+  );
+
+  // Referral sources — a slice is always "active" (defaults to the top
+  // source) so the detail panel never goes blank; clicking re-picks which
+  // one, but never toggles off to nothing (that's what PieChart's own
+  // deselect-to-null would otherwise do on a second click of the same slice).
+  const [referralSelectedIdx, setReferralSelectedIdx] = useState<number | null>(null);
+  const referralActiveIdx = referralSelectedIdx ?? 0;
+  const referralActive = referralSources?.[referralActiveIdx];
+  const referralNeedsDetail =
+    referralActive?.source === 'Hospital referral' || referralActive?.source === 'Doctor referral';
+  const referralDetailGroups = useMemo(() => {
+    if (!referralActive || !referralNeedsDetail) return [];
+    const byDetail = new Map<string, { patients: number; visits: number; revenuePaise: number }>();
+    for (const p of referralActive.patients) {
+      const key = p.detail?.trim() || 'Unspecified';
+      const entry = byDetail.get(key) ?? { patients: 0, visits: 0, revenuePaise: 0 };
+      entry.patients += 1;
+      entry.visits += p.visitCount;
+      entry.revenuePaise += p.revenuePaise;
+      byDetail.set(key, entry);
     }
-    return [...byService.entries()].sort((a, b) => b[1].total - a[1].total);
-  }, [packagesInScope]);
+    return [...byDetail.entries()].sort((a, b) => b[1].revenuePaise - a[1].revenuePaise);
+  }, [referralActive, referralNeedsDetail]);
+
+  // Conditions — unlike referral sources, no default slice: nothing is
+  // selected until clicked, since there's no one "always relevant" answer.
+  const [conditionSelectedIdx, setConditionSelectedIdx] = useState<number | null>(null);
+  const conditionActive = conditionSelectedIdx != null ? conditionUsage?.[conditionSelectedIdx] : undefined;
 
   const singleVisitBuckets = useMemo(
-    () =>
-      bucketCounts((singleVisitPatients ?? []).map((p) => p.daysSince), [
-        { max: 30, label: '15–30d' },
-        { max: 60, label: '31–60d' },
-        { max: Infinity, label: '60d+' },
-      ]),
+    () => bucketCounts((singleVisitPatients ?? []).map((p) => p.daysSince), SINGLE_VISIT_BUCKET_EDGES),
     [singleVisitPatients]
   );
-  const recurringBuckets = useMemo(
-    () =>
-      bucketCounts((recurringPatients ?? []).map((p) => p.visitCount), [
-        { max: 4, label: '3–4' },
-        { max: 9, label: '5–9' },
-        { max: Infinity, label: '10+' },
-      ]),
-    [recurringPatients]
-  );
+  // Clicking a histogram bar filters the list below to that day-range;
+  // null means "show everyone" (the default, and the BarChart itself has
+  // no "all" bar to click back to, so a Clear affordance covers that).
+  const [singleVisitBucketFilter, setSingleVisitBucketFilter] = useState<number | null>(null);
+  const [hideClosedReasons, setHideClosedReasons] = useState(false);
+  const filteredSingleVisit = useMemo(() => {
+    let rows = singleVisitPatients ?? [];
+    if (singleVisitBucketFilter != null) {
+      rows = rows.filter((p) => bucketIndexOf(p.daysSince, SINGLE_VISIT_BUCKET_EDGES) === singleVisitBucketFilter);
+    }
+    if (hideClosedReasons) rows = rows.filter((p) => !p.noReturnReasonClosed);
+    return rows;
+  }, [singleVisitPatients, singleVisitBucketFilter, hideClosedReasons]);
+
+  // The clinic's own "why didn't they come back" list — same editable-list
+  // shape as the service catalog (see Catalog() in SetupPage.tsx), managed
+  // inline here rather than routed through Settings since it's only ever
+  // used from this one spot.
+  const noReturnReasons = useLiveQuery(() => repos.noReturnReasonCatalog.list(clinic.id, true), [clinic.id]);
+  const [manageReasonsOpen, setManageReasonsOpen] = useState(false);
+  const [reasonDraftName, setReasonDraftName] = useState('');
+  const [reasonDraftClosed, setReasonDraftClosed] = useState(false);
+
+  async function addReason() {
+    const name = reasonDraftName.trim();
+    if (!name) return;
+    await repos.noReturnReasonCatalog.put({
+      id: crypto.randomUUID(),
+      clinicId: clinic.id,
+      name,
+      isClosed: reasonDraftClosed,
+      active: true,
+      updatedAt: new Date().toISOString(),
+    });
+    setReasonDraftName('');
+    setReasonDraftClosed(false);
+  }
+
+  async function toggleReasonActive(item: NoReturnReasonItem) {
+    await repos.noReturnReasonCatalog.put({ ...item, active: !item.active, updatedAt: new Date().toISOString() });
+  }
+
+  async function setPatientReason(patientId: string, reasonId: string) {
+    const patient = await repos.patients.get(patientId);
+    if (!patient) return;
+    await repos.patients.put({
+      ...patient,
+      noReturnReasonId: reasonId || null,
+      updatedAt: new Date().toISOString(),
+    });
+  }
 
   return (
     <div className="space-y-5">
@@ -372,10 +448,67 @@ export function DashboardPage() {
             className="scroll-mt-28 md:scroll-mt-20"
           >
             <SectionCard title="Single-visit patients">
-              <p className="mb-3 text-xs text-[var(--muted)]">
-                Exactly one visit on record, more than 14 days ago — worth a call to find out why, or a
-                reminder to book again.
-              </p>
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <p className="text-xs text-[var(--muted)]">
+                  Exactly one visit on record, more than 14 days ago — click a bar to filter, call from the
+                  list, or log why they didn't return once you know.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setManageReasonsOpen((o) => !o)}
+                  className="shrink-0 text-xs font-medium text-[var(--teal)] hover:underline"
+                >
+                  {manageReasonsOpen ? 'Done' : 'Manage reasons'}
+                </button>
+              </div>
+              {manageReasonsOpen && (
+                <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-3">
+                  <p className="mb-2 text-xs text-[var(--muted)]">
+                    Your clinic's own list — turn ones you don't use off, or add your own. "Counts as closed"
+                    reasons (e.g. Resolved, Relocated) can be hidden from the list below with the checkbox.
+                  </p>
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {(noReturnReasons ?? []).map((r) => (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 pl-2.5 pr-1 text-xs"
+                        style={r.active ? {} : { opacity: 0.5, textDecoration: 'line-through' }}
+                      >
+                        {r.name}
+                        {r.isClosed && <span className="text-[var(--muted)]">(closed)</span>}
+                        <button
+                          type="button"
+                          onClick={() => void toggleReasonActive(r)}
+                          className="rounded-full px-1.5 text-[var(--muted)] hover:bg-[var(--paper)]"
+                          title={r.active ? 'Deactivate' : 'Reactivate'}
+                        >
+                          {r.active ? '×' : '+'}
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={reasonDraftName}
+                      onChange={(e) => setReasonDraftName(e.target.value)}
+                      placeholder="Add a reason…"
+                      className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm"
+                    />
+                    <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                      <input
+                        type="checkbox"
+                        checked={reasonDraftClosed}
+                        onChange={(e) => setReasonDraftClosed(e.target.checked)}
+                      />
+                      Counts as closed
+                    </label>
+                    <button type="button" onClick={() => void addReason()} className="rounded-md bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white">
+                      + Add
+                    </button>
+                  </div>
+                </div>
+              )}
               {singleVisitPatients === undefined ? null : singleVisitPatients.length === 0 ? (
                 <p className="py-6 text-center text-sm text-[var(--muted)]">No lapsed single-visit patients right now.</p>
               ) : (
@@ -384,70 +517,86 @@ export function DashboardPage() {
                     <StatTile label="Total" value={singleVisitPatients.length} />
                     <div className="min-w-0 flex-1">
                       <BarChart
-                        categories={['15–30d', '31–60d', '60d+']}
+                        categories={SINGLE_VISIT_BUCKET_EDGES.map((e) => e.label)}
                         series={[{ label: 'Patients', color: SERIES_COLORS[0], values: singleVisitBuckets }]}
                         height={140}
+                        selectedCategoryIndex={singleVisitBucketFilter}
+                        onCategoryClick={(i) => setSingleVisitBucketFilter((prev) => (prev === i ? null : i))}
                       />
                     </div>
                   </div>
-                  <ul className="flex flex-wrap gap-1.5">
-                    {singleVisitPatients.slice(0, 20).map((p) => (
-                      <li key={p.patientId}>
-                        <Link
-                          to="/ledger"
-                          search={{ patientId: p.patientId }}
-                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                          title={`${p.serviceName} — last seen ${formatDateDMY(p.visitDate)}, ${p.daysSince}d ago`}
-                        >
-                          {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </SectionCard>
-          </div>
-
-          <div
-            ref={(el) => {
-              if (el) sectionRefs.current.set('regulars', el);
-              else sectionRefs.current.delete('regulars');
-            }}
-            className="scroll-mt-28 md:scroll-mt-20"
-          >
-            <SectionCard title="Regulars — last 30 days">
-              <p className="mb-3 text-xs text-[var(--muted)]">
-                Three or more visits in the last month — your most engaged patients right now.
-              </p>
-              {recurringPatients === undefined ? null : recurringPatients.length === 0 ? (
-                <p className="py-6 text-center text-sm text-[var(--muted)]">No one has visited 3+ times in the last 30 days yet.</p>
-              ) : (
-                <>
-                  <div className="mb-4 flex flex-wrap items-center gap-4">
-                    <StatTile label="Total" value={recurringPatients.length} />
-                    <div className="min-w-0 flex-1">
-                      <BarChart
-                        categories={['3–4 visits', '5–9 visits', '10+ visits']}
-                        series={[{ label: 'Patients', color: SERIES_COLORS[1], values: recurringBuckets }]}
-                        height={140}
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    {singleVisitBucketFilter != null ? (
+                      <button
+                        type="button"
+                        onClick={() => setSingleVisitBucketFilter(null)}
+                        className="text-xs font-medium text-[var(--teal)] hover:underline"
+                      >
+                        Showing {SINGLE_VISIT_BUCKET_EDGES[singleVisitBucketFilter].label} only — clear filter
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                    <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                      <input
+                        type="checkbox"
+                        checked={hideClosedReasons}
+                        onChange={(e) => setHideClosedReasons(e.target.checked)}
                       />
-                    </div>
+                      Hide closed reasons
+                    </label>
                   </div>
-                  <ul className="flex flex-wrap gap-1.5">
-                    {recurringPatients.slice(0, 20).map((p) => (
-                      <li key={p.patientId}>
-                        <Link
-                          to="/ledger"
-                          search={{ patientId: p.patientId }}
-                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                          title={`${p.visitCount} visits — last seen ${formatDateDMY(p.lastVisitOn)}`}
-                        >
-                          {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
-                        </Link>
-                      </li>
+                  <div className="max-h-96 divide-y divide-[var(--border)] overflow-y-auto rounded-lg border border-[var(--border)]">
+                    {filteredSingleVisit.slice(0, 50).map((p) => (
+                      <div key={p.patientId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                        <div className="min-w-0">
+                          <Link to="/ledger" search={{ patientId: p.patientId }} className="text-sm font-medium text-[var(--ink)] hover:underline">
+                            {p.patientName}
+                          </Link>
+                          <div className="text-xs text-[var(--muted)]">
+                            {p.mrno} · last seen {formatDateDMY(p.visitDate)} · {p.daysSince}d ago
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                          {p.primaryCondition && <Pill tone="slate">{p.primaryCondition}</Pill>}
+                          <select
+                            value={p.noReturnReasonId ?? ''}
+                            onChange={(e) => void setPatientReason(p.patientId, e.target.value)}
+                            className="rounded-full border px-2 py-1 text-xs font-medium"
+                            style={
+                              p.noReturnReasonName
+                                ? p.noReturnReasonClosed
+                                  ? { background: 'var(--moss-light)', color: 'var(--moss-strong)', borderColor: 'transparent' }
+                                  : { background: 'var(--amber-light)', color: 'var(--amber)', borderColor: 'transparent' }
+                                : { background: 'var(--surface)', color: 'var(--muted)', borderStyle: 'dashed' }
+                            }
+                          >
+                            <option value="">+ Reason</option>
+                            {(noReturnReasons ?? [])
+                              .filter((r) => r.active || r.id === p.noReturnReasonId)
+                              .map((r) => (
+                                <option key={r.id} value={r.id}>
+                                  {r.name}
+                                </option>
+                              ))}
+                          </select>
+                          {p.phone && (
+                            <a
+                              href={`tel:${p.phone}`}
+                              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                            >
+                              📞 {p.phone}
+                            </a>
+                          )}
+                        </div>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
+                  {filteredSingleVisit.length > 50 && (
+                    <p className="mt-2 text-center text-xs text-[var(--muted)]">
+                      Showing 50 of {filteredSingleVisit.length}.
+                    </p>
+                  )}
                 </>
               )}
             </SectionCard>
@@ -462,29 +611,73 @@ export function DashboardPage() {
           >
             <SectionCard title={scope.isClinicWideView ? 'Packages' : 'My packages'}>
               <p className="mb-3 text-xs text-[var(--muted)]">
-                Open packages by service{scope.isClinicWideView ? '' : " you've started"} — how many are active,
-                and how many have gone quiet.
+                Every patient on a package{scope.isClinicWideView ? '' : " you've started"} — who's still owed
+                sessions, and whose package has gone quiet.
               </p>
-              {packagesInScope.length === 0 ? (
-                <p className="py-6 text-center text-sm text-[var(--muted)]">No open packages right now.</p>
+              <div className="mb-3 flex items-center gap-1.5">
+                {(
+                  [
+                    { key: 'open', label: 'Open' },
+                    { key: 'stale', label: 'Stale' },
+                    { key: 'all', label: 'All' },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setPkgStatusFilter(opt.key)}
+                    className="rounded-full border px-3 py-1 text-xs font-medium"
+                    style={{
+                      background: pkgStatusFilter === opt.key ? 'var(--teal-light)' : 'var(--surface)',
+                      borderColor: pkgStatusFilter === opt.key ? 'transparent' : 'var(--border)',
+                      color: pkgStatusFilter === opt.key ? 'var(--teal)' : 'var(--muted)',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <span className="ml-1 text-xs text-[var(--muted)]">
+                  {filteredPackages.length} package{filteredPackages.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              {filteredPackages.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--muted)]">No packages match this filter.</p>
               ) : (
-                <>
-                  <div className="mb-4 flex gap-4">
-                    <StatTile label="Open packages" value={packagesInScope.length} />
-                    <StatTile label="Stale (14d+)" value={packagesInScope.filter((p) => p.stale).length} />
-                  </div>
-                  <ul className="space-y-2">
-                    {packagesByService.map(([service, counts]) => (
-                      <li key={service} className="flex items-center justify-between gap-3 text-sm">
-                        <span className="text-[var(--ink)]">{service}</span>
-                        <span className="flex items-center gap-2">
-                          <span className="font-num text-[var(--muted)]">{counts.total}</span>
-                          {counts.stale > 0 && <Pill tone="amber">{counts.stale} stale</Pill>}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-[var(--border)]">
+                    <thead className="bg-[var(--paper)]">
+                      <tr>
+                        <th className={th}>Patient</th>
+                        <th className={th}>Package</th>
+                        <th className={th}>Therapist</th>
+                        <th className={thNum}>Sessions</th>
+                        <th className={th}>Last visit</th>
+                        <th className={th}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border)]">
+                      {filteredPackages.map((p) => (
+                        <tr key={p.packageGroupId}>
+                          <td className={td}>
+                            {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                          </td>
+                          <td className={td}>{p.serviceName}</td>
+                          <td className={td}>{p.startedByTherapistName}</td>
+                          <td className={tdNum}>
+                            <span className="inline-flex items-center gap-1.5">
+                              <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
+                              {p.sessionsLogged} / {p.packageTotal}
+                            </span>
+                          </td>
+                          <td className={td}>{p.daysSinceLastVisit}d ago</td>
+                          <td className={td}>
+                            <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </SectionCard>
           </div>
@@ -503,7 +696,7 @@ export function DashboardPage() {
                 {(
                   [
                     { key: '6m', label: '6 months' },
-                    { key: '1y', label: '1 year' },
+                    { key: 'ytd', label: 'YTD' },
                     { key: 'fy', label: `FY ${currentFy.label}` },
                   ] as const
                 ).map((opt) => (
@@ -528,48 +721,38 @@ export function DashboardPage() {
                 </p>
               )}
               {trend && hasEnoughTrendHistory && (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-                      {revenueLabel}
-                    </h3>
-                    <BarChart
-                      categories={categories}
-                      series={[
-                        {
-                          label: revenueLabel,
-                          color: SERIES_COLORS[0],
-                          values: scope.isClinicWideView
-                            ? trend.map((r) => (hospitalSplit ? r.total.postTaxPaise : r.total.billPaise))
-                            : trend.map((r) => {
-                                const row = myMonthRow(r.rows);
-                                return hospitalSplit ? row.postTaxPaise : row.billPaise;
-                              }),
-                        },
-                      ]}
-                      formatValue={formatINR}
-                    />
+                <>
+                  <IndexedTrendChart
+                    categories={categories}
+                    barLabel={revenueLabel}
+                    barColor={SERIES_COLORS[0]}
+                    formatBarValue={formatINR}
+                    barValues={
+                      scope.isClinicWideView
+                        ? trend.map((r) => (hospitalSplit ? r.total.postTaxPaise : r.total.billPaise))
+                        : trend.map((r) => {
+                            const row = myMonthRow(r.rows);
+                            return hospitalSplit ? row.postTaxPaise : row.billPaise;
+                          })
+                    }
+                    lineLabel="Visits"
+                    lineColor={SERIES_COLORS[1]}
+                    lineValues={
+                      scope.isClinicWideView
+                        ? trend.map((r) => r.total.visitCount)
+                        : trend.map((r) => myMonthRow(r.rows).visitCount)
+                    }
+                  />
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-3 text-xs text-[var(--muted)]">
+                    <span aria-hidden="true">ⓘ</span>
+                    <span>
+                      Both lines are indexed to the first active month = 100, not plotted in rupees/visits on two
+                      different scales. A true dual-axis chart lets you pick the scales, which can make any two
+                      lines look correlated whether or not they are — indexing keeps the comparison honest while
+                      still showing which moved more. Hover a point for the real rupee/visit figure.
+                    </span>
                   </div>
-                  {/* Alongside revenue, not folded into the same chart — visit
-                      count and rupee totals are wildly different scales, and
-                      seeing both shapes side by side is what actually answers
-                      "did revenue move because of price or volume". */}
-                  <div>
-                    <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Visits</h3>
-                    <BarChart
-                      categories={categories}
-                      series={[
-                        {
-                          label: 'Visits',
-                          color: SERIES_COLORS[1],
-                          values: scope.isClinicWideView
-                            ? trend.map((r) => r.total.visitCount)
-                            : trend.map((r) => myMonthRow(r.rows).visitCount),
-                        },
-                      ]}
-                    />
-                  </div>
-                </div>
+                </>
               )}
             </SectionCard>
           </div>
@@ -644,6 +827,68 @@ export function DashboardPage() {
 
           <div
             ref={(el) => {
+              if (el) sectionRefs.current.set('conditionUsage', el);
+              else sectionRefs.current.delete('conditionUsage');
+            }}
+            className="scroll-mt-28 md:scroll-mt-20"
+          >
+            <SectionCard title="Conditions">
+              <p className="mb-4 text-xs text-[var(--muted)]">
+                What you're actually treating, all-time — click a slice for the patient list. Free-text
+                conditions past the top {CONDITION_TOP_N} fold into "Other" rather than fragmenting.
+              </p>
+              {conditionUsage === undefined ? null : conditionUsage.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--muted)]">No visits logged yet.</p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <PieChart
+                    data={conditionUsage.map((c) => ({ label: c.condition, value: c.count }))}
+                    selectedIndex={conditionSelectedIdx}
+                    onSelect={setConditionSelectedIdx}
+                  />
+                  {conditionActive ? (
+                    <div>
+                      <div className="mb-2 flex items-baseline justify-between gap-2">
+                        <h3 className="text-sm font-medium text-[var(--ink)]">{conditionActive.condition}</h3>
+                        <span className="text-xs text-[var(--muted)]">
+                          {conditionActive.patients.length} patient{conditionActive.patients.length === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      <div className="max-h-72 overflow-y-auto rounded-lg border border-[var(--border)]">
+                        <table className="min-w-full divide-y divide-[var(--border)]">
+                          <thead className="sticky top-0 bg-[var(--paper)]">
+                            <tr>
+                              <th className={th}>Patient</th>
+                              <th className={thNum}>Visits</th>
+                              <th className={thNum}>Revenue</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[var(--border)]">
+                            {conditionActive.patients.map((p) => (
+                              <tr key={p.patientId}>
+                                <td className={td}>
+                                  {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                                </td>
+                                <td className={tdNum}>{p.visitCount}</td>
+                                <td className={tdNum}>{formatINR(p.revenuePaise)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="flex items-center justify-center py-8 text-center text-sm text-[var(--muted)]">
+                      Click a slice to see who's being treated for it.
+                    </p>
+                  )}
+                </div>
+              )}
+            </SectionCard>
+          </div>
+
+          <div
+            ref={(el) => {
               if (el) sectionRefs.current.set('referralSources', el);
               else sectionRefs.current.delete('referralSources');
             }}
@@ -651,32 +896,75 @@ export function DashboardPage() {
           >
             <SectionCard title="Referral sources">
               <p className="mb-4 text-xs text-[var(--muted)]">
-                Where your patients are coming from, and how much revenue each source has actually brought in.
+                Click a slice — Doctor/Hospital referral break down by name; everything else lists its patients.
               </p>
-              {referralSources && referralSources.length > 0 ? (
+              {referralSources && referralSources.length > 0 && referralActive ? (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <PieChart
-                    data={referralSources.map((r) => ({
-                      label: r.source,
-                      value: r.count,
-                    }))}
+                    data={referralSources.map((r) => ({ label: r.source, value: r.count }))}
+                    showPercent
+                    selectedIndex={referralActiveIdx}
+                    onSelect={(i) => {
+                      if (i != null) setReferralSelectedIdx(i);
+                    }}
                   />
-                  <ul className="space-y-2">
-                    {referralSources.map((r) => (
-                      <li key={r.source} className="flex items-center justify-between gap-3 text-sm">
-                        <span className="text-[var(--ink)]">{r.source}</span>
-                        <span className="flex items-center gap-3">
-                          <span className="font-num text-[var(--muted)]">{r.count} visits</span>
-                          <span className="font-num text-[var(--muted)]" title="Total revenue from this source">
-                            {formatINR(r.revenuePaise)}
-                          </span>
-                          <span className="font-num text-[var(--muted)]" title="Average revenue per visit from this source">
-                            avg {formatINR(r.avgRevenuePaise)}
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div>
+                    <div className="mb-2 flex items-baseline justify-between gap-2">
+                      <h3 className="text-sm font-medium text-[var(--ink)]">{referralActive.source}</h3>
+                      <span className="text-xs text-[var(--muted)]">
+                        {referralActive.patients.length} patient{referralActive.patients.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+                      <table className="min-w-full divide-y divide-[var(--border)]">
+                        {referralNeedsDetail ? (
+                          <>
+                            <thead className="bg-[var(--paper)]">
+                              <tr>
+                                <th className={th}>{referringSourceDetailLabel(
+                                  referralActive.source === 'Doctor referral' ? 'doctor_referral' : 'hospital_referral'
+                                ) ?? 'Name'}</th>
+                                <th className={thNum}>Patients</th>
+                                <th className={thNum}>Visits</th>
+                                <th className={thNum}>Revenue</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--border)]">
+                              {referralDetailGroups.map(([name, g]) => (
+                                <tr key={name}>
+                                  <td className={td}>{name}</td>
+                                  <td className={tdNum}>{g.patients}</td>
+                                  <td className={tdNum}>{g.visits}</td>
+                                  <td className={tdNum}>{formatINR(g.revenuePaise)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </>
+                        ) : (
+                          <>
+                            <thead className="bg-[var(--paper)]">
+                              <tr>
+                                <th className={th}>Patient</th>
+                                <th className={thNum}>Visits</th>
+                                <th className={thNum}>Revenue</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--border)]">
+                              {referralActive.patients.map((p) => (
+                                <tr key={p.patientId}>
+                                  <td className={td}>
+                                    {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                                  </td>
+                                  <td className={tdNum}>{p.visitCount}</td>
+                                  <td className={tdNum}>{formatINR(p.revenuePaise)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </>
+                        )}
+                      </table>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <p className="py-8 text-center text-sm text-[var(--muted)]">No referral data yet.</p>

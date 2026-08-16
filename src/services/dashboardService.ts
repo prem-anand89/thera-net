@@ -1,4 +1,4 @@
-import type { UUID, Visit } from '@/domain/types';
+import { REFERRING_SOURCE_LABELS, type UUID, type Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { currentWeekRange, monthDateRange, type FyMonth } from '@/domain/fiscalYear';
 import { daysSince, groupOpenPackages, isStale, STALE_PACKAGE_DAYS } from '@/domain/packageTracking';
@@ -20,6 +20,7 @@ export interface OpenPackageRow {
   stale: boolean;
   /** Therapist who logged the package's first session — for "my open packages" scoping. */
   startedByTherapistId: UUID;
+  startedByTherapistName: string;
 }
 
 export interface OutstandingInvoiceRow {
@@ -66,6 +67,44 @@ export interface ServiceUsageRow {
 export interface ModalityUsageRow {
   modality: string;
   count: number;
+}
+
+export interface ConditionUsagePatientRow {
+  patientId: UUID;
+  patientName: string;
+  mrno: string;
+  visitCount: number;
+  revenuePaise: Paise;
+}
+
+export interface ConditionUsageRow {
+  condition: string;
+  count: number;
+  patients: ConditionUsagePatientRow[];
+}
+
+/** condition is free text (therapists type it in, no fixed list) — capping
+ *  to the top N and folding the rest into "Other" keeps this chartable
+ *  without inventing a taxonomy that doesn't exist. One slot short of
+ *  SERIES_COLORS' 8 so "Other" itself gets its own stable color. */
+export const CONDITION_TOP_N = 7;
+
+export interface ReferralSourcePatientRow {
+  patientId: UUID;
+  patientName: string;
+  mrno: string;
+  /** patient.referringSourceDetail — the doctor/hospital name for those two sources, free text otherwise. */
+  detail: string | null;
+  visitCount: number;
+  revenuePaise: Paise;
+}
+
+export interface ReferralSourceStat {
+  source: string;
+  count: number;
+  revenuePaise: Paise;
+  avgRevenuePaise: Paise;
+  patients: ReferralSourcePatientRow[];
 }
 
 export interface RecentVisitRow {
@@ -144,14 +183,11 @@ export interface SingleVisitPatientRow {
   serviceName: string;
   visitDate: string;
   daysSince: number;
-}
-
-export interface RecurringPatientRow {
-  patientId: UUID;
-  patientName: string;
-  mrno: string;
-  visitCount: number;
-  lastVisitOn: string;
+  phone: string | null;
+  primaryCondition: string | null;
+  noReturnReasonId: UUID | null;
+  noReturnReasonName: string | null;
+  noReturnReasonClosed: boolean;
 }
 
 export type PendingWorkKind = 'stale_package' | 'outstanding_payment' | 'incomplete_note';
@@ -219,13 +255,15 @@ export function createDashboardService(repos: Repos) {
       // package's earlier sessions and miscount its progress (or resurrect
       // a completed package as open). Volume is small; visits.list scans
       // the clinic index either way.
-      const [visits, catalog, patients] = await Promise.all([
+      const [visits, catalog, patients, therapists] = await Promise.all([
         repos.visits.list({ clinicId }),
         repos.catalog.list(clinicId, true),
         repos.patients.list(clinicId),
+        repos.therapists.list(clinicId, true),
       ]);
       const serviceName = new Map(catalog.map((c) => [c.id, c.name]));
       const patientById = new Map(patients.map((p) => [p.id, p]));
+      const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
 
       return groupOpenPackages(visits)
         .map((g) => {
@@ -243,6 +281,7 @@ export function createDashboardService(repos: Repos) {
             daysSinceLastVisit: daysSince(g.lastVisitOn),
             stale: isStale(g.lastVisitOn),
             startedByTherapistId: g.startedByTherapistId,
+            startedByTherapistName: therapistNameById.get(g.startedByTherapistId) ?? 'Unknown',
           };
         })
         .sort((a, b) => b.daysSinceLastVisit - a.daysSinceLastVisit);
@@ -403,6 +442,76 @@ export function createDashboardService(repos: Repos) {
       return [...counts.entries()]
         .map(([modality, count]) => ({ modality, count }))
         .sort((a, b) => b.count - a.count);
+    },
+
+    /**
+     * What's actually being treated, all-time — grouped by Visit.condition
+     * (free text, trimmed only, no other normalization since anything
+     * fuzzier risks merging genuinely different conditions). Top
+     * CONDITION_TOP_N by visit count keep their own slice; everything else
+     * folds into "Other" rather than fragmenting into a long low-value
+     * tail. Each row carries its contributing patients (name/mrno/visits/
+     * revenue) for a drill-down list, "Other"'s patients spanning every
+     * folded condition.
+     */
+    async conditionUsage(clinicId: UUID): Promise<ConditionUsageRow[]> {
+      const [visits, patients] = await Promise.all([
+        repos.visits.list({ clinicId }),
+        repos.patients.list(clinicId),
+      ]);
+      const patientById = new Map(patients.map((p) => [p.id, p]));
+
+      const byCondition = new Map<string, { count: number; patients: Map<UUID, ConditionUsagePatientRow> }>();
+      for (const v of visits) {
+        const condition = v.condition?.trim() || 'Unspecified';
+        const entry = byCondition.get(condition) ?? { count: 0, patients: new Map() };
+        entry.count += 1;
+        const patient = patientById.get(v.patientId);
+        const patientRow = entry.patients.get(v.patientId) ?? {
+          patientId: v.patientId,
+          patientName: patient?.name ?? 'Unknown',
+          mrno: patient?.mrno ?? '—',
+          visitCount: 0,
+          revenuePaise: 0 as Paise,
+        };
+        patientRow.visitCount += 1;
+        patientRow.revenuePaise = (patientRow.revenuePaise + v.actualBillPaise) as Paise;
+        entry.patients.set(v.patientId, patientRow);
+        byCondition.set(condition, entry);
+      }
+
+      const ranked = [...byCondition.entries()].sort((a, b) => b[1].count - a[1].count);
+      const top = ranked.slice(0, CONDITION_TOP_N);
+      const rest = ranked.slice(CONDITION_TOP_N);
+
+      const rows: ConditionUsageRow[] = top.map(([condition, { count, patients: patientRows }]) => ({
+        condition,
+        count,
+        patients: [...patientRows.values()].sort((a, b) => b.revenuePaise - a.revenuePaise),
+      }));
+
+      if (rest.length > 0) {
+        const otherPatients = new Map<UUID, ConditionUsagePatientRow>();
+        let otherCount = 0;
+        for (const [, { count, patients: patientRows }] of rest) {
+          otherCount += count;
+          for (const [patientId, row] of patientRows) {
+            const existing = otherPatients.get(patientId);
+            otherPatients.set(patientId, {
+              ...row,
+              visitCount: (existing?.visitCount ?? 0) + row.visitCount,
+              revenuePaise: ((existing?.revenuePaise ?? 0) + row.revenuePaise) as Paise,
+            });
+          }
+        }
+        rows.push({
+          condition: 'Other',
+          count: otherCount,
+          patients: [...otherPatients.values()].sort((a, b) => b.revenuePaise - a.revenuePaise),
+        });
+      }
+
+      return rows;
     },
 
     /**
@@ -626,13 +735,15 @@ export function createDashboardService(repos: Repos) {
       clinicId: UUID,
       thresholdDays = STALE_PACKAGE_DAYS
     ): Promise<SingleVisitPatientRow[]> {
-      const [visits, patients, catalog] = await Promise.all([
+      const [visits, patients, catalog, reasons] = await Promise.all([
         repos.visits.list({ clinicId }),
         repos.patients.list(clinicId),
         repos.catalog.list(clinicId, true),
+        repos.noReturnReasonCatalog.list(clinicId, true),
       ]);
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
+      const reasonById = new Map(reasons.map((r) => [r.id, r]));
 
       const rows: SingleVisitPatientRow[] = [];
       for (const [patientId, patientVisits] of groupByPatient(visits)) {
@@ -641,6 +752,7 @@ export function createDashboardService(repos: Repos) {
         const since = daysSince(v.visitDate);
         if (since <= thresholdDays) continue;
         const patient = patientById.get(patientId);
+        const reason = patient?.noReturnReasonId ? reasonById.get(patient.noReturnReasonId) : undefined;
         rows.push({
           patientId,
           patientName: patient?.name ?? 'Unknown',
@@ -648,44 +760,14 @@ export function createDashboardService(repos: Repos) {
           serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
           visitDate: v.visitDate,
           daysSince: since,
+          phone: patient?.phone ?? null,
+          primaryCondition: patient?.primaryCondition ?? null,
+          noReturnReasonId: reason?.id ?? null,
+          noReturnReasonName: reason?.name ?? null,
+          noReturnReasonClosed: reason?.isClosed ?? false,
         });
       }
       return rows.sort((a, b) => b.daysSince - a.daysSince);
-    },
-
-    /**
-     * Patients with several visits in a recent rolling window — the clinic's
-     * currently-engaged regulars, surfaced for recognition or an upsell
-     * conversation rather than a retention worry.
-     */
-    async recurringPatients(
-      clinicId: UUID,
-      minVisits = 3,
-      windowDays = 30
-    ): Promise<RecurringPatientRow[]> {
-      const [visits, patients] = await Promise.all([
-        repos.visits.list({ clinicId }),
-        repos.patients.list(clinicId),
-      ]);
-      const patientById = new Map(patients.map((p) => [p.id, p]));
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - windowDays);
-      const cutoffStr = cutoff.toISOString().slice(0, 10);
-      const recent = visits.filter((v) => v.visitDate >= cutoffStr);
-
-      const rows: RecurringPatientRow[] = [];
-      for (const [patientId, patientVisits] of groupByPatient(recent)) {
-        if (patientVisits.length < minVisits) continue;
-        const patient = patientById.get(patientId);
-        rows.push({
-          patientId,
-          patientName: patient?.name ?? 'Unknown',
-          mrno: patient?.mrno ?? '—',
-          visitCount: patientVisits.length,
-          lastVisitOn: patientVisits.map((v) => v.visitDate).sort().at(-1)!,
-        });
-      }
-      return rows.sort((a, b) => b.visitCount - a.visitCount);
     },
 
     /**
@@ -820,30 +902,49 @@ export function createDashboardService(repos: Repos) {
       return { newPackages, newPatients };
     },
 
-    async referralSourceStats(
-      clinicId: UUID
-    ): Promise<Array<{ source: string; count: number; revenuePaise: Paise; avgRevenuePaise: Paise }>> {
+    /**
+     * Per-source visit/revenue totals, plus each source's contributing
+     * patients (with their referringSourceDetail free text) so the
+     * dashboard can drill down: Doctor/Hospital referral break down by
+     * the referring doctor/hospital name, every other source lists its
+     * patients directly. Referral source lives on Patient (one current
+     * value, not per-visit), so "revenue from a source" sums every visit
+     * by patients currently tagged with it.
+     */
+    async referralSourceStats(clinicId: UUID): Promise<ReferralSourceStat[]> {
       const visits = await repos.visits.list({ clinicId });
       const patients = await repos.patients.list(clinicId);
       const patientById = new Map(patients.map((p) => [p.id, p]));
 
-      const bySource = new Map<string, { count: number; revenuePaise: number }>();
+      const bySource = new Map<string, { count: number; revenuePaise: number; patients: Map<UUID, ReferralSourcePatientRow> }>();
       for (const v of visits) {
         const patient = patientById.get(v.patientId);
         const source = patient?.referringSource ?? null;
-        const sourceLabel = source ? (source === 'hospital_referral' ? 'Hospital referral' : source === 'doctor_referral' ? 'Doctor referral' : source) : 'Unknown';
-        const entry = bySource.get(sourceLabel) ?? { count: 0, revenuePaise: 0 };
+        const sourceLabel = source ? REFERRING_SOURCE_LABELS[source] : 'Unknown';
+        const entry = bySource.get(sourceLabel) ?? { count: 0, revenuePaise: 0, patients: new Map() };
         entry.count += 1;
         entry.revenuePaise += v.actualBillPaise;
+        const patientRow = entry.patients.get(v.patientId) ?? {
+          patientId: v.patientId,
+          patientName: patient?.name ?? 'Unknown',
+          mrno: patient?.mrno ?? '—',
+          detail: patient?.referringSourceDetail ?? null,
+          visitCount: 0,
+          revenuePaise: 0 as Paise,
+        };
+        patientRow.visitCount += 1;
+        patientRow.revenuePaise = (patientRow.revenuePaise + v.actualBillPaise) as Paise;
+        entry.patients.set(v.patientId, patientRow);
         bySource.set(sourceLabel, entry);
       }
 
       return Array.from(bySource.entries())
-        .map(([source, { count, revenuePaise }]) => ({
+        .map(([source, { count, revenuePaise, patients: patientRows }]) => ({
           source,
           count,
           revenuePaise: revenuePaise as Paise,
           avgRevenuePaise: Math.round(revenuePaise / count) as Paise,
+          patients: [...patientRows.values()].sort((a, b) => b.revenuePaise - a.revenuePaise),
         }))
         .sort((a, b) => b.count - a.count);
     },
