@@ -3,6 +3,7 @@ import type {
   Clinic,
   Therapist,
   CatalogItem,
+  NoReturnReasonItem,
   Patient,
   Visit,
   Invoice,
@@ -16,6 +17,7 @@ import type {
   ClinicRepo,
   TherapistRepo,
   CatalogRepo,
+  NoReturnReasonCatalogRepo,
   PatientRepo,
   VisitRepo,
   VisitFilter,
@@ -83,6 +85,15 @@ const catalog: CatalogRepo = {
   },
   get: (id) => db.service_catalog.get(id),
   put: (item) => putWithOutbox('service_catalog', item),
+};
+
+const noReturnReasonCatalog: NoReturnReasonCatalogRepo = {
+  async list(clinicId, includeInactive = false) {
+    const all = await db.no_return_reason_catalog.where('clinicId').equals(clinicId).toArray();
+    return all.filter((r) => includeInactive || r.active).sort((a, b) => a.name.localeCompare(b.name));
+  },
+  get: (id) => db.no_return_reason_catalog.get(id),
+  put: (item) => putWithOutbox('no_return_reason_catalog', item),
 };
 
 const patients: PatientRepo = {
@@ -255,6 +266,7 @@ export const repos: Repos = {
   clinics,
   therapists,
   catalog,
+  noReturnReasonCatalog,
   patients,
   visits,
   invoices,
@@ -271,6 +283,7 @@ export type {
   Clinic,
   Therapist,
   CatalogItem,
+  NoReturnReasonItem,
   Patient,
   Visit,
   Invoice,

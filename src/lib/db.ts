@@ -3,6 +3,7 @@ import type {
   Clinic,
   Therapist,
   CatalogItem,
+  NoReturnReasonItem,
   Patient,
   Visit,
   Invoice,
@@ -45,6 +46,7 @@ export type SyncedTable =
   | 'clinics'
   | 'therapists'
   | 'service_catalog'
+  | 'no_return_reason_catalog'
   | 'patients'
   | 'visits'
   | 'invoices'
@@ -68,6 +70,7 @@ export const ALL_SYNCED_TABLES = [
   'clinics',
   'therapists',
   'service_catalog',
+  'no_return_reason_catalog',
   'patients',
   'visits',
   'invoices',
@@ -89,6 +92,7 @@ export const CLIENT_WRITABLE_TABLES = [
   'clinics',
   'therapists',
   'service_catalog',
+  'no_return_reason_catalog',
   'patients',
   'visits',
   'invoice_payments',
@@ -103,6 +107,7 @@ export class ClinicDB extends Dexie {
   clinics!: Table<Clinic, string>;
   therapists!: Table<Therapist, string>;
   service_catalog!: Table<CatalogItem, string>;
+  no_return_reason_catalog!: Table<NoReturnReasonItem, string>;
   patients!: Table<Patient, string>;
   visits!: Table<Visit, string>;
   invoices!: Table<Invoice, string>;
@@ -148,6 +153,9 @@ export class ClinicDB extends Dexie {
       // Re-declared with enrollmentId added — Dexie index changes on an
       // existing table require the full index string at the new version.
       consultation_notes: 'id, clinicId, patientId, visitId, status, enrollmentId',
+    });
+    this.version(9).stores({
+      no_return_reason_catalog: 'id, clinicId',
     });
   }
 }

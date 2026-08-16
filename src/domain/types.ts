@@ -152,6 +152,28 @@ export function effectivePricePerSession(item: Pick<CatalogItem, 'basePricePaise
   return Math.round(item.basePricePaise / item.sessionCount);
 }
 
+/**
+ * A clinic's own list of "why this patient hasn't come back" reasons —
+ * same editable-list shape as CatalogItem (add/deactivate, never delete so
+ * a patient already tagged with one keeps resolving) but without the
+ * pricing fields, since a reason has no session count or price.
+ *
+ * isClosed marks whether this reason means "no longer an active lead"
+ * (e.g. Resolved, Relocated) vs. one worth still following up on (e.g.
+ * Plans to return, Lost contact) — a per-item flag rather than hardcoding
+ * specific reason names, since the list itself is clinic-editable and a
+ * name match would silently break the moment a clinic renames or removes
+ * the item the code was checking for.
+ */
+export interface NoReturnReasonItem {
+  id: UUID;
+  clinicId: UUID;
+  name: string;
+  isClosed: boolean;
+  active: boolean;
+  updatedAt: string;
+}
+
 export type MrnoSource = 'hospital' | 'auto';
 
 export type ReferringSource =
@@ -202,6 +224,10 @@ export interface Patient {
   referringSource?: ReferringSource | null;
   /** Free text alongside referringSource — which doctor, who referred them, which online channel. */
   referringSourceDetail?: string | null;
+  /** Why a single-visit patient hasn't come back — set from the Trends
+   *  dashboard once known. References NoReturnReasonItem, the clinic's own
+   *  editable list. Optional: older cached rows lack the key. */
+  noReturnReasonId?: UUID | null;
   /** Set = hidden from search/pickers; visits keep resolving. Optional: older cached rows lack the key. */
   deletedAt?: string | null;
   updatedAt: string;

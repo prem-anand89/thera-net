@@ -2,6 +2,7 @@ import type {
   Clinic,
   Therapist,
   CatalogItem,
+  NoReturnReasonItem,
   Patient,
   Visit,
   Invoice,
@@ -40,6 +41,12 @@ export interface CatalogRepo {
   list(clinicId: UUID, includeInactive?: boolean): Promise<CatalogItem[]>;
   get(id: UUID): Promise<CatalogItem | undefined>;
   put(item: CatalogItem): Promise<void>;
+}
+
+export interface NoReturnReasonCatalogRepo {
+  list(clinicId: UUID, includeInactive?: boolean): Promise<NoReturnReasonItem[]>;
+  get(id: UUID): Promise<NoReturnReasonItem | undefined>;
+  put(item: NoReturnReasonItem): Promise<void>;
 }
 
 export interface PatientRepo {
@@ -135,6 +142,7 @@ export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
   catalog: CatalogRepo;
+  noReturnReasonCatalog: NoReturnReasonCatalogRepo;
   patients: PatientRepo;
   visits: VisitRepo;
   invoices: InvoiceRepo;

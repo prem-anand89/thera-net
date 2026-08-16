@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { dashboardService } from '@/services';
+import { dashboardService, repos } from '@/services';
 import { CONDITION_TOP_N } from '@/services/dashboardService';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import { monthName, formatDateDMY, fiscalYearOf, monthsOfFiscalYear, type FyMonth } from '@/domain/fiscalYear';
-import { clinicBillingConfig, clinicShareLabels, referringSourceDetailLabel } from '@/domain/types';
+import { clinicBillingConfig, clinicShareLabels, referringSourceDetailLabel, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
 import { SectionCard, StatTile, Pill, PackageThread, th, td, tdNum, thNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
@@ -324,11 +324,53 @@ export function DashboardPage() {
   // null means "show everyone" (the default, and the BarChart itself has
   // no "all" bar to click back to, so a Clear affordance covers that).
   const [singleVisitBucketFilter, setSingleVisitBucketFilter] = useState<number | null>(null);
+  const [hideClosedReasons, setHideClosedReasons] = useState(false);
   const filteredSingleVisit = useMemo(() => {
-    const rows = singleVisitPatients ?? [];
-    if (singleVisitBucketFilter == null) return rows;
-    return rows.filter((p) => bucketIndexOf(p.daysSince, SINGLE_VISIT_BUCKET_EDGES) === singleVisitBucketFilter);
-  }, [singleVisitPatients, singleVisitBucketFilter]);
+    let rows = singleVisitPatients ?? [];
+    if (singleVisitBucketFilter != null) {
+      rows = rows.filter((p) => bucketIndexOf(p.daysSince, SINGLE_VISIT_BUCKET_EDGES) === singleVisitBucketFilter);
+    }
+    if (hideClosedReasons) rows = rows.filter((p) => !p.noReturnReasonClosed);
+    return rows;
+  }, [singleVisitPatients, singleVisitBucketFilter, hideClosedReasons]);
+
+  // The clinic's own "why didn't they come back" list — same editable-list
+  // shape as the service catalog (see Catalog() in SetupPage.tsx), managed
+  // inline here rather than routed through Settings since it's only ever
+  // used from this one spot.
+  const noReturnReasons = useLiveQuery(() => repos.noReturnReasonCatalog.list(clinic.id, true), [clinic.id]);
+  const [manageReasonsOpen, setManageReasonsOpen] = useState(false);
+  const [reasonDraftName, setReasonDraftName] = useState('');
+  const [reasonDraftClosed, setReasonDraftClosed] = useState(false);
+
+  async function addReason() {
+    const name = reasonDraftName.trim();
+    if (!name) return;
+    await repos.noReturnReasonCatalog.put({
+      id: crypto.randomUUID(),
+      clinicId: clinic.id,
+      name,
+      isClosed: reasonDraftClosed,
+      active: true,
+      updatedAt: new Date().toISOString(),
+    });
+    setReasonDraftName('');
+    setReasonDraftClosed(false);
+  }
+
+  async function toggleReasonActive(item: NoReturnReasonItem) {
+    await repos.noReturnReasonCatalog.put({ ...item, active: !item.active, updatedAt: new Date().toISOString() });
+  }
+
+  async function setPatientReason(patientId: string, reasonId: string) {
+    const patient = await repos.patients.get(patientId);
+    if (!patient) return;
+    await repos.patients.put({
+      ...patient,
+      noReturnReasonId: reasonId || null,
+      updatedAt: new Date().toISOString(),
+    });
+  }
 
   return (
     <div className="space-y-5">
@@ -406,10 +448,67 @@ export function DashboardPage() {
             className="scroll-mt-28 md:scroll-mt-20"
           >
             <SectionCard title="Single-visit patients">
-              <p className="mb-3 text-xs text-[var(--muted)]">
-                Exactly one visit on record, more than 14 days ago — click a bar to filter, call from the
-                list, or clear to see everyone.
-              </p>
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <p className="text-xs text-[var(--muted)]">
+                  Exactly one visit on record, more than 14 days ago — click a bar to filter, call from the
+                  list, or log why they didn't return once you know.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setManageReasonsOpen((o) => !o)}
+                  className="shrink-0 text-xs font-medium text-[var(--teal)] hover:underline"
+                >
+                  {manageReasonsOpen ? 'Done' : 'Manage reasons'}
+                </button>
+              </div>
+              {manageReasonsOpen && (
+                <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-3">
+                  <p className="mb-2 text-xs text-[var(--muted)]">
+                    Your clinic's own list — turn ones you don't use off, or add your own. "Counts as closed"
+                    reasons (e.g. Resolved, Relocated) can be hidden from the list below with the checkbox.
+                  </p>
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {(noReturnReasons ?? []).map((r) => (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 pl-2.5 pr-1 text-xs"
+                        style={r.active ? {} : { opacity: 0.5, textDecoration: 'line-through' }}
+                      >
+                        {r.name}
+                        {r.isClosed && <span className="text-[var(--muted)]">(closed)</span>}
+                        <button
+                          type="button"
+                          onClick={() => void toggleReasonActive(r)}
+                          className="rounded-full px-1.5 text-[var(--muted)] hover:bg-[var(--paper)]"
+                          title={r.active ? 'Deactivate' : 'Reactivate'}
+                        >
+                          {r.active ? '×' : '+'}
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={reasonDraftName}
+                      onChange={(e) => setReasonDraftName(e.target.value)}
+                      placeholder="Add a reason…"
+                      className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm"
+                    />
+                    <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                      <input
+                        type="checkbox"
+                        checked={reasonDraftClosed}
+                        onChange={(e) => setReasonDraftClosed(e.target.checked)}
+                      />
+                      Counts as closed
+                    </label>
+                    <button type="button" onClick={() => void addReason()} className="rounded-md bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white">
+                      + Add
+                    </button>
+                  </div>
+                </div>
+              )}
               {singleVisitPatients === undefined ? null : singleVisitPatients.length === 0 ? (
                 <p className="py-6 text-center text-sm text-[var(--muted)]">No lapsed single-visit patients right now.</p>
               ) : (
@@ -426,15 +525,27 @@ export function DashboardPage() {
                       />
                     </div>
                   </div>
-                  {singleVisitBucketFilter != null && (
-                    <button
-                      type="button"
-                      onClick={() => setSingleVisitBucketFilter(null)}
-                      className="mb-2 text-xs font-medium text-[var(--teal)] hover:underline"
-                    >
-                      Showing {SINGLE_VISIT_BUCKET_EDGES[singleVisitBucketFilter].label} only — clear filter
-                    </button>
-                  )}
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    {singleVisitBucketFilter != null ? (
+                      <button
+                        type="button"
+                        onClick={() => setSingleVisitBucketFilter(null)}
+                        className="text-xs font-medium text-[var(--teal)] hover:underline"
+                      >
+                        Showing {SINGLE_VISIT_BUCKET_EDGES[singleVisitBucketFilter].label} only — clear filter
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                    <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                      <input
+                        type="checkbox"
+                        checked={hideClosedReasons}
+                        onChange={(e) => setHideClosedReasons(e.target.checked)}
+                      />
+                      Hide closed reasons
+                    </label>
+                  </div>
                   <div className="max-h-96 divide-y divide-[var(--border)] overflow-y-auto rounded-lg border border-[var(--border)]">
                     {filteredSingleVisit.slice(0, 50).map((p) => (
                       <div key={p.patientId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
@@ -446,8 +557,29 @@ export function DashboardPage() {
                             {p.mrno} · last seen {formatDateDMY(p.visitDate)} · {p.daysSince}d ago
                           </div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
                           {p.primaryCondition && <Pill tone="slate">{p.primaryCondition}</Pill>}
+                          <select
+                            value={p.noReturnReasonId ?? ''}
+                            onChange={(e) => void setPatientReason(p.patientId, e.target.value)}
+                            className="rounded-full border px-2 py-1 text-xs font-medium"
+                            style={
+                              p.noReturnReasonName
+                                ? p.noReturnReasonClosed
+                                  ? { background: 'var(--moss-light)', color: 'var(--moss-strong)', borderColor: 'transparent' }
+                                  : { background: 'var(--amber-light)', color: 'var(--amber)', borderColor: 'transparent' }
+                                : { background: 'var(--surface)', color: 'var(--muted)', borderStyle: 'dashed' }
+                            }
+                          >
+                            <option value="">+ Reason</option>
+                            {(noReturnReasons ?? [])
+                              .filter((r) => r.active || r.id === p.noReturnReasonId)
+                              .map((r) => (
+                                <option key={r.id} value={r.id}>
+                                  {r.name}
+                                </option>
+                              ))}
+                          </select>
                           {p.phone && (
                             <a
                               href={`tel:${p.phone}`}

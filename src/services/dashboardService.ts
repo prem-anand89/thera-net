@@ -185,6 +185,9 @@ export interface SingleVisitPatientRow {
   daysSince: number;
   phone: string | null;
   primaryCondition: string | null;
+  noReturnReasonId: UUID | null;
+  noReturnReasonName: string | null;
+  noReturnReasonClosed: boolean;
 }
 
 export type PendingWorkKind = 'stale_package' | 'outstanding_payment' | 'incomplete_note';
@@ -732,13 +735,15 @@ export function createDashboardService(repos: Repos) {
       clinicId: UUID,
       thresholdDays = STALE_PACKAGE_DAYS
     ): Promise<SingleVisitPatientRow[]> {
-      const [visits, patients, catalog] = await Promise.all([
+      const [visits, patients, catalog, reasons] = await Promise.all([
         repos.visits.list({ clinicId }),
         repos.patients.list(clinicId),
         repos.catalog.list(clinicId, true),
+        repos.noReturnReasonCatalog.list(clinicId, true),
       ]);
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
+      const reasonById = new Map(reasons.map((r) => [r.id, r]));
 
       const rows: SingleVisitPatientRow[] = [];
       for (const [patientId, patientVisits] of groupByPatient(visits)) {
@@ -747,6 +752,7 @@ export function createDashboardService(repos: Repos) {
         const since = daysSince(v.visitDate);
         if (since <= thresholdDays) continue;
         const patient = patientById.get(patientId);
+        const reason = patient?.noReturnReasonId ? reasonById.get(patient.noReturnReasonId) : undefined;
         rows.push({
           patientId,
           patientName: patient?.name ?? 'Unknown',
@@ -756,6 +762,9 @@ export function createDashboardService(repos: Repos) {
           daysSince: since,
           phone: patient?.phone ?? null,
           primaryCondition: patient?.primaryCondition ?? null,
+          noReturnReasonId: reason?.id ?? null,
+          noReturnReasonName: reason?.name ?? null,
+          noReturnReasonClosed: reason?.isClosed ?? false,
         });
       }
       return rows.sort((a, b) => b.daysSince - a.daysSince);

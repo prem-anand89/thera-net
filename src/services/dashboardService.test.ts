@@ -7,6 +7,7 @@ import type {
   ConsultationNote,
   Invoice,
   InvoicePayment,
+  NoReturnReasonItem,
   Payment,
   Patient,
   Therapist,
@@ -64,6 +65,7 @@ function makeFakeRepos() {
       },
     ],
   ]);
+  const reasons = new Map<string, NoReturnReasonItem>();
   const visits = new Map<string, Visit>();
   const invoices = new Map<string, Invoice>();
   const invoicePayments = new Map<string, InvoicePayment>();
@@ -74,6 +76,12 @@ function makeFakeRepos() {
     clinics: { get: async (id) => (id === clinic.id ? clinic : undefined), list: async () => [clinic], put: async () => {}, putLocal: async () => {} },
     therapists: { list: async () => therapists, put: async () => {}, removeLocal: async () => {} },
     catalog: { list: async () => catalog, get: async (id) => catalog.find((c) => c.id === id), put: async () => {} },
+    noReturnReasonCatalog: {
+      list: async (_c, includeInactive = false) =>
+        [...reasons.values()].filter((r) => includeInactive || r.active),
+      get: async (id) => reasons.get(id),
+      put: async (r) => void reasons.set(r.id, r),
+    },
     patients: {
       get: async (id) => patients.get(id),
       getByMrno: async (_c, mrno) => [...patients.values()].find((p) => p.mrno === mrno),
@@ -145,7 +153,7 @@ function makeFakeRepos() {
       put: async () => {},
     },
   };
-  return { repos, visits, invoices, invoicePayments, payments, patients, consultationNotes: consultationNotesStore };
+  return { repos, visits, invoices, invoicePayments, payments, patients, reasons, consultationNotes: consultationNotesStore };
 }
 
 const baseVisit = (id: string, overrides: Partial<Visit>): Visit => ({
@@ -780,6 +788,38 @@ describe('dashboardService.singleVisitPatients', () => {
     fake.visits.set('v2', baseVisit('v2', { visitDate: '2020-02-01' }));
     const svc = createDashboardService(fake.repos);
     expect(await svc.singleVisitPatients('clinic-1')).toEqual([]);
+  });
+
+  it('joins the patient\'s no-return reason when set', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2020-01-01' }));
+    fake.reasons.set('r1', {
+      id: 'r1',
+      clinicId: 'clinic-1',
+      name: 'Relocated',
+      isClosed: true,
+      active: true,
+      updatedAt: '',
+    });
+    const patient = await fake.repos.patients.get('pat-1');
+    await fake.repos.patients.put({ ...patient!, noReturnReasonId: 'r1' });
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.singleVisitPatients('clinic-1');
+    expect(rows[0]).toMatchObject({
+      noReturnReasonId: 'r1',
+      noReturnReasonName: 'Relocated',
+      noReturnReasonClosed: true,
+    });
+  });
+
+  it('leaves the reason fields null when nothing is set', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2020-01-01' }));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.singleVisitPatients('clinic-1');
+    expect(rows[0]).toMatchObject({
+      noReturnReasonId: null,
+      noReturnReasonName: null,
+      noReturnReasonClosed: false,
+    });
   });
 });
 
