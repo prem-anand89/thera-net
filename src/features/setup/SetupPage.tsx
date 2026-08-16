@@ -573,18 +573,18 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
                 onChange={(e) => set({ partnerHospitalName: e.target.value || null })}
               />
             </Field>
-            <Field label="Your share label (report column, e.g. BM)">
+            <Field label="Your share label (report column, e.g. Clinic)">
               <input
                 className={inputCls}
-                placeholder="BM"
+                placeholder="Clinic"
                 value={form.ownShareLabel ?? ''}
                 onChange={(e) => set({ ownShareLabel: e.target.value || null })}
               />
             </Field>
-            <Field label="Partner share label (report column, e.g. HV)">
+            <Field label="Partner share label (report column, e.g. Hospital)">
               <input
                 className={inputCls}
-                placeholder="HV"
+                placeholder="Hospital"
                 value={form.partnerShareLabel ?? ''}
                 onChange={(e) => set({ partnerShareLabel: e.target.value || null })}
               />

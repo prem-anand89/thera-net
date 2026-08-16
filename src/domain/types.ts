@@ -90,13 +90,13 @@ export const DEFAULT_VISIT_COLUMN_PREFS: Record<VisitColumnKey, boolean> = {
   service: true,
 };
 
-/** Resolve a clinic's share-label abbreviations, defaulting to BM/HV. */
+/** Resolve a clinic's share-label abbreviations, defaulting to clinic-neutral labels. */
 export function clinicShareLabels(
   clinic: Pick<Clinic, 'ownShareLabel' | 'partnerShareLabel'>
 ): { own: string; partner: string } {
   return {
-    own: clinic.ownShareLabel?.trim() || 'BM',
-    partner: clinic.partnerShareLabel?.trim() || 'HV',
+    own: clinic.ownShareLabel?.trim() || 'Clinic',
+    partner: clinic.partnerShareLabel?.trim() || 'Partner',
   };
 }
 

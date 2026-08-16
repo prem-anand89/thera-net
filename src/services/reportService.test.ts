@@ -123,12 +123,12 @@ describe('reportService.monthly — therapist split', () => {
 });
 
 describe('reportService.toCsv — configurable share labels', () => {
-  it('defaults the share columns to BM/HV', async () => {
+  it('defaults the share columns to Clinic/Partner', async () => {
     const report = await createReportService(makeFakeRepos([visit({})])).monthly(CLINIC, JULY);
     const header = createReportService(makeFakeRepos([])).toCsv(report).split('\n')[0];
-    expect(header).toContain('"BM Share"');
-    expect(header).toContain('"Post Tax BM"');
-    expect(header).toContain('"HV Share"');
+    expect(header).toContain('"Clinic Share"');
+    expect(header).toContain('"Post Tax Clinic"');
+    expect(header).toContain('"Partner Share"');
   });
 
   it('renders the clinic-configured labels when provided', async () => {
@@ -151,9 +151,9 @@ describe('reportService.toCsv — configurable share labels', () => {
 });
 
 describe('clinicShareLabels', () => {
-  it('defaults to BM/HV when unset or blank', () => {
-    expect(clinicShareLabels({ ownShareLabel: null, partnerShareLabel: undefined })).toEqual({ own: 'BM', partner: 'HV' });
-    expect(clinicShareLabels({ ownShareLabel: '  ', partnerShareLabel: '' })).toEqual({ own: 'BM', partner: 'HV' });
+  it('defaults to Clinic/Partner when unset or blank', () => {
+    expect(clinicShareLabels({ ownShareLabel: null, partnerShareLabel: undefined })).toEqual({ own: 'Clinic', partner: 'Partner' });
+    expect(clinicShareLabels({ ownShareLabel: '  ', partnerShareLabel: '' })).toEqual({ own: 'Clinic', partner: 'Partner' });
   });
 
   it('uses configured labels, trimmed', () => {

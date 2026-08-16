@@ -206,8 +206,12 @@ export function createDashboardService(repos: Repos) {
   const reportService = createReportService(repos);
 
   return {
-    revenueTrend(clinicId: UUID, months = 6): Promise<MonthlyReport[]> {
-      return Promise.all(lastNMonths(months).map((m) => reportService.monthly(clinicId, m)));
+    /** Either a rolling window of `months` calendar months (default 6), or
+     *  an explicit list of months (e.g. a fiscal year via monthsOfFiscalYear,
+     *  trimmed to not run past the current month). */
+    revenueTrend(clinicId: UUID, monthsOrList: number | FyMonth[] = 6): Promise<MonthlyReport[]> {
+      const list = Array.isArray(monthsOrList) ? monthsOrList : lastNMonths(monthsOrList);
+      return Promise.all(list.map((m) => reportService.monthly(clinicId, m)));
     },
 
     async openPackages(clinicId: UUID): Promise<OpenPackageRow[]> {
@@ -816,21 +820,31 @@ export function createDashboardService(repos: Repos) {
       return { newPackages, newPatients };
     },
 
-    async referralSourceStats(clinicId: UUID): Promise<Array<{ source: string; count: number }>> {
+    async referralSourceStats(
+      clinicId: UUID
+    ): Promise<Array<{ source: string; count: number; revenuePaise: Paise; avgRevenuePaise: Paise }>> {
       const visits = await repos.visits.list({ clinicId });
       const patients = await repos.patients.list(clinicId);
       const patientById = new Map(patients.map((p) => [p.id, p]));
 
-      const sourceCounts = new Map<string | null, number>();
+      const bySource = new Map<string, { count: number; revenuePaise: number }>();
       for (const v of visits) {
         const patient = patientById.get(v.patientId);
         const source = patient?.referringSource ?? null;
         const sourceLabel = source ? (source === 'hospital_referral' ? 'Hospital referral' : source === 'doctor_referral' ? 'Doctor referral' : source) : 'Unknown';
-        sourceCounts.set(sourceLabel, (sourceCounts.get(sourceLabel) ?? 0) + 1);
+        const entry = bySource.get(sourceLabel) ?? { count: 0, revenuePaise: 0 };
+        entry.count += 1;
+        entry.revenuePaise += v.actualBillPaise;
+        bySource.set(sourceLabel, entry);
       }
 
-      return Array.from(sourceCounts.entries())
-        .map(([source, count]) => ({ source: source ?? 'Unknown', count }))
+      return Array.from(bySource.entries())
+        .map(([source, { count, revenuePaise }]) => ({
+          source,
+          count,
+          revenuePaise: revenuePaise as Paise,
+          avgRevenuePaise: Math.round(revenuePaise / count) as Paise,
+        }))
         .sort((a, b) => b.count - a.count);
     },
   };

@@ -135,7 +135,7 @@ export function createReportService(repos: Repos) {
         therapistSplit?: boolean;
       } = {}
     ): string {
-      const labels = opts.labels ?? { own: 'BM', partner: 'HV' };
+      const labels = opts.labels ?? { own: 'Clinic', partner: 'Partner' };
       const hospitalSplit = opts.hospitalSplit ?? true;
       const therapistSplit = opts.therapistSplit ?? true;
 

@@ -5,7 +5,7 @@ import { dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
-import { monthName, formatDateDMY } from '@/domain/fiscalYear';
+import { monthName, formatDateDMY, fiscalYearOf, monthsOfFiscalYear, type FyMonth } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
 import { SectionCard, StatTile, Pill } from '@/components/ui';
@@ -105,7 +105,30 @@ export function DashboardPage() {
   const { hospitalSplit } = clinicBillingConfig(clinic);
   const revenueLabel = hospitalSplit ? `Post-Tax ${labels.own}` : 'Revenue';
 
-  const trend = useLiveQuery(() => dashboardService.revenueTrend(clinic.id), [clinic.id]);
+  // Revenue trend period — the KPI strip's "this/last month" figures only
+  // ever read the final two entries, which stay the same regardless of how
+  // far back the window extends, so one query serves both the KPI strip and
+  // the trend chart below.
+  const [trendPeriod, setTrendPeriod] = useState<'6m' | '1y' | 'fy'>('6m');
+  const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
+  const trendMonthsArg = useMemo((): number | FyMonth[] => {
+    if (trendPeriod === '1y') return 12;
+    if (trendPeriod === 'fy') {
+      const now = new Date();
+      const nowKey = now.getFullYear() * 12 + now.getMonth() + 1;
+      return monthsOfFiscalYear(currentFy.startYear, clinic.fyStartMonth).filter(
+        (m) => m.year * 12 + m.month <= nowKey
+      );
+    }
+    return 6;
+  }, [trendPeriod, currentFy.startYear, clinic.fyStartMonth]);
+  const trendPeriodLabel =
+    trendPeriod === '6m' ? 'last 6 months' : trendPeriod === '1y' ? 'last 12 months' : `FY ${currentFy.label}`;
+
+  const trend = useLiveQuery(
+    () => dashboardService.revenueTrend(clinic.id, trendMonthsArg),
+    [clinic.id, trendMonthsArg]
+  );
   const singleVisitPatients = useLiveQuery(
     () => dashboardService.singleVisitPatients(clinic.id),
     [clinic.id]
@@ -180,8 +203,11 @@ export function DashboardPage() {
   // and monthlyNewCounts pair already being fetched for the chart/other
   // KPIs — their last two entries are this month and last, so no extra
   // query for either KPI card.
-  const revenueRow = (report: MonthlyReport | undefined) =>
-    report ? (scope.isClinicWideView ? report.total.postTaxPaise : myMonthRow(report.rows).postTaxPaise) : null;
+  const revenueRow = (report: MonthlyReport | undefined) => {
+    if (!report) return null;
+    const row = scope.isClinicWideView ? report.total : myMonthRow(report.rows);
+    return hospitalSplit ? row.postTaxPaise : row.billPaise;
+  };
   const revenueThisMonth = trend ? revenueRow(trend[trend.length - 1]) : null;
   const revenueLastMonth = trend && trend.length > 1 ? revenueRow(trend[trend.length - 2]) : null;
 
@@ -311,12 +337,6 @@ export function DashboardPage() {
         <KpiCard
           label={scope.isClinicWideView ? 'Packages this month' : 'My packages this month'}
           value={newPatientsThisMonth?.newPackages ?? '—'}
-          trendPct={
-            newPatientsThisMonth && newPatientsLastMonth
-              ? pctChange(newPatientsThisMonth.newPackages, newPatientsLastMonth.newPackages)
-              : null
-          }
-          trendLabel="vs last month"
         />
       </div>
 
@@ -476,26 +496,80 @@ export function DashboardPage() {
             }}
             className="scroll-mt-28 md:scroll-mt-20"
           >
-            <SectionCard title={scope.isClinicWideView ? `Revenue trend — last 6 months (${revenueLabel})` : `My revenue trend — last 6 months (${revenueLabel})`}>
+            <SectionCard
+              title={scope.isClinicWideView ? `Revenue trend — ${trendPeriodLabel} (${revenueLabel})` : `My revenue trend — ${trendPeriodLabel} (${revenueLabel})`}
+            >
+              <div className="mb-3 flex gap-1.5">
+                {(
+                  [
+                    { key: '6m', label: '6 months' },
+                    { key: '1y', label: '1 year' },
+                    { key: 'fy', label: `FY ${currentFy.label}` },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setTrendPeriod(opt.key)}
+                    className="rounded-full border px-3 py-1 text-xs font-medium"
+                    style={{
+                      background: trendPeriod === opt.key ? 'var(--teal-light)' : 'var(--surface)',
+                      borderColor: trendPeriod === opt.key ? 'transparent' : 'var(--border)',
+                      color: trendPeriod === opt.key ? 'var(--teal)' : 'var(--muted)',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
               {trend && !hasEnoughTrendHistory && (
                 <p className="py-8 text-center text-sm text-[var(--muted)]">
                   Not enough data yet — a trend needs at least two months of visits to be meaningful.
                 </p>
               )}
               {trend && hasEnoughTrendHistory && (
-                <BarChart
-                  categories={categories}
-                  series={[
-                    {
-                      label: revenueLabel,
-                      color: SERIES_COLORS[0],
-                      values: scope.isClinicWideView
-                        ? trend.map((r) => r.total.postTaxPaise)
-                        : trend.map((r) => myMonthRow(r.rows).postTaxPaise),
-                    },
-                  ]}
-                  formatValue={formatINR}
-                />
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+                      {revenueLabel}
+                    </h3>
+                    <BarChart
+                      categories={categories}
+                      series={[
+                        {
+                          label: revenueLabel,
+                          color: SERIES_COLORS[0],
+                          values: scope.isClinicWideView
+                            ? trend.map((r) => (hospitalSplit ? r.total.postTaxPaise : r.total.billPaise))
+                            : trend.map((r) => {
+                                const row = myMonthRow(r.rows);
+                                return hospitalSplit ? row.postTaxPaise : row.billPaise;
+                              }),
+                        },
+                      ]}
+                      formatValue={formatINR}
+                    />
+                  </div>
+                  {/* Alongside revenue, not folded into the same chart — visit
+                      count and rupee totals are wildly different scales, and
+                      seeing both shapes side by side is what actually answers
+                      "did revenue move because of price or volume". */}
+                  <div>
+                    <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Visits</h3>
+                    <BarChart
+                      categories={categories}
+                      series={[
+                        {
+                          label: 'Visits',
+                          color: SERIES_COLORS[1],
+                          values: scope.isClinicWideView
+                            ? trend.map((r) => r.total.visitCount)
+                            : trend.map((r) => myMonthRow(r.rows).visitCount),
+                        },
+                      ]}
+                    />
+                  </div>
+                </div>
               )}
             </SectionCard>
           </div>
@@ -577,15 +651,33 @@ export function DashboardPage() {
           >
             <SectionCard title="Referral sources">
               <p className="mb-4 text-xs text-[var(--muted)]">
-                Where your patients are coming from — hospital referrals, doctor referrals, and other sources.
+                Where your patients are coming from, and how much revenue each source has actually brought in.
               </p>
               {referralSources && referralSources.length > 0 ? (
-                <PieChart
-                  data={referralSources.map((r) => ({
-                    label: r.source,
-                    value: r.count,
-                  }))}
-                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <PieChart
+                    data={referralSources.map((r) => ({
+                      label: r.source,
+                      value: r.count,
+                    }))}
+                  />
+                  <ul className="space-y-2">
+                    {referralSources.map((r) => (
+                      <li key={r.source} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-[var(--ink)]">{r.source}</span>
+                        <span className="flex items-center gap-3">
+                          <span className="font-num text-[var(--muted)]">{r.count} visits</span>
+                          <span className="font-num text-[var(--muted)]" title="Total revenue from this source">
+                            {formatINR(r.revenuePaise)}
+                          </span>
+                          <span className="font-num text-[var(--muted)]" title="Average revenue per visit from this source">
+                            avg {formatINR(r.avgRevenuePaise)}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : (
                 <p className="py-8 text-center text-sm text-[var(--muted)]">No referral data yet.</p>
               )}

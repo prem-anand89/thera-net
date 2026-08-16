@@ -1561,3 +1561,105 @@ needing the test file's shared fake-repos fixture extended with a real
 empty list), production build clean, real headless-browser renders of
 the 5-tile KPI strip and rail-free jump-nav at both desktop and mobile
 widths.
+
+## Trends round 3: fix the standalone-clinic revenue bug, trim/extend sections (2026-08-16)
+
+Follow-up to round 2, same day. Triggered by "why Post-Tax, why BM" —
+which turned out to be a real bug, not just a labeling question.
+
+**Root cause, verified against the live database before touching
+anything.** `create_clinic_with_admin` (the signup RPC every new clinic
+goes through) hardcoded `bm_split_pct=50, tax_pct=18` regardless of
+whether the clinic actually has a hospital partner. Every dashboard/report
+"Revenue" figure reads `postTaxPaise`, which is computed from those two
+numbers at billing time — so a standalone clinic that never opens
+Settings → Billing silently saw ~41% of its actual gross bill (50% split
+× 82% after 18% tax) labeled plain "Revenue," no indication a reduction
+was applied. Confirmed all 3 live clinics had `has_partner=false` but
+non-neutral split/tax values, and zero visits recorded anywhere (nothing
+to reconcile). Migration `20260816000004_fix_billing_defaults.sql`:
+new clinics now default to `bm_split_pct=100, tax_pct=0` (no phantom
+reduction unless an admin explicitly configures a real partner
+arrangement), column defaults updated to match, and the 3 existing
+clinics reset to the same neutral values — user explicitly chose the
+more thorough option (reset existing clinics too) over the
+leave-as-is default. Verified locally against all 36 migrations replayed
+in order before deploying to the live project.
+
+**Revenue now branches on `hospitalSplit`, not just its label.** The
+label already said `Revenue` vs `Post-Tax {own}` correctly; the
+*value* didn't — `DashboardPage`'s KPI tile, revenue trend chart, and
+`TherapistComparisonCard`'s revenue chart all read `postTaxPaise`
+unconditionally. Now: gross `billPaise` for standalone clinics,
+`postTaxPaise` (post-split, post-tax) only for clinics with a real
+hospital partner. Every other `postTaxPaise` display site (Reports page
+settlement card, `MonthlyReportTable`, CSV exports) turned out to
+already be correctly gated behind `hospitalSplit` — checked each one, no
+change needed there.
+
+**"BM"/"HV" fallback labels replaced with clinic-neutral "Clinic"/
+"Partner".** Those were inherited from the app's original single-pilot-
+clinic origin (Beyond Mechanics / Health Valley), not a sensible default
+for a new clinic that hasn't set its own share labels — fixed in
+`clinicShareLabels()`, `reportService.toCsv()`'s fallback, `Monthly
+ReportTable`'s default props, and the Settings billing-tab placeholder
+text.
+
+**Net Revenue expenses panel — designed, not built, per explicit
+request ("design it now, build separately").** For a standalone clinic,
+Gross billed amount is the right top-line Revenue figure, but it isn't
+Net Revenue — rent and therapist salaries aren't in the data model at
+all. Proposed shape for a future pass: a `clinic_expenses` table
+(`clinic_id`, `category` enum — `rent`/`salaries`/`utilities`/`other` —
+`amount_paise`, `effective_month` or a recurring flag, `notes`), a
+Settings → Expenses tab to maintain it, and a derived `Net Revenue =
+Gross billed − sum(expenses for the month)` KPI/section on the
+Dashboard, gated the same way the hospital-split settlement card is
+(`!hospitalSplit` this time, since it's meaningless once a hospital
+partner is already taking a cut upstream). Deliberately not built this
+round — real money math deserves its own review pass, not a rider on a
+bug-fix commit.
+
+**Packages KPI reverted to a bare count** (no vs-last-month trend
+badge) — the "New patients"-style trend framing didn't earn its keep for
+a number this small and lumpy month to month.
+
+**Referral sources paired with revenue.** `referralSourceStats` now
+returns `revenuePaise`/`avgRevenuePaise` alongside `count` per source
+(gross `actualBillPaise` sum — deliberately not split/tax-adjusted, since
+"which channel brings in the most business" is a total-value question
+independent of the clinic's internal split arrangement). UI is the
+existing pie chart plus a list pairing each source with visit count,
+total revenue, and average revenue per visit.
+
+**Therapist comparison trimmed to exactly 3 metrics** (revenue,
+sessions, packages) per explicit request — removed the *Avg charge/
+session* per-therapist chart added in round 2 (it stays as a clinic-wide
+KPI on the Dashboard itself, just not duplicated here). Its revenue chart
+now branches on `hospitalSplit` the same way the Dashboard's does.
+
+**Revenue trend: period toggle + visit-count overlay.**
+`dashboardService.revenueTrend` now accepts either a month count
+(unchanged rolling-window behavior, default 6) or an explicit
+`FyMonth[]` list. Dashboard adds a 6-months/1-year/Financial-Year toggle
+(FY list built from `monthsOfFiscalYear`, trimmed to not run past the
+current month) — one query serves both the KPI strip's this/last-month
+figures and the chart, since the array's last two entries are always the
+two most recent months regardless of how far back it extends. Visit
+count renders as a second stacked bar chart under the revenue one (not
+merged into one chart — rupees and visit counts are too different in
+scale for one axis to represent both usefully) so a revenue swing is
+visibly attributable to price or volume.
+
+**Regulars — recommendation given, not removed.** Single-visit patients
+and Regulars answer different questions (churn risk vs. engagement/
+loyalty signal); recommended keeping both rather than dropping Regulars,
+pending the user's call.
+
+Verified: typecheck clean, lint clean, vitest (252 passed, 2 tests
+updated for the new BM/HV→Clinic/Partner default), production build
+clean. Billing-defaults migration applied to the live project and
+verified via direct query (all 3 clinics now `bm_split_pct=100,
+tax_pct=0`). Browser render not done this round — the dashboard sits
+behind Supabase auth and no test credentials were available in this
+environment; typecheck/lint/test/build is the verification that ran.

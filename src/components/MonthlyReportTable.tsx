@@ -16,8 +16,8 @@ export function MonthlyReportTable({
   report,
   hospitalSplit = true,
   showShared = false,
-  own = 'BM',
-  partner = 'HV',
+  own = 'Clinic',
+  partner = 'Partner',
 }: {
   report: MonthlyReport | undefined;
   hospitalSplit?: boolean;

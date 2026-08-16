@@ -60,14 +60,6 @@ export function TherapistComparisonCard() {
     [trend]
   );
 
-  // Avg charge/session per therapist, latest month only (not averaged
-  // across the 6-month window) — same "this month" framing as the
-  // Dashboard's own clinic-wide version of this metric.
-  const latestRows = trend?.[trend.length - 1]?.rows ?? [];
-  const avgChargeByName = new Map(
-    latestRows.map((r) => [r.therapistName, r.visitCount > 0 ? Math.round(r.billPaise / r.visitCount) : 0])
-  );
-
   const nameByTherapistId = new Map((therapists ?? []).map((t) => [t.id, t.name]));
   const openPackageCountByName = new Map<string, number>();
   for (const p of openPackages ?? []) {
@@ -96,7 +88,10 @@ export function TherapistComparisonCard() {
               series={therapistNames.slice(0, SERIES_COLORS.length).map((name, i) => ({
                 label: name,
                 color: SERIES_COLORS[i],
-                values: trend.map((r) => r.rows.find((row) => row.therapistName === name)?.postTaxPaise ?? 0),
+                values: trend.map((r) => {
+                  const row = r.rows.find((row) => row.therapistName === name);
+                  return (hospitalSplit ? row?.postTaxPaise : row?.billPaise) ?? 0;
+                }),
               }))}
               formatValue={formatINR}
             />
@@ -112,25 +107,9 @@ export function TherapistComparisonCard() {
               }))}
             />
           </div>
-          {/* These two are one-value-per-therapist snapshots (this month,
-              right now), not a 6-month trend like the two above — one bar
-              per therapist rather than one series per therapist. */}
-          <div>
-            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-              Avg charge/session — this month
-            </h3>
-            <BarChart
-              categories={therapistNames}
-              series={[
-                {
-                  label: 'Avg charge',
-                  color: SERIES_COLORS[0],
-                  values: therapistNames.map((name) => avgChargeByName.get(name) ?? 0),
-                },
-              ]}
-              formatValue={formatINR}
-            />
-          </div>
+          {/* One-value-per-therapist snapshot (this month, right now), not a
+              6-month trend like the two above — one bar per therapist rather
+              than one series per therapist. */}
           <div>
             <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Open packages</h3>
             <BarChart
