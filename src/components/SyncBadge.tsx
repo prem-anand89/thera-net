@@ -35,8 +35,8 @@ export function SyncBadge() {
     // still-retrying failure hasn't been touched, so discarding it is the
     // real decision the original confirmation text describes.
     const message = isPermanentFailure(entry.errorCode, entry.error)
-      ? 'Dismiss this notice?\n\nThis device already matches the server for this record — dismissing just clears the notice, it doesn\'t change any data.'
-      : "Stop trying to save this change to the server?\n\nYour local copy stays as it is, but the server (and other devices) will never receive this specific change unless you edit that record again.";
+      ? "Dismiss this notice?\n\nThis device already matches the server for this record — dismissing just clears the notice, it doesn't change any data."
+      : 'Stop trying to save this change to the server?\n\nYour local copy stays as it is, but the server (and other devices) will never receive this specific change unless you edit that record again.';
     if (!confirm(message)) return;
     await syncEngine.discard(entry.table, entry.rowId);
   }
@@ -54,62 +54,74 @@ export function SyncBadge() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-30 mt-2 w-80 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="font-medium text-[var(--ink)]">Sync status</span>
-            <button
-              className="text-xs text-[var(--teal)] hover:underline"
-              onClick={() => syncEngine.schedule(0)}
-            >
-              Sync now
-            </button>
-          </div>
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-30 mt-2 w-80 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-[var(--ink)]">Sync status</span>
+              <button
+                className="text-xs text-[var(--teal)] hover:underline"
+                onClick={() => syncEngine.schedule(0)}
+              >
+                Sync now
+              </button>
+            </div>
 
-          {status.error && (
-            <p className="mt-2 rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-2 py-1 text-xs text-[var(--rust)]">
-              {toFriendlyMessage(new Error(status.error))}
-            </p>
-          )}
-
-          {failed.length === 0 ? (
-            <p className="mt-2 text-xs text-[var(--muted)]">
-              {status.pending > 0
-                ? `${status.pending} change${status.pending > 1 ? 's' : ''} queued, no errors — this clears automatically.`
-                : 'Everything on this device has been saved to the server.'}
-            </p>
-          ) : (
-            <>
-              <p className="mt-2 text-xs text-[var(--muted)]">
-                Most of these retry automatically and clear on their own. Anything labeled
-                <span className="font-medium text-[var(--rust)]"> won't succeed by retrying</span> has already
-                been reverted on this device to match the server — dismiss the notice with Discard, or ask an
-                admin if it looks wrong.
+            {status.error && (
+              <p className="mt-2 rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-2 py-1 text-xs text-[var(--rust)]">
+                {toFriendlyMessage(new Error(status.error))}
               </p>
-              <ul className="mt-2 max-h-64 space-y-2 overflow-y-auto">
-                {failed.map((e) => {
-                  const permanent = isPermanentFailure(e.errorCode, e.error);
-                  return (
-                    <li key={e.seq} className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] p-2">
-                      <div className="text-xs font-medium text-[var(--rust)]">
-                        {e.table} · {new Date(e.ts).toLocaleString()}
-                        {permanent && " · won't succeed by retrying"}
-                      </div>
-                      <div className="mt-1 text-xs text-[var(--rust)]">
-                        {toFriendlyMessage({ message: e.error ?? 'Unknown error', code: e.errorCode })}
-                      </div>
-                      <button
-                        className="mt-2 text-xs text-[var(--muted)] hover:text-[var(--rust)]"
-                        onClick={() => void discard(e)}
+            )}
+
+            {failed.length === 0 ? (
+              <p className="mt-2 text-xs text-[var(--muted)]">
+                {status.pending > 0
+                  ? `${status.pending} change${status.pending > 1 ? 's' : ''} queued, no errors — this clears automatically.`
+                  : 'Everything on this device has been saved to the server.'}
+              </p>
+            ) : (
+              <>
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  Most of these retry automatically and clear on their own. Anything labeled
+                  <span className="font-medium text-[var(--rust)]">
+                    {' '}
+                    won't succeed by retrying
+                  </span>{' '}
+                  has already been reverted on this device to match the server — dismiss the notice
+                  with Discard, or ask an admin if it looks wrong.
+                </p>
+                <ul className="mt-2 max-h-64 space-y-2 overflow-y-auto">
+                  {failed.map((e) => {
+                    const permanent = isPermanentFailure(e.errorCode, e.error);
+                    return (
+                      <li
+                        key={e.seq}
+                        className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] p-2"
                       >
-                        Discard
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
-        </div>
+                        <div className="text-xs font-medium text-[var(--rust)]">
+                          {e.table} · {new Date(e.ts).toLocaleString()}
+                          {permanent && " · won't succeed by retrying"}
+                        </div>
+                        <div className="mt-1 text-xs text-[var(--rust)]">
+                          {toFriendlyMessage({
+                            message: e.error ?? 'Unknown error',
+                            code: e.errorCode,
+                          })}
+                        </div>
+                        <button
+                          className="mt-2 text-xs text-[var(--muted)] hover:text-[var(--rust)]"
+                          onClick={() => void discard(e)}
+                        >
+                          Discard
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
