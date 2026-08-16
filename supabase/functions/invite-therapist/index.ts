@@ -4,11 +4,14 @@ interface InviteRequest {
   clinicId: string;
   email: string;
   role: 'admin' | 'therapist' | 'front_desk';
-  /** Required when role === 'therapist' — used to create and link a
-   *  `therapists` roster row in the same request, so a new therapist shows
-   *  up correctly-scoped (their own visits, not clinic-wide) from their
-   *  first login instead of needing a separate manual "add to roster, then
-   *  link" step an admin has to remember to do afterward. */
+  /** Required for every role — seeds clinic_members.display_name (shown
+   *  throughout the app instead of raw email; the invited person can
+   *  rename themselves once they've signed in) and, for a therapist
+   *  invite specifically, also creates and links a `therapists` roster
+   *  row in the same request, so a new therapist shows up correctly-
+   *  scoped (their own visits, not clinic-wide) from their first login
+   *  instead of needing a separate manual "add to roster, then link"
+   *  step an admin has to remember to do afterward. */
   name?: string;
 }
 
@@ -38,9 +41,9 @@ export default async function handler(req: Request): Promise<Response> {
       );
     }
 
-    if (role === 'therapist' && !name?.trim()) {
+    if (!name?.trim()) {
       return new Response(
-        JSON.stringify({ error: 'A name is required to invite a therapist' }),
+        JSON.stringify({ error: 'A name is required to invite a team member' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -135,6 +138,7 @@ export default async function handler(req: Request): Promise<Response> {
         clinic_id: clinicId,
         user_id: newUserId,
         role: role,
+        display_name: name!.trim(),
       });
 
     if (insertError) {

@@ -5,6 +5,7 @@ import { repos, backupService, therapistService } from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
+import { CLINIC_ROLE_LABELS, type ClinicRole } from '@/app/useClinicRole';
 import { getSupabase } from '@/lib/supabase';
 import { SUPABASE_URL } from '@/lib/env';
 import { db } from '@/lib/db';
@@ -1046,13 +1047,8 @@ interface ClinicMember {
   userId: string;
   email: string;
   role: string;
+  displayName: string | null;
 }
-
-const MEMBER_ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin',
-  therapist: 'Therapist',
-  front_desk: 'Front desk',
-};
 
 function Therapists() {
   const clinic = useClinic();
@@ -1069,26 +1065,29 @@ function Therapists() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refetchMembers = useCallback(async () => {
     const supabase = getSupabase();
     if (!supabase) return;
-    (async () => {
-      const { data, error } = await supabase.rpc('list_clinic_members_with_email', {
-        p_clinic_id: clinic.id,
-      });
-      if (error) {
-        setMembersError(toFriendlyMessage(new Error(error.message)));
-        return;
-      }
-      setMembers(
-        (data as { user_id: string; email: string; role: string }[]).map((m) => ({
-          userId: m.user_id,
-          email: m.email,
-          role: m.role,
-        }))
-      );
-    })();
+    const { data, error } = await supabase.rpc('list_clinic_members_with_email', {
+      p_clinic_id: clinic.id,
+    });
+    if (error) {
+      setMembersError(toFriendlyMessage(new Error(error.message)));
+      return;
+    }
+    setMembers(
+      (data as { user_id: string; email: string; role: string; display_name: string | null }[]).map((m) => ({
+        userId: m.user_id,
+        email: m.email,
+        role: m.role,
+        displayName: m.display_name,
+      }))
+    );
   }, [clinic.id]);
+
+  useEffect(() => {
+    void refetchMembers();
+  }, [refetchMembers]);
 
   async function add() {
     if (!name.trim()) return;
@@ -1141,7 +1140,7 @@ function Therapists() {
 
   async function inviteTherapist() {
     if (!inviteEmail.trim()) return;
-    if (inviteRole === 'therapist' && !inviteName.trim()) {
+    if (!inviteName.trim()) {
       setInviteError('Enter their name');
       return;
     }
@@ -1169,7 +1168,7 @@ function Therapists() {
             clinicId: clinic.id,
             email: inviteEmail.trim(),
             role: inviteRole,
-            ...(inviteRole === 'therapist' ? { name: inviteName.trim() } : {}),
+            name: inviteName.trim(),
           }),
         }
       );
@@ -1238,15 +1237,17 @@ function Therapists() {
               <option value="admin">Admin</option>
             </select>
           </label>
-          {inviteRole === 'therapist' && (
-            <input
-              className={inputCls}
-              placeholder="Their name — shows in the therapist picker on visits"
-              value={inviteName}
-              onChange={(e) => setInviteName(e.target.value)}
-              disabled={inviteBusy}
-            />
-          )}
+          <input
+            className={inputCls}
+            placeholder={
+              inviteRole === 'therapist'
+                ? 'Their name — shows in the therapist picker on visits'
+                : 'Their name — shown in the app instead of their email'
+            }
+            value={inviteName}
+            onChange={(e) => setInviteName(e.target.value)}
+            disabled={inviteBusy}
+          />
           <input
             className={inputCls}
             type="email"
@@ -1259,12 +1260,11 @@ function Therapists() {
             {inviteBusy ? 'Sending…' : 'Send invitation'}
           </button>
         </div>
-        {inviteRole === 'therapist' && (
-          <p className="text-xs text-[var(--muted)]">
-            Automatically added to the service roster below and linked to their login — no separate
-            setup step needed.
-          </p>
-        )}
+        <p className="text-xs text-[var(--muted)]">
+          {inviteRole === 'therapist'
+            ? "Automatically added to the service roster below and linked to their login — no separate setup step needed. They can rename themselves from the account menu once they've signed in."
+            : "They can rename themselves from the account menu once they've signed in — this is just the starting name."}
+        </p>
         {inviteSuccess && <p className="text-sm text-[var(--moss)]">{inviteSuccess}</p>}
         {inviteError && <ErrorNote message={inviteError} />}
       </div>
@@ -1274,19 +1274,14 @@ function Therapists() {
         {members && members.length > 0 ? (
           <ul className="space-y-2">
             {members.map((m) => (
-              <li key={m.userId} className="flex items-center justify-between gap-3 text-sm">
-                <div>
-                  <p className="text-[var(--ink)]">{m.email}</p>
-                  <p className="text-xs text-[var(--muted)]">{MEMBER_ROLE_LABELS[m.role] ?? m.role}</p>
-                </div>
-                <button
-                  className="text-xs text-[var(--rust)] hover:underline disabled:opacity-50"
-                  disabled={revokeInProgress === m.userId}
-                  onClick={() => void revokeMember(m.userId, m.email)}
-                >
-                  {revokeInProgress === m.userId ? 'Revoking…' : 'Revoke'}
-                </button>
-              </li>
+              <MemberRow
+                key={m.userId}
+                member={m}
+                clinicId={clinic.id}
+                revoking={revokeInProgress === m.userId}
+                onRevoke={() => void revokeMember(m.userId, m.email)}
+                onSaved={() => void refetchMembers()}
+              />
             ))}
           </ul>
         ) : (
@@ -1373,5 +1368,104 @@ function Therapists() {
         </div>
       </div>
     </SectionCard>
+  );
+}
+
+/** One "Team members" row — view state shows display name (falling back to
+ *  email if the member hasn't set one) + role; edit state lets an admin
+ *  change either. This is the admin-side counterpart to the self-service
+ *  name editor in Shell.tsx's account menu — a member can always rename
+ *  themselves, and now an admin can also rename or reassign anyone. */
+function MemberRow({
+  member,
+  clinicId,
+  revoking,
+  onRevoke,
+  onSaved,
+}: {
+  member: ClinicMember;
+  clinicId: string;
+  revoking: boolean;
+  onRevoke: () => void;
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState(member.displayName ?? '');
+  const [roleDraft, setRoleDraft] = useState<ClinicRole>(member.role as Exclude<ClinicRole, 'unknown'>);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('No Supabase connection');
+      const { error: updateError } = await supabase
+        .from('clinic_members')
+        .update({ display_name: nameDraft.trim() || null, role: roleDraft })
+        .eq('clinic_id', clinicId)
+        .eq('user_id', member.userId);
+      if (updateError) throw updateError;
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <li className="space-y-2 rounded-md border border-[var(--border)] p-2.5 text-sm">
+        <input
+          className={inputCls}
+          placeholder="Display name"
+          value={nameDraft}
+          onChange={(e) => setNameDraft(e.target.value)}
+          autoFocus
+        />
+        <select className={inputCls} value={roleDraft} onChange={(e) => setRoleDraft(e.target.value as ClinicRole)}>
+          <option value="therapist">Therapist</option>
+          <option value="front_desk">Front desk</option>
+          <option value="admin">Admin</option>
+        </select>
+        <div className="flex gap-2">
+          <button className={btnPrimary} disabled={saving} onClick={() => void save()}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button className={btnSecondary} disabled={saving} onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        </div>
+        <ErrorNote message={error} />
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-center justify-between gap-3 text-sm">
+      <div className="min-w-0">
+        <p className="truncate text-[var(--ink)]">{member.displayName ?? member.email}</p>
+        <p className="truncate text-xs text-[var(--muted)]">
+          {CLINIC_ROLE_LABELS[member.role as Exclude<ClinicRole, 'unknown'>] ?? member.role}
+          {member.displayName ? ` · ${member.email}` : ''}
+        </p>
+      </div>
+      <div className="flex shrink-0 gap-3 text-xs">
+        <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setEditing(true)}>
+          Edit
+        </button>
+        <button
+          type="button"
+          className="text-[var(--rust)] hover:underline disabled:opacity-50"
+          disabled={revoking}
+          onClick={onRevoke}
+        >
+          {revoking ? 'Revoking…' : 'Revoke'}
+        </button>
+      </div>
+    </li>
   );
 }

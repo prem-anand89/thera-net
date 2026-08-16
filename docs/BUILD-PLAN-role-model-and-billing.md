@@ -1256,3 +1256,78 @@ Verified: typecheck, lint, vitest (240 passed), production build clean,
 plus a real headless-browser render of the full redesigned Workspace at
 390px confirming the compact tile row, the three Needs Attention preview
 cards, and the list/form split all render coherently together.
+
+## Member display names + editable roles (2026-08-16)
+
+The last request from the same round: replace the raw email shown near
+Sign out with a name + role, let a member (not just an admin) set their
+own, and let an admin edit any member's name and role.
+
+**Schema.** `clinic_members` gained `display_name text` (migration
+`20260816000002_member_display_name.sql`) — deliberately separate from
+the existing `title` column added a round ago (`20260815000001`), which
+turned out to be an unused job-title field ("Lead Physiotherapist"), not
+a name; this is the everyday name shown in the header. Backfilled from
+`therapists.name` for anyone already linked. RLS previously let an admin
+update *any* member row (`members_update`) but gave a non-admin no way to
+touch even their own — added `members_update_self` (`user_id =
+auth.uid()`) so anyone can edit their own row, paired with a new
+`clinic_members_role_guard` trigger that raises unless the acting user is
+already a clinic admin whenever `role` actually changes — RLS alone can't
+see which columns changed, only trigger logic can, so self-service
+name-editing without opening a self-promotion hole needed both pieces
+together. `list_clinic_members_with_email` (dropped and recreated, since
+`CREATE OR REPLACE` can't add a return column) now also returns
+`display_name`. Verified locally first: replayed all 34 migrations
+against a from-scratch Postgres 16 database with the project's
+auth/storage shim, then exercised the RLS+trigger combination directly —
+confirmed a non-admin can rename themselves, cannot self-promote (trigger
+raises), an admin can rename or reassign anyone, and a non-admin update
+targeting *someone else's* row affects zero rows under RLS as the
+`authenticated` role (not superuser, which would have silently bypassed
+RLS and given a false pass) — before applying to production.
+
+**Incidental discovery**: while touching the invite flow, `list_edge_functions`
+on the live project came back empty — `invite-therapist` had never
+actually been deployed. The "Invite a team member" UI has been calling a
+function that doesn't exist in production this whole time. Deployed it
+now (as part of this change, not a separate fix) — first live version.
+
+**Frontend.** `useClinicRole` now also fetches/returns `displayName` and
+a `setDisplayName()` function that writes straight to `clinic_members`
+and updates the hook's own in-memory + Dexie-cached state from the
+confirmed value, rather than waiting on the fetch effect to re-run (its
+deps are clinicId/userId, which don't change on a name edit). The Dexie
+cache value changed shape (`ClinicRole` string → `{role, displayName}`)
+so it's now JSON-encoded into the same `string`-typed `meta.value`
+column rather than widening that shared type for one caller — with a
+parse-and-shape-check on read so a pre-upgrade cached plain-string entry
+degrades to `'unknown'` instead of silently returning `undefined` where
+the hook promises a `ClinicRole`.
+
+`Shell.tsx`'s account area (both the desktop header and the mobile
+dropdown) now shows `displayName ?? email-local-part` plus a role label
+instead of the bare email, click-to-edit inline (`NameEditor`, mounted
+once per breakpoint — each instance owns its own edit state
+independently, harmless since only one is ever visible via
+`hidden`/`sm:hidden`). `CLINIC_ROLE_LABELS` moved to live next to the
+`ClinicRole` type in `useClinicRole.ts` so Shell and Settings → Team
+share one copy instead of Settings keeping its own duplicate.
+
+Settings → Team's invite form used to only collect a name when inviting
+a therapist (front_desk/admin invites went out nameless, leaving their
+`display_name` null until someone set it later). Now every invite
+requires a name — for a therapist it still becomes both `therapists.name`
+(the roster label) and the seed `display_name`; for admin/front_desk it's
+just the seed `display_name`. The invited person can always rename
+themselves afterward from the account menu — copy on the form says so.
+The Team members list itself gained an "Edit" action per row
+(`MemberRow`) alongside the existing "Revoke": an inline form to change
+that member's display name and role, admin-only by construction (the
+whole Team tab is behind Shell's `role === 'admin'` nav gate), backed by
+the same `members_update`/role-guard-trigger pair the migration added.
+
+Verified: typecheck, lint, vitest (240 passed), production build clean,
+migration replayed locally end-to-end before deploying, plus real
+headless-browser renders of the account menu (view/edit/fallback states,
+both breakpoints) and the Team members list (view/edit rows).

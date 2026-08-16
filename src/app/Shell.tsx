@@ -5,7 +5,7 @@ import { db, ALL_SYNCED_TABLES } from '@/lib/db';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { syncEngine } from '@/sync/engine';
 import { useSession } from './useSession';
-import { useClinicRole } from './useClinicRole';
+import { useClinicRole, CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
 import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { CreateClinicForm } from '@/features/setup/CreateClinicForm';
@@ -85,7 +85,11 @@ export function Shell() {
   // down. useClinicRole takes a clinicId directly instead. Nav filtering
   // (not RLS) is display-only, same caveat as everywhere else this role
   // value is read; the real boundary is the settings tables' RLS policies.
-  const { role } = useClinicRole(clinic?.id ?? '');
+  const { role, displayName, setDisplayName } = useClinicRole(clinic?.id ?? '');
+  // Local-part of the email, not the full address — the account area used
+  // to show the raw email everywhere; this is the fallback for anyone who
+  // hasn't set a display name yet, not a full replacement for a real name.
+  const fallbackName = session?.user?.email?.split('@')[0] ?? 'Account';
   // Reports (Dashboard + monthly statement) is admin/front_desk only —
   // aggregates stay off-limits to a plain therapist (decision 3), same
   // conservative default as Settings: hidden during 'unknown' role
@@ -204,7 +208,13 @@ export function Shell() {
             <div className="ml-auto flex items-center gap-4">
               <SyncBadge />
               <div className="hidden flex-col items-end gap-1 sm:flex">
-                <div className="text-xs text-[var(--muted)]">{session.user?.email}</div>
+                <NameEditor
+                  variant="desktop"
+                  displayName={displayName}
+                  fallbackName={fallbackName}
+                  role={role}
+                  setDisplayName={setDisplayName}
+                />
                 <button
                   className="text-xs text-[var(--muted)] hover:text-[var(--ink)]"
                   onClick={() => getSupabase()?.auth.signOut()}
@@ -214,7 +224,8 @@ export function Shell() {
               </div>
               {/* Mobile account menu — navigation itself lives in the
                   bottom tab bar now, so this toggle is scoped to just the
-                  account (who's signed in, sign out), not the full nav. */}
+                  account (who's signed in, their name/role, sign out), not
+                  the full nav. */}
               <div className="relative sm:hidden">
                 <button
                   className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--paper)]"
@@ -231,7 +242,13 @@ export function Shell() {
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
                     <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 shadow-lg">
-                      <div className="mb-2 truncate text-xs text-[var(--muted)]">{session.user?.email}</div>
+                      <NameEditor
+                        variant="mobile"
+                        displayName={displayName}
+                        fallbackName={fallbackName}
+                        role={role}
+                        setDisplayName={setDisplayName}
+                      />
                       <button
                         className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--muted)] hover:bg-[var(--paper)]"
                         onClick={() => getSupabase()?.auth.signOut()}
@@ -276,4 +293,98 @@ export function Shell() {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return <div className="flex min-h-screen items-center justify-center">{children}</div>;
+}
+
+/**
+ * Shows the signed-in member's own display name + role instead of raw
+ * email, with a click-to-edit affordance so anyone (not just an admin) can
+ * set or change their own name — an invited member picks their own on
+ * first login rather than being stuck with whatever an admin typed at
+ * invite time. Rendered twice (desktop header, mobile dropdown); each
+ * instance owns its own editing state independently, which is fine since
+ * only one is ever visible at a time (the other is `hidden`/`sm:hidden`).
+ */
+function NameEditor({
+  variant,
+  displayName,
+  fallbackName,
+  role,
+  setDisplayName,
+}: {
+  variant: 'desktop' | 'mobile';
+  displayName: string | null;
+  fallbackName: string;
+  role: ClinicRole;
+  setDisplayName: (name: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const roleLabel = role !== 'unknown' ? CLINIC_ROLE_LABELS[role] : '';
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      await setDisplayName(draft);
+      setEditing(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className={variant === 'desktop' ? 'flex flex-col items-end gap-1' : 'mb-2 space-y-1.5'}>
+        <input
+          autoFocus
+          className="w-36 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--ink)]"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void save();
+            if (e.key === 'Escape') setEditing(false);
+          }}
+          placeholder="Your name"
+        />
+        <div className="flex gap-2">
+          <button type="button" className="text-xs font-medium text-[var(--teal)] disabled:opacity-50" disabled={saving} onClick={() => void save()}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button type="button" className="text-xs text-[var(--muted)]" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        </div>
+        {error && <div className="text-[10px] text-[var(--rust)]">{error}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className={variant === 'desktop' ? 'flex flex-col items-end gap-0.5' : 'mb-2'}>
+      <button
+        type="button"
+        className={
+          variant === 'desktop'
+            ? 'text-xs font-medium text-[var(--ink)] hover:underline'
+            : 'block text-left text-sm font-medium text-[var(--ink)] hover:underline'
+        }
+        onClick={() => {
+          setDraft(displayName ?? '');
+          setError(null);
+          setEditing(true);
+        }}
+      >
+        {displayName ?? fallbackName}
+      </button>
+      {roleLabel && (
+        <div className={variant === 'desktop' ? 'text-[10px] uppercase tracking-wide text-[var(--muted)]' : 'text-xs text-[var(--muted)]'}>
+          {roleLabel}
+        </div>
+      )}
+    </div>
+  );
 }
