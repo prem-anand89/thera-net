@@ -130,6 +130,9 @@ export interface Therapist {
   active: boolean;
   /** Linked Supabase auth user, if this therapist also logs in themselves. */
   userId?: UUID | null;
+  /** Path into the `clinic-assets` bucket (same pattern as Clinic.logoPath),
+   *  not the image itself. Optional: most existing rows predate this field. */
+  photoPath?: string | null;
   updatedAt: string;
 }
 

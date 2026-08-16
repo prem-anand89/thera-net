@@ -1395,3 +1395,55 @@ therapist-scoped `monthlyNewCounts` case), production build clean, plus a
 real headless-browser render comparing the tile row at 390px vs. 1280px
 confirming tiles now grow to fill a wide row instead of staying clustered
 and small.
+
+## Therapist photos, and a Team/Settings redesign mockup (2026-08-16)
+
+**Therapist photos.** `therapists` gained `photo_path text` (migration
+`20260816000003_therapist_photo.sql`) — stored the exact same way the
+clinic/partner logos already are, a path into the existing public
+`clinic-assets` bucket, not the image itself. No new bucket or RLS policy
+needed: `clinic_assets_write/_update/_delete` already scope by
+`is_clinic_member()` on the upload path's first segment (the clinic id),
+which `${clinicId}/therapist-${therapistId}-...` satisfies the same way
+`${clinicId}/logo-...` does today. Replayed all 35 migrations locally
+before applying, as usual.
+
+Upload is admin-only, from Settings → Team → Service roster (matches
+`therapists_update`'s RLS, which already requires `is_clinic_admin` for
+any change to a therapist row, photo included) — not self-service the way
+display name is. Added `resizeImageToBlob()` (`lib/resizeImage.ts`):
+downscales client-side via `createImageBitmap` + canvas before upload
+(max 256px, JPEG ~0.85 quality) — this only ever renders as a small
+avatar, so there's no reason to ship a multi-MB phone photo to storage
+and back down to every device that loads it. Each roster row now shows a
+small circular avatar (the photo once uploaded, initials before that,
+matching the same split-on-whitespace initials logic already duplicated
+across the patient-avatar spots) that doubles as the upload trigger — a
+`<label>` wrapping a hidden file input, clicking it opens the picker
+directly.
+
+**Team + Settings redesign — mockup, not yet implemented.** The user
+asked for a simpler, more colorful redesign of Team and, in the same
+style, the rest of Settings; asked to see a mockup before any real code
+changes. Built one as a static HTML artifact rather than touching
+`SetupPage.tsx`: a card-based member roster (avatar circles, colored role
+pills — teal/moss/amber for admin/therapist/front_desk, reusing the
+existing token palette rather than inventing a new one), a redesigned
+invite panel with a pill-style role picker instead of a plain `<select>`,
+and a left-rail preview of how the same treatment would extend across
+Settings' other six sections (icons + grouping already established by
+`SECTION_GROUPS`, just carrying matching accent colors). Deliberately
+scoped to the existing design tokens (`--teal`/`--moss`/`--amber`/etc.,
+Fraunces/IBM Plex Sans) rather than a new palette, per "keep it simple" —
+colorful comes from finally *using* the five accent colors the app
+already has for something semantic (role identity) instead of just teal
+everywhere. Sent as a published artifact for review; real implementation
+in `SetupPage.tsx` is pending sign-off on the direction.
+
+Verified: typecheck, lint, vitest (241 passed), production build clean;
+photo upload UI checked via a real headless-browser render of the roster
+row (avatar circle + initials fallback); the mockup itself checked in
+both light and dark theme via headless Chromium before publishing —
+caught and fixed one real bug in the process (a `@media` block nested
+*inside* a `:root` selector instead of the reverse, which silently no-
+opped the entire dark-theme token override).

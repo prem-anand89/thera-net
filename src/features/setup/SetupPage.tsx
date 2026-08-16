@@ -6,7 +6,8 @@ import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from '@/app/useClinicRole';
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, publicTherapistPhotoUrl } from '@/lib/supabase';
+import { resizeImageToBlob } from '@/lib/resizeImage';
 import { SUPABASE_URL } from '@/lib/env';
 import { db } from '@/lib/db';
 import { formatINR } from '@/domain/money';
@@ -1050,6 +1051,18 @@ interface ClinicMember {
   displayName: string | null;
 }
 
+/** Same split-on-whitespace, first-two-initials logic already duplicated
+ *  across the patient avatar spots (PatientsPage/PatientProfilePage/
+ *  NoteEditorPage) — matched here rather than introducing a shared helper
+ *  for a one-line computation. */
+function therapistInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
 function Therapists() {
   const clinic = useClinic();
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
@@ -1133,6 +1146,32 @@ function Therapists() {
         return;
       }
       await therapistService.hardDelete(t.id);
+    } catch (e) {
+      setRosterError(toFriendlyMessage(e));
+    }
+  }
+
+  async function uploadTherapistPhoto(t: Therapist, file: File) {
+    setRosterError(null);
+    const supabase = getSupabase();
+    if (!supabase || !navigator.onLine) {
+      setRosterError('Photo upload needs a connection.');
+      return;
+    }
+    try {
+      // Downscaled client-side first (see resizeImage.ts) — this only ever
+      // renders as a small avatar, no reason to store/serve a full-size
+      // phone photo for that.
+      const resized = await resizeImageToBlob(file, 256);
+      const path = `${clinic.id}/therapist-${t.id}-${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('clinic-assets')
+        .upload(path, resized, { contentType: 'image/jpeg' });
+      if (uploadError) {
+        setRosterError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
+        return;
+      }
+      await repos.therapists.put({ ...t, photoPath: path, updatedAt: new Date().toISOString() });
     } catch (e) {
       setRosterError(toFriendlyMessage(e));
     }
@@ -1295,6 +1334,24 @@ function Therapists() {
         <ul className="mb-3 space-y-2">
           {(therapists ?? []).map((t) => (
             <li key={t.id} className="flex flex-wrap items-center gap-3 text-sm">
+              <label
+                className="block h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-full border border-[var(--border)] bg-[var(--paper)]"
+                title="Change photo"
+              >
+                {t.photoPath ? (
+                  <img src={publicTherapistPhotoUrl(t.photoPath) ?? ''} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-[var(--muted)]">
+                    {therapistInitials(t.name)}
+                  </span>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => e.target.files?.[0] && void uploadTherapistPhoto(t, e.target.files[0])}
+                />
+              </label>
               <span className={`min-w-32 ${t.active ? '' : 'text-[var(--muted)] line-through'}`}>{t.name}</span>
               <button
                 className="text-xs text-[var(--teal)] hover:underline"
