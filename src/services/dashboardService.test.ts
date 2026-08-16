@@ -773,4 +773,25 @@ describe('dashboardService.monthlyNewCounts', () => {
     const counts = await svc.monthlyNewCounts('clinic-1', new Date('2026-06-15'));
     expect(counts.newPatients).toBe(0);
   });
+
+  it('scopes both counts to just one therapist when therapistId is passed', async () => {
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-05', therapistId: 'th-prem', patientId: 'p1' })
+    );
+    fake.visits.set(
+      'v2',
+      baseVisit('v2', {
+        visitDate: '2026-06-06',
+        therapistId: 'th-other',
+        patientId: 'p2',
+        packageGroupId: 'g1',
+        packageTotal: 3,
+      })
+    );
+    const svc = createDashboardService(fake.repos);
+    const counts = await svc.monthlyNewCounts('clinic-1', new Date('2026-06-15'), 'th-prem');
+    expect(counts.newPatients).toBe(1);
+    expect(counts.newPackages).toBe(0);
+  });
 });

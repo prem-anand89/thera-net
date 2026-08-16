@@ -627,9 +627,13 @@ export function createDashboardService(repos: Repos) {
     /**
      * Packages and patients whose FIRST-EVER visit falls in the given
      * calendar month — "new" this month, not just active this month.
+     * `therapistId` narrows both counts to visits that therapist logged
+     * (same convention as `weeklySummary`/`todayWorklist`) — Workspace
+     * passes this for a therapist's own scoped tile, omits it for admin's
+     * clinic-wide one.
      */
-    async monthlyNewCounts(clinicId: UUID, asOf = new Date()): Promise<MonthlyNewCounts> {
-      const visits = await repos.visits.list({ clinicId });
+    async monthlyNewCounts(clinicId: UUID, asOf = new Date(), therapistId?: UUID): Promise<MonthlyNewCounts> {
+      const visits = await repos.visits.list({ clinicId, therapistId });
       const monthStart = `${asOf.getFullYear()}-${String(asOf.getMonth() + 1).padStart(2, '0')}-01`;
 
       const packageGroups = new Map<UUID, Visit[]>();

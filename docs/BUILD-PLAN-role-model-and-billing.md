@@ -1331,3 +1331,67 @@ Verified: typecheck, lint, vitest (240 passed), production build clean,
 migration replayed locally end-to-end before deploying, plus real
 headless-browser renders of the account menu (view/edit/fallback states,
 both breakpoints) and the Team members list (view/edit rows).
+
+## Invite button stuck on "Sending…", plus Workspace stat-tile follow-ups (2026-08-16)
+
+**The invite bug.** `invite-therapist`'s own logs showed only bare
+`OPTIONS | 546 | .../invite-therapist` entries, twice, no POST ever
+landing — the browser's CORS preflight was failing before the real
+request could even be sent. Root-caused in three layers, each a real bug
+stacked on the last:
+
+1. The function never called `Deno.serve(...)` on its exported handler —
+   it just had `export default async function handler(...)`. Nothing
+   ever registered it as the HTTP entrypoint, so every request (OPTIONS
+   or POST alike) hung until the platform gateway's own idle timeout
+   (confirmed directly: a raw curl OPTIONS request came back after ~150s
+   with `{"code":"IDLE_TIMEOUT",...}` instead of an instant response).
+   This was the actual root cause — nothing else here mattered while it
+   was true.
+2. Even with that fixed, the function had no CORS handling at all — no
+   `OPTIONS` short-circuit, no `Access-Control-Allow-*` response headers
+   on anything. A browser blocks a cross-origin POST carrying an
+   `Authorization` header until its CORS preflight succeeds.
+3. Deployed with `verify_jwt: true`, which makes Supabase's platform
+   gateway require a valid JWT on *every* request including the
+   preflight — but a CORS preflight never carries an Authorization
+   header by spec, so that would have re-broken preflights even after
+   fixing (1) and (2). Redeployed with `verify_jwt: false`; the function
+   already does its own JWT + admin-role check internally, so the
+   platform's redundant check wasn't adding anything besides breaking
+   preflight.
+
+Verified end-to-end with curl once deployed: OPTIONS now returns 204 in
+~0.7s with correct CORS headers, and an unauthenticated POST returns 401
+in ~0.3s instead of hanging — both would have been ~150s IDLE_TIMEOUTs
+before.
+
+**Workspace stat tiles.** Two more complaints about the tile row added
+two rounds ago: too compressed on a laptop, and mobile should cap at 3.
+Root cause of "compressed on laptop": the `auto-fill` grid sizes columns
+off however many `minmax(86px, 1fr)` tracks fit the container width, and
+`auto-fill` keeps generating tracks (and giving them a share of the `1fr`
+space) whether or not there's a tile to put in them — on a wide screen
+that meant far more tracks than tiles, so each real tile still only got a
+narrow, cramped share. Fixed by dropping to a plain `grid-cols-3` (see
+below for why it's always exactly 3 now) — no more phantom tracks, each
+tile gets a full third of the row and actually grows on a wide screen.
+
+Also removed the "Expected" tile per request (redundant with the Expected
+Today list right below it) and simplified the admin/therapist branch from
+"1 admin tile vs. 2 therapist tiles" down to 1-for-1, landing on exactly
+3 tiles for every role: Collected today, New patients this month,
+Packages this month (admin) / My open packages (therapist) — dropped "My
+sessions this week" as the odd one out. While doing that, found
+`monthlyNewCounts` never actually took a therapist filter — "New patients
+this month" was showing the *whole clinic's* count to a therapist too,
+contradicting "therapists see their own numbers" (already true for
+Collected today via `scope.scopeTherapistId`, just not this one). Added
+an optional `therapistId` param following the exact convention
+`weeklySummary`/`todayWorklist` already use, and a test case covering it.
+
+Verified: typecheck, lint, vitest (241 passed, new test covers the
+therapist-scoped `monthlyNewCounts` case), production build clean, plus a
+real headless-browser render comparing the tile row at 390px vs. 1280px
+confirming tiles now grow to fill a wide row instead of staying clustered
+and small.

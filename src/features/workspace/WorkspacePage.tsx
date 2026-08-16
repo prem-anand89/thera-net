@@ -111,10 +111,15 @@ export function WorkspacePage() {
     [clinic.id, scope.scopeTherapistId]
   );
   const pendingWork = useLiveQuery(() => dashboardService.pendingWork(clinic.id), [clinic.id]);
-  const monthlyNew = useLiveQuery(() => dashboardService.monthlyNewCounts(clinic.id), [clinic.id]);
-  // Only fetched for the "My open packages" / "My sessions this week"
-  // tiles, which only render for a non-admin — cheap to skip entirely
-  // once role has resolved to admin.
+  // Clinic-wide for admin/front_desk, scoped to just this therapist's own
+  // visits otherwise — matches "Collected today" above, which already
+  // scopes the same way via scope.scopeTherapistId.
+  const monthlyNew = useLiveQuery(
+    () => dashboardService.monthlyNewCounts(clinic.id, new Date(), scope.scopeTherapistId),
+    [clinic.id, scope.scopeTherapistId]
+  );
+  // Only fetched for the "My open packages" tile, which only renders for a
+  // non-admin — cheap to skip entirely once role has resolved to admin.
   const openPackages = useLiveQuery(
     () => (scope.isAdmin ? undefined : dashboardService.openPackages(clinic.id)),
     [clinic.id, scope.isAdmin]
@@ -122,13 +127,6 @@ export function WorkspacePage() {
   const myOpenPackageCount = useMemo(
     () => (openPackages ?? []).filter((p) => p.startedByTherapistId === scope.myTherapistId).length,
     [openPackages, scope.myTherapistId]
-  );
-  const myWeekly = useLiveQuery(
-    () =>
-      scope.isAdmin || !scope.myTherapistId
-        ? undefined
-        : dashboardService.weeklySummary(clinic.id, new Date(), scope.myTherapistId),
-    [clinic.id, scope.isAdmin, scope.myTherapistId]
   );
   const openPackageGroupIds = useMemo(
     () => new Set<string>(),
@@ -248,23 +246,25 @@ export function WorkspacePage() {
         <ErrorNote message="Your login isn't linked to a therapist record yet, so today's visits and packages aren't showing here. Ask your admin to set it from Settings → Team → Service roster → Linked login." />
       )}
 
-      {/* One compact row, not two stacked grids — auto-fill sizes every
-          tile off the same column width, so a wrapped last item stays
-          tile-sized instead of a flex-wrap row's last (lonely) item
-          stretching to fill the whole row on its own. Each StatTile is
-          small enough that even 5 of them fit densely on a phone instead
-          of stacking one-per-row and pushing everything else off screen. */}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(86px,1fr))] gap-2">
-        {clinic.enableExpectedToday && <StatTile label="Expected" value={expectedToday?.length ?? 0} />}
+      {/* Always exactly 3 tiles — a fixed 3-column grid rather than the
+          previous auto-fill row, which packed tiles densely on a phone but
+          left them small and clustered on a wide screen (auto-fill keeps
+          generating empty tracks past the last real tile, so the 1fr share
+          those tiles actually got was computed against a much wider column
+          count than there was content for). "Expected" was dropped — it's
+          redundant with the Expected Today list right below. Admin/front
+          desk see clinic-wide numbers; a therapist sees the same three
+          metrics scoped to just their own visits (scope.scopeTherapistId
+          already drives that for Collected today and New patients this
+          month; My open packages is filtered separately below since
+          openPackages() doesn't take a therapist filter itself). */}
+      <div className="grid grid-cols-3 gap-2">
         <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
         <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
         {scope.isClinicWideView ? (
           <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
         ) : (
-          <>
-            <StatTile label="My open packages" value={openPackages === undefined ? '—' : myOpenPackageCount} />
-            <StatTile label="My sessions this week" value={myWeekly?.visitCount ?? 0} />
-          </>
+          <StatTile label="My open packages" value={openPackages === undefined ? '—' : myOpenPackageCount} />
         )}
       </div>
 
