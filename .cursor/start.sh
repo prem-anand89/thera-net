@@ -4,17 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CURSOR_DIR="$(dirname "$0")"
 
-# Ensure Docker daemon is running (nested Cloud Agent VMs)
+# Local Supabase requires Docker; skip gracefully when unavailable (no passwordless sudo on agent pods)
 if ! docker info >/dev/null 2>&1; then
-  if ! pgrep -x dockerd >/dev/null; then
-    echo '{"storage-driver":"vfs"}' | sudo tee /etc/docker/daemon.json >/dev/null
-    sudo dockerd >/tmp/dockerd.log 2>&1 &
-    for _ in $(seq 1 30); do
-      docker info >/dev/null 2>&1 && break
-      sleep 1
-    done
-  fi
-  sudo chmod 666 /var/run/docker.sock 2>/dev/null || true
+  echo "Docker unavailable; skipping local Supabase bootstrap" >&2
+  exit 0
 fi
 
 # Start local Supabase stack (Postgres + Auth + PostgREST + Kong)

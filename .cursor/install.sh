@@ -6,8 +6,8 @@ cd "$(dirname "$0")/.."
 # Node dependencies (idempotent)
 npm ci
 
-# Playwright browsers for e2e smoke tests
-npx playwright install chromium --with-deps
+# Playwright browsers for e2e (system libs are in .cursor/Dockerfile)
+npx playwright install chromium
 
 # Local Supabase CLI (project dev dependency)
 # Already in package-lock.json after first setup; npm ci installs it.
