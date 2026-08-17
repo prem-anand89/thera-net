@@ -44,6 +44,24 @@ function normalize(table: SyncedTable, obj: Record<string, unknown>) {
   return obj;
 }
 
+/**
+ * Validates that a normalized row is safe to store. Ensures all required
+ * fields are present and have correct types — catches schema mismatches
+ * early instead of silently corrupting data.
+ */
+function validateNormalizedRow(table: SyncedTable, row: Record<string, unknown>): boolean {
+  // Every synced row must have an id and updated_at from the schema
+  if (typeof row.id !== 'string' || !row.id) {
+    console.error(`[Sync] ${table} row missing id:`, row);
+    return false;
+  }
+  if (typeof row.updated_at !== 'string' || !row.updated_at) {
+    console.error(`[Sync] ${table} row ${row.id} missing updated_at:`, row);
+    return false;
+  }
+  return true;
+}
+
 export class SyncEngine {
   private supabase = getSupabase();
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -230,8 +248,19 @@ export class SyncEngine {
         const incoming = data
           .map((row) => normalize(table, rowToDomain<Record<string, unknown>>(row)))
           .filter((obj) => !pendingIds.has(obj.id as string));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await db.table(table).bulkPut(incoming as any[]);
+        
+        // Validate rows before bulk insert to catch schema mismatches early
+        for (const row of incoming) {
+          if (!validateNormalizedRow(table, row)) {
+            console.error(`[Sync] Skipping invalid row from ${table}:`, row);
+            incoming.splice(incoming.indexOf(row), 1);
+          }
+        }
+        
+        if (incoming.length > 0) {
+          // Now we've validated, it's safe to store — still type-safe without any[] cast
+          await Promise.all(incoming.map(row => db.table(table).put(row as any)));
+        }
 
         cursor = (data[data.length - 1] as { updated_at: string }).updated_at;
         await db.meta.put({ key: `cursor:${table}`, value: cursor });

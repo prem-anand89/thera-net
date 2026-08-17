@@ -40,9 +40,9 @@ export function createVisitService(repos: Repos) {
     input: Pick<NewVisitInput, 'actualBillPaise' | 'adjustmentReason' | 'isContinuation'>
   ) {
     const clinic = await repos.clinics.get(clinicId);
-    if (!clinic) throw new Error('Clinic not found');
+    if (!clinic) throw new Error(`Clinic not found (id: ${clinicId})`);
     const item = await repos.catalog.get(serviceCatalogId);
-    if (!item) throw new Error('Catalog service not found');
+    if (!item) throw new Error(`Catalog service not found (id: ${serviceCatalogId})`);
 
     const catalogPricePaise = input.isContinuation ? 0 : item.basePricePaise;
     const actualBillPaise = input.actualBillPaise ?? catalogPricePaise;
@@ -128,7 +128,7 @@ export function createVisitService(repos: Repos) {
       }
     ): Promise<Visit> {
       const visit = await repos.visits.get(visitId);
-      if (!visit) throw new Error('Visit not found');
+      if (!visit) throw new Error(`Visit not found (id: ${visitId})`);
       // "Frozen" means the billed amount and who it's billed to can't move
       // once invoiced -- it does not mean the visit's clinical record is
       // locked. A therapist backfilling condition/treatmentNotes on an
@@ -140,7 +140,7 @@ export function createVisitService(repos: Repos) {
         'therapistId' in changes ||
         'visitDate' in changes;
       if (visit.invoiceId && changesBilling) {
-        throw new Error('This visit is on an issued invoice; its billing is frozen.');
+        throw new Error(`This visit is on invoice ${visit.invoiceId}; its billing is frozen.`);
       }
 
       const actualBillPaise = changes.actualBillPaise ?? visit.actualBillPaise;
@@ -187,7 +187,7 @@ export function createVisitService(repos: Repos) {
       split: { sharedTherapistId: UUID | null; sharedPct?: number | null }
     ): Promise<Visit> {
       const visit = await repos.visits.get(visitId);
-      if (!visit) throw new Error('Visit not found');
+      if (!visit) throw new Error(`Visit not found (id: ${visitId})`);
 
       let sharedTherapistId: UUID | null = null;
       let sharedPct: number | null = null;
@@ -199,8 +199,15 @@ export function createVisitService(repos: Repos) {
           throw new Error('Pick a different therapist to share with.');
         }
         const pct = split.sharedPct ?? 0;
-        if (!(pct > 0 && pct <= 100)) {
-          throw new Error('Share must be between 0 and 100 percent.');
+        // Enhanced validation: check for NaN, Infinity, and edge cases
+        if (
+          typeof pct !== 'number' ||
+          !Number.isFinite(pct) ||
+          !(pct > 0 && pct < 100)
+        ) {
+          throw new Error(
+            `Share percentage must be a finite number between 0 and 100 (exclusive), got: ${pct}`
+          );
         }
         sharedTherapistId = split.sharedTherapistId;
         sharedPct = pct;
