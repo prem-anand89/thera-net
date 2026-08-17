@@ -1,0 +1,26 @@
+{
+  "name": "Thera.Net",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "user": "ubuntu",
+  "install": "./.cursor/install.sh",
+  "start": "./.cursor/start.sh",
+  "terminals": [
+    {
+      "name": "vite",
+      "command": "npm run dev"
+    }
+  ],
+  "ports": [
+    {
+      "name": "Vite dev server",
+      "port": 5173
+    },
+    {
+      "name": "Supabase API",
+      "port": 54321
+    }
+  ]
+}
