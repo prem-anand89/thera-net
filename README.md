@@ -18,7 +18,7 @@ framework.
 ## What it does
 
 ### Visit Management & Ledger
-- **Visit entry & patient lookup** — search by MRNO/name (create-if-missing, walk-in MRNO auto-generation), visit entry with catalog price autofill, price override with mandatory adjustment reason, package session tracking (1/3, 2/3 … with ₹0 continuations). Once a patient's confirmed, a reference panel shows their last visit and open-package progress alongside the form.
+- **Visit entry & patient lookup** — search by MRNO/name (create-if-missing, walk-in MRNO auto-generation with sequential format `PREFIXYY-NNNN`, e.g. `W26-0001` for the first walk-in of 2026, resetting yearly and auto-widening past 9999), visit entry with catalog price autofill, price override with mandatory adjustment reason, package session tracking (1/3, 2/3 … with ₹0 continuations). Once a patient's confirmed, a reference panel shows their last visit and open-package progress alongside the form.
 - **Edit visit** — condition, treatment notes, and (while not yet invoiced) bill amount, therapist, and date, editable after the fact from Ledger's row menu — scoped to the visit's own therapist or an admin. Clinical fields stay editable after invoicing; only billing locks.
 - **Today-first workspace** — default landing page showing today's visits with payment state at a glance (Paid / Collect ₹X / ₹0 session), open packages with stale flags, pending work (outstanding invoices, incomplete notes), and recent visits in a rolling 7/15/30 day window.
 - **Ledger** — full visit history with dense table, patient enrichment (last visit + count, treatment, condition, bill amount), therapist filter, date range search, bulk actions (invoice, repeat, split, delete). Visits/Invoices sub-tabs are URL-addressable (`/ledger?tab=invoices`); the Invoices sub-tab only appears for clinics with billing access. Invoices are only ever issued against a real visit — there's no standalone "manual invoice" path.
@@ -200,6 +200,22 @@ patients work.
 - Plus a New Visit rebuild, notes-completion prompting, Ledger hygiene,
   and Patients extracted to its own route. Full detail and shipped
   corrections are in the two build-plan docs.
+
+---
+
+### Phase 3b: Sync Fixes & Patient ID Redesign (LIVE)
+
+**Sequential Patient ID Format**
+- Walk-in MRNOs changed from date+random (e.g., `W-260816-K3F`) to sequential per-clinic-per-year format (`PREFIXYY-NNNN`, e.g., `W26-0001`, `W26-0002`).
+- Sequence derived by scanning the clinic's existing walk-in MRNOs for the highest number already used this year, ensuring consistency across offline devices and naturally resetting each January.
+- Auto-widening: once a clinic's yearly count exceeds 9999, the sequence automatically widens (e.g., `W26-10000`); no configuration needed, leveraging the existing `walkInMrnoPrefix` field in Setup.
+- Offline creation fully supported via retry-on-collision loop if a generated number collides.
+
+**Schema & Sync Fixes**
+- Added missing `pending_payment_note text` column to `visits` table — this nullable field (set from NewVisitPage, displayed on Workspace's Needs-attention list) was blocking all new visit creates with schema-cache 400 errors, preventing visit logging entirely.
+- Added missing `walk_in_mrno_prefix text` column to `clinics` table — SetupPage's clinic profile form always includes this field, so every clinic profile save was failing the same way.
+- Fixed `useClinicRole` querying with empty `clinicId` during Shell render before active clinic resolves — the hook now skips the query until it has a real clinic ID, eliminating wasted 400 errors on invalid uuid parameters.
+- Confirmed via direct SQL reproduction against the live project, then re-verified after migration application.
 
 ---
 
