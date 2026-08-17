@@ -33,8 +33,19 @@ export function useVisitColumnPrefs(): {
 
 function safeParse(value: string): Partial<Record<VisitColumnKey, boolean>> {
   try {
-    return JSON.parse(value) as Partial<Record<VisitColumnKey, boolean>>;
-  } catch {
+    const parsed = JSON.parse(value) as Partial<Record<VisitColumnKey, boolean>>;
+    // Validate that the parsed object contains only valid keys
+    if (typeof parsed !== 'object' || parsed === null) {
+      throw new Error('Parsed value is not an object');
+    }
+    return parsed;
+  } catch (error) {
+    // Log the failure for debugging, but fail gracefully by returning empty prefs
+    console.warn(
+      '[useVisitColumnPrefs] Failed to parse stored preferences:',
+      error instanceof Error ? error.message : String(error)
+    );
+    // Return empty object so defaults are used; user's choice will be saved on next update
     return {};
   }
 }

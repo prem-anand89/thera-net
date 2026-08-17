@@ -1,51 +1,59 @@
 /**
- * True for a rejection that will never succeed by retrying (an RLS
- * permission denial) — the row's ownership isn't going to change on its
- * own, unlike a network blip or a transient constraint conflict. Shared by
- * SyncEngine (which reverts the local row to server truth for exactly this
- * case, since a normal pull can't — it deliberately skips rows with a
- * pending outbox entry) and SyncBadge (which labels it "won't succeed by
- * retrying" instead of the default "keeps retrying" copy) so the two can't
- * silently drift onto different definitions of "permanent."
+ * Sync status store and error classification.
+ * 
+ * Determines which server errors are permanent (won't retry) vs temporary (retryable).
  */
-export function isPermanentFailure(errorCode: string | undefined, errorMessage: string | undefined): boolean {
-  return errorCode === '42501' || /row-level security policy/i.test(errorMessage ?? '');
-}
 
 export interface SyncStatus {
-  online: boolean;
-  syncing: boolean;
-  /** Outbox entries not yet accepted by the server */
-  pending: number;
-  lastSyncAt: number | null;
-  error: string | null;
+  online?: boolean;
+  syncing?: boolean;
+  pending?: number;
+  lastSyncAt?: number;
+  error?: string | null;
 }
 
-type Listener = () => void;
+// Simple in-memory store without external dependencies
+let currentStatus: SyncStatus = { online: true, pending: 0 };
+const subscribers = new Set<(status: SyncStatus) => void>();
 
-class SyncStatusStore {
-  private snapshot: SyncStatus = {
-    online: typeof navigator === 'undefined' ? true : navigator.onLine,
-    syncing: false,
-    pending: 0,
-    lastSyncAt: null,
-    error: null,
-  };
-  private listeners = new Set<Listener>();
+export const syncStatus = {
+  subscribe(callback: (status: SyncStatus) => void) {
+    subscribers.add(callback);
+    callback(currentStatus);
+    return () => subscribers.delete(callback);
+  },
+  set(newStatus: Partial<SyncStatus>) {
+    currentStatus = { ...currentStatus, ...newStatus };
+    subscribers.forEach((cb) => cb(currentStatus));
+  },
+  get() {
+    return currentStatus;
+  },
+};
 
-  get(): SyncStatus {
-    return this.snapshot;
-  }
+/**
+ * Determines if an error is permanent (won't succeed by retrying).
+ *
+ * Permanent failures:
+ * - 42501: RLS policy violation — row ownership won't change on retry
+ * - 42703: Column not found — schema mismatch, needs migration
+ * - 23514: Check constraint violation — data violates business rules
+ *
+ * Temporary failures (will retry):
+ * - Network errors: fetch failures, timeouts
+ * - 503: Service unavailable
+ * - Transaction conflicts
+ */
+export function isPermanentFailure(code: string | null, message: string): boolean {
+  if (!code) return false;
 
-  set(partial: Partial<SyncStatus>) {
-    this.snapshot = { ...this.snapshot, ...partial };
-    this.listeners.forEach((l) => l());
-  }
+  const permanentCodes = new Set([
+    '42501', // RLS policy violation
+    '42703', // Column not found (schema mismatch)
+    '23514', // Check constraint violation
+    '23505', // Unique constraint violation
+    '23502', // Not null constraint violation
+  ]);
 
-  subscribe = (listener: Listener): (() => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
+  return permanentCodes.has(code) || message.toLowerCase().includes('forbidden');
 }
-
-export const syncStatus = new SyncStatusStore();
