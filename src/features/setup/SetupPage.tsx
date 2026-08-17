@@ -392,7 +392,7 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
           label={
             <>
               Walk-in patient ID prefix
-              <InfoTip text="Used for auto-generated Patient IDs when a walk-in has no existing ID (format: PREFIX-YYMMDD-XXX). Defaults to 'W'." />
+              <InfoTip text="Used for auto-generated Patient IDs when a walk-in has no existing ID (format: PREFIXYY-0001, sequential per year). Defaults to 'W'." />
             </>
           }
         >

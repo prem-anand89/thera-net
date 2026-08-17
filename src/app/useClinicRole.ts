@@ -63,7 +63,10 @@ export function useClinicRole(clinicId: string): {
     let cancelled = false;
     const supabase = getSupabase();
     const userId = session?.user?.id;
-    if (!supabase || !userId) {
+    // clinicId arrives as '' for one render while Shell resolves which
+    // clinic is active (see its `clinic?.id ?? ''` call site) — querying
+    // with an empty clinic_id isn't just wasted, it 400s (not a valid uuid).
+    if (!supabase || !userId || !clinicId) {
       setLoading(false);
       return;
     }
