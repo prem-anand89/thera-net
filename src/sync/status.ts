@@ -1,4 +1,8 @@
-import { writable, type Writable } from 'svelte/store';
+/**
+ * Sync status store and error classification.
+ * 
+ * Determines which server errors are permanent (won't retry) vs temporary (retryable).
+ */
 
 export interface SyncStatus {
   online?: boolean;
@@ -8,7 +12,24 @@ export interface SyncStatus {
   error?: string | null;
 }
 
-export const syncStatus: Writable<SyncStatus> = writable({ online: true, pending: 0 });
+// Simple in-memory store without external dependencies
+let currentStatus: SyncStatus = { online: true, pending: 0 };
+const subscribers = new Set<(status: SyncStatus) => void>();
+
+export const syncStatus = {
+  subscribe(callback: (status: SyncStatus) => void) {
+    subscribers.add(callback);
+    callback(currentStatus);
+    return () => subscribers.delete(callback);
+  },
+  set(newStatus: Partial<SyncStatus>) {
+    currentStatus = { ...currentStatus, ...newStatus };
+    subscribers.forEach((cb) => cb(currentStatus));
+  },
+  get() {
+    return currentStatus;
+  },
+};
 
 /**
  * Determines if an error is permanent (won't succeed by retrying).
