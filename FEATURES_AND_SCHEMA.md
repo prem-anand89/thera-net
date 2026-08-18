@@ -269,13 +269,11 @@ src/services/            Orchestration layer (no React imports)
 
 src/features/            UI pages and components (React + TanStack Router)
   ├── workspace/         WorkspacePage (Today, Recent, Open Packages, Pending)
-  ├── visits/            VisitsPage at /ledger (Visits/Invoices sub-tabs, URL-addressable)
-  ├── patients/          PatientProfilePage, clinical notes, visit history
-  ├── insights/          Dashboard + monthly statement at /insights
-  ├── setup/             SetupPage at /settings (clinic configuration)
-  ├── invoices/          Invoice printing and management
-  ├── reports/           Monthly ledger and reports
-  └── patients/notes/    NoteEditorPage (Core Assessment notes)
+  ├── visits/            LedgerPage at /ledger (Visits/Invoices sub-tabs); NewVisitPage
+  ├── patients/          PatientsPage, PatientProfilePage, NoteEditorPage
+  ├── reports/           ReportsPage at /insights (Trends + monthly statement)
+  ├── settings/          SettingsPage at /settings; CreateClinicForm
+  └── invoices/          Invoice printing
 
 src/components/          Shared UI components
                          BodyChart, ScaleWidget, TreatmentNote, ColumnsPicker,

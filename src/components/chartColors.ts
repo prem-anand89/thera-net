@@ -1,7 +1,7 @@
 // Reference categorical palette — all 8 validated slots in fixed order,
 // assigned by index and never cycled (a 9th series would repeat hues and
 // break CVD separation; fold into "Other" before that ever happens).
-// Single source so DashboardPage, TherapistComparisonCard and PieChart
+// Single source so ReportsOverviewPage, TherapistComparisonCard and PieChart
 // can't drift onto two different palettes for the same series.
 //
 // Softened toward the surface (blend t=0.13 toward white, yellow left

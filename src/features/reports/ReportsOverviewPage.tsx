@@ -112,7 +112,7 @@ const SINGLE_VISIT_BUCKET_EDGES = [
   { max: Infinity, label: '60d+' },
 ];
 
-export function DashboardPage() {
+export function ReportsOverviewPage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
   const labels = clinicShareLabels(clinic);
@@ -335,7 +335,7 @@ export function DashboardPage() {
   }, [singleVisitPatients, singleVisitBucketFilter, hideClosedReasons]);
 
   // The clinic's own "why didn't they come back" list — same editable-list
-  // shape as the service catalog (see Catalog() in SetupPage.tsx), managed
+  // shape as the service catalog (see Catalog() in Settings), managed
   // inline here rather than routed through Settings since it's only ever
   // used from this one spot.
   const noReturnReasons = useLiveQuery(() => repos.noReturnReasonCatalog.list(clinic.id, true), [clinic.id]);

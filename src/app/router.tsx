@@ -15,11 +15,8 @@ import { WorkspacePage } from '@/features/workspace/WorkspacePage';
 const NewVisitPage = lazy(() =>
   import('@/features/visits/NewVisitPage').then((m) => ({ default: m.NewVisitPage }))
 );
-// VisitsPage.tsx is the Ledger screen — file/component name predates the
-// /archive -> /ledger rename; left as-is per the plan doc (route rename
-// only, no component rewrite).
 const LedgerPage = lazy(() =>
-  import('@/features/visits/VisitsPage').then((m) => ({ default: m.VisitsPage }))
+  import('@/features/visits/LedgerPage').then((m) => ({ default: m.LedgerPage }))
 );
 const PatientsPage = lazy(() =>
   import('@/features/patients/PatientsPage').then((m) => ({ default: m.PatientsPage }))
@@ -38,16 +35,14 @@ const MonthlyLedgerPrintPage = lazy(() =>
 const InvoicePrintPage = lazy(() =>
   import('@/features/invoices/InvoicePrintPage').then((m) => ({ default: m.InvoicePrintPage }))
 );
-// SetupPage.tsx is the Settings screen — same rename-only situation as
-// LedgerPage above.
 const SettingsPage = lazy(() =>
-  import('@/features/setup/SetupPage').then((m) => ({ default: m.SetupPage }))
+  import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
 );
 const ImportVisitsPage = lazy(() =>
   import('@/features/import/ImportVisitsPage').then((m) => ({ default: m.ImportVisitsPage }))
 );
-const InsightsPage = lazy(() =>
-  import('@/features/insights/InsightsPage').then((m) => ({ default: m.InsightsPage }))
+const ReportsPage = lazy(() =>
+  import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage }))
 );
 const ResetPasswordPage = lazy(() =>
   import('@/features/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage }))
@@ -134,7 +129,7 @@ const noteEditorRoute = createRoute({
 });
 
 // The monthly statement lives under the Reports nav tab (/insights), not
-// Ledger — see InsightsPage.tsx. This standalone route becomes a redirect
+// Ledger — see ReportsPage.tsx. This standalone route becomes a redirect
 // rather than a hard delete-to-404: nothing in the app links here anymore,
 // but an external bookmark or shared link might, and there's no way to be
 // certain none exist.
@@ -199,13 +194,13 @@ const insightsRoute = createRoute({
   path: '/insights',
   validateSearch: (search: Record<string, unknown>): { tab?: 'monthly' } =>
     search.tab === 'monthly' ? { tab: 'monthly' } : {},
-  component: InsightsPage,
+  component: ReportsPage,
 });
 
 // Invoices moved fully under Ledger as a sub-view — redirect rather than
 // delete, since nothing in the app links here anymore but an external
 // bookmark or shared link might. Lands on the Visits tab instead if the
-// viewer can't bill (VisitsPage.tsx resets an invalid `tab` — same guard
+// viewer can't bill (LedgerPage.tsx resets an invalid `tab` — same guard
 // PR 13 added for invoicingAccess changing mid-session).
 const invoicesRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,

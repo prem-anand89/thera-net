@@ -144,7 +144,7 @@ function toggleSet<T>(set: Set<T>, key: T, present: boolean): Set<T> {
   return next;
 }
 
-export function SetupPage() {
+export function SettingsPage() {
   const { canEditSettings } = usePermissions();
   const [activeKey, setActiveKey] = useState<SectionKey>('profile');
   const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
