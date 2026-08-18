@@ -50,13 +50,15 @@ function normalize(table: SyncedTable, obj: Record<string, unknown>) {
  * early instead of silently corrupting data.
  */
 function validateNormalizedRow(table: SyncedTable, row: Record<string, unknown>): boolean {
-  // Every synced row must have an id and updated_at from the schema
+  // Domain objects are camelCase after rowToDomain — do not look for
+  // Postgres snake_case here or every pulled row is skipped and a first
+  // login looks like "create your clinic".
   if (typeof row.id !== 'string' || !row.id) {
     console.error(`[Sync] ${table} row missing id:`, row);
     return false;
   }
-  if (typeof row.updated_at !== 'string' || !row.updated_at) {
-    console.error(`[Sync] ${table} row ${row.id} missing updated_at:`, row);
+  if (typeof row.updatedAt !== 'string' || !row.updatedAt) {
+    console.error(`[Sync] ${table} row ${row.id} missing updatedAt:`, row);
     return false;
   }
   return true;
