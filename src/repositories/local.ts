@@ -13,6 +13,7 @@ import type {
   ConsultationNote,
   UUID,
 } from '@/domain/types';
+import { coerceReferringSource } from '@/domain/types';
 import type {
   ClinicRepo,
   TherapistRepo,
@@ -124,7 +125,8 @@ const patients: PatientRepo = {
     const all = await db.patients.where('clinicId').equals(clinicId).toArray();
     return all.sort((a, b) => a.name.localeCompare(b.name));
   },
-  put: (p) => putWithOutbox('patients', p),
+  put: (p) =>
+    putWithOutbox('patients', { ...p, referringSource: coerceReferringSource(p.referringSource) }),
   removeLocal: async (id) => {
     await db.patients.delete(id);
   },

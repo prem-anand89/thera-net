@@ -1,7 +1,12 @@
-import { useState } from 'react';
-import type { Patient } from '@/domain/types';
+import { useEffect, useState } from 'react';
+import type { Patient, ReferringSource } from '@/domain/types';
+import {
+  REFERRING_SOURCE_LABELS,
+  coerceReferringSource,
+  referringSourceDetailLabel,
+} from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
-import { repos } from '@/services';
+import { patientService } from '@/services';
 
 interface EditPatientModalProps {
   patient: Patient;
@@ -16,23 +21,34 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
     age: patient.age ?? '',
     sex: patient.sex ?? '',
     phone: patient.phone ?? '',
-    referringSource: patient.referringSource ?? '',
+    referringSource: (coerceReferringSource(patient.referringSource) ?? '') as ReferringSource | '',
+    referringSourceDetail: patient.referringSourceDetail ?? '',
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setFormData({
+      name: patient.name,
+      age: patient.age ?? '',
+      sex: patient.sex ?? '',
+      phone: patient.phone ?? '',
+      referringSource: (coerceReferringSource(patient.referringSource) ?? '') as ReferringSource | '',
+      referringSourceDetail: patient.referringSourceDetail ?? '',
+    });
+  }, [patient]);
 
   async function handleSave() {
     setSaving(true);
     setError(null);
     try {
-      await repos.patients.put({
-        ...patient,
+      await patientService.update(patient.id, {
         name: formData.name,
-        age: formData.age ? Number(formData.age) : null,
-        sex: (formData.sex as 'M' | 'F' | 'Other' | null) || null,
+        age: formData.age === '' ? null : Number(formData.age),
+        sex: (formData.sex as Patient['sex']) || null,
         phone: formData.phone || null,
-        referringSource: (formData.referringSource as Patient['referringSource']) || null,
-        updatedAt: new Date().toISOString(),
+        referringSource: formData.referringSource || null,
+        referringSourceDetail: formData.referringSourceDetail || null,
       });
       onSave?.();
       onClose();
@@ -44,6 +60,8 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
   }
 
   if (!open) return null;
+
+  const detailLabel = referringSourceDetailLabel(formData.referringSource);
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -97,6 +115,7 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
                 <option value="">—</option>
                 <option value="M">M</option>
                 <option value="F">F</option>
+                <option value="Other">Other</option>
               </select>
             </div>
           </div>
@@ -109,6 +128,7 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               className="field-input"
               disabled={saving}
+              aria-label="Phone"
             />
           </div>
 
@@ -116,25 +136,47 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
             <label className="field-label">Referral source</label>
             <select
               value={formData.referringSource}
-              onChange={(e) => setFormData({ ...formData, referringSource: e.target.value })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  referringSource: e.target.value as ReferringSource | '',
+                  referringSourceDetail: '',
+                })
+              }
               className="field-input"
               disabled={saving}
+              aria-label="Referral source"
             >
               <option value="">—</option>
-              <option value="hospital">Hospital</option>
-              <option value="doctor">Doctor</option>
-              <option value="physiotherapist">Physiotherapist</option>
-              <option value="patient_referred">Patient referral</option>
-              <option value="self">Self</option>
+              {(Object.entries(REFERRING_SOURCE_LABELS) as [ReferringSource, string][]).map(
+                ([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                )
+              )}
             </select>
           </div>
+
+          {detailLabel && (
+            <div className="field-block">
+              <label className="field-label">{detailLabel}</label>
+              <input
+                type="text"
+                value={formData.referringSourceDetail}
+                onChange={(e) => setFormData({ ...formData, referringSourceDetail: e.target.value })}
+                className="field-input"
+                disabled={saving}
+              />
+            </div>
+          )}
         </div>
 
         <div className="modal-actions">
           <button className="btn-secondary" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button className="btn-primary" onClick={handleSave} disabled={saving}>
+          <button className="btn-primary" onClick={() => void handleSave()} disabled={saving}>
             {saving ? 'Saving...' : 'Save'}
           </button>
         </div>

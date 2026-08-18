@@ -3,6 +3,7 @@ import { getSupabase } from '@/lib/supabase';
 import { domainToRow, rowToDomain } from '@/repositories/rowMapping';
 import { onLocalWrite } from '@/repositories/local';
 import { syncStatus, isPermanentFailure } from './status';
+import { coerceReferringSource } from '@/domain/types';
 
 /**
  * Offline-first sync:
@@ -177,6 +178,19 @@ export class SyncEngine {
       if (!row) {
         await this.clearOutbox(entry.table, entry.rowId, maxSeq);
         continue;
+      }
+
+      // Older Edit Patient UI wrote referring_source values that fail the
+      // DB check constraint. Rewrite in place (no extra outbox row) so a
+      // stuck patients push can succeed on retry.
+      if (entry.table === 'patients') {
+        const referringSource = coerceReferringSource(
+          (row as { referringSource?: string | null }).referringSource
+        );
+        if (referringSource !== (row as { referringSource?: string | null }).referringSource) {
+          (row as { referringSource: string | null }).referringSource = referringSource;
+          await db.patients.put(row);
+        }
       }
 
       const { error } = await supabase.from(entry.table).upsert(domainToRow(row));

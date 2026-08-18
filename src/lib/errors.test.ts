@@ -80,10 +80,15 @@ describe('toFriendlyMessage', () => {
     ).toBe('This therapist has visits, notes, or invoices on record and cannot be permanently deleted. Deactivate them instead.');
   });
 
-  it('re-maps a double-leak wrapper Error that embeds a raw Postgrest message', () => {
+  it('translates a referring-source check constraint into an actionable message', () => {
     expect(
-      toFriendlyMessage(new Error('Could not issue invoice: patient has 3 visit(s); hide the patient instead of deleting'))
-    ).toBe('This patient has recorded visits and cannot be permanently deleted. Use "Hide" instead.');
+      toFriendlyMessage(
+        postgrestError(
+          'new row for relation "patients" violates check constraint "patients_referring_source_check"',
+          '23514'
+        )
+      )
+    ).toBe('That referral source is not valid. Pick one of the listed options and save again.');
   });
 });
 
