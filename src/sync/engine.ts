@@ -274,8 +274,7 @@ export class SyncEngine {
         }
         
         if (incoming.length > 0) {
-          // Now we've validated, it's safe to store — still type-safe without any[] cast
-          await Promise.all(incoming.map(row => db.table(table).put(row as any)));
+          await db.table(table).bulkPut(incoming);
         }
 
         cursor = (data[data.length - 1] as { updated_at: string }).updated_at;
