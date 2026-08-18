@@ -68,7 +68,7 @@ test.describe('authenticated flow', () => {
       .first()
       .getAttribute('value');
     await serviceSelect.selectOption(initialConsultation!);
-    await page.getByRole('button', { name: 'Collect later' }).click();
+    await page.getByRole('button', { name: 'Collect later', exact: true }).click();
     await page.getByRole('button', { name: 'Save visit' }).click();
     await expect(page.getByRole('heading', { name: 'Workspace' })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('row', { name: new RegExp(patientName) })).toBeVisible();
@@ -77,7 +77,8 @@ test.describe('authenticated flow', () => {
     await context.setOffline(false);
     await expect(syncButton(page, /^Sync: Synced$/)).toBeVisible({ timeout: 60_000 });
 
-    await page.getByRole('button', { name: 'Row actions' }).click();
+    const visitRow = page.getByRole('row', { name: new RegExp(patientName) });
+    await visitRow.getByRole('button', { name: 'Row actions' }).click();
     await page.getByRole('button', { name: 'Edit patient' }).click();
     await page.getByLabel('Phone').fill('9876543210');
     await page.getByLabel('Referral source').selectOption({ label: 'Hospital referral' });
@@ -86,9 +87,9 @@ test.describe('authenticated flow', () => {
     await expect(syncButton(page, /sync issue/i)).toHaveCount(0);
     await expect(syncButton(page, /^Sync: Synced$/)).toBeVisible({ timeout: 30_000 });
 
-    await page.getByRole('button', { name: /Collect/ }).click();
+    await visitRow.getByRole('button', { name: /Collect/ }).click();
     await expect(page.getByRole('heading', { name: 'Issue invoice' })).toBeVisible();
     await page.getByRole('button', { name: 'Issue invoice' }).click();
-    await expect(page.getByText(/EX\/\d{2}-\d{2}\/\d+/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/^EX\/\d{2}-\d{2}\/\d{4}$/)).toBeVisible({ timeout: 20_000 });
   });
 });
