@@ -146,10 +146,20 @@ function toggleSet<T>(set: Set<T>, key: T, present: boolean): Set<T> {
 }
 
 export function SettingsPage() {
+  const clinic = useClinic();
   const { canEditSettings } = usePermissions();
   const showFirstWeek = useFirstWeekChecklistVisible();
   const [activeKey, setActiveKey] = useState<SectionKey>('profile');
   const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
+  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
+  const [landedOnUnlinked, setLandedOnUnlinked] = useState(false);
+
+  useEffect(() => {
+    if (landedOnUnlinked || therapists === undefined) return;
+    if (unlinkedCount > 0) setActiveKey('team');
+    setLandedOnUnlinked(true);
+  }, [landedOnUnlinked, therapists, unlinkedCount]);
 
   // Left-rail sections that edit the clinic row report their dirty state up
   // here, so switching tabs with unsaved changes can warn before discarding
@@ -243,7 +253,17 @@ export function SettingsPage() {
           {activeKey === 'profile' && <ClinicProfileSection onDirtyChange={setProfileDirty} />}
           {activeKey === 'billing' && <BillingSection onDirtyChange={setBillingDirty} />}
           {activeKey === 'partner' && <PartnerSection onDirtyChange={setPartnerDirty} />}
-          {activeKey === 'team' && <Therapists />}
+          {activeKey === 'team' && (
+            <>
+              {unlinkedCount > 0 && (
+                <div className="rounded-2xl border border-[var(--amber)] bg-[var(--amber-light)] px-4 py-3 text-sm text-[var(--ink)]">
+                  {unlinkedCount} therapist{unlinkedCount === 1 ? '' : 's'} not linked to a login.
+                  Set Linked login so their Workspace isn’t empty.
+                </div>
+              )}
+              <Therapists />
+            </>
+          )}
           {activeKey === 'services' && <Catalog />}
           {activeKey === 'features' && <FeaturesSection onDirtyChange={setFeaturesDirty} />}
           {activeKey === 'data' && (
@@ -911,9 +931,9 @@ function DangerZone() {
       return;
     }
     const typed = prompt(
-      'This permanently deletes ALL patients, visits, invoices, payments and settlements for this clinic, and resets invoice numbering to 0001. The catalog, therapists, and logins are kept.\n\nThis cannot be undone. Type WIPE to confirm:'
+      `This permanently deletes ALL patients, visits, invoices, payments and settlements for this clinic, and resets invoice numbering to 0001. The catalog, therapists, and logins are kept.\n\nThis cannot be undone. Type the clinic name (${clinic.name}) to confirm:`
     );
-    if (typed !== 'WIPE') return;
+    if (typed?.trim() !== clinic.name) return;
     setBusy(true);
     try {
       const { data, error: rpcError } = await supabase.rpc('admin_wipe_clinic_data', {

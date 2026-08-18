@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService, invoiceService, paymentService, visitService } from '@/services';
+import { repos, dashboardService, visitService } from '@/services';
 import { db } from '@/lib/db';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
@@ -15,7 +15,6 @@ import {
   clinicBillingConfig,
   clinicShareLabels,
   type Patient,
-  type PaymentMode,
   type PaymentStatus,
   type Therapist,
   type UUID,
@@ -38,9 +37,11 @@ import { PatientOverview } from './PatientOverview';
 import { EditVisitModal } from './EditVisitModal';
 import { toFriendlyMessage } from '@/lib/errors';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
+import { TakePaymentDialog } from '@/components/TakePaymentDialog';
+import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
+import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { InvoicesPage } from '@/features/invoices/InvoicesPage';
 
-const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PATIENT_SEARCH_LIMIT = 6;
 
 type RecordsView = 'visits' | 'invoices';
@@ -118,13 +119,7 @@ function visitToCardData(
   };
 }
 
-/** What the invoice-issuance modal needs, independent of which tab opened it. */
-interface InvoicingTarget {
-  visitId: UUID;
-  patientLabel: string;
-  serviceLabel: string;
-  isPackage: boolean;
-}
+type InvoicingTarget = IssueInvoiceTarget;
 
 export function LedgerPage() {
   const clinic = useClinic();
@@ -161,12 +156,11 @@ export function LedgerPage() {
   const [onlyCollectedNoReceipt, setOnlyCollectedNoReceipt] = useState(false);
   const [patientQuery, setPatientQuery] = useState('');
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
+  const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
   const [splitting, setSplitting] = useState<Visit | null>(null);
   const [editing, setEditing] = useState<UUID | null>(null);
-  const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
-  const [paidNow, setPaidNow] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [editPatientId, setEditPatientId] = useState<UUID | null>(null);
+  const [, setError] = useState<string | null>(null);
 
   function applyDatePreset(preset: DatePreset) {
     setDatePreset(preset);
@@ -245,6 +239,7 @@ export function LedgerPage() {
   }, [directPayments]);
 
   const filteredPatient = search.patientId ? patientById.get(search.patientId) : undefined;
+  const editPatient = useLiveQuery(() => (editPatientId ? repos.patients.get(editPatientId) : undefined), [editPatientId]);
 
   const patientMatches = useMemo(() => {
     const q = patientQuery.trim().toLowerCase();
@@ -376,29 +371,6 @@ export function LedgerPage() {
         ? `As of last sync ${new Date(syncSnapshot.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
         : null;
 
-  async function issue() {
-    if (!invoicing) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const invoice = await invoiceService.issueForVisit(invoicing.visitId, paymentMode);
-      try {
-        await paymentService.setStatus(invoice.id, clinic.id, paidNow ? 'paid' : 'outstanding');
-      } catch (statusError) {
-        // Non-fatal: the invoice IS issued (retrying would fail with
-        // "already invoiced"), and a missing status row reads as Paid -
-        // correctable anytime from the Invoices page.
-        console.error('Could not record payment status', statusError);
-      }
-      setInvoicing(null);
-      void navigate({ to: '/invoices/$invoiceId/print', params: { invoiceId: invoice.id } });
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -491,7 +463,7 @@ export function LedgerPage() {
                 checked={onlyCollectedNoReceipt}
                 onChange={(e) => setOnlyCollectedNoReceipt(e.target.checked)}
               />
-              Collected, no receipt
+              Collected, no invoice
             </label>
             <div className="ml-auto flex flex-wrap items-end gap-2">
               <div className="flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
@@ -639,7 +611,6 @@ export function LedgerPage() {
                 groupByDate={true}
                 onInvoice={(row) => {
                   setError(null);
-                  setPaidNow(true);
                   setInvoicing({
                     visitId: row.visitId,
                     patientLabel: row.patientName,
@@ -647,6 +618,8 @@ export function LedgerPage() {
                     isPackage: row.packageTotal != null,
                   });
                 }}
+                onTakePayment={(row) => setTakingPayment(row)}
+                onEditPatient={(row) => setEditPatientId(row.patientId)}
                 onEdit={(row) => {
                   setError(null);
                   setEditing(row.visitId);
@@ -674,7 +647,7 @@ export function LedgerPage() {
             </>
           ) : (
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center text-sm text-[var(--muted)] shadow-sm">
-              No visits match "Collected, no receipt" in this range.
+              No visits match "Collected, no invoice" in this range.
             </div>
           )}
         </div>
@@ -689,49 +662,28 @@ export function LedgerPage() {
       {recordsView === 'invoices' && <InvoicesPage />}
 
       {invoicing && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">
-          <div className="w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5">
-            <h2 className="text-sm font-semibold text-[var(--ink)]">Issue invoice</h2>
-            <p className="text-sm text-[var(--muted)]">
-              {invoicing.patientLabel} - {invoicing.serviceLabel}
-              {invoicing.isPackage && ', all sessions of this package'}
-            </p>
-            <Field label="Payment mode">
-              <select
-                className={inputCls}
-                value={paymentMode}
-                onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}
-              >
-                {PAYMENT_MODES.map((m) => (
-                  <option key={m}>{m}</option>
-                ))}
-              </select>
-            </Field>
-            <div className="flex gap-4 text-sm">
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={paidNow} onChange={() => setPaidNow(true)} />
-                Paid now
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={!paidNow} onChange={() => setPaidNow(false)} />
-                Outstanding - pay later
-              </label>
-            </div>
-            <ErrorNote message={error} />
-            <p className="text-xs text-[var(--muted)]">
-              The invoice number is issued by the server and the bill becomes immutable - this
-              needs a connection and cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button className={btnSecondary} onClick={() => setInvoicing(null)}>
-                Cancel
-              </button>
-              <button className={btnPrimary} disabled={busy} onClick={() => void issue()}>
-                {busy ? 'Issuing...' : 'Issue invoice'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} />
+      )}
+
+      {takingPayment && (
+        <TakePaymentDialog
+          clinicId={clinic.id}
+          visitId={takingPayment.visitId}
+          invoiceId={takingPayment.invoiceId}
+          amountPaise={takingPayment.billPaise}
+          visitDate={takingPayment.visitDate}
+          patientLabel={takingPayment.patientName}
+          onClose={() => setTakingPayment(null)}
+        />
+      )}
+
+      {editPatientId && editPatient && (
+        <EditPatientModal
+          patient={editPatient}
+          open={true}
+          onClose={() => setEditPatientId(null)}
+          onSave={() => setEditPatientId(null)}
+        />
       )}
 
       {splitting && (

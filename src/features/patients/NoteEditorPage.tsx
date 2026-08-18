@@ -671,7 +671,11 @@ export function NoteEditorPage() {
                   color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
                 }}
               >
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: STATUS_DOT[completion] }} />
+                <span
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: STATUS_DOT[completion] }}
+                  title={completion === 'required-empty' ? 'Required for this note' : undefined}
+                />
                 {SECTION_LABELS[key]}
               </button>
             );
@@ -2266,7 +2270,10 @@ export function NoteEditorPage() {
         </div>
 
         {!readOnly && (
-          <div className="modal-actions" style={{ justifyContent: 'flex-start', marginBottom: 24 }}>
+          <div
+            className="modal-actions sticky bottom-20 z-[2] justify-start bg-[var(--paper)] sm:bottom-0"
+            style={{ justifyContent: 'flex-start', marginBottom: 0, paddingBottom: 16 }}
+          >
             <button className="btn-secondary" onClick={() => save('draft')} disabled={busy}>
               {busy ? 'Saving…' : 'Save draft'}
             </button>

@@ -18,6 +18,7 @@ interface EditPatientModalProps {
 export function EditPatientModal({ patient, open, onClose, onSave }: EditPatientModalProps) {
   const [formData, setFormData] = useState({
     name: patient.name,
+    mrno: patient.mrno,
     age: patient.age ?? '',
     sex: patient.sex ?? '',
     phone: patient.phone ?? '',
@@ -30,6 +31,7 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
   useEffect(() => {
     setFormData({
       name: patient.name,
+      mrno: patient.mrno,
       age: patient.age ?? '',
       sex: patient.sex ?? '',
       phone: patient.phone ?? '',
@@ -44,6 +46,7 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
     try {
       await patientService.update(patient.id, {
         name: formData.name,
+        mrno: formData.mrno,
         age: formData.age === '' ? null : Number(formData.age),
         sex: (formData.sex as Patient['sex']) || null,
         phone: formData.phone || null,
@@ -86,6 +89,18 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="field-input"
               disabled={saving}
+            />
+          </div>
+
+          <div className="field-block">
+            <label className="field-label">Patient ID</label>
+            <input
+              type="text"
+              value={formData.mrno}
+              onChange={(e) => setFormData({ ...formData, mrno: e.target.value })}
+              className="field-input"
+              disabled={saving}
+              aria-label="Patient ID"
             />
           </div>
 

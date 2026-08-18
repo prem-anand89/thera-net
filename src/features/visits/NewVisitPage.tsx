@@ -29,6 +29,7 @@ import {
   Pill,
   PackageThread,
 } from '@/components/ui';
+import { SearchableSelect } from '@/components/SearchableSelect';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { PAYMENT_CHIP } from '@/components/VisitCard';
 import { computeVisitPaymentState } from '@/domain/paymentState';
@@ -458,11 +459,7 @@ export function NewVisitPage() {
         await directPaymentService.logPayment(clinic.id, visit.id, billPaise, paymentMethod, visitDate, null);
       }
 
-      if (clinic.clinicalDocsEnabled) {
-        setJustSaved({ visitId: visit.id, patientId: patient.id, patientName: patient.name });
-      } else {
-        void navigate({ to: '/workspace' });
-      }
+      setJustSaved({ visitId: visit.id, patientId: patient.id, patientName: patient.name });
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
@@ -475,15 +472,26 @@ export function NewVisitPage() {
       <div className="mx-auto max-w-2xl space-y-4">
         <SectionCard title="Visit logged">
           <p className="text-sm text-[var(--ink)]">Visit saved for {justSaved.patientName}.</p>
-          <div className="mt-4 flex gap-2">
-            <Link
-              to="/patients/$patientId/notes/new"
-              params={{ patientId: justSaved.patientId }}
-              search={{ visitId: justSaved.visitId }}
-              className={btnPrimary}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {clinic.clinicalDocsEnabled && (
+              <Link
+                to="/patients/$patientId/notes/new"
+                params={{ patientId: justSaved.patientId }}
+                search={{ visitId: justSaved.visitId }}
+                className={btnPrimary}
+              >
+                Add clinical note
+              </Link>
+            )}
+            <button
+              className={clinic.clinicalDocsEnabled ? btnSecondary : btnPrimary}
+              onClick={() => {
+                setJustSaved(null);
+                void navigate({ to: '/visits/new', search: { patientId: justSaved.patientId } });
+              }}
             >
-              Add clinical note
-            </Link>
+              Another visit for {justSaved.patientName}
+            </button>
             <button className={btnSecondary} onClick={() => void navigate({ to: '/workspace' })}>
               Done
             </button>
@@ -494,7 +502,7 @@ export function NewVisitPage() {
   }
 
   const patientPanel = (
-    <SectionCard title="Patient">
+    <SectionCard title="Who">
       {patient ? (
         // Confirmed — collapsed to an identity header, reference tiles, and
         // a single way back to search. No outstanding-balance figure here
@@ -762,7 +770,7 @@ export function NewVisitPage() {
 
   const visitPanel = (
     <div className="space-y-4">
-      <SectionCard title="Visit">
+      <SectionCard title="What">
         {/* Single column throughout, matching the Patient panel above —
             the previous sm:grid-cols-2 paired up whichever two fields
             happened to land in the same row by grid auto-placement, which
@@ -781,20 +789,12 @@ export function NewVisitPage() {
               onChange={(e) => setVisitDate(e.target.value)}
             />
           </Field>
-          <Field label="Therapist *">
-            <select
-              className={inputCls}
-              value={therapistId}
-              onChange={(e) => setTherapistId(e.target.value)}
-            >
-              <option value="">Select…</option>
-              {(therapists ?? []).map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <SearchableSelect
+            label="Therapist *"
+            value={therapistId}
+            onChange={setTherapistId}
+            options={(therapists ?? []).map((t) => ({ value: t.id, label: t.name }))}
+          />
 
           <SegmentedToggle
             value={mode}
@@ -813,30 +813,26 @@ export function NewVisitPage() {
           />
 
           {mode === 'new' ? (
-            <Field label="Service *">
-              <select
-                className={inputCls}
-                value={serviceCatalogId}
-                onChange={(e) => {
-                  setServiceCatalogId(e.target.value);
-                  setBillOverride(null);
-                  setAdjustmentReason('');
-                }}
-              >
-                <option value="">Select…</option>
-                {categories.map(([category, items]) => (
-                  <optgroup key={category} label={category}>
-                    {items.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.name} — {formatINR(i.basePricePaise)}
-                        {i.sessionCount > 1 &&
-                          ` (${i.sessionCount} sessions, ${formatINR(effectivePricePerSession(i))}/session)`}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </Field>
+            <SearchableSelect
+              label="Service *"
+              value={serviceCatalogId}
+              onChange={(v) => {
+                setServiceCatalogId(v);
+                setBillOverride(null);
+                setAdjustmentReason('');
+              }}
+              options={categories.flatMap(([category, items]) =>
+                items.map((i) => ({
+                  value: i.id,
+                  label: `${i.name} — ${formatINR(i.basePricePaise)}${
+                    i.sessionCount > 1
+                      ? ` (${i.sessionCount} sessions, ${formatINR(effectivePricePerSession(i))}/session)`
+                      : ''
+                  }`,
+                  group: category,
+                }))
+              )}
+            />
           ) : (
             <Field label="Open package *">
               <select
@@ -855,6 +851,26 @@ export function NewVisitPage() {
             </Field>
           )}
 
+          <Field label="Condition (this visit)">
+            <input
+              className={inputCls}
+              value={condition}
+              onChange={(e) => setCondition(e.target.value)}
+            />
+          </Field>
+          <Field label="Treatment notes">
+            <input
+              className={inputCls}
+              placeholder='e.g. "FM An/Re S,S", "CST Sph Dysfunction"'
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </Field>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Money">
+        <div className="grid grid-cols-1 gap-3">
           <Field
             label={
               mode === 'continuation'
@@ -890,8 +906,8 @@ export function NewVisitPage() {
                 value={paymentChoice}
                 onChange={setPaymentChoice}
                 options={[
-                  { value: 'paid', label: 'Paid now' },
-                  { value: 'pending', label: 'Collect later' },
+                  { value: 'paid', label: 'Collected now' },
+                  { value: 'pending', label: 'Take payment later' },
                 ]}
               />
               {paymentChoice === 'paid' ? (
@@ -916,22 +932,6 @@ export function NewVisitPage() {
               )}
             </Field>
           )}
-
-          <Field label="Condition (this visit)">
-            <input
-              className={inputCls}
-              value={condition}
-              onChange={(e) => setCondition(e.target.value)}
-            />
-          </Field>
-          <Field label="Treatment notes">
-            <input
-              className={inputCls}
-              placeholder='e.g. "FM An/Re S,S", "CST Sph Dysfunction"'
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </Field>
         </div>
       </SectionCard>
 

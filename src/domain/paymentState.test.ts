@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeVisitPaymentState, isCollected } from './paymentState';
+import { computeVisitPaymentState, isCollected, paymentActions, paymentStatusLine } from './paymentState';
 import { rupeesToPaise as rs } from './money';
 
 const INV = 'invoice-1';
@@ -43,5 +43,25 @@ describe('isCollected', () => {
     expect(isCollected('outstanding')).toBe(false);
     expect(isCollected('uninvoiced')).toBe(false);
     expect(isCollected('zero_session')).toBe(false);
+  });
+});
+
+describe('paymentStatusLine', () => {
+  it('uses billed · collected · invoice for everyone', () => {
+    expect(paymentStatusLine('paid', '₹500')).toBe('₹500 billed · collected · invoiced');
+    expect(paymentStatusLine('collected_no_receipt', '₹500')).toBe('₹500 billed · collected · no invoice');
+    expect(paymentStatusLine('outstanding', '₹500')).toBe('₹500 billed · not collected · invoiced');
+    expect(paymentStatusLine('uninvoiced', '₹500')).toBe('₹500 billed · not collected · no invoice');
+    expect(paymentStatusLine('zero_session', '₹500')).toBe('₹0 session');
+  });
+});
+
+describe('paymentActions', () => {
+  it('splits take payment from issue invoice', () => {
+    expect(paymentActions('uninvoiced')).toEqual(['take_payment', 'issue_invoice']);
+    expect(paymentActions('outstanding')).toEqual(['take_payment']);
+    expect(paymentActions('collected_no_receipt')).toEqual(['issue_invoice']);
+    expect(paymentActions('paid')).toEqual([]);
+    expect(paymentActions('zero_session')).toEqual([]);
   });
 });

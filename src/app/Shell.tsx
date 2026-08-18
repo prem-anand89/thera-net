@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, ALL_SYNCED_TABLES } from '@/lib/db';
@@ -9,7 +9,7 @@ import { useClinicRole, CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicR
 import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { CreateClinicForm } from '@/features/settings/CreateClinicForm';
-import { SyncBadge } from '@/components/SyncBadge';
+import { SyncBadge, SyncStatusBanners } from '@/components/SyncBadge';
 
 /** Minimal stroke icons, one per main nav item — same visual language as
  *  the existing hamburger/close glyphs (currentColor, ~1.6px stroke,
@@ -54,6 +54,15 @@ function IconSettings({ className }: { className?: string }) {
       <path d="M4 5.5h7.5M4 10h11M4 14.5h7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       <circle cx="14" cy="5.5" r="1.7" fill="var(--surface)" stroke="currentColor" strokeWidth="1.6" />
       <circle cx="8.5" cy="14.5" r="1.7" fill="var(--surface)" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+function IconMore({ className }: { className?: string }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+      <circle cx="5" cy="10" r="1.4" fill="currentColor" />
+      <circle cx="10" cy="10" r="1.4" fill="currentColor" />
+      <circle cx="15" cy="10" r="1.4" fill="currentColor" />
     </svg>
   );
 }
@@ -262,32 +271,65 @@ export function Shell() {
             </div>
           </div>
         </header>
+        <SyncStatusBanners />
         <main className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:pb-6">
           <Suspense fallback={<div className="py-16 text-center text-sm text-[var(--muted)]">Loading…</div>}>
             <Outlet />
           </Suspense>
         </main>
-        {/* Bottom tab bar — primary navigation on mobile. Fixed, not
-            sticky, so it stays reachable regardless of scroll position,
-            the same way a native app's tab bar would; main gets matching
-            bottom padding (pb-24 above) so the last bit of every page's
-            content doesn't sit underneath it. Doesn't intercept touch
-            events outside its own bar, so the browser's native
-            back-swipe/back-button gesture is untouched. */}
-        <nav className="no-print fixed inset-x-0 bottom-0 z-10 flex border-t border-[var(--border)] bg-[var(--surface)] sm:hidden">
-          {nav.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className="flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium text-[var(--muted)] [&.active]:text-[var(--teal)]"
-            >
-              <item.Icon />
-              {item.label}
-            </Link>
-          ))}
+        <nav
+          className="no-print fixed inset-x-0 bottom-0 z-10 flex items-end border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] sm:hidden"
+          aria-label="Main"
+        >
+          <PhoneTab to="/workspace" label="Workspace" Icon={IconWorkspace} active={pathname.startsWith('/workspace')} />
+          <PhoneTab to="/patients" label="Patients" Icon={IconPatients} active={pathname.startsWith('/patients')} />
+          <Link
+            to="/visits/new"
+            aria-label="New visit"
+            className="flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center py-1"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--teal)] text-lg font-medium text-white">
+              +
+            </span>
+            <span className="sr-only">New visit</span>
+          </Link>
+          <PhoneTab to="/ledger" label="Ledger" Icon={IconLedger} active={pathname.startsWith('/ledger')} />
+          <PhoneTab
+            to="/more"
+            label="More"
+            Icon={IconMore}
+            active={
+              pathname.startsWith('/more') || pathname.startsWith('/settings') || pathname.startsWith('/insights')
+            }
+          />
         </nav>
       </div>
     </ClinicContext.Provider>
+  );
+}
+
+function PhoneTab({
+  to,
+  label,
+  Icon,
+  active,
+}: {
+  to: '/workspace' | '/patients' | '/ledger' | '/more';
+  label: string;
+  Icon: (props: { className?: string }) => ReactNode;
+  active: boolean;
+}) {
+  return (
+    <Link
+      to={to}
+      aria-current={active ? 'page' : undefined}
+      className={`flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium ${
+        active ? 'text-[var(--teal)]' : 'text-[var(--muted)]'
+      }`}
+    >
+      <Icon />
+      {label}
+    </Link>
   );
 }
 

@@ -5,18 +5,19 @@ import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import type { VisitPaymentState } from '@/domain/paymentState';
+import { paymentActions, paymentStatusLine } from '@/domain/paymentState';
 import { Pill, PackageThread, th, thNum, td, tdNum } from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 
 export const PAYMENT_CHIP: Record<
   VisitPaymentState,
-  { tone: 'green' | 'amber' | 'slate'; label: (bill: string) => string; actionLabel?: (bill: string) => string }
+  { tone: 'green' | 'amber' | 'slate'; label: (bill: string) => string }
 > = {
-  paid: { tone: 'green', label: () => 'Paid' },
-  collected_no_receipt: { tone: 'green', label: () => 'Collected' },
-  outstanding: { tone: 'amber', label: (bill) => `Outstanding ${bill}` },
-  uninvoiced: { tone: 'amber', label: (bill) => `Collect ${bill}`, actionLabel: (bill) => `Collect ${bill}` },
-  zero_session: { tone: 'slate', label: () => '₹0 session' },
+  paid: { tone: 'green', label: (bill) => paymentStatusLine('paid', bill) },
+  collected_no_receipt: { tone: 'green', label: (bill) => paymentStatusLine('collected_no_receipt', bill) },
+  outstanding: { tone: 'amber', label: (bill) => paymentStatusLine('outstanding', bill) },
+  uninvoiced: { tone: 'amber', label: (bill) => paymentStatusLine('uninvoiced', bill) },
+  zero_session: { tone: 'slate', label: () => paymentStatusLine('zero_session', '') },
 };
 
 /**
@@ -71,13 +72,11 @@ export interface VisitCardData {
  *  Repeat/Edit patient/Split/Delete never drift into two implementations. */
 function RowActionsMenu({
   data,
-  onEditPatient,
   onEdit,
   onSplit,
   onDelete,
 }: {
   data: VisitCardData;
-  onEditPatient?: () => void;
   onEdit?: () => void;
   onSplit?: () => void;
   onDelete: () => void;
@@ -85,7 +84,6 @@ function RowActionsMenu({
   const [menuOpen, setMenuOpen] = useState(false);
   const hasMenu =
     data.canRepeat ||
-    onEditPatient ||
     (data.canEdit && onEdit) ||
     data.canViewNotes ||
     (data.canSplit && onSplit) ||
@@ -115,18 +113,6 @@ function RowActionsMenu({
               >
                 Repeat
               </Link>
-            )}
-            {onEditPatient && (
-              <button
-                type="button"
-                className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onEditPatient();
-                }}
-              >
-                Edit patient
-              </button>
             )}
             {data.canEdit && onEdit && (
               <button
@@ -187,38 +173,46 @@ function RowActionsMenu({
 function PaymentStatusDisplay({
   data,
   onInvoice,
+  onTakePayment,
   canInvoice,
 }: {
   data: VisitCardData;
   onInvoice: () => void;
+  onTakePayment?: () => void;
   canInvoice: boolean;
 }) {
   const chip = PAYMENT_CHIP[data.paymentState];
+  const bill = formatINR(data.billPaise);
+  const actions = canInvoice ? paymentActions(data.paymentState) : [];
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
-      <div className="font-num text-sm text-[var(--ink)]">{formatINR(data.billPaise)}</div>
-      {chip.actionLabel && canInvoice ? (
-        <button
-          type="button"
-          className="rounded-full bg-[var(--rust-light)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:opacity-80"
-          onClick={onInvoice}
-        >
-          {chip.actionLabel(formatINR(data.billPaise))}
-        </button>
-      ) : chip.actionLabel ? (
-        // Same state as the clickable case above, but this viewer can't bill
-        // — a plain label, not a greyed-out button pretending to be one.
-        <Pill tone={chip.tone}>Awaiting billing</Pill>
-      ) : (
-        <Pill tone={chip.tone}>{chip.label(formatINR(data.billPaise))}</Pill>
+      <div className="font-num text-sm text-[var(--ink)]">{bill}</div>
+      <Pill tone={chip.tone}>{chip.label(bill)}</Pill>
+      {canInvoice && actions.length > 0 && (
+        <div className="flex flex-wrap justify-end gap-1">
+          {actions.includes('take_payment') && (
+            <button
+              type="button"
+              className="rounded-full bg-[var(--rust-light)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:opacity-80"
+              onClick={onTakePayment}
+            >
+              Take payment
+            </button>
+          )}
+          {actions.includes('issue_invoice') && (
+            <button
+              type="button"
+              className="rounded-full bg-[var(--teal-light)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:opacity-80"
+              onClick={onInvoice}
+            >
+              Issue invoice
+            </button>
+          )}
+        </div>
       )}
-      {data.invoiceId ? (
-        <Link to="/invoices/$invoiceId/print" params={{ invoiceId: data.invoiceId }} className="text-xs text-[var(--teal)] hover:underline">
-          Invoiced
-        </Link>
-      ) : data.billPaise > 0 ? (
-        <span className="text-xs text-[var(--muted)]">Not invoiced</span>
-      ) : null}
+      {!canInvoice && paymentActions(data.paymentState).length > 0 && (
+        <Pill tone="slate">Ask billing</Pill>
+      )}
       {data.needsNote && (
         <Link
           to="/patients/$patientId/notes/new"
@@ -239,6 +233,7 @@ export function SharedVisitCard({
   showDate,
   showPatient,
   onInvoice,
+  onTakePayment,
   onEditPatient,
   onEdit,
   onSplit,
@@ -249,11 +244,11 @@ export function SharedVisitCard({
   showDate: boolean;
   showPatient: boolean;
   onInvoice: () => void;
+  onTakePayment?: () => void;
   onEditPatient?: () => void;
   onEdit?: () => void;
   onSplit?: () => void;
   onDelete: () => void;
-  /** Whether this viewer can issue an invoice / collect payment. Defaults to true for callers that don't gate billing access. */
   canInvoice?: boolean;
 }) {
   const initials = showPatient
@@ -274,9 +269,16 @@ export function SharedVisitCard({
   const nameBlock = (
     <div className="min-w-0 flex-1">
       {showPatient && (
-        <Link to="/patients/$patientId" params={{ patientId: data.patientId }} className="font-display text-sm font-medium text-[var(--ink)] hover:underline">
-          {data.patientName} <span className="text-xs font-normal text-[var(--muted)]">{data.mrno}</span>
-        </Link>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <Link to="/patients/$patientId" params={{ patientId: data.patientId }} className="font-display text-sm font-medium text-[var(--ink)] hover:underline">
+            {data.patientName} <span className="text-xs font-normal text-[var(--muted)]">{data.mrno}</span>
+          </Link>
+          {onEditPatient && (
+            <button type="button" className="text-xs font-medium text-[var(--teal)] hover:underline" onClick={onEditPatient}>
+              Edit patient
+            </button>
+          )}
+        </div>
       )}
       <div className="text-xs text-[var(--muted)]" style={{ whiteSpace: 'normal' }}>
         {secondaryParts.map((part, i) => (
@@ -332,8 +334,8 @@ export function SharedVisitCard({
       <div className="hidden sm:contents">{nameBlock}</div>
 
       <div className="flex items-center justify-between gap-2 sm:contents">
-        <PaymentStatusDisplay data={data} onInvoice={onInvoice} canInvoice={canInvoice} />
-        <RowActionsMenu data={data} onEditPatient={onEditPatient} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
+        <PaymentStatusDisplay data={data} onInvoice={onInvoice} onTakePayment={onTakePayment} canInvoice={canInvoice} />
+        <RowActionsMenu data={data} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
       </div>
     </div>
   );
@@ -350,6 +352,7 @@ function VisitTable({
   columnPrefs,
   onColumnPrefsChange,
   onInvoice,
+  onTakePayment,
   onEditPatient,
   onEdit,
   onSplit,
@@ -362,6 +365,7 @@ function VisitTable({
   columnPrefs: Record<VisitColumnKey, boolean>;
   onColumnPrefsChange: (key: VisitColumnKey, visible: boolean) => void;
   onInvoice: (row: VisitCardData) => void;
+  onTakePayment?: (row: VisitCardData) => void;
   onEditPatient?: (row: VisitCardData) => void;
   onEdit?: (row: VisitCardData) => void;
   onSplit?: (row: VisitCardData) => void;
@@ -440,6 +444,15 @@ function VisitTable({
                       {row.patientName}
                     </Link>{' '}
                     <span className="text-xs text-[var(--muted)]">{row.mrno}</span>
+                    {onEditPatient && (
+                      <button
+                        type="button"
+                        className="ml-2 text-xs font-medium text-[var(--teal)] hover:underline"
+                        onClick={() => onEditPatient(row)}
+                      >
+                        Edit patient
+                      </button>
+                    )}
                   </td>
                 )}
                 {columnPrefs.therapist && <td className={td}>{row.therapistName}</td>}
@@ -457,12 +470,16 @@ function VisitTable({
                 )}
                 <td className={tdNum}>{formatINR(row.billPaise)}</td>
                 <td className={td}>
-                  <PaymentStatusDisplay data={row} onInvoice={() => onInvoice(row)} canInvoice={canInvoice} />
+                  <PaymentStatusDisplay
+                    data={row}
+                    onInvoice={() => onInvoice(row)}
+                    onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
+                    canInvoice={canInvoice}
+                  />
                 </td>
                 <td className={td}>
                   <RowActionsMenu
                     data={row}
-                    onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
                     onEdit={onEdit ? () => onEdit(row) : undefined}
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
@@ -564,6 +581,7 @@ export function ResponsiveVisitList({
   showPatient,
   groupByDate = false,
   onInvoice,
+  onTakePayment,
   onEditPatient,
   onEdit,
   onSplit,
@@ -575,11 +593,11 @@ export function ResponsiveVisitList({
   showPatient: boolean;
   groupByDate?: boolean;
   onInvoice: (row: VisitCardData) => void;
+  onTakePayment?: (row: VisitCardData) => void;
   onEditPatient?: (row: VisitCardData) => void;
   onEdit?: (row: VisitCardData) => void;
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
-  /** Whether this viewer can issue an invoice / collect payment. Defaults to true for callers that don't gate billing access. */
   canInvoice?: boolean;
 }) {
   const { prefs, setPref } = useVisitColumnPrefs();
@@ -605,6 +623,7 @@ export function ResponsiveVisitList({
                     showDate={showDate}
                     showPatient={showPatient}
                     onInvoice={() => onInvoice(row)}
+                    onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
                     onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
                     onEdit={onEdit ? () => onEdit(row) : undefined}
                     onSplit={onSplit ? () => onSplit(row) : undefined}
@@ -624,6 +643,7 @@ export function ResponsiveVisitList({
                 showDate={showDate}
                 showPatient={showPatient}
                 onInvoice={() => onInvoice(row)}
+                onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
                 onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
                 onEdit={onEdit ? () => onEdit(row) : undefined}
                 onSplit={onSplit ? () => onSplit(row) : undefined}
@@ -644,6 +664,7 @@ export function ResponsiveVisitList({
           columnPrefs={prefs}
           onColumnPrefsChange={setPref}
           onInvoice={onInvoice}
+          onTakePayment={onTakePayment}
           onEditPatient={onEditPatient}
           onEdit={onEdit}
           onSplit={onSplit}
