@@ -328,7 +328,10 @@ export function NewVisitPage() {
   // recent one, and shouldn't be silently overwritten once it resolves.
   useEffect(() => {
     if (!patient || patientVisits === undefined || search.repeatVisitId) return;
-    setTherapistId(lastVisit?.therapistId ?? '');
+    // Returning patients default to whoever saw them last. First visits
+    // leave the current pick alone — blanking it raced with the user's
+    // (or myTherapistId's) selection once Dexie resolved an empty history.
+    if (lastVisit?.therapistId) setTherapistId(lastVisit.therapistId);
   }, [patient, patientVisits, lastVisit?.therapistId, search.repeatVisitId]);
 
   useEffect(() => {

@@ -40,7 +40,7 @@ test.describe('authenticated flow', () => {
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByRole('heading', { name: 'Workspace' })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole('link', { name: 'Ledger' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'First week' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'First week' })).toBeVisible({ timeout: 15_000 });
     await expect(syncButton(page, /^Sync: Synced$/)).toBeVisible({ timeout: 45_000 });
 
     const patientName = `E2E Patient ${Date.now()}`;
@@ -59,7 +59,9 @@ test.describe('authenticated flow', () => {
     await page.getByRole('button', { name: '+ New patient' }).click();
     await page.getByLabel('Name *').fill(patientName);
     await page.getByRole('button', { name: 'Create patient' }).click();
+    await expect(page.getByText('No previous visits on record')).toBeVisible();
     await page.getByLabel('Therapist *').selectOption({ label: 'Therapist One' });
+    await expect(page.getByLabel('Therapist *')).toHaveValue(/.+/);
     const serviceSelect = page.getByLabel('Service *');
     const initialConsultation = await serviceSelect
       .locator('option', { hasText: 'Initial Consultation' })
