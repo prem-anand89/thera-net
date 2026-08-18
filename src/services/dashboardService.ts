@@ -149,6 +149,8 @@ export interface TodayVisitRow {
   patientId: UUID;
   patientName: string;
   mrno: string;
+  age: number | null;
+  sex: 'M' | 'F' | 'Other' | null;
   condition: string | null;
   phone: string | null;
   therapistId: UUID;
@@ -840,6 +842,8 @@ export function createDashboardService(repos: Repos) {
             patientId: v.patientId,
             patientName: patient?.name ?? 'Unknown',
             mrno: patient?.mrno ?? '—',
+            age: patient?.age ?? null,
+            sex: patient?.sex ?? null,
             condition: v.condition,
             phone: patient?.phone ?? null,
             therapistId: v.therapistId,

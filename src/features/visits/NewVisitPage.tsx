@@ -545,7 +545,7 @@ export function NewVisitPage() {
                       <span>
                         {formatDateDMY(lastVisit.visitDate)} — {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
                       </span>
-                      <Pill tone={chip.tone}>{chip.label(formatINR(lastVisit.actualBillPaise))}</Pill>
+                      <Pill tone={chip.tone}>{chip.label}</Pill>
                     </div>
                   );
                 })()

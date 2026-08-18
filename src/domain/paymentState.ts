@@ -41,23 +41,29 @@ export function isCollected(state: VisitPaymentState): boolean {
   return state === 'paid' || state === 'collected_no_receipt';
 }
 
-/**
- * One line for everyone: billed → collected → invoice.
- * `bill` is already formatted (e.g. ₹500).
- */
-export function paymentStatusLine(state: VisitPaymentState, bill: string): string {
+export function paymentStatusPhrase(state: VisitPaymentState): string {
   switch (state) {
     case 'zero_session':
       return '₹0 session';
     case 'paid':
-      return `${bill} billed · collected · invoiced`;
+      return 'collected · invoiced';
     case 'collected_no_receipt':
-      return `${bill} billed · collected · no invoice`;
+      return 'collected · no invoice';
     case 'outstanding':
-      return `${bill} billed · not collected · invoiced`;
+      return 'not collected · invoiced';
     case 'uninvoiced':
-      return `${bill} billed · not collected · no invoice`;
+      return 'not collected · no invoice';
   }
+}
+
+/**
+ * One line for everyone: billed → collected → invoice.
+ * `bill` is already formatted (e.g. ₹500). Prefer `paymentStatusPhrase`
+ * next to a separate amount so the rupee figure is not repeated.
+ */
+export function paymentStatusLine(state: VisitPaymentState, bill: string): string {
+  if (state === 'zero_session') return paymentStatusPhrase(state);
+  return `${bill} billed · ${paymentStatusPhrase(state)}`;
 }
 
 export type VisitPaymentAction = 'take_payment' | 'issue_invoice';

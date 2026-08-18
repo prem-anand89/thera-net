@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeVisitPaymentState, isCollected, paymentActions, paymentStatusLine } from './paymentState';
+import { computeVisitPaymentState, isCollected, paymentActions, paymentStatusLine, paymentStatusPhrase } from './paymentState';
 import { rupeesToPaise as rs } from './money';
 
 const INV = 'invoice-1';
@@ -43,6 +43,16 @@ describe('isCollected', () => {
     expect(isCollected('outstanding')).toBe(false);
     expect(isCollected('uninvoiced')).toBe(false);
     expect(isCollected('zero_session')).toBe(false);
+  });
+});
+
+describe('paymentStatusPhrase', () => {
+  it('omits the rupee figure so a Bill column can stand alone', () => {
+    expect(paymentStatusPhrase('paid')).toBe('collected · invoiced');
+    expect(paymentStatusPhrase('collected_no_receipt')).toBe('collected · no invoice');
+    expect(paymentStatusPhrase('outstanding')).toBe('not collected · invoiced');
+    expect(paymentStatusPhrase('uninvoiced')).toBe('not collected · no invoice');
+    expect(paymentStatusPhrase('zero_session')).toBe('₹0 session');
   });
 });
 

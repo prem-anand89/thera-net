@@ -26,6 +26,7 @@ import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueI
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
+import { EditVisitModal } from '@/features/visits/EditVisitModal';
 import { FirstWeekSetupLink } from '@/features/settings/FirstWeekChecklist';
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -52,7 +53,10 @@ function todayRowToCardData(
     patientId: row.patientId,
     patientName: row.patientName,
     mrno: row.mrno,
+    age: row.age,
+    sex: row.sex,
     condition: row.condition,
+    canEdit: isAdmin || row.therapistId === myTherapistId,
     serviceName: row.serviceName,
     sessionIndex: row.sessionIndex,
     packageTotal: row.packageTotal,
@@ -80,6 +84,8 @@ export function WorkspacePage() {
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
   const [attentionOpen, setAttentionOpen] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
+  const [, setVisitEditError] = useState<string | null>(null);
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
 
   // Staff (therapist) tier sees only their own visits in the today-scoped
@@ -201,6 +207,10 @@ export function WorkspacePage() {
             onInvoice={(row) => openInvoiceFor(row)}
             onTakePayment={(row) => setTakingPayment(row)}
             onEditPatient={(row) => setEditPatientId(row.patientId)}
+            onEdit={(row) => {
+              setVisitEditError(null);
+              setEditingVisitId(row.visitId);
+            }}
             onDelete={(row) => {
               if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
             }}
@@ -276,6 +286,14 @@ export function WorkspacePage() {
           visitDate={takingPayment.visitDate}
           patientLabel={takingPayment.patientName}
           onClose={() => setTakingPayment(null)}
+        />
+      )}
+
+      {editingVisitId && (
+        <EditVisitModal
+          visitId={editingVisitId}
+          onClose={() => setEditingVisitId(null)}
+          setError={setVisitEditError}
         />
       )}
 
