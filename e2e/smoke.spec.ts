@@ -48,10 +48,10 @@ test.describe('authenticated flow', () => {
     // Pull catalog while still online so therapist/service selects are populated.
     await page.getByRole('link', { name: '+ New visit' }).click();
     await expect(page.getByRole('heading', { name: 'New visit' })).toBeVisible();
-    await expect(page.getByLabel('Therapist *').locator('option', { hasText: 'Therapist One' })).toHaveCount(1, {
-      timeout: 30_000,
-    });
-    await expect(page.getByLabel('Service *').locator('option', { hasText: 'Initial Consultation' })).toHaveCount(1);
+    await page.getByLabel('Therapist *').click();
+    await expect(page.getByRole('option', { name: 'Therapist One' })).toBeVisible({ timeout: 30_000 });
+    await page.getByLabel('Service *').click();
+    await expect(page.getByRole('option', { name: /Initial Consultation/ })).toBeVisible();
 
     await context.setOffline(true);
     await expect(syncButton(page, /^Sync: Offline/)).toBeVisible();
@@ -60,14 +60,12 @@ test.describe('authenticated flow', () => {
     await page.getByLabel('Name *').fill(patientName);
     await page.getByRole('button', { name: 'Create patient' }).click();
     await expect(page.getByText('No previous visits on record')).toBeVisible();
-    await page.getByLabel('Therapist *').selectOption({ label: 'Therapist One' });
-    await expect(page.getByLabel('Therapist *')).toHaveValue(/.+/);
-    const serviceSelect = page.getByLabel('Service *');
-    const initialConsultation = await serviceSelect
-      .locator('option', { hasText: 'Initial Consultation' })
-      .first()
-      .getAttribute('value');
-    await serviceSelect.selectOption(initialConsultation!);
+    await page.getByLabel('Therapist *').fill('Therapist One');
+    await page.getByRole('option', { name: 'Therapist One' }).click();
+    await expect(page.getByLabel('Therapist *')).toHaveValue(/Therapist One/);
+    await page.getByLabel('Service *').fill('Initial Consultation');
+    await page.getByRole('option', { name: /Initial Consultation/ }).click();
+    await expect(page.getByLabel('Service *')).toHaveValue(/Initial Consultation/);
     await page.getByRole('button', { name: 'Take payment later', exact: true }).click();
     await page.getByRole('button', { name: 'Save visit' }).click();
     await expect(page.getByRole('heading', { name: 'Visit logged' })).toBeVisible({ timeout: 15_000 });

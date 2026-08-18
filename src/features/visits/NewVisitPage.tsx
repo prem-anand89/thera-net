@@ -502,7 +502,7 @@ export function NewVisitPage() {
   }
 
   const patientPanel = (
-    <SectionCard title="Who">
+    <SectionCard title="Patient">
       {patient ? (
         // Confirmed — collapsed to an identity header, reference tiles, and
         // a single way back to search. No outstanding-balance figure here
@@ -770,7 +770,7 @@ export function NewVisitPage() {
 
   const visitPanel = (
     <div className="space-y-4">
-      <SectionCard title="What">
+      <SectionCard title="Visit">
         {/* Single column throughout, matching the Patient panel above —
             the previous sm:grid-cols-2 paired up whichever two fields
             happened to land in the same row by grid auto-placement, which
@@ -869,7 +869,7 @@ export function NewVisitPage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Money">
+      <SectionCard title="Billing">
         <div className="grid grid-cols-1 gap-3">
           <Field
             label={

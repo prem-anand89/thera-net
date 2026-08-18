@@ -20,7 +20,7 @@ export const PAYMENT_CHIP: Record<
   zero_session: { tone: 'slate', label: paymentStatusPhrase('zero_session') },
 };
 
-/** ID · age · sex under the name, matching New visit's Who panel. */
+/** ID · age · sex under the name, matching New visit's Patient panel. */
 export function patientIdentityLine(
   mrno: string,
   age?: number | null,
