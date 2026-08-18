@@ -84,6 +84,7 @@ export function MonthlyStatementPage() {
         </div>
       </div>
 
+      <p className="mb-2 text-xs text-[var(--muted)] sm:hidden">Swipe sideways to see more columns.</p>
       <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
         <MonthlyReportTable
           report={report}

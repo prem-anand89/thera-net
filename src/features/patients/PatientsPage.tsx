@@ -1,24 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, patientService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { usePermissions } from '@/app/usePermissions';
+import { formatINR } from '@/domain/money';
+import { computeVisitPaymentState, paymentActions, paymentStatusLine } from '@/domain/paymentState';
+import { EditPatientModal } from './EditPatientModal';
 import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, monthName, formatDateDMY } from '@/domain/fiscalYear';
+import { type Patient, type Visit } from '@/domain/types';
 import {
-  referringSourceDetailLabel,
-  REFERRING_SOURCE_LABELS,
-  type Patient,
-  type ReferringSource,
-  type Visit,
-} from '@/domain/types';
-import {
-  btnPrimary,
-  btnSecondary,
   inputCls,
   th,
   td,
   ErrorNote,
-  Field,
   Pill,
   PackageThread,
   SectionCard,
@@ -26,7 +22,7 @@ import {
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
 
-type PatientSortKey = 'name' | 'mrno' | 'age' | 'condition';
+type PatientSortKey = 'name' | 'mrno' | 'age' | 'condition' | 'lastVisit';
 const PATIENT_COMPARATORS = {
   name: byString<Patient>((p) => p.name),
   mrno: byString<Patient>((p) => p.mrno),
@@ -45,11 +41,14 @@ export function PatientsPage() {
 
 function AllPatientsSection() {
   const clinic = useClinic();
+  const { myTherapistId } = useWorkspaceScope();
+  const { canBill } = usePermissions();
   const [query, setQuery] = useState('');
+  const [chip, setChip] = useState<'all' | 'needs_invoice' | 'mine'>('all');
   const [showHidden, setShowHidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Patient | null>(null);
-  const sort = useSort<PatientSortKey>('name');
+  const sort = useSort<PatientSortKey>('lastVisit', 'desc');
 
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
   const [fyStartYear, setFyStartYear] = useState(currentFy.startYear);
@@ -80,6 +79,8 @@ function AllPatientsSection() {
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
   const outstanding = useLiveQuery(() => dashboardService.outstandingInvoices(clinic.id), [clinic.id]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
+  const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
 
   const therapistName = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
@@ -104,6 +105,32 @@ function AllPatientsSection() {
     return map;
   }, [allVisits]);
 
+  const statusByInvoiceId = useMemo(
+    () => new Map((invoicePayments ?? []).map((p) => [p.invoiceId, p.status])),
+    [invoicePayments]
+  );
+  const directPaymentByVisitId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of directPayments ?? []) {
+      map.set(p.visitId, (map.get(p.visitId) ?? 0) + p.amountPaise);
+    }
+    return map;
+  }, [directPayments]);
+
+  function latestState(v: Visit) {
+    return computeVisitPaymentState(
+      v.actualBillPaise,
+      v.invoiceId ?? null,
+      directPaymentByVisitId.get(v.id) ?? 0,
+      v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+    );
+  }
+
+  const comparators = {
+    ...PATIENT_COMPARATORS,
+    lastVisit: byString<Patient>((p) => visitStatsByPatient.get(p.id)?.lastVisitOn ?? ''),
+  };
+
   const openPackageByPatient = useMemo(() => {
     const map = new Map<string, { sessionsLogged: number; packageTotal: number }>();
     for (const p of openPackages ?? []) {
@@ -118,14 +145,27 @@ function AllPatientsSection() {
   );
 
   const q = query.trim().toLowerCase();
-  const active = (all ?? []).filter(
-    (p) =>
-      !p.deletedAt &&
-      (!q || p.mrno.toLowerCase().startsWith(q) || p.name.toLowerCase().includes(q)) &&
-      (periodPatientIds === null || periodPatientIds.has(p.id))
-  );
+  const phoneQ = q.replace(/\D/g, '');
+  const active = (all ?? []).filter((p) => {
+    if (p.deletedAt) return false;
+    const matchesQuery =
+      !q ||
+      p.mrno.toLowerCase().startsWith(q) ||
+      p.name.toLowerCase().includes(q) ||
+      (phoneQ.length >= 3 && (p.phone ?? '').replace(/\D/g, '').includes(phoneQ));
+    if (!matchesQuery) return false;
+    if (periodPatientIds !== null && !periodPatientIds.has(p.id)) return false;
+    const stats = visitStatsByPatient.get(p.id);
+    if (chip === 'mine') {
+      return stats?.latestVisit.therapistId === myTherapistId;
+    }
+    if (chip === 'needs_invoice') {
+      return stats ? paymentActions(latestState(stats.latestVisit)).includes('issue_invoice') : false;
+    }
+    return true;
+  });
   const hidden = (all ?? []).filter((p) => p.deletedAt);
-  const rows = applySort(active, PATIENT_COMPARATORS, sort);
+  const rows = applySort(active, comparators, sort);
 
   async function hide(p: Patient) {
     if (
@@ -202,11 +242,31 @@ function AllPatientsSection() {
           </div>
           <input
             className={`${inputCls} max-w-xs`}
-            placeholder="Search by Patient ID or name..."
+            placeholder="Search by Patient ID, name, or phone…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+      </div>
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {(
+          [
+            { key: 'all', label: 'All' },
+            { key: 'needs_invoice', label: 'Needs invoice' },
+            { key: 'mine', label: 'My patients' },
+          ] as const
+        ).map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            className={`min-h-11 rounded-full px-3 py-1 text-xs font-medium ${
+              chip === c.key ? 'bg-[var(--teal-light)] text-[var(--teal)]' : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+            }`}
+            onClick={() => setChip(c.key)}
+          >
+            {c.label}
+          </button>
+        ))}
       </div>
       {selectedPeriod && (
         <p className="mb-3 text-xs text-[var(--muted)]">
@@ -239,7 +299,21 @@ function AllPatientsSection() {
                 patient={p}
                 stats={visitStatsByPatient.get(p.id)}
                 pkg={openPackageByPatient.get(p.id)}
-                isOutstanding={outstandingMrnos.has(p.mrno)}
+                paymentLine={
+                  visitStatsByPatient.get(p.id)
+                    ? paymentStatusLine(
+                        latestState(visitStatsByPatient.get(p.id)!.latestVisit),
+                        formatINR(visitStatsByPatient.get(p.id)!.latestVisit.actualBillPaise)
+                      )
+                    : null
+                }
+                nextAction={
+                  visitStatsByPatient.get(p.id) &&
+                  canBill &&
+                  paymentActions(latestState(visitStatsByPatient.get(p.id)!.latestVisit)).includes('issue_invoice')
+                    ? 'invoice'
+                    : 'visit'
+                }
                 therapistName={therapistName}
                 onEdit={() => setEditing(p)}
                 onHide={() => void hide(p)}
@@ -254,7 +328,7 @@ function AllPatientsSection() {
                   <SortHeader label="Patient ID" k="mrno" sort={sort} />
                   <SortHeader label="Name" k="name" sort={sort} />
                   <SortHeader label="Primary condition" k="condition" sort={sort} />
-                  <th className={th}>Last visit</th>
+                  <SortHeader label="Last visit" k="lastVisit" sort={sort} firstDir="desc" />
                   <th className={th}>Therapist</th>
                   <th className={th}>Treatment</th>
                   <th className={th}>Bill</th>
@@ -318,21 +392,20 @@ function AllPatientsSection() {
                           '-'
                         )}
                       </td>
-                      <td className={`${td} font-num text-right`}>
-                        {stats?.latestVisit ? (
-                          <span className="text-sm">INR {Math.round(stats.latestVisit.actualBillPaise / 100)}</span>
-                        ) : (
-                          '-'
-                        )}
+                      <td className={`${td} text-xs`}>
+                        {stats?.latestVisit
+                          ? paymentStatusLine(latestState(stats.latestVisit), formatINR(stats.latestVisit.actualBillPaise))
+                          : '-'}
                       </td>
                       <td className={td}>{p.phone ?? '-'}</td>
                       <td className={`${td} whitespace-nowrap`}>
-                        <button className="text-xs text-[var(--muted)] hover:text-[var(--teal)]" onClick={() => setEditing(p)}>
-                          Edit
-                        </button>
-                        <button className="ml-3 text-xs text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => void hide(p)}>
-                          Hide
-                        </button>
+                        <Link
+                          to="/visits/new"
+                          search={{ patientId: p.id }}
+                          className="text-xs font-medium text-[var(--teal)] hover:underline"
+                        >
+                          + Visit
+                        </Link>
                       </td>
                     </tr>
                   );
@@ -379,7 +452,9 @@ function AllPatientsSection() {
         </div>
       )}
 
-      {editing && <EditPatientRowModal patient={editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <EditPatientModal patient={editing} open={true} onClose={() => setEditing(null)} onSave={() => setEditing(null)} />
+      )}
     </SectionCard>
   );
 }
@@ -391,15 +466,15 @@ function PatientCard({
   patient: p,
   stats,
   pkg,
-  isOutstanding,
+  paymentLine,
+  nextAction,
   therapistName,
-  onEdit,
-  onHide,
 }: {
   patient: Patient;
   stats: { lastVisitOn: string; visitCount: number; latestVisit: Visit } | undefined;
   pkg: { sessionsLogged: number; packageTotal: number } | undefined;
-  isOutstanding: boolean;
+  paymentLine: string | null;
+  nextAction: 'invoice' | 'visit';
   therapistName: Map<string, string>;
   onEdit: () => void;
   onHide: () => void;
@@ -418,171 +493,43 @@ function PatientCard({
 
   return (
     <div className="flex items-start gap-3 px-3 py-3">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
-        {initials || '?'}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <Link
-          to="/patients/$patientId"
-          params={{ patientId: p.id }}
-          className="font-display text-sm font-medium text-[var(--ink)] hover:underline"
-        >
-          {p.name} <span className="text-xs font-normal text-[var(--muted)]">{p.mrno}</span>
-        </Link>
-        {p.mrnoSource === 'auto' && (
-          <span className="ml-1.5 align-middle">
-            <Pill tone="slate">walk-in</Pill>
-          </span>
-        )}
-
-        {secondaryParts.length > 0 && (
-          <div className="text-xs text-[var(--muted)]">{secondaryParts.join(' · ')}</div>
-        )}
-
-        {stats ? (
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">
-            <span className="font-num text-[var(--ink)]">{formatDateDMY(stats.lastVisitOn)}</span>
-            <span>· {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}</span>
-            {pkg && <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />}
-            {isOutstanding && <Pill tone="amber">Outstanding</Pill>}
+      <Link
+        to="/patients/$patientId"
+        params={{ patientId: p.id }}
+        className="flex min-w-0 flex-1 items-start gap-3 text-left"
+      >
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
+          {initials || '?'}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-display text-sm font-medium text-[var(--ink)]">
+            {p.name} <span className="text-xs font-normal text-[var(--muted)]">{p.mrno}</span>
           </div>
-        ) : (
-          <div className="mt-1 text-xs text-[var(--muted)]">No visits yet</div>
-        )}
-      </div>
-
-      <div className="flex shrink-0 flex-col items-end gap-1 whitespace-nowrap text-xs">
-        <button className="text-[var(--muted)] hover:text-[var(--teal)]" onClick={onEdit}>
-          Edit
-        </button>
-        <button className="text-[var(--muted)] hover:text-[var(--rust)]" onClick={onHide}>
-          Hide
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// Named distinctly from the sibling EditPatientModal.tsx (used by
-// PatientProfilePage) — same concept, different form fields and a
-// different save path (patientService.update vs. repos.patients.put
-// directly); not consolidated here since that's outside this rename's
-// scope.
-function EditPatientRowModal({ patient, onClose }: { patient: Patient; onClose: () => void }) {
-  const [form, setForm] = useState(patient);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => setForm(patient), [patient]);
-
-  const set = (patch: Partial<Patient>) => setForm((f) => ({ ...f, ...patch }));
-
-  async function save() {
-    setError(null);
-    if (form.mrno.trim() !== patient.mrno && !confirm(`Change Patient ID from ${patient.mrno} to ${form.mrno.trim()}?`)) {
-      return;
-    }
-    setBusy(true);
-    try {
-      await patientService.update(patient.id, {
-        mrno: form.mrno,
-        name: form.name,
-        age: form.age,
-        sex: form.sex,
-        phone: form.phone,
-        primaryCondition: form.primaryCondition,
-        referringSource: form.referringSource,
-        referringSourceDetail: form.referringSourceDetail,
-      });
-      onClose();
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">
-      <div className="w-full max-w-md space-y-4 rounded-[10px] bg-[var(--surface)] p-5">
-        <h2 className="text-sm font-semibold text-[var(--ink)]">Edit patient</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Name">
-            <input className={inputCls} value={form.name} onChange={(e) => set({ name: e.target.value })} />
-          </Field>
-          <Field label="Patient ID">
-            <input className={inputCls} value={form.mrno} onChange={(e) => set({ mrno: e.target.value })} />
-          </Field>
-          <Field label="Age">
-            <input
-              type="number"
-              className={inputCls}
-              value={form.age ?? ''}
-              onChange={(e) => set({ age: e.target.value === '' ? null : Number(e.target.value) })}
-            />
-          </Field>
-          <Field label="Sex">
-            <select
-              className={inputCls}
-              value={form.sex ?? ''}
-              onChange={(e) => set({ sex: (e.target.value || null) as Patient['sex'] })}
-            >
-              <option value="">-</option>
-              <option value="M">M</option>
-              <option value="F">F</option>
-              <option value="Other">Other</option>
-            </select>
-          </Field>
-          <Field label="Phone">
-            <input className={inputCls} value={form.phone ?? ''} onChange={(e) => set({ phone: e.target.value || null })} />
-          </Field>
-          <Field label="Primary condition">
-            <input
-              className={inputCls}
-              value={form.primaryCondition ?? ''}
-              onChange={(e) => set({ primaryCondition: e.target.value || null })}
-            />
-          </Field>
-          <Field label="Referring source">
-            <select
-              className={inputCls}
-              value={form.referringSource ?? ''}
-              onChange={(e) =>
-                set({
-                  referringSource: (e.target.value || null) as ReferringSource | null,
-                  referringSourceDetail: null,
-                })
-              }
-            >
-              <option value="">-</option>
-              {(Object.entries(REFERRING_SOURCE_LABELS) as [ReferringSource, string][]).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {referringSourceDetailLabel(form.referringSource) && (
-            <Field label={referringSourceDetailLabel(form.referringSource)!}>
-              <input
-                className={inputCls}
-                value={form.referringSourceDetail ?? ''}
-                onChange={(e) => set({ referringSourceDetail: e.target.value })}
-              />
-            </Field>
+          {secondaryParts.length > 0 && (
+            <div className="text-xs text-[var(--muted)]">{secondaryParts.join(' · ')}</div>
+          )}
+          {stats ? (
+            <div className="mt-1 text-xs text-[var(--muted)]">
+              <span className="font-num text-[var(--ink)]">{formatDateDMY(stats.lastVisitOn)}</span>
+              {pkg && (
+                <span className="ml-1.5">
+                  <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />
+                </span>
+              )}
+              {paymentLine && <div className="mt-0.5">{paymentLine}</div>}
+            </div>
+          ) : (
+            <div className="mt-1 text-xs text-[var(--muted)]">No visits yet</div>
           )}
         </div>
-        <ErrorNote message={error} />
-        <div className="flex justify-end gap-2">
-          <button className={btnSecondary} onClick={onClose}>
-            Cancel
-          </button>
-          <button className={btnPrimary} disabled={busy} onClick={() => void save()}>
-            {busy ? 'Saving...' : 'Save'}
-          </button>
-        </div>
-      </div>
+      </Link>
+      <Link
+        to="/visits/new"
+        search={{ patientId: p.id }}
+        className="min-h-11 shrink-0 text-xs font-medium text-[var(--teal)] hover:underline"
+      >
+        {nextAction === 'invoice' ? 'Needs invoice' : '+ Visit'}
+      </Link>
     </div>
   );
 }

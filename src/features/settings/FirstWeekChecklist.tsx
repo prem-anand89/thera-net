@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 import { btnSecondary } from '@/components/ui';
@@ -51,7 +52,18 @@ export async function dismissFirstWeekChecklist() {
   await db.meta.put({ key: FIRST_WEEK_CHECKLIST_META_KEY, value: '1' });
 }
 
-/** One-page go-live runbook for clinic admins. Same copy on Workspace and Settings. */
+export function FirstWeekSetupLink() {
+  const visible = useFirstWeekChecklistVisible();
+  if (!visible) return null;
+  return (
+    <Link
+      to="/settings"
+      className="text-sm text-[var(--muted)] hover:text-[var(--teal)]"
+    >
+      Setup: first week
+    </Link>
+  );
+}
 export function FirstWeekChecklist({ compact }: { compact?: boolean }) {
   return (
     <section

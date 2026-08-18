@@ -43,7 +43,7 @@ export function MonthlyReportTable({
     <table className="min-w-full divide-y divide-[var(--border)]">
       <thead className="bg-[var(--paper)]">
         <tr>
-          <th className={th}>Therapist</th>
+          <th className={`${th} sticky left-0 z-[1] bg-[var(--paper)]`}>Therapist</th>
           <th className={thNum}>Bill Amount</th>
           {hospitalSplit && (
             <th className={thNum}>
@@ -88,13 +88,13 @@ export function MonthlyReportTable({
       <tbody className="divide-y divide-[var(--border)]">
         {(report?.rows ?? []).map((r) => (
           <tr key={r.therapistId}>
-            <td className={td}>{r.therapistName}</td>
+            <td className={`${td} sticky left-0 bg-[var(--surface)]`}>{r.therapistName}</td>
             {cells(r)}
           </tr>
         ))}
         {report && (
           <tr className="bg-[var(--paper)] font-semibold">
-            <td className={td}>Total</td>
+            <td className={`${td} sticky left-0 bg-[var(--paper)]`}>Total</td>
             {cells(report.total)}
           </tr>
         )}

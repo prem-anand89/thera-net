@@ -2,11 +2,11 @@ import { useState, type ReactNode } from 'react';
 import { paiseToRupees, rupeesToPaise, type Paise } from '@/domain/money';
 
 export const inputCls =
-  'w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm focus:border-[var(--teal)] focus:outline-none disabled:bg-[var(--paper)]';
+  'w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-base sm:text-sm focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/30 disabled:bg-[var(--paper)]';
 export const btnPrimary =
-  'rounded-md bg-[var(--teal)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--teal-strong)] disabled:opacity-50';
+  'min-h-11 rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--teal-strong)] disabled:opacity-50';
 export const btnSecondary =
-  'rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--paper)] disabled:opacity-50';
+  'min-h-11 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--paper)] disabled:opacity-50';
 
 export function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
@@ -70,7 +70,7 @@ export function StatTile({ label, value }: { label: string; value: ReactNode }) 
   return (
     <div className="min-w-[86px] flex-1 basis-[86px] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 shadow-sm">
       <div className="truncate text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
-      <div className="font-num mt-0.5 text-base font-semibold text-[var(--ink)]">{value}</div>
+      <div className="font-num mt-0.5 text-xl font-semibold text-[var(--ink)] sm:text-2xl">{value}</div>
     </div>
   );
 }

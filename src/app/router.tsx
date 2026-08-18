@@ -44,6 +44,9 @@ const ImportVisitsPage = lazy(() =>
 const ReportsPage = lazy(() =>
   import('@/features/reports/ReportsPage').then((m) => ({ default: m.ReportsPage }))
 );
+const MorePage = lazy(() =>
+  import('@/features/more/MorePage').then((m) => ({ default: m.MorePage }))
+);
 const ResetPasswordPage = lazy(() =>
   import('@/features/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage }))
 );
@@ -210,6 +213,12 @@ const invoicesRedirectRoute = createRoute({
   },
 });
 
+const moreRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/more',
+  component: MorePage,
+});
+
 const resetPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reset-password',
@@ -235,6 +244,7 @@ const routeTree = rootRoute.addChildren([
   importVisitsRoute,
   importVisitsRedirectRoute,
   insightsRoute,
+  moreRoute,
   resetPasswordRoute,
 ]);
 
