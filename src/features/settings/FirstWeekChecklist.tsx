@@ -36,8 +36,15 @@ const STEPS: { title: string; body: string }[] = [
 ];
 
 export function useFirstWeekChecklistVisible() {
-  const row = useLiveQuery(() => db.meta.get(FIRST_WEEK_CHECKLIST_META_KEY), []);
-  return row === undefined ? undefined : row?.value !== '1';
+  // Dexie `get()` returns undefined for a missing key, which is the same
+  // sentinel useLiveQuery uses while the query is still opening — so we
+  // map "no row" onto an explicit value and only treat `undefined` as
+  // "still loading" (hide the card for that one frame).
+  const row = useLiveQuery(async () => {
+    const existing = await db.meta.get(FIRST_WEEK_CHECKLIST_META_KEY);
+    return existing ?? { key: FIRST_WEEK_CHECKLIST_META_KEY, value: '0' };
+  }, []);
+  return row === undefined ? undefined : row.value !== '1';
 }
 
 export async function dismissFirstWeekChecklist() {
