@@ -69,6 +69,10 @@ const EXPECTED_CLINIC_COLUMNS = new Set([
   'show_therapist_comparison',
   'walk_in_mrno_prefix', // Recently added, was missing before
   'enable_expected_today',
+  'upi_vpa',
+  'upi_payee_name',
+  'upi_qr_path',
+  'upi_qr_enabled',
   'updated_at',
   'created_by',
   'updated_by',
@@ -137,5 +141,7 @@ describe('Schema validation', () => {
     // Verify that fixes for previously-missing columns are in the list
     expect(EXPECTED_VISIT_COLUMNS.has('pending_payment_note')).toBe(true);
     expect(EXPECTED_CLINIC_COLUMNS.has('walk_in_mrno_prefix')).toBe(true);
+    expect(EXPECTED_CLINIC_COLUMNS.has('upi_vpa')).toBe(true);
+    expect(EXPECTED_CLINIC_COLUMNS.has('upi_qr_enabled')).toBe(true);
   });
 });

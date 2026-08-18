@@ -352,6 +352,8 @@ export function PatientProfilePage() {
                     patientId,
                     patientName: patient.name,
                     mrno: patient.mrno,
+                    age: patient.age,
+                    sex: patient.sex,
                     condition: v.condition ?? null,
                     serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
                     sessionIndex: v.sessionIndex ?? null,

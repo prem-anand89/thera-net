@@ -22,10 +22,12 @@ import {
 } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
+import { ShowUpiQrButton } from '@/components/UpiQrModal';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
+import { EditVisitModal } from '@/features/visits/EditVisitModal';
 import { FirstWeekSetupLink } from '@/features/settings/FirstWeekChecklist';
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -52,7 +54,10 @@ function todayRowToCardData(
     patientId: row.patientId,
     patientName: row.patientName,
     mrno: row.mrno,
+    age: row.age,
+    sex: row.sex,
     condition: row.condition,
+    canEdit: isAdmin || row.therapistId === myTherapistId,
     serviceName: row.serviceName,
     sessionIndex: row.sessionIndex,
     packageTotal: row.packageTotal,
@@ -80,6 +85,8 @@ export function WorkspacePage() {
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
   const [attentionOpen, setAttentionOpen] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
+  const [, setVisitEditError] = useState<string | null>(null);
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
 
   // Staff (therapist) tier sees only their own visits in the today-scoped
@@ -201,6 +208,10 @@ export function WorkspacePage() {
             onInvoice={(row) => openInvoiceFor(row)}
             onTakePayment={(row) => setTakingPayment(row)}
             onEditPatient={(row) => setEditPatientId(row.patientId)}
+            onEdit={(row) => {
+              setVisitEditError(null);
+              setEditingVisitId(row.visitId);
+            }}
             onDelete={(row) => {
               if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
             }}
@@ -275,7 +286,16 @@ export function WorkspacePage() {
           amountPaise={takingPayment.billPaise}
           visitDate={takingPayment.visitDate}
           patientLabel={takingPayment.patientName}
+          mrno={takingPayment.mrno}
           onClose={() => setTakingPayment(null)}
+        />
+      )}
+
+      {editingVisitId && (
+        <EditVisitModal
+          visitId={editingVisitId}
+          onClose={() => setEditingVisitId(null)}
+          setError={setVisitEditError}
         />
       )}
 
@@ -313,28 +333,21 @@ function PendingWorkRow({ item, clinicId }: { item: PendingWorkItem; clinicId: s
   const [busy, setBusy] = useState(false);
   const badge = PENDING_KIND[item.kind];
 
-  async function markInvoicePaid() {
-    if (!item.invoiceId) return;
+  async function confirmCollection() {
     setBusy(true);
     try {
-      await paymentService.setStatus(item.invoiceId, clinicId, 'paid');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirmDirectPayment() {
-    if (!item.visitId || item.amountPaise == null) return;
-    setBusy(true);
-    try {
-      await directPaymentService.logPayment(
-        clinicId,
-        item.visitId,
-        item.amountPaise,
-        method,
-        new Date().toISOString().slice(0, 10),
-        null
-      );
+      if (item.invoiceId) {
+        await paymentService.setStatus(item.invoiceId, clinicId, 'paid');
+      } else if (item.visitId && item.amountPaise != null) {
+        await directPaymentService.logPayment(
+          clinicId,
+          item.visitId,
+          item.amountPaise,
+          method,
+          new Date().toISOString().slice(0, 10),
+          null
+        );
+      }
       setChoosingMethod(false);
     } finally {
       setBusy(false);
@@ -367,7 +380,7 @@ function PendingWorkRow({ item, clinicId }: { item: PendingWorkItem; clinicId: s
             type="button"
             className="text-xs font-medium text-[var(--moss)] hover:underline"
             disabled={busy}
-            onClick={() => (item.invoiceId ? void markInvoicePaid() : setChoosingMethod(true))}
+            onClick={() => setChoosingMethod(true)}
           >
             Mark collected
           </button>
@@ -385,11 +398,19 @@ function PendingWorkRow({ item, clinicId }: { item: PendingWorkItem; clinicId: s
                 </option>
               ))}
             </select>
+            {method === 'upi' && item.amountPaise != null && (
+              <ShowUpiQrButton
+                amountPaise={item.amountPaise}
+                mrno={item.mrno}
+                visitDate={new Date().toISOString().slice(0, 10)}
+                patientName={item.patientName}
+              />
+            )}
             <button
               type="button"
               className="text-xs font-medium text-[var(--moss)] hover:underline"
               disabled={busy}
-              onClick={() => void confirmDirectPayment()}
+              onClick={() => void confirmCollection()}
             >
               Confirm
             </button>

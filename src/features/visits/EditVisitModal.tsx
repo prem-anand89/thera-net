@@ -109,12 +109,29 @@ export function EditVisitModal({
           </div>
 
           {frozen && (
-            <div className="rounded-md border-l-4 border-[var(--rust)] bg-[var(--rust-light)] p-3 text-xs">
-              🔒 <strong>Frozen</strong> — This visit is on invoice #{invoice?.invoiceNo ?? '—'}.
-              <br />
-              Only clinical notes can be edited.
+            <div className="rounded-md border-l-4 border-[var(--teal)] bg-[var(--teal-light)] p-3 text-xs text-[var(--ink)]">
+              This visit is on invoice #{invoice?.invoiceNo ?? '—'}. Bill amount, therapist, and
+              date stay as billed. Condition and treatment notes can still be updated.
             </div>
           )}
+
+          <Field label="Condition">
+            <input
+              className={inputCls}
+              value={condition}
+              onChange={(e) => setCondition(e.target.value)}
+              placeholder="e.g., Cervical pain"
+            />
+          </Field>
+
+          <Field label="Treatment notes">
+            <textarea
+              className={`${inputCls} min-h-20 resize-none`}
+              value={treatmentNotes}
+              onChange={(e) => setTreatmentNotes(e.target.value)}
+              placeholder="Clinical notes about the treatment"
+            />
+          </Field>
 
           {!frozen && (
             <>
@@ -163,24 +180,6 @@ export function EditVisitModal({
               </Field>
             </>
           )}
-
-          <Field label="Condition">
-            <input
-              className={inputCls}
-              value={condition}
-              onChange={(e) => setCondition(e.target.value)}
-              placeholder="e.g., Cervical pain"
-            />
-          </Field>
-
-          <Field label="Treatment notes">
-            <textarea
-              className={`${inputCls} min-h-20 resize-none`}
-              value={treatmentNotes}
-              onChange={(e) => setTreatmentNotes(e.target.value)}
-              placeholder="Clinical notes about the treatment"
-            />
-          </Field>
         </div>
 
         <div className="modal-actions">

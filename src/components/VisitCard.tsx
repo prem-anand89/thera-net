@@ -5,20 +5,60 @@ import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import type { VisitPaymentState } from '@/domain/paymentState';
-import { paymentActions, paymentStatusLine } from '@/domain/paymentState';
+import { paymentActions, paymentStatusPhrase } from '@/domain/paymentState';
 import { Pill, PackageThread, th, thNum, td, tdNum } from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 
 export const PAYMENT_CHIP: Record<
   VisitPaymentState,
-  { tone: 'green' | 'amber' | 'slate'; label: (bill: string) => string }
+  { tone: 'green' | 'amber' | 'slate'; label: string }
 > = {
-  paid: { tone: 'green', label: (bill) => paymentStatusLine('paid', bill) },
-  collected_no_receipt: { tone: 'green', label: (bill) => paymentStatusLine('collected_no_receipt', bill) },
-  outstanding: { tone: 'amber', label: (bill) => paymentStatusLine('outstanding', bill) },
-  uninvoiced: { tone: 'amber', label: (bill) => paymentStatusLine('uninvoiced', bill) },
-  zero_session: { tone: 'slate', label: () => paymentStatusLine('zero_session', '') },
+  paid: { tone: 'green', label: paymentStatusPhrase('paid') },
+  collected_no_receipt: { tone: 'green', label: paymentStatusPhrase('collected_no_receipt') },
+  outstanding: { tone: 'amber', label: paymentStatusPhrase('outstanding') },
+  uninvoiced: { tone: 'amber', label: paymentStatusPhrase('uninvoiced') },
+  zero_session: { tone: 'slate', label: paymentStatusPhrase('zero_session') },
 };
+
+/** ID · age · sex under the name, matching New visit's Patient panel. */
+export function patientIdentityLine(
+  mrno: string,
+  age?: number | null,
+  sex?: 'M' | 'F' | 'Other' | null
+): string {
+  const parts = [mrno];
+  if (age != null) parts.push(`${age}y`);
+  if (sex) parts.push(sex);
+  return parts.join(' · ');
+}
+
+function PatientNameBlock({
+  data,
+  onEditPatient,
+}: {
+  data: VisitCardData;
+  onEditPatient?: () => void;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <Link
+          to="/patients/$patientId"
+          params={{ patientId: data.patientId }}
+          className="font-display text-sm font-medium text-[var(--ink)] hover:underline"
+        >
+          {data.patientName}
+        </Link>
+        {onEditPatient && (
+          <button type="button" className="text-xs font-medium text-[var(--teal)] hover:underline" onClick={onEditPatient}>
+            Edit patient
+          </button>
+        )}
+      </div>
+      <div className="text-xs text-[var(--muted)]">{patientIdentityLine(data.mrno, data.age, data.sex)}</div>
+    </div>
+  );
+}
 
 /**
  * One row's worth of data for `SharedVisitCard`, normalized away from
@@ -32,6 +72,8 @@ export interface VisitCardData {
   patientId: UUID;
   patientName: string;
   mrno: string;
+  age?: number | null;
+  sex?: 'M' | 'F' | 'Other' | null;
   condition: string | null;
   serviceName: string;
   sessionIndex: number | null;
@@ -68,8 +110,8 @@ export interface VisitCardData {
   consultationNoteId?: UUID | null;
 }
 
-/** Row actions kebab menu — shared between the card and table renderings so
- *  Repeat/Edit patient/Split/Delete never drift into two implementations. */
+/** Row actions kebab — Repeat / Edit visit / Split / Delete. Note lives on
+ *  the status cell as + Note so it is not listed twice. */
 function RowActionsMenu({
   data,
   onEdit,
@@ -85,7 +127,6 @@ function RowActionsMenu({
   const hasMenu =
     data.canRepeat ||
     (data.canEdit && onEdit) ||
-    data.canViewNotes ||
     (data.canSplit && onSplit) ||
     data.canDelete;
   if (!hasMenu) return null;
@@ -126,17 +167,6 @@ function RowActionsMenu({
                 Edit visit
               </button>
             )}
-            {data.canViewNotes && (
-              <Link
-                to={data.consultationNoteId ? '/patients/$patientId/notes/$noteId' : '/patients/$patientId/notes/new'}
-                params={data.consultationNoteId ? { patientId: data.patientId, noteId: data.consultationNoteId } : { patientId: data.patientId }}
-                search={data.consultationNoteId ? undefined : { visitId: data.visitId }}
-                className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                onClick={() => setMenuOpen(false)}
-              >
-                {data.consultationNoteId ? 'View note' : 'Add note'}
-              </Link>
-            )}
             {data.canSplit && onSplit && (
               <button
                 type="button"
@@ -175,19 +205,24 @@ function PaymentStatusDisplay({
   onInvoice,
   onTakePayment,
   canInvoice,
+  showAmount = true,
 }: {
   data: VisitCardData;
   onInvoice: () => void;
   onTakePayment?: () => void;
   canInvoice: boolean;
+  /** False in the table, where Bill is already its own column. */
+  showAmount?: boolean;
 }) {
   const chip = PAYMENT_CHIP[data.paymentState];
   const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
-      <div className="font-num text-sm text-[var(--ink)]">{bill}</div>
-      <Pill tone={chip.tone}>{chip.label(bill)}</Pill>
+      {showAmount && data.paymentState !== 'zero_session' && (
+        <div className="font-num text-sm text-[var(--ink)]">{bill}</div>
+      )}
+      <Pill tone={chip.tone}>{chip.label}</Pill>
       {canInvoice && actions.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1">
           {actions.includes('take_payment') && (
@@ -268,18 +303,7 @@ export function SharedVisitCard({
 
   const nameBlock = (
     <div className="min-w-0 flex-1">
-      {showPatient && (
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <Link to="/patients/$patientId" params={{ patientId: data.patientId }} className="font-display text-sm font-medium text-[var(--ink)] hover:underline">
-            {data.patientName} <span className="text-xs font-normal text-[var(--muted)]">{data.mrno}</span>
-          </Link>
-          {onEditPatient && (
-            <button type="button" className="text-xs font-medium text-[var(--teal)] hover:underline" onClick={onEditPatient}>
-              Edit patient
-            </button>
-          )}
-        </div>
-      )}
+      {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
       <div className="text-xs text-[var(--muted)]" style={{ whiteSpace: 'normal' }}>
         {secondaryParts.map((part, i) => (
           <span key={i}>
@@ -440,19 +464,7 @@ function VisitTable({
                 )}
                 {showPatient && (
                   <td className={td}>
-                    <Link to="/patients/$patientId" params={{ patientId: row.patientId }} className="font-display hover:underline">
-                      {row.patientName}
-                    </Link>{' '}
-                    <span className="text-xs text-[var(--muted)]">{row.mrno}</span>
-                    {onEditPatient && (
-                      <button
-                        type="button"
-                        className="ml-2 text-xs font-medium text-[var(--teal)] hover:underline"
-                        onClick={() => onEditPatient(row)}
-                      >
-                        Edit patient
-                      </button>
-                    )}
+                    <PatientNameBlock data={row} onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined} />
                   </td>
                 )}
                 {columnPrefs.therapist && <td className={td}>{row.therapistName}</td>}
@@ -475,6 +487,7 @@ function VisitTable({
                     onInvoice={() => onInvoice(row)}
                     onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
                     canInvoice={canInvoice}
+                    showAmount={false}
                   />
                 </td>
                 <td className={td}>

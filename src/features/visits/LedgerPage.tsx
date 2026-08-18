@@ -93,6 +93,8 @@ function visitToCardData(
     patientId: v.patientId,
     patientName: p?.name ?? '-',
     mrno: p?.mrno ?? '-',
+    age: p?.age ?? null,
+    sex: p?.sex ?? null,
     condition: v.condition ?? null,
     serviceName: serviceName.get(v.serviceCatalogId) ?? '-',
     sessionIndex: v.sessionIndex ?? null,
@@ -673,6 +675,7 @@ export function LedgerPage() {
           amountPaise={takingPayment.billPaise}
           visitDate={takingPayment.visitDate}
           patientLabel={takingPayment.patientName}
+          mrno={takingPayment.mrno}
           onClose={() => setTakingPayment(null)}
         />
       )}

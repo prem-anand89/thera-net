@@ -33,6 +33,7 @@ import { SearchableSelect } from '@/components/SearchableSelect';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { PAYMENT_CHIP } from '@/components/VisitCard';
 import { computeVisitPaymentState } from '@/domain/paymentState';
+import { ShowUpiQrButton } from '@/components/UpiQrModal';
 
 /** Digits only, so "98765 43210" and "+91-98765-43210" compare equal. */
 function phoneDigits(s: string): string {
@@ -502,7 +503,7 @@ export function NewVisitPage() {
   }
 
   const patientPanel = (
-    <SectionCard title="Who">
+    <SectionCard title="Patient">
       {patient ? (
         // Confirmed — collapsed to an identity header, reference tiles, and
         // a single way back to search. No outstanding-balance figure here
@@ -545,7 +546,7 @@ export function NewVisitPage() {
                       <span>
                         {formatDateDMY(lastVisit.visitDate)} — {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
                       </span>
-                      <Pill tone={chip.tone}>{chip.label(formatINR(lastVisit.actualBillPaise))}</Pill>
+                      <Pill tone={chip.tone}>{chip.label}</Pill>
                     </div>
                   );
                 })()
@@ -770,7 +771,7 @@ export function NewVisitPage() {
 
   const visitPanel = (
     <div className="space-y-4">
-      <SectionCard title="What">
+      <SectionCard title="Visit">
         {/* Single column throughout, matching the Patient panel above —
             the previous sm:grid-cols-2 paired up whichever two fields
             happened to land in the same row by grid auto-placement, which
@@ -869,7 +870,7 @@ export function NewVisitPage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Money">
+      <SectionCard title="Billing">
         <div className="grid grid-cols-1 gap-3">
           <Field
             label={
@@ -911,17 +912,27 @@ export function NewVisitPage() {
                 ]}
               />
               {paymentChoice === 'paid' ? (
-                <select
-                  className={`${inputCls} mt-2`}
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                >
-                  {PAYMENT_METHODS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    className={`${inputCls} mt-2`}
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                  >
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                  {paymentMethod === 'upi' && patient && (
+                    <ShowUpiQrButton
+                      amountPaise={billPaise}
+                      mrno={patient.mrno}
+                      visitDate={visitDate}
+                      patientName={patient.name}
+                    />
+                  )}
+                </>
               ) : (
                 <input
                   className={`${inputCls} mt-2`}
