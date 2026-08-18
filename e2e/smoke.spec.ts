@@ -70,7 +70,7 @@ test.describe('authenticated flow', () => {
     await serviceSelect.selectOption(initialConsultation!);
     await page.getByRole('button', { name: 'Save visit' }).click();
     await expect(page.getByRole('heading', { name: 'Workspace' })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(patientName).first()).toBeVisible();
+    await expect(page.getByRole('row', { name: new RegExp(patientName) })).toBeVisible();
     await expect(syncButton(page, /^Sync: Offline/)).toBeVisible();
 
     await context.setOffline(false);
