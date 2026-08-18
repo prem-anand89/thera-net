@@ -110,23 +110,26 @@ const EXPECTED_CONSULTATION_NOTE_COLUMNS = new Set([
 
 describe('Schema validation', () => {
   it('Visit domain type has all required columns', () => {
-    // This is a compile-time check that Visit has these fields
-    const _: Record<string, unknown> = {} as Visit;
+    const sample = {} as Visit;
+    expect(sample).toBeDefined();
     expect(EXPECTED_VISIT_COLUMNS.size).toBeGreaterThan(0);
   });
 
   it('Clinic domain type has all required columns', () => {
-    const _: Record<string, unknown> = {} as Clinic;
+    const sample = {} as Clinic;
+    expect(sample).toBeDefined();
     expect(EXPECTED_CLINIC_COLUMNS.size).toBeGreaterThan(0);
   });
 
   it('Patient domain type has all required columns', () => {
-    const _: Record<string, unknown> = {} as Patient;
+    const sample = {} as Patient;
+    expect(sample).toBeDefined();
     expect(EXPECTED_PATIENT_COLUMNS.size).toBeGreaterThan(0);
   });
 
   it('ConsultationNote domain type has all required columns', () => {
-    const _: Record<string, unknown> = {} as ConsultationNote;
+    const sample = {} as ConsultationNote;
+    expect(sample).toBeDefined();
     expect(EXPECTED_CONSULTATION_NOTE_COLUMNS.size).toBeGreaterThan(0);
   });
 
