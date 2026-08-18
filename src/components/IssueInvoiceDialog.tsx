@@ -49,10 +49,15 @@ export function IssueInvoiceDialog({
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-3 sm:p-4">
-      <div className="max-h-[90vh] w-full max-w-sm space-y-4 overflow-y-auto rounded-2xl bg-[var(--surface)] p-4 sm:p-5">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="issue-invoice-title"
+        className="max-h-[90vh] w-full max-w-sm space-y-4 overflow-y-auto rounded-2xl bg-[var(--surface)] p-4 sm:p-5"
+      >
         {issued ? (
           <>
-            <h2 className="text-sm font-semibold text-[var(--ink)]">Invoice issued</h2>
+            <h2 id="issue-invoice-title" className="text-sm font-semibold text-[var(--ink)]">Invoice issued</h2>
             <p className="text-sm text-[var(--ink)]">
               Invoice {issued.invoiceNo} issued for {target.patientLabel}.
             </p>
@@ -71,7 +76,7 @@ export function IssueInvoiceDialog({
           </>
         ) : (
           <>
-            <h2 className="text-sm font-semibold text-[var(--ink)]">Issue invoice</h2>
+            <h2 id="issue-invoice-title" className="text-sm font-semibold text-[var(--ink)]">Issue invoice</h2>
             <p className="text-sm text-[var(--muted)]">
               {target.patientLabel} — {target.serviceLabel}
               {target.isPackage && ', all sessions of this package'}

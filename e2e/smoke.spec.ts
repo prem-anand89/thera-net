@@ -20,7 +20,7 @@ function syncButton(page: import('@playwright/test').Page, status: RegExp) {
 test('app boots without crashing', async ({ page }) => {
   await page.goto('/');
   await expect(
-    page.getByText('Sign in', { exact: true }).or(page.getByText('Supabase not configured'))
+    page.getByRole('button', { name: 'Sign in' }).or(page.getByText('Supabase not configured'))
   ).toBeVisible();
 });
 
@@ -89,8 +89,8 @@ test.describe('authenticated flow', () => {
     await expect(syncButton(page, /^Sync: Synced$/)).toBeVisible({ timeout: 30_000 });
 
     await visitRow.getByRole('button', { name: 'Issue invoice' }).click();
-    await expect(page.getByRole('heading', { name: 'Issue invoice' })).toBeVisible();
-    await page.getByRole('button', { name: 'Issue invoice' }).click();
+    await expect(page.getByRole('dialog').getByRole('heading', { name: 'Issue invoice' })).toBeVisible();
+    await page.getByRole('dialog').getByRole('button', { name: 'Issue invoice' }).click();
     await expect(page.getByText(/Invoice .+ issued for/)).toBeVisible({ timeout: 20_000 });
   });
 });
