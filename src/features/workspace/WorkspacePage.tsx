@@ -31,6 +31,7 @@ import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
+import { FirstWeekChecklist, useFirstWeekChecklistVisible } from '@/features/settings/FirstWeekChecklist';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -85,7 +86,8 @@ function todayRowToCardData(
 export function WorkspacePage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
-  const { canBill, canViewClinicalNotes } = usePermissions();
+  const { canBill, canViewClinicalNotes, canEditSettings } = usePermissions();
+  const showFirstWeek = useFirstWeekChecklistVisible();
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
   const [paidNow, setPaidNow] = useState(true);
@@ -246,6 +248,8 @@ export function WorkspacePage() {
       {scope.isUnlinkedTherapist && (
         <ErrorNote message="Your login isn't linked to a therapist record yet, so today's visits and packages aren't showing here. Ask your admin to set it from Settings → Team → Service roster → Linked login." />
       )}
+
+      {canEditSettings && showFirstWeek && <FirstWeekChecklist compact />}
 
       {/* Always exactly 3 tiles — a fixed 3-column grid rather than the
           previous auto-fill row, which packed tiles densely on a phone but

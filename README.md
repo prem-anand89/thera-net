@@ -57,11 +57,10 @@ src/sync/              outbox push / delta pull engine against Supabase
 src/services/          visit/invoice/report/patient/dashboard/consultation-note orchestration — no React imports
 src/features/          UI pages and components (React + TanStack Router)
   ├── workspace/       WorkspacePage (default landing: Today, Recent, Open Packages, Pending Work)
-  ├── visits/          VisitsPage, served at /ledger (Visits/Invoices sub-tabs, URL-addressable)
-  ├── patients/        PatientProfilePage with clinical notes, visit history
-  ├── insights/        Dashboard + monthly statement, served at /insights (nav label is "Reports"; admin/front_desk only)
-  ├── setup/           SetupPage, served at /settings (clinic configuration; nav label is "Settings")
-  └── patients/notes/  NoteEditorPage (Core Assessment: Initial/Follow-up consultation notes)
+  ├── visits/          LedgerPage at /ledger (Visits/Invoices sub-tabs); NewVisitPage
+  ├── patients/        PatientsPage, PatientProfilePage, NoteEditorPage (Core Assessment)
+  ├── reports/         ReportsPage at /insights (Trends + monthly statement; nav label is "Reports")
+  └── settings/        SettingsPage at /settings; CreateClinicForm for first-time clinic setup
 src/components/        Shared UI components (BodyChart, ScaleWidget, TreatmentNote, ColumnsPicker, etc.)
 supabase/              SQL migrations (schema, RLS, RPCs, realtime publications), seed
 ```
@@ -254,7 +253,7 @@ All original features remain: offline-first sync, revenue split tracking, invoic
 | `npm run typecheck` | strict TS                     |
 | `npm run lint`      | eslint                        |
 | `npm run build`     | production build              |
-| `npm run e2e`       | Playwright smoke              |
+| `npm run e2e`       | Playwright: boot smoke always; login→visit→sync when `.env` has Supabase (local defaults to `admin@thera.local`) |
 
 ## Security & data notes
 
@@ -262,7 +261,7 @@ All original features remain: offline-first sync, revenue split tracking, invoic
   Patient data is health data — there is no anonymous read path.
 - Issued invoices and their visits are frozen by DB triggers; corrections are
   a future amendment/credit-note feature, not edits.
-- Rate/tax changes in Setup apply to new visits only; history keeps the rates
+- Rate/tax changes in Settings apply to new visits only; history keeps the rates
   it was billed under.
 - Export monthly CSVs — this app should never be the only copy of financial
   records.

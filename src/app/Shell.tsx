@@ -8,7 +8,7 @@ import { useSession } from './useSession';
 import { useClinicRole, CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
 import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
-import { CreateClinicForm } from '@/features/setup/CreateClinicForm';
+import { CreateClinicForm } from '@/features/settings/CreateClinicForm';
 import { SyncBadge } from '@/components/SyncBadge';
 
 /** Minimal stroke icons, one per main nav item — same visual language as

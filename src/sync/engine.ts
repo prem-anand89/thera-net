@@ -3,6 +3,7 @@ import { getSupabase } from '@/lib/supabase';
 import { domainToRow, rowToDomain } from '@/repositories/rowMapping';
 import { onLocalWrite } from '@/repositories/local';
 import { syncStatus, isPermanentFailure } from './status';
+import { coerceReferringSource } from '@/domain/types';
 
 /**
  * Offline-first sync:
@@ -50,13 +51,15 @@ function normalize(table: SyncedTable, obj: Record<string, unknown>) {
  * early instead of silently corrupting data.
  */
 function validateNormalizedRow(table: SyncedTable, row: Record<string, unknown>): boolean {
-  // Every synced row must have an id and updated_at from the schema
+  // Domain objects are camelCase after rowToDomain — do not look for
+  // Postgres snake_case here or every pulled row is skipped and a first
+  // login looks like "create your clinic".
   if (typeof row.id !== 'string' || !row.id) {
     console.error(`[Sync] ${table} row missing id:`, row);
     return false;
   }
-  if (typeof row.updated_at !== 'string' || !row.updated_at) {
-    console.error(`[Sync] ${table} row ${row.id} missing updated_at:`, row);
+  if (typeof row.updatedAt !== 'string' || !row.updatedAt) {
+    console.error(`[Sync] ${table} row ${row.id} missing updatedAt:`, row);
     return false;
   }
   return true;
@@ -175,6 +178,19 @@ export class SyncEngine {
       if (!row) {
         await this.clearOutbox(entry.table, entry.rowId, maxSeq);
         continue;
+      }
+
+      // Older Edit Patient UI wrote referring_source values that fail the
+      // DB check constraint. Rewrite in place (no extra outbox row) so a
+      // stuck patients push can succeed on retry.
+      if (entry.table === 'patients') {
+        const referringSource = coerceReferringSource(
+          (row as { referringSource?: string | null }).referringSource
+        );
+        if (referringSource !== (row as { referringSource?: string | null }).referringSource) {
+          (row as { referringSource: string | null }).referringSource = referringSource;
+          await db.patients.put(row);
+        }
       }
 
       const { error } = await supabase.from(entry.table).upsert(domainToRow(row));

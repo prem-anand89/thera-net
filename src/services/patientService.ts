@@ -1,4 +1,5 @@
 import type { Patient, MrnoSource, ReferringSource, UUID } from '@/domain/types';
+import { coerceReferringSource } from '@/domain/types';
 import type { Repos } from '@/repositories/types';
 import { getSupabase } from '@/lib/supabase';
 
@@ -91,7 +92,7 @@ export function createPatientService(repos: Repos) {
         sex: input.sex ?? null,
         phone: input.phone?.trim() || null,
         primaryCondition: input.primaryCondition?.trim() || null,
-        referringSource: input.referringSource ?? null,
+        referringSource: coerceReferringSource(input.referringSource) ?? null,
         referringSourceDetail: input.referringSourceDetail?.trim() || null,
         deletedAt: null,
         updatedAt: new Date().toISOString(),
@@ -136,7 +137,9 @@ export function createPatientService(repos: Repos) {
             ? patch.primaryCondition?.trim() || null
             : patient.primaryCondition,
         referringSource:
-          patch.referringSource !== undefined ? patch.referringSource : patient.referringSource,
+          patch.referringSource !== undefined
+            ? coerceReferringSource(patch.referringSource)
+            : coerceReferringSource(patient.referringSource),
         referringSourceDetail:
           patch.referringSourceDetail !== undefined
             ? patch.referringSourceDetail?.trim() || null

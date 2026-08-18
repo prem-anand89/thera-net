@@ -193,6 +193,22 @@ export const REFERRING_SOURCE_LABELS: Record<ReferringSource, string> = {
   other: 'Other',
 };
 
+/** Values an older Edit Patient form stored locally — they fail the
+ *  patients_referring_source_check constraint on sync. */
+const LEGACY_REFERRING_SOURCE: Record<string, ReferringSource> = {
+  hospital: 'hospital_referral',
+  doctor: 'doctor_referral',
+  physiotherapist: 'other',
+  patient_referred: 'word_of_mouth',
+  self: 'walk_in',
+};
+
+export function coerceReferringSource(value: string | null | undefined): ReferringSource | null {
+  if (!value) return null;
+  if (value in REFERRING_SOURCE_LABELS) return value as ReferringSource;
+  return LEGACY_REFERRING_SOURCE[value] ?? null;
+}
+
 /** Label for the free-text detail field, or null if that source needs no detail. */
 export function referringSourceDetailLabel(source: ReferringSource | '' | null | undefined): string | null {
   switch (source) {

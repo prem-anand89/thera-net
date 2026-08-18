@@ -34,6 +34,7 @@ import {
   InfoTip,
 } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
+import { FirstWeekChecklist, useFirstWeekChecklistVisible } from './FirstWeekChecklist';
 
 type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'features' | 'data';
 
@@ -144,8 +145,9 @@ function toggleSet<T>(set: Set<T>, key: T, present: boolean): Set<T> {
   return next;
 }
 
-export function SetupPage() {
+export function SettingsPage() {
   const { canEditSettings } = usePermissions();
+  const showFirstWeek = useFirstWeekChecklistVisible();
   const [activeKey, setActiveKey] = useState<SectionKey>('profile');
   const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
 
@@ -190,6 +192,8 @@ export function SetupPage() {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Settings</h1>
+
+      {showFirstWeek && <FirstWeekChecklist />}
 
       <div className="tab:flex tab:items-start tab:gap-6">
         {/* Horizontal scroller at the top below tab: (Shell's own bottom

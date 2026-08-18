@@ -181,13 +181,12 @@ describe('patientService.update', () => {
     });
   });
 
-  it('clears the referring source to null rather than ignoring it', async () => {
-    const original = seedPatient(fake.patients, { referringSource: 'online', referringSourceDetail: 'Instagram' });
+  it('maps leftover Edit-patient values (hospital, doctor) onto the DB check constraint', async () => {
+    const fake = makeFakeRepos();
+    const original = seedPatient(fake.patients);
     const updated = await createPatientService(fake.repos).update(original.id, {
-      referringSource: null,
-      referringSourceDetail: null,
+      referringSource: 'hospital' as never,
     });
-    expect(updated.referringSource).toBeNull();
-    expect(updated.referringSourceDetail).toBeNull();
+    expect(updated.referringSource).toBe('hospital_referral');
   });
 });

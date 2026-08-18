@@ -7,6 +7,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 
 export function SyncBadge() {
   const status = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
+  const pending = status.pending ?? 0;
   const [open, setOpen] = useState(false);
   const failed = useLiveQuery(() => db.outbox.filter((e) => !!e.error).toArray(), []) ?? [];
 
@@ -14,18 +15,18 @@ export function SyncBadge() {
     ? 'bg-[var(--rust)]'
     : failed.length > 0 || status.error
       ? 'bg-[var(--rust)]'
-      : status.pending > 0 || status.syncing
+      : pending > 0 || status.syncing
         ? 'bg-[var(--teal)] animate-pulse'
         : 'bg-[var(--moss)]';
 
   const label = !status.online
-    ? `Offline${status.pending ? ` · ${status.pending} pending` : ''}`
+    ? `Offline${pending ? ` · ${pending} pending` : ''}`
     : status.syncing
       ? 'Syncing…'
       : failed.length > 0
         ? `${failed.length} sync issue${failed.length > 1 ? 's' : ''}`
-        : status.pending > 0
-          ? `${status.pending} pending`
+        : pending > 0
+          ? `${pending} pending`
           : 'Synced';
 
   async function discard(entry: OutboxEntry) {
@@ -34,7 +35,7 @@ export function SyncBadge() {
     // one of those just dismisses the notice, nothing more to lose. A
     // still-retrying failure hasn't been touched, so discarding it is the
     // real decision the original confirmation text describes.
-    const message = isPermanentFailure(entry.errorCode, entry.error)
+    const message = isPermanentFailure(entry.errorCode ?? null, entry.error ?? '')
       ? "Dismiss this notice?\n\nThis device already matches the server for this record — dismissing just clears the notice, it doesn't change any data."
       : 'Stop trying to save this change to the server?\n\nYour local copy stays as it is, but the server (and other devices) will never receive this specific change unless you edit that record again.';
     if (!confirm(message)) return;
@@ -47,6 +48,7 @@ export function SyncBadge() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         title={status.error ?? 'Sync status'}
+        aria-label={`Sync: ${label}`}
         className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs text-[var(--muted)] hover:bg-[var(--paper)]"
       >
         <span className={`h-2 w-2 rounded-full ${dot}`} />
@@ -75,8 +77,8 @@ export function SyncBadge() {
 
             {failed.length === 0 ? (
               <p className="mt-2 text-xs text-[var(--muted)]">
-                {status.pending > 0
-                  ? `${status.pending} change${status.pending > 1 ? 's' : ''} queued, no errors — this clears automatically.`
+                {pending > 0
+                  ? `${pending} change${pending > 1 ? 's' : ''} queued, no errors — this clears automatically.`
                   : 'Everything on this device has been saved to the server.'}
               </p>
             ) : (
@@ -92,7 +94,7 @@ export function SyncBadge() {
                 </p>
                 <ul className="mt-2 max-h-64 space-y-2 overflow-y-auto">
                   {failed.map((e) => {
-                    const permanent = isPermanentFailure(e.errorCode, e.error);
+                    const permanent = isPermanentFailure(e.errorCode ?? null, e.error ?? '');
                     return (
                       <li
                         key={e.seq}

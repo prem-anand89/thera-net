@@ -60,6 +60,10 @@ const MESSAGE_PATTERNS: Array<[RegExp, string]> = [
     /duplicate key value violates unique constraint "invoices_clinic_id_invoice_no_key"/i,
     'An invoice with this number already exists.',
   ],
+  [
+    /violates check constraint "patients_referring_source_check"/i,
+    'That referral source is not valid. Pick one of the listed options and save again.',
+  ],
   [/duplicate key value violates unique constraint/i, 'That record already exists — check for a duplicate.'],
 ];
 
@@ -69,6 +73,7 @@ const MESSAGE_PATTERNS: Array<[RegExp, string]> = [
 const CODE_MESSAGES: Record<string, string> = {
   '23505': 'That record already exists — check for a duplicate.',
   '23503': "This action isn't allowed because other records still depend on it.",
+  '23514': "This change doesn't match what the clinic allows. Check the fields and try again.",
   '42501': "You don't have permission to do that.",
 };
 

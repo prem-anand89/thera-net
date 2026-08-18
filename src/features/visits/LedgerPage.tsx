@@ -126,7 +126,7 @@ interface InvoicingTarget {
   isPackage: boolean;
 }
 
-export function VisitsPage() {
+export function LedgerPage() {
   const clinic = useClinic();
   const { canBill, isAdmin, canViewClinicalNotes, canViewPayouts } = usePermissions();
   const { myTherapistId } = useWorkspaceScope();
