@@ -6,7 +6,7 @@ import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from '@/app/useClinicRole';
-import { getSupabase, publicTherapistPhotoUrl } from '@/lib/supabase';
+import { getSupabase, publicTherapistPhotoUrl, publicLogoUrl } from '@/lib/supabase';
 import { resizeImageToBlob } from '@/lib/resizeImage';
 import { SUPABASE_URL } from '@/lib/env';
 import { db } from '@/lib/db';
@@ -35,6 +35,7 @@ import {
 } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
 import { FirstWeekChecklist, useFirstWeekChecklistVisible } from './FirstWeekChecklist';
+import { isValidUpiVpa } from '@/domain/upiPay';
 
 type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'features' | 'data';
 
@@ -63,7 +64,7 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
   {
     key: 'billing',
     label: 'Billing & invoicing',
-    description: 'Invoice numbering, GST/tax ID, fiscal year, who can bill.',
+    description: 'Invoice numbering, GST, fiscal year, who can bill, UPI QR.',
     accent: 'amber',
   },
   {
@@ -450,19 +451,65 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
   );
 }
 
-type BillingFields = Pick<Clinic, 'invoicePrefix' | 'gstNo' | 'fyStartMonth' | 'billingEnabled' | 'invoicingAccess'>;
+type BillingFields = Pick<
+  Clinic,
+  | 'invoicePrefix'
+  | 'gstNo'
+  | 'fyStartMonth'
+  | 'billingEnabled'
+  | 'invoicingAccess'
+  | 'upiVpa'
+  | 'upiPayeeName'
+  | 'upiQrPath'
+  | 'upiQrEnabled'
+>;
 
 function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<BillingFields>(
-    (c) => ({
-      invoicePrefix: c.invoicePrefix,
-      gstNo: c.gstNo,
-      fyStartMonth: c.fyStartMonth,
-      billingEnabled: c.billingEnabled ?? true,
-      invoicingAccess: c.invoicingAccess ?? 'everyone',
-    }),
-    onDirtyChange
-  );
+  const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =
+    useClinicSectionForm<BillingFields>(
+      (c) => ({
+        invoicePrefix: c.invoicePrefix,
+        gstNo: c.gstNo,
+        fyStartMonth: c.fyStartMonth,
+        billingEnabled: c.billingEnabled ?? true,
+        invoicingAccess: c.invoicingAccess ?? 'everyone',
+        upiVpa: c.upiVpa ?? '',
+        upiPayeeName: c.upiPayeeName ?? '',
+        upiQrPath: c.upiQrPath ?? null,
+        upiQrEnabled: c.upiQrEnabled ?? false,
+      }),
+      onDirtyChange
+    );
+  const qrPreviewUrl = publicLogoUrl(form.upiQrPath);
+
+  async function uploadUpiQr(file: File) {
+    setError(null);
+    const supabase = getSupabase();
+    if (!supabase || !navigator.onLine) {
+      setError('QR upload needs a connection.');
+      return;
+    }
+    const path = `${clinic.id}/upi-qr-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, file);
+    if (uploadError) {
+      setError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
+      return;
+    }
+    await saveFieldNow({ upiQrPath: path } as Partial<BillingFields>);
+  }
+
+  async function saveBilling() {
+    const vpa = (form.upiVpa ?? '').trim();
+    if (form.upiQrEnabled && vpa && !isValidUpiVpa(vpa)) {
+      setError('Enter a valid UPI ID (e.g. clinic@okaxis) or turn UPI QR off.');
+      return;
+    }
+    if (form.upiQrEnabled && !vpa && !form.upiQrPath) {
+      setError('Add a UPI ID or upload a QR image before turning UPI QR on.');
+      return;
+    }
+    await save();
+  }
 
   return (
     <SectionCard title="Billing & invoicing">
@@ -524,7 +571,67 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
           </Field>
         )}
       </div>
-      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
+
+      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">UPI collection</h3>
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        One clinic UPI for the front desk. When collection method is UPI, staff can show a QR the patient scans. A UPI
+        ID builds a QR with the visit amount and Patient ID in the note; an uploaded image is the fallback.
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Field
+          label={
+            <>
+              Show UPI QR at collection
+              <InfoTip text="When on, New visit and Take payment show a Scan to pay sheet if the method is UPI." />
+            </>
+          }
+        >
+          <BoolToggle value={form.upiQrEnabled ?? false} onChange={(v) => set({ upiQrEnabled: v })} />
+        </Field>
+        <Field label="UPI ID (VPA)">
+          <input
+            className={inputCls}
+            placeholder="clinic@okaxis"
+            value={form.upiVpa ?? ''}
+            onChange={(e) => set({ upiVpa: e.target.value })}
+            autoComplete="off"
+          />
+        </Field>
+        <Field
+          label={
+            <>
+              Payee name
+              <InfoTip text="Shown in the patient's UPI app. Leave blank to use the clinic name." />
+            </>
+          }
+        >
+          <input
+            className={inputCls}
+            placeholder={clinic.name}
+            value={form.upiPayeeName ?? ''}
+            onChange={(e) => set({ upiPayeeName: e.target.value })}
+          />
+        </Field>
+        <Field label="QR image (optional)">
+          <input
+            type="file"
+            accept="image/*"
+            className={inputCls}
+            onChange={(e) => e.target.files?.[0] && void uploadUpiQr(e.target.files[0])}
+          />
+          {qrPreviewUrl && (
+            <img src={qrPreviewUrl} alt="Uploaded clinic UPI QR" className="mt-2 h-24 w-24 object-contain" />
+          )}
+        </Field>
+      </div>
+      <SectionSaveBar
+        dirty={dirty}
+        saved={saved}
+        busy={busy}
+        onSave={() => void saveBilling()}
+        onCancel={cancel}
+        error={error}
+      />
     </SectionCard>
   );
 }

@@ -70,6 +70,17 @@ export interface Clinic {
   walkInMrnoPrefix?: string | null;
   /** Opt-in, off by default — the "Expected today" section on Workspace. */
   enableExpectedToday?: boolean;
+  /**
+   * Clinic UPI ID (VPA) used to generate a per-visit QR. Optional so older
+   * cached rows stay valid; unset means no dynamic QR.
+   */
+  upiVpa?: string | null;
+  /** Name shown in the patient's UPI app. Falls back to clinic name when blank. */
+  upiPayeeName?: string | null;
+  /** Path into `clinic-assets` for a static QR image (bank/app screenshot). */
+  upiQrPath?: string | null;
+  /** Off by default — Show UPI QR only appears at collection when this is on. */
+  upiQrEnabled?: boolean;
   updatedAt: string;
 }
 

@@ -33,6 +33,7 @@ import { SearchableSelect } from '@/components/SearchableSelect';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { PAYMENT_CHIP } from '@/components/VisitCard';
 import { computeVisitPaymentState } from '@/domain/paymentState';
+import { ShowUpiQrButton } from '@/components/UpiQrModal';
 
 /** Digits only, so "98765 43210" and "+91-98765-43210" compare equal. */
 function phoneDigits(s: string): string {
@@ -911,17 +912,27 @@ export function NewVisitPage() {
                 ]}
               />
               {paymentChoice === 'paid' ? (
-                <select
-                  className={`${inputCls} mt-2`}
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                >
-                  {PAYMENT_METHODS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    className={`${inputCls} mt-2`}
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                  >
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                  {paymentMethod === 'upi' && patient && (
+                    <ShowUpiQrButton
+                      amountPaise={billPaise}
+                      mrno={patient.mrno}
+                      visitDate={visitDate}
+                      patientName={patient.name}
+                    />
+                  )}
+                </>
               ) : (
                 <input
                   className={`${inputCls} mt-2`}

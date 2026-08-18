@@ -4,6 +4,7 @@ import { formatINR } from '@/domain/money';
 import type { Paise } from '@/domain/money';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { directPaymentService, paymentService } from '@/services';
+import { ShowUpiQrButton } from '@/components/UpiQrModal';
 
 const METHODS: { value: PaymentMethod; label: string }[] = [
   { value: 'cash', label: 'Cash' },
@@ -20,6 +21,7 @@ export function TakePaymentDialog({
   amountPaise,
   visitDate,
   patientLabel,
+  mrno,
   onClose,
 }: {
   clinicId: string;
@@ -28,6 +30,7 @@ export function TakePaymentDialog({
   amountPaise: Paise;
   visitDate: string;
   patientLabel: string;
+  mrno: string;
   onClose: () => void;
 }) {
   const [method, setMethod] = useState<PaymentMethod>('cash');
@@ -58,17 +61,23 @@ export function TakePaymentDialog({
         <p className="text-sm text-[var(--muted)]">
           {patientLabel} · {formatINR(amountPaise)}
         </p>
-        {!invoiceId && (
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Method</span>
-            <select className={inputCls} value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
-              {METHODS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Method</span>
+          <select className={inputCls} value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
+            {METHODS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {method === 'upi' && (
+          <ShowUpiQrButton
+            amountPaise={amountPaise}
+            mrno={mrno}
+            visitDate={visitDate}
+            patientName={patientLabel}
+          />
         )}
         {invoiceId && (
           <p className="text-xs text-[var(--muted)]">Marks this invoice collected. No extra receipt is created.</p>

@@ -675,6 +675,7 @@ export function LedgerPage() {
           amountPaise={takingPayment.billPaise}
           visitDate={takingPayment.visitDate}
           patientLabel={takingPayment.patientName}
+          mrno={takingPayment.mrno}
           onClose={() => setTakingPayment(null)}
         />
       )}
