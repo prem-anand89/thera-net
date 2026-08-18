@@ -60,7 +60,12 @@ test.describe('authenticated flow', () => {
     await page.getByLabel('Name *').fill(patientName);
     await page.getByRole('button', { name: 'Create patient' }).click();
     await page.getByLabel('Therapist *').selectOption({ label: 'Therapist One' });
-    await page.getByLabel('Service *').selectOption({ label: /Initial Consultation/ });
+    const serviceSelect = page.getByLabel('Service *');
+    const initialConsultation = await serviceSelect
+      .locator('option', { hasText: 'Initial Consultation' })
+      .first()
+      .getAttribute('value');
+    await serviceSelect.selectOption(initialConsultation!);
     await page.getByRole('button', { name: 'Save visit' }).click();
     await expect(page.getByRole('heading', { name: 'Workspace' })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(patientName).first()).toBeVisible();
