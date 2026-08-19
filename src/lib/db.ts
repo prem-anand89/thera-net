@@ -157,6 +157,13 @@ export class ClinicDB extends Dexie {
     this.version(9).stores({
       no_return_reason_catalog: 'id, clinicId',
     });
+    this.version(10).stores({
+      // Compound index so a date-bounded query (Workspace's "today",
+      // Ledger's date presets, dashboard aggregations) can jump straight to
+      // the matching rows instead of loading every visit the clinic has
+      // ever logged and filtering in memory.
+      visits: 'id, clinicId, visitDate, patientId, therapistId, packageGroupId, invoiceId, [clinicId+visitDate]',
+    });
   }
 }
 
