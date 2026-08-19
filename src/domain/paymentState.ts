@@ -10,7 +10,13 @@ import type { PaymentStatus, UUID } from './types';
  * Receipted; `outstanding` and `uninvoiced` are both "not collected",
  * differing only on whether an invoice was ever issued.
  */
-export type VisitPaymentState = 'paid' | 'collected_no_receipt' | 'outstanding' | 'uninvoiced' | 'zero_session';
+export type VisitPaymentState =
+  | 'paid'
+  | 'collected_no_receipt'
+  | 'partially_collected'
+  | 'outstanding'
+  | 'uninvoiced'
+  | 'zero_session';
 
 /**
  * A missing invoice-payment-status row (rather than an explicit
@@ -18,11 +24,13 @@ export type VisitPaymentState = 'paid' | 'collected_no_receipt' | 'outstanding' 
  * and recording its initial status are two separate writes, and if the
  * second one fails after the first succeeds, the invoice IS real and
  * shouldn't be hidden as if payment failed too. Correctable anytime from
- * the Invoices tab. Direct-payment evidence always wins outright: if any
- * cash/UPI/etc was logged against the visit, it's collected regardless of
- * what the invoice's own status row says (someone may have issued the
- * invoice as outstanding, then separately logged the cash instead of
- * flipping the invoice's own toggle).
+ * the Invoices tab. An invoice explicitly marked paid always wins outright,
+ * regardless of amounts (that path has no partial-payment concept of its
+ * own — see TakePaymentDialog). Outside that, `directPaymentAmountPaise` is
+ * compared against the bill: less than the bill but still more than zero
+ * is a real partial payment, not "done" — treating any nonzero amount as
+ * fully collected (the old behavior) hid a ₹300 payment against a ₹500
+ * bill as if the whole thing had been paid.
  */
 export function computeVisitPaymentState(
   actualBillPaise: Paise,
@@ -31,12 +39,15 @@ export function computeVisitPaymentState(
   invoiceStatus: PaymentStatus | undefined
 ): VisitPaymentState {
   if (actualBillPaise === 0) return 'zero_session';
-  const collected = directPaymentAmountPaise > 0 || (invoiceId != null && invoiceStatus !== 'outstanding');
-  if (collected) return invoiceId ? 'paid' : 'collected_no_receipt';
+  const invoiceMarkedPaid = invoiceId != null && invoiceStatus !== 'outstanding';
+  if (invoiceMarkedPaid || directPaymentAmountPaise >= actualBillPaise) {
+    return invoiceId ? 'paid' : 'collected_no_receipt';
+  }
+  if (directPaymentAmountPaise > 0) return 'partially_collected';
   return invoiceId ? 'outstanding' : 'uninvoiced';
 }
 
-/** Whether a payment state represents money actually received, regardless of receipt. */
+/** Whether a payment state represents the bill fully settled, regardless of receipt. */
 export function isCollected(state: VisitPaymentState): boolean {
   return state === 'paid' || state === 'collected_no_receipt';
 }
@@ -49,6 +60,8 @@ export function paymentStatusPhrase(state: VisitPaymentState): string {
       return 'collected · invoiced';
     case 'collected_no_receipt':
       return 'collected · no invoice';
+    case 'partially_collected':
+      return 'partially collected';
     case 'outstanding':
       return 'not collected · invoiced';
     case 'uninvoiced':
@@ -74,6 +87,7 @@ export function paymentActions(state: VisitPaymentState): VisitPaymentAction[] {
     case 'uninvoiced':
       return ['take_payment', 'issue_invoice'];
     case 'outstanding':
+    case 'partially_collected':
       return ['take_payment'];
     case 'collected_no_receipt':
       return ['issue_invoice'];

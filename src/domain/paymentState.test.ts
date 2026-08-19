@@ -34,12 +34,29 @@ describe('computeVisitPaymentState', () => {
     // e.g. cash was collected and logged separately instead of flipping the invoice's own status toggle
     expect(computeVisitPaymentState(rs(500), INV, rs(500), 'outstanding')).toBe('paid');
   });
+
+  it('is partially_collected when a direct payment is less than the bill and no invoice covers it', () => {
+    expect(computeVisitPaymentState(rs(500), null, rs(300), undefined)).toBe('partially_collected');
+  });
+
+  it('is partially_collected when invoiced-outstanding and a direct payment falls short of the bill', () => {
+    expect(computeVisitPaymentState(rs(500), INV, rs(300), 'outstanding')).toBe('partially_collected');
+  });
+
+  it('is collected_no_receipt (not partial) once the direct payment reaches the bill exactly', () => {
+    expect(computeVisitPaymentState(rs(500), null, rs(500), undefined)).toBe('collected_no_receipt');
+  });
+
+  it('is paid, not partially_collected, once an invoice is explicitly marked paid regardless of amount tracked', () => {
+    expect(computeVisitPaymentState(rs(500), INV, rs(300), 'paid')).toBe('paid');
+  });
 });
 
 describe('isCollected', () => {
   it('is true for paid and collected_no_receipt, false otherwise', () => {
     expect(isCollected('paid')).toBe(true);
     expect(isCollected('collected_no_receipt')).toBe(true);
+    expect(isCollected('partially_collected')).toBe(false);
     expect(isCollected('outstanding')).toBe(false);
     expect(isCollected('uninvoiced')).toBe(false);
     expect(isCollected('zero_session')).toBe(false);
@@ -50,6 +67,7 @@ describe('paymentStatusPhrase', () => {
   it('omits the rupee figure so a Bill column can stand alone', () => {
     expect(paymentStatusPhrase('paid')).toBe('collected · invoiced');
     expect(paymentStatusPhrase('collected_no_receipt')).toBe('collected · no invoice');
+    expect(paymentStatusPhrase('partially_collected')).toBe('partially collected');
     expect(paymentStatusPhrase('outstanding')).toBe('not collected · invoiced');
     expect(paymentStatusPhrase('uninvoiced')).toBe('not collected · no invoice');
     expect(paymentStatusPhrase('zero_session')).toBe('₹0 session');
@@ -70,6 +88,7 @@ describe('paymentActions', () => {
   it('splits take payment from issue invoice', () => {
     expect(paymentActions('uninvoiced')).toEqual(['take_payment', 'issue_invoice']);
     expect(paymentActions('outstanding')).toEqual(['take_payment']);
+    expect(paymentActions('partially_collected')).toEqual(['take_payment']);
     expect(paymentActions('collected_no_receipt')).toEqual(['issue_invoice']);
     expect(paymentActions('paid')).toEqual([]);
     expect(paymentActions('zero_session')).toEqual([]);
