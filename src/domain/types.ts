@@ -81,6 +81,12 @@ export interface Clinic {
   upiQrPath?: string | null;
   /** Off by default — Show UPI QR only appears at collection when this is on. */
   upiQrEnabled?: boolean;
+  /**
+   * Path into `clinic-assets` (same pattern as logoPath) for a one-time
+   * uploaded signature image, printed on invoices in place of the blank
+   * "Authorised signature" line. Not a cryptographic e-signature.
+   */
+  signaturePath?: string | null;
   updatedAt: string;
 }
 
@@ -144,6 +150,10 @@ export interface Therapist {
   /** Path into the `clinic-assets` bucket (same pattern as Clinic.logoPath),
    *  not the image itself. Optional: most existing rows predate this field. */
   photoPath?: string | null;
+  /** Registration/license number with the state physiotherapy council or
+   *  equivalent body. Printed on invoices — the field TPAs check to confirm
+   *  the treating therapist is a registered practitioner. */
+  registrationNo?: string | null;
   updatedAt: string;
 }
 
