@@ -327,6 +327,13 @@ export interface Visit {
   clinicalStatus?: 'pending' | 'documented' | 'reviewed';
   consultationNoteId?: UUID | null;
   reauthorizationRequired?: boolean;
+  /**
+   * Where the visit happened. Domiciliary (homecare) billing generally
+   * needs this recorded explicitly and separately justified — a TPA wants
+   * to see why the visit couldn't have been an in-clinic OP visit instead.
+   * Optional: older cached rows predate this and default to 'clinic'.
+   */
+  location?: 'clinic' | 'home';
   updatedAt: string;
   /** Auth user who created/last touched this row. Optional: older cached rows lack the key. */
   createdBy?: UUID | null;

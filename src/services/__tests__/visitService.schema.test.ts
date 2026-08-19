@@ -44,6 +44,7 @@ const EXPECTED_VISIT_COLUMNS = new Set([
   'pending_payment_note', // Recently added, was missing before
   'clinical_status',
   'consultation_note_id',
+  'location',
   'deleted',
   'updated_at',
   'created_by',
