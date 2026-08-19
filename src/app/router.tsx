@@ -35,6 +35,9 @@ const MonthlyLedgerPrintPage = lazy(() =>
 const InvoicePrintPage = lazy(() =>
   import('@/features/invoices/InvoicePrintPage').then((m) => ({ default: m.InvoicePrintPage }))
 );
+const NotePrintPage = lazy(() =>
+  import('@/features/patients/NotePrintPage').then((m) => ({ default: m.NotePrintPage }))
+);
 const SettingsPage = lazy(() =>
   import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
 );
@@ -129,6 +132,12 @@ const noteEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId/notes/$noteId',
   component: NoteEditorPage,
+});
+
+const notePrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/notes/$noteId/print',
+  component: NotePrintPage,
 });
 
 // The monthly statement lives under the Reports nav tab (/insights), not
@@ -235,6 +244,7 @@ const routeTree = rootRoute.addChildren([
   patientProfileRoute,
   newNoteRoute,
   noteEditorRoute,
+  notePrintRoute,
   reportsRedirectRoute,
   reportsPrintRoute,
   invoicePrintRoute,
