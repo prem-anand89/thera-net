@@ -29,6 +29,9 @@ import {
   computeBmi,
   computeWaistToHeightRatio,
   outcomeTrend,
+  frequencyLabel,
+  orderedOutcomeInstruments,
+  outcomeInstrumentDef,
   type CoreAssessmentPayload,
   type RedFlagItem,
   type RedFlagState,
@@ -355,6 +358,8 @@ export function NoteEditorPage() {
   // Neurological screen: collapsed by default once WNL, expands automatically
   // if any level is flagged, or on manual expand.
   const [neuroExpanded, setNeuroExpanded] = useState(false);
+  const [outcomeInstrumentPick, setOutcomeInstrumentPick] = useState('');
+  const [outcomeScoreDraft, setOutcomeScoreDraft] = useState('');
 
   // Default the therapist selector: to the linked visit's own therapist when
   // this note documents one (waits for that lookup rather than guessing —
@@ -469,6 +474,7 @@ export function NoteEditorPage() {
   // (undefined for a brand-new note, which excludes nothing) and taking
   // the last of what's left gives the prior note to trend against.
   const previousNote = (enrollmentNotes ?? []).filter((n) => n.id !== noteId).slice(-1)[0];
+  const previousPayload = previousNote?.assessmentPayload ? upcastPayload(previousNote.assessmentPayload) : null;
   const outcomeCards: {
     instrument: string;
     latest: number;
@@ -489,6 +495,16 @@ export function NoteEditorPage() {
       latest: derived.nrsScore,
       previous: previousNote?.nrsScore ?? null,
       direction: 'lower-is-better',
+    });
+  }
+  for (const entry of payload.outcomeTracking?.instruments ?? []) {
+    const def = outcomeInstrumentDef(entry.instrumentId);
+    const prior = previousPayload?.outcomeTracking?.instruments.find((i) => i.instrumentId === entry.instrumentId);
+    outcomeCards.push({
+      instrument: def?.label ?? entry.instrumentId,
+      latest: entry.latestScore,
+      previous: prior?.latestScore ?? null,
+      direction: entry.direction,
     });
   }
 
@@ -527,6 +543,16 @@ export function NoteEditorPage() {
     setPayload((p) => ({ ...p, [key]: value }));
   }
 
+  /** Patches the referral block, creating it on first touch. */
+  function updateReferral(patch: Partial<NonNullable<CoreAssessmentPayload['referral']>>) {
+    update('referral', {
+      referringPhysician: '',
+      diagnosis: '',
+      ...payload.referral,
+      ...patch,
+    });
+  }
+
   /** Upserts a ROM entry by movement name — used by both the freeform ROM
    *  list and the spine-only quick-preset table, so they share one source
    *  of truth in `objective.rom` rather than a parallel structure. */
@@ -536,6 +562,24 @@ export function NoteEditorPage() {
       ? payload.objective.rom.map((r) => (r.movement === movement ? { ...r, ...patch } : r))
       : [...payload.objective.rom, { movement, active: null, passive: null, unit: 'deg' as const, painProvoked: false, ...patch }];
     update('objective', { ...payload.objective, rom });
+  }
+
+  /** Upserts a joint-specific outcome score by instrument id — the current
+   *  score becomes `previousScore` so the trend arrow (outcomeTrend) has
+   *  something to compare against next time this instrument is scored. */
+  function upsertOutcomeInstrument(instrumentId: string, latestScore: number) {
+    const def = outcomeInstrumentDef(instrumentId);
+    if (!def) return;
+    const existing = payload.outcomeTracking?.instruments ?? [];
+    const prior = existing.find((i) => i.instrumentId === instrumentId);
+    const instruments = prior
+      ? existing.map((i) =>
+          i.instrumentId === instrumentId
+            ? { ...i, previousScore: i.latestScore, latestScore, trend: outcomeTrend(def.direction, i.latestScore, latestScore) }
+            : i
+        )
+      : [...existing, { instrumentId, latestScore, direction: def.direction, trend: 'stable' as const }];
+    update('outcomeTracking', { instruments });
   }
 
   if (!ready || patient === undefined) return null;
@@ -590,6 +634,16 @@ export function NoteEditorPage() {
         >
           ← {patient?.name ?? 'Patient'}
         </Link>
+        {existingNote && (
+          <Link
+            to="/patients/$patientId/notes/$noteId/print"
+            params={{ patientId, noteId: existingNote.id }}
+            className="btn-secondary"
+            style={{ marginBottom: 8, marginLeft: 8, display: 'inline-block', textDecoration: 'none' }}
+          >
+            Print
+          </Link>
+        )}
         <h1 className="screen-title">Assessment</h1>
       </header>
 
@@ -656,7 +710,7 @@ export function NoteEditorPage() {
             </button>
           ))}
           {SECTION_GROUPS.flatMap((group) =>
-            group.keys.filter((key) => key !== 'outcome' || outcomeCards.length > 0)
+            group.keys.filter((key) => key !== 'outcome' || outcomeCards.length > 0 || !readOnly)
           ).map((key) => {
             const completion = sectionCompletion(key, payload);
             return (
@@ -705,7 +759,7 @@ export function NoteEditorPage() {
               // Outcome Tracking only exists once there's prior data to
               // compare against — drop its whole group rather than leave a
               // heading with nothing under it.
-              const keys = group.keys.filter((key) => key !== 'outcome' || outcomeCards.length > 0);
+              const keys = group.keys.filter((key) => key !== 'outcome' || outcomeCards.length > 0 || !readOnly);
               if (keys.length === 0) return null;
               return (
                 <div key={group.label} className="mb-1.5 last:mb-0">
@@ -943,6 +997,54 @@ export function NoteEditorPage() {
             />
           ) : (
             <div className="initial-only" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <p className="section-label" style={{ marginTop: 0 }}>Referral &amp; diagnosis</p>
+              <div className="field-row">
+                <div className="field-block">
+                  <label>Referring physician</label>
+                  <input
+                    value={payload.referral?.referringPhysician ?? ''}
+                    disabled={readOnly}
+                    onChange={(e) => updateReferral({ referringPhysician: e.target.value })}
+                  />
+                </div>
+                <div className="field-block">
+                  <label>Physician reg. no.</label>
+                  <input
+                    value={payload.referral?.physicianRegistrationNo ?? ''}
+                    disabled={readOnly}
+                    onChange={(e) => updateReferral({ physicianRegistrationNo: e.target.value })}
+                  />
+                </div>
+                <div className="field-block">
+                  <label>Referral date</label>
+                  <input
+                    type="date"
+                    value={payload.referral?.referralDate ?? ''}
+                    disabled={readOnly}
+                    onChange={(e) => updateReferral({ referralDate: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="field-row">
+                <div className="field-block">
+                  <label>Diagnosis</label>
+                  <input
+                    value={payload.referral?.diagnosis ?? ''}
+                    disabled={readOnly}
+                    onChange={(e) => updateReferral({ diagnosis: e.target.value })}
+                  />
+                </div>
+                <div className="field-block">
+                  <label>ICD-10 code</label>
+                  <input
+                    placeholder="e.g. Z96.651"
+                    value={payload.referral?.diagnosisIcdCode ?? ''}
+                    disabled={readOnly}
+                    onChange={(e) => updateReferral({ diagnosisIcdCode: e.target.value })}
+                  />
+                </div>
+              </div>
+
               <div className="field-block" style={{ margin: 0 }}>
                 <label>Presenting problem</label>
                 <textarea
@@ -2160,6 +2262,34 @@ export function NoteEditorPage() {
                 </select>
               </div>
             </div>
+            <div className="field-row">
+              <div className="field-block">
+                <label>Frequency (per week)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={14}
+                  value={payload.plan.frequencyPerWeek ?? ''}
+                  disabled={readOnly}
+                  onChange={(e) => update('plan', { ...payload.plan, frequencyPerWeek: e.target.value ? Number(e.target.value) : undefined })}
+                />
+              </div>
+              <div className="field-block">
+                <label>Duration (weeks)</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={payload.plan.durationWeeks ?? ''}
+                  disabled={readOnly}
+                  onChange={(e) => update('plan', { ...payload.plan, durationWeeks: e.target.value ? Number(e.target.value) : undefined })}
+                />
+              </div>
+              {frequencyLabel(payload.plan.frequencyPerWeek, payload.plan.durationWeeks) && (
+                <p style={{ fontSize: 10.5, color: 'var(--muted)', alignSelf: 'flex-end', marginBottom: 6 }}>
+                  {frequencyLabel(payload.plan.frequencyPerWeek, payload.plan.durationWeeks)} — what a TPA checks for medical necessity, alongside the bucket above.
+                </p>
+              )}
+            </div>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label className="field-label">Goals</label>
@@ -2204,7 +2334,7 @@ export function NoteEditorPage() {
         </div>
 
         {/* 10. Outcome tracking */}
-        {outcomeCards.length > 0 && (
+        {(outcomeCards.length > 0 || !readOnly) && (
           <div
             ref={(el) => {
               if (el) sectionRefs.current.set('outcome', el);
@@ -2213,10 +2343,12 @@ export function NoteEditorPage() {
             className={`setup-section scroll-mt-28 md:scroll-mt-20 ${openSections.has('outcome') ? 'open' : ''}`}
           >
             <button type="button" className="setup-section-head" onClick={() => toggleSection('outcome')}>
-              <div><h3>Outcome Tracking</h3><div className="sub">PSFS &amp; NRS trend</div></div>
+              <div><h3>Outcome Tracking</h3><div className="sub">PSFS, NRS &amp; joint-specific scales</div></div>
               <span className="chev">›</span>
             </button>
             <div className="setup-section-body">
+            {outcomeCards.length > 0 && (
+            <>
             <div className="stat-row" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
               {outcomeCards.map((card) => {
                 const trend = card.previous !== null ? outcomeTrend(card.direction, card.previous, card.latest) : null;
@@ -2251,6 +2383,47 @@ export function NoteEditorPage() {
               Direction is per-instrument (higher-is-better for PSFS, lower-is-better for NRS) — never read off the
               raw sign of the change.
             </p>
+            </>
+            )}
+            {!readOnly && (() => {
+              const instruments = orderedOutcomeInstruments(payload.chiefComplaint.anatomicalRegion);
+              const def = outcomeInstrumentPick ? outcomeInstrumentDef(outcomeInstrumentPick) : undefined;
+              const score = Number(outcomeScoreDraft);
+              const scoreValid = outcomeScoreDraft.trim() !== '' && Number.isFinite(score) && (!def || (score >= def.minScore && score <= def.maxScore));
+              return (
+                <div className="field-row" style={{ marginTop: outcomeCards.length > 0 ? 12 : 0, alignItems: 'flex-end' }}>
+                  <div className="field-block">
+                    <label>Joint-specific scale</label>
+                    <select value={outcomeInstrumentPick} onChange={(e) => { setOutcomeInstrumentPick(e.target.value); setOutcomeScoreDraft(''); }}>
+                      <option value="">Select a scale…</option>
+                      {instruments.map((i) => (
+                        <option key={i.id} value={i.id}>{i.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="field-block">
+                    <label>Score{def ? ` (${def.minScore}–${def.maxScore})` : ''}</label>
+                    <input
+                      type="number"
+                      disabled={!def}
+                      value={outcomeScoreDraft}
+                      onChange={(e) => setOutcomeScoreDraft(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    className="btn-secondary"
+                    disabled={!def || !scoreValid}
+                    onClick={() => {
+                      if (!def || !scoreValid) return;
+                      upsertOutcomeInstrument(def.id, score);
+                      setOutcomeScoreDraft('');
+                    }}
+                  >
+                    Save score
+                  </button>
+                </div>
+              );
+            })()}
             </div>
           </div>
         )}
