@@ -1,9 +1,10 @@
-import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, ALL_SYNCED_TABLES } from '@/lib/db';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { syncEngine } from '@/sync/engine';
+import { syncStatus } from '@/sync/status';
 import { useSession } from './useSession';
 import { useClinicRole, CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
 import { ClinicContext } from './clinicContext';
@@ -80,6 +81,7 @@ export function Shell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [syncKicked, setSyncKicked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const sync = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
 
   const clinics = useLiveQuery(() => db.clinics.toArray(), []);
   const activeClinicId = useLiveQuery(
@@ -161,10 +163,32 @@ export function Shell() {
     // resolves from localStorage faster than Dexie opens IndexedDB) briefly
     // renders CreateClinicForm before the real clinic loads in, since
     // `syncKicked` only tracks whether the session is ready, not Dexie.
-    if (!syncKicked || clinics === undefined || activeClinicId === undefined) {
+    //
+    // `syncKicked` alone also isn't enough on its own: it flips true the
+    // instant syncEngine.start() is *called*, not once its first pull has
+    // actually landed. On a brand-new device an invited member's own
+    // clinic_members/clinics rows haven't arrived yet at that point — local
+    // Dexie is genuinely empty, which reads identically to "this account
+    // really has zero clinics." Submitting CreateClinicForm in that window
+    // creates a second, empty clinic and hides the one they were invited
+    // to. `sync.lastSyncAt` is only set once a push+pull cycle has fully
+    // completed (see SyncEngine.sync()), by which point a real clinic
+    // membership would already be sitting in `clinics` above — so waiting
+    // for it here is what actually confirms "zero clinics," not just
+    // "haven't checked yet."
+    const initialSyncSettled = sync.lastSyncAt != null;
+    if (!syncKicked || clinics === undefined || activeClinicId === undefined || !initialSyncSettled) {
       return (
         <Centered>
-          <div className="text-center text-sm text-[var(--muted)]">Preparing…</div>
+          <div className="space-y-2 text-center text-sm text-[var(--muted)]">
+            <p>Preparing…</p>
+            {syncKicked && !initialSyncSettled && sync.online === false && (
+              <p className="text-xs">Waiting for a connection to check your clinic access…</p>
+            )}
+            {syncKicked && !initialSyncSettled && sync.online !== false && sync.error && (
+              <p className="text-xs text-[var(--rust)]">Sync issue: {sync.error}</p>
+            )}
+          </div>
         </Centered>
       );
     }
