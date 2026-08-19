@@ -73,6 +73,7 @@ const EXPECTED_CLINIC_COLUMNS = new Set([
   'upi_payee_name',
   'upi_qr_path',
   'upi_qr_enabled',
+  'signature_path',
   'updated_at',
   'created_by',
   'updated_by',

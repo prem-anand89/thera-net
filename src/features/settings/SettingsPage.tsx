@@ -462,6 +462,7 @@ type BillingFields = Pick<
   | 'upiPayeeName'
   | 'upiQrPath'
   | 'upiQrEnabled'
+  | 'signaturePath'
 >;
 
 function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
@@ -477,10 +478,12 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         upiPayeeName: c.upiPayeeName ?? '',
         upiQrPath: c.upiQrPath ?? null,
         upiQrEnabled: c.upiQrEnabled ?? false,
+        signaturePath: c.signaturePath ?? null,
       }),
       onDirtyChange
     );
   const qrPreviewUrl = publicLogoUrl(form.upiQrPath);
+  const signaturePreviewUrl = publicLogoUrl(form.signaturePath);
 
   async function uploadUpiQr(file: File) {
     setError(null);
@@ -496,6 +499,22 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
       return;
     }
     await saveFieldNow({ upiQrPath: path } as Partial<BillingFields>);
+  }
+
+  async function uploadSignature(file: File) {
+    setError(null);
+    const supabase = getSupabase();
+    if (!supabase || !navigator.onLine) {
+      setError('Signature upload needs a connection.');
+      return;
+    }
+    const path = `${clinic.id}/signature-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, file);
+    if (uploadError) {
+      setError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
+      return;
+    }
+    await saveFieldNow({ signaturePath: path } as Partial<BillingFields>);
   }
 
   async function saveBilling() {
@@ -621,6 +640,26 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
           />
           {qrPreviewUrl && (
             <img src={qrPreviewUrl} alt="Uploaded clinic UPI QR" className="mt-2 h-24 w-24 object-contain" />
+          )}
+        </Field>
+      </div>
+
+      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">Invoice signature</h3>
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        A one-time uploaded signature image, printed on every invoice in place of the blank
+        "Authorised signature" line. Not a cryptographic e-signature — a photo or scan of a hand
+        signature is fine.
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Field label="Signature image (optional)">
+          <input
+            type="file"
+            accept="image/*"
+            className={inputCls}
+            onChange={(e) => e.target.files?.[0] && void uploadSignature(e.target.files[0])}
+          />
+          {signaturePreviewUrl && (
+            <img src={signaturePreviewUrl} alt="Uploaded signature" className="mt-2 h-16 w-40 object-contain" />
           )}
         </Field>
       </div>
@@ -1584,6 +1623,18 @@ function Therapists() {
                 />
               </label>
               <span className="min-w-32 text-[var(--ink)]">{t.name}</span>
+              <input
+                key={t.id}
+                className={`${inputCls} w-36 text-xs`}
+                placeholder="Reg. no."
+                title="Registration/license number — printed on invoices"
+                defaultValue={t.registrationNo ?? ''}
+                onBlur={(e) => {
+                  const value = e.target.value.trim() || null;
+                  if (value === (t.registrationNo ?? null)) return;
+                  void repos.therapists.put({ ...t, registrationNo: value, updatedAt: new Date().toISOString() });
+                }}
+              />
               <span
                 className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
                 style={
