@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos } from '@/services';
@@ -30,6 +30,20 @@ export function InvoicePrintPage() {
     [clinic.partnerHospitalLogoPath]
   );
   const signatureUrl = useMemo(() => publicLogoUrl(clinic.signaturePath), [clinic.signaturePath]);
+
+  // "Save as PDF" in the browser's print dialog names the file after
+  // document.title, which is otherwise stuck on the app-wide "Thera.Net —
+  // Patient Visit Ledger" — useless for a document staff hand to a patient
+  // or file with a claim. Restored on unmount so navigating away doesn't
+  // leave the browser tab mistitled.
+  useEffect(() => {
+    if (!invoice) return;
+    const previousTitle = document.title;
+    document.title = `${invoice.patientSnapshot.name} - ${invoice.patientSnapshot.mrno}`;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, [invoice]);
 
   if (!invoice) {
     return <div className="p-8 text-sm text-[var(--muted)]">Invoice not found (or not yet synced).</div>;
