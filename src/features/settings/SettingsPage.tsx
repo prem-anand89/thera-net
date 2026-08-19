@@ -1428,7 +1428,8 @@ function Therapists() {
         throw new Error(result.error || `Request failed with status ${response.status}`);
       }
 
-      setInviteSuccess(result.warning ? `Invitation sent to ${inviteEmail}. ${result.warning}` : `Invitation sent to ${inviteEmail}`);
+      const baseMessage = result.message || `Invitation sent to ${inviteEmail}`;
+      setInviteSuccess(result.warning ? `${baseMessage}. ${result.warning}` : baseMessage);
       setInviteEmail('');
       setInviteName('');
       setInviteRole('therapist');
@@ -1440,6 +1441,12 @@ function Therapists() {
   }
 
   async function revokeMember(userId: string, email: string) {
+    const target = members?.find((m) => m.userId === userId);
+    const isLastAdmin = target?.role === 'admin' && (members?.filter((m) => m.role === 'admin').length ?? 0) <= 1;
+    if (isLastAdmin) {
+      setMembersError('This clinic must keep at least one admin — revoke or demote another admin first.');
+      return;
+    }
     if (!confirm(`Revoke ${email}'s access to this clinic?`)) return;
     setMembersError(null);
     setRevokeInProgress(userId);
@@ -1474,16 +1481,24 @@ function Therapists() {
         </div>
         {members && members.length > 0 ? (
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {members.map((m) => (
-              <MemberCard
-                key={m.userId}
-                member={m}
-                clinicId={clinic.id}
-                revoking={revokeInProgress === m.userId}
-                onRevoke={() => void revokeMember(m.userId, m.email)}
-                onSaved={() => void refetchMembers()}
-              />
-            ))}
+            {members.map((m) => {
+              // A clinic left with zero admins has no path back into
+              // Settings for anyone (every write there requires
+              // is_clinic_admin) — so the last admin's card can't be
+              // demoted or revoked from here, regardless of who's clicking.
+              const isLastAdmin = m.role === 'admin' && members.filter((x) => x.role === 'admin').length <= 1;
+              return (
+                <MemberCard
+                  key={m.userId}
+                  member={m}
+                  clinicId={clinic.id}
+                  revoking={revokeInProgress === m.userId}
+                  isLastAdmin={isLastAdmin}
+                  onRevoke={() => void revokeMember(m.userId, m.email)}
+                  onSaved={() => void refetchMembers()}
+                />
+              );
+            })}
           </div>
         ) : (
           <p className="text-xs text-[var(--muted)]">No team members yet.</p>
@@ -1679,12 +1694,18 @@ function MemberCard({
   member,
   clinicId,
   revoking,
+  isLastAdmin,
   onRevoke,
   onSaved,
 }: {
   member: ClinicMember;
   clinicId: string;
   revoking: boolean;
+  /** True when this member is the clinic's only admin — demoting or
+   *  revoking them would leave nobody able to reach Settings again. The DB
+   *  rejects it either way (see guard_clinic_members_last_admin), but
+   *  blocking here avoids a round-trip just to show the same error. */
+  isLastAdmin: boolean;
   onRevoke: () => void;
   onSaved: () => void;
 }) {
@@ -1697,6 +1718,10 @@ function MemberCard({
   const { color, light } = ACCENT_VARS[ROLE_ACCENT[role] ?? 'slate'];
 
   async function save() {
+    if (isLastAdmin && roleDraft !== 'admin') {
+      setError('This clinic must keep at least one admin — make someone else admin first.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -1762,6 +1787,9 @@ function MemberCard({
         </div>
       </div>
       <RolePill role={role} />
+      {isLastAdmin && (
+        <p className="text-[11px] text-[var(--muted)]">Only admin — can't be demoted or revoked from here.</p>
+      )}
       <div className="flex gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
         <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setEditing(true)}>
           Edit
@@ -1769,7 +1797,7 @@ function MemberCard({
         <button
           type="button"
           className="ml-auto text-[var(--rust)] hover:underline disabled:opacity-50"
-          disabled={revoking}
+          disabled={revoking || isLastAdmin}
           onClick={onRevoke}
         >
           {revoking ? 'Revoking…' : 'Revoke'}
