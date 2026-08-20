@@ -37,7 +37,6 @@ export function NotePrintPage() {
   const note = useLiveQuery(() => repos.consultationNotes.get(noteId), [noteId]);
   const patient = useLiveQuery(() => (note ? repos.patients.get(note.patientId) : undefined), [note?.patientId]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
-  const visit = useLiveQuery(() => (note?.visitId ? repos.visits.get(note.visitId) : undefined), [note?.visitId]);
   const [paper, setPaper] = useState<'A4' | 'A5'>('A4');
 
   const logoUrl = useMemo(() => publicLogoUrl(clinic.logoPath), [clinic.logoPath]);
@@ -113,9 +112,6 @@ export function NotePrintPage() {
             <p className="text-[var(--muted)]">{formatDateDMY(note.updatedAt)}</p>
             {note.noteMode && (
               <p className="text-[var(--muted)]">{note.noteMode === 'initial' ? 'Initial Evaluation' : 'Follow-up'}</p>
-            )}
-            {visit?.location === 'home' && (
-              <p className="text-[var(--muted)]">Home visit</p>
             )}
             <p
               className="mt-1 inline-block rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"

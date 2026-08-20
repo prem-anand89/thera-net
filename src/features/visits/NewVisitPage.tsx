@@ -143,7 +143,6 @@ export function NewVisitPage() {
   const [billOverride, setBillOverride] = useState<number | null>(null);
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [condition, setCondition] = useState('');
-  const [location, setLocation] = useState<'clinic' | 'home'>('clinic');
   const [notes, setNotes] = useState('');
   const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending'>('paid');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
@@ -285,7 +284,6 @@ export function NewVisitPage() {
         setPatient(p);
         setCondition(repeatVisit.condition ?? p.primaryCondition ?? '');
       }
-      setLocation(repeatVisit.location ?? 'clinic');
       setTherapistId(repeatVisit.therapistId);
       // Same service and bill as the visit being repeated either way — for
       // a package continuation this just seeds sensible values before the
@@ -436,7 +434,6 @@ export function NewVisitPage() {
         serviceCatalogId: mode === 'continuation' ? selectedPackage!.serviceCatalogId : serviceCatalogId,
         condition,
         treatmentNotes: notes,
-        location,
         actualBillPaise: billOverride ?? undefined,
         adjustmentReason,
         ...(mode === 'continuation'
@@ -861,16 +858,6 @@ export function NewVisitPage() {
               value={condition}
               onChange={(e) => setCondition(e.target.value)}
             />
-          </Field>
-          <Field label="Visit location">
-            <select
-              className={inputCls}
-              value={location}
-              onChange={(e) => setLocation(e.target.value as 'clinic' | 'home')}
-            >
-              <option value="clinic">Clinic</option>
-              <option value="home">Patient's home</option>
-            </select>
           </Field>
           <Field label="Treatment notes">
             <input
