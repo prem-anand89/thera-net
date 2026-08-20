@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, backupService, therapistService } from '@/services';
+import { repos, backupService, therapistService, visitService } from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -370,7 +370,7 @@ function useClinicSectionForm<F extends Partial<Clinic>>(
     setForm((f) => ({ ...f, ...patch }));
   }
 
-  async function save() {
+  async function save(): Promise<boolean> {
     setError(null);
     setBusy(true);
     try {
@@ -378,8 +378,10 @@ function useClinicSectionForm<F extends Partial<Clinic>>(
       if (!current) throw new Error('Clinic not found');
       await repos.clinics.put({ ...current, ...form, updatedAt: new Date().toISOString() });
       setSaved(true);
+      return true;
     } catch (e) {
       setError(toFriendlyMessage(e));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -468,6 +470,7 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
       onDirtyChange
     );
   const logoPreviewUrl = publicLogoUrl(form.logoPath);
+  const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
 
   async function uploadLogo(file: File) {
     setError(null);
@@ -483,6 +486,28 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
       return;
     }
     await saveFieldNow({ logoPath: path } as Partial<ProfileFields>);
+  }
+
+  // clinicType feeds clinicBillingConfig()'s hospitalSplit flag alongside
+  // Partner & split's own fields — switching Individual/Multiple can turn
+  // the clinic/partner split on or off, so it needs the same catch-up as a
+  // bmSplitPct/taxPct change there. See PartnerSection.savePartner.
+  async function saveProfile() {
+    setRecomputeMsg(null);
+    const splitAffected = form.clinicType !== clinic.clinicType;
+    const ok = await save();
+    if (ok && splitAffected) {
+      try {
+        const { updated } = await visitService.recomputeUninvoicedSplits(clinic.id);
+        setRecomputeMsg(
+          updated > 0
+            ? `Applied the updated split to ${updated} already-logged, not-yet-invoiced visit${updated === 1 ? '' : 's'}.`
+            : null
+        );
+      } catch (e) {
+        setError(toFriendlyMessage(e));
+      }
+    }
   }
 
   return (
@@ -579,7 +604,8 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         </Field>
       </div>
 
-      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
+      {recomputeMsg && <p className="mt-2 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
+      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void saveProfile()} onCancel={cancel} error={error} />
     </SectionCard>
   );
 }
@@ -849,6 +875,35 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
     );
   const labels = clinicShareLabels(form);
   const partnerLogoPreviewUrl = publicLogoUrl(form.partnerHospitalLogoPath);
+  const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
+
+  // hasPartner/bmSplitPct/taxPct/tdsBasis all feed clinicBillingConfig() and
+  // computeVisitSplit() — a change to any of them means visits already
+  // logged (but not yet invoiced) are now showing a stale split, since
+  // updateBilling deliberately keeps a visit's ORIGINAL rate snapshot on
+  // edit. Catch those up here, right where the rate actually changed,
+  // instead of leaving it to silently only affect visits logged from now on.
+  async function savePartner() {
+    setRecomputeMsg(null);
+    const splitAffected =
+      (form.hasPartner ?? false) !== (clinic.hasPartner ?? false) ||
+      form.bmSplitPct !== clinic.bmSplitPct ||
+      form.taxPct !== clinic.taxPct ||
+      form.tdsBasis !== clinic.tdsBasis;
+    const ok = await save();
+    if (ok && splitAffected) {
+      try {
+        const { updated } = await visitService.recomputeUninvoicedSplits(clinic.id);
+        setRecomputeMsg(
+          updated > 0
+            ? `Applied the new split to ${updated} already-logged, not-yet-invoiced visit${updated === 1 ? '' : 's'}.`
+            : 'No not-yet-invoiced visits needed updating.'
+        );
+      } catch (e) {
+        setError(toFriendlyMessage(e));
+      }
+    }
+  }
 
   async function uploadPartnerLogo(file: File) {
     setError(null);
@@ -974,9 +1029,11 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         )}
       </div>
       <p className="mt-3 text-xs text-[var(--muted)]">
-        Split/tax changes apply to NEW visits only — past visits keep the rates they were billed under.
+        Split/tax changes apply going forward automatically, and — on Save — also to any already-logged
+        visit that hasn't been invoiced yet. Invoiced visits keep the rates they were billed under.
       </p>
-      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
+      {recomputeMsg && <p className="mt-1 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
+      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void savePartner()} onCancel={cancel} error={error} />
     </SectionCard>
   );
 }
