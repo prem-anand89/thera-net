@@ -267,6 +267,7 @@ export function SharedVisitCard({
   data,
   showDate,
   showPatient,
+  boxed = false,
   onInvoice,
   onTakePayment,
   onEditPatient,
@@ -278,6 +279,10 @@ export function SharedVisitCard({
   data: VisitCardData;
   showDate: boolean;
   showPatient: boolean;
+  /** Renders as its own bordered/shadowed card (the flat "Seen today" list)
+   *  rather than a plain row (used inside an already-boxed date group, or a
+   *  divide-y list a caller owns) — avoids nesting a box inside a box. */
+  boxed?: boolean;
   onInvoice: () => void;
   onTakePayment?: () => void;
   onEditPatient?: () => void;
@@ -294,74 +299,110 @@ export function SharedVisitCard({
         .join('')
     : '';
 
-  const secondaryParts = [
-    data.condition,
-    `${data.serviceName}${data.sessionIndex && data.packageTotal ? ` (${data.sessionIndex}/${data.packageTotal})` : ''}`,
-    data.therapistName,
-    data.treatmentNotes,
-  ].filter(Boolean);
+  const chip = PAYMENT_CHIP[data.paymentState];
+  const bill = formatINR(data.billPaise);
+  const actions = canInvoice ? paymentActions(data.paymentState) : [];
+  const sessionLabel =
+    data.sessionIndex && data.packageTotal ? `${data.sessionIndex} of ${data.packageTotal} sessions` : null;
+  const therapistLine = [data.therapistName, data.condition].filter(Boolean).join(' · ');
 
-  const nameBlock = (
-    <div className="min-w-0 flex-1">
-      {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
-      <div className="text-xs text-[var(--muted)]" style={{ whiteSpace: 'normal' }}>
-        {secondaryParts.map((part, i) => (
-          <span key={i}>
-            {i > 0 && ' · '}
-            {part}
-            {i === 1 && data.sessionIndex && data.packageTotal && (
-              <span className="ml-1 align-middle">
-                <PackageThread sessionIndex={data.sessionIndex} packageTotal={data.packageTotal} />
-              </span>
-            )}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-
-  return (
-    // Below sm:, date + avatar + name share one row and payment info +
-    // actions share a second, full-width row — cramming all five into one
-    // flex row left the name/details column with almost no space on a
-    // narrow phone, forcing every word onto its own line. sm: and up
-    // (still card view below tab:, e.g. a wider phone or small tablet)
-    // reverts to the original single-row layout via sm:contents, which has
-    // room for it.
-    <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:gap-3">
-      <div className="flex items-start gap-3">
-        {showDate && (
-          <div className="w-14 shrink-0 pt-0.5 text-xs text-[var(--muted)]">
-            {formatDateDMY(data.visitDate)}
-            {data.editedBy && (
-              <span className="ml-1" title={`Edited by ${data.editedBy}`}>
-                ✎
-              </span>
-            )}
-            {data.syncError && (
-              <span className="ml-1 text-[var(--rust)]" title={`Sync issue: ${data.syncError}`}>
-                ⚠
-              </span>
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-start gap-3">
+          {showPatient && (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
+              {initials || '?'}
+            </div>
+          )}
+          <div className="min-w-0">
+            {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
+            {showDate && (
+              <div className={`text-xs text-[var(--muted)] ${showPatient ? 'mt-0.5' : ''}`}>
+                {formatDateDMY(data.visitDate)}
+                {data.editedBy && (
+                  <span className="ml-1" title={`Edited by ${data.editedBy}`}>
+                    ✎
+                  </span>
+                )}
+                {data.syncError && (
+                  <span className="ml-1 text-[var(--rust)]" title={`Sync issue: ${data.syncError}`}>
+                    ⚠
+                  </span>
+                )}
+              </div>
             )}
           </div>
-        )}
-
-        {showPatient && (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
-            {initials || '?'}
-          </div>
-        )}
-
-        <div className="min-w-0 flex-1 sm:hidden">{nameBlock}</div>
-      </div>
-
-      <div className="hidden sm:contents">{nameBlock}</div>
-
-      <div className="flex items-center justify-between gap-2 sm:contents">
-        <PaymentStatusDisplay data={data} onInvoice={onInvoice} onTakePayment={onTakePayment} canInvoice={canInvoice} />
+        </div>
         <RowActionsMenu data={data} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
       </div>
-    </div>
+
+      {(data.serviceName || sessionLabel) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {data.serviceName && <Pill tone="slate">{data.serviceName}</Pill>}
+          {sessionLabel && <Pill tone="slate">{sessionLabel}</Pill>}
+        </div>
+      )}
+
+      {(therapistLine || data.treatmentNotes) && (
+        <div className="mt-2 text-xs text-[var(--muted)]">
+          {therapistLine && (
+            <div className="flex items-center gap-1.5">
+              <span aria-hidden>👤</span>
+              <span>{therapistLine}</span>
+            </div>
+          )}
+          {data.treatmentNotes && <div className="mt-0.5">{data.treatmentNotes}</div>}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {data.paymentState !== 'zero_session' && (
+            <span className="font-num text-sm font-medium text-[var(--ink)]">{bill}</span>
+          )}
+          <Pill tone={chip.tone}>{chip.label}</Pill>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {actions.includes('take_payment') && (
+            <button
+              type="button"
+              className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+              onClick={onTakePayment}
+            >
+              Take payment
+            </button>
+          )}
+          {actions.includes('issue_invoice') && (
+            <button
+              type="button"
+              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+              onClick={onInvoice}
+            >
+              Issue invoice
+            </button>
+          )}
+          {!canInvoice && paymentActions(data.paymentState).length > 0 && <Pill tone="slate">Ask billing</Pill>}
+          {data.needsNote && (
+            <Link
+              to="/patients/$patientId/notes/new"
+              params={{ patientId: data.patientId }}
+              search={{ visitId: data.visitId }}
+              className="text-xs font-medium text-[var(--amber)] hover:underline"
+              title="Clinical note not started for this visit"
+            >
+              + Note
+            </Link>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  return boxed ? (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">{content}</div>
+  ) : (
+    <div className="py-3">{content}</div>
   );
 }
 
@@ -648,13 +689,14 @@ export function ResponsiveVisitList({
             </div>
           ))
         ) : (
-          <div className="divide-y divide-[var(--border)]">
+          <div className="space-y-2">
             {rows.map((row) => (
               <SharedVisitCard
                 key={row.visitId}
                 data={row}
                 showDate={showDate}
                 showPatient={showPatient}
+                boxed={true}
                 onInvoice={() => onInvoice(row)}
                 onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
                 onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
