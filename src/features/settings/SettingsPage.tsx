@@ -575,18 +575,8 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         <Field
           label={
             <>
-              Expected today
-              <InfoTip text="Shows a lightweight 'who's coming in today' list on Workspace, for clinics that track informal walk-in/appointment expectations. Not a booking system — no calendar, no availability checking." />
-            </>
-          }
-        >
-          <BoolToggle value={form.enableExpectedToday ?? false} onChange={(v) => set({ enableExpectedToday: v })} />
-        </Field>
-        <Field
-          label={
-            <>
               Clinical documentation
-              <InfoTip text="When on, new visits are flagged for a clinical note until one is completed — surfaced on Workspace's Needs attention and Documentation lists. Off by default; turn on for clinics that track a note per visit." />
+              <InfoTip text="When on, new visits are flagged for a clinical note until one is completed — filterable via Ledger's 'Not documented' checkbox. Off by default; turn on for clinics that track a note per visit." />
             </>
           }
         >

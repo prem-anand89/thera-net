@@ -10,6 +10,10 @@ export interface OpenPackageGroup {
   startedOn: string;
   /** Latest visit date in the group — the anchor for staleness */
   lastVisitOn: string;
+  /** The latest visit's own id — lets a caller jump straight into logging
+   *  the next session via the same repeatVisitId mechanism Ledger's "Repeat"
+   *  action already uses. */
+  lastVisitId: UUID;
   /** Therapist who logged the earliest (session 1) visit — who "started" this package. */
   startedByTherapistId: UUID;
 }
@@ -41,6 +45,7 @@ export function groupOpenPackages(visits: Visit[]): OpenPackageGroup[] {
       packageTotal,
       startedOn: sorted[0].visitDate,
       lastVisitOn: sorted[sorted.length - 1].visitDate,
+      lastVisitId: sorted[sorted.length - 1].id,
       startedByTherapistId: sorted[0].therapistId,
     });
   }
