@@ -169,9 +169,18 @@ const invoicePrintRoute = createRoute({
   component: InvoicePrintPage,
 });
 
+// Kept in sync with SettingsPage's own SectionKey by hand — a route file
+// shouldn't import a feature's internal type just to validate a search
+// param, and the two rarely change.
+const SETTINGS_TABS = ['profile', 'billing', 'partner', 'team', 'services', 'features', 'data'] as const;
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
+  validateSearch: (search: Record<string, unknown>): { tab?: (typeof SETTINGS_TABS)[number] } =>
+    typeof search.tab === 'string' && (SETTINGS_TABS as readonly string[]).includes(search.tab)
+      ? { tab: search.tab as (typeof SETTINGS_TABS)[number] }
+      : {},
   component: SettingsPage,
 });
 

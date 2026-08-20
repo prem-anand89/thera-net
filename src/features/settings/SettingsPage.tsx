@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, backupService, therapistService } from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
@@ -150,18 +150,42 @@ function toggleSet<T>(set: Set<T>, key: T, present: boolean): Set<T> {
 export function SettingsPage() {
   const clinic = useClinic();
   const { canEditSettings } = usePermissions();
-  const showFirstWeek = useFirstWeekChecklistVisible();
-  const [activeKey, setActiveKey] = useState<SectionKey>('profile');
+  const search = useSearch({ from: '/settings' });
+  const navigate = useNavigate({ from: '/settings' });
+  const [activeKey, setActiveKeyState] = useState<SectionKey>(search.tab ?? 'profile');
   const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
-  const [landedOnUnlinked, setLandedOnUnlinked] = useState(false);
+  const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
+  const catalogEmpty = catalog !== undefined && catalog.length === 0;
 
+  // `replace` so switching tabs doesn't spam browser history — a `?tab=`
+  // link is meant to be bookmarkable/shareable, not a Back-button stepper.
+  function setActiveKey(key: SectionKey) {
+    setActiveKeyState(key);
+    void navigate({ search: (prev) => ({ ...prev, tab: key }), replace: true });
+  }
+
+  // Default landing, only when nobody already told us where to go via
+  // ?tab=: Team if anyone is unlinked (existing behavior, kept), otherwise
+  // Services while the catalog is still empty (that's the actual week-one
+  // blocker), otherwise Profile.
+  const [landedOnDefault, setLandedOnDefault] = useState(!!search.tab);
   useEffect(() => {
-    if (landedOnUnlinked || therapists === undefined) return;
-    if (unlinkedCount > 0) setActiveKey('team');
-    setLandedOnUnlinked(true);
-  }, [landedOnUnlinked, therapists, unlinkedCount]);
+    if (landedOnDefault || therapists === undefined || catalog === undefined) return;
+    setActiveKey(unlinkedCount > 0 ? 'team' : catalogEmpty ? 'services' : 'profile');
+    setLandedOnDefault(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [landedOnDefault, therapists, catalog, unlinkedCount, catalogEmpty]);
+
+  // First week's own two checkable gates (the rest of its steps are
+  // behavioral tips, not something Dexie can confirm) — once both clear,
+  // the card auto-hides instead of sitting there until someone notices the
+  // Hide button. Held back while either query is still loading so it
+  // doesn't flash visible-then-hidden on a fast setup.
+  const firstWeekNotDismissed = useFirstWeekChecklistVisible();
+  const setupIncomplete = therapists === undefined || catalog === undefined ? undefined : unlinkedCount > 0 || catalogEmpty;
+  const showFirstWeek = firstWeekNotDismissed === undefined || setupIncomplete === undefined ? false : firstWeekNotDismissed && setupIncomplete;
 
   // Left-rail sections that edit the clinic row report their dirty state up
   // here, so switching tabs with unsaved changes can warn before discarding
@@ -208,13 +232,33 @@ export function SettingsPage() {
       {showFirstWeek && <FirstWeekChecklist />}
 
       <div className="tab:flex tab:items-start tab:gap-6">
-        {/* Horizontal scroller at the top below tab: (Shell's own bottom
-            tab bar owns the bottom of the viewport now — a second bar down
-            there would compete with it), vertical rail at tab: and above.
-            Group headings only render in that rail; the horizontal
-            scroller stays a flat row, where headings would just eat scroll
-            width. */}
-        <nav className="mb-4 flex gap-1 overflow-x-auto tab:mb-0 tab:w-48 tab:shrink-0 tab:flex-col tab:gap-0.5 tab:overflow-visible">
+        {/* Below tab: (Shell's own bottom tab bar owns the bottom of the
+            viewport now — a horizontal chip row down there would compete
+            with it), a grouped <select> stands in for the rail: seven flat
+            chips with no room for the Clinic/People & services/System
+            grouping read as one undifferentiated strip. Vertical rail with
+            real group headings at tab: and above, where there's width for
+            it. */}
+        <select
+          value={activeKey}
+          onChange={(e) => selectSection(e.target.value as SectionKey)}
+          className={`${inputCls} mb-4 tab:hidden`}
+        >
+          {SECTION_GROUPS.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.keys.map((key) => {
+                const s = SECTIONS.find((x) => x.key === key)!;
+                return (
+                  <option key={key} value={key}>
+                    {s.label}
+                    {dirtyKeys.has(key) ? ' •' : ''}
+                  </option>
+                );
+              })}
+            </optgroup>
+          ))}
+        </select>
+        <nav className="mb-4 hidden gap-1 overflow-x-auto tab:mb-0 tab:flex tab:w-48 tab:shrink-0 tab:flex-col tab:gap-0.5 tab:overflow-visible">
           {SECTION_GROUPS.map((group) => (
             <div key={group.label} className="contents tab:mb-1.5 tab:block">
               <p className="hidden px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]/70 tab:block">
