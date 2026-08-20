@@ -20,10 +20,10 @@ type InsightsView = 'overview' | 'monthly';
  * already admin or front_desk.
  */
 export function ReportsPage() {
-  const { canViewPayouts } = usePermissions();
+  const { canViewPayouts, role } = usePermissions();
   const { isClinicWideView } = useWorkspaceScope();
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { tab?: InsightsView };
+  const search = useSearch({ from: '/insights' });
   const view: InsightsView = search.tab === 'monthly' ? 'monthly' : 'overview';
 
   const setView = useCallback(
@@ -35,9 +35,11 @@ export function ReportsPage() {
 
   // canViewPayouts flipping mid-session (admin role changed on another
   // device) shouldn't leave someone stranded on a tab that just disappeared.
+  // Wait until role resolves — while it's still 'unknown', canViewPayouts is
+  // false and we'd incorrectly strip ?tab=monthly back to Trends on load.
   useEffect(() => {
-    if (view === 'monthly' && !canViewPayouts) setView('overview');
-  }, [view, canViewPayouts, setView]);
+    if (view === 'monthly' && role !== 'unknown' && !canViewPayouts) setView('overview');
+  }, [view, canViewPayouts, role, setView]);
 
   // Nav already hides the Reports link for a plain therapist (Shell.tsx);
   // this guard covers a direct URL hit (old bookmark, typed link) instead

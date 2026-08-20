@@ -9,7 +9,7 @@ import { formatINR } from '@/domain/money';
 import { monthName, formatDateDMY, fiscalYearOf, monthsOfFiscalYear, type FyMonth } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels, referringSourceDetailLabel, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
-import { SectionCard, StatTile, Pill, PackageThread, th, td, tdNum, thNum } from '@/components/ui';
+import { SectionCard, StatTile, Pill, th, td, tdNum, thNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
 import { IndexedTrendChart } from '@/components/IndexedTrendChart';
 import { PieChart } from '@/components/PieChart';
@@ -24,7 +24,6 @@ import { SERIES_COLORS } from '@/components/chartColors';
  *  filtered per-render rather than being a fixed list. */
 const DASHBOARD_SECTIONS: { key: string; label: string }[] = [
   { key: 'singleVisit', label: 'Single-visit patients' },
-  { key: 'packages', label: 'Packages' },
   { key: 'revenue', label: 'Revenue trend' },
   { key: 'therapistComparison', label: 'Therapist comparison' },
   { key: 'serviceUsage', label: 'Frequently used services' },
@@ -84,6 +83,7 @@ const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> =
   adjustmentPaise: 0,
   sharedPaise: 0,
   netPostTaxPaise: 0,
+  attributedRevenuePaise: 0,
   visitCount: 0,
   uniquePatients: 0,
 };
@@ -156,7 +156,6 @@ export function ReportsOverviewPage() {
     () => dashboardService.referralSourceStats(clinic.id),
     [clinic.id]
   );
-  const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
   const serviceUsage = useLiveQuery(
     () => dashboardService.serviceUsage(clinic.id, { year: new Date().getFullYear(), month: new Date().getMonth() + 1 }, scope.scopeTherapistId),
     [clinic.id, scope.scopeTherapistId]
@@ -219,10 +218,16 @@ export function ReportsOverviewPage() {
   // and monthlyNewCounts pair already being fetched for the chart/other
   // KPIs — their last two entries are this month and last, so no extra
   // query for either KPI card.
+  // Clinic-wide (admin) keeps the actual post-tax/billed figure — the
+  // financial number the clinic runs on, unaffected by attribution since a
+  // total is invariant to how it's split across therapists. A single
+  // therapist's own figure instead uses attributedRevenuePaise: without it,
+  // "my revenue" credits 100% of a package to whoever logged its first
+  // (billed) session and 0% to a colleague who ran the rest of it.
   const revenueRow = (report: MonthlyReport | undefined) => {
     if (!report) return null;
-    const row = scope.isClinicWideView ? report.total : myMonthRow(report.rows);
-    return hospitalSplit ? row.postTaxPaise : row.billPaise;
+    if (scope.isClinicWideView) return hospitalSplit ? report.total.postTaxPaise : report.total.billPaise;
+    return myMonthRow(report.rows).attributedRevenuePaise;
   };
   const revenueThisMonth = trend ? revenueRow(trend[trend.length - 1]) : null;
   const revenueLastMonth = trend && trend.length > 1 ? revenueRow(trend[trend.length - 2]) : null;
@@ -273,19 +278,6 @@ export function ReportsOverviewPage() {
     (s) =>
       (s.key !== 'therapistComparison' || showTherapistComparison) &&
       (s.key !== 'modalityUsage' || clinic.clinicalDocsEnabled)
-  );
-
-  const packagesInScope = useMemo(
-    () =>
-      scope.isClinicWideView
-        ? (openPackages ?? [])
-        : (openPackages ?? []).filter((p) => p.startedByTherapistId === scope.myTherapistId),
-    [openPackages, scope.isClinicWideView, scope.myTherapistId]
-  );
-  const [pkgStatusFilter, setPkgStatusFilter] = useState<'open' | 'stale' | 'all'>('open');
-  const filteredPackages = useMemo(
-    () => (pkgStatusFilter === 'all' ? packagesInScope : packagesInScope.filter((p) => p.stale === (pkgStatusFilter === 'stale'))),
-    [packagesInScope, pkgStatusFilter]
   );
 
   // Referral sources — a slice is always "active" (defaults to the top
@@ -604,86 +596,6 @@ export function ReportsOverviewPage() {
 
           <div
             ref={(el) => {
-              if (el) sectionRefs.current.set('packages', el);
-              else sectionRefs.current.delete('packages');
-            }}
-            className="scroll-mt-28 md:scroll-mt-20"
-          >
-            <SectionCard title={scope.isClinicWideView ? 'Packages' : 'My packages'}>
-              <p className="mb-3 text-xs text-[var(--muted)]">
-                Every patient on a package{scope.isClinicWideView ? '' : " you've started"} — who's still owed
-                sessions, and whose package has gone quiet.
-              </p>
-              <div className="mb-3 flex items-center gap-1.5">
-                {(
-                  [
-                    { key: 'open', label: 'Open' },
-                    { key: 'stale', label: 'Stale' },
-                    { key: 'all', label: 'All' },
-                  ] as const
-                ).map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => setPkgStatusFilter(opt.key)}
-                    className="rounded-full border px-3 py-1 text-xs font-medium"
-                    style={{
-                      background: pkgStatusFilter === opt.key ? 'var(--teal-light)' : 'var(--surface)',
-                      borderColor: pkgStatusFilter === opt.key ? 'transparent' : 'var(--border)',
-                      color: pkgStatusFilter === opt.key ? 'var(--teal)' : 'var(--muted)',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-                <span className="ml-1 text-xs text-[var(--muted)]">
-                  {filteredPackages.length} package{filteredPackages.length === 1 ? '' : 's'}
-                </span>
-              </div>
-              {filteredPackages.length === 0 ? (
-                <p className="py-6 text-center text-sm text-[var(--muted)]">No packages match this filter.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-[var(--border)]">
-                    <thead className="bg-[var(--paper)]">
-                      <tr>
-                        <th className={th}>Patient</th>
-                        <th className={th}>Package</th>
-                        <th className={th}>Therapist</th>
-                        <th className={thNum}>Sessions</th>
-                        <th className={th}>Last visit</th>
-                        <th className={th}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--border)]">
-                      {filteredPackages.map((p) => (
-                        <tr key={p.packageGroupId}>
-                          <td className={td}>
-                            {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
-                          </td>
-                          <td className={td}>{p.serviceName}</td>
-                          <td className={td}>{p.startedByTherapistName}</td>
-                          <td className={tdNum}>
-                            <span className="inline-flex items-center gap-1.5">
-                              <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
-                              {p.sessionsLogged} / {p.packageTotal}
-                            </span>
-                          </td>
-                          <td className={td}>{p.daysSinceLastVisit}d ago</td>
-                          <td className={td}>
-                            <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </SectionCard>
-          </div>
-
-          <div
-            ref={(el) => {
               if (el) sectionRefs.current.set('revenue', el);
               else sectionRefs.current.delete('revenue');
             }}
@@ -730,10 +642,7 @@ export function ReportsOverviewPage() {
                     barValues={
                       scope.isClinicWideView
                         ? trend.map((r) => (hospitalSplit ? r.total.postTaxPaise : r.total.billPaise))
-                        : trend.map((r) => {
-                            const row = myMonthRow(r.rows);
-                            return hospitalSplit ? row.postTaxPaise : row.billPaise;
-                          })
+                        : trend.map((r) => myMonthRow(r.rows).attributedRevenuePaise)
                     }
                     lineLabel="Visits"
                     lineColor={SERIES_COLORS[1]}

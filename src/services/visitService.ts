@@ -222,5 +222,43 @@ export function createVisitService(repos: Repos) {
       await repos.visits.put(updated);
       return updated;
     },
+
+    /**
+     * Re-snapshots the clinic/partner split (bmSplitPct, taxPct, tdsBasis)
+     * onto every not-yet-invoiced visit, using the clinic's CURRENT settings.
+     * updateBilling deliberately keeps a visit's original rate snapshot on
+     * edit (see its test) — that's correct for a visit whose rates were
+     * already locked in, but it also means a Settings change to the split %
+     * never reaches visits logged before the change. This gives Settings an
+     * explicit, bounded way to catch those up: invoiced visits are skipped
+     * (their billing is already frozen), and a visit already matching the
+     * current rates is left untouched.
+     */
+    async recomputeUninvoicedSplits(clinicId: UUID): Promise<{ updated: number }> {
+      const clinic = await repos.clinics.get(clinicId);
+      if (!clinic) throw new Error(`Clinic not found (id: ${clinicId})`);
+      const { hospitalSplit } = clinicBillingConfig(clinic);
+      const splitPct = hospitalSplit ? clinic.bmSplitPct : 100;
+      const taxPct = hospitalSplit ? clinic.taxPct : 0;
+      const tdsBasis = hospitalSplit ? clinic.tdsBasis : 'gross_bill';
+
+      const visits = await repos.visits.list({ clinicId });
+      let updated = 0;
+      for (const v of visits) {
+        if (v.invoiceId) continue;
+        if (v.bmSplitPct === splitPct && v.taxPct === taxPct && v.tdsBasis === tdsBasis) continue;
+        const split = computeVisitSplit(v.actualBillPaise, splitPct, taxPct, tdsBasis);
+        await repos.visits.put({
+          ...v,
+          bmSplitPct: splitPct,
+          taxPct,
+          tdsBasis,
+          ...split,
+          updatedAt: new Date().toISOString(),
+        });
+        updated++;
+      }
+      return { updated };
+    },
   };
 }

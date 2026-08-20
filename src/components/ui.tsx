@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { paiseToRupees, rupeesToPaise, type Paise } from '@/domain/money';
 
 export const inputCls =
@@ -7,6 +7,10 @@ export const btnPrimary =
   'min-h-11 rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--teal-strong)] disabled:opacity-50';
 export const btnSecondary =
   'min-h-11 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--paper)] disabled:opacity-50';
+/** A row inside a `KebabMenu` dropdown — pair with `menuItemDestructive` for Delete-style actions. */
+export const menuItem = 'block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]';
+export const menuItemDestructive =
+  'block w-full px-3 py-1.5 text-left text-xs text-[var(--rust)] hover:bg-[var(--rust-light)]';
 
 export function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
@@ -91,7 +95,66 @@ export function Pill({ tone, children }: { tone: keyof typeof PILL_TONES; childr
 }
 
 /**
- * Small "?" affordance explaining a jargon term inline. A tap/click toggles a
+ * Generic ⋮ trigger + dropdown menu for a row's actions. Flips to open
+ * above the trigger whenever there isn't room to open below within the
+ * viewport, computed from the button's position at the moment it's
+ * opened — a kebab near the bottom of a short list otherwise opens
+ * off-screen, forcing a scroll to see it. Every row-actions menu in the
+ * app shares this one implementation so that fix only has to be gotten
+ * right once. Note for callers: any scrollable ancestor built with
+ * `overflow-x-auto` alone needs `overflow-y-visible` alongside it — per
+ * the CSS overflow spec, leaving overflow-y unset there computes it to
+ * 'auto' too, silently clipping this menu instead of letting it render
+ * past the container's edge.
+ */
+export function KebabMenu({
+  children,
+  ariaLabel = 'Row actions',
+}: {
+  children: (close: () => void) => ReactNode;
+  ariaLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  function toggle() {
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const estimatedMenuHeight = 170;
+      setOpenUpward(window.innerHeight - rect.bottom < estimatedMenuHeight);
+    }
+    setOpen((o) => !o);
+  }
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={ariaLabel}
+        className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--paper)]"
+        onClick={toggle}
+      >
+        ⋮
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div
+            className={`absolute right-0 z-20 min-w-32 rounded-md border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg ${
+              openUpward ? 'bottom-full mb-1' : 'top-full mt-1'
+            }`}
+          >
+            {children(() => setOpen(false))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Small "?" affordance explaining a jargon term inline. A tap/click toggles a
  * visible bubble — relying on the native `title` attribute alone doesn't
  * work on phones/tablets, since there's no hover state to trigger it, and
  * these are aimed squarely at non-technical staff who may be on one.
@@ -212,6 +275,88 @@ export function Panel({
           </button>
         </div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Centered confirm/type-to-confirm dialog — replaces native `confirm()` /
+ * `prompt()` across the app with the same visual shell as TakePaymentDialog
+ * / EditVisitModal / IssueInvoiceDialog. Plain confirms just need
+ * onConfirm/onCancel; a destructive action that used to gate on `prompt()`
+ * passes `typeToConfirm` — the confirm button stays disabled until
+ * `isMatch` returns true, so there's no separate "name didn't match" alert
+ * to write or dismiss.
+ */
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  destructive = false,
+  typeToConfirm,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  message: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  typeToConfirm?: { placeholder: string; isMatch: (typed: string) => boolean };
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const [typed, setTyped] = useState('');
+  useEffect(() => {
+    if (open) setTyped('');
+  }, [open]);
+
+  if (!open) return null;
+  const canConfirm = !typeToConfirm || typeToConfirm.isMatch(typed);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/40 p-4"
+      onClick={onCancel}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-sm space-y-3 rounded-[10px] bg-[var(--surface)] p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-sm font-semibold text-[var(--ink)]">{title}</h2>
+        <p className="whitespace-pre-line text-sm text-[var(--muted)]">{message}</p>
+        {typeToConfirm && (
+          <input
+            autoFocus
+            className={inputCls}
+            placeholder={typeToConfirm.placeholder}
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+          />
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className={btnSecondary} onClick={onCancel}>
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            className={
+              destructive
+                ? 'min-h-11 rounded-lg border border-[var(--rust)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)] disabled:opacity-50'
+                : btnPrimary
+            }
+            disabled={!canConfirm}
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </button>
+        </div>
       </div>
     </div>
   );

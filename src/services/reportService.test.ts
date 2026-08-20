@@ -18,6 +18,8 @@ function makeFakeRepos(visitList: Visit[]) {
     visits: {
       list: async (f: VisitFilter) =>
         visitList.filter((v) => v.clinicId === f.clinicId && (!f.from || v.visitDate >= f.from) && (!f.to || v.visitDate <= f.to)),
+      listByPackageGroup: async (groupId: string) =>
+        visitList.filter((v) => v.packageGroupId === groupId && !v.deleted),
     },
   } as unknown as Repos;
   return repos;
@@ -122,6 +124,102 @@ describe('reportService.monthly — therapist split', () => {
   });
 });
 
+describe('reportService.monthly — attributedRevenuePaise (session-based)', () => {
+  it('attributes revenue to the primary therapist for a non-package visit, unchanged', async () => {
+    const repos = makeFakeRepos([visit({ therapistId: PREM, actualBillPaise: rs(5400) })]);
+    const report = await createReportService(repos).monthly(CLINIC, JULY);
+    const prem = report.rows.find((r) => r.therapistId === PREM)!;
+    expect(prem.attributedRevenuePaise).toBe(rs(5400));
+    expect(report.total.attributedRevenuePaise).toBe(rs(5400));
+  });
+
+  it('splits a package evenly across the therapists who actually ran its sessions', async () => {
+    const groupId = 'pkg-1';
+    const repos = makeFakeRepos([
+      // Session 1: billed for the whole 3-session package, logged by Prem.
+      visit({
+        id: 'v1',
+        therapistId: PREM,
+        visitDate: '2026-07-01',
+        actualBillPaise: rs(6000),
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 1,
+      }),
+      // Sessions 2-3: ₹0 continuations, run by Aishwarya.
+      visit({
+        id: 'v2',
+        therapistId: AISH,
+        visitDate: '2026-07-08',
+        actualBillPaise: 0,
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 2,
+      }),
+      visit({
+        id: 'v3',
+        therapistId: AISH,
+        visitDate: '2026-07-15',
+        actualBillPaise: 0,
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 3,
+      }),
+    ]);
+    const report = await createReportService(repos).monthly(CLINIC, JULY);
+    const prem = report.rows.find((r) => r.therapistId === PREM)!;
+    const aish = report.rows.find((r) => r.therapistId === AISH)!;
+    // ₹6000 / 3 sessions = ₹2000 each; Prem ran 1, Aishwarya ran 2.
+    expect(prem.attributedRevenuePaise).toBe(rs(2000));
+    expect(aish.attributedRevenuePaise).toBe(rs(4000));
+    expect(report.total.attributedRevenuePaise).toBe(rs(6000));
+    // The actual billed figures are untouched — still 100% on the billing visit.
+    expect(prem.billPaise).toBe(rs(6000));
+    expect(aish.billPaise).toBe(0);
+  });
+
+  it('resolves a package spanning two report periods via listByPackageGroup', async () => {
+    const groupId = 'pkg-2';
+    const repos = makeFakeRepos([
+      // Billed in June — outside this report's July window.
+      visit({
+        id: 'v1',
+        therapistId: PREM,
+        visitDate: '2026-06-28',
+        actualBillPaise: rs(4500),
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 1,
+      }),
+      // Session run in July by a different therapist.
+      visit({
+        id: 'v2',
+        therapistId: AISH,
+        visitDate: '2026-07-03',
+        actualBillPaise: 0,
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 2,
+      }),
+    ]);
+    const report = await createReportService(repos).monthly(CLINIC, JULY);
+    // Only v2 is inside July's window, but its attribution still reflects
+    // the whole package's ₹4500 (not ₹0, and not something derived only
+    // from what's visible in this month).
+    const aish = report.rows.find((r) => r.therapistId === AISH)!;
+    expect(aish.attributedRevenuePaise).toBe(roundToRupeeHalfUp(rs(4500) / 3));
+    expect(report.rows.find((r) => r.therapistId === PREM)).toBeUndefined(); // Prem's visit is outside this month
+  });
+
+  it('leaves a single-session (non-package) visit within a group of size 1 unaffected', async () => {
+    const repos = makeFakeRepos([
+      visit({ therapistId: PREM, actualBillPaise: rs(2200), packageGroupId: null, packageTotal: null }),
+    ]);
+    const report = await createReportService(repos).monthly(CLINIC, JULY);
+    expect(report.total.attributedRevenuePaise).toBe(rs(2200));
+  });
+});
+
 describe('reportService.toCsv — configurable share labels', () => {
   it('defaults the share columns to Clinic/Partner', async () => {
     const report = await createReportService(makeFakeRepos([visit({})])).monthly(CLINIC, JULY);
@@ -146,7 +244,7 @@ describe('reportService.toCsv — configurable share labels', () => {
     const header = createReportService(makeFakeRepos([]))
       .toCsv(report, { hospitalSplit: false, therapistSplit: false })
       .split('\n')[0];
-    expect(header).toBe('"Therapist","Bill Amount","Visits","Patients"');
+    expect(header).toBe('"Therapist","Bill Amount","Revenue Generated","Visits","Patients"');
   });
 });
 

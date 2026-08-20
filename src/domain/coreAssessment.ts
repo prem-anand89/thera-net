@@ -97,6 +97,53 @@ export const ACTIVITY_GROUPS: { group: string; options: string[] }[] = [
 
 export const SESSION_DURATIONS = ['15 min', '30 min', '45 min', '60 min', '90 min'] as const;
 
+/**
+ * Standard outcome measures TPAs actually recognize for these joints,
+ * replacing a free-text instrument name with a fixed catalog — so two
+ * notes scoring the same patient's knee always say "Oxford Knee Score",
+ * never "OKS" in one and "Oxford knee" in another. `region` drives which
+ * instruments the picker suggests once Chief Complaint's anatomical
+ * region is set; every instrument still stays selectable regardless, since
+ * a clinician may track a scale outside the obvious region.
+ */
+export interface OutcomeInstrumentDef {
+  id: string;
+  label: string;
+  region: AnatomicalRegion[];
+  direction: OutcomeDirection;
+  minScore: number;
+  maxScore: number;
+}
+
+export const OUTCOME_INSTRUMENTS: OutcomeInstrumentDef[] = [
+  { id: 'oks', label: 'Oxford Knee Score (OKS)', region: ['Knee'], direction: 'higher-is-better', minScore: 0, maxScore: 48 },
+  { id: 'womac', label: 'WOMAC (Knee/Hip OA)', region: ['Knee', 'Hip'], direction: 'lower-is-better', minScore: 0, maxScore: 96 },
+  { id: 'hhs', label: 'Harris Hip Score (HHS)', region: ['Hip'], direction: 'higher-is-better', minScore: 0, maxScore: 100 },
+  { id: 'hoos', label: 'HOOS (Hip disability & OA Outcome Score)', region: ['Hip'], direction: 'higher-is-better', minScore: 0, maxScore: 100 },
+  { id: 'cms', label: 'Constant-Murley Score (Shoulder)', region: ['Shoulder'], direction: 'higher-is-better', minScore: 0, maxScore: 100 },
+  { id: 'dash', label: 'DASH (Disabilities of Arm, Shoulder, Hand)', region: ['Shoulder', 'Elbow', 'Wrist/Hand'], direction: 'lower-is-better', minScore: 0, maxScore: 100 },
+];
+
+export function outcomeInstrumentDef(id: string): OutcomeInstrumentDef | undefined {
+  return OUTCOME_INSTRUMENTS.find((i) => i.id === id);
+}
+
+/** Instruments relevant to the note's anatomical region, listed first —
+ *  every instrument still appears after them, never hidden outright. */
+export function orderedOutcomeInstruments(region: AnatomicalRegion | ''): OutcomeInstrumentDef[] {
+  if (!region) return OUTCOME_INSTRUMENTS;
+  const applicable = OUTCOME_INSTRUMENTS.filter((i) => i.region.includes(region));
+  const rest = OUTCOME_INSTRUMENTS.filter((i) => !i.region.includes(region));
+  return [...applicable, ...rest];
+}
+
+/** "3×/week for 4 weeks" — null when either half is unset, since half a
+ *  frequency plan isn't a plan a TPA can evaluate. */
+export function frequencyLabel(frequencyPerWeek: number | null | undefined, durationWeeks: number | null | undefined): string | null {
+  if (!frequencyPerWeek || !durationWeeks) return null;
+  return `${frequencyPerWeek}×/week for ${durationWeeks} week${durationWeeks === 1 ? '' : 's'}`;
+}
+
 export interface PsfsActivity {
   label: string;
   baseline: number;
@@ -194,6 +241,21 @@ export interface CoreAssessmentPayload {
 
   /** Region Modules attach here — additive, versioned independently. */
   regionModules?: Record<string, { version: string; data: unknown }>;
+
+  /**
+   * The physician order behind this episode of care. Missing this is one
+   * of the most common reasons a PT claim is rejected outright — a TPA
+   * wants to see who ordered therapy and for what diagnosis, not just the
+   * therapist's own account of the complaint. Optional/undefined until
+   * first touched, same convention as generalHealth/outcomeTracking below.
+   */
+  referral?: {
+    referringPhysician: string;
+    physicianRegistrationNo?: string;
+    referralDate?: string;
+    diagnosis: string;
+    diagnosisIcdCode?: string;
+  };
 
   chiefComplaint: {
     /** Drives the ROM/MMT movement dropdown and the spine-only ROM preset
@@ -332,6 +394,11 @@ export interface CoreAssessmentPayload {
     currentProtocolPhase?: string;
     goals: { text: string; targetDate?: string; targetTerm: 'short-term' | 'long-term' | '' }[];
     estimatedSessions: string;
+    /** Explicit frequency × duration (e.g. "3×/week for 4 weeks"), alongside
+     *  the coarse estimatedSessions bucket — a TPA judging medical necessity
+     *  wants the former, not "6–10 sessions". */
+    frequencyPerWeek?: number;
+    durationWeeks?: number;
     patientEducation: string[];
   };
 

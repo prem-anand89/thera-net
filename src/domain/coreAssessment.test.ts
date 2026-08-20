@@ -6,6 +6,10 @@ import {
   emptyPayload,
   outcomeTrend,
   sectionCompletion,
+  frequencyLabel,
+  orderedOutcomeInstruments,
+  outcomeInstrumentDef,
+  OUTCOME_INSTRUMENTS,
 } from './coreAssessment';
 
 // One test per registered instrument, per the handoff's own instruction:
@@ -175,5 +179,59 @@ describe('sectionCompletion', () => {
     const payload = { ...base, palpation: [{ region: 'L4-L5', findings: ['Tenderness'], painOnPalpation: 'mild' as const, notes: '' }] };
     // 1 of 5 objective sub-parts filled (palpation) -> partial, not complete.
     expect(sectionCompletion('objective', payload)).toBe('partial');
+  });
+});
+
+describe('frequencyLabel', () => {
+  it('formats a full frequency plan', () => {
+    expect(frequencyLabel(3, 4)).toBe('3×/week for 4 weeks');
+  });
+
+  it('singularizes a one-week plan', () => {
+    expect(frequencyLabel(5, 1)).toBe('5×/week for 1 week');
+  });
+
+  it('is null when frequency is unset', () => {
+    expect(frequencyLabel(null, 4)).toBeNull();
+    expect(frequencyLabel(undefined, 4)).toBeNull();
+  });
+
+  it('is null when duration is unset', () => {
+    expect(frequencyLabel(3, null)).toBeNull();
+    expect(frequencyLabel(3, undefined)).toBeNull();
+  });
+
+  it('is null when both are unset', () => {
+    expect(frequencyLabel(null, null)).toBeNull();
+  });
+});
+
+describe('outcomeInstrumentDef', () => {
+  it('finds a known instrument by id', () => {
+    expect(outcomeInstrumentDef('oks')?.label).toBe('Oxford Knee Score (OKS)');
+  });
+
+  it('returns undefined for an unknown id', () => {
+    expect(outcomeInstrumentDef('not-a-real-instrument')).toBeUndefined();
+  });
+});
+
+describe('orderedOutcomeInstruments', () => {
+  it('returns the full catalog when no region is set', () => {
+    expect(orderedOutcomeInstruments('')).toEqual(OUTCOME_INSTRUMENTS);
+  });
+
+  it('lists region-applicable instruments first, without hiding the rest', () => {
+    const ordered = orderedOutcomeInstruments('Knee');
+    expect(ordered).toHaveLength(OUTCOME_INSTRUMENTS.length);
+    expect(ordered[0].id).toBe('oks');
+    expect(ordered[1].id).toBe('womac');
+    // Shoulder-only instruments still present, just pushed later.
+    expect(ordered.some((i) => i.id === 'cms')).toBe(true);
+  });
+
+  it('lists hip-applicable instruments first for Hip', () => {
+    const ordered = orderedOutcomeInstruments('Hip');
+    expect(ordered.slice(0, 3).map((i) => i.id).sort()).toEqual(['hhs', 'hoos', 'womac']);
   });
 });

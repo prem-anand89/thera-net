@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, backupService, therapistService } from '@/services';
+import { repos, backupService, therapistService, visitService } from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -11,6 +11,7 @@ import { resizeImageToBlob } from '@/lib/resizeImage';
 import { SUPABASE_URL } from '@/lib/env';
 import { db } from '@/lib/db';
 import { formatINR } from '@/domain/money';
+import { MONTH_NAMES } from '@/domain/fiscalYear';
 import {
   clinicShareLabels,
   effectivePricePerSession,
@@ -27,6 +28,7 @@ import {
   ErrorNote,
   RupeeInput,
   SectionCard,
+  ConfirmDialog,
   th,
   thNum,
   td,
@@ -37,7 +39,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { FirstWeekChecklist, useFirstWeekChecklistVisible } from './FirstWeekChecklist';
 import { isValidUpiVpa } from '@/domain/upiPay';
 
-type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'features' | 'data';
+type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'data';
 
 /**
  * Grouped into the three jobs an admin actually comes here to do, rather
@@ -51,7 +53,7 @@ type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'fea
 const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
   { label: 'Clinic', keys: ['profile', 'billing', 'partner'] },
   { label: 'People & services', keys: ['team', 'services'] },
-  { label: 'System', keys: ['features', 'data'] },
+  { label: 'System', keys: ['data'] },
 ];
 
 /** One accent color per section, matching the reviewed Team-panel mockup's
@@ -60,7 +62,12 @@ const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
 type Accent = 'teal' | 'amber' | 'rust' | 'moss' | 'slate';
 
 const SECTIONS: { key: SectionKey; label: string; description: string; accent: Accent }[] = [
-  { key: 'profile', label: 'Clinic profile', description: 'Name, address, contact info, logo, walk-in ID prefix.', accent: 'teal' },
+  {
+    key: 'profile',
+    label: 'Clinic profile',
+    description: 'Name, address, contact info, logo, walk-in ID prefix, optional modules.',
+    accent: 'teal',
+  },
   {
     key: 'billing',
     label: 'Billing & invoicing',
@@ -75,12 +82,6 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
   },
   { key: 'team', label: 'Team', description: 'Invite and manage logins, therapist roster.', accent: 'moss' },
   { key: 'services', label: 'Services', description: 'Catalog of billable services and package prices.', accent: 'teal' },
-  {
-    key: 'features',
-    label: 'Features',
-    description: 'Optional modules — Expected today, clinical notes, comparison chart.',
-    accent: 'slate',
-  },
   {
     key: 'data',
     label: 'Data & maintenance',
@@ -108,7 +109,6 @@ const SECTION_ICON_PATHS: Record<SectionKey, string> = {
   partner: 'M8 2.5l1.4 3.1 3.4.4-2.5 2.3.7 3.4L8 10l-3 1.7.7-3.4-2.5-2.3 3.4-.4L8 2.5z',
   team: 'M2.3 13c.4-2.5 2-3.9 3.9-3.9s3.5 1.4 3.9 3.9M9.9 9.5c1.6.2 2.8 1.4 3.1 3.5',
   services: 'M3 4h10M3 8h10M3 12h6',
-  features: 'M8 2.5v1.8M8 11.7v1.8M13.5 8h-1.8M4.3 8H2.5M11.8 4.2l-1.3 1.3M5.5 10.5l-1.3 1.3M11.8 11.8l-1.3-1.3M5.5 5.5L4.2 4.2',
   data: 'M3 5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2zM3 5v6c0 1.1 2.2 2 5 2s5-.9 5-2V5M3 8c0 1.1 2.2 2 5 2s5-.9 5-2',
 };
 
@@ -135,6 +135,50 @@ function SectionIcon({ sectionKey, accent }: { sectionKey: SectionKey; accent: A
   );
 }
 
+function SettingsSectionNavButton({
+  section,
+  active,
+  dirty,
+  onSelect,
+  variant,
+}: {
+  section: (typeof SECTIONS)[number];
+  active: boolean;
+  dirty: boolean;
+  onSelect: () => void;
+  variant: 'mobile' | 'rail';
+}) {
+  const accent = ACCENT_VARS[section.accent];
+  const mobile = variant === 'mobile';
+  return (
+    <button
+      type="button"
+      data-section={section.key}
+      onClick={onSelect}
+      className={
+        mobile
+          ? 'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-2 text-xs font-medium'
+          : 'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm font-medium tab:w-full'
+      }
+      style={
+        active
+          ? {
+              ...(mobile ? { borderColor: accent.color } : {}),
+              background: accent.light,
+              color: accent.color,
+            }
+          : mobile
+            ? { borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--muted)' }
+            : { color: 'var(--muted)' }
+      }
+    >
+      <SectionIcon sectionKey={section.key} accent={section.accent} />
+      {section.label}
+      {dirty && <span className="text-[var(--rust)]">•</span>}
+    </button>
+  );
+}
+
 /** Only add/remove `key` if that actually changes membership — keeps the
  *  Set reference stable across no-op updates so dirty-tracking effects
  *  downstream don't re-fire needlessly. */
@@ -149,18 +193,50 @@ function toggleSet<T>(set: Set<T>, key: T, present: boolean): Set<T> {
 export function SettingsPage() {
   const clinic = useClinic();
   const { canEditSettings } = usePermissions();
-  const showFirstWeek = useFirstWeekChecklistVisible();
-  const [activeKey, setActiveKey] = useState<SectionKey>('profile');
+  const search = useSearch({ from: '/settings' });
+  const navigate = useNavigate({ from: '/settings' });
+  const [activeKey, setActiveKeyState] = useState<SectionKey>(search.tab ?? 'profile');
   const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
+  const [pendingSectionKey, setPendingSectionKey] = useState<SectionKey | null>(null);
+  const mobileNavRef = useRef<HTMLDivElement>(null);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
-  const [landedOnUnlinked, setLandedOnUnlinked] = useState(false);
+  const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
+  const catalogEmpty = catalog !== undefined && catalog.length === 0;
 
+  // `replace` so switching tabs doesn't spam browser history — a `?tab=`
+  // link is meant to be bookmarkable/shareable, not a Back-button stepper.
+  function setActiveKey(key: SectionKey) {
+    setActiveKeyState(key);
+    void navigate({ search: (prev) => ({ ...prev, tab: key }), replace: true });
+  }
+
+  // Default landing, only when nobody already told us where to go via
+  // ?tab=: Team if anyone is unlinked (existing behavior, kept), otherwise
+  // Services while the catalog is still empty (that's the actual week-one
+  // blocker), otherwise Profile.
+  const [landedOnDefault, setLandedOnDefault] = useState(!!search.tab);
   useEffect(() => {
-    if (landedOnUnlinked || therapists === undefined) return;
-    if (unlinkedCount > 0) setActiveKey('team');
-    setLandedOnUnlinked(true);
-  }, [landedOnUnlinked, therapists, unlinkedCount]);
+    if (landedOnDefault || therapists === undefined || catalog === undefined) return;
+    setActiveKey(unlinkedCount > 0 ? 'team' : catalogEmpty ? 'services' : 'profile');
+    setLandedOnDefault(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [landedOnDefault, therapists, catalog, unlinkedCount, catalogEmpty]);
+
+  // Keep the active chip visible in the horizontal mobile strip.
+  useEffect(() => {
+    const el = mobileNavRef.current?.querySelector(`[data-section="${activeKey}"]`);
+    el?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+  }, [activeKey]);
+
+  // First week's own two checkable gates (the rest of its steps are
+  // behavioral tips, not something Dexie can confirm) — once both clear,
+  // the card auto-hides instead of sitting there until someone notices the
+  // Hide button. Held back while either query is still loading so it
+  // doesn't flash visible-then-hidden on a fast setup.
+  const firstWeekNotDismissed = useFirstWeekChecklistVisible();
+  const setupIncomplete = therapists === undefined || catalog === undefined ? undefined : unlinkedCount > 0 || catalogEmpty;
+  const showFirstWeek = firstWeekNotDismissed === undefined || setupIncomplete === undefined ? false : firstWeekNotDismissed && setupIncomplete;
 
   // Left-rail sections that edit the clinic row report their dirty state up
   // here, so switching tabs with unsaved changes can warn before discarding
@@ -171,14 +247,11 @@ export function SettingsPage() {
   const setProfileDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'profile', d)), []);
   const setBillingDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'billing', d)), []);
   const setPartnerDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'partner', d)), []);
-  const setFeaturesDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'features', d)), []);
 
   function selectSection(key: SectionKey) {
     if (key === activeKey) return;
-    if (
-      dirtyKeys.has(activeKey) &&
-      !confirm('This section has unsaved changes. Discard them and switch?')
-    ) {
+    if (dirtyKeys.has(activeKey)) {
+      setPendingSectionKey(key);
       return;
     }
     setActiveKey(key);
@@ -207,13 +280,34 @@ export function SettingsPage() {
       {showFirstWeek && <FirstWeekChecklist />}
 
       <div className="tab:flex tab:items-start tab:gap-6">
-        {/* Horizontal scroller at the top below tab: (Shell's own bottom
-            tab bar owns the bottom of the viewport now — a second bar down
-            there would compete with it), vertical rail at tab: and above.
-            Group headings only render in that rail; the horizontal
-            scroller stays a flat row, where headings would just eat scroll
-            width. */}
-        <nav className="mb-4 flex gap-1 overflow-x-auto tab:mb-0 tab:w-48 tab:shrink-0 tab:flex-col tab:gap-0.5 tab:overflow-visible">
+        {/* Below tab: horizontal scroll chips (one tap per section) instead of
+            a grouped <select>. Sits under the page title, above the bottom
+            tab bar — same icon + label language as the vertical rail. */}
+        <nav
+          ref={mobileNavRef}
+          aria-label="Settings sections"
+          className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 tab:hidden"
+        >
+          {SECTION_GROUPS.map((group, groupIndex) => (
+            <div key={group.label} className="flex shrink-0 items-center gap-2">
+              {groupIndex > 0 && <div className="h-8 w-px shrink-0 bg-[var(--border)]" aria-hidden />}
+              {group.keys.map((key) => {
+                const s = SECTIONS.find((x) => x.key === key)!;
+                return (
+                  <SettingsSectionNavButton
+                    key={s.key}
+                    section={s}
+                    active={activeKey === s.key}
+                    dirty={dirtyKeys.has(s.key)}
+                    onSelect={() => selectSection(s.key)}
+                    variant="mobile"
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+        <nav className="mb-4 hidden gap-1 overflow-x-auto tab:mb-0 tab:flex tab:w-48 tab:shrink-0 tab:flex-col tab:gap-0.5 tab:overflow-visible">
           {SECTION_GROUPS.map((group) => (
             <div key={group.label} className="contents tab:mb-1.5 tab:block">
               <p className="hidden px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]/70 tab:block">
@@ -221,20 +315,15 @@ export function SettingsPage() {
               </p>
               {group.keys.map((key) => {
                 const s = SECTIONS.find((x) => x.key === key)!;
-                const active = activeKey === s.key;
-                const accent = ACCENT_VARS[s.accent];
                 return (
-                  <button
+                  <SettingsSectionNavButton
                     key={s.key}
-                    type="button"
-                    onClick={() => selectSection(s.key)}
-                    className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm font-medium tab:w-full"
-                    style={active ? { background: accent.light, color: accent.color } : { color: 'var(--muted)' }}
-                  >
-                    <SectionIcon sectionKey={s.key} accent={s.accent} />
-                    {s.label}
-                    {dirtyKeys.has(s.key) && <span className="text-[var(--rust)]">•</span>}
-                  </button>
+                    section={s}
+                    active={activeKey === s.key}
+                    dirty={dirtyKeys.has(s.key)}
+                    onSelect={() => selectSection(s.key)}
+                    variant="rail"
+                  />
                 );
               })}
             </div>
@@ -266,7 +355,6 @@ export function SettingsPage() {
             </>
           )}
           {activeKey === 'services' && <Catalog />}
-          {activeKey === 'features' && <FeaturesSection onDirtyChange={setFeaturesDirty} />}
           {activeKey === 'data' && (
             <>
               <HistoricalData />
@@ -276,6 +364,19 @@ export function SettingsPage() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingSectionKey !== null}
+        title="Discard unsaved changes?"
+        message="This section has unsaved changes. Discard them and switch?"
+        confirmLabel="Discard & switch"
+        destructive
+        onCancel={() => setPendingSectionKey(null)}
+        onConfirm={() => {
+          if (pendingSectionKey) setActiveKey(pendingSectionKey);
+          setPendingSectionKey(null);
+        }}
+      />
     </div>
   );
 }
@@ -316,7 +417,7 @@ function useClinicSectionForm<F extends Partial<Clinic>>(
     setForm((f) => ({ ...f, ...patch }));
   }
 
-  async function save() {
+  async function save(): Promise<boolean> {
     setError(null);
     setBusy(true);
     try {
@@ -324,8 +425,10 @@ function useClinicSectionForm<F extends Partial<Clinic>>(
       if (!current) throw new Error('Clinic not found');
       await repos.clinics.put({ ...current, ...form, updatedAt: new Date().toISOString() });
       setSaved(true);
+      return true;
     } catch (e) {
       setError(toFriendlyMessage(e));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -382,14 +485,39 @@ function SectionSaveBar({
   );
 }
 
-type ProfileFields = Pick<Clinic, 'name' | 'address' | 'phone' | 'email' | 'walkInMrnoPrefix' | 'logoPath'>;
+type ProfileFields = Pick<
+  Clinic,
+  | 'name'
+  | 'address'
+  | 'phone'
+  | 'email'
+  | 'walkInMrnoPrefix'
+  | 'logoPath'
+  | 'clinicType'
+  | 'enableExpectedToday'
+  | 'clinicalDocsEnabled'
+  | 'showTherapistComparison'
+>;
 
 function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =
     useClinicSectionForm<ProfileFields>(
-      (c) => ({ name: c.name, address: c.address, phone: c.phone, email: c.email, walkInMrnoPrefix: c.walkInMrnoPrefix, logoPath: c.logoPath }),
+      (c) => ({
+        name: c.name,
+        address: c.address,
+        phone: c.phone,
+        email: c.email,
+        walkInMrnoPrefix: c.walkInMrnoPrefix,
+        logoPath: c.logoPath,
+        clinicType: c.clinicType,
+        enableExpectedToday: c.enableExpectedToday ?? false,
+        clinicalDocsEnabled: c.clinicalDocsEnabled ?? false,
+        showTherapistComparison: c.showTherapistComparison ?? false,
+      }),
       onDirtyChange
     );
+  const logoPreviewUrl = publicLogoUrl(form.logoPath);
+  const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
 
   async function uploadLogo(file: File) {
     setError(null);
@@ -405,6 +533,28 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
       return;
     }
     await saveFieldNow({ logoPath: path } as Partial<ProfileFields>);
+  }
+
+  // clinicType feeds clinicBillingConfig()'s hospitalSplit flag alongside
+  // Partner & split's own fields — switching Individual/Multiple can turn
+  // the clinic/partner split on or off, so it needs the same catch-up as a
+  // bmSplitPct/taxPct change there. See PartnerSection.savePartner.
+  async function saveProfile() {
+    setRecomputeMsg(null);
+    const splitAffected = form.clinicType !== clinic.clinicType;
+    const ok = await save();
+    if (ok && splitAffected) {
+      try {
+        const { updated } = await visitService.recomputeUninvoicedSplits(clinic.id);
+        setRecomputeMsg(
+          updated > 0
+            ? `Applied the updated split to ${updated} already-logged, not-yet-invoiced visit${updated === 1 ? '' : 's'}.`
+            : null
+        );
+      } catch (e) {
+        setError(toFriendlyMessage(e));
+      }
+    }
   }
 
   return (
@@ -437,6 +587,23 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         <Field label="Email">
           <input className={inputCls} value={form.email ?? ''} onChange={(e) => set({ email: e.target.value || null })} />
         </Field>
+        <Field
+          label={
+            <>
+              Therapist setup
+              <InfoTip text="Individual: single therapist practice. Multiple: clinic with multiple therapists. This affects billing and reporting." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.clinicType ?? 'multiple'}
+            onChange={(e) => set({ clinicType: e.target.value as Clinic['clinicType'] })}
+          >
+            <option value="individual">Individual Therapist</option>
+            <option value="multiple">Multiple Therapists</option>
+          </select>
+        </Field>
         <Field label="Clinic logo">
           <input
             type="file"
@@ -444,9 +611,38 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
             className={inputCls}
             onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])}
           />
+          {logoPreviewUrl && (
+            <img src={logoPreviewUrl} alt="Current clinic logo" className="mt-2 h-14 w-auto object-contain" />
+          )}
         </Field>
       </div>
-      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
+
+      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">Optional modules</h3>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Field
+          label={
+            <>
+              Clinical documentation
+              <InfoTip text="When on, new visits are flagged for a clinical note until one is completed — filterable via Ledger's 'Not documented' checkbox. Off by default; turn on for clinics that track a note per visit." />
+            </>
+          }
+        >
+          <BoolToggle value={form.clinicalDocsEnabled ?? false} onChange={(v) => set({ clinicalDocsEnabled: v })} />
+        </Field>
+        <Field
+          label={
+            <>
+              Therapist comparison chart
+              <InfoTip text="When on, the Revenue and Visits comparison charts on Reports are visible to therapists too, not just admins — for clinics that want that competitive visibility. Off by default." />
+            </>
+          }
+        >
+          <BoolToggle value={form.showTherapistComparison ?? false} onChange={(v) => set({ showTherapistComparison: v })} />
+        </Field>
+      </div>
+
+      {recomputeMsg && <p className="mt-2 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
+      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void saveProfile()} onCancel={cancel} error={error} />
     </SectionCard>
   );
 }
@@ -462,6 +658,7 @@ type BillingFields = Pick<
   | 'upiPayeeName'
   | 'upiQrPath'
   | 'upiQrEnabled'
+  | 'signaturePath'
 >;
 
 function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
@@ -477,10 +674,12 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         upiPayeeName: c.upiPayeeName ?? '',
         upiQrPath: c.upiQrPath ?? null,
         upiQrEnabled: c.upiQrEnabled ?? false,
+        signaturePath: c.signaturePath ?? null,
       }),
       onDirtyChange
     );
   const qrPreviewUrl = publicLogoUrl(form.upiQrPath);
+  const signaturePreviewUrl = publicLogoUrl(form.signaturePath);
 
   async function uploadUpiQr(file: File) {
     setError(null);
@@ -496,6 +695,22 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
       return;
     }
     await saveFieldNow({ upiQrPath: path } as Partial<BillingFields>);
+  }
+
+  async function uploadSignature(file: File) {
+    setError(null);
+    const supabase = getSupabase();
+    if (!supabase || !navigator.onLine) {
+      setError('Signature upload needs a connection.');
+      return;
+    }
+    const path = `${clinic.id}/signature-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, file);
+    if (uploadError) {
+      setError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
+      return;
+    }
+    await saveFieldNow({ signaturePath: path } as Partial<BillingFields>);
   }
 
   async function saveBilling() {
@@ -532,14 +747,17 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
           <input className={inputCls} value={form.gstNo ?? ''} onChange={(e) => set({ gstNo: e.target.value || null })} />
         </Field>
         <Field label="Fiscal year starts in month">
-          <input
-            type="number"
-            min={1}
-            max={12}
+          <select
             className={inputCls}
             value={form.fyStartMonth}
             onChange={(e) => set({ fyStartMonth: Number(e.target.value) })}
-          />
+          >
+            {MONTH_NAMES.map((label, i) => (
+              <option key={label} value={i + 1}>
+                {label}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field
           label={
@@ -588,39 +806,63 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         >
           <BoolToggle value={form.upiQrEnabled ?? false} onChange={(v) => set({ upiQrEnabled: v })} />
         </Field>
-        <Field label="UPI ID (VPA)">
-          <input
-            className={inputCls}
-            placeholder="clinic@okaxis"
-            value={form.upiVpa ?? ''}
-            onChange={(e) => set({ upiVpa: e.target.value })}
-            autoComplete="off"
-          />
-        </Field>
-        <Field
-          label={
-            <>
-              Payee name
-              <InfoTip text="Shown in the patient's UPI app. Leave blank to use the clinic name." />
-            </>
-          }
-        >
-          <input
-            className={inputCls}
-            placeholder={clinic.name}
-            value={form.upiPayeeName ?? ''}
-            onChange={(e) => set({ upiPayeeName: e.target.value })}
-          />
-        </Field>
-        <Field label="QR image (optional)">
+        {form.upiQrEnabled && (
+          <>
+            <Field label="UPI ID (VPA)">
+              <input
+                className={inputCls}
+                placeholder="clinic@okaxis"
+                value={form.upiVpa ?? ''}
+                onChange={(e) => set({ upiVpa: e.target.value })}
+                autoComplete="off"
+              />
+            </Field>
+            <Field
+              label={
+                <>
+                  Payee name
+                  <InfoTip text="Shown in the patient's UPI app. Leave blank to use the clinic name." />
+                </>
+              }
+            >
+              <input
+                className={inputCls}
+                placeholder={clinic.name}
+                value={form.upiPayeeName ?? ''}
+                onChange={(e) => set({ upiPayeeName: e.target.value })}
+              />
+            </Field>
+            <Field label="QR image (optional)">
+              <input
+                type="file"
+                accept="image/*"
+                className={inputCls}
+                onChange={(e) => e.target.files?.[0] && void uploadUpiQr(e.target.files[0])}
+              />
+              {qrPreviewUrl && (
+                <img src={qrPreviewUrl} alt="Uploaded clinic UPI QR" className="mt-2 h-24 w-24 object-contain" />
+              )}
+            </Field>
+          </>
+        )}
+      </div>
+
+      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">Invoice signature</h3>
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        A one-time uploaded signature image, printed on every invoice in place of the blank
+        "Authorised signature" line. Not a cryptographic e-signature — a photo or scan of a hand
+        signature is fine.
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Field label="Signature image (optional)">
           <input
             type="file"
             accept="image/*"
             className={inputCls}
-            onChange={(e) => e.target.files?.[0] && void uploadUpiQr(e.target.files[0])}
+            onChange={(e) => e.target.files?.[0] && void uploadSignature(e.target.files[0])}
           />
-          {qrPreviewUrl && (
-            <img src={qrPreviewUrl} alt="Uploaded clinic UPI QR" className="mt-2 h-24 w-24 object-contain" />
+          {signaturePreviewUrl && (
+            <img src={signaturePreviewUrl} alt="Uploaded signature" className="mt-2 h-16 w-40 object-contain" />
           )}
         </Field>
       </div>
@@ -638,7 +880,6 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
 
 type PartnerFields = Pick<
   Clinic,
-  | 'clinicType'
   | 'hasPartner'
   | 'enableTherapistSplit'
   | 'partnerHospitalName'
@@ -657,7 +898,6 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =
     useClinicSectionForm<PartnerFields>(
       (c) => ({
-        clinicType: c.clinicType,
         hasPartner: c.hasPartner,
         enableTherapistSplit: c.enableTherapistSplit,
         partnerHospitalName: c.partnerHospitalName,
@@ -671,6 +911,36 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
       onDirtyChange
     );
   const labels = clinicShareLabels(form);
+  const partnerLogoPreviewUrl = publicLogoUrl(form.partnerHospitalLogoPath);
+  const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
+
+  // hasPartner/bmSplitPct/taxPct/tdsBasis all feed clinicBillingConfig() and
+  // computeVisitSplit() — a change to any of them means visits already
+  // logged (but not yet invoiced) are now showing a stale split, since
+  // updateBilling deliberately keeps a visit's ORIGINAL rate snapshot on
+  // edit. Catch those up here, right where the rate actually changed,
+  // instead of leaving it to silently only affect visits logged from now on.
+  async function savePartner() {
+    setRecomputeMsg(null);
+    const splitAffected =
+      (form.hasPartner ?? false) !== (clinic.hasPartner ?? false) ||
+      form.bmSplitPct !== clinic.bmSplitPct ||
+      form.taxPct !== clinic.taxPct ||
+      form.tdsBasis !== clinic.tdsBasis;
+    const ok = await save();
+    if (ok && splitAffected) {
+      try {
+        const { updated } = await visitService.recomputeUninvoicedSplits(clinic.id);
+        setRecomputeMsg(
+          updated > 0
+            ? `Applied the new split to ${updated} already-logged, not-yet-invoiced visit${updated === 1 ? '' : 's'}.`
+            : 'No not-yet-invoiced visits needed updating.'
+        );
+      } catch (e) {
+        setError(toFriendlyMessage(e));
+      }
+    }
+  }
 
   async function uploadPartnerLogo(file: File) {
     setError(null);
@@ -694,23 +964,6 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         <Field
           label={
             <>
-              Therapist setup
-              <InfoTip text="Individual: single therapist practice. Multiple: clinic with multiple therapists. This affects billing and reporting." />
-            </>
-          }
-        >
-          <select
-            className={inputCls}
-            value={form.clinicType ?? 'multiple'}
-            onChange={(e) => set({ clinicType: e.target.value as Clinic['clinicType'] })}
-          >
-            <option value="individual">Individual Therapist</option>
-            <option value="multiple">Multiple Therapists</option>
-          </select>
-        </Field>
-        <Field
-          label={
-            <>
               Partner with therapist/external org
               <InfoTip text="Enable if your clinic partners with a therapist or external organization (hospital, etc.) for revenue sharing, tax deduction, or other arrangements." />
             </>
@@ -718,16 +971,18 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         >
           <BoolToggle value={form.hasPartner ?? false} onChange={(v) => set({ hasPartner: v })} />
         </Field>
-        <Field
-          label={
-            <>
-              Track therapist splits
-              <InfoTip text="Lets a visit's revenue be credited between two therapists (a Split action + Shared/Net report columns). Turn off if you don't attribute revenue across therapists." />
-            </>
-          }
-        >
-          <BoolToggle value={form.enableTherapistSplit !== false} onChange={(v) => set({ enableTherapistSplit: v })} />
-        </Field>
+        {(clinic.clinicType ?? 'multiple') === 'multiple' && (
+          <Field
+            label={
+              <>
+                Track therapist splits
+                <InfoTip text="Lets a visit's revenue be credited between two therapists (a Split action + Shared/Net report columns). Turn off if you don't attribute revenue across therapists." />
+              </>
+            }
+          >
+            <BoolToggle value={form.enableTherapistSplit !== false} onChange={(v) => set({ enableTherapistSplit: v })} />
+          </Field>
+        )}
         {form.hasPartner && (
           <>
             <Field label="Partner name (prints on invoices if set)">
@@ -768,6 +1023,9 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
                 className={inputCls}
                 onChange={(e) => e.target.files?.[0] && void uploadPartnerLogo(e.target.files[0])}
               />
+              {partnerLogoPreviewUrl && (
+                <img src={partnerLogoPreviewUrl} alt="Current partner logo" className="mt-2 h-14 w-auto object-contain" />
+              )}
             </Field>
           </>
         )}
@@ -808,14 +1066,14 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         )}
       </div>
       <p className="mt-3 text-xs text-[var(--muted)]">
-        Split/tax changes apply to NEW visits only — past visits keep the rates they were billed under.
+        Split/tax changes apply going forward automatically, and — on Save — also to any already-logged
+        visit that hasn't been invoiced yet. Invoiced visits keep the rates they were billed under.
       </p>
-      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
+      {recomputeMsg && <p className="mt-1 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
+      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void savePartner()} onCancel={cancel} error={error} />
     </SectionCard>
   );
 }
-
-type FeaturesFields = Pick<Clinic, 'enableExpectedToday' | 'clinicalDocsEnabled' | 'showTherapistComparison'>;
 
 /** Two-option pill toggle — same selected/unselected visual language as
  *  Team's invite-role picker (border/background/color keyed off a boolean
@@ -847,59 +1105,6 @@ function BoolToggle({ value, onChange }: { value: boolean; onChange: (v: boolean
   );
 }
 
-function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<FeaturesFields>(
-    (c) => ({
-      enableExpectedToday: c.enableExpectedToday,
-      clinicalDocsEnabled: c.clinicalDocsEnabled,
-      showTherapistComparison: c.showTherapistComparison ?? false,
-    }),
-    onDirtyChange
-  );
-
-  return (
-    <SectionCard title="Features">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Field
-          label={
-            <>
-              Expected today
-              <InfoTip text="Shows a lightweight 'who's coming in today' list on Workspace, for clinics that track informal walk-in/appointment expectations. Not a booking system — no calendar, no availability checking." />
-            </>
-          }
-        >
-          <BoolToggle value={form.enableExpectedToday ?? false} onChange={(v) => set({ enableExpectedToday: v })} />
-        </Field>
-        <Field
-          label={
-            <>
-              Clinical documentation
-              <InfoTip text="When on, new visits are flagged for a clinical note until one is completed — surfaced on Workspace's Needs attention and Documentation lists. Off by default; turn on for clinics that track a note per visit." />
-            </>
-          }
-        >
-          <BoolToggle value={form.clinicalDocsEnabled ?? false} onChange={(v) => set({ clinicalDocsEnabled: v })} />
-        </Field>
-        <Field
-          label={
-            <>
-              Therapist comparison chart
-              <InfoTip text="When on, the Revenue and Visits comparison charts on Reports are visible to therapists too, not just admins — for clinics that want that competitive visibility. Off by default." />
-            </>
-          }
-        >
-          <BoolToggle value={form.showTherapistComparison ?? false} onChange={(v) => set({ showTherapistComparison: v })} />
-        </Field>
-      </div>
-      <p className="mt-3 text-xs text-[var(--muted)]">
-        Which Visits-table columns show is now a per-user choice, in the column picker on the
-        Ledger and Workspace tables themselves.
-      </p>
-      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
-    </SectionCard>
-  );
-}
-
 function HistoricalData() {
   return (
     <SectionCard title="Historical data">
@@ -919,6 +1124,7 @@ function DataBackup() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<RestoreSummary | null>(null);
+  const [pendingRestore, setPendingRestore] = useState<BackupBundle | null>(null);
 
   async function exportNow() {
     setError(null);
@@ -935,24 +1141,29 @@ function DataBackup() {
   async function importFile(file: File) {
     setError(null);
     setSummary(null);
-    setBusy(true);
     try {
       const text = await file.text();
       const bundle = JSON.parse(text) as BackupBundle;
-      if (
-        !confirm(
-          `Restore this backup (exported ${bundle.exportedAt?.slice(0, 10) ?? 'unknown date'})?\n\nThis writes patients, visits, invoices, payments, and settlements back into this clinic. Existing records with the same ID are overwritten; nothing else is deleted.`
-        )
-      ) {
-        return;
-      }
+      setPendingRestore(bundle);
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function confirmRestore() {
+    if (!pendingRestore) return;
+    const bundle = pendingRestore;
+    setPendingRestore(null);
+    setBusy(true);
+    try {
       const result = await backupService.restoreBundle(bundle, clinic.id);
       setSummary(result);
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
       setBusy(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
@@ -992,6 +1203,15 @@ function DataBackup() {
       <div className="mt-2">
         <ErrorNote message={error} />
       </div>
+
+      <ConfirmDialog
+        open={pendingRestore !== null}
+        title="Restore backup?"
+        message={`Restore this backup (exported ${pendingRestore?.exportedAt?.slice(0, 10) ?? 'unknown date'})?\n\nThis writes patients, visits, invoices, payments, and settlements back into this clinic. Existing records with the same ID are overwritten; nothing else is deleted.`}
+        confirmLabel="Restore"
+        onCancel={() => setPendingRestore(null)}
+        onConfirm={() => void confirmRestore()}
+      />
     </SectionCard>
   );
 }
@@ -1000,14 +1220,14 @@ function DangerZone() {
   const clinic = useClinic();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [confirmingWipe, setConfirmingWipe] = useState(false);
+  const [wipeResult, setWipeResult] = useState<{ patients: number; visits: number; invoices: number } | null>(
+    null
+  );
 
-  async function resetLocalCache() {
-    if (
-      !confirm(
-        "Clear this device's local copy of the data?\n\nNothing on the server is affected — the app reloads and downloads everything fresh. Use this after a wipe, or if this device is showing stale data."
-      )
-    )
-      return;
+  async function doResetLocalCache() {
+    setConfirmingReset(false);
     setError(null);
     setBusy(true);
     try {
@@ -1030,33 +1250,36 @@ function DangerZone() {
     }
   }
 
-  async function wipeAll() {
+  function wipeAll() {
     setError(null);
     const supabase = getSupabase();
     if (!supabase || !navigator.onLine) {
       setError('Wiping needs a connection — try again when online.');
       return;
     }
-    const typed = prompt(
-      `This permanently deletes ALL patients, visits, invoices, payments and settlements for this clinic, and resets invoice numbering to 0001. The catalog, therapists, and logins are kept.\n\nThis cannot be undone. Type the clinic name (${clinic.name}) to confirm:`
-    );
-    if (typed?.trim() !== clinic.name) return;
+    setConfirmingWipe(true);
+  }
+
+  async function doWipeAll() {
+    setConfirmingWipe(false);
+    const supabase = getSupabase();
+    if (!supabase) return;
     setBusy(true);
     try {
       const { data, error: rpcError } = await supabase.rpc('admin_wipe_clinic_data', {
         p_clinic_id: clinic.id,
       });
       if (rpcError) throw new Error(rpcError.message);
-      const counts = data as { patients: number; visits: number; invoices: number };
-      alert(
-        `Wiped ${counts.patients} patients, ${counts.visits} visits, and ${counts.invoices} invoices. The app will now reload with a clean slate.\n\nOn any OTHER device that was already signed in, use "Reset local cache" once.`
-      );
-      await db.delete();
-      location.reload();
+      setWipeResult(data as { patients: number; visits: number; invoices: number });
     } catch (e) {
       setError(toFriendlyMessage(e));
       setBusy(false);
     }
+  }
+
+  async function finishWipeReload() {
+    await db.delete();
+    location.reload();
   }
 
   return (
@@ -1064,21 +1287,58 @@ function DangerZone() {
       <p className="mb-3 text-xs text-[var(--muted)]">
         For test-data cleanup and troubleshooting. Wiping is admin-only and enforced by the server.
       </p>
-      <div className="flex flex-wrap gap-2">
-        <button className={btnSecondary} disabled={busy} onClick={() => void resetLocalCache()}>
-          {busy ? 'Working…' : 'Reset local cache on this device'}
-        </button>
-        <button
-          className="rounded-md border border-[var(--rust)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)] disabled:opacity-50"
-          disabled={busy}
-          onClick={() => void wipeAll()}
-        >
-          {busy ? 'Wiping…' : 'Wipe ALL clinic data…'}
-        </button>
-      </div>
+      {wipeResult ? (
+        <div className="rounded-md border border-[var(--moss)] bg-[var(--moss-light)] px-3 py-2.5 text-sm text-[var(--moss-strong)]">
+          <p>
+            Wiped {wipeResult.patients} patients, {wipeResult.visits} visits, and {wipeResult.invoices} invoices.
+            The app needs to reload to show a clean slate.
+          </p>
+          <p className="mt-1 text-xs">
+            On any OTHER device that was already signed in, use "Reset local cache" once there.
+          </p>
+          <button className={`${btnPrimary} mt-2.5`} onClick={() => void finishWipeReload()}>
+            Reload now
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button className={btnSecondary} disabled={busy} onClick={() => setConfirmingReset(true)}>
+            {busy ? 'Working…' : 'Reset local cache on this device'}
+          </button>
+          <button
+            className="rounded-md border border-[var(--rust)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)] disabled:opacity-50"
+            disabled={busy}
+            onClick={wipeAll}
+          >
+            {busy ? 'Wiping…' : 'Wipe ALL clinic data…'}
+          </button>
+        </div>
+      )}
       <div className="mt-2">
         <ErrorNote message={error} />
       </div>
+
+      <ConfirmDialog
+        open={confirmingReset}
+        title="Reset local cache?"
+        message="Clear this device's local copy of the data?\n\nNothing on the server is affected — the app reloads and downloads everything fresh. Use this after a wipe, or if this device is showing stale data."
+        confirmLabel="Clear local data"
+        onCancel={() => setConfirmingReset(false)}
+        onConfirm={() => void doResetLocalCache()}
+      />
+      <ConfirmDialog
+        open={confirmingWipe}
+        title="Wipe ALL clinic data?"
+        message={`This permanently deletes ALL patients, visits, invoices, payments and settlements for this clinic, and resets invoice numbering to 0001. The catalog, therapists, and logins are kept.\n\nThis cannot be undone.`}
+        confirmLabel="Wipe clinic data"
+        destructive
+        typeToConfirm={{
+          placeholder: `Type "${clinic.name}" to confirm`,
+          isMatch: (typed) => typed.trim() === clinic.name,
+        }}
+        onCancel={() => setConfirmingWipe(false)}
+        onConfirm={() => void doWipeAll()}
+      />
     </SectionCard>
   );
 }
@@ -1089,6 +1349,12 @@ function Catalog() {
   const [draft, setDraft] = useState({ category: '', name: '', sessionCount: '1' });
   const [draftPrice, setDraftPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Price edits save instantly on blur with no Save bar — without this, a
+  // changed price looked identical to an unsaved one, and the section's own
+  // "Price changes affect FUTURE visits only" note reads as broken if
+  // nothing on screen confirms the edit actually took.
+  const [savedItemId, setSavedItemId] = useState<string | null>(null);
+  const savedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function addItem() {
     setError(null);
@@ -1116,12 +1382,15 @@ function Catalog() {
   }
 
   async function updatePrice(item: CatalogItem, pricePaise: number | null) {
-    if (pricePaise == null) return;
+    if (pricePaise == null || pricePaise === item.basePricePaise) return;
     await repos.catalog.put({
       ...item,
       basePricePaise: pricePaise,
       updatedAt: new Date().toISOString(),
     });
+    if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current);
+    setSavedItemId(item.id);
+    savedTimeoutRef.current = setTimeout(() => setSavedItemId(null), 1500);
   }
 
   return (
@@ -1150,10 +1419,15 @@ function Catalog() {
                 <td className={td}>{item.name}</td>
                 <td className={tdNum}>{item.sessionCount}</td>
                 <td className={`${tdNum} w-32`}>
-                  <RupeeInput
-                    valuePaise={item.basePricePaise}
-                    onChange={(p) => void updatePrice(item, p)}
-                  />
+                  <div className="flex items-center justify-end gap-1.5">
+                    <RupeeInput
+                      valuePaise={item.basePricePaise}
+                      onChange={(p) => void updatePrice(item, p)}
+                    />
+                    {savedItemId === item.id && (
+                      <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">Saved</span>
+                    )}
+                  </div>
                 </td>
                 <td className={tdNum}>{formatINR(effectivePricePerSession(item))}</td>
                 <td className={td}>
@@ -1271,11 +1545,26 @@ function therapistInitials(name: string): string {
 function Therapists() {
   const clinic = useClinic();
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
+  // Members+Invite (who can log in) and Service roster (who patients get
+  // billed against) were one long scroll — the roster's Linked login field,
+  // the #1 support failure, sat at the bottom of it. Defaults to Roster
+  // when someone needs linking, same "surface the actual problem" reasoning
+  // as the parent tab landing on Team in the first place.
+  const [teamView, setTeamView] = useState<'logins' | 'roster'>('logins');
+  const [teamViewDefaulted, setTeamViewDefaulted] = useState(false);
+  useEffect(() => {
+    if (teamViewDefaulted || therapists === undefined) return;
+    if (unlinkedCount > 0) setTeamView('roster');
+    setTeamViewDefaulted(true);
+  }, [teamViewDefaulted, therapists, unlinkedCount]);
   const [name, setName] = useState('');
   const [rosterError, setRosterError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Therapist | null>(null);
   const [members, setMembers] = useState<ClinicMember[] | null>(null);
   const [membersError, setMembersError] = useState<string | null>(null);
   const [revokeInProgress, setRevokeInProgress] = useState<string | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<{ userId: string; email: string } | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'therapist' | 'front_desk'>('therapist');
@@ -1319,12 +1608,12 @@ function Therapists() {
     setName('');
   }
 
-  async function deleteTherapist(t: Therapist) {
+  async function startDeleteTherapist(t: Therapist) {
     setRosterError(null);
     try {
       // Mirrors hard_delete_therapist()'s exact check (20260815000006) so a
       // therapist that looks deletable here doesn't just fail server-side
-      // with a less specific error after the confirm prompt: visits where
+      // with a less specific error after the confirm dialog: visits where
       // they're the primary OR shared therapist, plus consultation notes
       // and invoices attributed to them.
       const [allVisits, allNotes, allInvoices] = await Promise.all([
@@ -1337,19 +1626,22 @@ function Therapists() {
       const linkedInvoices = allInvoices.filter((i) => i.therapistId === t.id).length;
       const linked = linkedVisits + linkedNotes + linkedInvoices;
       if (linked > 0) {
-        alert(
+        setRosterError(
           `${t.name} has ${linked} linked record(s) (visits, notes, or invoices), so they can't be permanently deleted — deactivate instead.`
         );
         return;
       }
-      const typed = prompt(
-        `Permanently delete ${t.name} from the roster? This cannot be undone.\n\nType their name to confirm:`
-      );
-      if (typed === null) return;
-      if (typed.trim().toLowerCase() !== t.name.trim().toLowerCase()) {
-        alert('Name did not match — nothing was deleted.');
-        return;
-      }
+      setDeleteTarget(t);
+    } catch (e) {
+      setRosterError(toFriendlyMessage(e));
+    }
+  }
+
+  async function confirmDeleteTherapist() {
+    if (!deleteTarget) return;
+    const t = deleteTarget;
+    setDeleteTarget(null);
+    try {
       await therapistService.hardDelete(t.id);
     } catch (e) {
       setRosterError(toFriendlyMessage(e));
@@ -1440,14 +1732,20 @@ function Therapists() {
     }
   }
 
-  async function revokeMember(userId: string, email: string) {
+  function revokeMember(userId: string, email: string) {
     const target = members?.find((m) => m.userId === userId);
     const isLastAdmin = target?.role === 'admin' && (members?.filter((m) => m.role === 'admin').length ?? 0) <= 1;
     if (isLastAdmin) {
       setMembersError('This clinic must keep at least one admin — revoke or demote another admin first.');
       return;
     }
-    if (!confirm(`Revoke ${email}'s access to this clinic?`)) return;
+    setRevokeTarget({ userId, email });
+  }
+
+  async function confirmRevokeMember() {
+    if (!revokeTarget) return;
+    const { userId } = revokeTarget;
+    setRevokeTarget(null);
     setMembersError(null);
     setRevokeInProgress(userId);
     try {
@@ -1474,6 +1772,31 @@ function Therapists() {
 
   return (
     <SectionCard title="Therapists & team">
+      <div className="mb-5 flex gap-1.5">
+        {(['logins', 'roster'] as const).map((v) => {
+          const selected = teamView === v;
+          return (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setTeamView(v)}
+              className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+              style={{
+                borderColor: selected ? 'var(--teal)' : 'var(--border)',
+                background: selected ? 'var(--teal-light)' : 'var(--surface)',
+                color: selected ? 'var(--teal)' : 'var(--muted)',
+              }}
+            >
+              {v === 'logins' ? 'Logins' : 'Service roster'}
+              {v === 'roster' && unlinkedCount > 0 && (
+                <span className="ml-1.5 text-[var(--rust)]">{unlinkedCount} unlinked</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {teamView === 'logins' && (
+      <>
       <div className="mb-6">
         <div className="mb-3 flex items-baseline justify-between gap-2">
           <h3 className="text-sm font-semibold text-[var(--ink)]">Members</h3>
@@ -1494,7 +1817,7 @@ function Therapists() {
                   clinicId={clinic.id}
                   revoking={revokeInProgress === m.userId}
                   isLastAdmin={isLastAdmin}
-                  onRevoke={() => void revokeMember(m.userId, m.email)}
+                  onRevoke={() => revokeMember(m.userId, m.email)}
                   onSaved={() => void refetchMembers()}
                 />
               );
@@ -1564,8 +1887,11 @@ function Therapists() {
         {inviteSuccess && <p className="mt-2 text-sm text-[var(--moss)]">{inviteSuccess}</p>}
         {inviteError && <ErrorNote message={inviteError} />}
       </div>
+      </>
+      )}
 
-      <div className="border-t border-[var(--border)] pt-6">
+      {teamView === 'roster' && (
+      <div>
         <div className="mb-3 flex items-baseline justify-between gap-2">
           <h3 className="text-sm font-semibold text-[var(--ink)]">Service roster</h3>
           <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2 py-0.5 font-mono text-[11px] text-[var(--muted)]">
@@ -1599,6 +1925,18 @@ function Therapists() {
                 />
               </label>
               <span className="min-w-32 text-[var(--ink)]">{t.name}</span>
+              <input
+                key={t.id}
+                className={`${inputCls} w-36 text-xs`}
+                placeholder="Reg. no."
+                title="Registration/license number — printed on invoices"
+                defaultValue={t.registrationNo ?? ''}
+                onBlur={(e) => {
+                  const value = e.target.value.trim() || null;
+                  if (value === (t.registrationNo ?? null)) return;
+                  void repos.therapists.put({ ...t, registrationNo: value, updatedAt: new Date().toISOString() });
+                }}
+              />
               <span
                 className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
                 style={
@@ -1623,7 +1961,7 @@ function Therapists() {
               </button>
               <button
                 className="text-xs text-[var(--rust)] hover:underline"
-                onClick={() => void deleteTherapist(t)}
+                onClick={() => void startDeleteTherapist(t)}
               >
                 Delete
               </button>
@@ -1680,6 +2018,34 @@ function Therapists() {
           <ErrorNote message={rosterError} />
         </div>
       </div>
+      )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete therapist?"
+        message={`Permanently delete ${deleteTarget?.name} from the roster? This cannot be undone.`}
+        confirmLabel="Delete permanently"
+        destructive
+        typeToConfirm={
+          deleteTarget
+            ? {
+                placeholder: 'Type their name to confirm',
+                isMatch: (typed) => typed.trim().toLowerCase() === deleteTarget.name.trim().toLowerCase(),
+              }
+            : undefined
+        }
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => void confirmDeleteTherapist()}
+      />
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        title="Revoke access?"
+        message={`Revoke ${revokeTarget?.email}'s access to this clinic?`}
+        confirmLabel="Revoke access"
+        destructive
+        onCancel={() => setRevokeTarget(null)}
+        onConfirm={() => void confirmRevokeMember()}
+      />
     </SectionCard>
   );
 }

@@ -35,6 +35,9 @@ const MonthlyLedgerPrintPage = lazy(() =>
 const InvoicePrintPage = lazy(() =>
   import('@/features/invoices/InvoicePrintPage').then((m) => ({ default: m.InvoicePrintPage }))
 );
+const NotePrintPage = lazy(() =>
+  import('@/features/patients/NotePrintPage').then((m) => ({ default: m.NotePrintPage }))
+);
 const SettingsPage = lazy(() =>
   import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
 );
@@ -131,11 +134,32 @@ const noteEditorRoute = createRoute({
   component: NoteEditorPage,
 });
 
+const notePrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/notes/$noteId/print',
+  component: NotePrintPage,
+});
+
 // The monthly statement lives under the Reports nav tab (/insights), not
 // Ledger — see ReportsPage.tsx. This standalone route becomes a redirect
 // rather than a hard delete-to-404: nothing in the app links here anymore,
 // but an external bookmark or shared link might, and there's no way to be
 // certain none exist.
+const monthlyPrintSearch = (search: Record<string, unknown>): { year: number; month: number } => ({
+  year: Number(search.year) || new Date().getFullYear(),
+  month: Number(search.month) || new Date().getMonth() + 1,
+});
+
+// Monthly statement PDF/print view — lives under /insights (Reports nav) so
+// TanStack Router <Link> doesn't resolve /reports/print through the /reports
+// bookmark redirect (which sent Export as PDF back to Trends).
+const insightsPrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/insights/print',
+  validateSearch: monthlyPrintSearch,
+  component: MonthlyLedgerPrintPage,
+});
+
 const reportsRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports',
@@ -144,14 +168,13 @@ const reportsRedirectRoute = createRoute({
   },
 });
 
-const reportsPrintRoute = createRoute({
+const reportsPrintRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports/print',
-  validateSearch: (search: Record<string, unknown>): { year: number; month: number } => ({
-    year: Number(search.year) || new Date().getFullYear(),
-    month: Number(search.month) || new Date().getMonth() + 1,
-  }),
-  component: MonthlyLedgerPrintPage,
+  validateSearch: monthlyPrintSearch,
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: '/insights/print', search });
+  },
 });
 
 const invoicePrintRoute = createRoute({
@@ -160,9 +183,18 @@ const invoicePrintRoute = createRoute({
   component: InvoicePrintPage,
 });
 
+// Kept in sync with SettingsPage's own SectionKey by hand — a route file
+// shouldn't import a feature's internal type just to validate a search
+// param, and the two rarely change.
+const SETTINGS_TABS = ['profile', 'billing', 'partner', 'team', 'services', 'data'] as const;
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
+  validateSearch: (search: Record<string, unknown>): { tab?: (typeof SETTINGS_TABS)[number] } =>
+    typeof search.tab === 'string' && (SETTINGS_TABS as readonly string[]).includes(search.tab)
+      ? { tab: search.tab as (typeof SETTINGS_TABS)[number] }
+      : {},
   component: SettingsPage,
 });
 
@@ -235,8 +267,10 @@ const routeTree = rootRoute.addChildren([
   patientProfileRoute,
   newNoteRoute,
   noteEditorRoute,
+  notePrintRoute,
+  insightsPrintRoute,
   reportsRedirectRoute,
-  reportsPrintRoute,
+  reportsPrintRedirectRoute,
   invoicePrintRoute,
   invoicesRedirectRoute,
   settingsRoute,

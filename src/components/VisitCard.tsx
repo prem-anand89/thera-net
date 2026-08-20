@@ -6,7 +6,7 @@ import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import type { VisitPaymentState } from '@/domain/paymentState';
 import { paymentActions, paymentStatusPhrase } from '@/domain/paymentState';
-import { Pill, PackageThread, th, thNum, td, tdNum } from '@/components/ui';
+import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum } from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 
 export const PAYMENT_CHIP: Record<
@@ -51,8 +51,14 @@ function PatientNameBlock({
           {data.patientName}
         </Link>
         {onEditPatient && (
-          <button type="button" className="text-xs font-medium text-[var(--teal)] hover:underline" onClick={onEditPatient}>
-            Edit patient
+          <button
+            type="button"
+            className="text-[var(--muted)] hover:text-[var(--ink)]"
+            aria-label="Edit patient"
+            title="Edit patient"
+            onClick={onEditPatient}
+          >
+            ✎
           </button>
         )}
       </div>
@@ -124,7 +130,6 @@ function RowActionsMenu({
   onSplit?: () => void;
   onDelete: () => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const hasMenu =
     data.canRepeat ||
     (data.canEdit && onEdit) ||
@@ -133,69 +138,58 @@ function RowActionsMenu({
   if (!hasMenu) return null;
 
   return (
-    <div className="relative shrink-0">
-      <button
-        type="button"
-        aria-label="Row actions"
-        className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--paper)]"
-        onClick={() => setMenuOpen((o) => !o)}
-      >
-        ⋮
-      </button>
-      {menuOpen && (
+    <KebabMenu>
+      {(close) => (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 top-full z-20 mt-1 min-w-32 rounded-md border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg">
-            {data.canRepeat && (
-              <Link
-                to="/visits/new"
-                search={{ repeatVisitId: data.visitId }}
-                className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                onClick={() => setMenuOpen(false)}
-              >
-                Repeat
-              </Link>
-            )}
-            {data.canEdit && onEdit && (
-              <button
-                type="button"
-                className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onEdit();
-                }}
-              >
-                Edit visit
-              </button>
-            )}
-            {data.canSplit && onSplit && (
-              <button
-                type="button"
-                className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onSplit();
-                }}
-              >
-                {data.hasSplit ? 'Edit split' : 'Split'}
-              </button>
-            )}
-            {data.canDelete && (
-              <button
-                type="button"
-                className="block w-full px-3 py-1.5 text-left text-xs text-[var(--rust)] hover:bg-[var(--rust-light)]"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDelete();
-                }}
-              >
-                Delete
-              </button>
-            )}
-          </div>
+          {data.canRepeat && (
+            <Link
+              to="/visits/new"
+              search={{ repeatVisitId: data.visitId }}
+              className={menuItem}
+              onClick={close}
+            >
+              Repeat
+            </Link>
+          )}
+          {data.canEdit && onEdit && (
+            <button
+              type="button"
+              className={menuItem}
+              onClick={() => {
+                close();
+                onEdit();
+              }}
+            >
+              Edit visit
+            </button>
+          )}
+          {data.canSplit && onSplit && (
+            <button
+              type="button"
+              className={menuItem}
+              onClick={() => {
+                close();
+                onSplit();
+              }}
+            >
+              {data.hasSplit ? 'Edit split' : 'Split revenue'}
+            </button>
+          )}
+          {data.canDelete && (
+            <button
+              type="button"
+              className={menuItemDestructive}
+              onClick={() => {
+                close();
+                onDelete();
+              }}
+            >
+              Delete
+            </button>
+          )}
         </>
       )}
-    </div>
+    </KebabMenu>
   );
 }
 
@@ -264,10 +258,20 @@ function PaymentStatusDisplay({
   );
 }
 
+/** Service · therapist · condition — session count sits beside PackageThread dots. */
+function visitContextLine(data: VisitCardData): string {
+  const parts: string[] = [];
+  if (data.serviceName) parts.push(data.serviceName);
+  if (data.therapistName) parts.push(data.therapistName);
+  if (data.condition) parts.push(data.condition);
+  return parts.join(' · ');
+}
+
 export function SharedVisitCard({
   data,
   showDate,
   showPatient,
+  boxed = false,
   onInvoice,
   onTakePayment,
   onEditPatient,
@@ -279,6 +283,10 @@ export function SharedVisitCard({
   data: VisitCardData;
   showDate: boolean;
   showPatient: boolean;
+  /** Renders as its own bordered/shadowed card (the flat "Seen today" list)
+   *  rather than a plain row (used inside an already-boxed date group, or a
+   *  divide-y list a caller owns) — avoids nesting a box inside a box. */
+  boxed?: boolean;
   onInvoice: () => void;
   onTakePayment?: () => void;
   onEditPatient?: () => void;
@@ -295,74 +303,104 @@ export function SharedVisitCard({
         .join('')
     : '';
 
-  const secondaryParts = [
-    data.condition,
-    `${data.serviceName}${data.sessionIndex && data.packageTotal ? ` (${data.sessionIndex}/${data.packageTotal})` : ''}`,
-    data.therapistName,
-    data.treatmentNotes,
-  ].filter(Boolean);
+  const chip = PAYMENT_CHIP[data.paymentState];
+  const bill = formatINR(data.billPaise);
+  const actions = canInvoice ? paymentActions(data.paymentState) : [];
+  const contextLine = visitContextLine(data);
 
-  const nameBlock = (
-    <div className="min-w-0 flex-1">
-      {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
-      <div className="text-xs text-[var(--muted)]" style={{ whiteSpace: 'normal' }}>
-        {secondaryParts.map((part, i) => (
-          <span key={i}>
-            {i > 0 && ' · '}
-            {part}
-            {i === 1 && data.sessionIndex && data.packageTotal && (
-              <span className="ml-1 align-middle">
-                <PackageThread sessionIndex={data.sessionIndex} packageTotal={data.packageTotal} />
-              </span>
-            )}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-
-  return (
-    // Below sm:, date + avatar + name share one row and payment info +
-    // actions share a second, full-width row — cramming all five into one
-    // flex row left the name/details column with almost no space on a
-    // narrow phone, forcing every word onto its own line. sm: and up
-    // (still card view below tab:, e.g. a wider phone or small tablet)
-    // reverts to the original single-row layout via sm:contents, which has
-    // room for it.
-    <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:gap-3">
-      <div className="flex items-start gap-3">
-        {showDate && (
-          <div className="w-14 shrink-0 pt-0.5 text-xs text-[var(--muted)]">
-            {formatDateDMY(data.visitDate)}
-            {data.editedBy && (
-              <span className="ml-1" title={`Edited by ${data.editedBy}`}>
-                ✎
-              </span>
-            )}
-            {data.syncError && (
-              <span className="ml-1 text-[var(--rust)]" title={`Sync issue: ${data.syncError}`}>
-                ⚠
-              </span>
-            )}
-          </div>
-        )}
-
+  const content = (
+    <>
+      <div className="flex items-start gap-2.5">
         {showPatient && (
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
             {initials || '?'}
           </div>
         )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
+              {showDate && (
+                <div className={`text-xs text-[var(--muted)] ${showPatient ? 'mt-0.5' : ''}`}>
+                  {formatDateDMY(data.visitDate)}
+                  {data.editedBy && (
+                    <span className="ml-1" title={`Edited by ${data.editedBy}`}>
+                      ✎
+                    </span>
+                  )}
+                  {data.syncError && (
+                    <span className="ml-1 text-[var(--rust)]" title={`Sync issue: ${data.syncError}`}>
+                      ⚠
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex shrink-0 items-start gap-0.5">
+              {data.paymentState !== 'zero_session' && (
+                <span className="font-num text-sm font-semibold tabular-nums text-[var(--ink)]">{bill}</span>
+              )}
+              <RowActionsMenu data={data} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
+            </div>
+          </div>
 
-        <div className="min-w-0 flex-1 sm:hidden">{nameBlock}</div>
+          {contextLine && <p className="mt-1 truncate text-xs text-[var(--muted)]">{contextLine}</p>}
+          {data.sessionIndex && data.packageTotal && (
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
+              <PackageThread sessionIndex={data.sessionIndex} packageTotal={data.packageTotal} />
+              <span className="font-num">
+                {data.sessionIndex}/{data.packageTotal}
+              </span>
+            </div>
+          )}
+          {data.treatmentNotes && (
+            <p className="mt-0.5 truncate text-xs text-[var(--muted)]">{data.treatmentNotes}</p>
+          )}
+        </div>
       </div>
 
-      <div className="hidden sm:contents">{nameBlock}</div>
-
-      <div className="flex items-center justify-between gap-2 sm:contents">
-        <PaymentStatusDisplay data={data} onInvoice={onInvoice} onTakePayment={onTakePayment} canInvoice={canInvoice} />
-        <RowActionsMenu data={data} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
+        <Pill tone={chip.tone}>{chip.label}</Pill>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {actions.includes('take_payment') && (
+            <button
+              type="button"
+              className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+              onClick={onTakePayment}
+            >
+              Take payment
+            </button>
+          )}
+          {actions.includes('issue_invoice') && (
+            <button
+              type="button"
+              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+              onClick={onInvoice}
+            >
+              Issue invoice
+            </button>
+          )}
+          {!canInvoice && paymentActions(data.paymentState).length > 0 && <Pill tone="slate">Ask billing</Pill>}
+          {data.needsNote && (
+            <Link
+              to="/patients/$patientId/notes/new"
+              params={{ patientId: data.patientId }}
+              search={{ visitId: data.visitId }}
+              className="text-xs font-medium text-[var(--amber)] hover:underline"
+              title="Clinical note not started for this visit"
+            >
+              + Note
+            </Link>
+          )}
+        </div>
       </div>
-    </div>
+    </>
+  );
+
+  return boxed ? (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">{content}</div>
+  ) : (
+    <div className="py-3">{content}</div>
   );
 }
 
@@ -430,7 +468,13 @@ function VisitTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* overflow-y-visible is deliberate, not decorative: setting only
+          overflow-x leaves overflow-y at its browser-computed default of
+          'auto' too (per the CSS overflow spec), which silently turns this
+          into a vertical clipping container — cutting off the row-actions
+          dropdown on the last row instead of letting it render past the
+          table's edge. */}
+      <div className="overflow-x-auto overflow-y-visible">
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
             <tr>
@@ -446,8 +490,11 @@ function VisitTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
-            {rows.map((row) => (
-              <tr key={row.visitId} className="hover:bg-[var(--paper)]">
+            {rows.map((row, i) => (
+              <tr
+                key={row.visitId}
+                className={`hover:bg-[var(--teal-light)] ${i % 2 === 1 ? 'bg-[var(--paper)]' : ''}`}
+              >
                 {showDate && (
                   <td className={td}>
                     {formatDateDMY(row.visitDate)}
@@ -473,11 +520,14 @@ function VisitTable({
                 {columnPrefs.treatment && <td className={td}>{row.treatmentNotes ?? '—'}</td>}
                 {columnPrefs.service && (
                   <td className={td}>
-                    {row.serviceName}
+                    <div>{row.serviceName}</div>
                     {row.sessionIndex && row.packageTotal && (
-                      <span className="ml-1.5">
+                      <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
                         <PackageThread sessionIndex={row.sessionIndex} packageTotal={row.packageTotal} />
-                      </span>
+                        <span className="font-num">
+                          {row.sessionIndex}/{row.packageTotal}
+                        </span>
+                      </div>
                     )}
                   </td>
                 )}
@@ -649,13 +699,14 @@ export function ResponsiveVisitList({
             </div>
           ))
         ) : (
-          <div className="divide-y divide-[var(--border)]">
+          <div className="space-y-2">
             {rows.map((row) => (
               <SharedVisitCard
                 key={row.visitId}
                 data={row}
                 showDate={showDate}
                 showPatient={showPatient}
+                boxed={true}
                 onInvoice={() => onInvoice(row)}
                 onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
                 onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}

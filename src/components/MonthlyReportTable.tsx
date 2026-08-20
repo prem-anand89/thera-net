@@ -28,6 +28,7 @@ export function MonthlyReportTable({
   const cells = (r: TherapistMonthRow) => (
     <>
       <td className={tdNum}>{formatINR(r.billPaise)}</td>
+      <td className={tdNum}>{formatINR(r.attributedRevenuePaise)}</td>
       {hospitalSplit && <td className={tdNum}>{formatINR(r.bmSharePaise)}</td>}
       {hospitalSplit && <td className={tdNum}>{formatINR(r.tdsPaise)}</td>}
       {hospitalSplit && <td className={tdNum}>{formatINR(r.postTaxPaise)}</td>}
@@ -45,6 +46,10 @@ export function MonthlyReportTable({
         <tr>
           <th className={`${th} sticky left-0 z-[1] bg-[var(--paper)]`}>Therapist</th>
           <th className={thNum}>Bill Amount</th>
+          <th className={thNum}>
+            Revenue Generated
+            <InfoTip text="Gross revenue credited to whoever actually delivered each session — a multi-session package's total is split evenly across the therapists who ran its sessions, instead of all going to whoever it was billed under. Independent of Shared/Net (the manual same-visit override) and of the Clinic/Partner split below." />
+          </th>
           {hospitalSplit && (
             <th className={thNum}>
               {own} Share
