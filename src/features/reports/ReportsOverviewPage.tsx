@@ -84,6 +84,7 @@ const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> =
   adjustmentPaise: 0,
   sharedPaise: 0,
   netPostTaxPaise: 0,
+  attributedRevenuePaise: 0,
   visitCount: 0,
   uniquePatients: 0,
 };
@@ -219,10 +220,16 @@ export function ReportsOverviewPage() {
   // and monthlyNewCounts pair already being fetched for the chart/other
   // KPIs — their last two entries are this month and last, so no extra
   // query for either KPI card.
+  // Clinic-wide (admin) keeps the actual post-tax/billed figure — the
+  // financial number the clinic runs on, unaffected by attribution since a
+  // total is invariant to how it's split across therapists. A single
+  // therapist's own figure instead uses attributedRevenuePaise: without it,
+  // "my revenue" credits 100% of a package to whoever logged its first
+  // (billed) session and 0% to a colleague who ran the rest of it.
   const revenueRow = (report: MonthlyReport | undefined) => {
     if (!report) return null;
-    const row = scope.isClinicWideView ? report.total : myMonthRow(report.rows);
-    return hospitalSplit ? row.postTaxPaise : row.billPaise;
+    if (scope.isClinicWideView) return hospitalSplit ? report.total.postTaxPaise : report.total.billPaise;
+    return myMonthRow(report.rows).attributedRevenuePaise;
   };
   const revenueThisMonth = trend ? revenueRow(trend[trend.length - 1]) : null;
   const revenueLastMonth = trend && trend.length > 1 ? revenueRow(trend[trend.length - 2]) : null;
@@ -730,10 +737,7 @@ export function ReportsOverviewPage() {
                     barValues={
                       scope.isClinicWideView
                         ? trend.map((r) => (hospitalSplit ? r.total.postTaxPaise : r.total.billPaise))
-                        : trend.map((r) => {
-                            const row = myMonthRow(r.rows);
-                            return hospitalSplit ? row.postTaxPaise : row.billPaise;
-                          })
+                        : trend.map((r) => myMonthRow(r.rows).attributedRevenuePaise)
                     }
                     lineLabel="Visits"
                     lineColor={SERIES_COLORS[1]}

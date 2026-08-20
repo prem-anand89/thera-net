@@ -4,7 +4,7 @@ import { createReportService } from './reportService';
 import { createPatientService } from './patientService';
 import type { Repos, VisitFilter } from '@/repositories/types';
 import type { CatalogItem, Clinic, Patient, Therapist, Visit } from '@/domain/types';
-import { rupeesToPaise as rs } from '@/domain/money';
+import { roundToRupeeHalfUp, rupeesToPaise as rs } from '@/domain/money';
 
 // In-memory Repos double — services never touch Dexie or Supabase directly,
 // which is exactly what makes them testable (and the backend swappable).
@@ -60,7 +60,7 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
     clinics: {
       get: async (id) => (id === clinic.id ? clinic : undefined),
       list: async () => [clinic],
-      put: async () => {},
+      put: async (c) => void Object.assign(clinic, c),
       putLocal: async () => {},
     },
     therapists: {
@@ -378,6 +378,48 @@ describe('visitService.setSplit', () => {
     fake.visits.set(v.id, { ...v, invoiceId: 'inv-1' });
     const updated = await svc.setSplit(v.id, { sharedTherapistId: 'th-aish', sharedPct: 25 });
     expect(updated.sharedTherapistId).toBe('th-aish');
+  });
+});
+
+describe('visitService.recomputeUninvoicedSplits', () => {
+  const base = {
+    clinicId: 'clinic-1',
+    patientId: 'p1',
+    therapistId: 'th-prem',
+    visitDate: '2026-05-10',
+    serviceCatalogId: 'svc-physio3',
+  };
+
+  it('re-snapshots not-yet-invoiced visits to the clinic\'s current split, leaving invoiced ones alone', async () => {
+    const fake = makeFakeRepos(); // bmSplitPct: 75, taxPct: 10, tdsBasis: 'gross_bill'
+    const svc = createVisitService(fake.repos);
+    const open = await svc.create(base);
+    const invoiced = await svc.create({ ...base, visitDate: '2026-05-11' });
+    fake.visits.set(invoiced.id, { ...invoiced, invoiceId: 'inv-1' });
+
+    // Renegotiate: clinic's split changes after both visits were logged.
+    const clinic = await fake.repos.clinics.get('clinic-1');
+    await fake.repos.clinics.put({ ...clinic!, bmSplitPct: 60, taxPct: 5 });
+
+    const result = await svc.recomputeUninvoicedSplits('clinic-1');
+    expect(result.updated).toBe(1);
+
+    const reopened = await fake.repos.visits.get(open.id);
+    expect(reopened!.bmSplitPct).toBe(60);
+    expect(reopened!.taxPct).toBe(5);
+    expect(reopened!.bmSharePaise).toBe(roundToRupeeHalfUp((open.actualBillPaise * 60) / 100));
+
+    // Invoiced visit's billing stays exactly as it was billed.
+    const stillInvoiced = await fake.repos.visits.get(invoiced.id);
+    expect(stillInvoiced!.bmSplitPct).toBe(75);
+  });
+
+  it('is a no-op when nothing needs updating', async () => {
+    const fake = makeFakeRepos();
+    const svc = createVisitService(fake.repos);
+    await svc.create(base);
+    const result = await svc.recomputeUninvoicedSplits('clinic-1');
+    expect(result.updated).toBe(0);
   });
 });
 
