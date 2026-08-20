@@ -172,7 +172,7 @@ const invoicePrintRoute = createRoute({
 // Kept in sync with SettingsPage's own SectionKey by hand — a route file
 // shouldn't import a feature's internal type just to validate a search
 // param, and the two rarely change.
-const SETTINGS_TABS = ['profile', 'billing', 'partner', 'team', 'services', 'features', 'data'] as const;
+const SETTINGS_TABS = ['profile', 'billing', 'partner', 'team', 'services', 'data'] as const;
 
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,

@@ -38,7 +38,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { FirstWeekChecklist, useFirstWeekChecklistVisible } from './FirstWeekChecklist';
 import { isValidUpiVpa } from '@/domain/upiPay';
 
-type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'features' | 'data';
+type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'data';
 
 /**
  * Grouped into the three jobs an admin actually comes here to do, rather
@@ -52,7 +52,7 @@ type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'fea
 const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
   { label: 'Clinic', keys: ['profile', 'billing', 'partner'] },
   { label: 'People & services', keys: ['team', 'services'] },
-  { label: 'System', keys: ['features', 'data'] },
+  { label: 'System', keys: ['data'] },
 ];
 
 /** One accent color per section, matching the reviewed Team-panel mockup's
@@ -61,7 +61,12 @@ const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
 type Accent = 'teal' | 'amber' | 'rust' | 'moss' | 'slate';
 
 const SECTIONS: { key: SectionKey; label: string; description: string; accent: Accent }[] = [
-  { key: 'profile', label: 'Clinic profile', description: 'Name, address, contact info, logo, walk-in ID prefix.', accent: 'teal' },
+  {
+    key: 'profile',
+    label: 'Clinic profile',
+    description: 'Name, address, contact info, logo, walk-in ID prefix, optional modules.',
+    accent: 'teal',
+  },
   {
     key: 'billing',
     label: 'Billing & invoicing',
@@ -76,12 +81,6 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
   },
   { key: 'team', label: 'Team', description: 'Invite and manage logins, therapist roster.', accent: 'moss' },
   { key: 'services', label: 'Services', description: 'Catalog of billable services and package prices.', accent: 'teal' },
-  {
-    key: 'features',
-    label: 'Features',
-    description: 'Optional modules — Expected today, clinical notes, comparison chart.',
-    accent: 'slate',
-  },
   {
     key: 'data',
     label: 'Data & maintenance',
@@ -109,7 +108,6 @@ const SECTION_ICON_PATHS: Record<SectionKey, string> = {
   partner: 'M8 2.5l1.4 3.1 3.4.4-2.5 2.3.7 3.4L8 10l-3 1.7.7-3.4-2.5-2.3 3.4-.4L8 2.5z',
   team: 'M2.3 13c.4-2.5 2-3.9 3.9-3.9s3.5 1.4 3.9 3.9M9.9 9.5c1.6.2 2.8 1.4 3.1 3.5',
   services: 'M3 4h10M3 8h10M3 12h6',
-  features: 'M8 2.5v1.8M8 11.7v1.8M13.5 8h-1.8M4.3 8H2.5M11.8 4.2l-1.3 1.3M5.5 10.5l-1.3 1.3M11.8 11.8l-1.3-1.3M5.5 5.5L4.2 4.2',
   data: 'M3 5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2zM3 5v6c0 1.1 2.2 2 5 2s5-.9 5-2V5M3 8c0 1.1 2.2 2 5 2s5-.9 5-2',
 };
 
@@ -196,7 +194,6 @@ export function SettingsPage() {
   const setProfileDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'profile', d)), []);
   const setBillingDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'billing', d)), []);
   const setPartnerDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'partner', d)), []);
-  const setFeaturesDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'features', d)), []);
 
   function selectSection(key: SectionKey) {
     if (key === activeKey) return;
@@ -311,7 +308,6 @@ export function SettingsPage() {
             </>
           )}
           {activeKey === 'services' && <Catalog />}
-          {activeKey === 'features' && <FeaturesSection onDirtyChange={setFeaturesDirty} />}
           {activeKey === 'data' && (
             <>
               <HistoricalData />
@@ -429,7 +425,16 @@ function SectionSaveBar({
 
 type ProfileFields = Pick<
   Clinic,
-  'name' | 'address' | 'phone' | 'email' | 'walkInMrnoPrefix' | 'logoPath' | 'clinicType'
+  | 'name'
+  | 'address'
+  | 'phone'
+  | 'email'
+  | 'walkInMrnoPrefix'
+  | 'logoPath'
+  | 'clinicType'
+  | 'enableExpectedToday'
+  | 'clinicalDocsEnabled'
+  | 'showTherapistComparison'
 >;
 
 function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
@@ -443,6 +448,9 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         walkInMrnoPrefix: c.walkInMrnoPrefix,
         logoPath: c.logoPath,
         clinicType: c.clinicType,
+        enableExpectedToday: c.enableExpectedToday ?? false,
+        clinicalDocsEnabled: c.clinicalDocsEnabled ?? false,
+        showTherapistComparison: c.showTherapistComparison ?? false,
       }),
       onDirtyChange
     );
@@ -523,6 +531,41 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
           )}
         </Field>
       </div>
+
+      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">Optional modules</h3>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Field
+          label={
+            <>
+              Expected today
+              <InfoTip text="Shows a lightweight 'who's coming in today' list on Workspace, for clinics that track informal walk-in/appointment expectations. Not a booking system — no calendar, no availability checking." />
+            </>
+          }
+        >
+          <BoolToggle value={form.enableExpectedToday ?? false} onChange={(v) => set({ enableExpectedToday: v })} />
+        </Field>
+        <Field
+          label={
+            <>
+              Clinical documentation
+              <InfoTip text="When on, new visits are flagged for a clinical note until one is completed — surfaced on Workspace's Needs attention and Documentation lists. Off by default; turn on for clinics that track a note per visit." />
+            </>
+          }
+        >
+          <BoolToggle value={form.clinicalDocsEnabled ?? false} onChange={(v) => set({ clinicalDocsEnabled: v })} />
+        </Field>
+        <Field
+          label={
+            <>
+              Therapist comparison chart
+              <InfoTip text="When on, the Revenue and Visits comparison charts on Reports are visible to therapists too, not just admins — for clinics that want that competitive visibility. Off by default." />
+            </>
+          }
+        >
+          <BoolToggle value={form.showTherapistComparison ?? false} onChange={(v) => set({ showTherapistComparison: v })} />
+        </Field>
+      </div>
+
       <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
     </SectionCard>
   );
@@ -925,8 +968,6 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   );
 }
 
-type FeaturesFields = Pick<Clinic, 'enableExpectedToday' | 'clinicalDocsEnabled' | 'showTherapistComparison'>;
-
 /** Two-option pill toggle — same selected/unselected visual language as
  *  Team's invite-role picker (border/background/color keyed off a boolean
  *  instead of a 3-way role), so a feature flag reads the same way a role
@@ -954,55 +995,6 @@ function BoolToggle({ value, onChange }: { value: boolean; onChange: (v: boolean
         );
       })}
     </div>
-  );
-}
-
-function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<FeaturesFields>(
-    (c) => ({
-      enableExpectedToday: c.enableExpectedToday,
-      clinicalDocsEnabled: c.clinicalDocsEnabled,
-      showTherapistComparison: c.showTherapistComparison ?? false,
-    }),
-    onDirtyChange
-  );
-
-  return (
-    <SectionCard title="Features">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Field
-          label={
-            <>
-              Expected today
-              <InfoTip text="Shows a lightweight 'who's coming in today' list on Workspace, for clinics that track informal walk-in/appointment expectations. Not a booking system — no calendar, no availability checking." />
-            </>
-          }
-        >
-          <BoolToggle value={form.enableExpectedToday ?? false} onChange={(v) => set({ enableExpectedToday: v })} />
-        </Field>
-        <Field
-          label={
-            <>
-              Clinical documentation
-              <InfoTip text="When on, new visits are flagged for a clinical note until one is completed — surfaced on Workspace's Needs attention and Documentation lists. Off by default; turn on for clinics that track a note per visit." />
-            </>
-          }
-        >
-          <BoolToggle value={form.clinicalDocsEnabled ?? false} onChange={(v) => set({ clinicalDocsEnabled: v })} />
-        </Field>
-        <Field
-          label={
-            <>
-              Therapist comparison chart
-              <InfoTip text="When on, the Revenue and Visits comparison charts on Reports are visible to therapists too, not just admins — for clinics that want that competitive visibility. Off by default." />
-            </>
-          }
-        >
-          <BoolToggle value={form.showTherapistComparison ?? false} onChange={(v) => set({ showTherapistComparison: v })} />
-        </Field>
-      </div>
-      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
-    </SectionCard>
   );
 }
 
@@ -1195,6 +1187,12 @@ function Catalog() {
   const [draft, setDraft] = useState({ category: '', name: '', sessionCount: '1' });
   const [draftPrice, setDraftPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Price edits save instantly on blur with no Save bar — without this, a
+  // changed price looked identical to an unsaved one, and the section's own
+  // "Price changes affect FUTURE visits only" note reads as broken if
+  // nothing on screen confirms the edit actually took.
+  const [savedItemId, setSavedItemId] = useState<string | null>(null);
+  const savedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function addItem() {
     setError(null);
@@ -1222,12 +1220,15 @@ function Catalog() {
   }
 
   async function updatePrice(item: CatalogItem, pricePaise: number | null) {
-    if (pricePaise == null) return;
+    if (pricePaise == null || pricePaise === item.basePricePaise) return;
     await repos.catalog.put({
       ...item,
       basePricePaise: pricePaise,
       updatedAt: new Date().toISOString(),
     });
+    if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current);
+    setSavedItemId(item.id);
+    savedTimeoutRef.current = setTimeout(() => setSavedItemId(null), 1500);
   }
 
   return (
@@ -1256,10 +1257,15 @@ function Catalog() {
                 <td className={td}>{item.name}</td>
                 <td className={tdNum}>{item.sessionCount}</td>
                 <td className={`${tdNum} w-32`}>
-                  <RupeeInput
-                    valuePaise={item.basePricePaise}
-                    onChange={(p) => void updatePrice(item, p)}
-                  />
+                  <div className="flex items-center justify-end gap-1.5">
+                    <RupeeInput
+                      valuePaise={item.basePricePaise}
+                      onChange={(p) => void updatePrice(item, p)}
+                    />
+                    {savedItemId === item.id && (
+                      <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">Saved</span>
+                    )}
+                  </div>
                 </td>
                 <td className={tdNum}>{formatINR(effectivePricePerSession(item))}</td>
                 <td className={td}>
@@ -1377,6 +1383,19 @@ function therapistInitials(name: string): string {
 function Therapists() {
   const clinic = useClinic();
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
+  // Members+Invite (who can log in) and Service roster (who patients get
+  // billed against) were one long scroll — the roster's Linked login field,
+  // the #1 support failure, sat at the bottom of it. Defaults to Roster
+  // when someone needs linking, same "surface the actual problem" reasoning
+  // as the parent tab landing on Team in the first place.
+  const [teamView, setTeamView] = useState<'logins' | 'roster'>('logins');
+  const [teamViewDefaulted, setTeamViewDefaulted] = useState(false);
+  useEffect(() => {
+    if (teamViewDefaulted || therapists === undefined) return;
+    if (unlinkedCount > 0) setTeamView('roster');
+    setTeamViewDefaulted(true);
+  }, [teamViewDefaulted, therapists, unlinkedCount]);
   const [name, setName] = useState('');
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [members, setMembers] = useState<ClinicMember[] | null>(null);
@@ -1573,6 +1592,31 @@ function Therapists() {
 
   return (
     <SectionCard title="Therapists & team">
+      <div className="mb-5 flex gap-1.5">
+        {(['logins', 'roster'] as const).map((v) => {
+          const selected = teamView === v;
+          return (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setTeamView(v)}
+              className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+              style={{
+                borderColor: selected ? 'var(--teal)' : 'var(--border)',
+                background: selected ? 'var(--teal-light)' : 'var(--surface)',
+                color: selected ? 'var(--teal)' : 'var(--muted)',
+              }}
+            >
+              {v === 'logins' ? 'Logins' : 'Service roster'}
+              {v === 'roster' && unlinkedCount > 0 && (
+                <span className="ml-1.5 text-[var(--rust)]">{unlinkedCount} unlinked</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {teamView === 'logins' && (
+      <>
       <div className="mb-6">
         <div className="mb-3 flex items-baseline justify-between gap-2">
           <h3 className="text-sm font-semibold text-[var(--ink)]">Members</h3>
@@ -1655,8 +1699,11 @@ function Therapists() {
         {inviteSuccess && <p className="mt-2 text-sm text-[var(--moss)]">{inviteSuccess}</p>}
         {inviteError && <ErrorNote message={inviteError} />}
       </div>
+      </>
+      )}
 
-      <div className="border-t border-[var(--border)] pt-6">
+      {teamView === 'roster' && (
+      <div>
         <div className="mb-3 flex items-baseline justify-between gap-2">
           <h3 className="text-sm font-semibold text-[var(--ink)]">Service roster</h3>
           <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2 py-0.5 font-mono text-[11px] text-[var(--muted)]">
@@ -1783,6 +1830,7 @@ function Therapists() {
           <ErrorNote message={rosterError} />
         </div>
       </div>
+      )}
     </SectionCard>
   );
 }

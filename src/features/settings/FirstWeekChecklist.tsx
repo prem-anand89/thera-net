@@ -24,7 +24,7 @@ const STEPS: { title: string; body: string }[] = [
   },
   {
     title: 'Keep Core Assessment off until asked',
-    body: 'Settings → Features. First week should be ledger + billing only. Turn clinical notes on for one willing therapist, not the whole roster.',
+    body: 'Settings → Clinic profile → Optional modules. First week should be ledger + billing only. Turn clinical notes on for one willing therapist, not the whole roster.',
   },
   {
     title: 'Sign out on shared PCs',
