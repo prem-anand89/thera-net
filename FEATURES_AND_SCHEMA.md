@@ -31,12 +31,10 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 
 #### Today-First Workspace
 - **Default landing page** showing:
-  - Today's visits with payment state at a glance (Paid / Collect ₹X / ₹0 session)
-  - Open packages with stale flags (14+ days since last visit)
-  - Pending work (outstanding invoices, incomplete notes)
-  - Recent visits in rolling 7/15/30 day windows
-- **Stat strip** — Today's visits count, collected today, new patients this month, packages this month
-- **Quick actions** — "Mark paid" for invoices, visit entry, patient creation
+  - Today's visits with payment state at a glance (Paid / Collect ₹X / ₹0 session) — boxed cards on phone, a table on tablet/desktop
+  - Packages panel — Open/Stale/All status filter, plus a "Mine only" checkbox for anyone with a linked therapist record (admin included)
+- **Stat strip** — Collected today, new patients this month, and either "My open packages" (linked therapist) or "Packages this month" (clinic-wide)
+- **Quick actions** — take payment / issue invoice / split revenue / delete directly from each visit row's kebab menu; "Log visit" from a Packages row resumes the right package
 
 #### Ledger & History
 - **Dense table view** with patient enrichment (last visit + count, treatment, condition, bill amount)
@@ -146,7 +144,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Dexie (IndexedDB)** local store with Supabase sync engine
 
 #### Historical Import
-- **Setup → Import historical visits** — one-time import from clinic's Excel ledger
+- **Settings → Import historical visits** — one-time import from clinic's Excel ledger
 - **Smart matching**:
   - Matches/creates patients by MRNO
   - Parses freeform service names into catalog items and package sessions
@@ -674,9 +672,3 @@ UNIQUE (clinic_id, reason)
 - Schema drift fixes (missing columns)
 - useClinicRole empty clinicId fix
 
-### Phase 4: Future (TBD)
-- Region Modules (FaCE Scale, Facial Palsy)
-- HEP exercise library & video linking
-- Protocol library & phase management
-- Treatment consent tracking
-- Advanced outcome reports (MCID aggregation, multi-patient trends)
