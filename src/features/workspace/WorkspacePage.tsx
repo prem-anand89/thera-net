@@ -167,6 +167,7 @@ export function WorkspacePage() {
           </p>
         ) : (
           <ResponsiveVisitList
+            tableFrom="lg"
             rows={today.visits.map((row) =>
               todayRowToCardData(row, openPackageGroupIds, scope.isAdmin, scope.myTherapistId, canViewClinicalNotes)
             )}
@@ -229,10 +230,9 @@ export function WorkspacePage() {
           <p className="py-6 text-center text-sm text-[var(--muted)]">No packages match this filter.</p>
         ) : (
           <>
-            {/* Below tab: — same boxed-card treatment Today's visits and
-                Patients use, on the same breakpoint, instead of forcing a
-                7-column table to scroll sideways on a phone. */}
-            <div className="tab:hidden space-y-2">
+            {/* Cards through iPad portrait (below lg/1024px); table on landscape
+                and laptop. Pill design unchanged — distinct from visit rows. */}
+            <div className="lg:hidden space-y-2">
               {filteredPackages.map((p) => (
                 <div
                   key={p.packageGroupId}
@@ -269,7 +269,7 @@ export function WorkspacePage() {
               ))}
             </div>
 
-            <div className="hidden tab:block overflow-x-auto">
+            <div className="hidden lg:block overflow-x-auto">
               <table className="min-w-full divide-y divide-[var(--border)]">
                 <thead className="bg-[var(--paper)]">
                   <tr>

@@ -636,18 +636,17 @@ function groupRowsByDate(rows: VisitCardData[], today: Date): DateGroupedRows[] 
 }
 
 /**
- * Below tab: the existing card list (grouped by date if `groupByDate` is
- * set — Ledger wants that, Workspace's flat "Seen today" doesn't). At tab:
- * and up, a table with a per-user Columns picker, backed by the same rows
- * and callbacks. One column config for both surfaces, per the callers
- * simply handing over normalized VisitCardData instead of each maintaining
- * its own rendering.
+ * Below `tableFrom`: card list (grouped by date if `groupByDate` is set).
+ * At `tableFrom` and up: table with Columns picker. Default `tab` (744px);
+ * Workspace passes `lg` (1024px) so iPad portrait keeps cards while Ledger
+ * and Patients switch to tables at the usual tablet breakpoint.
  */
 export function ResponsiveVisitList({
   rows,
   showDate,
   showPatient,
   groupByDate = false,
+  tableFrom = 'tab',
   onInvoice,
   onTakePayment,
   onEditPatient,
@@ -660,6 +659,8 @@ export function ResponsiveVisitList({
   showDate: boolean;
   showPatient: boolean;
   groupByDate?: boolean;
+  /** Width at which this list switches from cards to table. */
+  tableFrom?: 'tab' | 'lg';
   onInvoice: (row: VisitCardData) => void;
   onTakePayment?: (row: VisitCardData) => void;
   onEditPatient?: (row: VisitCardData) => void;
@@ -669,10 +670,12 @@ export function ResponsiveVisitList({
   canInvoice?: boolean;
 }) {
   const { prefs, setPref } = useVisitColumnPrefs();
+  const cardClass = tableFrom === 'lg' ? 'lg:hidden' : 'tab:hidden';
+  const tableClass = tableFrom === 'lg' ? 'hidden lg:block' : 'hidden tab:block';
 
   return (
     <>
-      <div className="tab:hidden">
+      <div className={cardClass}>
         {groupByDate ? (
           groupRowsByDate(rows, new Date()).map((group) => (
             <div
@@ -727,7 +730,7 @@ export function ResponsiveVisitList({
         {rows.length === 0 && <p className="py-8 text-center text-sm text-[var(--muted)]">No visits to show.</p>}
       </div>
 
-      <div className="hidden tab:block">
+      <div className={tableClass}>
         <VisitTable
           rows={rows}
           showDate={showDate}
