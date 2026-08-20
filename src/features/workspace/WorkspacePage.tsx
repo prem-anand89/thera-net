@@ -160,7 +160,7 @@ export function WorkspacePage() {
         )}
       </div>
 
-      <SectionCard title="Today's visits">
+      <SectionCard title={today && today.visits.length === 1 ? "Today's visit" : "Today's visits"}>
         {!today || today.visits.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">
             No visits logged today — log one with &ldquo;+ New visit&rdquo;.
