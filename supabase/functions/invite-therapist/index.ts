@@ -37,6 +37,28 @@ function json(body: unknown, status: number): Response {
   });
 }
 
+// supabase-js's admin.listUsers() has no server-side email filter, so
+// finding "the user behind this email" means paging through the project's
+// users and matching client-side. Bounded to a few thousand accounts --
+// comfortably past what a clinic-management app's whole Supabase project
+// will ever have -- so a genuinely missing match returns null instead of
+// scanning forever.
+async function findUserIdByEmail(
+  serviceClient: ReturnType<typeof createClient>,
+  email: string
+): Promise<string | null> {
+  const target = email.trim().toLowerCase();
+  const perPage = 200;
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await serviceClient.auth.admin.listUsers({ page, perPage });
+    if (error || !data?.users?.length) break;
+    const match = data.users.find((u) => u.email?.toLowerCase() === target);
+    if (match) return match.id;
+    if (data.users.length < perPage) break; // last page
+  }
+  return null;
+}
+
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -87,11 +109,29 @@ export default async function handler(req: Request): Promise<Response> {
       },
     });
 
-    // Verify caller is admin in this clinic
+    // Who's calling — needed both to know their own membership row (below)
+    // and, since RLS lets an admin see every member of the clinic, to make
+    // sure the very next query doesn't come back with more than one row.
+    const {
+      data: { user: caller },
+      error: callerError,
+    } = await userClient.auth.getUser();
+
+    if (callerError || !caller) {
+      return json({ error: 'Could not verify the calling user' }, 401);
+    }
+
+    // Verify caller is admin in this clinic. Scoped to the caller's own
+    // user_id -- clinic_members' RLS policy lets an admin read every row in
+    // the clinic (needed for the Team page), so without this filter a
+    // clinic with 2+ members makes this query return multiple rows and
+    // .maybeSingle() throw, breaking every invite past the clinic's second
+    // member.
     const { data: memberData, error: memberError } = await userClient
       .from('clinic_members')
       .select('role')
       .eq('clinic_id', clinicId)
+      .eq('user_id', caller.id)
       .maybeSingle();
 
     if (memberError) {
@@ -118,11 +158,47 @@ export default async function handler(req: Request): Promise<Response> {
       }
     );
 
-    if (inviteError || !inviteData.user) {
-      return json({ error: `Failed to invite user: ${inviteError?.message || 'Unknown error'}` }, 400);
-    }
+    let newUserId: string;
+    let reLinkedExisting = false;
 
-    const newUserId = inviteData.user.id;
+    if (inviteError || !inviteData.user) {
+      // GoTrue rejects an invite to an email that already has an auth.users
+      // row -- true for anyone previously invited/offboarded from any
+      // clinic, or a therapist who already works at a different one. Rather
+      // than dead-ending there, fall back to re-linking the existing
+      // account: this clinic just needs a clinic_members row for them, not
+      // a brand-new login.
+      const looksAlreadyRegistered =
+        (inviteError as { code?: string } | null)?.code === 'email_exists' ||
+        /already.*(registered|exists)/i.test(inviteError?.message ?? '');
+
+      if (!looksAlreadyRegistered) {
+        return json({ error: `Failed to invite user: ${inviteError?.message || 'Unknown error'}` }, 400);
+      }
+
+      const existingUserId = await findUserIdByEmail(serviceClient, email);
+      if (!existingUserId) {
+        // Matches GoTrue's own claim that the email is taken, but the admin
+        // lookup couldn't confirm which account -- surface the original
+        // error rather than silently doing nothing.
+        return json({ error: `Failed to invite user: ${inviteError?.message || 'Unknown error'}` }, 400);
+      }
+
+      const { data: existingMembership } = await serviceClient
+        .from('clinic_members')
+        .select('role')
+        .eq('clinic_id', clinicId)
+        .eq('user_id', existingUserId)
+        .maybeSingle();
+      if (existingMembership) {
+        return json({ error: `${email} is already a member of this clinic.` }, 409);
+      }
+
+      newUserId = existingUserId;
+      reLinkedExisting = true;
+    } else {
+      newUserId = inviteData.user.id;
+    }
 
     // Insert clinic_members row
     const { error: insertError } = await serviceClient
@@ -135,11 +211,19 @@ export default async function handler(req: Request): Promise<Response> {
       });
 
     if (insertError) {
-      // User was created but clinic_members insert failed. This is bad but the invite went out.
-      // Log it but don't fail the entire response since the user will receive an email.
+      // For a fresh invite, the login was created but clinic_members insert
+      // failed -- bad, but the invite email already went out. For the
+      // re-link path, no new login/email is involved, so this is just a
+      // failed insert. Either way: log it but don't fail the whole request,
+      // since undoing the invite/lookup above isn't possible from here.
       console.error(`Failed to insert clinic_members for user ${newUserId}:`, insertError);
       return json(
-        { success: false, error: `Invite sent but failed to set up clinic access: ${insertError.message}` },
+        {
+          success: false,
+          error: reLinkedExisting
+            ? `Found their existing account but failed to grant clinic access: ${insertError.message}`
+            : `Invite sent but failed to set up clinic access: ${insertError.message}`,
+        },
         500
       );
     }
@@ -165,7 +249,7 @@ export default async function handler(req: Request): Promise<Response> {
         return json(
           {
             success: true,
-            message: `Invitation sent to ${email}`,
+            message: reLinkedExisting ? `${email} was added to this clinic` : `Invitation sent to ${email}`,
             warning: `Could not add them to the service roster automatically: ${therapistError.message}. Add them from Settings → Team → Service roster.`,
           },
           200
@@ -173,7 +257,13 @@ export default async function handler(req: Request): Promise<Response> {
       }
     }
 
-    return json({ success: true, message: `Invitation sent to ${email}` }, 200);
+    return json(
+      {
+        success: true,
+        message: reLinkedExisting ? `${email} was added to this clinic` : `Invitation sent to ${email}`,
+      },
+      200
+    );
   } catch (error) {
     console.error('Unexpected error:', error);
     return json({ error: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}` }, 500);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
+import { Link, useBlocker, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -268,6 +268,30 @@ export function NoteEditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
+  // Last-saved (or last-hydrated) snapshot of `payload`, so a close/reload/
+  // back-navigation can tell "nothing changed" apart from "there's unsaved
+  // work" instead of losing a long clinical form silently either way.
+  // Snapshotting via JSON rather than a dirty boolean means an edit that's
+  // undone by hand (typed something, then cleared it back) doesn't still
+  // read as dirty.
+  const savedSnapshotRef = useRef<string>(JSON.stringify(emptyPayload()));
+  const isDirtyRef = useRef(false);
+  useEffect(() => {
+    isDirtyRef.current = JSON.stringify(payload) !== savedSnapshotRef.current;
+  }, [payload]);
+
+  // Read isDirtyRef (not a plain boolean) in both callbacks below so they
+  // always see the latest value rather than whatever it was when this
+  // render's closure was created — useBlocker only re-subscribes on
+  // deps/identity changes, not on every render.
+  useBlocker({
+    shouldBlockFn: () => {
+      if (!isDirtyRef.current) return false;
+      return !confirm('You have unsaved changes on this note. Leave without saving?');
+    },
+    enableBeforeUnload: () => isDirtyRef.current,
+  });
+
   const enrollment = useLiveQuery(() => (enrollmentId ? repos.patientModuleEnrollments.get(enrollmentId) : undefined), [enrollmentId]);
   const enrollmentNotes = useLiveQuery(() => (enrollmentId ? repos.consultationNotes.listByEnrollment(enrollmentId) : undefined), [enrollmentId]);
   const visitNumber = enrollmentNotes ? enrollmentNotes.length + (existingNote ? 0 : 1) : null;
@@ -384,23 +408,38 @@ export function NoteEditorPage() {
   // an Initial note so the "no prior note" banner never shows there.
   const [priorNoteHasCarryForwardData, setPriorNoteHasCarryForwardData] = useState(true);
 
+  // Which noteId's local editing state has already been hydrated from
+  // Dexie — set once, the first time `existingNote` resolves for a given
+  // noteId. The editor stays mounted between patient visits and across
+  // background sync pulls, so `existingNote` (a useLiveQuery) can emit a
+  // fresh object for this exact row well after the therapist has started
+  // typing (a sync pull reconciling it, the same note open on another
+  // device/tab). Without this gate, the effect below re-fires on every one
+  // of those emissions and clobbers whatever's unsaved with the row's
+  // last-synced state.
+  const hydratedNoteIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     async function init() {
-      if (existingNote) {
+      if (noteId) {
+        if (hydratedNoteIdRef.current === noteId) return;
+        if (!existingNote) return; // still resolving
+        hydratedNoteIdRef.current = noteId;
         setEnrollmentId(existingNote.enrollmentId);
         const mode = existingNote.noteMode ?? 'initial';
         setNoteMode(mode);
         setStatus(existingNote.status === 'completed' ? 'completed' : 'draft');
         setTherapistId(existingNote.therapistId);
         if (existingNote.assessmentPayload) {
-          setPayload(upcastPayload(existingNote.assessmentPayload));
+          const hydrated = upcastPayload(existingNote.assessmentPayload);
+          setPayload(hydrated);
+          savedSnapshotRef.current = JSON.stringify(hydrated);
         }
         if (mode === 'followup') setExpanded(new Set());
         setReady(true);
         return;
       }
-      if (noteId) return;
       const enrollment = await consultationNoteService.getOrCreateActiveEnrollment(clinic.id, patientId);
       const mode = await consultationNoteService.noteModeFor(enrollment.id);
       if (cancelled) return;
@@ -427,7 +466,9 @@ export function NoteEditorPage() {
         if (cancelled) return;
         setPriorNoteHasCarryForwardData(hasData);
         if (prevPayload) {
-          setPayload((p) => ({ ...p, chiefComplaint: prevPayload.chiefComplaint, history: prevPayload.history }));
+          const carried = { ...emptyPayload(), chiefComplaint: prevPayload.chiefComplaint, history: prevPayload.history };
+          setPayload(carried);
+          savedSnapshotRef.current = JSON.stringify(carried);
         }
       }
       setReady(true);
@@ -514,6 +555,18 @@ export function NoteEditorPage() {
       setError('Anatomical region is required before saving.');
       return;
     }
+    // The Screening banner (red flags) is otherwise purely informational —
+    // nothing stopped a note with e.g. cauda equina or fracture marked
+    // 'yes' from being marked completed same as any other. Not a silent
+    // block (a red flag can be a real, correctly-documented clinical
+    // state) — just a deliberate "are you sure" instead of a click that
+    // reads the same as every routine save.
+    if (nextStatus === 'completed' && derived.redFlagCount > 0) {
+      const proceed = confirm(
+        `This note has ${derived.redFlagCount} red flag${derived.redFlagCount > 1 ? 's' : ''} marked in Screening. Mark completed anyway?`
+      );
+      if (!proceed) return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -531,6 +584,8 @@ export function NoteEditorPage() {
         payload,
         nextStatus
       );
+      savedSnapshotRef.current = JSON.stringify(payload);
+      isDirtyRef.current = false;
       navigate({ to: '/patients/$patientId', params: { patientId } });
     } catch (e) {
       setError(toFriendlyMessage(e));

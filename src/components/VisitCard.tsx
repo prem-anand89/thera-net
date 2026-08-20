@@ -15,6 +15,7 @@ export const PAYMENT_CHIP: Record<
 > = {
   paid: { tone: 'green', label: paymentStatusPhrase('paid') },
   collected_no_receipt: { tone: 'green', label: paymentStatusPhrase('collected_no_receipt') },
+  partially_collected: { tone: 'amber', label: paymentStatusPhrase('partially_collected') },
   outstanding: { tone: 'amber', label: paymentStatusPhrase('outstanding') },
   uninvoiced: { tone: 'amber', label: paymentStatusPhrase('uninvoiced') },
   zero_session: { tone: 'slate', label: paymentStatusPhrase('zero_session') },
