@@ -36,15 +36,14 @@ test.describe('mobile list layouts', () => {
     }
   });
 
-  test('patients list uses card layout with bill in header', async ({ page }) => {
+  test('patients list uses flat rows with action in footer', async ({ page }) => {
     await login(page);
     await page.goto('/patients');
     await expect(page.getByRole('heading', { name: 'Patients', exact: true })).toBeVisible({ timeout: 15_000 });
 
     const section = page.locator('section').filter({ has: page.getByRole('heading', { name: 'All Patients' }) });
-    const card = section.locator('.rounded-2xl.border').first();
-    await expect(card).toBeVisible({ timeout: 10_000 });
-    await expect(card.getByRole('link', { name: '+ Visit' }).first()).toBeVisible();
+    await expect(section.getByRole('link', { name: '+ Visit' }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(section.getByRole('columnheader', { name: 'Name' })).toHaveCount(0);
   });
 
   test('ledger visits use card layout on phone', async ({ page }) => {
