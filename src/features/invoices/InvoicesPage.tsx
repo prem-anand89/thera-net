@@ -94,7 +94,76 @@ export function InvoicesPage() {
 
       <SectionCard title="Invoices">
         <div className="space-y-4">
-          <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+          {/* Below tab: — same boxed-card treatment Today's visits, Patients,
+              and Packages use, instead of forcing this 8-column table to
+              scroll sideways on a phone. */}
+          <div className="tab:hidden space-y-2">
+            {sortedInvoices.map((inv) => {
+              const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+              const initials = inv.patientSnapshot.name
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((w) => w[0]?.toUpperCase() ?? '')
+                .join('');
+              return (
+                <div
+                  key={inv.id}
+                  className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
+                      {initials || '?'}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-display text-sm font-medium text-[var(--ink)]">
+                        {inv.patientSnapshot.name}
+                      </div>
+                      <div className="text-xs text-[var(--muted)]">{inv.patientSnapshot.mrno}</div>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <Pill tone="slate">{inv.invoiceNo}</Pill>
+                    <Pill tone="slate">{formatDateDMY(inv.issuedAt)}</Pill>
+                    <Pill tone="slate">{inv.paymentMode}</Pill>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-num text-sm font-medium text-[var(--ink)]">
+                        {formatINR(inv.totalPaise)}
+                      </span>
+                      <Pill tone={status === 'paid' ? 'green' : 'amber'}>
+                        {status === 'paid' ? 'Paid' : 'Outstanding'}
+                      </Pill>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={busy}
+                        onClick={() => void toggleInvoiceStatus(inv.id, status)}
+                      >
+                        Mark {status === 'paid' ? 'outstanding' : 'paid'}
+                      </button>
+                      <Link
+                        to="/invoices/$invoiceId/print"
+                        params={{ invoiceId: inv.id }}
+                        className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+                      >
+                        Print
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {sortedInvoices.length === 0 && (
+              <p className="py-8 text-center text-sm text-[var(--muted)]">
+                No invoices issued yet — issue one from the Visits table.
+              </p>
+            )}
+          </div>
+
+          <div className="hidden tab:block overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
             <table className="min-w-full divide-y divide-[var(--border)]">
               <thead className="bg-[var(--paper)]">
                 <tr>
