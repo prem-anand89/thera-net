@@ -257,11 +257,10 @@ function PaymentStatusDisplay({
   );
 }
 
-/** Service · session · therapist · condition — one scannable muted line. */
+/** Service · therapist · condition — session count sits beside PackageThread dots. */
 function visitContextLine(data: VisitCardData): string {
   const parts: string[] = [];
   if (data.serviceName) parts.push(data.serviceName);
-  if (data.sessionIndex && data.packageTotal) parts.push(`${data.sessionIndex}/${data.packageTotal}`);
   if (data.therapistName) parts.push(data.therapistName);
   if (data.condition) parts.push(data.condition);
   return parts.join(' · ');
@@ -346,8 +345,11 @@ export function SharedVisitCard({
 
           {contextLine && <p className="mt-1 truncate text-xs text-[var(--muted)]">{contextLine}</p>}
           {data.sessionIndex && data.packageTotal && (
-            <div className="mt-1">
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
               <PackageThread sessionIndex={data.sessionIndex} packageTotal={data.packageTotal} />
+              <span className="font-num">
+                {data.sessionIndex}/{data.packageTotal}
+              </span>
             </div>
           )}
           {data.treatmentNotes && (
@@ -519,8 +521,11 @@ function VisitTable({
                   <td className={td}>
                     <div>{row.serviceName}</div>
                     {row.sessionIndex && row.packageTotal && (
-                      <div className="mt-1">
+                      <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
                         <PackageThread sessionIndex={row.sessionIndex} packageTotal={row.packageTotal} />
+                        <span className="font-num">
+                          {row.sessionIndex}/{row.packageTotal}
+                        </span>
                       </div>
                     )}
                   </td>
