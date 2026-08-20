@@ -50,8 +50,14 @@ function PatientNameBlock({
           {data.patientName}
         </Link>
         {onEditPatient && (
-          <button type="button" className="text-xs font-medium text-[var(--teal)] hover:underline" onClick={onEditPatient}>
-            Edit patient
+          <button
+            type="button"
+            className="text-[var(--muted)] hover:text-[var(--ink)]"
+            aria-label="Edit patient"
+            title="Edit patient"
+            onClick={onEditPatient}
+          >
+            ✎
           </button>
         )}
       </div>
@@ -486,8 +492,11 @@ function VisitTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
-            {rows.map((row) => (
-              <tr key={row.visitId} className="hover:bg-[var(--paper)]">
+            {rows.map((row, i) => (
+              <tr
+                key={row.visitId}
+                className={`hover:bg-[var(--teal-light)] ${i % 2 === 1 ? 'bg-[var(--paper)]' : ''}`}
+              >
                 {showDate && (
                   <td className={td}>
                     {formatDateDMY(row.visitDate)}
@@ -513,11 +522,14 @@ function VisitTable({
                 {columnPrefs.treatment && <td className={td}>{row.treatmentNotes ?? '—'}</td>}
                 {columnPrefs.service && (
                   <td className={td}>
-                    {row.serviceName}
+                    <div>
+                      {row.serviceName}
+                      {row.packageTotal ? ` (${row.packageTotal})` : ''}
+                    </div>
                     {row.sessionIndex && row.packageTotal && (
-                      <span className="ml-1.5">
+                      <div className="mt-1">
                         <PackageThread sessionIndex={row.sessionIndex} packageTotal={row.packageTotal} />
-                      </span>
+                      </div>
                     )}
                   </td>
                 )}
