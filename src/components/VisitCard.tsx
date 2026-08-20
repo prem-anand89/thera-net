@@ -257,6 +257,15 @@ function PaymentStatusDisplay({
   );
 }
 
+/** Service · therapist · condition — session count sits beside PackageThread dots. */
+function visitContextLine(data: VisitCardData): string {
+  const parts: string[] = [];
+  if (data.serviceName) parts.push(data.serviceName);
+  if (data.therapistName) parts.push(data.therapistName);
+  if (data.condition) parts.push(data.condition);
+  return parts.join(' · ');
+}
+
 export function SharedVisitCard({
   data,
   showDate,
@@ -296,67 +305,61 @@ export function SharedVisitCard({
   const chip = PAYMENT_CHIP[data.paymentState];
   const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
-  const sessionLabel =
-    data.sessionIndex && data.packageTotal ? `${data.sessionIndex} of ${data.packageTotal} sessions` : null;
-  const therapistLine = [data.therapistName, data.condition].filter(Boolean).join(' · ');
+  const contextLine = visitContextLine(data);
 
   const content = (
     <>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-start gap-3">
-          {showPatient && (
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
-              {initials || '?'}
+      <div className="flex items-start gap-2.5">
+        {showPatient && (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
+            {initials || '?'}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
+              {showDate && (
+                <div className={`text-xs text-[var(--muted)] ${showPatient ? 'mt-0.5' : ''}`}>
+                  {formatDateDMY(data.visitDate)}
+                  {data.editedBy && (
+                    <span className="ml-1" title={`Edited by ${data.editedBy}`}>
+                      ✎
+                    </span>
+                  )}
+                  {data.syncError && (
+                    <span className="ml-1 text-[var(--rust)]" title={`Sync issue: ${data.syncError}`}>
+                      ⚠
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex shrink-0 items-start gap-0.5">
+              {data.paymentState !== 'zero_session' && (
+                <span className="font-num text-sm font-semibold tabular-nums text-[var(--ink)]">{bill}</span>
+              )}
+              <RowActionsMenu data={data} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
+            </div>
+          </div>
+
+          {contextLine && <p className="mt-1 truncate text-xs text-[var(--muted)]">{contextLine}</p>}
+          {data.sessionIndex && data.packageTotal && (
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
+              <PackageThread sessionIndex={data.sessionIndex} packageTotal={data.packageTotal} />
+              <span className="font-num">
+                {data.sessionIndex}/{data.packageTotal}
+              </span>
             </div>
           )}
-          <div className="min-w-0">
-            {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
-            {showDate && (
-              <div className={`text-xs text-[var(--muted)] ${showPatient ? 'mt-0.5' : ''}`}>
-                {formatDateDMY(data.visitDate)}
-                {data.editedBy && (
-                  <span className="ml-1" title={`Edited by ${data.editedBy}`}>
-                    ✎
-                  </span>
-                )}
-                {data.syncError && (
-                  <span className="ml-1 text-[var(--rust)]" title={`Sync issue: ${data.syncError}`}>
-                    ⚠
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+          {data.treatmentNotes && (
+            <p className="mt-0.5 truncate text-xs text-[var(--muted)]">{data.treatmentNotes}</p>
+          )}
         </div>
-        <RowActionsMenu data={data} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
       </div>
 
-      {(data.serviceName || sessionLabel) && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {data.serviceName && <Pill tone="slate">{data.serviceName}</Pill>}
-          {sessionLabel && <Pill tone="slate">{sessionLabel}</Pill>}
-        </div>
-      )}
-
-      {(therapistLine || data.treatmentNotes) && (
-        <div className="mt-2 text-xs text-[var(--muted)]">
-          {therapistLine && (
-            <div className="flex items-center gap-1.5">
-              <span aria-hidden>👤</span>
-              <span>{therapistLine}</span>
-            </div>
-          )}
-          {data.treatmentNotes && <div className="mt-0.5">{data.treatmentNotes}</div>}
-        </div>
-      )}
-
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {data.paymentState !== 'zero_session' && (
-            <span className="font-num text-sm font-medium text-[var(--ink)]">{bill}</span>
-          )}
-          <Pill tone={chip.tone}>{chip.label}</Pill>
-        </div>
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
+        <Pill tone={chip.tone}>{chip.label}</Pill>
         <div className="flex flex-wrap items-center justify-end gap-1.5">
           {actions.includes('take_payment') && (
             <button
