@@ -636,17 +636,14 @@ function groupRowsByDate(rows: VisitCardData[], today: Date): DateGroupedRows[] 
 }
 
 /**
- * Below `tableFrom`: card list (grouped by date if `groupByDate` is set).
- * At `tableFrom` and up: table with Columns picker. Default `tab` (744px);
- * Workspace passes `lg` (1024px) so iPad portrait keeps cards while Ledger
- * and Patients switch to tables at the usual tablet breakpoint.
+ * Below tab: card list (grouped by date if `groupByDate` is set).
+ * At tab: and up, a table with a per-user Columns picker.
  */
 export function ResponsiveVisitList({
   rows,
   showDate,
   showPatient,
   groupByDate = false,
-  tableFrom = 'tab',
   onInvoice,
   onTakePayment,
   onEditPatient,
@@ -659,8 +656,6 @@ export function ResponsiveVisitList({
   showDate: boolean;
   showPatient: boolean;
   groupByDate?: boolean;
-  /** Width at which this list switches from cards to table. */
-  tableFrom?: 'tab' | 'lg';
   onInvoice: (row: VisitCardData) => void;
   onTakePayment?: (row: VisitCardData) => void;
   onEditPatient?: (row: VisitCardData) => void;
@@ -670,12 +665,10 @@ export function ResponsiveVisitList({
   canInvoice?: boolean;
 }) {
   const { prefs, setPref } = useVisitColumnPrefs();
-  const cardClass = tableFrom === 'lg' ? 'lg:hidden' : 'tab:hidden';
-  const tableClass = tableFrom === 'lg' ? 'hidden lg:block' : 'hidden tab:block';
 
   return (
     <>
-      <div className={cardClass}>
+      <div className="tab:hidden">
         {groupByDate ? (
           groupRowsByDate(rows, new Date()).map((group) => (
             <div
@@ -730,7 +723,7 @@ export function ResponsiveVisitList({
         {rows.length === 0 && <p className="py-8 text-center text-sm text-[var(--muted)]">No visits to show.</p>}
       </div>
 
-      <div className={tableClass}>
+      <div className="hidden tab:block">
         <VisitTable
           rows={rows}
           showDate={showDate}

@@ -38,11 +38,11 @@ test.describe('mobile list layouts', () => {
     }
   });
 
-  test('workspace keeps cards on iPad portrait width', async ({ page }) => {
+  test('workspace uses table on iPad portrait width', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await login(page);
     await expect(page.getByRole('heading', { name: /Today's visits?/ })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('columnheader', { name: 'Patient' })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: 'Patient' })).toBeVisible({ timeout: 15_000 });
   });
 
   test('patients list uses flat rows with action in footer', async ({ page }) => {
