@@ -135,6 +135,50 @@ function SectionIcon({ sectionKey, accent }: { sectionKey: SectionKey; accent: A
   );
 }
 
+function SettingsSectionNavButton({
+  section,
+  active,
+  dirty,
+  onSelect,
+  variant,
+}: {
+  section: (typeof SECTIONS)[number];
+  active: boolean;
+  dirty: boolean;
+  onSelect: () => void;
+  variant: 'mobile' | 'rail';
+}) {
+  const accent = ACCENT_VARS[section.accent];
+  const mobile = variant === 'mobile';
+  return (
+    <button
+      type="button"
+      data-section={section.key}
+      onClick={onSelect}
+      className={
+        mobile
+          ? 'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-2 text-xs font-medium'
+          : 'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm font-medium tab:w-full'
+      }
+      style={
+        active
+          ? {
+              ...(mobile ? { borderColor: accent.color } : {}),
+              background: accent.light,
+              color: accent.color,
+            }
+          : mobile
+            ? { borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--muted)' }
+            : { color: 'var(--muted)' }
+      }
+    >
+      <SectionIcon sectionKey={section.key} accent={section.accent} />
+      {section.label}
+      {dirty && <span className="text-[var(--rust)]">•</span>}
+    </button>
+  );
+}
+
 /** Only add/remove `key` if that actually changes membership — keeps the
  *  Set reference stable across no-op updates so dirty-tracking effects
  *  downstream don't re-fire needlessly. */
@@ -154,6 +198,7 @@ export function SettingsPage() {
   const [activeKey, setActiveKeyState] = useState<SectionKey>(search.tab ?? 'profile');
   const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
   const [pendingSectionKey, setPendingSectionKey] = useState<SectionKey | null>(null);
+  const mobileNavRef = useRef<HTMLDivElement>(null);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
@@ -177,6 +222,12 @@ export function SettingsPage() {
     setLandedOnDefault(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landedOnDefault, therapists, catalog, unlinkedCount, catalogEmpty]);
+
+  // Keep the active chip visible in the horizontal mobile strip.
+  useEffect(() => {
+    const el = mobileNavRef.current?.querySelector(`[data-section="${activeKey}"]`);
+    el?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+  }, [activeKey]);
 
   // First week's own two checkable gates (the rest of its steps are
   // behavioral tips, not something Dexie can confirm) — once both clear,
@@ -229,32 +280,33 @@ export function SettingsPage() {
       {showFirstWeek && <FirstWeekChecklist />}
 
       <div className="tab:flex tab:items-start tab:gap-6">
-        {/* Below tab: (Shell's own bottom tab bar owns the bottom of the
-            viewport now — a horizontal chip row down there would compete
-            with it), a grouped <select> stands in for the rail: seven flat
-            chips with no room for the Clinic/People & services/System
-            grouping read as one undifferentiated strip. Vertical rail with
-            real group headings at tab: and above, where there's width for
-            it. */}
-        <select
-          value={activeKey}
-          onChange={(e) => selectSection(e.target.value as SectionKey)}
-          className={`${inputCls} mb-4 tab:hidden`}
+        {/* Below tab: horizontal scroll chips (one tap per section) instead of
+            a grouped <select>. Sits under the page title, above the bottom
+            tab bar — same icon + label language as the vertical rail. */}
+        <nav
+          ref={mobileNavRef}
+          aria-label="Settings sections"
+          className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 tab:hidden"
         >
-          {SECTION_GROUPS.map((group) => (
-            <optgroup key={group.label} label={group.label}>
+          {SECTION_GROUPS.map((group, groupIndex) => (
+            <div key={group.label} className="flex shrink-0 items-center gap-2">
+              {groupIndex > 0 && <div className="h-8 w-px shrink-0 bg-[var(--border)]" aria-hidden />}
               {group.keys.map((key) => {
                 const s = SECTIONS.find((x) => x.key === key)!;
                 return (
-                  <option key={key} value={key}>
-                    {s.label}
-                    {dirtyKeys.has(key) ? ' •' : ''}
-                  </option>
+                  <SettingsSectionNavButton
+                    key={s.key}
+                    section={s}
+                    active={activeKey === s.key}
+                    dirty={dirtyKeys.has(s.key)}
+                    onSelect={() => selectSection(s.key)}
+                    variant="mobile"
+                  />
                 );
               })}
-            </optgroup>
+            </div>
           ))}
-        </select>
+        </nav>
         <nav className="mb-4 hidden gap-1 overflow-x-auto tab:mb-0 tab:flex tab:w-48 tab:shrink-0 tab:flex-col tab:gap-0.5 tab:overflow-visible">
           {SECTION_GROUPS.map((group) => (
             <div key={group.label} className="contents tab:mb-1.5 tab:block">
@@ -263,20 +315,15 @@ export function SettingsPage() {
               </p>
               {group.keys.map((key) => {
                 const s = SECTIONS.find((x) => x.key === key)!;
-                const active = activeKey === s.key;
-                const accent = ACCENT_VARS[s.accent];
                 return (
-                  <button
+                  <SettingsSectionNavButton
                     key={s.key}
-                    type="button"
-                    onClick={() => selectSection(s.key)}
-                    className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm font-medium tab:w-full"
-                    style={active ? { background: accent.light, color: accent.color } : { color: 'var(--muted)' }}
-                  >
-                    <SectionIcon sectionKey={s.key} accent={s.accent} />
-                    {s.label}
-                    {dirtyKeys.has(s.key) && <span className="text-[var(--rust)]">•</span>}
-                  </button>
+                    section={s}
+                    active={activeKey === s.key}
+                    dirty={dirtyKeys.has(s.key)}
+                    onSelect={() => selectSection(s.key)}
+                    variant="rail"
+                  />
                 );
               })}
             </div>
