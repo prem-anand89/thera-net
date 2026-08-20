@@ -6,6 +6,7 @@ import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
+import { clinicBillingConfig, type Visit } from '@/domain/types';
 import type { TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
@@ -21,6 +22,7 @@ import {
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
+import { SplitModal } from '@/components/SplitModal';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
@@ -35,8 +37,10 @@ function todayRowToCardData(
   openPackageGroupIds: Set<string>,
   isAdmin: boolean,
   myTherapistId: string | undefined,
-  canViewClinicalNotes: boolean
+  canViewClinicalNotes: boolean,
+  therapistSplit: boolean
 ): VisitCardData {
+  const canModify = isAdmin || row.therapistId === myTherapistId;
   return {
     visitId: row.visitId,
     visitDate: new Date().toISOString().slice(0, 10),
@@ -46,7 +50,7 @@ function todayRowToCardData(
     age: row.age,
     sex: row.sex,
     condition: row.condition,
-    canEdit: isAdmin || row.therapistId === myTherapistId,
+    canEdit: canModify,
     serviceName: row.serviceName,
     sessionIndex: row.sessionIndex,
     packageTotal: row.packageTotal,
@@ -56,10 +60,12 @@ function todayRowToCardData(
     paymentState: row.paymentState,
     invoiceId: row.invoiceId,
     canRepeat: Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId)),
+    canSplit: therapistSplit && row.billPaise > 0 && canModify,
+    hasSplit: Boolean(row.sharedTherapistId),
     // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
     // is_own_therapist). front_desk is never either, so this always comes
     // out false for them — matching RLS, which rejects their delete too.
-    canDelete: !row.invoiceId && (isAdmin || row.therapistId === myTherapistId),
+    canDelete: !row.invoiceId && canModify,
     needsNote: row.needsNote,
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: row.consultationNoteId,
@@ -70,12 +76,14 @@ export function WorkspacePage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
   const { canBill, canViewClinicalNotes, canEditSettings } = usePermissions();
+  const { therapistSplit } = clinicBillingConfig(clinic);
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
   const [, setVisitEditError] = useState<string | null>(null);
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
+  const [splitting, setSplitting] = useState<Visit | null>(null);
   const [pkgStatusFilter, setPkgStatusFilter] = useState<'open' | 'stale' | 'all'>('open');
   // Defaults on for anyone with a linked therapist record — admin included,
   // since in most solo/small clinics the admin *is* the primary therapist.
@@ -118,6 +126,12 @@ export function WorkspacePage() {
   }, [openPackages, pkgMineOnly, scope.myTherapistId, pkgStatusFilter]);
 
   const editPatient = useLiveQuery(() => (editPatientId ? repos.patients.get(editPatientId) : undefined), [editPatientId]);
+  // Only needed for the split dialog's "assisting therapist" picker — cheap
+  // to skip entirely for a clinic that hasn't turned the feature on.
+  const therapists = useLiveQuery(
+    () => (therapistSplit ? repos.therapists.list(clinic.id, true) : undefined),
+    [clinic.id, therapistSplit]
+  );
 
   function openInvoiceFor(data: VisitCardData) {
     setInvoicing({
@@ -127,6 +141,8 @@ export function WorkspacePage() {
       isPackage: data.packageTotal != null,
     });
   }
+
+  const therapistNameById = new Map((therapists ?? []).map((t) => [t.id, t.name]));
 
   return (
     <div className="space-y-5">
@@ -168,7 +184,14 @@ export function WorkspacePage() {
         ) : (
           <ResponsiveVisitList
             rows={today.visits.map((row) =>
-              todayRowToCardData(row, openPackageGroupIds, scope.isAdmin, scope.myTherapistId, canViewClinicalNotes)
+              todayRowToCardData(
+                row,
+                openPackageGroupIds,
+                scope.isAdmin,
+                scope.myTherapistId,
+                canViewClinicalNotes,
+                therapistSplit
+              )
             )}
             showDate={false}
             showPatient={true}
@@ -179,6 +202,15 @@ export function WorkspacePage() {
               setVisitEditError(null);
               setEditingVisitId(row.visitId);
             }}
+            onSplit={
+              therapistSplit
+                ? (row) => {
+                    void repos.visits.get(row.visitId).then((v) => {
+                      if (v) setSplitting(v);
+                    });
+                  }
+                : undefined
+            }
             onDelete={(row) => {
               if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
             }}
@@ -364,6 +396,15 @@ export function WorkspacePage() {
           patientId={newPatientId}
           onClose={() => setNewPatientId(null)}
           onOpenEdit={() => setEditPatientId(newPatientId)}
+        />
+      )}
+
+      {splitting && (
+        <SplitModal
+          visit={splitting}
+          therapists={(therapists ?? []).filter((t) => t.id !== splitting.therapistId)}
+          primaryName={therapistNameById.get(splitting.therapistId) ?? '-'}
+          onClose={() => setSplitting(null)}
         />
       )}
     </div>
