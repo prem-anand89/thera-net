@@ -44,6 +44,7 @@ const EXPECTED_VISIT_COLUMNS = new Set([
   'pending_payment_note', // Recently added, was missing before
   'clinical_status',
   'consultation_note_id',
+  'location',
   'deleted',
   'updated_at',
   'created_by',
@@ -73,6 +74,7 @@ const EXPECTED_CLINIC_COLUMNS = new Set([
   'upi_payee_name',
   'upi_qr_path',
   'upi_qr_enabled',
+  'signature_path',
   'updated_at',
   'created_by',
   'updated_by',

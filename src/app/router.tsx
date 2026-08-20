@@ -35,6 +35,9 @@ const MonthlyLedgerPrintPage = lazy(() =>
 const InvoicePrintPage = lazy(() =>
   import('@/features/invoices/InvoicePrintPage').then((m) => ({ default: m.InvoicePrintPage }))
 );
+const NotePrintPage = lazy(() =>
+  import('@/features/patients/NotePrintPage').then((m) => ({ default: m.NotePrintPage }))
+);
 const SettingsPage = lazy(() =>
   import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
 );
@@ -131,6 +134,12 @@ const noteEditorRoute = createRoute({
   component: NoteEditorPage,
 });
 
+const notePrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/notes/$noteId/print',
+  component: NotePrintPage,
+});
+
 // The monthly statement lives under the Reports nav tab (/insights), not
 // Ledger — see ReportsPage.tsx. This standalone route becomes a redirect
 // rather than a hard delete-to-404: nothing in the app links here anymore,
@@ -160,9 +169,18 @@ const invoicePrintRoute = createRoute({
   component: InvoicePrintPage,
 });
 
+// Kept in sync with SettingsPage's own SectionKey by hand — a route file
+// shouldn't import a feature's internal type just to validate a search
+// param, and the two rarely change.
+const SETTINGS_TABS = ['profile', 'billing', 'partner', 'team', 'services', 'data'] as const;
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
+  validateSearch: (search: Record<string, unknown>): { tab?: (typeof SETTINGS_TABS)[number] } =>
+    typeof search.tab === 'string' && (SETTINGS_TABS as readonly string[]).includes(search.tab)
+      ? { tab: search.tab as (typeof SETTINGS_TABS)[number] }
+      : {},
   component: SettingsPage,
 });
 
@@ -235,6 +253,7 @@ const routeTree = rootRoute.addChildren([
   patientProfileRoute,
   newNoteRoute,
   noteEditorRoute,
+  notePrintRoute,
   reportsRedirectRoute,
   reportsPrintRoute,
   invoicePrintRoute,

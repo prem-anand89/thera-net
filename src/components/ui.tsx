@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { paiseToRupees, rupeesToPaise, type Paise } from '@/domain/money';
 
 export const inputCls =
@@ -212,6 +212,88 @@ export function Panel({
           </button>
         </div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Centered confirm/type-to-confirm dialog — replaces native `confirm()` /
+ * `prompt()` across the app with the same visual shell as TakePaymentDialog
+ * / EditVisitModal / IssueInvoiceDialog. Plain confirms just need
+ * onConfirm/onCancel; a destructive action that used to gate on `prompt()`
+ * passes `typeToConfirm` — the confirm button stays disabled until
+ * `isMatch` returns true, so there's no separate "name didn't match" alert
+ * to write or dismiss.
+ */
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  destructive = false,
+  typeToConfirm,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  message: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  typeToConfirm?: { placeholder: string; isMatch: (typed: string) => boolean };
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const [typed, setTyped] = useState('');
+  useEffect(() => {
+    if (open) setTyped('');
+  }, [open]);
+
+  if (!open) return null;
+  const canConfirm = !typeToConfirm || typeToConfirm.isMatch(typed);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/40 p-4"
+      onClick={onCancel}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-sm space-y-3 rounded-[10px] bg-[var(--surface)] p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-sm font-semibold text-[var(--ink)]">{title}</h2>
+        <p className="whitespace-pre-line text-sm text-[var(--muted)]">{message}</p>
+        {typeToConfirm && (
+          <input
+            autoFocus
+            className={inputCls}
+            placeholder={typeToConfirm.placeholder}
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+          />
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className={btnSecondary} onClick={onCancel}>
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            className={
+              destructive
+                ? 'min-h-11 rounded-lg border border-[var(--rust)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)] disabled:opacity-50'
+                : btnPrimary
+            }
+            disabled={!canConfirm}
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </button>
+        </div>
       </div>
     </div>
   );
