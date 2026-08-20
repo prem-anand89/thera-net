@@ -16,6 +16,7 @@ export interface OpenPackageRow {
   packageTotal: number;
   startedOn: string;
   lastVisitOn: string;
+  lastVisitId: UUID;
   daysSinceLastVisit: number;
   stale: boolean;
   /** Therapist who logged the package's first session — for "my open packages" scoping. */
@@ -192,28 +193,6 @@ export interface SingleVisitPatientRow {
   noReturnReasonClosed: boolean;
 }
 
-export type PendingWorkKind = 'stale_package' | 'outstanding_payment' | 'incomplete_note';
-
-/**
- * One unresolved item from a prior visit, surfaced on the Workspace landing
- * page so nothing falls through the cracks between visits. Three unrelated
- * signals feed this list — a stale package, an unpaid bill, an unfinished
- * clinical note — deliberately kept as one merged, most-overdue-first feed
- * rather than three separate widgets.
- */
-export interface PendingWorkItem {
-  kind: PendingWorkKind;
-  patientId: UUID | null;
-  patientName: string;
-  mrno: string;
-  detail: string;
-  amountPaise: Paise | null;
-  visitId: UUID | null;
-  /** Set only for the invoice-outstanding case — lets "Mark paid" toggle the invoice's status directly. */
-  invoiceId: UUID | null;
-  daysSince: number;
-}
-
 /** Groups a clinic-wide visit list by patient, skipping deleted rows. */
 function groupByPatient(visits: Visit[]): Map<UUID, Visit[]> {
   const byPatient = new Map<UUID, Visit[]>();
@@ -280,6 +259,7 @@ export function createDashboardService(repos: Repos) {
             packageTotal: g.packageTotal,
             startedOn: g.startedOn,
             lastVisitOn: g.lastVisitOn,
+            lastVisitId: g.lastVisitId,
             daysSinceLastVisit: daysSince(g.lastVisitOn),
             stale: isStale(g.lastVisitOn),
             startedByTherapistId: g.startedByTherapistId,
@@ -514,104 +494,6 @@ export function createDashboardService(repos: Repos) {
       }
 
       return rows;
-    },
-
-    /**
-     * Everything left unresolved from a prior visit, most-overdue-first:
-     * packages gone quiet, bills with no payment on record, and visits whose
-     * clinical note was never finished. One merged feed for the Workspace
-     * landing page — the point is nothing needs a separate trip to another
-     * tab to notice it's still open.
-     */
-    async pendingWork(clinicId: UUID): Promise<PendingWorkItem[]> {
-      const [visits, patients, catalog, invoices, invoicePayments, directPayments] = await Promise.all([
-        repos.visits.list({ clinicId }),
-        repos.patients.list(clinicId),
-        repos.catalog.list(clinicId, true),
-        repos.invoices.list(clinicId),
-        repos.invoicePayments.list(clinicId),
-        repos.payments.list(clinicId),
-      ]);
-      const patientById = new Map(patients.map((p) => [p.id, p]));
-      const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
-      const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
-      const paidVisitIds = new Set(directPayments.map((p) => p.visitId));
-
-      const items: PendingWorkItem[] = [];
-
-      for (const g of groupOpenPackages(visits)) {
-        if (!isStale(g.lastVisitOn)) continue;
-        const patient = patientById.get(g.patientId);
-        const days = daysSince(g.lastVisitOn);
-        items.push({
-          kind: 'stale_package',
-          patientId: g.patientId,
-          patientName: patient?.name ?? 'Unknown',
-          mrno: patient?.mrno ?? '—',
-          detail: `${serviceNameById.get(g.serviceCatalogId) ?? 'Package'} — no visit in ${days} days`,
-          amountPaise: null,
-          visitId: null,
-          invoiceId: null,
-          daysSince: days,
-        });
-      }
-
-      // Invoices explicitly marked outstanding (invoices carry no patientId,
-      // only a name/mrno snapshot taken at issue time).
-      for (const inv of invoices) {
-        if (statusByInvoiceId.get(inv.id) !== 'outstanding') continue;
-        const days = daysSince(inv.issuedAt.slice(0, 10));
-        items.push({
-          kind: 'outstanding_payment',
-          patientId: null,
-          patientName: inv.patientSnapshot.name,
-          mrno: inv.patientSnapshot.mrno,
-          detail: `Invoice ${inv.invoiceNo} outstanding`,
-          amountPaise: inv.totalPaise,
-          visitId: null,
-          invoiceId: inv.id,
-          daysSince: days,
-        });
-      }
-
-      // Billed visits with neither an invoice nor a direct payment logged —
-      // the "collect later" case Phase 1/3 introduced.
-      for (const v of visits) {
-        if (v.deleted || v.actualBillPaise === 0 || v.invoiceId) continue;
-        if (paidVisitIds.has(v.id)) continue;
-        const patient = patientById.get(v.patientId);
-        const days = daysSince(v.visitDate);
-        items.push({
-          kind: 'outstanding_payment',
-          patientId: v.patientId,
-          patientName: patient?.name ?? 'Unknown',
-          mrno: patient?.mrno ?? '—',
-          detail: v.pendingPaymentNote ? `Marked pending: ${v.pendingPaymentNote}` : 'No payment recorded yet',
-          amountPaise: v.actualBillPaise,
-          visitId: v.id,
-          invoiceId: null,
-          daysSince: days,
-        });
-      }
-
-      for (const v of visits) {
-        if (v.deleted || v.clinicalStatus !== 'pending') continue;
-        const patient = patientById.get(v.patientId);
-        const days = daysSince(v.visitDate);
-        items.push({
-          kind: 'incomplete_note',
-          patientId: v.patientId,
-          patientName: patient?.name ?? 'Unknown',
-          mrno: patient?.mrno ?? '—',
-          detail: 'Clinical note not finished',
-          amountPaise: null,
-          visitId: v.id,
-          invoiceId: null,
-          daysSince: days,
-        });
-      }
-
-      return items.sort((a, b) => b.daysSince - a.daysSince);
     },
 
     /** Most recent visits first, for an at-a-glance strip — not filtered by date. */

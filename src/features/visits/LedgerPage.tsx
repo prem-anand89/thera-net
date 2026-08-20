@@ -156,6 +156,8 @@ export function LedgerPage() {
   const [datePreset, setDatePreset] = useState<DatePreset>('week');
   const [therapistId, setTherapistId] = useState('');
   const [onlyCollectedNoReceipt, setOnlyCollectedNoReceipt] = useState(false);
+  const [onlyNotCollected, setOnlyNotCollected] = useState(false);
+  const [onlyNotDocumented, setOnlyNotDocumented] = useState(false);
   const [patientQuery, setPatientQuery] = useState('');
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
@@ -296,8 +298,12 @@ export function LedgerPage() {
   );
 
   const visibleRows = useMemo(
-    () => (onlyCollectedNoReceipt ? cardRows.filter((r) => r.paymentState === 'collected_no_receipt') : cardRows),
-    [cardRows, onlyCollectedNoReceipt]
+    () =>
+      cardRows
+        .filter((r) => !onlyCollectedNoReceipt || r.paymentState === 'collected_no_receipt')
+        .filter((r) => !onlyNotCollected || r.paymentState === 'outstanding' || r.paymentState === 'uninvoiced')
+        .filter((r) => !onlyNotDocumented || r.needsNote),
+    [cardRows, onlyCollectedNoReceipt, onlyNotCollected, onlyNotDocumented]
   );
 
   // Billed = every visit's bill amount, same as before. Collected/outstanding
@@ -467,6 +473,24 @@ export function LedgerPage() {
               />
               Collected, no invoice
             </label>
+            <label className="flex items-center gap-1.5 pb-2 text-xs text-[var(--muted)]">
+              <input
+                type="checkbox"
+                checked={onlyNotCollected}
+                onChange={(e) => setOnlyNotCollected(e.target.checked)}
+              />
+              Not collected
+            </label>
+            {clinic.clinicalDocsEnabled && (
+              <label className="flex items-center gap-1.5 pb-2 text-xs text-[var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={onlyNotDocumented}
+                  onChange={(e) => setOnlyNotDocumented(e.target.checked)}
+                />
+                Not documented
+              </label>
+            )}
             <div className="ml-auto flex flex-wrap items-end gap-2">
               <div className="flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
                 {DATE_PRESETS.map((p) => (

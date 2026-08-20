@@ -31,8 +31,6 @@ export interface NewVisitInput {
    * (not this field) is what actually drives outstanding calculations.
    */
   pendingPaymentNote?: string | null;
-  /** Where the visit happened. Omit for the default clinic (in-person) case. */
-  location?: 'clinic' | 'home';
 }
 
 export function createVisitService(repos: Repos) {
@@ -99,7 +97,6 @@ export function createVisitService(repos: Repos) {
         hvPaise: split.hvPaise,
         invoiceId: null,
         pendingPaymentNote: input.pendingPaymentNote?.trim() || null,
-        ...(input.location ? { location: input.location } : {}),
         deleted: false,
         // Flags the visit for a clinical note until one is completed against
         // it (see consultationNoteService.saveAssessment, which closes this
