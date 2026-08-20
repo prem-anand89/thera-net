@@ -1400,7 +1400,100 @@ function Catalog() {
         Deactivate instead of deleting so history keeps resolving; per-session price is always
         derived (price ÷ sessions), never stored.
       </p>
-      <div className="overflow-x-auto">
+      <datalist id="catalog-categories">
+        {[...new Set((items ?? []).map((i) => i.category))].map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
+
+      {/* Below tab: — same boxed-card treatment Today's visits, Patients,
+          Packages, and Invoices use, instead of forcing this 6-column table
+          (with an inline add-row) to scroll sideways on a phone. The add
+          form moves to its own block below the list, since a form doesn't
+          fit a table-row shape once it's not a table. */}
+      <div className="tab:hidden space-y-2">
+        {(items ?? []).map((item) => (
+          <div
+            key={item.id}
+            className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm ${item.active ? '' : 'opacity-50'}`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="font-display text-sm font-medium text-[var(--ink)]">{item.name}</div>
+                <div className="text-xs text-[var(--muted)]">
+                  {item.category} · {item.sessionCount} session{item.sessionCount === 1 ? '' : 's'}
+                </div>
+              </div>
+              <span
+                className="shrink-0 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+                style={
+                  item.active
+                    ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
+                    : { background: 'var(--paper)', color: 'var(--muted)' }
+                }
+              >
+                {item.active ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <RupeeInput valuePaise={item.basePricePaise} onChange={(p) => void updatePrice(item, p)} />
+                {savedItemId === item.id && (
+                  <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">Saved</span>
+                )}
+              </div>
+              <button className="text-xs text-[var(--teal)] hover:underline" onClick={() => void toggleActive(item)}>
+                {item.active ? 'Deactivate' : 'Reactivate'}
+              </button>
+            </div>
+            <div className="mt-1 text-xs text-[var(--muted)]">
+              Per session: {formatINR(effectivePricePerSession(item))}
+            </div>
+          </div>
+        ))}
+
+        <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-3.5">
+          <p className="mb-2 text-xs font-medium text-[var(--muted)]">Add a package</p>
+          <div className="space-y-2">
+            <Field label="Category">
+              <input
+                className={inputCls}
+                placeholder="Category"
+                list="catalog-categories"
+                value={draft.category}
+                onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+              />
+            </Field>
+            <Field label="Package name">
+              <input
+                className={inputCls}
+                placeholder="Package name"
+                value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              />
+            </Field>
+            <div className="flex gap-2">
+              <Field label="Sessions">
+                <input
+                  type="number"
+                  min={1}
+                  className={inputCls}
+                  value={draft.sessionCount}
+                  onChange={(e) => setDraft({ ...draft, sessionCount: e.target.value })}
+                />
+              </Field>
+              <Field label="Price">
+                <RupeeInput valuePaise={draftPrice} onChange={setDraftPrice} />
+              </Field>
+            </div>
+            <button className={`${btnSecondary} w-full`} onClick={() => void addItem()}>
+              + Add
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="hidden tab:block overflow-x-auto">
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
             <tr>
@@ -1461,11 +1554,6 @@ function Catalog() {
                   value={draft.category}
                   onChange={(e) => setDraft({ ...draft, category: e.target.value })}
                 />
-                <datalist id="catalog-categories">
-                  {[...new Set((items ?? []).map((i) => i.category))].map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
               </td>
               <td className={td}>
                 <input

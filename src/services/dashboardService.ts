@@ -164,6 +164,8 @@ export interface TodayVisitRow {
   billPaise: Paise;
   invoiceId: UUID | null;
   paymentState: TodayPaymentState;
+  /** Set when this visit's revenue is already shared with another therapist. */
+  sharedTherapistId: UUID | null;
   /** True when this visit is flagged for a clinical note that hasn't been completed yet. */
   needsNote: boolean;
   /** Set once this visit's note is completed. */
@@ -738,6 +740,7 @@ export function createDashboardService(repos: Repos) {
             billPaise: v.actualBillPaise,
             invoiceId: v.invoiceId,
             paymentState,
+            sharedTherapistId: v.sharedTherapistId ?? null,
             needsNote: v.clinicalStatus === 'pending',
             consultationNoteId: v.consultationNoteId ?? null,
           };
