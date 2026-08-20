@@ -5,7 +5,6 @@ import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import { monthName } from '@/domain/fiscalYear';
-import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { SectionCard } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
 import { SERIES_COLORS } from '@/components/chartColors';
@@ -23,9 +22,12 @@ import { SERIES_COLORS } from '@/components/chartColors';
 export function TherapistComparisonCard() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
-  const labels = clinicShareLabels(clinic);
-  const { hospitalSplit } = clinicBillingConfig(clinic);
-  const revenueLabel = hospitalSplit ? `Post-Tax ${labels.own}` : 'Revenue';
+  // Gross revenue actually attributed per therapist (package-session-aware —
+  // see reportService's attributedRevenuePaise), not the post-tax clinic
+  // share — this chart compares therapists' own output, not the clinic's
+  // take after a hospital split, so the same figure applies whether or not
+  // a partner split is configured.
+  const revenueLabel = 'Revenue generated';
 
   const trend = useLiveQuery(
     () => (clinic.showTherapistComparison && !scope.isFrontDesk ? dashboardService.revenueTrend(clinic.id) : undefined),
@@ -90,7 +92,7 @@ export function TherapistComparisonCard() {
                 color: SERIES_COLORS[i],
                 values: trend.map((r) => {
                   const row = r.rows.find((row) => row.therapistName === name);
-                  return (hospitalSplit ? row?.postTaxPaise : row?.billPaise) ?? 0;
+                  return row?.attributedRevenuePaise ?? 0;
                 }),
               }))}
               formatValue={formatINR}

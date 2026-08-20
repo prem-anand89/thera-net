@@ -176,7 +176,7 @@ function RowActionsMenu({
                   onSplit();
                 }}
               >
-                {data.hasSplit ? 'Edit split' : 'Split'}
+                {data.hasSplit ? 'Edit split' : 'Split revenue'}
               </button>
             )}
             {data.canDelete && (

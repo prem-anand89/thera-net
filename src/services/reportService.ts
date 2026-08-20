@@ -1,4 +1,4 @@
-import type { UUID } from '@/domain/types';
+import type { UUID, Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { paiseToRupees, roundToRupeeHalfUp } from '@/domain/money';
 import { monthDateRange, monthName, type FyMonth } from '@/domain/fiscalYear';
@@ -28,6 +28,21 @@ export interface TherapistMonthRow {
    * different base). Total always equals total.postTaxPaise unchanged.
    */
   netPostTaxPaise: Paise;
+  /**
+   * Gross revenue attributed to whoever actually delivered each session,
+   * not whoever the package happened to be billed under. A package's full
+   * price is billed on one session's visit; every other session in it is
+   * logged separately at ₹0 so it isn't double-billed — which otherwise
+   * credits 100% of a multi-session package to whichever therapist logged
+   * session 1, even when a colleague delivered the rest. This spreads a
+   * package's total bill evenly across its sessions, attributed to each
+   * session's own therapist. Deliberately independent of billPaise/
+   * bmSharePaise/postTaxPaise/sharedPaise above — those stay exactly what
+   * was billed and split, for hospital reconciliation and the manual
+   * same-visit Split override; this is a separate "who actually generated
+   * this" lens, e.g. for comparing therapists or a revenue-share payout.
+   */
+  attributedRevenuePaise: Paise;
   visitCount: number;
   /** COUNT(DISTINCT mrno) — unique patients, not visit count (spec §5.2) */
   uniquePatients: number;
@@ -38,6 +53,39 @@ export interface MonthlyReport {
   title: string;
   rows: TherapistMonthRow[];
   total: TherapistMonthRow;
+}
+
+/**
+ * Per-visit attributed revenue for a set of visits (see TherapistMonthRow.
+ * attributedRevenuePaise). A non-package visit (or a package's own solo
+ * session) attributes to itself, unchanged. A visit inside a multi-session
+ * package instead gets an equal share of the WHOLE package's billed total,
+ * regardless of which single session actually carries that bill —
+ * `listByPackageGroup` pulls every session in the package regardless of the
+ * requested report's date range, so a package spanning two report periods
+ * (started one month, finished the next) still attributes correctly to
+ * whichever period each session actually happened in.
+ */
+async function attributedBillPaiseByVisit(
+  visits: Visit[],
+  repos: Pick<Repos, 'visits'>
+): Promise<Map<UUID, Paise>> {
+  const packageGroupIds = new Set(
+    visits.filter((v) => v.packageGroupId && (v.packageTotal ?? 1) > 1).map((v) => v.packageGroupId!)
+  );
+  const billSumByGroup = new Map<UUID, Paise>();
+  await Promise.all(
+    [...packageGroupIds].map(async (groupId) => {
+      const group = await repos.visits.listByPackageGroup(groupId);
+      billSumByGroup.set(groupId, group.reduce((sum, g) => sum + g.actualBillPaise, 0));
+    })
+  );
+  const attributed = new Map<UUID, Paise>();
+  for (const v of visits) {
+    const billSum = v.packageGroupId ? billSumByGroup.get(v.packageGroupId) : undefined;
+    attributed.set(v.id, billSum != null && v.packageTotal ? roundToRupeeHalfUp(billSum / v.packageTotal) : v.actualBillPaise);
+  }
+  return attributed;
 }
 
 /**
@@ -70,6 +118,7 @@ export function createReportService(repos: Repos) {
         adjustmentPaise: 0,
         sharedPaise: 0,
         netPostTaxPaise: 0,
+        attributedRevenuePaise: 0,
         visitCount: 0,
         uniquePatients: 0,
       });
@@ -116,6 +165,13 @@ export function createReportService(repos: Repos) {
         // total.netPostTaxPaise stays equal to total.postTaxPaise
       }
 
+      const attributedByVisit = await attributedBillPaiseByVisit(visits, repos);
+      for (const v of visits) {
+        const amt = attributedByVisit.get(v.id) ?? v.actualBillPaise;
+        rowFor(v.therapistId).attributedRevenuePaise += amt;
+        total.attributedRevenuePaise += amt;
+      }
+
       const rows = [...rowsById.values()].sort((a, b) =>
         a.therapistName.localeCompare(b.therapistName)
       );
@@ -142,6 +198,7 @@ export function createReportService(repos: Repos) {
       const header = [
         'Therapist',
         'Bill Amount',
+        'Revenue Generated',
         ...(hospitalSplit
           ? [`${labels.own} Share`, 'TDS Deducted', `Post Tax ${labels.own}`, `${labels.partner} Share`]
           : []),
@@ -152,6 +209,7 @@ export function createReportService(repos: Repos) {
       const line = (r: TherapistMonthRow) => [
         r.therapistName,
         paiseToRupees(r.billPaise),
+        paiseToRupees(r.attributedRevenuePaise),
         ...(hospitalSplit
           ? [
               paiseToRupees(r.bmSharePaise),
