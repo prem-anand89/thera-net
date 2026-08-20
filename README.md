@@ -20,7 +20,7 @@ framework.
 ### Visit Management & Ledger
 - **Visit entry & patient lookup** — search by MRNO/name (create-if-missing, walk-in MRNO auto-generation with sequential format `PREFIXYY-NNNN`, e.g. `W26-0001` for the first walk-in of 2026, resetting yearly and auto-widening past 9999), visit entry with catalog price autofill, price override with mandatory adjustment reason, package session tracking (1/3, 2/3 … with ₹0 continuations). Once a patient's confirmed, a reference panel shows their last visit and open-package progress alongside the form.
 - **Edit visit** — condition, treatment notes, and (while not yet invoiced) bill amount, therapist, and date, editable after the fact from Ledger's row menu — scoped to the visit's own therapist or an admin. Clinical fields stay editable after invoicing; only billing locks.
-- **Today-first workspace** — default landing page showing today's visits with payment state at a glance (Paid / Collect ₹X / ₹0 session), open packages with stale flags, pending work (outstanding invoices, incomplete notes), and recent visits in a rolling 7/15/30 day window.
+- **Today-first workspace** — default landing page showing today's visits with payment state at a glance (Paid / Collect ₹X / ₹0 session) as boxed cards on phone, a table on tablet/desktop, and a Packages panel (Open/Stale/All, "Mine only" for anyone with a linked therapist record) for tracking sessions still owed.
 - **Ledger** — full visit history with dense table, patient enrichment (last visit + count, treatment, condition, bill amount), therapist filter, date range search, bulk actions (invoice, repeat, split, delete). Visits/Invoices sub-tabs are URL-addressable (`/ledger?tab=invoices`); the Invoices sub-tab only appears for clinics with billing access. Invoices are only ever issued against a real visit — there's no standalone "manual invoice" path.
 
 ### Clinical Assessment & Notes
@@ -36,13 +36,13 @@ framework.
 ### Revenue & Invoicing
 - **Revenue split** — per visit, computed at billing time and stored with the rate snapshot: BM Share (75%), Post-Tax (90% of share), TDS (configurable basis: % of gross bill or % of BM share), HV share. Rounding: half-up to the rupee, once per visit — rollups reconcile by construction.
 - **Invoices** — server-issued, gap-free sequential numbers per clinic per FY (`BM/26-27/0001`), immutable once issued (DB triggers), printable A4/A5 with clinic letterhead + optional partner-hospital branding.
-- **Payment status & HV settlement** — a three-fact payment model (Billed / Collected / Receipted) distinguishes cash collected without a receipt from an issued-but-unpaid invoice, so neither reads as the other; quick "Mark paid" action from Workspace pending feed. Monthly report shows HV settlement card for variance tracking.
+- **Payment status & HV settlement** — a three-fact payment model (Billed / Collected / Receipted) distinguishes cash collected without a receipt from an issued-but-unpaid invoice, so neither reads as the other; take-payment/issue-invoice actions live directly on each visit row and on the Invoices tab. Monthly report shows HV settlement card for variance tracking.
 - **Billing access control** — clinics can restrict who is allowed to issue invoices ("everyone" vs. "billing staff only"), enforced server-side inside `issue_invoice()`, not just hidden in the UI.
 - **Monthly report** — fiscal-year-aware (Apr–Mar), per-therapist Bill / BM Share / TDS / Post-Tax / HV / unique patients + total, CSV export.
 
 ### Data & Offline
 - **Offline-first** — all entry works offline; changes queue in an outbox and sync when a connection returns. Invoice issuance is deliberately online-only (gap-free numbers need the server counter).
-- **Historical import** (Setup → Import historical visits) — one-time import of pre-go-live visits from the clinic's Excel ledger: matches/creates patients by MRNO, parses freeform service names into catalog items and package sessions, and flags anything it can't confidently resolve for manual review before committing.
+- **Historical import** (Settings → Import historical visits) — one-time import of pre-go-live visits from the clinic's Excel ledger: matches/creates patients by MRNO, parses freeform service names into catalog items and package sessions, and flags anything it can't confidently resolve for manual review before committing.
 
 ### Analytics & Dashboard
 - **Dashboard** — rolling last-6-months view: Post-Tax BM revenue trend, open packages sorted by days since last visit (flagged stale past 14 days), outstanding invoices summary. Charts are hand-built SVG (no charting dependency), colored from validated categorical palette.
@@ -217,15 +217,6 @@ patients work.
 - Confirmed via direct SQL reproduction against the live project, then re-verified after migration application.
 
 ---
-
-### Phase 4: Future (TBD)
-
-Candidates for future phases:
-- Region Modules (FaCE Scale, Facial Palsy assessment plugins within Core Assessment framework)
-- HEP exercise library & video linking
-- Protocol library & phase management
-- Treatment consent tracking (blocked: no data infrastructure exists)
-- Advanced outcome reports (MCID aggregation, multi-patient trends)
 
 ---
 
