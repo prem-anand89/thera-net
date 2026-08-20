@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { VISIT_COLUMN_LABELS, type UUID, type VisitColumnKey } from '@/domain/types';
 import type { Paise } from '@/domain/money';
@@ -130,6 +130,8 @@ function RowActionsMenu({
   onDelete: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const hasMenu =
     data.canRepeat ||
     (data.canEdit && onEdit) ||
@@ -137,20 +139,37 @@ function RowActionsMenu({
     data.canDelete;
   if (!hasMenu) return null;
 
+  function toggleMenu() {
+    if (!menuOpen && buttonRef.current) {
+      // Flip the menu above the button whenever there isn't room to open
+      // downward within the viewport — a kebab near the bottom of a short
+      // list otherwise opens off-screen, forcing a scroll to see it.
+      const rect = buttonRef.current.getBoundingClientRect();
+      const estimatedMenuHeight = 170;
+      setOpenUpward(window.innerHeight - rect.bottom < estimatedMenuHeight);
+    }
+    setMenuOpen((o) => !o);
+  }
+
   return (
     <div className="relative shrink-0">
       <button
+        ref={buttonRef}
         type="button"
         aria-label="Row actions"
         className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--paper)]"
-        onClick={() => setMenuOpen((o) => !o)}
+        onClick={toggleMenu}
       >
         ⋮
       </button>
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 top-full z-20 mt-1 min-w-32 rounded-md border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg">
+          <div
+            className={`absolute right-0 z-20 min-w-32 rounded-md border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg ${
+              openUpward ? 'bottom-full mb-1' : 'top-full mt-1'
+            }`}
+          >
             {data.canRepeat && (
               <Link
                 to="/visits/new"
@@ -476,7 +495,13 @@ function VisitTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* overflow-y-visible is deliberate, not decorative: setting only
+          overflow-x leaves overflow-y at its browser-computed default of
+          'auto' too (per the CSS overflow spec), which silently turns this
+          into a vertical clipping container — cutting off the row-actions
+          dropdown on the last row instead of letting it render past the
+          table's edge. */}
+      <div className="overflow-x-auto overflow-y-visible">
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
             <tr>
@@ -522,13 +547,13 @@ function VisitTable({
                 {columnPrefs.treatment && <td className={td}>{row.treatmentNotes ?? '—'}</td>}
                 {columnPrefs.service && (
                   <td className={td}>
-                    <div>
-                      {row.serviceName}
-                      {row.packageTotal ? ` (${row.packageTotal})` : ''}
-                    </div>
+                    <div>{row.serviceName}</div>
                     {row.sessionIndex && row.packageTotal && (
-                      <div className="mt-1">
+                      <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
                         <PackageThread sessionIndex={row.sessionIndex} packageTotal={row.packageTotal} />
+                        <span className="font-num">
+                          {row.sessionIndex}/{row.packageTotal}
+                        </span>
                       </div>
                     )}
                   </td>
