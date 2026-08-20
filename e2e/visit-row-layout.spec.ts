@@ -30,15 +30,27 @@ test.describe('visit row layout', () => {
     // Bill amount sits in the header row, not duplicated next to the status chip.
     await expect(visitSection.getByText(/₹/).first()).toBeVisible();
     await expect(visitSection.getByText(/₹/)).toHaveCount(1);
+    await expect(visitSection.getByText('Therapist', { exact: true }).first()).toBeVisible();
+    await expect(visitSection.getByText('Condition', { exact: true }).first()).toBeVisible();
   });
 });
 
 test.describe('visit row layout desktop', () => {
   test.use({ viewport: { width: 1024, height: 768 } });
 
-  test('ledger visits table renders on tablet width', async ({ page }) => {
+  test('ledger visits table column order', async ({ page }) => {
     await login(page);
     await page.goto('/ledger');
-    await expect(page.getByRole('columnheader', { name: 'Patient' })).toBeVisible({ timeout: 15_000 });
+    const headers = page.getByRole('columnheader');
+    await expect(headers.filter({ hasText: 'Patient' })).toBeVisible({ timeout: 15_000 });
+    const order = await headers.allTextContents();
+    const therapistIdx = order.indexOf('Therapist');
+    const conditionIdx = order.indexOf('Condition');
+    const treatmentIdx = order.indexOf('Treatment');
+    const serviceIdx = order.indexOf('Service');
+    expect(therapistIdx).toBeGreaterThan(-1);
+    expect(therapistIdx).toBeLessThan(conditionIdx);
+    expect(conditionIdx).toBeLessThan(treatmentIdx);
+    expect(treatmentIdx).toBeLessThan(serviceIdx);
   });
 });

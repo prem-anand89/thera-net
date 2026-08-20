@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { VISIT_COLUMN_LABELS, type UUID, type VisitColumnKey } from '@/domain/types';
+import { VISIT_COLUMN_LABELS, VISIT_OPTIONAL_COLUMN_ORDER, type UUID, type VisitColumnKey } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import type { VisitPaymentState } from '@/domain/paymentState';
-import { paymentActions, paymentStatusPhrase } from '@/domain/paymentState';
-import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum } from '@/components/ui';
+import { paymentActions, paymentStatusPhrase, paymentStatusShortPhrase } from '@/domain/paymentState';
+import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 
 export const PAYMENT_CHIP: Record<
@@ -201,6 +201,7 @@ function PaymentStatusDisplay({
   onTakePayment,
   canInvoice,
   showAmount = true,
+  compact = false,
 }: {
   data: VisitCardData;
   onInvoice: () => void;
@@ -208,10 +209,48 @@ function PaymentStatusDisplay({
   canInvoice: boolean;
   /** False in the table, where Bill is already its own column. */
   showAmount?: boolean;
+  /** Table cells: short label, horizontal layout — avoids tall rows on iPad portrait. */
+  compact?: boolean;
 }) {
   const chip = PAYMENT_CHIP[data.paymentState];
   const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
+  const statusLabel = compact ? paymentStatusShortPhrase(data.paymentState) : chip.label;
+  const statusTitle = compact ? paymentStatusPhrase(data.paymentState) : undefined;
+
+  if (compact) {
+    return (
+      <div className="flex max-w-[8.5rem] flex-wrap items-center gap-1">
+        <Pill tone={chip.tone}>
+          <span className="whitespace-nowrap" title={statusTitle}>
+            {statusLabel}
+          </span>
+        </Pill>
+        {canInvoice && actions.includes('take_payment') && (
+          <button
+            type="button"
+            className="whitespace-nowrap rounded-full bg-[var(--rust-light)] px-2 py-0.5 text-[10px] font-medium text-[var(--rust)] hover:opacity-80"
+            onClick={onTakePayment}
+          >
+            Pay
+          </button>
+        )}
+        {canInvoice && actions.includes('issue_invoice') && (
+          <button
+            type="button"
+            className="whitespace-nowrap rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10px] font-medium text-[var(--teal)] hover:opacity-80"
+            onClick={onInvoice}
+          >
+            Invoice
+          </button>
+        )}
+        {!canInvoice && paymentActions(data.paymentState).length > 0 && (
+          <Pill tone="slate">Ask billing</Pill>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
       {showAmount && data.paymentState !== 'zero_session' && (
@@ -258,12 +297,56 @@ function PaymentStatusDisplay({
   );
 }
 
-/** Therapist · condition — service is shown on its own line for readability. */
-function visitMetaLine(data: VisitCardData): string {
-  const parts: string[] = [];
-  if (data.therapistName) parts.push(data.therapistName);
-  if (data.condition) parts.push(data.condition);
-  return parts.join(' · ');
+/** Label + value rows for mobile cards — same field order as the optional table columns. */
+export function CardDetailRow({
+  label,
+  children,
+  clamp,
+}: {
+  label: string;
+  children: ReactNode;
+  clamp?: boolean;
+}) {
+  return (
+    <div className="flex gap-2 text-xs leading-snug">
+      <span className="w-[4.75rem] shrink-0 font-medium text-[var(--muted)]">{label}</span>
+      <span className={`min-w-0 flex-1 text-[var(--ink)] ${clamp ? 'line-clamp-2' : ''}`}>{children}</span>
+    </div>
+  );
+}
+
+function VisitCardDetails({ data }: { data: VisitCardData }) {
+  const hasSession = Boolean(data.sessionIndex && data.packageTotal);
+  const hasDetails =
+    data.serviceName || data.therapistName || data.condition || data.treatmentNotes || hasSession;
+  if (!hasDetails) return null;
+
+  return (
+    <div className="mt-1.5 space-y-1">
+      {data.therapistName && (
+        <CardDetailRow label="Therapist">
+          <TherapistPill>{data.therapistName}</TherapistPill>
+        </CardDetailRow>
+      )}
+      {data.condition && <CardDetailRow label="Condition">{data.condition}</CardDetailRow>}
+      {data.treatmentNotes && (
+        <CardDetailRow label="Treatment" clamp>
+          {data.treatmentNotes}
+        </CardDetailRow>
+      )}
+      {data.serviceName && <CardDetailRow label="Service">{data.serviceName}</CardDetailRow>}
+      {hasSession && (
+        <CardDetailRow label="Session">
+          <span className="inline-flex items-center gap-1.5">
+            <PackageThread sessionIndex={data.sessionIndex!} packageTotal={data.packageTotal!} />
+            <span className="font-num text-[var(--muted)]">
+              {data.sessionIndex}/{data.packageTotal}
+            </span>
+          </span>
+        </CardDetailRow>
+      )}
+    </div>
+  );
 }
 
 export function SharedVisitCard({
@@ -305,7 +388,6 @@ export function SharedVisitCard({
   const chip = PAYMENT_CHIP[data.paymentState];
   const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
-  const metaLine = visitMetaLine(data);
 
   const content = (
     <>
@@ -343,25 +425,7 @@ export function SharedVisitCard({
         </div>
       </div>
 
-      {(data.serviceName || metaLine || data.sessionIndex || data.treatmentNotes) && (
-        <div className="mt-1.5 space-y-0.5">
-          {data.serviceName && (
-            <p className="text-xs font-medium leading-snug text-[var(--ink)]">{data.serviceName}</p>
-          )}
-          {metaLine && <p className="text-xs leading-snug text-[var(--muted)]">{metaLine}</p>}
-          {data.sessionIndex && data.packageTotal && (
-            <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-              <PackageThread sessionIndex={data.sessionIndex} packageTotal={data.packageTotal} />
-              <span className="font-num">
-                {data.sessionIndex}/{data.packageTotal}
-              </span>
-            </div>
-          )}
-          {data.treatmentNotes && (
-            <p className="line-clamp-2 text-xs leading-snug text-[var(--muted)]">{data.treatmentNotes}</p>
-          )}
-        </div>
-      )}
+      <VisitCardDetails data={data} />
 
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
         <Pill tone={chip.tone}>{chip.label}</Pill>
@@ -456,7 +520,7 @@ function VisitTable({
             <>
               <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
               <div className="absolute right-0 top-full z-20 mt-1 min-w-40 rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 shadow-lg">
-                {(Object.keys(VISIT_COLUMN_LABELS) as VisitColumnKey[]).map((key) => (
+                {VISIT_OPTIONAL_COLUMN_ORDER.map((key) => (
                   <label key={key} className="flex items-center gap-2 px-1 py-1 text-xs text-[var(--ink)]">
                     <input
                       type="checkbox"
@@ -484,10 +548,9 @@ function VisitTable({
             <tr>
               {showDate && <th className={th}>Date</th>}
               {showPatient && <th className={th}>Patient</th>}
-              {columnPrefs.therapist && <th className={th}>Therapist</th>}
-              {columnPrefs.condition && <th className={th}>Condition</th>}
-              {columnPrefs.treatment && <th className={th}>Treatment</th>}
-              {columnPrefs.service && <th className={th}>Service</th>}
+              {VISIT_OPTIONAL_COLUMN_ORDER.map(
+                (key) => columnPrefs[key] && <th key={key} className={th}>{VISIT_COLUMN_LABELS[key]}</th>
+              )}
               <th className={thNum}>Bill</th>
               <th className={th}>Status</th>
               <th className={th}></th>
@@ -519,22 +582,43 @@ function VisitTable({
                     <PatientNameBlock data={row} onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined} />
                   </td>
                 )}
-                {columnPrefs.therapist && <td className={td}>{row.therapistName}</td>}
-                {columnPrefs.condition && <td className={td}>{row.condition ?? '—'}</td>}
-                {columnPrefs.treatment && <td className={td}>{row.treatmentNotes ?? '—'}</td>}
-                {columnPrefs.service && (
-                  <td className={td}>
-                    <div>{row.serviceName}</div>
-                    {row.sessionIndex && row.packageTotal && (
-                      <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                        <PackageThread sessionIndex={row.sessionIndex} packageTotal={row.packageTotal} />
-                        <span className="font-num">
-                          {row.sessionIndex}/{row.packageTotal}
-                        </span>
-                      </div>
-                    )}
-                  </td>
-                )}
+                {VISIT_OPTIONAL_COLUMN_ORDER.map((key) => {
+                  if (!columnPrefs[key]) return null;
+                  switch (key) {
+                    case 'service':
+                      return (
+                        <td key={key} className={td}>
+                          <div>{row.serviceName}</div>
+                          {row.sessionIndex && row.packageTotal && (
+                            <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                              <PackageThread sessionIndex={row.sessionIndex} packageTotal={row.packageTotal} />
+                              <span className="font-num">
+                                {row.sessionIndex}/{row.packageTotal}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                      );
+                    case 'therapist':
+                      return (
+                        <td key={key} className={td}>
+                          <TherapistPill>{row.therapistName}</TherapistPill>
+                        </td>
+                      );
+                    case 'condition':
+                      return (
+                        <td key={key} className={td}>
+                          {row.condition ?? '—'}
+                        </td>
+                      );
+                    case 'treatment':
+                      return (
+                        <td key={key} className={td}>
+                          {row.treatmentNotes ?? '—'}
+                        </td>
+                      );
+                  }
+                })}
                 <td className={tdNum}>{formatINR(row.billPaise)}</td>
                 <td className={td}>
                   <PaymentStatusDisplay
@@ -543,6 +627,7 @@ function VisitTable({
                     onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
                     canInvoice={canInvoice}
                     showAmount={false}
+                    compact
                   />
                 </td>
                 <td className={td}>
@@ -561,10 +646,7 @@ function VisitTable({
                   colSpan={
                     (showDate ? 1 : 0) +
                     (showPatient ? 1 : 0) +
-                    (columnPrefs.therapist ? 1 : 0) +
-                    (columnPrefs.condition ? 1 : 0) +
-                    (columnPrefs.treatment ? 1 : 0) +
-                    (columnPrefs.service ? 1 : 0) +
+                    (VISIT_OPTIONAL_COLUMN_ORDER.filter((key) => columnPrefs[key]).length) +
                     3
                   }
                   className="px-3 py-8 text-center text-sm text-[var(--muted)]"

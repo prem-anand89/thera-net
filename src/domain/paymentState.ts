@@ -69,6 +69,24 @@ export function paymentStatusPhrase(state: VisitPaymentState): string {
   }
 }
 
+/** Shorter labels for cramped table cells — full phrase stays on cards (title attr). */
+export function paymentStatusShortPhrase(state: VisitPaymentState): string {
+  switch (state) {
+    case 'zero_session':
+      return '₹0';
+    case 'paid':
+      return 'Invoiced';
+    case 'collected_no_receipt':
+      return 'Collected';
+    case 'partially_collected':
+      return 'Partial';
+    case 'outstanding':
+      return 'Due';
+    case 'uninvoiced':
+      return 'Unbilled';
+  }
+}
+
 /**
  * One line for everyone: billed → collected → invoice.
  * `bill` is already formatted (e.g. ₹500). Prefer `paymentStatusPhrase`

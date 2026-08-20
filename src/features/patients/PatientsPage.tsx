@@ -20,8 +20,9 @@ import {
   SectionCard,
   KebabMenu,
   menuItem,
+  TherapistPill,
 } from '@/components/ui';
-import { patientIdentityLine } from '@/components/VisitCard';
+import { patientIdentityLine, CardDetailRow } from '@/components/VisitCard';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
 
@@ -329,12 +330,12 @@ function AllPatientsSection() {
                 <tr>
                   <SortHeader label="Patient ID" k="mrno" sort={sort} />
                   <SortHeader label="Name" k="name" sort={sort} />
-                  <SortHeader label="Primary condition" k="condition" sort={sort} />
-                  <SortHeader label="Last visit" k="lastVisit" sort={sort} firstDir="desc" />
-                  <th className={th}>Therapist</th>
-                  <th className={th}>Treatment</th>
-                  <th className={th}>Bill</th>
                   <th className={th}>Phone</th>
+                  <th className={th}>Therapist</th>
+                  <SortHeader label="Primary condition" k="condition" sort={sort} />
+                  <th className={th}>Treatment</th>
+                  <SortHeader label="Last visit" k="lastVisit" sort={sort} firstDir="desc" />
+                  <th className={th}>Bill</th>
                   <th className={th}></th>
                 </tr>
               </thead>
@@ -363,7 +364,22 @@ function AllPatientsSection() {
                           </div>
                         )}
                       </td>
+                      <td className={td}>{p.phone ?? '-'}</td>
+                      <td className={td}>
+                        {stats?.latestVisit ? (
+                          <TherapistPill>{therapistName.get(stats.latestVisit.therapistId) ?? '-'}</TherapistPill>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
                       <td className={td}>{p.primaryCondition ?? '-'}</td>
+                      <td className={td}>
+                        {stats?.latestVisit?.treatmentNotes ? (
+                          <span className="text-xs">{stats.latestVisit.treatmentNotes}</span>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
                       <td className={td}>
                         {stats ? (
                           <>
@@ -384,22 +400,11 @@ function AllPatientsSection() {
                           <span className="text-xs text-[var(--muted)]">No visits yet</span>
                         )}
                       </td>
-                      <td className={td}>
-                        {stats?.latestVisit ? therapistName.get(stats.latestVisit.therapistId) ?? '-' : '-'}
-                      </td>
-                      <td className={td}>
-                        {stats?.latestVisit?.treatmentNotes ? (
-                          <span className="text-xs">{stats.latestVisit.treatmentNotes}</span>
-                        ) : (
-                          '-'
-                        )}
-                      </td>
                       <td className={`${td} text-xs`}>
                         {stats?.latestVisit
                           ? paymentStatusLine(latestState(stats.latestVisit), formatINR(stats.latestVisit.actualBillPaise))
                           : '-'}
                       </td>
-                      <td className={td}>{p.phone ?? '-'}</td>
                       <td className={`${td} whitespace-nowrap`}>
                         <Link
                           to="/visits/new"
@@ -535,13 +540,17 @@ function PatientCard({
       </div>
 
       {(p.primaryCondition || therapistLine || stats?.latestVisit?.treatmentNotes) && (
-        <div className="mt-1.5 space-y-0.5">
-          {p.primaryCondition && (
-            <p className="text-xs font-medium leading-snug text-[var(--ink)]">{p.primaryCondition}</p>
+        <div className="mt-1.5 space-y-1">
+          {therapistLine && (
+            <CardDetailRow label="Therapist">
+              <TherapistPill>{therapistLine}</TherapistPill>
+            </CardDetailRow>
           )}
-          {therapistLine && <p className="text-xs leading-snug text-[var(--muted)]">{therapistLine}</p>}
+          {p.primaryCondition && <CardDetailRow label="Condition">{p.primaryCondition}</CardDetailRow>}
           {stats?.latestVisit?.treatmentNotes && (
-            <p className="line-clamp-2 text-xs leading-snug text-[var(--muted)]">{stats.latestVisit.treatmentNotes}</p>
+            <CardDetailRow label="Treatment" clamp>
+              {stats.latestVisit.treatmentNotes}
+            </CardDetailRow>
           )}
         </div>
       )}

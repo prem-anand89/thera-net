@@ -94,11 +94,14 @@ export interface Clinic {
 export type VisitColumnKey = 'condition' | 'treatment' | 'therapist' | 'service';
 
 export const VISIT_COLUMN_LABELS: Record<VisitColumnKey, string> = {
+  service: 'Service',
+  therapist: 'Therapist',
   condition: 'Condition',
   treatment: 'Treatment',
-  therapist: 'Therapist',
-  service: 'Service',
 };
+
+/** Column order for visit tables and card detail rows — who → context → notes → service. */
+export const VISIT_OPTIONAL_COLUMN_ORDER: VisitColumnKey[] = ['therapist', 'condition', 'treatment', 'service'];
 
 export const DEFAULT_VISIT_COLUMN_PREFS: Record<VisitColumnKey, boolean> = {
   condition: true,
