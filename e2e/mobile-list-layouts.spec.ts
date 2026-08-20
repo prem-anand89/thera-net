@@ -21,9 +21,11 @@ test.describe('mobile list layouts', () => {
     await expect(page.getByRole('heading', { name: /Today's visits?/ })).toBeVisible({ timeout: 15_000 });
 
     const visitsSection = page.locator('section').filter({ has: page.getByRole('heading', { name: /Today's visits?/ }) });
-    const visitCard = visitsSection.locator('.rounded-2xl.border').first();
-    if ((await visitCard.count()) > 0) {
-      await expect(visitCard.getByText(/₹/)).toHaveCount(1);
+    const patientLink = visitsSection.getByRole('link').first();
+    if ((await patientLink.count()) > 0) {
+      await expect(visitsSection.getByText(/₹/).first()).toBeVisible();
+      await expect(visitsSection.getByText(/₹/)).toHaveCount(1);
+      await expect(visitsSection.getByRole('columnheader', { name: 'Patient' })).toHaveCount(0);
     }
 
     const packagesSection = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Packages' }) });
@@ -32,18 +34,25 @@ test.describe('mobile list layouts', () => {
     if ((await packageCard.count()) > 0) {
       await expect(packageCard.getByText(/Log visit/)).toBeVisible();
       await expect(packageCard.getByText(/Open|Stale/)).toBeVisible();
+      await expect(packagesSection.getByRole('columnheader', { name: 'Patient' })).toHaveCount(0);
     }
   });
 
-  test('patients list uses card layout with bill in header', async ({ page }) => {
+  test('workspace keeps cards on iPad portrait width', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await login(page);
+    await expect(page.getByRole('heading', { name: /Today's visits?/ })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('columnheader', { name: 'Patient' })).toHaveCount(0);
+  });
+
+  test('patients list uses flat rows with action in footer', async ({ page }) => {
     await login(page);
     await page.goto('/patients');
     await expect(page.getByRole('heading', { name: 'Patients', exact: true })).toBeVisible({ timeout: 15_000 });
 
     const section = page.locator('section').filter({ has: page.getByRole('heading', { name: 'All Patients' }) });
-    const card = section.locator('.rounded-2xl.border').first();
-    await expect(card).toBeVisible({ timeout: 10_000 });
-    await expect(card.getByRole('link', { name: '+ Visit' }).first()).toBeVisible();
+    await expect(section.getByRole('link', { name: '+ Visit' }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(section.getByRole('columnheader', { name: 'Name' })).toHaveCount(0);
   });
 
   test('ledger visits use card layout on phone', async ({ page }) => {
@@ -52,5 +61,13 @@ test.describe('mobile list layouts', () => {
     await expect(page.getByRole('link', { name: 'Generate report' })).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('.rounded-2xl.border').first()).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Patient' })).toHaveCount(0);
+  });
+
+  test('ledger uses table on iPad portrait width', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await login(page);
+    await page.goto('/ledger');
+    await expect(page.getByRole('link', { name: 'Generate report' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('columnheader', { name: 'Patient' })).toBeVisible({ timeout: 15_000 });
   });
 });

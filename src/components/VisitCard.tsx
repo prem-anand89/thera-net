@@ -258,10 +258,9 @@ function PaymentStatusDisplay({
   );
 }
 
-/** Service · therapist · condition — session count sits beside PackageThread dots. */
-function visitContextLine(data: VisitCardData): string {
+/** Therapist · condition — service is shown on its own line for readability. */
+function visitMetaLine(data: VisitCardData): string {
   const parts: string[] = [];
-  if (data.serviceName) parts.push(data.serviceName);
   if (data.therapistName) parts.push(data.therapistName);
   if (data.condition) parts.push(data.condition);
   return parts.join(' · ');
@@ -306,47 +305,52 @@ export function SharedVisitCard({
   const chip = PAYMENT_CHIP[data.paymentState];
   const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
-  const contextLine = visitContextLine(data);
+  const metaLine = visitMetaLine(data);
 
   const content = (
     <>
-      <div className="flex items-start gap-2.5">
-        {showPatient && (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
-            {initials || '?'}
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
-              {showDate && (
-                <div className={`text-xs text-[var(--muted)] ${showPatient ? 'mt-0.5' : ''}`}>
-                  {formatDateDMY(data.visitDate)}
-                  {data.editedBy && (
-                    <span className="ml-1" title={`Edited by ${data.editedBy}`}>
-                      ✎
-                    </span>
-                  )}
-                  {data.syncError && (
-                    <span className="ml-1 text-[var(--rust)]" title={`Sync issue: ${data.syncError}`}>
-                      ⚠
-                    </span>
-                  )}
-                </div>
-              )}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-start gap-2.5">
+          {showPatient && (
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-[11px] font-semibold text-[var(--teal)]">
+              {initials || '?'}
             </div>
-            <div className="flex shrink-0 items-start gap-0.5">
-              {data.paymentState !== 'zero_session' && (
-                <span className="font-num text-sm font-semibold tabular-nums text-[var(--ink)]">{bill}</span>
-              )}
-              <RowActionsMenu data={data} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
-            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
+            {showDate && (
+              <div className={`text-xs text-[var(--muted)] ${showPatient ? 'mt-0.5' : ''}`}>
+                {formatDateDMY(data.visitDate)}
+                {data.editedBy && (
+                  <span className="ml-1" title={`Edited by ${data.editedBy}`}>
+                    ✎
+                  </span>
+                )}
+                {data.syncError && (
+                  <span className="ml-1 text-[var(--rust)]" title={`Sync issue: ${data.syncError}`}>
+                    ⚠
+                  </span>
+                )}
+              </div>
+            )}
           </div>
+        </div>
+        <div className="flex shrink-0 items-start gap-0.5">
+          {data.paymentState !== 'zero_session' && (
+            <span className="font-num text-sm font-semibold tabular-nums text-[var(--ink)]">{bill}</span>
+          )}
+          <RowActionsMenu data={data} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
+        </div>
+      </div>
 
-          {contextLine && <p className="mt-1 truncate text-xs text-[var(--muted)]">{contextLine}</p>}
+      {(data.serviceName || metaLine || data.sessionIndex || data.treatmentNotes) && (
+        <div className="mt-1.5 space-y-0.5">
+          {data.serviceName && (
+            <p className="text-xs font-medium leading-snug text-[var(--ink)]">{data.serviceName}</p>
+          )}
+          {metaLine && <p className="text-xs leading-snug text-[var(--muted)]">{metaLine}</p>}
           {data.sessionIndex && data.packageTotal && (
-            <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
+            <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
               <PackageThread sessionIndex={data.sessionIndex} packageTotal={data.packageTotal} />
               <span className="font-num">
                 {data.sessionIndex}/{data.packageTotal}
@@ -354,10 +358,10 @@ export function SharedVisitCard({
             </div>
           )}
           {data.treatmentNotes && (
-            <p className="mt-0.5 truncate text-xs text-[var(--muted)]">{data.treatmentNotes}</p>
+            <p className="line-clamp-2 text-xs leading-snug text-[var(--muted)]">{data.treatmentNotes}</p>
           )}
         </div>
-      </div>
+      )}
 
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
         <Pill tone={chip.tone}>{chip.label}</Pill>
@@ -398,7 +402,7 @@ export function SharedVisitCard({
   );
 
   return boxed ? (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">{content}</div>
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-sm">{content}</div>
   ) : (
     <div className="py-3">{content}</div>
   );
@@ -632,18 +636,17 @@ function groupRowsByDate(rows: VisitCardData[], today: Date): DateGroupedRows[] 
 }
 
 /**
- * Below tab: the existing card list (grouped by date if `groupByDate` is
- * set — Ledger wants that, Workspace's flat "Seen today" doesn't). At tab:
- * and up, a table with a per-user Columns picker, backed by the same rows
- * and callbacks. One column config for both surfaces, per the callers
- * simply handing over normalized VisitCardData instead of each maintaining
- * its own rendering.
+ * Below `tableFrom`: card list (grouped by date if `groupByDate` is set).
+ * At `tableFrom` and up: table with Columns picker. Default `tab` (744px);
+ * Workspace passes `lg` (1024px) so iPad portrait keeps cards while Ledger
+ * and Patients switch to tables at the usual tablet breakpoint.
  */
 export function ResponsiveVisitList({
   rows,
   showDate,
   showPatient,
   groupByDate = false,
+  tableFrom = 'tab',
   onInvoice,
   onTakePayment,
   onEditPatient,
@@ -656,6 +659,8 @@ export function ResponsiveVisitList({
   showDate: boolean;
   showPatient: boolean;
   groupByDate?: boolean;
+  /** Width at which this list switches from cards to table. */
+  tableFrom?: 'tab' | 'lg';
   onInvoice: (row: VisitCardData) => void;
   onTakePayment?: (row: VisitCardData) => void;
   onEditPatient?: (row: VisitCardData) => void;
@@ -665,10 +670,12 @@ export function ResponsiveVisitList({
   canInvoice?: boolean;
 }) {
   const { prefs, setPref } = useVisitColumnPrefs();
+  const cardClass = tableFrom === 'lg' ? 'lg:hidden' : 'tab:hidden';
+  const tableClass = tableFrom === 'lg' ? 'hidden lg:block' : 'hidden tab:block';
 
   return (
     <>
-      <div className="tab:hidden">
+      <div className={cardClass}>
         {groupByDate ? (
           groupRowsByDate(rows, new Date()).map((group) => (
             <div
@@ -699,29 +706,31 @@ export function ResponsiveVisitList({
             </div>
           ))
         ) : (
-          <div className="space-y-2">
+          /* Flat list inside a SectionCard — use dividers, not a card per row,
+           * so we don't nest a box inside a box and waste horizontal space. */
+          <div className="-mx-5 divide-y divide-[var(--border)]">
             {rows.map((row) => (
-              <SharedVisitCard
-                key={row.visitId}
-                data={row}
-                showDate={showDate}
-                showPatient={showPatient}
-                boxed={true}
-                onInvoice={() => onInvoice(row)}
-                onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
-                onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
-                onEdit={onEdit ? () => onEdit(row) : undefined}
-                onSplit={onSplit ? () => onSplit(row) : undefined}
-                onDelete={() => onDelete(row)}
-                canInvoice={canInvoice}
-              />
+              <div key={row.visitId} className="px-5">
+                <SharedVisitCard
+                  data={row}
+                  showDate={showDate}
+                  showPatient={showPatient}
+                  onInvoice={() => onInvoice(row)}
+                  onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
+                  onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
+                  onEdit={onEdit ? () => onEdit(row) : undefined}
+                  onSplit={onSplit ? () => onSplit(row) : undefined}
+                  onDelete={() => onDelete(row)}
+                  canInvoice={canInvoice}
+                />
+              </div>
             ))}
           </div>
         )}
         {rows.length === 0 && <p className="py-8 text-center text-sm text-[var(--muted)]">No visits to show.</p>}
       </div>
 
-      <div className="hidden tab:block">
+      <div className={tableClass}>
         <VisitTable
           rows={rows}
           showDate={showDate}

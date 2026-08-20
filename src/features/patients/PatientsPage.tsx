@@ -292,36 +292,34 @@ function AllPatientsSection() {
         </div>
       ) : (
         <>
-          {/* Below tab: (744px) — the same boxed-card treatment
-              ResponsiveVisitList's flat lists use (e.g. Workspace's "Today's
-              visits"), on the same breakpoint, so a table this wide doesn't
-              force horizontal scrolling on a phone. */}
-          <div className="tab:hidden space-y-2">
+          {/* Below tab: (744px) — flat rows inside SectionCard, same as visit lists. */}
+          <div className="tab:hidden -mx-5 divide-y divide-[var(--border)]">
             {rows.map((p) => (
-              <PatientCard
-                key={p.id}
-                patient={p}
-                stats={visitStatsByPatient.get(p.id)}
-                pkg={openPackageByPatient.get(p.id)}
-                paymentLine={
-                  visitStatsByPatient.get(p.id)
-                    ? paymentStatusLine(
-                        latestState(visitStatsByPatient.get(p.id)!.latestVisit),
-                        formatINR(visitStatsByPatient.get(p.id)!.latestVisit.actualBillPaise)
-                      )
-                    : null
-                }
-                nextAction={
-                  visitStatsByPatient.get(p.id) &&
-                  canBill &&
-                  paymentActions(latestState(visitStatsByPatient.get(p.id)!.latestVisit)).includes('issue_invoice')
-                    ? 'invoice'
-                    : 'visit'
-                }
-                therapistName={therapistName}
-                onEdit={() => setEditing(p)}
-                onHide={() => void hide(p)}
-              />
+              <div key={p.id} className="px-5">
+                <PatientCard
+                  patient={p}
+                  stats={visitStatsByPatient.get(p.id)}
+                  pkg={openPackageByPatient.get(p.id)}
+                  paymentLine={
+                    visitStatsByPatient.get(p.id)
+                      ? paymentStatusLine(
+                          latestState(visitStatsByPatient.get(p.id)!.latestVisit),
+                          formatINR(visitStatsByPatient.get(p.id)!.latestVisit.actualBillPaise)
+                        )
+                      : null
+                  }
+                  nextAction={
+                    visitStatsByPatient.get(p.id) &&
+                    canBill &&
+                    paymentActions(latestState(visitStatsByPatient.get(p.id)!.latestVisit)).includes('issue_invoice')
+                      ? 'invoice'
+                      : 'visit'
+                  }
+                  therapistName={therapistName}
+                  onEdit={() => setEditing(p)}
+                  onHide={() => void hide(p)}
+                />
+              </div>
             ))}
           </div>
 
@@ -463,10 +461,9 @@ function AllPatientsSection() {
   );
 }
 
-/** Phone-width card for the patients list — same boxed-card language as
- *  SharedVisitCard (VisitCard.tsx): avatar + name + kebab header, pill
- *  badges, a muted secondary line, and a footer pairing status with the
- *  primary action. */
+/** Phone-width row for the patients list — flat inside SectionCard (no nested
+ *  box), matching SharedVisitCard: avatar header, full-width wrapped detail
+ *  lines, footer with status + primary action. */
 function PatientCard({
   patient: p,
   stats,
@@ -495,15 +492,15 @@ function PatientCard({
   const therapistLine = stats ? therapistName.get(stats.latestVisit.therapistId) : null;
 
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+    <div className="py-3">
       <div className="flex items-start justify-between gap-2">
-        <Link to="/patients/$patientId" params={{ patientId: p.id }} className="flex min-w-0 items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
+        <Link to="/patients/$patientId" params={{ patientId: p.id }} className="flex min-w-0 flex-1 items-start gap-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-[11px] font-semibold text-[var(--teal)]">
             {initials || '?'}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="font-display text-sm font-medium text-[var(--ink)]">{p.name}</div>
-            <div className="text-xs text-[var(--muted)]">
+            <div className="text-xs leading-snug text-[var(--muted)]">
               {patientIdentityLine(p.mrno, p.age, p.sex)}
               {p.phone && ` · ${p.phone}`}
             </div>
@@ -537,22 +534,34 @@ function PatientCard({
         </KebabMenu>
       </div>
 
-      {(p.primaryCondition || therapistLine) && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {p.primaryCondition && <Pill tone="slate">{p.primaryCondition}</Pill>}
-          {therapistLine && <Pill tone="slate">{therapistLine}</Pill>}
+      {(p.primaryCondition || therapistLine || stats?.latestVisit?.treatmentNotes) && (
+        <div className="mt-1.5 space-y-0.5">
+          {p.primaryCondition && (
+            <p className="text-xs font-medium leading-snug text-[var(--ink)]">{p.primaryCondition}</p>
+          )}
+          {therapistLine && <p className="text-xs leading-snug text-[var(--muted)]">{therapistLine}</p>}
+          {stats?.latestVisit?.treatmentNotes && (
+            <p className="line-clamp-2 text-xs leading-snug text-[var(--muted)]">{stats.latestVisit.treatmentNotes}</p>
+          )}
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted)]">
           {stats ? (
             <>
               <span className="font-num text-[var(--ink)]">{formatDateDMY(stats.lastVisitOn)}</span>
               <span>
                 {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
               </span>
-              {pkg && <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />}
+              {pkg && (
+                <span className="inline-flex items-center gap-1.5">
+                  <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />
+                  <span className="font-num">
+                    {pkg.sessionsLogged}/{pkg.packageTotal}
+                  </span>
+                </span>
+              )}
               {paymentLine && <span>{paymentLine}</span>}
             </>
           ) : (
