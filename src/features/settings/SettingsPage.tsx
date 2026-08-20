@@ -11,6 +11,7 @@ import { resizeImageToBlob } from '@/lib/resizeImage';
 import { SUPABASE_URL } from '@/lib/env';
 import { db } from '@/lib/db';
 import { formatINR } from '@/domain/money';
+import { MONTH_NAMES } from '@/domain/fiscalYear';
 import {
   clinicShareLabels,
   effectivePricePerSession,
@@ -382,14 +383,26 @@ function SectionSaveBar({
   );
 }
 
-type ProfileFields = Pick<Clinic, 'name' | 'address' | 'phone' | 'email' | 'walkInMrnoPrefix' | 'logoPath'>;
+type ProfileFields = Pick<
+  Clinic,
+  'name' | 'address' | 'phone' | 'email' | 'walkInMrnoPrefix' | 'logoPath' | 'clinicType'
+>;
 
 function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =
     useClinicSectionForm<ProfileFields>(
-      (c) => ({ name: c.name, address: c.address, phone: c.phone, email: c.email, walkInMrnoPrefix: c.walkInMrnoPrefix, logoPath: c.logoPath }),
+      (c) => ({
+        name: c.name,
+        address: c.address,
+        phone: c.phone,
+        email: c.email,
+        walkInMrnoPrefix: c.walkInMrnoPrefix,
+        logoPath: c.logoPath,
+        clinicType: c.clinicType,
+      }),
       onDirtyChange
     );
+  const logoPreviewUrl = publicLogoUrl(form.logoPath);
 
   async function uploadLogo(file: File) {
     setError(null);
@@ -437,6 +450,23 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         <Field label="Email">
           <input className={inputCls} value={form.email ?? ''} onChange={(e) => set({ email: e.target.value || null })} />
         </Field>
+        <Field
+          label={
+            <>
+              Therapist setup
+              <InfoTip text="Individual: single therapist practice. Multiple: clinic with multiple therapists. This affects billing and reporting." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.clinicType ?? 'multiple'}
+            onChange={(e) => set({ clinicType: e.target.value as Clinic['clinicType'] })}
+          >
+            <option value="individual">Individual Therapist</option>
+            <option value="multiple">Multiple Therapists</option>
+          </select>
+        </Field>
         <Field label="Clinic logo">
           <input
             type="file"
@@ -444,6 +474,9 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
             className={inputCls}
             onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])}
           />
+          {logoPreviewUrl && (
+            <img src={logoPreviewUrl} alt="Current clinic logo" className="mt-2 h-14 w-auto object-contain" />
+          )}
         </Field>
       </div>
       <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
@@ -551,14 +584,17 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
           <input className={inputCls} value={form.gstNo ?? ''} onChange={(e) => set({ gstNo: e.target.value || null })} />
         </Field>
         <Field label="Fiscal year starts in month">
-          <input
-            type="number"
-            min={1}
-            max={12}
+          <select
             className={inputCls}
             value={form.fyStartMonth}
             onChange={(e) => set({ fyStartMonth: Number(e.target.value) })}
-          />
+          >
+            {MONTH_NAMES.map((label, i) => (
+              <option key={label} value={i + 1}>
+                {label}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field
           label={
@@ -607,41 +643,45 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         >
           <BoolToggle value={form.upiQrEnabled ?? false} onChange={(v) => set({ upiQrEnabled: v })} />
         </Field>
-        <Field label="UPI ID (VPA)">
-          <input
-            className={inputCls}
-            placeholder="clinic@okaxis"
-            value={form.upiVpa ?? ''}
-            onChange={(e) => set({ upiVpa: e.target.value })}
-            autoComplete="off"
-          />
-        </Field>
-        <Field
-          label={
-            <>
-              Payee name
-              <InfoTip text="Shown in the patient's UPI app. Leave blank to use the clinic name." />
-            </>
-          }
-        >
-          <input
-            className={inputCls}
-            placeholder={clinic.name}
-            value={form.upiPayeeName ?? ''}
-            onChange={(e) => set({ upiPayeeName: e.target.value })}
-          />
-        </Field>
-        <Field label="QR image (optional)">
-          <input
-            type="file"
-            accept="image/*"
-            className={inputCls}
-            onChange={(e) => e.target.files?.[0] && void uploadUpiQr(e.target.files[0])}
-          />
-          {qrPreviewUrl && (
-            <img src={qrPreviewUrl} alt="Uploaded clinic UPI QR" className="mt-2 h-24 w-24 object-contain" />
-          )}
-        </Field>
+        {form.upiQrEnabled && (
+          <>
+            <Field label="UPI ID (VPA)">
+              <input
+                className={inputCls}
+                placeholder="clinic@okaxis"
+                value={form.upiVpa ?? ''}
+                onChange={(e) => set({ upiVpa: e.target.value })}
+                autoComplete="off"
+              />
+            </Field>
+            <Field
+              label={
+                <>
+                  Payee name
+                  <InfoTip text="Shown in the patient's UPI app. Leave blank to use the clinic name." />
+                </>
+              }
+            >
+              <input
+                className={inputCls}
+                placeholder={clinic.name}
+                value={form.upiPayeeName ?? ''}
+                onChange={(e) => set({ upiPayeeName: e.target.value })}
+              />
+            </Field>
+            <Field label="QR image (optional)">
+              <input
+                type="file"
+                accept="image/*"
+                className={inputCls}
+                onChange={(e) => e.target.files?.[0] && void uploadUpiQr(e.target.files[0])}
+              />
+              {qrPreviewUrl && (
+                <img src={qrPreviewUrl} alt="Uploaded clinic UPI QR" className="mt-2 h-24 w-24 object-contain" />
+              )}
+            </Field>
+          </>
+        )}
       </div>
 
       <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">Invoice signature</h3>
@@ -677,7 +717,6 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
 
 type PartnerFields = Pick<
   Clinic,
-  | 'clinicType'
   | 'hasPartner'
   | 'enableTherapistSplit'
   | 'partnerHospitalName'
@@ -696,7 +735,6 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =
     useClinicSectionForm<PartnerFields>(
       (c) => ({
-        clinicType: c.clinicType,
         hasPartner: c.hasPartner,
         enableTherapistSplit: c.enableTherapistSplit,
         partnerHospitalName: c.partnerHospitalName,
@@ -710,6 +748,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
       onDirtyChange
     );
   const labels = clinicShareLabels(form);
+  const partnerLogoPreviewUrl = publicLogoUrl(form.partnerHospitalLogoPath);
 
   async function uploadPartnerLogo(file: File) {
     setError(null);
@@ -733,23 +772,6 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         <Field
           label={
             <>
-              Therapist setup
-              <InfoTip text="Individual: single therapist practice. Multiple: clinic with multiple therapists. This affects billing and reporting." />
-            </>
-          }
-        >
-          <select
-            className={inputCls}
-            value={form.clinicType ?? 'multiple'}
-            onChange={(e) => set({ clinicType: e.target.value as Clinic['clinicType'] })}
-          >
-            <option value="individual">Individual Therapist</option>
-            <option value="multiple">Multiple Therapists</option>
-          </select>
-        </Field>
-        <Field
-          label={
-            <>
               Partner with therapist/external org
               <InfoTip text="Enable if your clinic partners with a therapist or external organization (hospital, etc.) for revenue sharing, tax deduction, or other arrangements." />
             </>
@@ -757,16 +779,18 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         >
           <BoolToggle value={form.hasPartner ?? false} onChange={(v) => set({ hasPartner: v })} />
         </Field>
-        <Field
-          label={
-            <>
-              Track therapist splits
-              <InfoTip text="Lets a visit's revenue be credited between two therapists (a Split action + Shared/Net report columns). Turn off if you don't attribute revenue across therapists." />
-            </>
-          }
-        >
-          <BoolToggle value={form.enableTherapistSplit !== false} onChange={(v) => set({ enableTherapistSplit: v })} />
-        </Field>
+        {(clinic.clinicType ?? 'multiple') === 'multiple' && (
+          <Field
+            label={
+              <>
+                Track therapist splits
+                <InfoTip text="Lets a visit's revenue be credited between two therapists (a Split action + Shared/Net report columns). Turn off if you don't attribute revenue across therapists." />
+              </>
+            }
+          >
+            <BoolToggle value={form.enableTherapistSplit !== false} onChange={(v) => set({ enableTherapistSplit: v })} />
+          </Field>
+        )}
         {form.hasPartner && (
           <>
             <Field label="Partner name (prints on invoices if set)">
@@ -807,6 +831,9 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
                 className={inputCls}
                 onChange={(e) => e.target.files?.[0] && void uploadPartnerLogo(e.target.files[0])}
               />
+              {partnerLogoPreviewUrl && (
+                <img src={partnerLogoPreviewUrl} alt="Current partner logo" className="mt-2 h-14 w-auto object-contain" />
+              )}
             </Field>
           </>
         )}
@@ -930,10 +957,6 @@ function FeaturesSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) =>
           <BoolToggle value={form.showTherapistComparison ?? false} onChange={(v) => set({ showTherapistComparison: v })} />
         </Field>
       </div>
-      <p className="mt-3 text-xs text-[var(--muted)]">
-        Which Visits-table columns show is now a per-user choice, in the column picker on the
-        Ledger and Workspace tables themselves.
-      </p>
       <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void save()} onCancel={cancel} error={error} />
     </SectionCard>
   );
