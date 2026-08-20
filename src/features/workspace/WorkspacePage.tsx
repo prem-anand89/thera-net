@@ -323,7 +323,9 @@ export function WorkspacePage() {
                       <td className={tdNum}>
                         <span className="inline-flex items-center gap-1.5">
                           <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
-                          {p.sessionsLogged} / {p.packageTotal}
+                          <span className="font-num">
+                            {p.sessionsLogged}/{p.packageTotal}
+                          </span>
                         </span>
                       </td>
                       <td className={td}>{p.daysSinceLastVisit}d ago</td>
