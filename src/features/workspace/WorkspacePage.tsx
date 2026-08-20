@@ -228,51 +228,93 @@ export function WorkspacePage() {
         {filteredPackages.length === 0 ? (
           <p className="py-6 text-center text-sm text-[var(--muted)]">No packages match this filter.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-[var(--border)]">
-              <thead className="bg-[var(--paper)]">
-                <tr>
-                  <th className={th}>Patient</th>
-                  <th className={th}>Package</th>
-                  <th className={th}>Therapist</th>
-                  <th className={thNum}>Sessions</th>
-                  <th className={th}>Last visit</th>
-                  <th className={th}>Status</th>
-                  <th className={th}></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {filteredPackages.map((p) => (
-                  <tr key={p.packageGroupId}>
-                    <td className={td}>
-                      {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
-                    </td>
-                    <td className={td}>{p.serviceName}</td>
-                    <td className={td}>{p.startedByTherapistName}</td>
-                    <td className={tdNum}>
-                      <span className="inline-flex items-center gap-1.5">
-                        <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
-                        {p.sessionsLogged} / {p.packageTotal}
+          <>
+            {/* Below tab: — same boxed-card treatment Today's visits and
+                Patients use, on the same breakpoint, instead of forcing a
+                7-column table to scroll sideways on a phone. */}
+            <div className="tab:hidden space-y-2">
+              {filteredPackages.map((p) => (
+                <div
+                  key={p.packageGroupId}
+                  className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <Link to="/patients/$patientId" params={{ patientId: p.patientId }} className="min-w-0">
+                      <div className="font-display text-sm font-medium text-[var(--ink)]">{p.patientName}</div>
+                      <div className="text-xs text-[var(--muted)]">{p.mrno}</div>
+                    </Link>
+                    <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <Pill tone="slate">{p.serviceName}</Pill>
+                    <Pill tone="slate">{p.startedByTherapistName}</Pill>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                      <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
+                      <span className="font-num">
+                        {p.sessionsLogged}/{p.packageTotal}
                       </span>
-                    </td>
-                    <td className={td}>{p.daysSinceLastVisit}d ago</td>
-                    <td className={td}>
-                      <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
-                    </td>
-                    <td className={td}>
-                      <Link
-                        to="/visits/new"
-                        search={{ repeatVisitId: p.lastVisitId }}
-                        className="text-xs font-medium text-[var(--teal)] hover:underline"
-                      >
-                        Log visit
-                      </Link>
-                    </td>
+                      <span>· {p.daysSinceLastVisit}d ago</span>
+                    </div>
+                    <Link
+                      to="/visits/new"
+                      search={{ repeatVisitId: p.lastVisitId }}
+                      className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                    >
+                      Log visit
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden tab:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-[var(--border)]">
+                <thead className="bg-[var(--paper)]">
+                  <tr>
+                    <th className={th}>Patient</th>
+                    <th className={th}>Package</th>
+                    <th className={th}>Therapist</th>
+                    <th className={thNum}>Sessions</th>
+                    <th className={th}>Last visit</th>
+                    <th className={th}>Status</th>
+                    <th className={th}></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {filteredPackages.map((p) => (
+                    <tr key={p.packageGroupId}>
+                      <td className={td}>
+                        {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                      </td>
+                      <td className={td}>{p.serviceName}</td>
+                      <td className={td}>{p.startedByTherapistName}</td>
+                      <td className={tdNum}>
+                        <span className="inline-flex items-center gap-1.5">
+                          <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
+                          {p.sessionsLogged} / {p.packageTotal}
+                        </span>
+                      </td>
+                      <td className={td}>{p.daysSinceLastVisit}d ago</td>
+                      <td className={td}>
+                        <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
+                      </td>
+                      <td className={td}>
+                        <Link
+                          to="/visits/new"
+                          search={{ repeatVisitId: p.lastVisitId }}
+                          className="text-xs font-medium text-[var(--teal)] hover:underline"
+                        >
+                          Log visit
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </SectionCard>
 

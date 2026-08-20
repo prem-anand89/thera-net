@@ -18,7 +18,10 @@ import {
   Pill,
   PackageThread,
   SectionCard,
+  KebabMenu,
+  menuItem,
 } from '@/components/ui';
+import { patientIdentityLine } from '@/components/VisitCard';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
 
@@ -289,10 +292,11 @@ function AllPatientsSection() {
         </div>
       ) : (
         <>
-          {/* Below tab: (744px) — the same card/table split ResponsiveVisitList
-              uses for Ledger, on the same breakpoint, so a table this wide
-              doesn't force horizontal scrolling on a phone. */}
-          <div className="tab:hidden divide-y divide-[var(--border)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+          {/* Below tab: (744px) — the same boxed-card treatment
+              ResponsiveVisitList's flat lists use (e.g. Workspace's "Today's
+              visits"), on the same breakpoint, so a table this wide doesn't
+              force horizontal scrolling on a phone. */}
+          <div className="tab:hidden space-y-2">
             {rows.map((p) => (
               <PatientCard
                 key={p.id}
@@ -459,9 +463,10 @@ function AllPatientsSection() {
   );
 }
 
-/** Phone-width row for the patients list — same visual language as
- *  SharedVisitCard (VisitCard.tsx): avatar initials, name/mrno header,
- *  a muted secondary line, actions at the end. */
+/** Phone-width card for the patients list — same boxed-card language as
+ *  SharedVisitCard (VisitCard.tsx): avatar + name + kebab header, pill
+ *  badges, a muted secondary line, and a footer pairing status with the
+ *  primary action. */
 function PatientCard({
   patient: p,
   stats,
@@ -469,6 +474,8 @@ function PatientCard({
   paymentLine,
   nextAction,
   therapistName,
+  onEdit,
+  onHide,
 }: {
   patient: Patient;
   stats: { lastVisitOn: string; visitCount: number; latestVisit: Visit } | undefined;
@@ -485,51 +492,85 @@ function PatientCard({
     .map((w) => w[0]?.toUpperCase() ?? '')
     .join('');
 
-  const secondaryParts = [
-    p.primaryCondition,
-    stats ? therapistName.get(stats.latestVisit.therapistId) : null,
-    p.phone,
-  ].filter(Boolean);
+  const therapistLine = stats ? therapistName.get(stats.latestVisit.therapistId) : null;
 
   return (
-    <div className="flex items-start gap-3 px-3 py-3">
-      <Link
-        to="/patients/$patientId"
-        params={{ patientId: p.id }}
-        className="flex min-w-0 flex-1 items-start gap-3 text-left"
-      >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
-          {initials || '?'}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="font-display text-sm font-medium text-[var(--ink)]">
-            {p.name} <span className="text-xs font-normal text-[var(--muted)]">{p.mrno}</span>
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <Link to="/patients/$patientId" params={{ patientId: p.id }} className="flex min-w-0 items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
+            {initials || '?'}
           </div>
-          {secondaryParts.length > 0 && (
-            <div className="text-xs text-[var(--muted)]">{secondaryParts.join(' · ')}</div>
-          )}
-          {stats ? (
-            <div className="mt-1 text-xs text-[var(--muted)]">
-              <span className="font-num text-[var(--ink)]">{formatDateDMY(stats.lastVisitOn)}</span>
-              {pkg && (
-                <span className="ml-1.5">
-                  <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />
-                </span>
-              )}
-              {paymentLine && <div className="mt-0.5">{paymentLine}</div>}
+          <div className="min-w-0">
+            <div className="font-display text-sm font-medium text-[var(--ink)]">{p.name}</div>
+            <div className="text-xs text-[var(--muted)]">
+              {patientIdentityLine(p.mrno, p.age, p.sex)}
+              {p.phone && ` · ${p.phone}`}
             </div>
+          </div>
+        </Link>
+        <KebabMenu ariaLabel="Patient actions">
+          {(close) => (
+            <>
+              <button
+                type="button"
+                className={menuItem}
+                onClick={() => {
+                  close();
+                  onEdit();
+                }}
+              >
+                Edit patient
+              </button>
+              <button
+                type="button"
+                className={menuItem}
+                onClick={() => {
+                  close();
+                  onHide();
+                }}
+              >
+                Hide patient
+              </button>
+            </>
+          )}
+        </KebabMenu>
+      </div>
+
+      {(p.primaryCondition || therapistLine) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {p.primaryCondition && <Pill tone="slate">{p.primaryCondition}</Pill>}
+          {therapistLine && <Pill tone="slate">{therapistLine}</Pill>}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+          {stats ? (
+            <>
+              <span className="font-num text-[var(--ink)]">{formatDateDMY(stats.lastVisitOn)}</span>
+              <span>
+                {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
+              </span>
+              {pkg && <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />}
+              {paymentLine && <span>{paymentLine}</span>}
+            </>
           ) : (
-            <div className="mt-1 text-xs text-[var(--muted)]">No visits yet</div>
+            <span>No visits yet</span>
           )}
         </div>
-      </Link>
-      <Link
-        to="/visits/new"
-        search={{ patientId: p.id }}
-        className="min-h-11 shrink-0 text-xs font-medium text-[var(--teal)] hover:underline"
-      >
-        {nextAction === 'invoice' ? 'Needs invoice' : '+ Visit'}
-      </Link>
+        <Link
+          to="/visits/new"
+          search={{ patientId: p.id }}
+          className={
+            nextAction === 'invoice'
+              ? 'rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]'
+              : 'rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]'
+          }
+        >
+          {nextAction === 'invoice' ? 'Needs invoice' : '+ Visit'}
+        </Link>
+      </div>
     </div>
   );
 }
