@@ -280,12 +280,12 @@ export function WorkspacePage() {
                     <Pill tone="slate">{p.startedByTherapistName}</Pill>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                    <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
                       <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
                       <span className="font-num">
                         {p.sessionsLogged}/{p.packageTotal}
                       </span>
-                      <span>· {p.daysSinceLastVisit}d ago</span>
+                      <span className="ml-1">· {p.daysSinceLastVisit}d ago</span>
                     </div>
                     <Link
                       to="/visits/new"
