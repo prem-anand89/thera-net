@@ -135,10 +135,24 @@ const patients: PatientRepo = {
 const visits: VisitRepo = {
   get: (id) => db.visits.get(id),
   async list(filter: VisitFilter) {
-    let rows = await db.visits.where('clinicId').equals(filter.clinicId).toArray();
+    // A date range (Workspace's "today", Ledger's date presets, dashboard
+    // aggregations) can go straight to the matching rows via the compound
+    // index instead of loading the clinic's entire visit history and
+    // filtering in memory. An open-ended range still needs a bound on each
+    // side, so a missing `from`/`to` is filled with a value date never goes
+    // below/above.
+    let rows: Visit[];
+    if (filter.from || filter.to) {
+      const from = filter.from ?? '0000-00-00';
+      const to = filter.to ?? '9999-99-99';
+      rows = await db.visits
+        .where('[clinicId+visitDate]')
+        .between([filter.clinicId, from], [filter.clinicId, to], true, true)
+        .toArray();
+    } else {
+      rows = await db.visits.where('clinicId').equals(filter.clinicId).toArray();
+    }
     rows = rows.filter((v) => !v.deleted);
-    if (filter.from) rows = rows.filter((v) => v.visitDate >= filter.from!);
-    if (filter.to) rows = rows.filter((v) => v.visitDate <= filter.to!);
     if (filter.therapistId) rows = rows.filter((v) => v.therapistId === filter.therapistId);
     if (filter.patientId) rows = rows.filter((v) => v.patientId === filter.patientId);
     return rows.sort((a, b) => b.visitDate.localeCompare(a.visitDate) || b.updatedAt.localeCompare(a.updatedAt));

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import type { Paise } from '@/domain/money';
@@ -84,7 +83,12 @@ function UpiQrModal({
     }
     const uri = buildUpiPayUri({ vpa, payeeName: payee, amountPaise, note });
     let cancelled = false;
-    void QRCode.toDataURL(uri, { width: 280, margin: 2, errorCorrectionLevel: 'M' })
+    // Loaded on demand — most sessions never open this modal, so the QR
+    // encoder shouldn't ship in the bundle everyone downloads at boot.
+    void import('qrcode')
+      .then(({ default: QRCode }) =>
+        QRCode.toDataURL(uri, { width: 280, margin: 2, errorCorrectionLevel: 'M' })
+      )
       .then((url) => {
         if (!cancelled) setQrDataUrl(url);
       })
