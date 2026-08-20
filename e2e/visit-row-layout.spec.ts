@@ -21,14 +21,15 @@ test.describe('visit row layout', () => {
     await expect(page.getByRole('heading', { name: /Today's visits?/ })).toBeVisible({ timeout: 15_000 });
 
     const visitSection = page.locator('section').filter({ has: page.getByRole('heading', { name: /Today's visits?/ }) });
-    const firstCard = visitSection.locator('.rounded-2xl.border').first();
-    if ((await firstCard.count()) === 0) {
+    await expect(visitSection).toBeVisible();
+    const firstVisit = visitSection.getByRole('link').first();
+    if ((await firstVisit.count()) === 0) {
       test.skip(true, 'no visits logged today in seed data');
     }
 
-    await expect(firstCard).toBeVisible();
     // Bill amount sits in the header row, not duplicated next to the status chip.
-    await expect(firstCard.getByText(/₹/)).toHaveCount(1);
+    await expect(visitSection.getByText(/₹/).first()).toBeVisible();
+    await expect(visitSection.getByText(/₹/)).toHaveCount(1);
   });
 });
 

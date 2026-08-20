@@ -21,9 +21,10 @@ test.describe('mobile list layouts', () => {
     await expect(page.getByRole('heading', { name: /Today's visits?/ })).toBeVisible({ timeout: 15_000 });
 
     const visitsSection = page.locator('section').filter({ has: page.getByRole('heading', { name: /Today's visits?/ }) });
-    const visitCard = visitsSection.locator('.rounded-2xl.border').first();
-    if ((await visitCard.count()) > 0) {
-      await expect(visitCard.getByText(/₹/)).toHaveCount(1);
+    const patientLink = visitsSection.getByRole('link').first();
+    if ((await patientLink.count()) > 0) {
+      await expect(visitsSection.getByText(/₹/).first()).toBeVisible();
+      await expect(visitsSection.getByText(/₹/)).toHaveCount(1);
     }
 
     const packagesSection = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Packages' }) });
