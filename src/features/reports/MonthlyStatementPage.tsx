@@ -75,7 +75,7 @@ export function MonthlyStatementPage() {
             Export CSV
           </button>
           <Link
-            to="/reports/print"
+            to="/insights/print"
             search={{ year: selected.year, month: selected.month }}
             className={btnSecondary}
           >

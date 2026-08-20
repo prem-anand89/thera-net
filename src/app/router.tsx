@@ -145,6 +145,21 @@ const notePrintRoute = createRoute({
 // rather than a hard delete-to-404: nothing in the app links here anymore,
 // but an external bookmark or shared link might, and there's no way to be
 // certain none exist.
+const monthlyPrintSearch = (search: Record<string, unknown>): { year: number; month: number } => ({
+  year: Number(search.year) || new Date().getFullYear(),
+  month: Number(search.month) || new Date().getMonth() + 1,
+});
+
+// Monthly statement PDF/print view — lives under /insights (Reports nav) so
+// TanStack Router <Link> doesn't resolve /reports/print through the /reports
+// bookmark redirect (which sent Export as PDF back to Trends).
+const insightsPrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/insights/print',
+  validateSearch: monthlyPrintSearch,
+  component: MonthlyLedgerPrintPage,
+});
+
 const reportsRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports',
@@ -153,14 +168,13 @@ const reportsRedirectRoute = createRoute({
   },
 });
 
-const reportsPrintRoute = createRoute({
+const reportsPrintRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports/print',
-  validateSearch: (search: Record<string, unknown>): { year: number; month: number } => ({
-    year: Number(search.year) || new Date().getFullYear(),
-    month: Number(search.month) || new Date().getMonth() + 1,
-  }),
-  component: MonthlyLedgerPrintPage,
+  validateSearch: monthlyPrintSearch,
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: '/insights/print', search });
+  },
 });
 
 const invoicePrintRoute = createRoute({
@@ -254,8 +268,9 @@ const routeTree = rootRoute.addChildren([
   newNoteRoute,
   noteEditorRoute,
   notePrintRoute,
+  insightsPrintRoute,
   reportsRedirectRoute,
-  reportsPrintRoute,
+  reportsPrintRedirectRoute,
   invoicePrintRoute,
   invoicesRedirectRoute,
   settingsRoute,
