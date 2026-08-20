@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { VISIT_COLUMN_LABELS, type UUID, type VisitColumnKey } from '@/domain/types';
 import type { Paise } from '@/domain/money';
@@ -6,7 +6,7 @@ import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import type { VisitPaymentState } from '@/domain/paymentState';
 import { paymentActions, paymentStatusPhrase } from '@/domain/paymentState';
-import { Pill, PackageThread, th, thNum, td, tdNum } from '@/components/ui';
+import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum } from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 
 export const PAYMENT_CHIP: Record<
@@ -129,9 +129,6 @@ function RowActionsMenu({
   onSplit?: () => void;
   onDelete: () => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [openUpward, setOpenUpward] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
   const hasMenu =
     data.canRepeat ||
     (data.canEdit && onEdit) ||
@@ -139,87 +136,59 @@ function RowActionsMenu({
     data.canDelete;
   if (!hasMenu) return null;
 
-  function toggleMenu() {
-    if (!menuOpen && buttonRef.current) {
-      // Flip the menu above the button whenever there isn't room to open
-      // downward within the viewport — a kebab near the bottom of a short
-      // list otherwise opens off-screen, forcing a scroll to see it.
-      const rect = buttonRef.current.getBoundingClientRect();
-      const estimatedMenuHeight = 170;
-      setOpenUpward(window.innerHeight - rect.bottom < estimatedMenuHeight);
-    }
-    setMenuOpen((o) => !o);
-  }
-
   return (
-    <div className="relative shrink-0">
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-label="Row actions"
-        className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--paper)]"
-        onClick={toggleMenu}
-      >
-        ⋮
-      </button>
-      {menuOpen && (
+    <KebabMenu>
+      {(close) => (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          <div
-            className={`absolute right-0 z-20 min-w-32 rounded-md border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg ${
-              openUpward ? 'bottom-full mb-1' : 'top-full mt-1'
-            }`}
-          >
-            {data.canRepeat && (
-              <Link
-                to="/visits/new"
-                search={{ repeatVisitId: data.visitId }}
-                className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                onClick={() => setMenuOpen(false)}
-              >
-                Repeat
-              </Link>
-            )}
-            {data.canEdit && onEdit && (
-              <button
-                type="button"
-                className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onEdit();
-                }}
-              >
-                Edit visit
-              </button>
-            )}
-            {data.canSplit && onSplit && (
-              <button
-                type="button"
-                className="block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onSplit();
-                }}
-              >
-                {data.hasSplit ? 'Edit split' : 'Split revenue'}
-              </button>
-            )}
-            {data.canDelete && (
-              <button
-                type="button"
-                className="block w-full px-3 py-1.5 text-left text-xs text-[var(--rust)] hover:bg-[var(--rust-light)]"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDelete();
-                }}
-              >
-                Delete
-              </button>
-            )}
-          </div>
+          {data.canRepeat && (
+            <Link
+              to="/visits/new"
+              search={{ repeatVisitId: data.visitId }}
+              className={menuItem}
+              onClick={close}
+            >
+              Repeat
+            </Link>
+          )}
+          {data.canEdit && onEdit && (
+            <button
+              type="button"
+              className={menuItem}
+              onClick={() => {
+                close();
+                onEdit();
+              }}
+            >
+              Edit visit
+            </button>
+          )}
+          {data.canSplit && onSplit && (
+            <button
+              type="button"
+              className={menuItem}
+              onClick={() => {
+                close();
+                onSplit();
+              }}
+            >
+              {data.hasSplit ? 'Edit split' : 'Split revenue'}
+            </button>
+          )}
+          {data.canDelete && (
+            <button
+              type="button"
+              className={menuItemDestructive}
+              onClick={() => {
+                close();
+                onDelete();
+              }}
+            >
+              Delete
+            </button>
+          )}
         </>
       )}
-    </div>
+    </KebabMenu>
   );
 }
 
