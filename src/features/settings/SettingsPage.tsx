@@ -28,6 +28,7 @@ import {
   ErrorNote,
   RupeeInput,
   SectionCard,
+  ConfirmDialog,
   th,
   thNum,
   td,
@@ -152,6 +153,7 @@ export function SettingsPage() {
   const navigate = useNavigate({ from: '/settings' });
   const [activeKey, setActiveKeyState] = useState<SectionKey>(search.tab ?? 'profile');
   const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
+  const [pendingSectionKey, setPendingSectionKey] = useState<SectionKey | null>(null);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
@@ -197,10 +199,8 @@ export function SettingsPage() {
 
   function selectSection(key: SectionKey) {
     if (key === activeKey) return;
-    if (
-      dirtyKeys.has(activeKey) &&
-      !confirm('This section has unsaved changes. Discard them and switch?')
-    ) {
+    if (dirtyKeys.has(activeKey)) {
+      setPendingSectionKey(key);
       return;
     }
     setActiveKey(key);
@@ -317,6 +317,19 @@ export function SettingsPage() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingSectionKey !== null}
+        title="Discard unsaved changes?"
+        message="This section has unsaved changes. Discard them and switch?"
+        confirmLabel="Discard & switch"
+        destructive
+        onCancel={() => setPendingSectionKey(null)}
+        onConfirm={() => {
+          if (pendingSectionKey) setActiveKey(pendingSectionKey);
+          setPendingSectionKey(null);
+        }}
+      />
     </div>
   );
 }
@@ -1017,6 +1030,7 @@ function DataBackup() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<RestoreSummary | null>(null);
+  const [pendingRestore, setPendingRestore] = useState<BackupBundle | null>(null);
 
   async function exportNow() {
     setError(null);
@@ -1033,24 +1047,29 @@ function DataBackup() {
   async function importFile(file: File) {
     setError(null);
     setSummary(null);
-    setBusy(true);
     try {
       const text = await file.text();
       const bundle = JSON.parse(text) as BackupBundle;
-      if (
-        !confirm(
-          `Restore this backup (exported ${bundle.exportedAt?.slice(0, 10) ?? 'unknown date'})?\n\nThis writes patients, visits, invoices, payments, and settlements back into this clinic. Existing records with the same ID are overwritten; nothing else is deleted.`
-        )
-      ) {
-        return;
-      }
+      setPendingRestore(bundle);
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function confirmRestore() {
+    if (!pendingRestore) return;
+    const bundle = pendingRestore;
+    setPendingRestore(null);
+    setBusy(true);
+    try {
       const result = await backupService.restoreBundle(bundle, clinic.id);
       setSummary(result);
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
       setBusy(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
@@ -1090,6 +1109,15 @@ function DataBackup() {
       <div className="mt-2">
         <ErrorNote message={error} />
       </div>
+
+      <ConfirmDialog
+        open={pendingRestore !== null}
+        title="Restore backup?"
+        message={`Restore this backup (exported ${pendingRestore?.exportedAt?.slice(0, 10) ?? 'unknown date'})?\n\nThis writes patients, visits, invoices, payments, and settlements back into this clinic. Existing records with the same ID are overwritten; nothing else is deleted.`}
+        confirmLabel="Restore"
+        onCancel={() => setPendingRestore(null)}
+        onConfirm={() => void confirmRestore()}
+      />
     </SectionCard>
   );
 }
@@ -1098,14 +1126,14 @@ function DangerZone() {
   const clinic = useClinic();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [confirmingWipe, setConfirmingWipe] = useState(false);
+  const [wipeResult, setWipeResult] = useState<{ patients: number; visits: number; invoices: number } | null>(
+    null
+  );
 
-  async function resetLocalCache() {
-    if (
-      !confirm(
-        "Clear this device's local copy of the data?\n\nNothing on the server is affected — the app reloads and downloads everything fresh. Use this after a wipe, or if this device is showing stale data."
-      )
-    )
-      return;
+  async function doResetLocalCache() {
+    setConfirmingReset(false);
     setError(null);
     setBusy(true);
     try {
@@ -1128,33 +1156,36 @@ function DangerZone() {
     }
   }
 
-  async function wipeAll() {
+  function wipeAll() {
     setError(null);
     const supabase = getSupabase();
     if (!supabase || !navigator.onLine) {
       setError('Wiping needs a connection — try again when online.');
       return;
     }
-    const typed = prompt(
-      `This permanently deletes ALL patients, visits, invoices, payments and settlements for this clinic, and resets invoice numbering to 0001. The catalog, therapists, and logins are kept.\n\nThis cannot be undone. Type the clinic name (${clinic.name}) to confirm:`
-    );
-    if (typed?.trim() !== clinic.name) return;
+    setConfirmingWipe(true);
+  }
+
+  async function doWipeAll() {
+    setConfirmingWipe(false);
+    const supabase = getSupabase();
+    if (!supabase) return;
     setBusy(true);
     try {
       const { data, error: rpcError } = await supabase.rpc('admin_wipe_clinic_data', {
         p_clinic_id: clinic.id,
       });
       if (rpcError) throw new Error(rpcError.message);
-      const counts = data as { patients: number; visits: number; invoices: number };
-      alert(
-        `Wiped ${counts.patients} patients, ${counts.visits} visits, and ${counts.invoices} invoices. The app will now reload with a clean slate.\n\nOn any OTHER device that was already signed in, use "Reset local cache" once.`
-      );
-      await db.delete();
-      location.reload();
+      setWipeResult(data as { patients: number; visits: number; invoices: number });
     } catch (e) {
       setError(toFriendlyMessage(e));
       setBusy(false);
     }
+  }
+
+  async function finishWipeReload() {
+    await db.delete();
+    location.reload();
   }
 
   return (
@@ -1162,21 +1193,58 @@ function DangerZone() {
       <p className="mb-3 text-xs text-[var(--muted)]">
         For test-data cleanup and troubleshooting. Wiping is admin-only and enforced by the server.
       </p>
-      <div className="flex flex-wrap gap-2">
-        <button className={btnSecondary} disabled={busy} onClick={() => void resetLocalCache()}>
-          {busy ? 'Working…' : 'Reset local cache on this device'}
-        </button>
-        <button
-          className="rounded-md border border-[var(--rust)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)] disabled:opacity-50"
-          disabled={busy}
-          onClick={() => void wipeAll()}
-        >
-          {busy ? 'Wiping…' : 'Wipe ALL clinic data…'}
-        </button>
-      </div>
+      {wipeResult ? (
+        <div className="rounded-md border border-[var(--moss)] bg-[var(--moss-light)] px-3 py-2.5 text-sm text-[var(--moss-strong)]">
+          <p>
+            Wiped {wipeResult.patients} patients, {wipeResult.visits} visits, and {wipeResult.invoices} invoices.
+            The app needs to reload to show a clean slate.
+          </p>
+          <p className="mt-1 text-xs">
+            On any OTHER device that was already signed in, use "Reset local cache" once there.
+          </p>
+          <button className={`${btnPrimary} mt-2.5`} onClick={() => void finishWipeReload()}>
+            Reload now
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button className={btnSecondary} disabled={busy} onClick={() => setConfirmingReset(true)}>
+            {busy ? 'Working…' : 'Reset local cache on this device'}
+          </button>
+          <button
+            className="rounded-md border border-[var(--rust)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)] disabled:opacity-50"
+            disabled={busy}
+            onClick={wipeAll}
+          >
+            {busy ? 'Wiping…' : 'Wipe ALL clinic data…'}
+          </button>
+        </div>
+      )}
       <div className="mt-2">
         <ErrorNote message={error} />
       </div>
+
+      <ConfirmDialog
+        open={confirmingReset}
+        title="Reset local cache?"
+        message="Clear this device's local copy of the data?\n\nNothing on the server is affected — the app reloads and downloads everything fresh. Use this after a wipe, or if this device is showing stale data."
+        confirmLabel="Clear local data"
+        onCancel={() => setConfirmingReset(false)}
+        onConfirm={() => void doResetLocalCache()}
+      />
+      <ConfirmDialog
+        open={confirmingWipe}
+        title="Wipe ALL clinic data?"
+        message={`This permanently deletes ALL patients, visits, invoices, payments and settlements for this clinic, and resets invoice numbering to 0001. The catalog, therapists, and logins are kept.\n\nThis cannot be undone.`}
+        confirmLabel="Wipe clinic data"
+        destructive
+        typeToConfirm={{
+          placeholder: `Type "${clinic.name}" to confirm`,
+          isMatch: (typed) => typed.trim() === clinic.name,
+        }}
+        onCancel={() => setConfirmingWipe(false)}
+        onConfirm={() => void doWipeAll()}
+      />
     </SectionCard>
   );
 }
@@ -1398,9 +1466,11 @@ function Therapists() {
   }, [teamViewDefaulted, therapists, unlinkedCount]);
   const [name, setName] = useState('');
   const [rosterError, setRosterError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Therapist | null>(null);
   const [members, setMembers] = useState<ClinicMember[] | null>(null);
   const [membersError, setMembersError] = useState<string | null>(null);
   const [revokeInProgress, setRevokeInProgress] = useState<string | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<{ userId: string; email: string } | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'therapist' | 'front_desk'>('therapist');
@@ -1444,12 +1514,12 @@ function Therapists() {
     setName('');
   }
 
-  async function deleteTherapist(t: Therapist) {
+  async function startDeleteTherapist(t: Therapist) {
     setRosterError(null);
     try {
       // Mirrors hard_delete_therapist()'s exact check (20260815000006) so a
       // therapist that looks deletable here doesn't just fail server-side
-      // with a less specific error after the confirm prompt: visits where
+      // with a less specific error after the confirm dialog: visits where
       // they're the primary OR shared therapist, plus consultation notes
       // and invoices attributed to them.
       const [allVisits, allNotes, allInvoices] = await Promise.all([
@@ -1462,19 +1532,22 @@ function Therapists() {
       const linkedInvoices = allInvoices.filter((i) => i.therapistId === t.id).length;
       const linked = linkedVisits + linkedNotes + linkedInvoices;
       if (linked > 0) {
-        alert(
+        setRosterError(
           `${t.name} has ${linked} linked record(s) (visits, notes, or invoices), so they can't be permanently deleted — deactivate instead.`
         );
         return;
       }
-      const typed = prompt(
-        `Permanently delete ${t.name} from the roster? This cannot be undone.\n\nType their name to confirm:`
-      );
-      if (typed === null) return;
-      if (typed.trim().toLowerCase() !== t.name.trim().toLowerCase()) {
-        alert('Name did not match — nothing was deleted.');
-        return;
-      }
+      setDeleteTarget(t);
+    } catch (e) {
+      setRosterError(toFriendlyMessage(e));
+    }
+  }
+
+  async function confirmDeleteTherapist() {
+    if (!deleteTarget) return;
+    const t = deleteTarget;
+    setDeleteTarget(null);
+    try {
       await therapistService.hardDelete(t.id);
     } catch (e) {
       setRosterError(toFriendlyMessage(e));
@@ -1564,8 +1637,14 @@ function Therapists() {
     }
   }
 
-  async function revokeMember(userId: string, email: string) {
-    if (!confirm(`Revoke ${email}'s access to this clinic?`)) return;
+  function revokeMember(userId: string, email: string) {
+    setRevokeTarget({ userId, email });
+  }
+
+  async function confirmRevokeMember() {
+    if (!revokeTarget) return;
+    const { userId } = revokeTarget;
+    setRevokeTarget(null);
     setMembersError(null);
     setRevokeInProgress(userId);
     try {
@@ -1630,7 +1709,7 @@ function Therapists() {
                 member={m}
                 clinicId={clinic.id}
                 revoking={revokeInProgress === m.userId}
-                onRevoke={() => void revokeMember(m.userId, m.email)}
+                onRevoke={() => revokeMember(m.userId, m.email)}
                 onSaved={() => void refetchMembers()}
               />
             ))}
@@ -1773,7 +1852,7 @@ function Therapists() {
               </button>
               <button
                 className="text-xs text-[var(--rust)] hover:underline"
-                onClick={() => void deleteTherapist(t)}
+                onClick={() => void startDeleteTherapist(t)}
               >
                 Delete
               </button>
@@ -1831,6 +1910,33 @@ function Therapists() {
         </div>
       </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete therapist?"
+        message={`Permanently delete ${deleteTarget?.name} from the roster? This cannot be undone.`}
+        confirmLabel="Delete permanently"
+        destructive
+        typeToConfirm={
+          deleteTarget
+            ? {
+                placeholder: 'Type their name to confirm',
+                isMatch: (typed) => typed.trim().toLowerCase() === deleteTarget.name.trim().toLowerCase(),
+              }
+            : undefined
+        }
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => void confirmDeleteTherapist()}
+      />
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        title="Revoke access?"
+        message={`Revoke ${revokeTarget?.email}'s access to this clinic?`}
+        confirmLabel="Revoke access"
+        destructive
+        onCancel={() => setRevokeTarget(null)}
+        onConfirm={() => void confirmRevokeMember()}
+      />
     </SectionCard>
   );
 }
