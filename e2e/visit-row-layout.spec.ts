@@ -44,13 +44,13 @@ test.describe('visit row layout desktop', () => {
     const headers = page.getByRole('columnheader');
     await expect(headers.filter({ hasText: 'Patient' })).toBeVisible({ timeout: 15_000 });
     const order = await headers.allTextContents();
-    const serviceIdx = order.indexOf('Service');
     const therapistIdx = order.indexOf('Therapist');
     const conditionIdx = order.indexOf('Condition');
     const treatmentIdx = order.indexOf('Treatment');
-    expect(serviceIdx).toBeGreaterThan(-1);
-    expect(serviceIdx).toBeLessThan(therapistIdx);
+    const serviceIdx = order.indexOf('Service');
+    expect(therapistIdx).toBeGreaterThan(-1);
     expect(therapistIdx).toBeLessThan(conditionIdx);
     expect(conditionIdx).toBeLessThan(treatmentIdx);
+    expect(treatmentIdx).toBeLessThan(serviceIdx);
   });
 });

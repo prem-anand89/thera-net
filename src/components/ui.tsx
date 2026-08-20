@@ -83,6 +83,7 @@ const PILL_TONES = {
   green: 'bg-[var(--moss-light)] text-[var(--moss)]',
   amber: 'bg-[var(--rust-light)] text-[var(--rust)]',
   slate: 'bg-[var(--paper)] text-[var(--muted)]',
+  teal: 'bg-[var(--teal-light)] text-[var(--teal)]',
 } as const;
 
 /** Status badge. Pair color with words/icons — never color alone. */
@@ -92,6 +93,11 @@ export function Pill({ tone, children }: { tone: keyof typeof PILL_TONES; childr
       {children}
     </span>
   );
+}
+
+/** Therapist name badge — teal fill so "who treated" stands out from condition/treatment text. */
+export function TherapistPill({ children }: { children: ReactNode }) {
+  return <Pill tone="teal">{children}</Pill>;
 }
 
 /**

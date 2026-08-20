@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeVisitPaymentState, isCollected, paymentActions, paymentStatusLine, paymentStatusPhrase } from './paymentState';
+import { computeVisitPaymentState, isCollected, paymentActions, paymentStatusLine, paymentStatusPhrase, paymentStatusShortPhrase } from './paymentState';
 import { rupeesToPaise as rs } from './money';
 
 const INV = 'invoice-1';
@@ -92,5 +92,12 @@ describe('paymentActions', () => {
     expect(paymentActions('collected_no_receipt')).toEqual(['issue_invoice']);
     expect(paymentActions('paid')).toEqual([]);
     expect(paymentActions('zero_session')).toEqual([]);
+  });
+});
+
+describe('paymentStatusShortPhrase', () => {
+  it('uses compact table labels', () => {
+    expect(paymentStatusShortPhrase('collected_no_receipt')).toBe('Collected');
+    expect(paymentStatusPhrase('collected_no_receipt')).toBe('collected · no invoice');
   });
 });

@@ -5,8 +5,8 @@ import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import type { VisitPaymentState } from '@/domain/paymentState';
-import { paymentActions, paymentStatusPhrase } from '@/domain/paymentState';
-import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum } from '@/components/ui';
+import { paymentActions, paymentStatusPhrase, paymentStatusShortPhrase } from '@/domain/paymentState';
+import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 
 export const PAYMENT_CHIP: Record<
@@ -201,6 +201,7 @@ function PaymentStatusDisplay({
   onTakePayment,
   canInvoice,
   showAmount = true,
+  compact = false,
 }: {
   data: VisitCardData;
   onInvoice: () => void;
@@ -208,10 +209,48 @@ function PaymentStatusDisplay({
   canInvoice: boolean;
   /** False in the table, where Bill is already its own column. */
   showAmount?: boolean;
+  /** Table cells: short label, horizontal layout — avoids tall rows on iPad portrait. */
+  compact?: boolean;
 }) {
   const chip = PAYMENT_CHIP[data.paymentState];
   const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
+  const statusLabel = compact ? paymentStatusShortPhrase(data.paymentState) : chip.label;
+  const statusTitle = compact ? paymentStatusPhrase(data.paymentState) : undefined;
+
+  if (compact) {
+    return (
+      <div className="flex max-w-[8.5rem] flex-wrap items-center gap-1">
+        <Pill tone={chip.tone}>
+          <span className="whitespace-nowrap" title={statusTitle}>
+            {statusLabel}
+          </span>
+        </Pill>
+        {canInvoice && actions.includes('take_payment') && (
+          <button
+            type="button"
+            className="whitespace-nowrap rounded-full bg-[var(--rust-light)] px-2 py-0.5 text-[10px] font-medium text-[var(--rust)] hover:opacity-80"
+            onClick={onTakePayment}
+          >
+            Pay
+          </button>
+        )}
+        {canInvoice && actions.includes('issue_invoice') && (
+          <button
+            type="button"
+            className="whitespace-nowrap rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10px] font-medium text-[var(--teal)] hover:opacity-80"
+            onClick={onInvoice}
+          >
+            Invoice
+          </button>
+        )}
+        {!canInvoice && paymentActions(data.paymentState).length > 0 && (
+          <Pill tone="slate">Ask billing</Pill>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
       {showAmount && data.paymentState !== 'zero_session' && (
@@ -284,9 +323,18 @@ function VisitCardDetails({ data }: { data: VisitCardData }) {
 
   return (
     <div className="mt-1.5 space-y-1">
-      {data.serviceName && <CardDetailRow label="Service">{data.serviceName}</CardDetailRow>}
-      {data.therapistName && <CardDetailRow label="Therapist">{data.therapistName}</CardDetailRow>}
+      {data.therapistName && (
+        <CardDetailRow label="Therapist">
+          <TherapistPill>{data.therapistName}</TherapistPill>
+        </CardDetailRow>
+      )}
       {data.condition && <CardDetailRow label="Condition">{data.condition}</CardDetailRow>}
+      {data.treatmentNotes && (
+        <CardDetailRow label="Treatment" clamp>
+          {data.treatmentNotes}
+        </CardDetailRow>
+      )}
+      {data.serviceName && <CardDetailRow label="Service">{data.serviceName}</CardDetailRow>}
       {hasSession && (
         <CardDetailRow label="Session">
           <span className="inline-flex items-center gap-1.5">
@@ -295,11 +343,6 @@ function VisitCardDetails({ data }: { data: VisitCardData }) {
               {data.sessionIndex}/{data.packageTotal}
             </span>
           </span>
-        </CardDetailRow>
-      )}
-      {data.treatmentNotes && (
-        <CardDetailRow label="Treatment" clamp>
-          {data.treatmentNotes}
         </CardDetailRow>
       )}
     </div>
@@ -559,7 +602,7 @@ function VisitTable({
                     case 'therapist':
                       return (
                         <td key={key} className={td}>
-                          {row.therapistName}
+                          <TherapistPill>{row.therapistName}</TherapistPill>
                         </td>
                       );
                     case 'condition':
@@ -584,6 +627,7 @@ function VisitTable({
                     onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
                     canInvoice={canInvoice}
                     showAmount={false}
+                    compact
                   />
                 </td>
                 <td className={td}>
