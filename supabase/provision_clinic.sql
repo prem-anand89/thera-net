@@ -77,6 +77,18 @@ begin
     (v_clinic_id, 'Kinesio Taping',   'Kinesio Taping',            1,   30000),
     (v_clinic_id, 'Assessment',       'Assessment',                1,   60000);
 
+  -- Starter no-return-reason list (clinic-editable afterward in Reports'
+  -- "Manage reasons" panel — see Trends → Single-visit patients).
+  insert into no_return_reason_catalog (clinic_id, name, is_closed) values
+    (v_clinic_id, 'Moved away / relocated',            true),
+    (v_clinic_id, 'Discomfort with treatment',          false),
+    (v_clinic_id, 'Cost / could not afford',            false),
+    (v_clinic_id, 'Recovered — no longer needed care',  true),
+    (v_clinic_id, 'Switched to another provider',       true),
+    (v_clinic_id, 'Lost contact / unreachable',         false),
+    (v_clinic_id, 'Scheduling conflict',                false),
+    (v_clinic_id, 'Referred elsewhere',                 true);
+
   -- Therapist records (for per-therapist attribution; separate from logins).
   foreach v_therapist in array v_therapists loop
     insert into therapists (clinic_id, name, active) values (v_clinic_id, v_therapist, true);
