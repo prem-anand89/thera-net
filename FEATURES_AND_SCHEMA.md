@@ -447,6 +447,8 @@ patient_id            uuid NOT NULL (FOREIGN KEY → patients.id)
 therapist_id          uuid NOT NULL (FOREIGN KEY → therapists.id)
 visit_date            date NOT NULL
 condition, treatment_notes  text (NULLABLE)
+treatment_ids         uuid[] NOT NULL (default '{}') — which treatment_catalog
+                       entries were performed this visit
 service_catalog_id    uuid NOT NULL (FOREIGN KEY → service_catalog.id)
 catalog_price_paise   bigint NOT NULL — snapshot at billing time
 actual_bill_paise     bigint NOT NULL
@@ -699,6 +701,28 @@ for patients tagged after this catalog existed; the legacy
 `patients.referring_source` enum column is kept (not backfilled) so older
 patients keep displaying via the old `REFERRING_SOURCE_LABELS` fallback —
 see `dashboardService.referralSourceStats` for how both are reconciled.
+
+#### `treatment_catalog`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+name            text NOT NULL
+active          boolean NOT NULL (default true)
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+UNIQUE (clinic_id, name)
+```
+Clinic-editable list of treatment types (Manual Therapy, Exercise Therapy,
+Kinesio Taping, ...), managed from Settings → Services same as the other
+catalogs. Independent of the billing-side `service_catalog` — one visit is
+billed under one service package but can record several treatment types
+performed via `visits.treatment_ids`, checked off on a "Treatments
+performed" picker on both the visit-logging and edit-visit forms.
+Independent of Core Assessment/clinical docs too, so it works for every
+clinic regardless of `clinicalDocsEnabled`. Patient Profile's Care plan
+card shows a per-package breakdown (e.g. "Manual Therapy: 4 · Exercise: 6")
+computed client-side from the patient's own visits — no separate
+aggregation query. Seeded with a 6-item starter set for every clinic.
 
 #### `clinic_module_settings`, `clinic_entitlements` — dead infrastructure
 Both tables still exist (RLS enabled, no policies) but have **zero client

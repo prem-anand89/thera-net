@@ -6,6 +6,7 @@ const TABLE_PHRASE: Record<SyncedTable, { one: string; many: string }> = {
   service_catalog: { one: 'service change', many: 'service changes' },
   no_return_reason_catalog: { one: 'settings change', many: 'settings changes' },
   referring_source_catalog: { one: 'settings change', many: 'settings changes' },
+  treatment_catalog: { one: 'settings change', many: 'settings changes' },
   patients: { one: 'patient change', many: 'patient changes' },
   visits: { one: 'visit', many: 'visits' },
   invoices: { one: 'invoice', many: 'invoices' },

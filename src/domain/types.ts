@@ -220,6 +220,23 @@ export interface ReferringSourceItem {
   updatedAt: string;
 }
 
+/**
+ * Clinic-editable list of treatment types (Exercise, Manual Therapy, Kinesio
+ * Taping, ...) — same shape as NoReturnReasonItem/CatalogItem (add /
+ * deactivate-not-delete / rename from Settings). Independent of the
+ * billing-side service_catalog: one visit can be billed under one service
+ * package while performing several treatment types, tracked via
+ * Visit.treatmentIds. Also independent of Core Assessment/clinical docs, so
+ * it works for every clinic regardless of clinicalDocsEnabled.
+ */
+export interface TreatmentItem {
+  id: UUID;
+  clinicId: UUID;
+  name: string;
+  active: boolean;
+  updatedAt: string;
+}
+
 export type ReferringSource =
   | 'hospital_referral'
   | 'doctor_referral'
@@ -311,6 +328,8 @@ export interface Visit {
   visitDate: string;
   condition: string | null;
   treatmentNotes: string | null;
+  /** Which TreatmentItem catalog entries were performed this visit. Optional: older cached rows predate treatment tracking. */
+  treatmentIds?: UUID[];
   serviceCatalogId: UUID;
   /** Catalog price snapshot at time of billing — discounts never touch the catalog */
   catalogPricePaise: Paise;

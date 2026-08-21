@@ -98,6 +98,15 @@ begin
     (v_clinic_id, 'Online',             'Online channel (e.g. Google, Instagram)'),
     (v_clinic_id, 'Other',              'Details');
 
+  -- Starter treatment list (clinic-editable afterward in Settings).
+  insert into treatment_catalog (clinic_id, name) values
+    (v_clinic_id, 'Manual Therapy'),
+    (v_clinic_id, 'Exercise Therapy'),
+    (v_clinic_id, 'Kinesio Taping'),
+    (v_clinic_id, 'Electrotherapy'),
+    (v_clinic_id, 'Dry Needling'),
+    (v_clinic_id, 'Postural Education');
+
   -- Therapist records (for per-therapist attribution; separate from logins).
   foreach v_therapist in array v_therapists loop
     insert into therapists (clinic_id, name, active) values (v_clinic_id, v_therapist, true);

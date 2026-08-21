@@ -64,6 +64,7 @@ export function PatientProfilePage() {
   );
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
+  const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
   const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
 
@@ -95,6 +96,26 @@ export function PatientProfilePage() {
     () => (openPackages ?? []).filter((p) => p.patientId === patientId),
     [openPackages, patientId]
   );
+
+  // How many sessions of each treatment type this package has had so far —
+  // e.g. "Manual Therapy: 4 · Exercise: 6 · Kinesio Taping: 2" — derived
+  // from each visit's own treatmentIds rather than a separate aggregation
+  // query, since every visit for this patient is already loaded above.
+  const treatmentCountsByPackage = useMemo(() => {
+    const treatmentName = new Map((treatments ?? []).map((t) => [t.id, t.name]));
+    const byPackage = new Map<string, Map<string, number>>();
+    for (const v of visits ?? []) {
+      if (v.deleted || !v.packageGroupId || !v.treatmentIds?.length) continue;
+      const counts = byPackage.get(v.packageGroupId) ?? new Map<string, number>();
+      for (const id of v.treatmentIds) {
+        const name = treatmentName.get(id);
+        if (!name) continue;
+        counts.set(name, (counts.get(name) ?? 0) + 1);
+      }
+      byPackage.set(v.packageGroupId, counts);
+    }
+    return byPackage;
+  }, [visits, treatments]);
 
   // One pass over the patient's visits for all three headline money facts —
   // billed (every visit's bill, including ₹0 package sessions), collected
@@ -397,6 +418,17 @@ export function PatientProfilePage() {
                             last {formatDateDMY(p.lastVisitOn)} · {p.daysSinceLastVisit}d ago
                           </span>
                         </div>
+                        {treatmentCountsByPackage.get(p.packageGroupId) && (
+                          <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-[var(--muted)]">
+                            {[...treatmentCountsByPackage.get(p.packageGroupId)!.entries()].map(
+                              ([name, count]) => (
+                                <span key={name}>
+                                  {name}: {count}
+                                </span>
+                              )
+                            )}
+                          </div>
+                        )}
                       </li>
                     );
                   })}

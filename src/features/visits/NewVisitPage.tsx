@@ -25,6 +25,7 @@ import {
   SectionCard,
   Pill,
   PackageThread,
+  MultiToggle,
 } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
@@ -154,6 +155,7 @@ export function NewVisitPage() {
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [condition, setCondition] = useState('');
   const [notes, setNotes] = useState('');
+  const [treatmentIds, setTreatmentIds] = useState<string[]>([]);
   const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending'>('paid');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [pendingNote, setPendingNote] = useState('');
@@ -172,6 +174,7 @@ export function NewVisitPage() {
     [therapists, session?.user?.id]
   );
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
+  const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id), [clinic.id]) ?? [];
   const matches = useLiveQuery(
     () => (patient ? Promise.resolve([]) : repos.patients.search(clinic.id, query)),
     [clinic.id, query, patient]
@@ -444,6 +447,7 @@ export function NewVisitPage() {
         serviceCatalogId: mode === 'continuation' ? selectedPackage!.serviceCatalogId : serviceCatalogId,
         condition,
         treatmentNotes: notes,
+        treatmentIds,
         actualBillPaise: billOverride ?? undefined,
         adjustmentReason,
         ...(mode === 'continuation'
@@ -875,6 +879,15 @@ export function NewVisitPage() {
               onChange={(e) => setNotes(e.target.value)}
             />
           </Field>
+          {treatments.length > 0 && (
+            <Field label="Treatments performed">
+              <MultiToggle
+                options={treatments.map((t) => ({ value: t.id, label: t.name }))}
+                value={treatmentIds}
+                onChange={setTreatmentIds}
+              />
+            </Field>
+          )}
         </div>
       </SectionCard>
 

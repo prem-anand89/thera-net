@@ -374,3 +374,38 @@ export const td = 'px-3 py-3 text-sm text-[var(--ink)]';
 export const tdNum = 'font-num px-3 py-3 text-sm text-[var(--ink)] text-right';
 export const thNum =
   'px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]';
+
+type MultiToggleOption = string | { value: string; label: string };
+
+/** Toggle-chip multi-select: value is the array of selected option values.
+ *  Options can be plain strings (value === label) or {value, label} pairs —
+ *  the latter for pickers backed by an id (e.g. a clinic-editable catalog)
+ *  where the displayed label isn't the value being stored. */
+export function MultiToggle({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly MultiToggleOption[];
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  return (
+    <div className="chip-row">
+      {options.map((opt) => {
+        const { value: optValue, label } = typeof opt === 'string' ? { value: opt, label: opt } : opt;
+        const on = value.includes(optValue);
+        return (
+          <button
+            key={optValue}
+            type="button"
+            className={`toggle-chip ${on ? 'on' : ''}`}
+            onClick={() => onChange(on ? value.filter((v) => v !== optValue) : [...value, optValue])}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}

@@ -4,6 +4,7 @@ import type {
   CatalogItem,
   NoReturnReasonItem,
   ReferringSourceItem,
+  TreatmentItem,
   Patient,
   Visit,
   Invoice,
@@ -54,6 +55,12 @@ export interface ReferringSourceCatalogRepo {
   list(clinicId: UUID, includeInactive?: boolean): Promise<ReferringSourceItem[]>;
   get(id: UUID): Promise<ReferringSourceItem | undefined>;
   put(item: ReferringSourceItem): Promise<void>;
+}
+
+export interface TreatmentCatalogRepo {
+  list(clinicId: UUID, includeInactive?: boolean): Promise<TreatmentItem[]>;
+  get(id: UUID): Promise<TreatmentItem | undefined>;
+  put(item: TreatmentItem): Promise<void>;
 }
 
 export interface PatientRepo {
@@ -151,6 +158,7 @@ export interface Repos {
   catalog: CatalogRepo;
   noReturnReasonCatalog: NoReturnReasonCatalogRepo;
   referringSourceCatalog: ReferringSourceCatalogRepo;
+  treatmentCatalog: TreatmentCatalogRepo;
   patients: PatientRepo;
   visits: VisitRepo;
   invoices: InvoiceRepo;

@@ -5,6 +5,7 @@ import type {
   CatalogItem,
   NoReturnReasonItem,
   ReferringSourceItem,
+  TreatmentItem,
   Patient,
   Visit,
   Invoice,
@@ -21,6 +22,7 @@ import type {
   CatalogRepo,
   NoReturnReasonCatalogRepo,
   ReferringSourceCatalogRepo,
+  TreatmentCatalogRepo,
   PatientRepo,
   VisitRepo,
   VisitFilter,
@@ -106,6 +108,15 @@ const referringSourceCatalog: ReferringSourceCatalogRepo = {
   },
   get: (id) => db.referring_source_catalog.get(id),
   put: (item) => putWithOutbox('referring_source_catalog', item),
+};
+
+const treatmentCatalog: TreatmentCatalogRepo = {
+  async list(clinicId, includeInactive = false) {
+    const all = await db.treatment_catalog.where('clinicId').equals(clinicId).toArray();
+    return all.filter((r) => includeInactive || r.active).sort((a, b) => a.name.localeCompare(b.name));
+  },
+  get: (id) => db.treatment_catalog.get(id),
+  put: (item) => putWithOutbox('treatment_catalog', item),
 };
 
 const patients: PatientRepo = {
@@ -295,6 +306,7 @@ export const repos: Repos = {
   catalog,
   noReturnReasonCatalog,
   referringSourceCatalog,
+  treatmentCatalog,
   patients,
   visits,
   invoices,
@@ -313,6 +325,7 @@ export type {
   CatalogItem,
   NoReturnReasonItem,
   ReferringSourceItem,
+  TreatmentItem,
   Patient,
   Visit,
   Invoice,

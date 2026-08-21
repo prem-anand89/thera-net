@@ -19,6 +19,7 @@ import {
   type Clinic,
   type ReferringSourceItem,
   type Therapist,
+  type TreatmentItem,
 } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
 import {
@@ -362,6 +363,7 @@ export function SettingsPage() {
           {activeKey === 'services' && (
             <>
               <Catalog />
+              <TreatmentCatalog />
               <ReferringSources />
             </>
           )}
@@ -1635,6 +1637,95 @@ function Catalog() {
       </div>
       <div className="mt-2">
         <ErrorNote message={error} />
+      </div>
+    </SectionCard>
+  );
+}
+
+/**
+ * Clinic-editable list of treatment types (Exercise, Manual Therapy, Kinesio
+ * Taping, ...) — same add / deactivate-not-delete / rename shape as the
+ * other catalogs on this tab. Independent of the billing-side service
+ * catalog above: a visit can be billed under one package while recording
+ * several treatment types performed, via the "Treatments performed" picker
+ * on the visit-logging and edit-visit forms.
+ */
+function TreatmentCatalog() {
+  const clinic = useClinic();
+  const items = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]) ?? [];
+  const [draftName, setDraftName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  async function addItem() {
+    setError(null);
+    const name = draftName.trim();
+    if (!name) {
+      setError('Name is required');
+      return;
+    }
+    const item: TreatmentItem = {
+      id: crypto.randomUUID(),
+      clinicId: clinic.id,
+      name,
+      active: true,
+      updatedAt: new Date().toISOString(),
+    };
+    await repos.treatmentCatalog.put(item);
+    setDraftName('');
+  }
+
+  async function toggleActive(item: TreatmentItem) {
+    await repos.treatmentCatalog.put({ ...item, active: !item.active, updatedAt: new Date().toISOString() });
+  }
+
+  async function rename(item: TreatmentItem, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === item.name) return;
+    await repos.treatmentCatalog.put({ ...item, name: trimmed, updatedAt: new Date().toISOString() });
+  }
+
+  return (
+    <SectionCard title="Treatments">
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        Tracked per visit as a "Treatments performed" checklist, independent of billing. Deactivate
+        instead of deleting so past visits keep displaying correctly.
+      </p>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className={`flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 ${item.active ? '' : 'opacity-50'}`}
+          >
+            <input
+              className={`${inputCls} min-w-0 flex-1`}
+              defaultValue={item.name}
+              onBlur={(e) => void rename(item, e.target.value)}
+              aria-label="Treatment name"
+            />
+            <button
+              type="button"
+              className="shrink-0 text-xs text-[var(--teal)] hover:underline"
+              onClick={() => void toggleActive(item)}
+            >
+              {item.active ? 'Deactivate' : 'Reactivate'}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {error && <ErrorNote message={error} />}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={draftName}
+          onChange={(e) => setDraftName(e.target.value)}
+          placeholder="Add a treatment…"
+          className={`${inputCls} min-w-0 flex-1`}
+        />
+        <button className={btnSecondary} onClick={() => void addItem()}>
+          + Add
+        </button>
       </div>
     </SectionCard>
   );

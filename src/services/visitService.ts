@@ -11,6 +11,8 @@ export interface NewVisitInput {
   serviceCatalogId: UUID;
   condition?: string | null;
   treatmentNotes?: string | null;
+  /** Treatment types performed this visit — TreatmentItem catalog ids. */
+  treatmentIds?: UUID[];
   /** Omit to bill the catalog price; any difference requires a reason */
   actualBillPaise?: Paise;
   adjustmentReason?: string | null;
@@ -78,6 +80,7 @@ export function createVisitService(repos: Repos) {
         visitDate: input.visitDate,
         condition: input.condition?.trim() || null,
         treatmentNotes: input.treatmentNotes?.trim() || null,
+        treatmentIds: input.treatmentIds ?? [],
         serviceCatalogId: input.serviceCatalogId,
         catalogPricePaise,
         actualBillPaise,
@@ -125,6 +128,7 @@ export function createVisitService(repos: Repos) {
         visitDate?: string;
         condition?: string | null;
         treatmentNotes?: string | null;
+        treatmentIds?: UUID[];
       }
     ): Promise<Visit> {
       const visit = await repos.visits.get(visitId);
@@ -165,6 +169,7 @@ export function createVisitService(repos: Repos) {
         ...('treatmentNotes' in changes
           ? { treatmentNotes: changes.treatmentNotes?.trim() || null }
           : {}),
+        ...('treatmentIds' in changes ? { treatmentIds: changes.treatmentIds ?? [] } : {}),
         actualBillPaise,
         adjustmentPaise,
         adjustmentReason: adjustmentPaise !== 0 ? (reason?.trim() ?? null) : null,
