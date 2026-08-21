@@ -172,6 +172,9 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Shows side-by-side**: revenue and visit-count per therapist
 - **Visible to therapists too**, not just admins — deliberate exception to "financial aggregates are admin-only"
 - **3 key metrics** per therapist
+- **6-month trend charts** need at least 2 months of history to render (otherwise read as a false spike);
+  below them, a **live "this month" table** (revenue, visits, open packages per therapist) always shows
+  as soon as there's at least one visit this month — not gated behind the trend's own history requirement
 
 #### Analytics Capabilities
 - Condition pie chart (grouped raw text)
