@@ -42,6 +42,11 @@ export function PatientProfilePage() {
   const [selectedVisitIds, setSelectedVisitIds] = useState<Set<string>>(new Set());
   const [issuingInvoice, setIssuingInvoice] = useState(false);
   const [issueError, setIssueError] = useState<string | null>(null);
+  // Package sessions already billed as part of the package's own invoice
+  // show up here as ₹0 visits — real activity, but noise when someone just
+  // wants the payment/invoice trail. Off by default so nothing disappears
+  // without the viewer choosing it.
+  const [hideZeroBilled, setHideZeroBilled] = useState(false);
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
   const editPatient = useLiveQuery(() => (editPatientId ? repos.patients.get(editPatientId) : undefined), [editPatientId]);
@@ -157,6 +162,11 @@ export function PatientProfilePage() {
       isAdmin,
       myTherapistId,
     ]
+  );
+
+  const visibleVisitCardRows = useMemo(
+    () => (hideZeroBilled ? visitCardRows.filter((r) => r.billPaise > 0) : visitCardRows),
+    [visitCardRows, hideZeroBilled]
   );
 
   const handleVisitDelete = useCallback(async (visitId: string) => {
@@ -366,7 +376,19 @@ export function PatientProfilePage() {
 
         {/* Main column */}
         <div className="order-2 space-y-4 lg:order-none lg:col-start-1 lg:row-start-1">
-          <SectionLabel>Visit history</SectionLabel>
+          <div className="flex items-center justify-between">
+            <SectionLabel>Visit history</SectionLabel>
+            {visitRows.length > 0 && (
+              <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={hideZeroBilled}
+                  onChange={(e) => setHideZeroBilled(e.target.checked)}
+                />
+                Hide ₹0 visits (package sessions)
+              </label>
+            )}
+          </div>
           {issueError && (
             <div className="rounded bg-[var(--rust-light)] p-2 text-sm text-[var(--rust)]">
               {issueError}
@@ -390,10 +412,14 @@ export function PatientProfilePage() {
             )}
             {visitRows.length === 0 ? (
               <p className="p-4 text-sm text-[var(--muted)]">No visits recorded yet.</p>
+            ) : visibleVisitCardRows.length === 0 ? (
+              <p className="p-4 text-sm text-[var(--muted)]">
+                All visits are ₹0 (package sessions) — uncheck "Hide ₹0 visits" to see them.
+              </p>
             ) : (
               <div className="p-5">
                 <ResponsiveVisitList
-                  rows={visitCardRows}
+                  rows={visibleVisitCardRows}
                   showDate={true}
                   showPatient={false}
                   onInvoice={() => {}}
