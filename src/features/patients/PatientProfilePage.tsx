@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
-import { Link, useParams } from '@tanstack/react-router';
+import { Link, useParams, useSearch } from '@tanstack/react-router';
+import type { PatientProfileBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, consultationNoteService, invoiceService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
@@ -36,6 +37,7 @@ export function PatientProfilePage() {
   const { canBill, canViewClinicalNotes, isAdmin } = usePermissions();
   const { myTherapistId } = useWorkspaceScope();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
+  const { from: backTo } = useSearch({ strict: false }) as { from?: PatientProfileBackTarget };
   const [editOpen, setEditOpen] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
@@ -269,8 +271,8 @@ export function PatientProfilePage() {
 
   return (
     <div className="space-y-4">
-      <Link to="/workspace" className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]">
-        ← All patients
+      <Link to={backTo ?? '/patients'} className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]">
+        ← Back
       </Link>
 
       {safetyFlags.length > 0 && (

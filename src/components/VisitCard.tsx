@@ -8,6 +8,7 @@ import type { VisitPaymentState } from '@/domain/paymentState';
 import { paymentActions, paymentStatusPhrase, paymentStatusShortPhrase } from '@/domain/paymentState';
 import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
+import type { PatientProfileBackTarget } from '@/app/router';
 
 export const PAYMENT_CHIP: Record<
   VisitPaymentState,
@@ -36,9 +37,15 @@ export function patientIdentityLine(
 function PatientNameBlock({
   data,
   onEditPatient,
+  backTo,
 }: {
   data: VisitCardData;
   onEditPatient?: () => void;
+  /** Where the patient profile's own "← Back" link should return to —
+   *  set by whichever list is rendering this row (Ledger, Workspace).
+   *  Omitted where clicking through doesn't leave the current page in
+   *  any meaningful sense (e.g. Patient Profile's own visit history). */
+  backTo?: PatientProfileBackTarget;
 }) {
   return (
     <div className="min-w-0">
@@ -46,6 +53,7 @@ function PatientNameBlock({
         <Link
           to="/patients/$patientId"
           params={{ patientId: data.patientId }}
+          search={backTo ? { from: backTo } : undefined}
           className="font-display text-sm font-medium text-[var(--ink)] hover:underline"
         >
           {data.patientName}
@@ -380,6 +388,7 @@ export function SharedVisitCard({
   onSplit,
   onDelete,
   canInvoice = true,
+  backTo,
 }: {
   data: VisitCardData;
   showDate: boolean;
@@ -395,6 +404,7 @@ export function SharedVisitCard({
   onSplit?: () => void;
   onDelete: () => void;
   canInvoice?: boolean;
+  backTo?: PatientProfileBackTarget;
 }) {
   const initials = showPatient
     ? data.patientName
@@ -418,7 +428,7 @@ export function SharedVisitCard({
             </div>
           )}
           <div className="min-w-0 flex-1">
-            {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
+            {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} backTo={backTo} />}
             {showDate && (
               <div className={`text-xs text-[var(--muted)] ${showPatient ? 'mt-0.5' : ''}`}>
                 {formatDateDM(data.visitDate)}
@@ -518,6 +528,7 @@ function VisitTable({
   onDelete,
   canInvoice,
   selection,
+  backTo,
 }: {
   rows: VisitCardData[];
   showDate: boolean;
@@ -532,6 +543,7 @@ function VisitTable({
   onDelete: (row: VisitCardData) => void;
   canInvoice: boolean;
   selection?: VisitSelectionProps;
+  backTo?: PatientProfileBackTarget;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -623,7 +635,11 @@ function VisitTable({
                 )}
                 {showPatient && (
                   <td className={td}>
-                    <PatientNameBlock data={row} onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined} />
+                    <PatientNameBlock
+                      data={row}
+                      onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
+                      backTo={backTo}
+                    />
                   </td>
                 )}
                 {VISIT_OPTIONAL_COLUMN_ORDER.map((key) => {
@@ -779,6 +795,7 @@ export function ResponsiveVisitList({
   onDelete,
   canInvoice = true,
   selection,
+  backTo,
 }: {
   rows: VisitCardData[];
   showDate: boolean;
@@ -795,6 +812,9 @@ export function ResponsiveVisitList({
    *  visits, issue one invoice"). Only wired up in the flat (non-grouped)
    *  card list and the table — grouped mode has no caller that needs it. */
   selection?: VisitSelectionProps;
+  /** Where the patient name link's "← Back" should return to. Omit when
+   *  showPatient is false, or when this list is the patient's own profile. */
+  backTo?: PatientProfileBackTarget;
 }) {
   const { prefs, setPref } = useVisitColumnPrefs();
 
@@ -825,6 +845,7 @@ export function ResponsiveVisitList({
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
                     canInvoice={canInvoice}
+                    backTo={backTo}
                   />
                 ))}
               </div>
@@ -857,6 +878,7 @@ export function ResponsiveVisitList({
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
                     canInvoice={canInvoice}
+                    backTo={backTo}
                   />
                 </div>
               </div>
@@ -881,6 +903,7 @@ export function ResponsiveVisitList({
           onDelete={onDelete}
           canInvoice={canInvoice}
           selection={selection}
+          backTo={backTo}
         />
       </div>
     </>

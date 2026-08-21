@@ -372,7 +372,12 @@ function AllPatientsSection() {
                         )}
                       </td>
                       <td className={`${td} font-display`}>
-                        <Link to="/patients/$patientId" params={{ patientId: p.id }} className="hover:underline">
+                        <Link
+                          to="/patients/$patientId"
+                          params={{ patientId: p.id }}
+                          search={{ from: '/patients' }}
+                          className="hover:underline"
+                        >
                           {p.name}
                         </Link>
                         {(p.age || p.sex) && (
@@ -515,7 +520,12 @@ function PatientCard({
   return (
     <div className="py-3">
       <div className="flex items-start justify-between gap-2">
-        <Link to="/patients/$patientId" params={{ patientId: p.id }} className="flex min-w-0 flex-1 items-start gap-2.5">
+        <Link
+          to="/patients/$patientId"
+          params={{ patientId: p.id }}
+          search={{ from: '/patients' }}
+          className="flex min-w-0 flex-1 items-start gap-2.5"
+        >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-[11px] font-semibold text-[var(--teal)]">
             {initials || '?'}
           </div>

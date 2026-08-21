@@ -4,6 +4,7 @@ import type { PaymentMode } from '@/domain/types';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
 import { invoiceService, paymentService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
+import type { InvoicePrintBackTarget } from '@/app/router';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 
@@ -18,10 +19,14 @@ export function IssueInvoiceDialog({
   clinicId,
   target,
   onClose,
+  returnTo,
 }: {
   clinicId: string;
   target: IssueInvoiceTarget;
   onClose: () => void;
+  /** Where the print page's own "← Back" should return to — this dialog
+   *  opens from both Ledger and Workspace. */
+  returnTo: InvoicePrintBackTarget;
 }) {
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
   const [collectedNow, setCollectedNow] = useState(true);
@@ -65,6 +70,7 @@ export function IssueInvoiceDialog({
               <Link
                 to="/invoices/$invoiceId/print"
                 params={{ invoiceId: issued.invoiceId }}
+                search={{ from: returnTo }}
                 className={btnSecondary}
               >
                 Print

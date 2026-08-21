@@ -114,9 +114,19 @@ const patientsRoute = createRoute({
   component: PatientsPage,
 });
 
+const PATIENT_PROFILE_BACK_TARGETS = ['/patients', '/workspace', '/ledger'] as const;
+export type PatientProfileBackTarget = (typeof PATIENT_PROFILE_BACK_TARGETS)[number];
+
 const patientProfileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId',
+  // Where "← Back" should return to — set by whichever screen linked here
+  // (Patients list, Workspace, Ledger) so it doesn't always land on one
+  // fixed page regardless of where the visitor came from.
+  validateSearch: (search: Record<string, unknown>): { from?: PatientProfileBackTarget } =>
+    PATIENT_PROFILE_BACK_TARGETS.includes(search.from as PatientProfileBackTarget)
+      ? { from: search.from as PatientProfileBackTarget }
+      : {},
   component: PatientProfilePage,
 });
 
@@ -177,9 +187,18 @@ const reportsPrintRedirectRoute = createRoute({
   },
 });
 
+const INVOICE_PRINT_BACK_TARGETS = ['/ledger', '/workspace'] as const;
+export type InvoicePrintBackTarget = (typeof INVOICE_PRINT_BACK_TARGETS)[number];
+
 const invoicePrintRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/invoices/$invoiceId/print',
+  // Same "← Back" context-carrying as the patient profile route — this
+  // print page is reachable from both Ledger and Workspace.
+  validateSearch: (search: Record<string, unknown>): { from?: InvoicePrintBackTarget } =>
+    INVOICE_PRINT_BACK_TARGETS.includes(search.from as InvoicePrintBackTarget)
+      ? { from: search.from as InvoicePrintBackTarget }
+      : {},
   component: InvoicePrintPage,
 });
 

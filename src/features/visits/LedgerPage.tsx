@@ -604,6 +604,7 @@ export function LedgerPage() {
                       <Link
                         to="/invoices/$invoiceId/print"
                         params={{ invoiceId: r.invoiceId }}
+                        search={{ from: '/ledger' }}
                         className="text-[var(--teal)] hover:underline"
                       >
                         {r.invoiceNo}
@@ -662,6 +663,7 @@ export function LedgerPage() {
                   if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
                 }}
                 canInvoice={canBill}
+                backTo="/ledger"
               />
               <div className="sticky bottom-0 z-10 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm font-semibold text-[var(--ink)] shadow-[0_-2px_6px_rgba(0,0,0,0.06)]">
                 Totals: {visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'} · Billed{' '}
@@ -686,7 +688,7 @@ export function LedgerPage() {
       {recordsView === 'invoices' && <InvoicesPage />}
 
       {invoicing && (
-        <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} />
+        <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} returnTo="/ledger" />
       )}
 
       {takingPayment && (

@@ -147,6 +147,7 @@ export function InvoicesPage() {
                       <Link
                         to="/invoices/$invoiceId/print"
                         params={{ invoiceId: inv.id }}
+                        search={{ from: '/ledger' }}
                         className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
                       >
                         Print
@@ -204,6 +205,7 @@ export function InvoicesPage() {
                         <Link
                           to="/invoices/$invoiceId/print"
                           params={{ invoiceId: inv.id }}
+                          search={{ from: '/ledger' }}
                           className="font-medium text-[var(--teal)] hover:underline"
                         >
                           Print

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from '@tanstack/react-router';
+import { Link, useParams, useSearch } from '@tanstack/react-router';
+import type { InvoicePrintBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
@@ -12,6 +13,7 @@ import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 export function InvoicePrintPage() {
   const clinic = useClinic();
   const { invoiceId } = useParams({ strict: false }) as { invoiceId: string };
+  const { from: backTo } = useSearch({ strict: false }) as { from?: InvoicePrintBackTarget };
   const invoice = useLiveQuery(() => repos.invoices.get(invoiceId), [invoiceId]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   // Missing row reads as paid, matching computeVisitPaymentState's convention
@@ -58,7 +60,7 @@ export function InvoicePrintPage() {
       <style>{`@page { size: ${paper}; margin: ${paper === 'A5' ? '10mm' : '16mm'}; }`}</style>
 
       <div className="no-print mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
-        <Link to="/ledger" className={btnSecondary}>
+        <Link to={backTo ?? '/ledger'} className={btnSecondary}>
           ← Back
         </Link>
         <div className="ml-auto flex items-center gap-3">

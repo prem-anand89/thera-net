@@ -114,6 +114,18 @@ export function NewVisitPage() {
     prefillName?: string;
   };
 
+  // "Done"/"Cancel" used to always land on Workspace, even when this page
+  // was opened from a patient's own profile (via its "New visit" button,
+  // which passes patientId) — leaving that patient behind instead of
+  // returning to them.
+  function goBack() {
+    if (search.patientId) {
+      void navigate({ to: '/patients/$patientId', params: { patientId: search.patientId } });
+    } else {
+      void navigate({ to: '/workspace' });
+    }
+  }
+
   // Patient selection — a small state machine: searching (default) → either
   // creating (no existing patient matched) or confirmed (patient is set).
   // Only one of these three views renders at a time, so the create-patient
@@ -493,7 +505,7 @@ export function NewVisitPage() {
             >
               Another visit for {justSaved.patientName}
             </button>
-            <button className={btnSecondary} onClick={() => void navigate({ to: '/workspace' })}>
+            <button className={btnSecondary} onClick={goBack}>
               Done
             </button>
           </div>
@@ -951,7 +963,7 @@ export function NewVisitPage() {
         <button className={btnPrimary} disabled={busy} onClick={() => void save()}>
           {busy ? 'Saving…' : 'Save visit'}
         </button>
-        <button className={btnSecondary} onClick={() => void navigate({ to: '/workspace' })}>
+        <button className={btnSecondary} onClick={goBack}>
           Cancel
         </button>
       </div>

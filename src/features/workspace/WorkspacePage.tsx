@@ -215,6 +215,7 @@ export function WorkspacePage() {
               if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
             }}
             canInvoice={canBill}
+            backTo="/workspace"
           />
         )}
       </SectionCard>
@@ -269,7 +270,12 @@ export function WorkspacePage() {
                   className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <Link to="/patients/$patientId" params={{ patientId: p.patientId }} className="min-w-0">
+                    <Link
+                      to="/patients/$patientId"
+                      params={{ patientId: p.patientId }}
+                      search={{ from: '/workspace' }}
+                      className="min-w-0"
+                    >
                       <div className="font-display text-sm font-medium text-[var(--ink)]">{p.patientName}</div>
                       <div className="text-xs text-[var(--muted)]">{p.mrno}</div>
                     </Link>
@@ -358,7 +364,7 @@ export function WorkspacePage() {
       {!scope.isClinicWideView && <TherapistComparisonCard />}
 
       {invoicing && (
-        <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} />
+        <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} returnTo="/workspace" />
       )}
 
       {takingPayment && (
