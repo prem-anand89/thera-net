@@ -8,9 +8,20 @@
  * every "does this count as a working tablet" decision in the app should
  * use, so that answer stays consistent everywhere rather than each screen
  * picking its own threshold.
+ *
+ * `desktop:` breakpoint — 1000px, matching the plain-CSS tablet/desktop
+ * split below (`.screen-body` etc). For layouts that reserve their own
+ * side column (Settings' section nav rail), switching that column in at
+ * `tab:` steals width from content at exactly the iPad-portrait widths
+ * `tab:` exists to serve well — a 744-834px iPad portrait was left with a
+ * ~500px content area. Those layouts should gate the side column on
+ * `desktop:` instead, so iPad portrait still gets the tablet content
+ * layout (`tab:`-gated tables etc.) at full width, with just the nav
+ * itself staying as horizontal chips through the whole tablet range.
  */
 @theme {
   --breakpoint-tab: 46.5rem;
+  --breakpoint-desktop: 62.5rem;
 }
 
 /*

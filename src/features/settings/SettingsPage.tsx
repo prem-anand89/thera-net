@@ -158,7 +158,7 @@ function SettingsSectionNavButton({
       className={
         mobile
           ? 'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-2 text-xs font-medium'
-          : 'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm font-medium tab:w-full'
+          : 'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm font-medium desktop:w-full'
       }
       style={
         active
@@ -279,14 +279,18 @@ export function SettingsPage() {
 
       {showFirstWeek && <FirstWeekChecklist />}
 
-      <div className="tab:flex tab:items-start tab:gap-6">
-        {/* Below tab: horizontal scroll chips (one tap per section) instead of
-            a grouped <select>. Sits under the page title, above the bottom
-            tab bar — same icon + label language as the vertical rail. */}
+      <div className="desktop:flex desktop:items-start desktop:gap-6">
+        {/* Horizontal scroll chips (one tap per section) instead of a
+            grouped <select> — used on phones AND the whole tablet range
+            (through iPad portrait) so the persistent side rail below only
+            claims width once there's a laptop-width screen to give it;
+            gating the rail at `tab:` left iPad portrait with a ~500px-wide
+            content column. Sits under the page title, above the bottom tab
+            bar — same icon + label language as the vertical rail. */}
         <nav
           ref={mobileNavRef}
           aria-label="Settings sections"
-          className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 tab:hidden"
+          className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 desktop:hidden"
         >
           {SECTION_GROUPS.map((group, groupIndex) => (
             <div key={group.label} className="flex shrink-0 items-center gap-2">
@@ -307,10 +311,10 @@ export function SettingsPage() {
             </div>
           ))}
         </nav>
-        <nav className="mb-4 hidden gap-1 overflow-x-auto tab:mb-0 tab:flex tab:w-48 tab:shrink-0 tab:flex-col tab:gap-0.5 tab:overflow-visible">
+        <nav className="mb-4 hidden gap-1 overflow-x-auto desktop:mb-0 desktop:flex desktop:w-48 desktop:shrink-0 desktop:flex-col desktop:gap-0.5 desktop:overflow-visible">
           {SECTION_GROUPS.map((group) => (
-            <div key={group.label} className="contents tab:mb-1.5 tab:block">
-              <p className="hidden px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]/70 tab:block">
+            <div key={group.label} className="contents desktop:mb-1.5 desktop:block">
+              <p className="hidden px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]/70 desktop:block">
                 {group.label}
               </p>
               {group.keys.map((key) => {
