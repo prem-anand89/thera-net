@@ -47,7 +47,7 @@ export function MonthlyLedgerPrintPage() {
 
   return (
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
-      <style>{`@page { size: A4 landscape; margin: 12mm; }`}</style>
+      <style>{`@page { size: A4 portrait; margin: 10mm; }`}</style>
 
       <div className="no-print mx-auto flex max-w-6xl items-center gap-2 px-4 py-3">
         <Link to="/insights" search={{ tab: 'monthly' }} className={btnSecondary}>
@@ -96,11 +96,8 @@ export function MonthlyLedgerPrintPage() {
         <table className="mt-4 w-full text-xs">
           <thead>
             <tr className="border-b border-[var(--border)] text-left uppercase tracking-wide text-[var(--muted)]">
-              <th className="py-1.5 pr-2">SN</th>
               <th className="py-1.5 pr-2">Date</th>
               <th className="py-1.5 pr-2">Patient</th>
-              <th className="py-1.5 pr-2">Patient ID</th>
-              <th className="py-1.5 pr-2">Age/Sex</th>
               <th className="py-1.5 pr-2">Condition</th>
               <th className="py-1.5 pr-2">Therapist</th>
               <th className="py-1.5 pr-2">Service</th>
@@ -108,16 +105,16 @@ export function MonthlyLedgerPrintPage() {
             </tr>
           </thead>
           <tbody>
-            {sortedVisits.map((v, i) => {
+            {sortedVisits.map((v) => {
               const p = patientById.get(v.patientId);
               return (
                 <tr key={v.id} className="border-b border-[var(--border)]">
-                  <td className="py-1 pr-2 text-[var(--muted)]">{i + 1}</td>
                   <td className="py-1 pr-2">{formatDateDMY(v.visitDate)}</td>
-                  <td className="font-display py-1 pr-2 font-medium text-[var(--ink)]">{p?.name ?? '—'}</td>
-                  <td className="py-1 pr-2">{p?.mrno ?? '—'}</td>
                   <td className="py-1 pr-2">
-                    {p?.age ?? '—'} / {p?.sex ?? '—'}
+                    <div className="font-display font-medium text-[var(--ink)]">{p?.name ?? '—'}</div>
+                    <div className="text-[10px] text-[var(--muted)]">
+                      {p?.mrno ?? '—'} · {p?.age ?? '—'}/{p?.sex ?? '—'}
+                    </div>
                   </td>
                   <td className="py-1 pr-2">{v.condition ?? '—'}</td>
                   <td className="py-1 pr-2">{therapistName.get(v.therapistId) ?? '—'}</td>
@@ -135,7 +132,7 @@ export function MonthlyLedgerPrintPage() {
             })}
             {sortedVisits.length === 0 && (
               <tr>
-                <td colSpan={9} className="py-6 text-center text-[var(--muted)]">
+                <td colSpan={6} className="py-6 text-center text-[var(--muted)]">
                   No visits in this month.
                 </td>
               </tr>

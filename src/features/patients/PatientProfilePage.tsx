@@ -6,7 +6,7 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
-import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
+import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
@@ -108,6 +108,55 @@ export function PatientProfilePage() {
   const openPackageIds = useMemo(
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
+  );
+
+  const visitCardRows: VisitCardData[] = useMemo(
+    () =>
+      visitRows.map((v) => ({
+        visitId: v.id,
+        visitDate: v.visitDate,
+        patientId,
+        patientName: patient?.name ?? '—',
+        mrno: patient?.mrno ?? '—',
+        age: patient?.age,
+        sex: patient?.sex,
+        condition: v.condition ?? null,
+        serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
+        sessionIndex: v.sessionIndex ?? null,
+        packageTotal: v.packageTotal ?? null,
+        therapistName: therapistName.get(v.therapistId) ?? '—',
+        treatmentNotes: v.treatmentNotes ?? null,
+        billPaise: v.actualBillPaise,
+        paymentState: computeVisitPaymentState(
+          v.actualBillPaise,
+          v.invoiceId ?? null,
+          directPaymentByVisitId.get(v.id) ?? 0,
+          v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+        ),
+        invoiceId: v.invoiceId ?? null,
+        canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
+        // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
+        // is_own_therapist) — a patient's history is clinic-wide (any
+        // therapist can view it), but only the visit's own therapist or an
+        // admin can delete it.
+        canDelete: !v.invoiceId && (isAdmin || v.therapistId === myTherapistId),
+        needsNote: v.clinicalStatus === 'pending',
+      })),
+    [
+      visitRows,
+      patientId,
+      patient?.name,
+      patient?.mrno,
+      patient?.age,
+      patient?.sex,
+      serviceName,
+      therapistName,
+      directPaymentByVisitId,
+      statusByInvoiceId,
+      openPackageIds,
+      isAdmin,
+      myTherapistId,
+    ]
   );
 
   const handleVisitDelete = useCallback(async (visitId: string) => {
@@ -342,67 +391,22 @@ export function PatientProfilePage() {
             {visitRows.length === 0 ? (
               <p className="p-4 text-sm text-[var(--muted)]">No visits recorded yet.</p>
             ) : (
-              <ul className="divide-y divide-[var(--border)]">
-                {visitRows.map((v) => {
-                  const isSelected = selectedVisitIds.has(v.id);
-                  const eligibleForInvoicing = !v.invoiceId;
-                  const cardData: VisitCardData = {
-                    visitId: v.id,
-                    visitDate: v.visitDate,
-                    patientId,
-                    patientName: patient.name,
-                    mrno: patient.mrno,
-                    age: patient.age,
-                    sex: patient.sex,
-                    condition: v.condition ?? null,
-                    serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
-                    sessionIndex: v.sessionIndex ?? null,
-                    packageTotal: v.packageTotal ?? null,
-                    therapistName: therapistName.get(v.therapistId) ?? '—',
-                    treatmentNotes: v.treatmentNotes ?? null,
-                    billPaise: v.actualBillPaise,
-                    paymentState: computeVisitPaymentState(
-                      v.actualBillPaise,
-                      v.invoiceId ?? null,
-                      directPaymentByVisitId.get(v.id) ?? 0,
-                      v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
-                    ),
-                    invoiceId: v.invoiceId ?? null,
-                    canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
-                    // Pre-flight mirror of visits_delete's RLS check
-                    // (is_clinic_admin or is_own_therapist) — a patient's
-                    // history is clinic-wide (any therapist can view it),
-                    // but only the visit's own therapist or an admin can
-                    // delete it.
-                    canDelete: !v.invoiceId && (isAdmin || v.therapistId === myTherapistId),
-                    needsNote: v.clinicalStatus === 'pending',
-                  };
-                  return (
-                    <li key={v.id} className="flex items-start gap-3 px-3">
-                      {eligibleForInvoicing && canBill && (
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleVisitSelection(v.id)}
-                          className="mt-4 shrink-0 cursor-pointer"
-                          aria-label={`Select visit on ${formatDateDMY(v.visitDate)}`}
-                        />
-                      )}
-                      <div className="flex-1">
-                        <SharedVisitCard
-                          data={cardData}
-                          showDate={true}
-                          showPatient={false}
-                          onInvoice={() => {}}
-                          onEditPatient={() => setEditPatientId(v.patientId)}
-                          onDelete={() => handleVisitDelete(v.id)}
-                          canInvoice={canBill}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="p-5">
+                <ResponsiveVisitList
+                  rows={visitCardRows}
+                  showDate={true}
+                  showPatient={false}
+                  onInvoice={() => {}}
+                  onEditPatient={(row) => setEditPatientId(row.patientId)}
+                  onDelete={(row) => handleVisitDelete(row.visitId)}
+                  canInvoice={canBill}
+                  selection={{
+                    selectedIds: selectedVisitIds,
+                    onToggle: toggleVisitSelection,
+                    isSelectable: (row) => !row.invoiceId && canBill,
+                  }}
+                />
+              </div>
             )}
           </section>
         </div>
