@@ -35,7 +35,7 @@ framework.
 
 ### Revenue & Invoicing
 - **Revenue split** — per visit, computed at billing time and stored with the rate snapshot: BM Share (75%), Post-Tax (90% of share), TDS (configurable basis: % of gross bill or % of BM share), HV share. Rounding: half-up to the rupee, once per visit — rollups reconcile by construction.
-- **Invoices** — server-issued, gap-free sequential numbers per clinic per FY (`BM/26-27/0001`), immutable once issued (DB triggers), printable A4/A5 with clinic letterhead + optional partner-hospital branding.
+- **Invoices** — server-issued, gap-free sequential numbers per clinic per FY (`BM/26-27/0001`), immutable once issued (DB triggers), printable A4/A5 with clinic letterhead + optional partner-hospital branding. Titled "BILL" while outstanding and "BILL CUM RECEIPT" once paid, rather than "Invoice"/"Tax Invoice" — matches how insurers/TPAs expect these documents to read for GST-exempt healthcare services.
 - **Payment status & HV settlement** — a three-fact payment model (Billed / Collected / Receipted) distinguishes cash collected without a receipt from an issued-but-unpaid invoice, so neither reads as the other; take-payment/issue-invoice actions live directly on each visit row and on the Invoices tab. Monthly report shows HV settlement card for variance tracking.
 - **Billing access control** — clinics can restrict who is allowed to issue invoices ("everyone" vs. "billing staff only"), enforced server-side inside `issue_invoice()`, not just hidden in the UI.
 - **Monthly report** — fiscal-year-aware (Apr–Mar), per-therapist Bill / BM Share / TDS / Post-Tax / HV / unique patients + total, CSV export.

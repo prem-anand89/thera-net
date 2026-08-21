@@ -114,6 +114,10 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Server-issued gap-free sequential numbers** per clinic per FY (format: `PREFIX/FY-LABEL/NNNN`, e.g., `BM/26-27/0001`)
 - **Immutable once issued** via DB triggers
 - **Printable** on A4/A5 with clinic letterhead + optional partner-hospital branding
+- **Document title**: "BILL" while outstanding, "BILL CUM RECEIPT" once paid — not
+  "Invoice"/"Tax Invoice", which reads as GST terminology that doesn't apply to
+  (generally GST-exempt) healthcare services and doesn't match how insurers/TPAs
+  expect these documents to be labeled
 - **Online-only** — gap-free numbers require the server counter
 
 #### Payment Status & HV Settlement
@@ -198,16 +202,28 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 ### 7. Patient Management
 
 #### Patient Creation & Lookup
-- **Search by MRNO or name**
+- **Search by MRNO, name, or phone**
 - **Create-if-missing** on visit entry
 - **Walk-in MRNO auto-generation** (sequential per clinic per year)
 - **Editable fields**: age, sex, phone, primary condition, referring source
+- Phone is searchable everywhere but only *displayed* on the Patient Profile
+  page — dropped from the Patients list/card to save space there
 
 #### Patient Profile
-- **Visit history** with dense table
+- **Visit history** — responsive table (tab-and-up widths) / card list
+  (phone) shared with Ledger and Workspace, with a "hide ₹0 visits"
+  filter for package sessions billed as part of the package's own invoice,
+  and bulk visit selection for issuing one invoice across several visits
+- **Payments summary** — lifetime billed / collected / outstanding for the
+  patient, alongside the outstanding-balance pill in the header
+- **Billing-lock indicator** — a small lock icon on invoiced-but-unpaid
+  visit rows, since their billing fields are frozen even though the
+  payment chip alone ("Due") doesn't say so
 - **Clinical notes section** — drilling into note editor
-- **Package tracking** — open and completed packages
-- **Referring source** display with detail (doctor/hospital names)
+- **Package tracking** — open and completed packages, with days-since-last-visit
+  shown next to the date so staleness doesn't require doing the math
+- **Referring source** shown as a badge next to the outstanding-balance and
+  condition pills (not buried in small text)
 
 #### Patient Hiding & Deletion
 - **Hide (soft delete)** — default remediation for duplicates/mistakes, propagates to all devices via outbox
@@ -230,7 +246,9 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Walk-in MRNO prefix** (configurable, defaults to 'W')
 
 #### Service Catalog
-- Category and name per item
+- Category and name per item — category is free text (autocompleted from
+  existing categories via a datalist), and the Settings list/table groups
+  items under a category heading rather than repeating it per row
 - Session count (1, 3, 5, etc. for package pricing)
 - Base price (in paise)
 - Active toggle
@@ -579,6 +597,20 @@ UNIQUE (clinic_id, reason)
 - **Patients**: `deleted_at` — soft delete, still resolves in notes
 - **Visits**: `deleted` boolean — hard delete via RPC only
 - **Therapists**: `active` boolean — deactivation, hard delete only if zero visits
+
+### 9. Date Display: Short On-Screen, Full On Paper
+- **`formatDateDM`** (`DD/MM`, no year) — the default for interactive
+  on-screen dates: visit rows/cards, invoice dates, note editor/list dates.
+  The year is redundant when the date is always close to "now" in context.
+- **`formatDateDMY`** (`DD/MM/YY`) — reserved for dates that can legitimately
+  be a very different year: first/last visit, package start, arbitrary
+  date-range filter text, historical import rows.
+- **All printed/exported documents keep full-year dates unconditionally**
+  (visits CSV, invoice print, monthly ledger print, note print) — they're
+  standalone records that may be reviewed later without app context.
+- Both functions live in `src/domain/fiscalYear.ts`; the choice between them
+  is a per-usage judgment call, not something to change without checking
+  which bucket a given date falls into.
 
 ---
 
