@@ -9,6 +9,7 @@ import { amountInWords } from '@/domain/amountInWords';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
+import { AmendInvoiceDialog } from '@/components/AmendInvoiceDialog';
 
 export function InvoicePrintPage() {
   const clinic = useClinic();
@@ -23,8 +24,16 @@ export function InvoicePrintPage() {
     () => (invoice ? repos.invoicePayments.getByInvoiceId(invoice.id) : undefined),
     [invoice?.id]
   );
+  const allInvoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
+  const supersededBy = (allInvoices ?? []).find((inv) => inv.supersedesInvoiceId === invoice?.id);
+  const supersedes = useLiveQuery(
+    () => (invoice?.supersedesInvoiceId ? repos.invoices.get(invoice.supersedesInvoiceId) : undefined),
+    [invoice?.supersedesInvoiceId]
+  );
+
   const [paper, setPaper] = useState<'A4' | 'A5'>('A4');
   const [showVisitDates, setShowVisitDates] = useState(true);
+  const [amending, setAmending] = useState(false);
 
   const logoUrl = useMemo(() => publicLogoUrl(clinic.logoPath), [clinic.logoPath]);
   const partnerLogoUrl = useMemo(
@@ -83,8 +92,54 @@ export function InvoicePrintPage() {
           <button className={btnPrimary} onClick={() => window.print()}>
             Print / Save PDF
           </button>
+          {!supersededBy && (
+            <button className={btnSecondary} onClick={() => setAmending(true)}>
+              Amend this invoice
+            </button>
+          )}
         </div>
       </div>
+
+      {(supersededBy || supersedes) && (
+        <div className="no-print mx-auto max-w-3xl px-4">
+          {supersededBy && (
+            <div className="mb-3 rounded-md border-l-4 border-[var(--rust)] bg-[var(--rust-light)] p-3 text-xs text-[var(--ink)]">
+              Superseded by{' '}
+              <Link
+                to="/invoices/$invoiceId/print"
+                params={{ invoiceId: supersededBy.id }}
+                search={{ from: backTo }}
+                className="font-medium underline"
+              >
+                {supersededBy.invoiceNo}
+              </Link>{' '}
+              — that invoice is the current version of this bill.
+            </div>
+          )}
+          {supersedes && (
+            <div className="mb-3 rounded-md border-l-4 border-[var(--teal)] bg-[var(--teal-light)] p-3 text-xs text-[var(--ink)]">
+              Amendment to{' '}
+              <Link
+                to="/invoices/$invoiceId/print"
+                params={{ invoiceId: supersedes.id }}
+                search={{ from: backTo }}
+                className="font-medium underline"
+              >
+                {supersedes.invoiceNo}
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {amending && (
+        <AmendInvoiceDialog
+          clinicId={clinic.id}
+          invoice={invoice}
+          onClose={() => setAmending(false)}
+          returnTo={backTo ?? '/ledger'}
+        />
+      )}
 
       <div
         className={`mx-auto max-w-3xl bg-[var(--surface)] p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm]' : 'print:max-w-[178mm]'}`}

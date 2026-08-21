@@ -826,6 +826,44 @@ column, folded into `netPostTaxPaise` instead so there's one lens, not two.
 - **Prevents concurrent duplicates** with DB locking
 - **Online-only** to maintain gap-free guarantee
 
+### 3b. Invoice Amendments
+A TPA/insurance payer sometimes asks for a corrected bill-cum-receipt on an
+already-issued invoice (e.g. missing visit dates added). Invoices are
+immutable by design (`invoices_immutable` trigger, corrections raise "issued
+invoices are immutable; corrections require an amendment record") — so a
+correction is a brand-new invoice that **supersedes** the old one, never an
+edit to it. Both stay on record for audit; only the latest is what a payer
+should honor.
+
+- **`invoices.supersedes_invoice_id`** — a one-directional forward pointer
+  (new → old) only. The old invoice can never be updated to point at its
+  replacement without violating immutability, so "X is amended by Y" is
+  always derived by querying `where supersedes_invoice_id = X.id`, never
+  stored on X itself.
+- **`amend_invoice()` RPC** mirrors `issue_invoice()`'s membership/
+  entitlement/access checks and gets its own real, gap-free sequential
+  invoice number from the same counter — but accepts visit IDs already on
+  the invoice being amended (in addition to any newly-added, previously
+  uninvoiced visits) and stamps `supersedes_invoice_id`.
+- **`protect_invoiced_visit()` trigger bypass**: re-pointing `invoice_id`
+  on an already-invoiced visit is normally blocked unconditionally.
+  `amend_invoice()` sets a transaction-local flag
+  (`set_config('app.allow_invoice_amendment', 'true', true)`) that the
+  trigger checks specifically for that one field — every other financial-
+  field freeze on an invoiced visit stays fully enforced even during an
+  amendment, so an amendment can only add/re-point visits, never edit a
+  visit's billed amount.
+- **UI**: `InvoicePrintPage` shows a "Superseded by …" banner on an old
+  invoice and an "Amendment to …" banner on the new one, each linking to
+  the other. "Amend this invoice" opens `AmendInvoiceDialog`
+  (`src/components/AmendInvoiceDialog.tsx`), which carries the original's
+  own visits forward and lets staff pick additional uninvoiced visits for
+  the same patient before issuing.
+- **Reporting impact**: none needed — `reportService`/`dashboardService`
+  query `visits` directly, and each visit's `invoice_id` always points to
+  whichever invoice currently claims it, so reports automatically reflect
+  only the latest state.
+
 ### 4. Walk-In MRNO Auto-Generation
 - **Sequential per clinic per year**: `PREFIXYY-NNNN` (W26-0001, W26-0002)
 - **Sequence derived by scanning** existing walk-in MRNOs (no running counter)
@@ -899,7 +937,7 @@ column, folded into `netPostTaxPaise` instead so there's one lens, not two.
 
 - **Every table carries `clinic_id`** — RLS restricts all access to clinic members
 - **Patient data is health data** — no anonymous read path
-- **Issued invoices and visits frozen** by DB triggers (corrections = future amendment/credit-note feature)
+- **Issued invoices and visits frozen** by DB triggers; corrections go through the invoice-amendment feature (§3b) — a new invoice that supersedes the old one, never an edit to it
 - **Rate/tax changes apply to new visits only** — history keeps the rates it was billed under
 - **Export monthly CSVs** — this app should never be the only copy of financial records
 

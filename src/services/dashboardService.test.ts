@@ -207,6 +207,7 @@ const baseInvoice = (id: string, overrides: Partial<Invoice>): Invoice => ({
   totalPaise: rs(1500),
   paymentMode: 'Cash',
   therapistId: 'th-prem',
+  supersedesInvoiceId: null,
   updatedAt: '',
   ...overrides,
 });

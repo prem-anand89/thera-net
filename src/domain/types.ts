@@ -426,6 +426,11 @@ export interface Invoice {
   totalPaise: Paise;
   paymentMode: PaymentMode;
   therapistId: UUID | null;
+  /** Set when this invoice is a correction that replaces an earlier one
+   *  (e.g. a TPA asked for added visit dates) — points at the original.
+   *  One-directional: the original invoice is never updated to point
+   *  forward, since issued invoices are immutable. */
+  supersedesInvoiceId: UUID | null;
   updatedAt: string;
 }
 
