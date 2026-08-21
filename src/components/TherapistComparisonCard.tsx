@@ -149,7 +149,8 @@ export function TherapistComparisonCard() {
               <thead className="bg-[var(--paper)]">
                 <tr>
                   <th className={th}>Therapist</th>
-                  <th className={thNum}>{revenueLabel}</th>
+                  <th className={thNum}>Bill Amount</th>
+                  <th className={thNum}>Net</th>
                   <th className={thNum}>Visits</th>
                   <th className={thNum}>Open packages</th>
                 </tr>
@@ -160,6 +161,7 @@ export function TherapistComparisonCard() {
                   return (
                     <tr key={name}>
                       <td className={td}>{name}</td>
+                      <td className={tdNum}>{formatINR(row?.billPaise ?? 0)}</td>
                       <td className={tdNum}>{formatINR(row?.netPostTaxPaise ?? 0)}</td>
                       <td className={tdNum}>{row?.visitCount ?? 0}</td>
                       <td className={tdNum}>{openPackageCountByName.get(name) ?? 0}</td>

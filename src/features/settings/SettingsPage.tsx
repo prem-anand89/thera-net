@@ -41,7 +41,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { FirstWeekChecklist, useFirstWeekChecklistVisible } from './FirstWeekChecklist';
 import { isValidUpiVpa } from '@/domain/upiPay';
 
-type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'data';
+type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'treatments' | 'referrals' | 'data';
 
 /**
  * Grouped into the three jobs an admin actually comes here to do, rather
@@ -54,7 +54,7 @@ type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'dat
  */
 const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
   { label: 'Clinic', keys: ['profile', 'billing', 'partner'] },
-  { label: 'People & services', keys: ['team', 'services'] },
+  { label: 'People & services', keys: ['team', 'services', 'treatments', 'referrals'] },
   { label: 'System', keys: ['data'] },
 ];
 
@@ -85,6 +85,18 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
   { key: 'team', label: 'Team', description: 'Invite and manage logins, therapist roster.', accent: 'moss' },
   { key: 'services', label: 'Services', description: 'Catalog of billable services and package prices.', accent: 'teal' },
   {
+    key: 'treatments',
+    label: 'Treatments',
+    description: 'Treatment types tracked per visit, independent of billing.',
+    accent: 'moss',
+  },
+  {
+    key: 'referrals',
+    label: 'Referral sources',
+    description: 'Channels shown when adding or editing a patient.',
+    accent: 'rust',
+  },
+  {
     key: 'data',
     label: 'Data & maintenance',
     description: 'Import historical visits, back up or restore, reset this device, wipe clinic data.',
@@ -111,6 +123,8 @@ const SECTION_ICON_PATHS: Record<SectionKey, string> = {
   partner: 'M8 2.5l1.4 3.1 3.4.4-2.5 2.3.7 3.4L8 10l-3 1.7.7-3.4-2.5-2.3 3.4-.4L8 2.5z',
   team: 'M2.3 13c.4-2.5 2-3.9 3.9-3.9s3.5 1.4 3.9 3.9M9.9 9.5c1.6.2 2.8 1.4 3.1 3.5',
   services: 'M3 4h10M3 8h10M3 12h6',
+  treatments: 'M5 3l6 10M11 3l-6 10M3 8h10',
+  referrals: 'M4 13V3l4 2.5L12 3v10M4 8h8',
   data: 'M3 5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2zM3 5v6c0 1.1 2.2 2 5 2s5-.9 5-2V5M3 8c0 1.1 2.2 2 5 2s5-.9 5-2',
 };
 
@@ -360,13 +374,9 @@ export function SettingsPage() {
               <Therapists />
             </>
           )}
-          {activeKey === 'services' && (
-            <>
-              <Catalog />
-              <TreatmentCatalog />
-              <ReferringSources />
-            </>
-          )}
+          {activeKey === 'services' && <Catalog />}
+          {activeKey === 'treatments' && <TreatmentCatalog />}
+          {activeKey === 'referrals' && <ReferringSources />}
           {activeKey === 'data' && (
             <>
               <HistoricalData />

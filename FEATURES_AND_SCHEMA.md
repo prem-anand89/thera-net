@@ -695,7 +695,7 @@ updated_at      timestamptz NOT NULL
 UNIQUE (clinic_id, name)
 ```
 Clinic-editable list of referral channels shown when adding/editing a
-patient (Settings → Services), same add / deactivate-not-delete / rename
+patient (Settings → Referral sources, its own tab), same add / deactivate-not-delete / rename
 pattern as `no_return_reason_catalog`. Seeded with the app's original six
 labels (Hospital referral, Doctor referral, Walk-in, Word of mouth, Online,
 Other) for every clinic — new via `create_clinic_with_admin()`, existing via
@@ -716,8 +716,10 @@ updated_at      timestamptz NOT NULL
 UNIQUE (clinic_id, name)
 ```
 Clinic-editable list of treatment types (Manual Therapy, Exercise Therapy,
-Kinesio Taping, ...), managed from Settings → Services same as the other
-catalogs. Independent of the billing-side `service_catalog` — one visit is
+Kinesio Taping, ...), managed from Settings → Treatments, its own tab
+alongside Services and Referral sources (all three used to be stacked in
+one "Services" tab; split apart so each is its own scroll). Independent of
+the billing-side `service_catalog` — one visit is
 billed under one service package but can record several treatment types
 performed via `visits.treatment_ids`, checked off on a "Treatments
 performed" picker on both the visit-logging and edit-visit forms.

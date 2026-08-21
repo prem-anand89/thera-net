@@ -6,6 +6,7 @@ import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
+import { formatDateDM } from '@/domain/fiscalYear';
 import { clinicBillingConfig, type Visit } from '@/domain/types';
 import type { TodayVisitRow } from '@/services/dashboardService';
 import {
@@ -292,12 +293,14 @@ export function WorkspacePage() {
                     <Pill tone="slate">{p.startedByTherapistName}</Pill>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
+                    <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--muted)]">
                       <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
                       <span className="font-num">
                         {p.sessionsLogged}/{p.packageTotal}
                       </span>
-                      <span className="ml-1">· {p.daysSinceLastVisit}d ago</span>
+                      <span className="ml-1">
+                        Started {formatDateDM(p.startedOn)} · Last {formatDateDM(p.lastVisitOn)} ({p.daysSinceLastVisit}d ago)
+                      </span>
                     </div>
                     <Link
                       to="/visits/new"
@@ -319,6 +322,7 @@ export function WorkspacePage() {
                     <th className={th}>Package</th>
                     <th className={th}>Therapist</th>
                     <th className={thNum}>Sessions</th>
+                    <th className={th}>Started</th>
                     <th className={th}>Last visit</th>
                     <th className={th}>Status</th>
                     <th className={th}></th>
@@ -340,7 +344,11 @@ export function WorkspacePage() {
                           </span>
                         </span>
                       </td>
-                      <td className={td}>{p.daysSinceLastVisit}d ago</td>
+                      <td className={td}>{formatDateDM(p.startedOn)}</td>
+                      <td className={td}>
+                        {formatDateDM(p.lastVisitOn)}{' '}
+                        <span className="text-[var(--muted)]">({p.daysSinceLastVisit}d ago)</span>
+                      </td>
                       <td className={td}>
                         <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
                       </td>

@@ -5,7 +5,7 @@ import { repos, reportService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { publicLogoUrl } from '@/lib/supabase';
 import { formatINR } from '@/domain/money';
-import { fiscalYearOf, monthDateRange, monthName, formatDateDMY } from '@/domain/fiscalYear';
+import { fiscalYearOf, monthDateRange, monthName, formatDateDM } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { btnPrimary, btnSecondary } from '@/components/ui';
 import { MonthlyReportTable } from '@/components/MonthlyReportTable';
@@ -111,7 +111,7 @@ export function MonthlyLedgerPrintPage() {
               const p = patientById.get(v.patientId);
               return (
                 <tr key={v.id} className="border-b border-[var(--border)]">
-                  <td className="py-1 pr-2">{formatDateDMY(v.visitDate)}</td>
+                  <td className="py-1 pr-2">{formatDateDM(v.visitDate)}</td>
                   <td className="py-1 pr-2">
                     <div className="font-display font-medium text-[var(--ink)]">{p?.name ?? '—'}</div>
                     <div className="text-[10px] text-[var(--muted)]">
@@ -149,7 +149,7 @@ export function MonthlyLedgerPrintPage() {
         </div>
 
         <footer className="mt-8 border-t border-[var(--border)] pt-3 text-xs text-[var(--muted)]">
-          Generated {formatDateDMY(new Date().toISOString())} · {clinic.name}
+          Generated {formatDateDM(new Date().toISOString())} · {clinic.name}
           {clinic.partnerHospitalName ? ` — ${clinic.partnerHospitalName}` : ''}
         </footer>
       </div>
