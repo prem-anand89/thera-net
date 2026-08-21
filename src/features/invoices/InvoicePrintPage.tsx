@@ -211,7 +211,7 @@ export function InvoicePrintPage() {
           </tfoot>
         </table>
 
-        <p className="mt-2 text-xs italic text-[var(--muted)]">In words: {amountInWords(invoice.totalPaise)}</p>
+        <p className="mt-2 text-sm text-[var(--muted)]">In words: {amountInWords(invoice.totalPaise)}</p>
 
         <p className="mt-3 text-sm text-[var(--muted)]">Payment mode: {invoice.paymentMode}</p>
 
