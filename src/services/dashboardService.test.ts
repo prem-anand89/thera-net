@@ -898,6 +898,26 @@ describe('dashboardService.monthlyNewCounts', () => {
     expect(counts.newPatients).toBe(0);
   });
 
+  it('does not count a patient whose first visit was a LATER month as new for an earlier one', async () => {
+    // Regression: monthStart used to have no upper bound, so querying an
+    // earlier month (e.g. "last month") counted anyone new since then —
+    // including patients who only actually showed up later.
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-07-05' }));
+    const svc = createDashboardService(fake.repos);
+    const counts = await svc.monthlyNewCounts('clinic-1', new Date('2026-06-15'));
+    expect(counts.newPatients).toBe(0);
+  });
+
+  it('does not count a package whose first session was a LATER month as new for an earlier one', async () => {
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-07-05', packageGroupId: 'g1', packageTotal: 3 })
+    );
+    const svc = createDashboardService(fake.repos);
+    const counts = await svc.monthlyNewCounts('clinic-1', new Date('2026-06-15'));
+    expect(counts.newPackages).toBe(0);
+  });
+
   it('scopes both counts to just one therapist when therapistId is passed', async () => {
     fake.visits.set(
       'v1',

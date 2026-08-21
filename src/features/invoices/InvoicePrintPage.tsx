@@ -86,7 +86,9 @@ export function InvoicePrintPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-3xl bg-[var(--surface)] p-8 print:max-w-none print:p-0">
+      <div
+        className={`mx-auto max-w-3xl bg-[var(--surface)] p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm]' : 'print:max-w-[178mm]'}`}
+      >
         {/* Letterhead */}
         <header className="flex items-start justify-between border-b border-[var(--border)] pb-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -94,7 +96,7 @@ export function InvoicePrintPage() {
             <div className="min-w-0">
               <h1 className="font-display text-xl font-bold text-[var(--ink)]">{clinic.name}</h1>
               {clinic.address && (
-                <p className="whitespace-pre-line text-xs text-[var(--muted)]">{clinic.address}</p>
+                <p className="whitespace-pre-line break-words text-xs text-[var(--muted)]">{clinic.address}</p>
               )}
               <p className="text-xs text-[var(--muted)]">
                 {[clinic.phone, clinic.email].filter(Boolean).join(' · ')}

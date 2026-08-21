@@ -723,6 +723,9 @@ clinic regardless of `clinicalDocsEnabled`. Patient Profile's Care plan
 card shows a per-package breakdown (e.g. "Manual Therapy: 4 · Exercise: 6")
 computed client-side from the patient's own visits — no separate
 aggregation query. Seeded with a 6-item starter set for every clinic.
+Also shown as a toggleable "Treatments" column/row on the Visits table
+(Ledger, Workspace, Patient Profile) — a separate `VisitColumnKey` from the
+pre-existing free-text `'treatment'` (treatmentNotes) column.
 
 #### `clinic_module_settings`, `clinic_entitlements` — dead infrastructure
 Both tables still exist (RLS enabled, no policies) but have **zero client

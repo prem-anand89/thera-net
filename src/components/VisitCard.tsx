@@ -95,6 +95,8 @@ export interface VisitCardData {
   packageTotal: number | null;
   therapistName: string;
   treatmentNotes: string | null;
+  /** Resolved treatment_catalog names for this visit's "Treatments performed" — pre-resolved, not raw ids. */
+  treatmentNames: string[];
   billPaise: Paise;
   paymentState: VisitPaymentState;
   invoiceId: UUID | null;
@@ -345,7 +347,12 @@ export function CardDetailRow({
 function VisitCardDetails({ data }: { data: VisitCardData }) {
   const hasSession = Boolean(data.sessionIndex && data.packageTotal);
   const hasDetails =
-    data.serviceName || data.therapistName || data.condition || data.treatmentNotes || hasSession;
+    data.serviceName ||
+    data.therapistName ||
+    data.condition ||
+    data.treatmentNotes ||
+    data.treatmentNames.length > 0 ||
+    hasSession;
   if (!hasDetails) return null;
 
   return (
@@ -359,6 +366,11 @@ function VisitCardDetails({ data }: { data: VisitCardData }) {
       {data.treatmentNotes && (
         <CardDetailRow label="Treatment" clamp>
           {data.treatmentNotes}
+        </CardDetailRow>
+      )}
+      {data.treatmentNames.length > 0 && (
+        <CardDetailRow label="Treatments" clamp>
+          {data.treatmentNames.join(', ')}
         </CardDetailRow>
       )}
       {data.serviceName && <CardDetailRow label="Service">{data.serviceName}</CardDetailRow>}
@@ -675,6 +687,12 @@ function VisitTable({
                       return (
                         <td key={key} className={td}>
                           {row.treatmentNotes ?? '—'}
+                        </td>
+                      );
+                    case 'treatments':
+                      return (
+                        <td key={key} className={td}>
+                          {row.treatmentNames.length ? row.treatmentNames.join(', ') : '—'}
                         </td>
                       );
                   }

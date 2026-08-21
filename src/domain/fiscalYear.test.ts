@@ -4,6 +4,7 @@ import {
   monthsOfFiscalYear,
   monthDateRange,
   fiscalYearDateRange,
+  currentWeekRange,
   formatDateDMY,
   formatDateDM,
 } from './fiscalYear';
@@ -55,6 +56,21 @@ describe('fiscalYearDateRange', () => {
     expect(fiscalYearDateRange(2026, 1)).toEqual({
       from: '2026-01-01',
       to: '2026-12-31',
+    });
+  });
+});
+
+describe('currentWeekRange', () => {
+  it('spans Monday through Sunday for a mid-week date', () => {
+    expect(currentWeekRange(new Date(2026, 7, 19))).toEqual({
+      from: '2026-08-17',
+      to: '2026-08-23',
+    });
+  });
+  it('treats Monday itself as the start of its own week', () => {
+    expect(currentWeekRange(new Date(2026, 7, 24))).toEqual({
+      from: '2026-08-24',
+      to: '2026-08-30',
     });
   });
 });

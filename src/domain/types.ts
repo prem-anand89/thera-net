@@ -91,21 +91,32 @@ export interface Clinic {
 }
 
 /** Optional (toggleable) Visits-table columns — the essentials (patient, bill, status) aren't listed. */
-export type VisitColumnKey = 'condition' | 'treatment' | 'therapist' | 'service';
+export type VisitColumnKey = 'condition' | 'treatment' | 'treatments' | 'therapist' | 'service';
 
 export const VISIT_COLUMN_LABELS: Record<VisitColumnKey, string> = {
   service: 'Service',
   therapist: 'Therapist',
   condition: 'Condition',
   treatment: 'Treatment',
+  // 'treatment' is the free-text treatmentNotes column (unrelated name
+  // collision, kept for backward compatibility); 'treatments' is the
+  // clinic-editable treatment_catalog picker checked off per visit.
+  treatments: 'Treatments',
 };
 
 /** Column order for visit tables and card detail rows — who → context → notes → service. */
-export const VISIT_OPTIONAL_COLUMN_ORDER: VisitColumnKey[] = ['therapist', 'condition', 'treatment', 'service'];
+export const VISIT_OPTIONAL_COLUMN_ORDER: VisitColumnKey[] = [
+  'therapist',
+  'condition',
+  'treatment',
+  'treatments',
+  'service',
+];
 
 export const DEFAULT_VISIT_COLUMN_PREFS: Record<VisitColumnKey, boolean> = {
   condition: true,
   treatment: true,
+  treatments: true,
   therapist: true,
   service: true,
 };

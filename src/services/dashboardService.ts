@@ -160,6 +160,7 @@ export interface TodayVisitRow {
   therapistName: string;
   serviceName: string;
   treatmentNotes: string | null;
+  treatmentIds: UUID[];
   sessionIndex: number | null;
   packageTotal: number | null;
   packageGroupId: UUID | null;
@@ -543,6 +544,7 @@ export function createDashboardService(repos: Repos) {
             sessionIndex: v.sessionIndex,
             packageTotal: v.packageTotal,
             treatmentNotes: v.treatmentNotes,
+            treatmentIds: v.treatmentIds ?? [],
             billPaise: v.actualBillPaise,
             hasInvoice: Boolean(v.invoiceId),
             invoiceId: v.invoiceId,
@@ -606,6 +608,7 @@ export function createDashboardService(repos: Repos) {
             sessionIndex: v.sessionIndex,
             packageTotal: v.packageTotal,
             treatmentNotes: v.treatmentNotes,
+            treatmentIds: v.treatmentIds ?? [],
             billPaise: v.actualBillPaise,
             hasInvoice: Boolean(v.invoiceId),
             invoiceId: v.invoiceId,
@@ -736,6 +739,7 @@ export function createDashboardService(repos: Repos) {
             therapistName: therapistNameById.get(v.therapistId) ?? '—',
             serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
             treatmentNotes: v.treatmentNotes,
+            treatmentIds: v.treatmentIds ?? [],
             sessionIndex: v.sessionIndex,
             packageTotal: v.packageTotal,
             packageGroupId: v.packageGroupId,
@@ -770,7 +774,13 @@ export function createDashboardService(repos: Repos) {
      */
     async monthlyNewCounts(clinicId: UUID, asOf = new Date(), therapistId?: UUID): Promise<MonthlyNewCounts> {
       const visits = await repos.visits.list({ clinicId, therapistId });
-      const monthStart = `${asOf.getFullYear()}-${String(asOf.getMonth() + 1).padStart(2, '0')}-01`;
+      // Bounded both ends — an unbounded `>= monthStart` check (the old bug)
+      // silently turns "new last month" into "new since last month started,"
+      // double-counting anything new this month too.
+      const { from: monthStart, to: monthEnd } = monthDateRange({
+        year: asOf.getFullYear(),
+        month: asOf.getMonth() + 1,
+      });
 
       const packageGroups = new Map<UUID, Visit[]>();
       for (const v of visits) {
@@ -781,13 +791,13 @@ export function createDashboardService(repos: Repos) {
       let newPackages = 0;
       for (const group of packageGroups.values()) {
         const earliest = group.map((v) => v.visitDate).sort()[0];
-        if (earliest >= monthStart) newPackages++;
+        if (earliest >= monthStart && earliest <= monthEnd) newPackages++;
       }
 
       let newPatients = 0;
       for (const patientVisits of groupByPatient(visits).values()) {
         const earliest = patientVisits.map((v) => v.visitDate).sort()[0];
-        if (earliest >= monthStart) newPatients++;
+        if (earliest >= monthStart && earliest <= monthEnd) newPatients++;
       }
 
       return { newPackages, newPatients };

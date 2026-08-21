@@ -38,7 +38,8 @@ function todayRowToCardData(
   isAdmin: boolean,
   myTherapistId: string | undefined,
   canViewClinicalNotes: boolean,
-  therapistSplit: boolean
+  therapistSplit: boolean,
+  treatmentName: Map<string, string>
 ): VisitCardData {
   const canModify = isAdmin || row.therapistId === myTherapistId;
   return {
@@ -56,6 +57,7 @@ function todayRowToCardData(
     packageTotal: row.packageTotal,
     therapistName: row.therapistName,
     treatmentNotes: row.treatmentNotes,
+    treatmentNames: row.treatmentIds.map((id) => treatmentName.get(id)).filter((n): n is string => !!n),
     billPaise: row.billPaise,
     paymentState: row.paymentState,
     invoiceId: row.invoiceId,
@@ -132,6 +134,8 @@ export function WorkspacePage() {
     () => (therapistSplit ? repos.therapists.list(clinic.id, true) : undefined),
     [clinic.id, therapistSplit]
   );
+  const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
+  const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
 
   function openInvoiceFor(data: VisitCardData) {
     setInvoicing({
@@ -139,6 +143,7 @@ export function WorkspacePage() {
       patientLabel: data.patientName,
       serviceLabel: data.serviceName,
       isPackage: data.packageTotal != null,
+      alreadyCollected: data.paymentState === 'collected_no_receipt',
     });
   }
 
@@ -190,7 +195,8 @@ export function WorkspacePage() {
                 scope.isAdmin,
                 scope.myTherapistId,
                 canViewClinicalNotes,
-                therapistSplit
+                therapistSplit,
+                treatmentName
               )
             )}
             showDate={false}

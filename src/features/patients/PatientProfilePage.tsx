@@ -97,12 +97,13 @@ export function PatientProfilePage() {
     [openPackages, patientId]
   );
 
+  const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
+
   // How many sessions of each treatment type this package has had so far —
   // e.g. "Manual Therapy: 4 · Exercise: 6 · Kinesio Taping: 2" — derived
   // from each visit's own treatmentIds rather than a separate aggregation
   // query, since every visit for this patient is already loaded above.
   const treatmentCountsByPackage = useMemo(() => {
-    const treatmentName = new Map((treatments ?? []).map((t) => [t.id, t.name]));
     const byPackage = new Map<string, Map<string, number>>();
     for (const v of visits ?? []) {
       if (v.deleted || !v.packageGroupId || !v.treatmentIds?.length) continue;
@@ -115,7 +116,7 @@ export function PatientProfilePage() {
       byPackage.set(v.packageGroupId, counts);
     }
     return byPackage;
-  }, [visits, treatments]);
+  }, [visits, treatmentName]);
 
   // One pass over the patient's visits for all three headline money facts —
   // billed (every visit's bill, including ₹0 package sessions), collected
@@ -168,6 +169,7 @@ export function PatientProfilePage() {
         packageTotal: v.packageTotal ?? null,
         therapistName: therapistName.get(v.therapistId) ?? '—',
         treatmentNotes: v.treatmentNotes ?? null,
+        treatmentNames: (v.treatmentIds ?? []).map((id) => treatmentName.get(id)).filter((n): n is string => !!n),
         billPaise: v.actualBillPaise,
         paymentState: computeVisitPaymentState(
           v.actualBillPaise,
@@ -193,6 +195,7 @@ export function PatientProfilePage() {
       patient?.sex,
       serviceName,
       therapistName,
+      treatmentName,
       directPaymentByVisitId,
       statusByInvoiceId,
       openPackageIds,
