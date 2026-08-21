@@ -124,24 +124,28 @@ describe('reportService.monthly — therapist split', () => {
   });
 });
 
-describe('reportService.monthly — attributedRevenuePaise (session-based)', () => {
-  it('attributes revenue to the primary therapist for a non-package visit, unchanged', async () => {
-    const repos = makeFakeRepos([visit({ therapistId: PREM, actualBillPaise: rs(5400) })]);
+describe('reportService.monthly — netPostTaxPaise package attribution', () => {
+  it("leaves a non-package visit's Post-Tax BM attribution unchanged", async () => {
+    const repos = makeFakeRepos([
+      visit({ therapistId: PREM, actualBillPaise: rs(5400), postTaxPaise: rs(3645) }),
+    ]);
     const report = await createReportService(repos).monthly(CLINIC, JULY);
     const prem = report.rows.find((r) => r.therapistId === PREM)!;
-    expect(prem.attributedRevenuePaise).toBe(rs(5400));
-    expect(report.total.attributedRevenuePaise).toBe(rs(5400));
+    expect(prem.netPostTaxPaise).toBe(rs(3645));
+    expect(report.total.netPostTaxPaise).toBe(rs(3645));
   });
 
-  it('splits a package evenly across the therapists who actually ran its sessions', async () => {
+  it("splits a package's Post-Tax BM evenly across the therapists who actually ran its sessions", async () => {
     const groupId = 'pkg-1';
     const repos = makeFakeRepos([
-      // Session 1: billed for the whole 3-session package, logged by Prem.
+      // Session 1: billed (and Post-Tax BM'd) for the whole 3-session
+      // package, logged by Prem.
       visit({
         id: 'v1',
         therapistId: PREM,
         visitDate: '2026-07-01',
         actualBillPaise: rs(6000),
+        postTaxPaise: rs(6000),
         packageGroupId: groupId,
         packageTotal: 3,
         sessionIndex: 1,
@@ -152,6 +156,7 @@ describe('reportService.monthly — attributedRevenuePaise (session-based)', () 
         therapistId: AISH,
         visitDate: '2026-07-08',
         actualBillPaise: 0,
+        postTaxPaise: 0,
         packageGroupId: groupId,
         packageTotal: 3,
         sessionIndex: 2,
@@ -161,6 +166,7 @@ describe('reportService.monthly — attributedRevenuePaise (session-based)', () 
         therapistId: AISH,
         visitDate: '2026-07-15',
         actualBillPaise: 0,
+        postTaxPaise: 0,
         packageGroupId: groupId,
         packageTotal: 3,
         sessionIndex: 3,
@@ -170,12 +176,60 @@ describe('reportService.monthly — attributedRevenuePaise (session-based)', () 
     const prem = report.rows.find((r) => r.therapistId === PREM)!;
     const aish = report.rows.find((r) => r.therapistId === AISH)!;
     // ₹6000 / 3 sessions = ₹2000 each; Prem ran 1, Aishwarya ran 2.
-    expect(prem.attributedRevenuePaise).toBe(rs(2000));
-    expect(aish.attributedRevenuePaise).toBe(rs(4000));
-    expect(report.total.attributedRevenuePaise).toBe(rs(6000));
+    expect(prem.netPostTaxPaise).toBe(rs(2000));
+    expect(aish.netPostTaxPaise).toBe(rs(4000));
+    // Attribution redistributes rows only — the clinic-wide total always
+    // stays exactly what was actually billed and split this period.
+    expect(report.total.netPostTaxPaise).toBe(report.total.postTaxPaise);
+    expect(report.total.netPostTaxPaise).toBe(rs(6000));
     // The actual billed figures are untouched — still 100% on the billing visit.
     expect(prem.billPaise).toBe(rs(6000));
     expect(aish.billPaise).toBe(0);
+  });
+
+  it('distributes an uneven package total in whole rupees with zero rounding drift', async () => {
+    const groupId = 'pkg-3';
+    const repos = makeFakeRepos([
+      visit({
+        id: 'v1',
+        therapistId: PREM,
+        visitDate: '2026-07-01',
+        actualBillPaise: rs(100),
+        postTaxPaise: rs(100),
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 1,
+      }),
+      visit({
+        id: 'v2',
+        therapistId: AISH,
+        visitDate: '2026-07-08',
+        actualBillPaise: 0,
+        postTaxPaise: 0,
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 2,
+      }),
+      visit({
+        id: 'v3',
+        therapistId: AISH,
+        visitDate: '2026-07-15',
+        actualBillPaise: 0,
+        postTaxPaise: 0,
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 3,
+      }),
+    ]);
+    const report = await createReportService(repos).monthly(CLINIC, JULY);
+    const prem = report.rows.find((r) => r.therapistId === PREM)!;
+    const aish = report.rows.find((r) => r.therapistId === AISH)!;
+    // ₹100 / 3 = ₹33.33 — not evenly divisible into whole rupees. The
+    // earliest-logged session (v1) gets the leftover rupee, not an
+    // independently-rounded (and therefore drifting) share.
+    expect(prem.netPostTaxPaise).toBe(rs(34));
+    expect(aish.netPostTaxPaise).toBe(rs(66));
+    expect(prem.netPostTaxPaise + aish.netPostTaxPaise).toBe(rs(100));
   });
 
   it('resolves a package spanning two report periods via listByPackageGroup', async () => {
@@ -187,16 +241,20 @@ describe('reportService.monthly — attributedRevenuePaise (session-based)', () 
         therapistId: PREM,
         visitDate: '2026-06-28',
         actualBillPaise: rs(4500),
+        postTaxPaise: rs(4500),
         packageGroupId: groupId,
         packageTotal: 3,
         sessionIndex: 1,
       }),
-      // Session run in July by a different therapist.
+      // Session run in July by a different therapist. Only 2 of the
+      // package's 3 sessions have been logged so far — attribution still
+      // divides by the declared packageTotal (3), not the 2 logged.
       visit({
         id: 'v2',
         therapistId: AISH,
         visitDate: '2026-07-03',
         actualBillPaise: 0,
+        postTaxPaise: 0,
         packageGroupId: groupId,
         packageTotal: 3,
         sessionIndex: 2,
@@ -204,19 +262,27 @@ describe('reportService.monthly — attributedRevenuePaise (session-based)', () 
     ]);
     const report = await createReportService(repos).monthly(CLINIC, JULY);
     // Only v2 is inside July's window, but its attribution still reflects
-    // the whole package's ₹4500 (not ₹0, and not something derived only
-    // from what's visible in this month).
+    // the whole package's ₹4500 Post-Tax BM (not ₹0, and not something
+    // derived only from what's visible in this month).
     const aish = report.rows.find((r) => r.therapistId === AISH)!;
-    expect(aish.attributedRevenuePaise).toBe(roundToRupeeHalfUp(rs(4500) / 3));
+    expect(aish.netPostTaxPaise).toBe(roundToRupeeHalfUp(rs(4500) / 3));
     expect(report.rows.find((r) => r.therapistId === PREM)).toBeUndefined(); // Prem's visit is outside this month
   });
 
-  it('leaves a single-session (non-package) visit within a group of size 1 unaffected', async () => {
+  it('leaves a single-session (non-package) visit unaffected by attribution', async () => {
     const repos = makeFakeRepos([
-      visit({ therapistId: PREM, actualBillPaise: rs(2200), packageGroupId: null, packageTotal: null }),
+      visit({
+        therapistId: PREM,
+        actualBillPaise: rs(2200),
+        postTaxPaise: rs(1980),
+        packageGroupId: null,
+        packageTotal: null,
+      }),
     ]);
     const report = await createReportService(repos).monthly(CLINIC, JULY);
-    expect(report.total.attributedRevenuePaise).toBe(rs(2200));
+    const prem = report.rows.find((r) => r.therapistId === PREM)!;
+    expect(prem.netPostTaxPaise).toBe(rs(1980));
+    expect(report.total.netPostTaxPaise).toBe(rs(1980));
   });
 });
 
@@ -244,7 +310,7 @@ describe('reportService.toCsv — configurable share labels', () => {
     const header = createReportService(makeFakeRepos([]))
       .toCsv(report, { hospitalSplit: false, therapistSplit: false })
       .split('\n')[0];
-    expect(header).toBe('"Therapist","Bill Amount","Revenue Generated","Visits","Patients"');
+    expect(header).toBe('"Therapist","Bill Amount","Net","Visits","Patients"');
   });
 });
 

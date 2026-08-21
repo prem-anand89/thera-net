@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { formatINR } from '@/domain/money';
 import { monthName } from '@/domain/fiscalYear';
 import { SectionCard, th, thNum, td, tdNum } from '@/components/ui';
@@ -22,12 +23,14 @@ import { SERIES_COLORS } from '@/components/chartColors';
 export function TherapistComparisonCard() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
-  // Gross revenue actually attributed per therapist (package-session-aware —
-  // see reportService's attributedRevenuePaise), not the post-tax clinic
-  // share — this chart compares therapists' own output, not the clinic's
-  // take after a hospital split, so the same figure applies whether or not
-  // a partner split is configured.
-  const revenueLabel = 'Revenue generated';
+  // Post-Tax BM adjusted for same-visit splits and automatic package-session
+  // attribution (reportService's netPostTaxPaise) — genuinely post-tax for a
+  // hospital-split clinic, and equal to the plain net bill for a simple one
+  // (postTaxPaise === actualBillPaise there), so the same mode-aware label
+  // ReportsOverviewPage's KPI strip uses applies here too.
+  const { hospitalSplit } = clinicBillingConfig(clinic);
+  const labels = clinicShareLabels(clinic);
+  const revenueLabel = hospitalSplit ? `Post-Tax ${labels.own}` : 'Revenue generated';
 
   const trend = useLiveQuery(
     () => (clinic.showTherapistComparison && !scope.isFrontDesk ? dashboardService.revenueTrend(clinic.id) : undefined),
@@ -98,7 +101,7 @@ export function TherapistComparisonCard() {
                 color: SERIES_COLORS[i],
                 values: trend.map((r) => {
                   const row = r.rows.find((row) => row.therapistName === name);
-                  return row?.attributedRevenuePaise ?? 0;
+                  return row?.netPostTaxPaise ?? 0;
                 }),
               }))}
               formatValue={formatINR}
@@ -157,7 +160,7 @@ export function TherapistComparisonCard() {
                   return (
                     <tr key={name}>
                       <td className={td}>{name}</td>
-                      <td className={tdNum}>{formatINR(row?.attributedRevenuePaise ?? 0)}</td>
+                      <td className={tdNum}>{formatINR(row?.netPostTaxPaise ?? 0)}</td>
                       <td className={tdNum}>{row?.visitCount ?? 0}</td>
                       <td className={tdNum}>{openPackageCountByName.get(name) ?? 0}</td>
                     </tr>

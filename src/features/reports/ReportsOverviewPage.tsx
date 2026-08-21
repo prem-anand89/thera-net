@@ -93,7 +93,6 @@ const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> =
   adjustmentPaise: 0,
   sharedPaise: 0,
   netPostTaxPaise: 0,
-  attributedRevenuePaise: 0,
   visitCount: 0,
   uniquePatients: 0,
 };
@@ -240,13 +239,18 @@ export function ReportsOverviewPage() {
   // Clinic-wide (admin) keeps the actual post-tax/billed figure — the
   // financial number the clinic runs on, unaffected by attribution since a
   // total is invariant to how it's split across therapists. A single
-  // therapist's own figure instead uses attributedRevenuePaise: without it,
-  // "my revenue" credits 100% of a package to whoever logged its first
-  // (billed) session and 0% to a colleague who ran the rest of it.
+  // therapist's own figure instead uses netPostTaxPaise: without package
+  // attribution folded in, "my revenue" credits 100% of a package to
+  // whoever logged its first (billed) session and 0% to a colleague who
+  // ran the rest of it. netPostTaxPaise is genuinely post-tax in
+  // hospital_split mode, and equals the plain net bill in simple mode
+  // (postTaxPaise === actualBillPaise there) — so revenueLabel's
+  // "Post-Tax {own}" / "Revenue" split above already describes it
+  // accurately in both modes.
   const revenueRow = (report: MonthlyReport | undefined) => {
     if (!report) return null;
     if (scope.isClinicWideView) return hospitalSplit ? report.total.postTaxPaise : report.total.billPaise;
-    return myMonthRow(report.rows).attributedRevenuePaise;
+    return myMonthRow(report.rows).netPostTaxPaise;
   };
   const revenueThisMonth = trend ? revenueRow(trend[trend.length - 1]) : null;
   const revenueLastMonth = trend && trend.length > 1 ? revenueRow(trend[trend.length - 2]) : null;
@@ -669,7 +673,7 @@ export function ReportsOverviewPage() {
                     barValues={
                       scope.isClinicWideView
                         ? trend.map((r) => (hospitalSplit ? r.total.postTaxPaise : r.total.billPaise))
-                        : trend.map((r) => myMonthRow(r.rows).attributedRevenuePaise)
+                        : trend.map((r) => myMonthRow(r.rows).netPostTaxPaise)
                     }
                     lineLabel="Visits"
                     lineColor={SERIES_COLORS[1]}

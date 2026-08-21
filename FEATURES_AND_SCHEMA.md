@@ -756,6 +756,46 @@ be resurrected — as of this writing they're inert.
 - **Immutable invoice** via DB trigger
 - **Rate changes** only affect new visits, not historical records
 
+### 2b. Reporting-Layer Attribution (`reportService.monthly`'s `netPostTaxPaise`)
+The per-visit split above answers "how was this bill divided between the
+clinic and the partner hospital" — a billing fact, never touched after the
+fact. A separate question, answered only at the reporting layer (never
+stored on the visit itself), is "how much did this THERAPIST actually
+generate" — which the raw per-visit numbers get wrong for two real cases:
+
+- **Multi-session packages**: a package's full price is billed on one
+  session's visit; every other session is logged separately at ₹0 so it
+  isn't double-billed. Naively summing `postTaxPaise` per therapist credits
+  100% of a 3-session package to whoever logged session 1, even when a
+  colleague ran the other two.
+- **Manual same-visit Shared/Split**: an admin can explicitly move a % of
+  one visit's Post-Tax BM to an assisting therapist (`visits.shared_therapist_id`/`shared_pct`, set via `visitService.setSplit`).
+
+Both are folded into ONE number, `TherapistMonthRow.netPostTaxPaise`
+(`reportService.ts`), rather than kept as parallel concepts: the base is
+each row's summed `postTaxPaise`, adjusted by (1) the manual-split delta
+(a same-visit % moved between two named therapists, always net-zero across
+the month) and (2) an automatic package-attribution delta — a package's
+total Post-Tax BM divided evenly across the therapists who ran its
+sessions, using an exact whole-rupee **largest-remainder distribution**
+(not independent per-session rounding) so the shares always sum to the
+package's exact total with zero drift. Package attribution deltas are
+applied **only to each visit's own row, never to `total.netPostTaxPaise`**
+— attribution redistributes which row a rupee counts under, it never
+changes what the clinic-wide total claims. This means a package spanning
+two report periods (started one month, finished the next) can leave a
+single month's row-level sum not exactly matching that month's total —
+expected, since the whole point of attribution is that a session's true
+credit doesn't always land in the billing month.
+
+This is the one number used everywhere a therapist's own "how much revenue
+did I generate" is shown — Trends KPI/chart, Therapist Comparison (both the
+trend and the live table), and the Monthly Statement's "Net" column (shown
+unconditionally, unlike "Shared" which stays behind the `enableTherapistSplit`
+opt-in). There is no separate "gross attributed revenue, ignoring splits"
+concept anymore — that used to be a parallel `attributedRevenuePaise` field/
+column, folded into `netPostTaxPaise` instead so there's one lens, not two.
+
 ### 3. Sequential Gap-Free Invoices
 - **Server-issued numbers** via `issue_invoice()` RPC
 - **Per-clinic per-FY counter** in `invoice_counters` table
