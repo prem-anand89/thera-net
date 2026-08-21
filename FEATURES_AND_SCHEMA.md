@@ -114,6 +114,10 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Server-issued gap-free sequential numbers** per clinic per FY (format: `PREFIX/FY-LABEL/NNNN`, e.g., `BM/26-27/0001`)
 - **Immutable once issued** via DB triggers
 - **Printable** on A4/A5 with clinic letterhead + optional partner-hospital branding
+- **Document title**: "BILL" while outstanding, "BILL CUM RECEIPT" once paid — not
+  "Invoice"/"Tax Invoice", which reads as GST terminology that doesn't apply to
+  (generally GST-exempt) healthcare services and doesn't match how insurers/TPAs
+  expect these documents to be labeled
 - **Online-only** — gap-free numbers require the server counter
 
 #### Payment Status & HV Settlement
@@ -198,16 +202,28 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 ### 7. Patient Management
 
 #### Patient Creation & Lookup
-- **Search by MRNO or name**
+- **Search by MRNO, name, or phone**
 - **Create-if-missing** on visit entry
 - **Walk-in MRNO auto-generation** (sequential per clinic per year)
 - **Editable fields**: age, sex, phone, primary condition, referring source
+- Phone is searchable everywhere but only *displayed* on the Patient Profile
+  page — dropped from the Patients list/card to save space there
 
 #### Patient Profile
-- **Visit history** with dense table
+- **Visit history** — responsive table (tab-and-up widths) / card list
+  (phone) shared with Ledger and Workspace, with a "hide ₹0 visits"
+  filter for package sessions billed as part of the package's own invoice,
+  and bulk visit selection for issuing one invoice across several visits
+- **Payments summary** — lifetime billed / collected / outstanding for the
+  patient, alongside the outstanding-balance pill in the header
+- **Billing-lock indicator** — a small lock icon on invoiced-but-unpaid
+  visit rows, since their billing fields are frozen even though the
+  payment chip alone ("Due") doesn't say so
 - **Clinical notes section** — drilling into note editor
-- **Package tracking** — open and completed packages
-- **Referring source** display with detail (doctor/hospital names)
+- **Package tracking** — open and completed packages, with days-since-last-visit
+  shown next to the date so staleness doesn't require doing the math
+- **Referring source** shown as a badge next to the outstanding-balance and
+  condition pills (not buried in small text)
 
 #### Patient Hiding & Deletion
 - **Hide (soft delete)** — default remediation for duplicates/mistakes, propagates to all devices via outbox
@@ -230,7 +246,9 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Walk-in MRNO prefix** (configurable, defaults to 'W')
 
 #### Service Catalog
-- Category and name per item
+- Category and name per item — category is free text (autocompleted from
+  existing categories via a datalist), and the Settings list/table groups
+  items under a category heading rather than repeating it per row
 - Session count (1, 3, 5, etc. for package pricing)
 - Base price (in paise)
 - Active toggle
@@ -269,13 +287,20 @@ src/features/            UI pages and components (React + TanStack Router)
   ├── workspace/         WorkspacePage (Today, Recent, Open Packages, Pending)
   ├── visits/            LedgerPage at /ledger (Visits/Invoices sub-tabs); NewVisitPage
   ├── patients/          PatientsPage, PatientProfilePage, NoteEditorPage
-  ├── reports/           ReportsPage at /insights (Trends + monthly statement)
+  ├── reports/           ReportsPage at /insights (Trends + monthly statement),
+                         MonthlyLedgerPrintPage
   ├── settings/          SettingsPage at /settings; CreateClinicForm
-  └── invoices/          Invoice printing
+  ├── invoices/          InvoicePrintPage
+  ├── import/            Historical Excel visit import (preview + commit)
+  ├── auth/              Login, reset-password
+  └── more/              Mobile-only overflow nav page
 
-src/components/          Shared UI components
-                         BodyChart, ScaleWidget, TreatmentNote, ColumnsPicker,
-                         ChartComponents, PaymentState, etc.
+src/components/          Shared UI components — VisitCard (shared card/table
+                         list), BodyChart, ScaleWidget, IssueInvoiceDialog,
+                         TakePaymentDialog, SplitModal, UpiQrModal, SyncBadge,
+                         BarChart/PieChart/IndexedTrendChart, MonthlyReportTable,
+                         TherapistComparisonCard, SearchableSelect, ui.tsx
+                         (shared primitives: Pill, buttons, table cells)
 
 src/lib/                 Utilities (Supabase client, errors, image resize, db)
 
@@ -291,51 +316,73 @@ supabase/                SQL migrations, RLS policies, RPCs, realtime
 | Route | Purpose | Access |
 |-------|---------|--------|
 | `/workspace` (default) | Today's work, recent history, open packages, pending items | All roles |
+| `/visits/new` | New visit entry | All roles (billing fields gated by `canBill`) |
 | `/ledger` | Historical visit records & invoices, URL-addressable sub-tabs (`?tab=visits\|invoices`) | All roles (Invoices tab requires billing access) |
-| `/patients/$patientId` | Individual patient profile, clinical notes history | All roles |
-| `/patients/$patientId/notes/$noteId` | Core Assessment note editor (Initial/Follow-up) | Therapists & admins |
-| `/insights` | Dashboard + monthly per-therapist statement (`?tab=monthly`) | Admins & front_desk only |
+| `/patients` | Patients list | All roles |
+| `/patients/$patientId` | Individual patient profile, visit history, payments summary, clinical notes | All roles |
+| `/patients/$patientId/notes/new`, `/patients/$patientId/notes/$noteId` | Core Assessment note editor (Initial/Follow-up) | Therapists & admins (`canViewClinicalNotes`) |
+| `/patients/$patientId/notes/$noteId/print` | Printable consultation note | Therapists & admins |
+| `/insights` | Dashboard + monthly per-therapist statement (`?tab=monthly`) | Admins & front_desk (monthly statement sub-view further gated admin-only) |
+| `/insights/print` | Printable monthly ledger (portrait A4) | Admins & front_desk |
+| `/invoices/$invoiceId/print` | Printable Bill/Bill Cum Receipt (A4/A5) | Anyone who can reach the invoice |
 | `/settings` | Clinic configuration, MRNO settings, billing mode, rate setup, feature toggles | Admins only |
-| `/archive`, `/setup`, `/invoices`, `/reports` | Legacy redirects for old bookmarks | All roles |
+| `/settings/import-visits` | Historical Excel visit import | Admins only |
+| `/more` | Mobile-only overflow nav (Settings/Reports on narrow screens) | All roles |
+| `/reset-password` | Password reset | Unauthenticated |
+| `/archive`, `/setup`, `/setup/import-visits`, `/invoices`, `/reports`, `/reports/print` | Legacy redirects for old bookmarks | All roles |
 
 ---
 
 ## Database Schema
 
+*Verified against the live schema (`information_schema.columns`), not
+hand-maintained from memory — if this section and the actual database ever
+disagree again, trust the database and fix this doc, not the other way
+around.*
+
 ### Core Tables
 
 #### `clinics`
 ```sql
-id              uuid PRIMARY KEY
-name            text NOT NULL
-address         text
-phone           text
-email           text
-gst_no          text
-logo_path       text
-partner_hospital_name   text
-partner_hospital_logo_path  text
-invoice_prefix  text DEFAULT 'INV'
-bm_split_pct    numeric(5,2) DEFAULT 75
-tax_pct         numeric(5,2) DEFAULT 10
-tds_basis       text CHECK (tds_basis IN ('gross_bill', 'bm_share'))
-fy_start_month  int DEFAULT 4 CHECK (fy_start_month BETWEEN 1 AND 12)
-billing_mode    text CHECK (billing_mode IN ('standalone', 'partnership'))
-billing_enabled boolean DEFAULT true
-walk_in_mrno_prefix text (NULLABLE)
-therapist_comparison_enabled boolean DEFAULT false
-updated_at      timestamptz SERVER_DEFAULT now()
+id                          uuid PRIMARY KEY
+name                        text NOT NULL
+address, phone, email, gst_no, logo_path  text (NULLABLE)
+partner_hospital_name, partner_hospital_logo_path  text (NULLABLE)
+invoice_prefix              text NOT NULL (e.g., "BM")
+bm_split_pct                numeric NOT NULL (default 75)
+tax_pct                     numeric NOT NULL (default 10)
+tds_basis                   text NOT NULL CHECK (IN 'gross_bill', 'bm_share')
+fy_start_month              int NOT NULL (default 4 = April)
+clinic_type                 text (NULLABLE) — 'individual' | 'multiple'
+has_partner                 boolean NOT NULL
+billing_mode                text NOT NULL — legacy, maps to clinic_type+has_partner
+enable_therapist_split      boolean (NULLABLE)
+own_share_label, partner_share_label  text (NULLABLE) — default "BM"/"HV"
+billing_enabled              boolean NOT NULL
+invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
+clinical_docs_enabled       boolean NOT NULL
+enable_expected_today       boolean NOT NULL
+show_therapist_comparison   boolean NOT NULL
+walk_in_mrno_prefix         text (NULLABLE, default 'W')
+visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
+                             Dexie prefs (useVisitColumnPrefs); no client code
+                             reads/writes this column today
+upi_vpa, upi_payee_name, upi_qr_path  text (NULLABLE)
+upi_qr_enabled               boolean (NULLABLE)
+signature_path               text (NULLABLE)
+created_by, updated_by       uuid (FOREIGN KEY → auth.users.id, NULLABLE)
+updated_at                  timestamptz NOT NULL
 ```
 
 #### `clinic_members`
 ```sql
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 user_id         uuid NOT NULL (FOREIGN KEY → auth.users.id)
-role            text DEFAULT 'admin'
-                CHECK (role IN ('admin', 'therapist', 'front_desk'))
+role            text NOT NULL CHECK (IN 'admin', 'therapist', 'front_desk')
+title           text (NULLABLE)
 display_name    text (NULLABLE)
-photo_path      text (NULLABLE)
-updated_at      timestamptz SERVER_DEFAULT now()
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
 PRIMARY KEY (clinic_id, user_id)
 ```
 
@@ -344,131 +391,197 @@ PRIMARY KEY (clinic_id, user_id)
 id              uuid PRIMARY KEY
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 name            text NOT NULL
-active          boolean DEFAULT true
-user_id         uuid (FOREIGN KEY → auth.users.id, NULLABLE)
+active          boolean NOT NULL (default true)
+user_id         uuid (FOREIGN KEY → auth.users.id, NULLABLE) — linked login
 photo_path      text (NULLABLE)
-updated_at      timestamptz SERVER_DEFAULT now()
+registration_no text (NULLABLE) — printed on invoices under the therapist's name
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
 ```
 
 #### `service_catalog`
 ```sql
-id              uuid PRIMARY KEY
-clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
-category        text NOT NULL
-name            text NOT NULL
-session_count   int DEFAULT 1 CHECK (session_count >= 1)
-base_price_paise bigint NOT NULL CHECK (base_price_paise >= 0)
-active          boolean DEFAULT true
-updated_at      timestamptz SERVER_DEFAULT now()
-UNIQUE (clinic_id, name)
+id               uuid PRIMARY KEY
+clinic_id        uuid NOT NULL (FOREIGN KEY → clinics.id)
+category         text NOT NULL — free text, autocompleted client-side
+name             text NOT NULL
+session_count    int NOT NULL (default 1, package pricing)
+base_price_paise bigint NOT NULL
+active           boolean NOT NULL (default true)
+created_by, updated_by  uuid (NULLABLE)
+updated_at       timestamptz NOT NULL
 ```
 
 #### `patients`
 ```sql
-id              uuid PRIMARY KEY
-clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
-mrno            text NOT NULL
-mrno_source     text DEFAULT 'hospital'
-                CHECK (mrno_source IN ('hospital', 'auto'))
-name            text NOT NULL
-age             int CHECK (age BETWEEN 0 AND 150)
-sex             text CHECK (sex IN ('M', 'F', 'Other'))
-phone           text
-primary_condition text
-referring_source text CHECK (referring_source IN ('doctor_referral', 'word_of_mouth',
-                  'online', 'self', 'other'))
-referring_source_detail text
-deleted_at      timestamptz (NULLABLE) — soft delete
-updated_at      timestamptz SERVER_DEFAULT now()
-UNIQUE (clinic_id, mrno)
+id                    uuid PRIMARY KEY
+clinic_id             uuid NOT NULL (FOREIGN KEY → clinics.id)
+mrno                  text NOT NULL
+mrno_source           text NOT NULL — 'hospital' | 'auto'
+name                  text NOT NULL
+age                   int (NULLABLE)
+sex                   text (NULLABLE) — 'M' | 'F' | 'Other'
+phone                 text (NULLABLE) — searchable everywhere, but only
+                       *displayed* on Patient Profile, not the Patients list
+primary_condition     text (NULLABLE)
+referring_source      text (NULLABLE)
+referring_source_detail text (NULLABLE)
+no_return_reason_id   uuid (FOREIGN KEY → no_return_reason_catalog.id, NULLABLE)
+deleted_at            timestamptz (NULLABLE) — soft delete
+created_by, updated_by  uuid (NULLABLE)
+updated_at            timestamptz NOT NULL
 ```
 
 #### `visits`
 ```sql
-id              uuid PRIMARY KEY
-clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
-patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
-therapist_id    uuid NOT NULL (FOREIGN KEY → therapists.id)
-visit_date      date NOT NULL
-condition       text
-treatment_notes text
-service_catalog_id uuid NOT NULL (FOREIGN KEY → service_catalog.id)
-catalog_price_paise bigint NOT NULL CHECK >= 0
-actual_bill_paise bigint DEFAULT 0
-adjustment_paise bigint DEFAULT 0
-adjustment_reason text
-session_index   int CHECK (session_index >= 1)
-package_total   int CHECK (package_total >= 1)
-package_group_id uuid
-pending_payment_note text (NULLABLE)
-bm_split_pct    numeric(5,2) NOT NULL (snapshot)
-tax_pct         numeric(5,2) NOT NULL (snapshot)
-tds_basis       text CHECK (tds_basis IN ('gross_bill', 'bm_share'))
-bm_share_paise  bigint NOT NULL (computed at billing)
-post_tax_paise  bigint NOT NULL (computed at billing)
-tds_paise       bigint NOT NULL (computed at billing)
-hv_paise        bigint NOT NULL (computed at billing)
-invoice_id      uuid (FOREIGN KEY → invoices.id, NULLABLE)
-deleted         boolean DEFAULT false
-updated_at      timestamptz SERVER_DEFAULT now()
-updated_by      uuid (FOREIGN KEY → auth.users.id, NULLABLE)
-created_by      uuid (FOREIGN KEY → auth.users.id, NULLABLE)
-INDEXES: clinic_date, patient, clinic_updated
+id                    uuid PRIMARY KEY
+clinic_id             uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id            uuid NOT NULL (FOREIGN KEY → patients.id)
+therapist_id          uuid NOT NULL (FOREIGN KEY → therapists.id)
+visit_date            date NOT NULL
+condition, treatment_notes  text (NULLABLE)
+service_catalog_id    uuid NOT NULL (FOREIGN KEY → service_catalog.id)
+catalog_price_paise   bigint NOT NULL — snapshot at billing time
+actual_bill_paise     bigint NOT NULL
+adjustment_paise      bigint NOT NULL — actual − catalog
+adjustment_reason     text (NULLABLE)
+session_index, package_total  int (NULLABLE)
+package_group_id      uuid (NULLABLE)
+shared_therapist_id   uuid (FOREIGN KEY → therapists.id, NULLABLE) — internal
+                       revenue-split assist, reporting only
+shared_pct            numeric (NULLABLE)
+bm_split_pct, tax_pct, tds_basis  NOT NULL — rate snapshot at billing
+bm_share_paise, post_tax_paise, tds_paise, hv_paise  bigint NOT NULL — computed
+invoice_id            uuid (FOREIGN KEY → invoices.id, NULLABLE)
+pending_payment_note  text (NULLABLE) — "collect later" reason
+patient_consent_confirmed  boolean NOT NULL
+patient_signature_url text (NULLABLE)
+clinical_status       text NOT NULL — 'pending' | 'documented' | 'reviewed'
+consultation_note_id  uuid (FOREIGN KEY → consultation_notes.id, NULLABLE)
+reauthorization_required  boolean NOT NULL
+location              text (NULLABLE) — 'clinic' | 'home'
+deleted               boolean NOT NULL (default false)
+created_by, updated_by  uuid (NULLABLE)
+updated_at            timestamptz NOT NULL
+INDEXES: clinic+date, patient, clinic+updated
 ```
 
 #### `invoices`
 ```sql
-id              uuid PRIMARY KEY
-clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
-invoice_no      text NOT NULL
-fy_label        text NOT NULL (e.g., "26-27")
-seq             int NOT NULL
-issued_at       timestamptz DEFAULT now()
-patient_snapshot jsonb NOT NULL (patient details at issue time)
-line_items      jsonb NOT NULL (array of line items)
-total_paise     bigint NOT NULL CHECK >= 0
-payment_mode    text CHECK (payment_mode IN ('Cash', 'Card', 'UPI', 'Insurance'))
-therapist_id    uuid (FOREIGN KEY → therapists.id)
-payment_status  text CHECK (payment_status IN ('billed', 'collected', 'receipted'))
-created_by      uuid (FOREIGN KEY → auth.users.id, NULLABLE)
-updated_by      uuid (FOREIGN KEY → auth.users.id, NULLABLE)
-updated_at      timestamptz SERVER_DEFAULT now()
-UNIQUE (clinic_id, fy_label, seq)
-UNIQUE (clinic_id, invoice_no)
-INDEXES: clinic_updated
+id               uuid PRIMARY KEY
+clinic_id        uuid NOT NULL (FOREIGN KEY → clinics.id)
+invoice_no       text NOT NULL — `PREFIX/FY-LABEL/NNNN`
+fy_label         text NOT NULL (e.g., "26-27")
+seq              int NOT NULL
+issued_at        timestamptz NOT NULL
+patient_snapshot jsonb NOT NULL — patient details at issue time
+line_items       jsonb NOT NULL
+total_paise      bigint NOT NULL
+payment_mode     text NOT NULL — 'Cash' | 'Card' | 'UPI' | 'Insurance'
+therapist_id     uuid (FOREIGN KEY → therapists.id, NULLABLE)
+created_by, updated_by  uuid (NULLABLE)
+updated_at       timestamptz NOT NULL
 ```
+Immutable once issued (DB trigger). Payment status is **not** a column here —
+see `invoice_payments` below.
 
 #### `invoice_counters`
 ```sql
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 fy_label        text NOT NULL
-next_seq        int DEFAULT 1
+next_seq        int NOT NULL (default 1)
 PRIMARY KEY (clinic_id, fy_label)
 ```
 
-### Clinical Notes Tables
+---
 
-#### `consultation_notes`
+### Financial Tables
+
+#### `invoice_payments`
+```sql
+id              uuid PRIMARY KEY
+invoice_id      uuid NOT NULL (FOREIGN KEY → invoices.id)
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+status          text NOT NULL — 'paid' | 'outstanding'
+paid_at         timestamptz (NULLABLE)
+created_by, updated_by  uuid (NULLABLE)
+created_at, updated_at  timestamptz
+```
+Lives apart from `invoices` (which is immutable once issued). A missing row
+for an invoice reads as **paid** — see the payment-state note in Key Design
+Patterns below.
+
+#### `payments`
 ```sql
 id              uuid PRIMARY KEY
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
-patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
-therapist_id    uuid NOT NULL (FOREIGN KEY → therapists.id)
-note_type       text CHECK (note_type IN ('initial', 'followup'))
-chief_complaint text
-history_payload jsonb NOT NULL (nested structure)
-subjective_payload jsonb NOT NULL
-objective_payload jsonb NOT NULL
-functional_status_payload jsonb NOT NULL
-treatment_payload jsonb NOT NULL
-nrs_score       int (derived: current pain score for filtering)
-psfs_mean       numeric(5,2) (derived: mean functional status)
-red_flag_count  int (derived: count of red flags)
-consultation_date date
-created_at      timestamptz DEFAULT now()
-updated_at      timestamptz SERVER_DEFAULT now()
-created_by      uuid (FOREIGN KEY → auth.users.id)
-updated_by      uuid (FOREIGN KEY → auth.users.id)
+visit_id        uuid NOT NULL (FOREIGN KEY → visits.id)
+amount_paise    bigint NOT NULL
+method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque'
+received_date   date NOT NULL
+notes           text (NULLABLE)
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+```
+Direct payment against a visit, independent of any invoice — lets cash/UPI
+collection be recorded without requiring an invoice first, and supports
+partial payments (an amount less than the visit's bill).
+
+#### `settlements`
+```sql
+id                     uuid PRIMARY KEY
+clinic_id              uuid NOT NULL (FOREIGN KEY → clinics.id)
+year, month            int NOT NULL
+amount_received_paise  bigint NOT NULL
+received_date          date (NULLABLE)
+notes                  text (NULLABLE)
+created_by, updated_by uuid (NULLABLE)
+updated_at             timestamptz (NULLABLE)
+```
+Per-month partner-hospital (HV) settlement record, for the Monthly Report's
+variance tracking.
+
+#### `expected_visits`
+```sql
+id            uuid PRIMARY KEY
+clinic_id     uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id    uuid (FOREIGN KEY → patients.id, NULLABLE) — NULL for a
+              not-yet-a-patient expected arrival
+patient_name  text (NULLABLE)
+time_note     text NOT NULL — free text, e.g. "4pm" or "after lunch"
+visit_date    date NOT NULL
+status        text NOT NULL
+created_by, updated_by  uuid (NULLABLE)
+updated_at    timestamptz NOT NULL
+```
+Backs Workspace's "Expected today" list — manually added or matched patients
+expected in that day, independent of any actual visit record.
+
+---
+
+### Clinical Documentation Tables
+
+#### `consultation_notes`
+```sql
+id                        uuid PRIMARY KEY
+clinic_id                 uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id                uuid NOT NULL (FOREIGN KEY → patients.id)
+therapist_id              uuid NOT NULL (FOREIGN KEY → therapists.id)
+visit_id                  uuid (FOREIGN KEY → visits.id, NULLABLE)
+enrollment_id             uuid (FOREIGN KEY → patient_module_enrollments.id, NULLABLE)
+note_mode                 text (NULLABLE) — 'initial' | 'followup'
+status                    text NOT NULL — 'draft' | 'completed' | 'archived'
+assessment_payload        jsonb (NULLABLE) — the whole Core Assessment form
+                           (history, pain, PSFS, body chart, objective exam,
+                           treatment/HEP) as one versioned/upcastable blob,
+                           not separate columns per section
+authorized_session_count  int (NULLABLE)
+notes_text                text (NULLABLE)
+nrs_score                 int (NULLABLE) — derived, for outcome tracking
+psfs_mean                 numeric (NULLABLE) — derived
+red_flag_count            int NOT NULL — derived
+created_by, updated_by    uuid (NULLABLE)
+updated_at                timestamptz NOT NULL
 ```
 
 #### `patient_module_enrollments`
@@ -476,58 +589,89 @@ updated_by      uuid (FOREIGN KEY → auth.users.id)
 id              uuid PRIMARY KEY
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
-module_name     text (e.g., "core_assessment")
-enrolled_at     timestamptz DEFAULT now()
-discharge_at    timestamptz (NULLABLE) — end of episode
-updated_at      timestamptz SERVER_DEFAULT now()
-```
-
-### Additional Tables
-
-#### `audit_trail`
-```sql
-id              uuid PRIMARY KEY
-clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
-entity_type     text (e.g., 'visit', 'invoice', 'patient')
-entity_id       uuid NOT NULL
-action          text CHECK (action IN ('create', 'update', 'delete'))
-actor_id        uuid (FOREIGN KEY → auth.users.id)
-changed_fields  jsonb (before/after diffs)
-created_at      timestamptz DEFAULT now()
+module_type     text NOT NULL (e.g., "core_assessment")
+status          text NOT NULL — episode open/closed state
+created_by, updated_by  uuid (NULLABLE)
+enrolled_at, updated_at  timestamptz NOT NULL
 ```
 
 #### `ai_generation_log`
 ```sql
-id              uuid PRIMARY KEY
-clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
-user_id         uuid NOT NULL (FOREIGN KEY → auth.users.id)
-entity_type     text (e.g., 'treatment_note', 'hep')
-entity_id       uuid
-prompt          text
-result          text
-created_at      timestamptz DEFAULT now()
+id                uuid PRIMARY KEY
+clinic_id         uuid NOT NULL (FOREIGN KEY → clinics.id)
+consultation_id   uuid NOT NULL (FOREIGN KEY → consultation_notes.id)
+raw_ai_output     text NOT NULL
+model_name        text NOT NULL
+created_at        timestamptz NOT NULL
 ```
 
-#### `visit_column_preferences`
+#### Region-module response tables
+Each region module (opt-in extensions to Core Assessment) has its own
+response table, all following the same shape: `id`, `clinic_id`, `patient_id`,
+`enrollment_id` (FK → `patient_module_enrollments.id`, NULLABLE), a `responses
+jsonb` blob, one or two derived score/category columns, `created_by`/
+`updated_by`, `updated_at`.
+
+- **`screening_responses`** — `computed_score numeric`, `triage_level text`
+- **`return_to_sport_responses`** — `computed_score numeric`, `risk_category text`
+- **`scoliosis_screening_responses`** — `cobb_angle numeric`, `severity_level text`
+- **`face_scale_responses`** — `side_affected`, `visit_label`, `vas_movement`,
+  `vas_qol`, `domain_scores jsonb`, `total_score numeric`
+- **`facial_palsy_assessments`** — `side_affected`, `visit_label`, `hb_grade`,
+  `sunnybrook_resting/voluntary/synkinesis jsonb`, `sunnybrook_score numeric`,
+  `synkinesis_total int`
+
+#### Consent tables
 ```sql
-id              uuid PRIMARY KEY
-clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
-user_id         uuid NOT NULL (FOREIGN KEY → auth.users.id)
-visible_columns text[] (array of column names to show in ledger)
-updated_at      timestamptz DEFAULT now()
+consent_form_templates:
+  id, clinic_id, consent_type, version, locale, title, body_text, purpose,
+  is_active, effective_from, created_by, updated_by, updated_at
+
+consents:
+  id, clinic_id, consent_type, template_id (FK), subject_type,
+  patient_id (NULLABLE), therapist_id (NULLABLE), granted, granted_at,
+  granted_via, evidence_url, withdrawn_at, withdrawn_reason, captured_by,
+  created_by, updated_by, updated_at
+```
+`current_consents` is a **view** (not a table) over `consents` exposing the
+latest, still-in-force consent per subject (`is_in_force boolean`).
+
+---
+
+### Additional Tables
+
+#### `audit_log`
+```sql
+id           bigint PRIMARY KEY
+clinic_id    uuid (NULLABLE, FOREIGN KEY → clinics.id)
+table_name   text NOT NULL
+row_id       uuid NOT NULL
+action       text NOT NULL — 'create' | 'update' | 'delete'
+old_data, new_data  jsonb (NULLABLE)
+changed_by   uuid (NULLABLE, FOREIGN KEY → auth.users.id)
+changed_at   timestamptz NOT NULL
 ```
 
 #### `no_return_reason_catalog`
 ```sql
 id              uuid PRIMARY KEY
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
-reason          text NOT NULL
-active          boolean DEFAULT true
-created_by      uuid (FOREIGN KEY → auth.users.id)
-updated_by      uuid (FOREIGN KEY → auth.users.id)
-updated_at      timestamptz SERVER_DEFAULT now()
-UNIQUE (clinic_id, reason)
+name            text NOT NULL
+is_closed       boolean NOT NULL
+active          boolean NOT NULL (default true)
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
 ```
+
+#### `clinic_module_settings`, `clinic_entitlements` — dead infrastructure
+Both tables still exist (RLS enabled, no policies) but have **zero client
+code** reading or writing them anywhere in `src/` — no Dexie table, no repo,
+no sync. They were built for a Tier-1/Tier-2 module-gating mechanism that
+was never wired up. The `modules` reference table they originally pointed
+to was dropped (`20260820000001_drop_unused_modules_table.sql`); these two
+were left in place since removing them wasn't asked for. Don't build new
+features against them without first confirming they're actually meant to
+be resurrected — as of this writing they're inert.
 
 ---
 
@@ -570,15 +714,29 @@ UNIQUE (clinic_id, reason)
 - **SECURITY DEFINER RPCs** bypass RLS where needed (e.g., `issue_invoice()`)
 
 ### 7. Audit Trail & Compliance
-- **audit_trail table** logs all mutations (create/update/delete)
-- **actor_id** tracks who made the change
-- **changed_fields** captures before/after diffs
+- **audit_log table** logs mutations per row (`table_name`, `row_id`, `action`)
+- **old_data / new_data** capture the full before/after row as jsonb
+- **changed_by** tracks who made the change
 - **created_by / updated_by** on financial tables (visits, invoices, payments)
 
 ### 8. Soft Deletes for Safety
 - **Patients**: `deleted_at` — soft delete, still resolves in notes
 - **Visits**: `deleted` boolean — hard delete via RPC only
 - **Therapists**: `active` boolean — deactivation, hard delete only if zero visits
+
+### 9. Date Display: Short On-Screen, Full On Paper
+- **`formatDateDM`** (`DD/MM`, no year) — the default for interactive
+  on-screen dates: visit rows/cards, invoice dates, note editor/list dates.
+  The year is redundant when the date is always close to "now" in context.
+- **`formatDateDMY`** (`DD/MM/YY`) — reserved for dates that can legitimately
+  be a very different year: first/last visit, package start, arbitrary
+  date-range filter text, historical import rows.
+- **All printed/exported documents keep full-year dates unconditionally**
+  (visits CSV, invoice print, monthly ledger print, note print) — they're
+  standalone records that may be reviewed later without app context.
+- Both functions live in `src/domain/fiscalYear.ts`; the choice between them
+  is a per-usage judgment call, not something to change without checking
+  which bucket a given date falls into.
 
 ---
 
@@ -622,9 +780,13 @@ UNIQUE (clinic_id, reason)
 1. Create Supabase project
 2. Apply migrations in filename order from `supabase/migrations/`
 3. Run `supabase/seed.sql`
-4. Create auth users and grant clinic access via `supabase/setup_members.sql`
-5. `cp .env.example .env` and fill in project URL + anon key
-6. `npm install && npm run dev`
+4. Provision a clinic and its first admin via `supabase/provision_clinic.sql`
+   / grant further clinic access via `supabase/setup_members.sql`
+5. Deploy the `invite-therapist` edge function (`supabase/functions/`) —
+   used by Settings → Team to invite a new login without exposing a
+   service-role key to the client
+6. `cp .env.example .env` and fill in project URL + anon key
+7. `npm install && npm run dev`
 
 ### Development Commands
 | Command | Purpose |

@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { VISIT_COLUMN_LABELS, VISIT_OPTIONAL_COLUMN_ORDER, type UUID, type VisitColumnKey } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
-import { formatDateDMY } from '@/domain/fiscalYear';
+import { formatDateDM } from '@/domain/fiscalYear';
 import type { VisitPaymentState } from '@/domain/paymentState';
 import { paymentActions, paymentStatusPhrase, paymentStatusShortPhrase } from '@/domain/paymentState';
 import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
@@ -218,9 +218,21 @@ function PaymentStatusDisplay({
   const statusLabel = compact ? paymentStatusShortPhrase(data.paymentState) : chip.label;
   const statusTitle = compact ? paymentStatusPhrase(data.paymentState) : undefined;
 
+  // Billing fields freeze the moment a visit is invoiced (see
+  // EditVisitModal's `frozen` check), independent of whether it's since
+  // been collected — but only 'outstanding'/'partially_collected' chips
+  // read ambiguously about that ("Due"/"Partial" say nothing about billing
+  // being locked). 'paid' already says "Invoiced" in its own label.
+  const billingLocked = Boolean(data.invoiceId) && data.paymentState !== 'paid';
+
   if (compact) {
     return (
       <div className="flex max-w-[8.5rem] flex-wrap items-center gap-1">
+        {billingLocked && (
+          <span className="text-[10px]" title="Billing locked — this visit is invoiced">
+            🔒
+          </span>
+        )}
         <Pill tone={chip.tone}>
           <span className="whitespace-nowrap" title={statusTitle}>
             {statusLabel}
@@ -256,7 +268,14 @@ function PaymentStatusDisplay({
       {showAmount && data.paymentState !== 'zero_session' && (
         <div className="font-num text-sm text-[var(--ink)]">{bill}</div>
       )}
-      <Pill tone={chip.tone}>{chip.label}</Pill>
+      <div className="flex items-center gap-1">
+        {billingLocked && (
+          <span className="text-xs" title="Billing locked — this visit is invoiced">
+            🔒
+          </span>
+        )}
+        <Pill tone={chip.tone}>{chip.label}</Pill>
+      </div>
       {canInvoice && actions.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1">
           {actions.includes('take_payment') && (
@@ -402,7 +421,7 @@ export function SharedVisitCard({
             {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
             {showDate && (
               <div className={`text-xs text-[var(--muted)] ${showPatient ? 'mt-0.5' : ''}`}>
-                {formatDateDMY(data.visitDate)}
+                {formatDateDM(data.visitDate)}
                 {data.editedBy && (
                   <span className="ml-1" title={`Edited by ${data.editedBy}`}>
                     ✎
@@ -472,6 +491,15 @@ export function SharedVisitCard({
   );
 }
 
+/** Opt-in row checkboxes for bulk actions (currently: Patient Profile's
+ *  "select visits, issue one invoice" flow) — shared between the card list
+ *  and the table so the feature works at every breakpoint. */
+export interface VisitSelectionProps {
+  selectedIds: Set<UUID>;
+  onToggle: (visitId: UUID) => void;
+  isSelectable: (row: VisitCardData) => boolean;
+}
+
 /** Table rendering of the same VisitCardData rows the card uses — the
  *  Columns picker and every action here reads from the same data shape and
  *  callbacks as SharedVisitCard, so Seen Today and Ledger can share this
@@ -489,6 +517,7 @@ function VisitTable({
   onSplit,
   onDelete,
   canInvoice,
+  selection,
 }: {
   rows: VisitCardData[];
   showDate: boolean;
@@ -502,6 +531,7 @@ function VisitTable({
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
   canInvoice: boolean;
+  selection?: VisitSelectionProps;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -546,6 +576,7 @@ function VisitTable({
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
             <tr>
+              {selection && <th className={th}></th>}
               {showDate && <th className={th}>Date</th>}
               {showPatient && <th className={th}>Patient</th>}
               {VISIT_OPTIONAL_COLUMN_ORDER.map(
@@ -562,9 +593,22 @@ function VisitTable({
                 key={row.visitId}
                 className={`hover:bg-[var(--teal-light)] ${i % 2 === 1 ? 'bg-[var(--paper)]' : ''}`}
               >
+                {selection && (
+                  <td className={td}>
+                    {selection.isSelectable(row) && (
+                      <input
+                        type="checkbox"
+                        checked={selection.selectedIds.has(row.visitId)}
+                        onChange={() => selection.onToggle(row.visitId)}
+                        className="cursor-pointer"
+                        aria-label={`Select visit on ${formatDateDM(row.visitDate)}`}
+                      />
+                    )}
+                  </td>
+                )}
                 {showDate && (
                   <td className={td}>
-                    {formatDateDMY(row.visitDate)}
+                    {formatDateDM(row.visitDate)}
                     {row.editedBy && (
                       <span className="ml-1 text-[var(--muted)]" title={`Edited by ${row.editedBy}`}>
                         ✎
@@ -644,6 +688,7 @@ function VisitTable({
               <tr>
                 <td
                   colSpan={
+                    (selection ? 1 : 0) +
                     (showDate ? 1 : 0) +
                     (showPatient ? 1 : 0) +
                     (VISIT_OPTIONAL_COLUMN_ORDER.filter((key) => columnPrefs[key]).length) +
@@ -733,6 +778,7 @@ export function ResponsiveVisitList({
   onSplit,
   onDelete,
   canInvoice = true,
+  selection,
 }: {
   rows: VisitCardData[];
   showDate: boolean;
@@ -745,6 +791,10 @@ export function ResponsiveVisitList({
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
   canInvoice?: boolean;
+  /** Row checkboxes for bulk actions (e.g. Patient Profile's "select
+   *  visits, issue one invoice"). Only wired up in the flat (non-grouped)
+   *  card list and the table — grouped mode has no caller that needs it. */
+  selection?: VisitSelectionProps;
 }) {
   const { prefs, setPref } = useVisitColumnPrefs();
 
@@ -785,19 +835,30 @@ export function ResponsiveVisitList({
            * so we don't nest a box inside a box and waste horizontal space. */
           <div className="-mx-5 divide-y divide-[var(--border)]">
             {rows.map((row) => (
-              <div key={row.visitId} className="px-5">
-                <SharedVisitCard
-                  data={row}
-                  showDate={showDate}
-                  showPatient={showPatient}
-                  onInvoice={() => onInvoice(row)}
-                  onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
-                  onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
-                  onEdit={onEdit ? () => onEdit(row) : undefined}
-                  onSplit={onSplit ? () => onSplit(row) : undefined}
-                  onDelete={() => onDelete(row)}
-                  canInvoice={canInvoice}
-                />
+              <div key={row.visitId} className="flex items-start gap-2 px-5">
+                {selection && selection.isSelectable(row) && (
+                  <input
+                    type="checkbox"
+                    checked={selection.selectedIds.has(row.visitId)}
+                    onChange={() => selection.onToggle(row.visitId)}
+                    className="mt-4 shrink-0 cursor-pointer"
+                    aria-label={`Select visit on ${formatDateDM(row.visitDate)}`}
+                  />
+                )}
+                <div className="min-w-0 flex-1">
+                  <SharedVisitCard
+                    data={row}
+                    showDate={showDate}
+                    showPatient={showPatient}
+                    onInvoice={() => onInvoice(row)}
+                    onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
+                    onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
+                    onEdit={onEdit ? () => onEdit(row) : undefined}
+                    onSplit={onSplit ? () => onSplit(row) : undefined}
+                    onDelete={() => onDelete(row)}
+                    canInvoice={canInvoice}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -819,6 +880,7 @@ export function ResponsiveVisitList({
           onSplit={onSplit}
           onDelete={onDelete}
           canInvoice={canInvoice}
+          selection={selection}
         />
       </div>
     </>

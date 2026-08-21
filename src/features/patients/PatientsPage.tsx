@@ -8,7 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { computeVisitPaymentState, paymentActions, paymentStatusLine } from '@/domain/paymentState';
 import { EditPatientModal } from './EditPatientModal';
-import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, monthName, formatDateDMY } from '@/domain/fiscalYear';
+import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, monthName, formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
 import { type Patient, type Visit } from '@/domain/types';
 import {
   inputCls,
@@ -330,7 +330,6 @@ function AllPatientsSection() {
                 <tr>
                   <SortHeader label="Patient ID" k="mrno" sort={sort} />
                   <SortHeader label="Name" k="name" sort={sort} />
-                  <th className={th}>Phone</th>
                   <th className={th}>Therapist</th>
                   <SortHeader label="Primary condition" k="condition" sort={sort} />
                   <th className={th}>Treatment</th>
@@ -364,7 +363,6 @@ function AllPatientsSection() {
                           </div>
                         )}
                       </td>
-                      <td className={td}>{p.phone ?? '-'}</td>
                       <td className={td}>
                         {stats?.latestVisit ? (
                           <TherapistPill>{therapistName.get(stats.latestVisit.therapistId) ?? '-'}</TherapistPill>
@@ -441,7 +439,7 @@ function AllPatientsSection() {
                       <span className="font-display">{p.name}</span> <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
                     </td>
                     <td className={td}>
-                      <Pill tone="slate">Hidden {p.deletedAt && formatDateDMY(p.deletedAt)}</Pill>
+                      <Pill tone="slate">Hidden {p.deletedAt && formatDateDM(p.deletedAt)}</Pill>
                     </td>
                     <td className={`${td} whitespace-nowrap text-right`}>
                       <button className="text-xs text-[var(--teal)] hover:underline" onClick={() => void restore(p)}>
@@ -507,7 +505,6 @@ function PatientCard({
             <div className="font-display text-sm font-medium text-[var(--ink)]">{p.name}</div>
             <div className="text-xs leading-snug text-[var(--muted)]">
               {patientIdentityLine(p.mrno, p.age, p.sex)}
-              {p.phone && ` · ${p.phone}`}
             </div>
           </div>
         </Link>

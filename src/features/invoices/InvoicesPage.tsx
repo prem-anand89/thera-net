@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, paymentService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
-import { formatDateDMY } from '@/domain/fiscalYear';
+import { formatDateDM } from '@/domain/fiscalYear';
 import { type Invoice } from '@/domain/types';
 import { th, td, tdNum, ErrorNote, Pill, SectionCard } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
@@ -123,7 +123,7 @@ export function InvoicesPage() {
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     <Pill tone="slate">{inv.invoiceNo}</Pill>
-                    <Pill tone="slate">{formatDateDMY(inv.issuedAt)}</Pill>
+                    <Pill tone="slate">{formatDateDM(inv.issuedAt)}</Pill>
                     <Pill tone="slate">{inv.paymentMode}</Pill>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
@@ -183,7 +183,7 @@ export function InvoicesPage() {
                   return (
                     <tr key={inv.id} className="hover:bg-[var(--paper)]">
                       <td className={`${td} font-medium`}>{inv.invoiceNo}</td>
-                      <td className={td}>{formatDateDMY(inv.issuedAt)}</td>
+                      <td className={td}>{formatDateDM(inv.issuedAt)}</td>
                       <td className={`${td} font-display`}>{inv.patientSnapshot.name}</td>
                       <td className={td}>{inv.patientSnapshot.mrno}</td>
                       <td className={tdNum}>{formatINR(inv.totalPaise)}</td>

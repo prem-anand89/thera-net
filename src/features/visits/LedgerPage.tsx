@@ -8,7 +8,7 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
-import { formatDateDMY } from '@/domain/fiscalYear';
+import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import {
@@ -614,7 +614,7 @@ export function LedgerPage() {
                       <span className="text-xs text-[var(--muted)]">{r.mrno}</span>
                     </td>
                     <td className={tdNum}>{formatINR(r.totalPaise)}</td>
-                    <td className={td}>{formatDateDMY(r.issuedAt)}</td>
+                    <td className={td}>{formatDateDM(r.issuedAt)}</td>
                     <td className={tdNum}>{r.daysOutstanding}</td>
                   </tr>
                 ))}

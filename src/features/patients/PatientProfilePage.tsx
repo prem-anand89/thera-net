@@ -6,8 +6,8 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
-import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
-import { formatDateDMY } from '@/domain/fiscalYear';
+import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
+import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
@@ -42,6 +42,11 @@ export function PatientProfilePage() {
   const [selectedVisitIds, setSelectedVisitIds] = useState<Set<string>>(new Set());
   const [issuingInvoice, setIssuingInvoice] = useState(false);
   const [issueError, setIssueError] = useState<string | null>(null);
+  // Package sessions already billed as part of the package's own invoice
+  // show up here as ₹0 visits — real activity, but noise when someone just
+  // wants the payment/invoice trail. Off by default so nothing disappears
+  // without the viewer choosing it.
+  const [hideZeroBilled, setHideZeroBilled] = useState(false);
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
   const editPatient = useLiveQuery(() => (editPatientId ? repos.patients.get(editPatientId) : undefined), [editPatientId]);
@@ -89,25 +94,93 @@ export function PatientProfilePage() {
     [openPackages, patientId]
   );
 
-  const outstandingBalance = useMemo(() => {
-    if (!visits) return 0;
-    let total = 0;
-    for (const v of visits) {
+  // One pass over the patient's visits for all three headline money facts —
+  // billed (every visit's bill, including ₹0 package sessions), collected
+  // (money actually in hand: full bill when settled, the partial amount
+  // when not), and outstanding (still owed). Collected + outstanding always
+  // sums to billed except for partial payments, where the unpaid remainder
+  // is still counted as outstanding in full (same simplification the
+  // existing "outstanding" header pill has always used).
+  const billingSummary = useMemo(() => {
+    let totalBilled = 0;
+    let totalCollected = 0;
+    let outstandingBalance = 0;
+    for (const v of visits ?? []) {
       if (v.deleted) continue;
+      totalBilled += v.actualBillPaise;
       const state = computeVisitPaymentState(
         v.actualBillPaise,
         v.invoiceId ?? null,
         directPaymentByVisitId.get(v.id) ?? 0,
         v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
       );
-      if (!isCollected(state) && state !== 'zero_session') total += v.actualBillPaise;
+      if (isCollected(state)) {
+        totalCollected += v.actualBillPaise;
+      } else if (state === 'partially_collected') {
+        totalCollected += directPaymentByVisitId.get(v.id) ?? 0;
+      }
+      if (!isCollected(state) && state !== 'zero_session') outstandingBalance += v.actualBillPaise;
     }
-    return total;
+    return { totalBilled, totalCollected, outstandingBalance };
   }, [visits, statusByInvoiceId, directPaymentByVisitId]);
 
   const openPackageIds = useMemo(
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
+  );
+
+  const visitCardRows: VisitCardData[] = useMemo(
+    () =>
+      visitRows.map((v) => ({
+        visitId: v.id,
+        visitDate: v.visitDate,
+        patientId,
+        patientName: patient?.name ?? '—',
+        mrno: patient?.mrno ?? '—',
+        age: patient?.age,
+        sex: patient?.sex,
+        condition: v.condition ?? null,
+        serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
+        sessionIndex: v.sessionIndex ?? null,
+        packageTotal: v.packageTotal ?? null,
+        therapistName: therapistName.get(v.therapistId) ?? '—',
+        treatmentNotes: v.treatmentNotes ?? null,
+        billPaise: v.actualBillPaise,
+        paymentState: computeVisitPaymentState(
+          v.actualBillPaise,
+          v.invoiceId ?? null,
+          directPaymentByVisitId.get(v.id) ?? 0,
+          v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+        ),
+        invoiceId: v.invoiceId ?? null,
+        canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
+        // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
+        // is_own_therapist) — a patient's history is clinic-wide (any
+        // therapist can view it), but only the visit's own therapist or an
+        // admin can delete it.
+        canDelete: !v.invoiceId && (isAdmin || v.therapistId === myTherapistId),
+        needsNote: v.clinicalStatus === 'pending',
+      })),
+    [
+      visitRows,
+      patientId,
+      patient?.name,
+      patient?.mrno,
+      patient?.age,
+      patient?.sex,
+      serviceName,
+      therapistName,
+      directPaymentByVisitId,
+      statusByInvoiceId,
+      openPackageIds,
+      isAdmin,
+      myTherapistId,
+    ]
+  );
+
+  const visibleVisitCardRows = useMemo(
+    () => (hideZeroBilled ? visitCardRows.filter((r) => r.billPaise > 0) : visitCardRows),
+    [visitCardRows, hideZeroBilled]
   );
 
   const handleVisitDelete = useCallback(async (visitId: string) => {
@@ -237,21 +310,21 @@ export function PatientProfilePage() {
                 <span className="font-num">{patient.mrno}</span>
               </span>
               {meta.length > 0 && <span className="font-num">{meta.join(' · ')}</span>}
-              {referral && (
-                <span>
-                  <span className="text-[var(--muted)]/70">Ref</span> {referral}
-                </span>
-              )}
             </div>
             <div className="mt-2.5 flex flex-wrap gap-1.5">
-              {outstandingBalance > 0 && (
+              {billingSummary.outstandingBalance > 0 && (
                 <span className="rounded-full bg-[var(--rust-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--rust)]">
-                  ₹{(outstandingBalance / 100).toFixed(0)} outstanding
+                  ₹{(billingSummary.outstandingBalance / 100).toFixed(0)} outstanding
                 </span>
               )}
               {patient.primaryCondition && (
                 <span className="rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--teal)]">
                   {patient.primaryCondition}
+                </span>
+              )}
+              {referral && (
+                <span className="rounded-full bg-[var(--paper)] px-2.5 py-0.5 text-xs font-medium text-[var(--ink)]">
+                  Ref: {referral}
                 </span>
               )}
               {patient.mrnoSource === 'auto' && <Pill tone="slate">walk-in</Pill>}
@@ -273,51 +346,79 @@ export function PatientProfilePage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         {/* Side column — rendered first on mobile for proper ordering */}
         <div className="order-1 space-y-4 lg:order-none lg:col-start-2 lg:row-start-1">
-          {/* Front desk keeps read access to `notes` for the safety-flags
-              banner above (blood thinners, implants, pregnancy) — that's a
-              narrow derived subset, not clinical documentation. The full
-              note list/authoring entry point is gated separately, matching
-              canViewClinicalNotes's "reception has no clinical-documentation
-              need" (NoteEditorPage enforces the same gate for anyone who
-              navigates to a note URL directly). */}
-          {canViewClinicalNotes && <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />}
+          {/* One bordered panel instead of stacked separate cards — a
+              therapist opening a profile mid-visit wants notes, money, and
+              care-plan progress read together as one "where things stand"
+              snapshot, not three disconnected boxes. */}
+          <div className="divide-y divide-[var(--border)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+            {/* Front desk keeps read access to `notes` for the safety-flags
+                banner above (blood thinners, implants, pregnancy) — that's a
+                narrow derived subset, not clinical documentation. The full
+                note list/authoring entry point is gated separately, matching
+                canViewClinicalNotes's "reception has no clinical-documentation
+                need" (NoteEditorPage enforces the same gate for anyone who
+                navigates to a note URL directly). */}
+            {canViewClinicalNotes && <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />}
 
-          <SideCard title="Care plan">
-            {patientPackages.length === 0 ? (
-              <p className="text-sm text-[var(--muted)]">No open package.</p>
-            ) : (
-              <ul className="space-y-3">
-                {patientPackages.map((p) => {
-                  const pct = Math.min(100, Math.round((p.sessionsLogged / p.packageTotal) * 100));
-                  return (
-                    <li key={p.packageGroupId}>
-                      <div className="flex items-center justify-between text-sm font-medium text-[var(--ink)]">
-                        <span>{p.serviceName}</span>
-                        {p.stale && <Pill tone="amber">⚠ Stale</Pill>}
-                      </div>
-                      <div className="my-1.5 h-2 overflow-hidden rounded-full bg-[var(--paper)]">
-                        <span
-                          className="block h-full rounded-full bg-[var(--teal)]"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <div className="font-num flex justify-between text-xs text-[var(--muted)]">
-                        <span>
-                          {p.sessionsLogged} of {p.packageTotal} sessions
-                        </span>
-                        <span>last {formatDateDMY(p.lastVisitOn)}</span>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+            {visitRows.length > 0 && (
+              <PaymentsSummarySection
+                billed={billingSummary.totalBilled}
+                collected={billingSummary.totalCollected}
+                outstanding={billingSummary.outstandingBalance}
+              />
             )}
-          </SideCard>
+
+            <SideCard title="Care plan">
+              {patientPackages.length === 0 ? (
+                <p className="text-sm text-[var(--muted)]">No open package.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {patientPackages.map((p) => {
+                    const pct = Math.min(100, Math.round((p.sessionsLogged / p.packageTotal) * 100));
+                    return (
+                      <li key={p.packageGroupId}>
+                        <div className="flex items-center justify-between text-sm font-medium text-[var(--ink)]">
+                          <span>{p.serviceName}</span>
+                          {p.stale && <Pill tone="amber">⚠ Stale</Pill>}
+                        </div>
+                        <div className="my-1.5 h-2 overflow-hidden rounded-full bg-[var(--paper)]">
+                          <span
+                            className="block h-full rounded-full bg-[var(--teal)]"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="font-num flex justify-between text-xs text-[var(--muted)]">
+                          <span>
+                            {p.sessionsLogged} of {p.packageTotal} sessions
+                          </span>
+                          <span>
+                            last {formatDateDMY(p.lastVisitOn)} · {p.daysSinceLastVisit}d ago
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </SideCard>
+          </div>
         </div>
 
         {/* Main column */}
         <div className="order-2 space-y-4 lg:order-none lg:col-start-1 lg:row-start-1">
-          <SectionLabel>Visit history</SectionLabel>
+          <div className="flex items-center justify-between">
+            <SectionLabel>Visit history</SectionLabel>
+            {visitRows.length > 0 && (
+              <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={hideZeroBilled}
+                  onChange={(e) => setHideZeroBilled(e.target.checked)}
+                />
+                Hide ₹0 visits (package sessions)
+              </label>
+            )}
+          </div>
           {issueError && (
             <div className="rounded bg-[var(--rust-light)] p-2 text-sm text-[var(--rust)]">
               {issueError}
@@ -341,68 +442,27 @@ export function PatientProfilePage() {
             )}
             {visitRows.length === 0 ? (
               <p className="p-4 text-sm text-[var(--muted)]">No visits recorded yet.</p>
+            ) : visibleVisitCardRows.length === 0 ? (
+              <p className="p-4 text-sm text-[var(--muted)]">
+                All visits are ₹0 (package sessions) — uncheck "Hide ₹0 visits" to see them.
+              </p>
             ) : (
-              <ul className="divide-y divide-[var(--border)]">
-                {visitRows.map((v) => {
-                  const isSelected = selectedVisitIds.has(v.id);
-                  const eligibleForInvoicing = !v.invoiceId;
-                  const cardData: VisitCardData = {
-                    visitId: v.id,
-                    visitDate: v.visitDate,
-                    patientId,
-                    patientName: patient.name,
-                    mrno: patient.mrno,
-                    age: patient.age,
-                    sex: patient.sex,
-                    condition: v.condition ?? null,
-                    serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
-                    sessionIndex: v.sessionIndex ?? null,
-                    packageTotal: v.packageTotal ?? null,
-                    therapistName: therapistName.get(v.therapistId) ?? '—',
-                    treatmentNotes: v.treatmentNotes ?? null,
-                    billPaise: v.actualBillPaise,
-                    paymentState: computeVisitPaymentState(
-                      v.actualBillPaise,
-                      v.invoiceId ?? null,
-                      directPaymentByVisitId.get(v.id) ?? 0,
-                      v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
-                    ),
-                    invoiceId: v.invoiceId ?? null,
-                    canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
-                    // Pre-flight mirror of visits_delete's RLS check
-                    // (is_clinic_admin or is_own_therapist) — a patient's
-                    // history is clinic-wide (any therapist can view it),
-                    // but only the visit's own therapist or an admin can
-                    // delete it.
-                    canDelete: !v.invoiceId && (isAdmin || v.therapistId === myTherapistId),
-                    needsNote: v.clinicalStatus === 'pending',
-                  };
-                  return (
-                    <li key={v.id} className="flex items-start gap-3 px-3">
-                      {eligibleForInvoicing && canBill && (
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleVisitSelection(v.id)}
-                          className="mt-4 shrink-0 cursor-pointer"
-                          aria-label={`Select visit on ${formatDateDMY(v.visitDate)}`}
-                        />
-                      )}
-                      <div className="flex-1">
-                        <SharedVisitCard
-                          data={cardData}
-                          showDate={true}
-                          showPatient={false}
-                          onInvoice={() => {}}
-                          onEditPatient={() => setEditPatientId(v.patientId)}
-                          onDelete={() => handleVisitDelete(v.id)}
-                          canInvoice={canBill}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="p-5">
+                <ResponsiveVisitList
+                  rows={visibleVisitCardRows}
+                  showDate={true}
+                  showPatient={false}
+                  onInvoice={() => {}}
+                  onEditPatient={(row) => setEditPatientId(row.patientId)}
+                  onDelete={(row) => handleVisitDelete(row.visitId)}
+                  canInvoice={canBill}
+                  selection={{
+                    selectedIds: selectedVisitIds,
+                    onToggle: toggleVisitSelection,
+                    isSelectable: (row) => !row.invoiceId && canBill,
+                  }}
+                />
+              </div>
             )}
           </section>
         </div>
@@ -488,7 +548,7 @@ function ConsultationNotePanel({
                 className="flex items-center justify-between gap-2 hover:underline"
               >
                 <span className="min-w-0">
-                  <span className="font-num text-[var(--ink)]">{formatDateDMY(n.updatedAt.slice(0, 10))}</span>
+                  <span className="font-num text-[var(--ink)]">{formatDateDM(n.updatedAt.slice(0, 10))}</span>
                   <span className="ml-1.5 text-[var(--muted)]">
                     {n.noteMode === 'followup' ? 'Follow-up' : 'Initial'}
                   </span>
@@ -516,6 +576,10 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** One section of the side panel — border/background live on the shared
+ *  wrapper (see the patient snapshot panel above), this just supplies the
+ *  header + padding so Notes / Payments / Care plan read as one connected
+ *  panel with divider lines instead of three separate boxes. */
 function SideCard({
   title,
   action,
@@ -526,13 +590,49 @@ function SideCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-4">
+    <div className="p-4">
       <div className="mb-2.5 flex items-center justify-between">
         <h3 className="font-display text-sm font-semibold text-[var(--ink)]">{title}</h3>
         {action}
       </div>
       {children}
-    </section>
+    </div>
+  );
+}
+
+/** Lifetime billed / collected / outstanding for this patient — the
+ *  header's outstanding pill only tells half the story; this gives the
+ *  full picture in one glance without leaving the profile. */
+function PaymentsSummarySection({
+  billed,
+  collected,
+  outstanding,
+}: {
+  billed: number;
+  collected: number;
+  outstanding: number;
+}) {
+  return (
+    <SideCard title="Payments">
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <div className="font-num text-sm font-semibold text-[var(--ink)]">₹{(billed / 100).toFixed(0)}</div>
+          <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Billed</div>
+        </div>
+        <div>
+          <div className="font-num text-sm font-semibold text-[var(--teal)]">₹{(collected / 100).toFixed(0)}</div>
+          <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Collected</div>
+        </div>
+        <div>
+          <div
+            className={`font-num text-sm font-semibold ${outstanding > 0 ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}
+          >
+            ₹{(outstanding / 100).toFixed(0)}
+          </div>
+          <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Outstanding</div>
+        </div>
+      </div>
+    </SideCard>
   );
 }
 

@@ -128,7 +128,9 @@ export function InvoicePrintPage() {
             )}
           </div>
           <div className="text-right">
-            <p className="text-lg font-bold text-[var(--ink)]">INVOICE</p>
+            <p className="text-lg font-bold text-[var(--ink)]">
+              {isPaid ? 'BILL CUM RECEIPT' : 'BILL'}
+            </p>
             <p className="text-[var(--ink)]">{invoice.invoiceNo}</p>
             <p className="text-[var(--muted)]">{formatDateDMY(invoice.issuedAt)}</p>
             <p
@@ -211,7 +213,10 @@ export function InvoicePrintPage() {
           </tfoot>
         </table>
 
-        <p className="mt-2 text-xs italic text-[var(--muted)]">In words: {amountInWords(invoice.totalPaise)}</p>
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          {isPaid ? 'Received with thanks: ' : 'Amount in words: '}
+          {amountInWords(invoice.totalPaise)}
+        </p>
 
         <p className="mt-3 text-sm text-[var(--muted)]">Payment mode: {invoice.paymentMode}</p>
 
