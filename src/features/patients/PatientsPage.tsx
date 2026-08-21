@@ -332,12 +332,16 @@ function AllPatientsSection() {
           </>
         ) : month === 'custom' ? (
           customFrom && customTo ? (
-            <>
-              Showing patients seen {formatDateDMY(customFrom)}–{formatDateDMY(customTo)}.{' '}
-              <button className="font-medium text-[var(--teal)] hover:underline" onClick={() => setMonth('')}>
-                Show Full FY
-              </button>
-            </>
+            customFrom > customTo ? (
+              <span className="text-[var(--rust)]">From date must be before To date.</span>
+            ) : (
+              <>
+                Showing patients seen {formatDateDMY(customFrom)}–{formatDateDMY(customTo)}.{' '}
+                <button className="font-medium text-[var(--teal)] hover:underline" onClick={() => setMonth('')}>
+                  Show Full FY
+                </button>
+              </>
+            )
           ) : (
             'Pick a From and To date above.'
           )

@@ -58,6 +58,11 @@ export function AmendInvoiceDialog({
     setBusy(true);
     setError(null);
     try {
+      if (!invoice) {
+        setError('Invoice data unavailable');
+        setBusy(false);
+        return;
+      }
       const visitIds = [...originalVisits.map((v) => v.id), ...selectedExtra];
       const newInvoice = await invoiceService.amendInvoice(invoice.id, visitIds, paymentMode);
       setAmended({ invoiceId: newInvoice.id, invoiceNo: newInvoice.invoiceNo });
