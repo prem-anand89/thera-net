@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, backupService, therapistService, visitService } from '@/services';
@@ -1346,6 +1346,17 @@ function DangerZone() {
 function Catalog() {
   const clinic = useClinic();
   const items = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
+  // repos.catalog.list already sorts by category then name, so grouping is
+  // just a pass over that order — no re-sort needed here.
+  const groups = useMemo(() => {
+    const map = new Map<string, CatalogItem[]>();
+    for (const item of items ?? []) {
+      const key = item.category.trim() || 'Uncategorized';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(item);
+    }
+    return [...map.entries()];
+  }, [items]);
   const [draft, setDraft] = useState({ category: '', name: '', sessionCount: '1' });
   const [draftPrice, setDraftPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1412,42 +1423,54 @@ function Catalog() {
           form moves to its own block below the list, since a form doesn't
           fit a table-row shape once it's not a table. */}
       <div className="tab:hidden space-y-2">
-        {(items ?? []).map((item) => (
-          <div
-            key={item.id}
-            className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm ${item.active ? '' : 'opacity-50'}`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="font-display text-sm font-medium text-[var(--ink)]">{item.name}</div>
-                <div className="text-xs text-[var(--muted)]">
-                  {item.category} · {item.sessionCount} session{item.sessionCount === 1 ? '' : 's'}
+        {groups.map(([category, catItems]) => (
+          <div key={category}>
+            <p className="mb-1.5 px-0.5 text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]/80">
+              {category}
+            </p>
+            <div className="space-y-2">
+              {catItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm ${item.active ? '' : 'opacity-50'}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-display text-sm font-medium text-[var(--ink)]">{item.name}</div>
+                      <div className="text-xs text-[var(--muted)]">
+                        {item.sessionCount} session{item.sessionCount === 1 ? '' : 's'}
+                      </div>
+                    </div>
+                    <span
+                      className="shrink-0 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+                      style={
+                        item.active
+                          ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
+                          : { background: 'var(--paper)', color: 'var(--muted)' }
+                      }
+                    >
+                      {item.active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <RupeeInput valuePaise={item.basePricePaise} onChange={(p) => void updatePrice(item, p)} />
+                      {savedItemId === item.id && (
+                        <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">Saved</span>
+                      )}
+                    </div>
+                    <button
+                      className="text-xs text-[var(--teal)] hover:underline"
+                      onClick={() => void toggleActive(item)}
+                    >
+                      {item.active ? 'Deactivate' : 'Reactivate'}
+                    </button>
+                  </div>
+                  <div className="mt-1 text-xs text-[var(--muted)]">
+                    Per session: {formatINR(effectivePricePerSession(item))}
+                  </div>
                 </div>
-              </div>
-              <span
-                className="shrink-0 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-                style={
-                  item.active
-                    ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
-                    : { background: 'var(--paper)', color: 'var(--muted)' }
-                }
-              >
-                {item.active ? 'Active' : 'Inactive'}
-              </span>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <RupeeInput valuePaise={item.basePricePaise} onChange={(p) => void updatePrice(item, p)} />
-                {savedItemId === item.id && (
-                  <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">Saved</span>
-                )}
-              </div>
-              <button className="text-xs text-[var(--teal)] hover:underline" onClick={() => void toggleActive(item)}>
-                {item.active ? 'Deactivate' : 'Reactivate'}
-              </button>
-            </div>
-            <div className="mt-1 text-xs text-[var(--muted)]">
-              Per session: {formatINR(effectivePricePerSession(item))}
+              ))}
             </div>
           </div>
         ))}
@@ -1497,7 +1520,6 @@ function Catalog() {
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
             <tr>
-              <th className={th}>Category</th>
               <th className={th}>Package</th>
               <th className={thNum}>Sessions</th>
               <th className={thNum}>Price</th>
@@ -1506,62 +1528,73 @@ function Catalog() {
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
-            {(items ?? []).map((item) => (
-              <tr key={item.id} className={item.active ? '' : 'opacity-50'}>
-                <td className={td}>{item.category}</td>
-                <td className={td}>{item.name}</td>
-                <td className={tdNum}>{item.sessionCount}</td>
-                <td className={`${tdNum} w-32`}>
-                  <div className="flex items-center justify-end gap-1.5">
-                    <RupeeInput
-                      valuePaise={item.basePricePaise}
-                      onChange={(p) => void updatePrice(item, p)}
-                    />
-                    {savedItemId === item.id && (
-                      <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">Saved</span>
-                    )}
-                  </div>
-                </td>
-                <td className={tdNum}>{formatINR(effectivePricePerSession(item))}</td>
-                <td className={td}>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-                      style={
-                        item.active
-                          ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
-                          : { background: 'var(--paper)', color: 'var(--muted)' }
-                      }
-                    >
-                      {item.active ? 'Active' : 'Inactive'}
-                    </span>
-                    <button
-                      className="text-xs text-[var(--teal)] hover:underline"
-                      onClick={() => void toggleActive(item)}
-                    >
-                      {item.active ? 'Deactivate' : 'Reactivate'}
-                    </button>
-                  </div>
-                </td>
-              </tr>
+            {groups.map(([category, catItems]) => (
+              <Fragment key={category}>
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="bg-[var(--paper)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]/80"
+                  >
+                    {category}
+                  </td>
+                </tr>
+                {catItems.map((item) => (
+                  <tr key={item.id} className={item.active ? '' : 'opacity-50'}>
+                    <td className={td}>{item.name}</td>
+                    <td className={tdNum}>{item.sessionCount}</td>
+                    <td className={`${tdNum} w-32`}>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <RupeeInput
+                          valuePaise={item.basePricePaise}
+                          onChange={(p) => void updatePrice(item, p)}
+                        />
+                        {savedItemId === item.id && (
+                          <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">Saved</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className={tdNum}>{formatINR(effectivePricePerSession(item))}</td>
+                    <td className={td}>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+                          style={
+                            item.active
+                              ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
+                              : { background: 'var(--paper)', color: 'var(--muted)' }
+                          }
+                        >
+                          {item.active ? 'Active' : 'Inactive'}
+                        </span>
+                        <button
+                          className="text-xs text-[var(--teal)] hover:underline"
+                          onClick={() => void toggleActive(item)}
+                        >
+                          {item.active ? 'Deactivate' : 'Reactivate'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </Fragment>
             ))}
             <tr className="bg-[var(--paper)]/50">
               <td className={td}>
-                <input
-                  className={inputCls}
-                  placeholder="Category"
-                  list="catalog-categories"
-                  value={draft.category}
-                  onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-                />
-              </td>
-              <td className={td}>
-                <input
-                  className={inputCls}
-                  placeholder="Package name"
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                />
+                <div className="space-y-1">
+                  <input
+                    className={inputCls}
+                    placeholder="Category"
+                    list="catalog-categories"
+                    value={draft.category}
+                    onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+                  />
+                  <input
+                    className={inputCls}
+                    placeholder="Package name"
+                    value={draft.name}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                  />
+                </div>
               </td>
               <td className={`${td} w-24`}>
                 <input
