@@ -61,11 +61,13 @@ export function MonthlyLedgerPrintPage() {
       <div className="mx-auto max-w-6xl bg-[var(--surface)] p-8 print:max-w-none print:p-0">
         {/* Letterhead */}
         <header className="flex items-start justify-between border-b border-[var(--border)] pb-4">
-          <div className="flex items-center gap-3">
-            {logoUrl && <img src={logoUrl} alt="" className="h-14 w-auto object-contain" />}
-            <div>
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {logoUrl && <img src={logoUrl} alt="" className="h-14 w-auto shrink-0 object-contain" />}
+            <div className="min-w-0">
               <h1 className="font-display text-xl font-bold text-[var(--ink)]">{clinic.name}</h1>
-              {clinic.address && <p className="text-xs text-[var(--muted)]">{clinic.address}</p>}
+              {clinic.address && (
+                <p className="whitespace-pre-line text-xs text-[var(--muted)]">{clinic.address}</p>
+              )}
               <p className="text-xs text-[var(--muted)]">
                 {[clinic.phone, clinic.email].filter(Boolean).join(' · ')}
               </p>
@@ -73,7 +75,7 @@ export function MonthlyLedgerPrintPage() {
             </div>
           </div>
           {clinic.partnerHospitalName && (
-            <div className="flex items-center gap-2 text-right">
+            <div className="flex shrink-0 items-center gap-2 text-right">
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">In partnership with</p>
                 <p className="text-sm font-medium text-[var(--ink)]">{clinic.partnerHospitalName}</p>

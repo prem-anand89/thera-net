@@ -8,7 +8,15 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { computeVisitPaymentState, paymentActions, paymentStatusLine } from '@/domain/paymentState';
 import { EditPatientModal } from './EditPatientModal';
-import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, monthName, formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
+import {
+  fiscalYearOf,
+  monthsOfFiscalYear,
+  monthDateRange,
+  fiscalYearDateRange,
+  monthName,
+  formatDateDMY,
+  formatDateDM,
+} from '@/domain/fiscalYear';
 import { type Patient, type Visit } from '@/domain/types';
 import {
   inputCls,
@@ -68,11 +76,17 @@ function AllPatientsSection() {
     return { year: y, month: m };
   }, [month]);
 
-  const periodVisits = useLiveQuery(() => {
-    if (!selectedPeriod) return Promise.resolve(null);
-    const { from, to } = monthDateRange(selectedPeriod);
-    return repos.visits.list({ clinicId: clinic.id, from, to });
-  }, [clinic.id, selectedPeriod?.year, selectedPeriod?.month]);
+  // No month picked doesn't mean "no filter" — it means "the whole selected
+  // fiscal year," so the FY dropdown actually does something. A genuinely
+  // unfiltered "every patient ever" view isn't offered by this control.
+  const selectedRange = useMemo(
+    () => (selectedPeriod ? monthDateRange(selectedPeriod) : fiscalYearDateRange(fyStartYear, clinic.fyStartMonth)),
+    [selectedPeriod, fyStartYear, clinic.fyStartMonth]
+  );
+  const periodVisits = useLiveQuery(
+    () => repos.visits.list({ clinicId: clinic.id, from: selectedRange.from, to: selectedRange.to }),
+    [clinic.id, selectedRange.from, selectedRange.to]
+  );
   const periodPatientIds = useMemo(
     () => (periodVisits ? new Set(periodVisits.map((v) => v.patientId)) : null),
     [periodVisits]
@@ -236,7 +250,7 @@ function AllPatientsSection() {
               ))}
             </select>
             <select className={inputCls} value={month} onChange={(e) => setMonth(e.target.value)}>
-              <option value="">All time</option>
+              <option value="">Whole year</option>
               {months.map((m) => (
                 <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
                   {monthName(m.month)} {m.year}
@@ -272,14 +286,18 @@ function AllPatientsSection() {
           </button>
         ))}
       </div>
-      {selectedPeriod && (
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          Showing patients seen in {monthName(selectedPeriod.month)} {selectedPeriod.year}.{' '}
-          <button className="font-medium text-[var(--teal)] hover:underline" onClick={() => setMonth('')}>
-            Show all time
-          </button>
-        </p>
-      )}
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        {selectedPeriod ? (
+          <>
+            Showing patients seen in {monthName(selectedPeriod.month)} {selectedPeriod.year}.{' '}
+            <button className="font-medium text-[var(--teal)] hover:underline" onClick={() => setMonth('')}>
+              Show whole year
+            </button>
+          </>
+        ) : (
+          `Showing patients seen in FY ${fiscalYearOf(new Date(fyStartYear, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label}.`
+        )}
+      </p>
 
       <ErrorNote message={error} />
 
@@ -287,9 +305,9 @@ function AllPatientsSection() {
         <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-8 text-center text-sm text-[var(--muted)]">
           {q
             ? 'No patients match your search.'
-            : selectedPeriod
-              ? 'No patients were seen in this period.'
-              : "No patients yet - they're created from the \"New visit\" flow."}
+            : (all ?? []).filter((p) => !p.deletedAt).length === 0
+              ? "No patients yet - they're created from the \"New visit\" flow."
+              : 'No patients were seen in this period.'}
         </div>
       ) : (
         <>

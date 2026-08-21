@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, formatDateDMY, formatDateDM } from './fiscalYear';
+import {
+  fiscalYearOf,
+  monthsOfFiscalYear,
+  monthDateRange,
+  fiscalYearDateRange,
+  formatDateDMY,
+  formatDateDM,
+} from './fiscalYear';
 import { formatInvoiceNo } from './invoiceNumber';
 import { effectivePricePerSession } from './types';
 import { rupeesToPaise as rs } from './money';
@@ -33,6 +40,21 @@ describe('monthDateRange', () => {
     expect(monthDateRange({ year: 2028, month: 2 })).toEqual({
       from: '2028-02-01',
       to: '2028-02-29',
+    });
+  });
+});
+
+describe('fiscalYearDateRange', () => {
+  it('spans the whole FY, Apr 2026 through Mar 2027', () => {
+    expect(fiscalYearDateRange(2026, 4)).toEqual({
+      from: '2026-04-01',
+      to: '2027-03-31',
+    });
+  });
+  it('respects a different fy_start_month', () => {
+    expect(fiscalYearDateRange(2026, 1)).toEqual({
+      from: '2026-01-01',
+      to: '2026-12-31',
     });
   });
 });

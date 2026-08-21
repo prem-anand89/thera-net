@@ -583,7 +583,13 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
           />
         </Field>
         <Field label="Address">
-          <input className={inputCls} value={form.address ?? ''} onChange={(e) => set({ address: e.target.value || null })} />
+          <textarea
+            className={`${inputCls} min-h-16 resize-none`}
+            rows={3}
+            placeholder={'Street\nCity, State — PIN'}
+            value={form.address ?? ''}
+            onChange={(e) => set({ address: e.target.value || null })}
+          />
         </Field>
         <Field label="Phone">
           <input className={inputCls} value={form.phone ?? ''} onChange={(e) => set({ phone: e.target.value || null })} />

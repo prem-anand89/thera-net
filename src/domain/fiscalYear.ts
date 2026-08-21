@@ -58,6 +58,17 @@ export function monthDateRange({ year, month }: FyMonth): { from: string; to: st
   return { from, to };
 }
 
+/** First/last ISO dates spanning a whole fiscal year — the `from` of its
+ *  first month through the `to` of its last, for filters where "no specific
+ *  month picked" should mean "the whole selected FY," not "no filter." */
+export function fiscalYearDateRange(startYear: number, fyStartMonth = 4): { from: string; to: string } {
+  const months = monthsOfFiscalYear(startYear, fyStartMonth);
+  return {
+    from: monthDateRange(months[0]).from,
+    to: monthDateRange(months[months.length - 1]).to,
+  };
+}
+
 /** ISO date (or timestamp) to display format, e.g. "2026-07-05" -> "05/07/26".
  *  Reserved for dates that can meaningfully be a different year from
  *  today — "last visit"/"first seen" stats, a stale package's start date,
