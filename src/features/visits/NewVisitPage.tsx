@@ -10,11 +10,8 @@ import { formatDateDMY } from '@/domain/fiscalYear';
 import { DUPLICATE_NAME_THRESHOLD, nameSimilarity } from '@/domain/nameSimilarity';
 import {
   effectivePricePerSession,
-  referringSourceDetailLabel,
-  REFERRING_SOURCE_LABELS,
   type Patient,
   type PaymentMethod,
-  type ReferringSource,
   type UUID,
 } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -141,9 +138,10 @@ export function NewVisitPage() {
     sex: '',
     phone: '',
     primaryCondition: '',
-    referringSource: '' as ReferringSource | '',
+    referringSourceId: '',
     referringSourceDetail: '',
   });
+  const referringSources = useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id), [clinic.id]) ?? [];
 
   // Visit fields
   const today = new Date().toISOString().slice(0, 10);
@@ -419,7 +417,7 @@ export function NewVisitPage() {
         sex: (newPatient.sex || null) as Patient['sex'],
         phone: newPatient.phone || null,
         primaryCondition: newPatient.primaryCondition || null,
-        referringSource: newPatient.referringSource || null,
+        referringSourceId: newPatient.referringSourceId || null,
         referringSourceDetail: newPatient.referringSourceDetail || null,
       });
       setPatient(created);
@@ -680,27 +678,25 @@ export function NewVisitPage() {
               <Field label="Referring source">
                 <select
                   className={inputCls}
-                  value={newPatient.referringSource}
+                  value={newPatient.referringSourceId}
                   onChange={(e) =>
                     setNewPatient({
                       ...newPatient,
-                      referringSource: e.target.value as ReferringSource | '',
+                      referringSourceId: e.target.value,
                       referringSourceDetail: '',
                     })
                   }
                 >
                   <option value="">—</option>
-                  {(Object.entries(REFERRING_SOURCE_LABELS) as [ReferringSource, string][]).map(
-                    ([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    )
-                  )}
+                  {referringSources.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
                 </select>
               </Field>
-              {referringSourceDetailLabel(newPatient.referringSource) && (
-                <Field label={referringSourceDetailLabel(newPatient.referringSource)!}>
+              {referringSources.find((s) => s.id === newPatient.referringSourceId)?.detailLabel && (
+                <Field label={referringSources.find((s) => s.id === newPatient.referringSourceId)!.detailLabel!}>
                   <input
                     className={inputCls}
                     value={newPatient.referringSourceDetail}

@@ -424,7 +424,11 @@ sex                   text (NULLABLE) — 'M' | 'F' | 'Other'
 phone                 text (NULLABLE) — searchable everywhere, but only
                        *displayed* on Patient Profile, not the Patients list
 primary_condition     text (NULLABLE)
-referring_source      text (NULLABLE)
+referring_source      text (NULLABLE) — legacy fixed enum, kept only so
+                       patients tagged before referring_source_catalog
+                       existed keep displaying correctly; no longer written
+referring_source_id   uuid (FOREIGN KEY → referring_source_catalog.id, NULLABLE)
+                       — current source of truth for new/edited patients
 referring_source_detail text (NULLABLE)
 no_return_reason_id   uuid (FOREIGN KEY → no_return_reason_catalog.id, NULLABLE)
 deleted_at            timestamptz (NULLABLE) — soft delete
@@ -662,6 +666,36 @@ active          boolean NOT NULL (default true)
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 ```
+Every clinic gets an 8-item starter set (Moved away / relocated, Discomfort
+with treatment, Cost / could not afford, Recovered — no longer needed care,
+Switched to another provider, Lost contact / unreachable, Scheduling
+conflict, Referred elsewhere) — seeded by `create_clinic_with_admin()` for
+new clinics and by a one-time backfill migration for existing ones. Fully
+editable afterward from Reports' "Manage reasons" panel (add / deactivate /
+mark "counts as closed"); the starter rows aren't locked, just pre-filled.
+
+#### `referring_source_catalog`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+name            text NOT NULL
+detail_label    text (NULLABLE) — label for the follow-up detail field this
+                source needs (e.g. "Referring doctor"), null if it needs none
+active          boolean NOT NULL (default true)
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+UNIQUE (clinic_id, name)
+```
+Clinic-editable list of referral channels shown when adding/editing a
+patient (Settings → Services), same add / deactivate-not-delete / rename
+pattern as `no_return_reason_catalog`. Seeded with the app's original six
+labels (Hospital referral, Doctor referral, Walk-in, Word of mouth, Online,
+Other) for every clinic — new via `create_clinic_with_admin()`, existing via
+a backfill migration. `patients.referring_source_id` is the source of truth
+for patients tagged after this catalog existed; the legacy
+`patients.referring_source` enum column is kept (not backfilled) so older
+patients keep displaying via the old `REFERRING_SOURCE_LABELS` fallback —
+see `dashboardService.referralSourceStats` for how both are reconciled.
 
 #### `clinic_module_settings`, `clinic_entitlements` — dead infrastructure
 Both tables still exist (RLS enabled, no policies) but have **zero client

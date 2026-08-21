@@ -4,6 +4,7 @@ import type {
   Therapist,
   CatalogItem,
   NoReturnReasonItem,
+  ReferringSourceItem,
   Patient,
   Visit,
   Invoice,
@@ -19,6 +20,7 @@ import type {
   TherapistRepo,
   CatalogRepo,
   NoReturnReasonCatalogRepo,
+  ReferringSourceCatalogRepo,
   PatientRepo,
   VisitRepo,
   VisitFilter,
@@ -95,6 +97,15 @@ const noReturnReasonCatalog: NoReturnReasonCatalogRepo = {
   },
   get: (id) => db.no_return_reason_catalog.get(id),
   put: (item) => putWithOutbox('no_return_reason_catalog', item),
+};
+
+const referringSourceCatalog: ReferringSourceCatalogRepo = {
+  async list(clinicId, includeInactive = false) {
+    const all = await db.referring_source_catalog.where('clinicId').equals(clinicId).toArray();
+    return all.filter((r) => includeInactive || r.active).sort((a, b) => a.name.localeCompare(b.name));
+  },
+  get: (id) => db.referring_source_catalog.get(id),
+  put: (item) => putWithOutbox('referring_source_catalog', item),
 };
 
 const patients: PatientRepo = {
@@ -283,6 +294,7 @@ export const repos: Repos = {
   therapists,
   catalog,
   noReturnReasonCatalog,
+  referringSourceCatalog,
   patients,
   visits,
   invoices,
@@ -300,6 +312,7 @@ export type {
   Therapist,
   CatalogItem,
   NoReturnReasonItem,
+  ReferringSourceItem,
   Patient,
   Visit,
   Invoice,

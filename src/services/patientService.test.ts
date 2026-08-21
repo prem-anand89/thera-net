@@ -48,16 +48,16 @@ describe('patientService.create', () => {
     const patient = await createPatientService(fake.repos).create({
       clinicId: 'clinic-1',
       name: 'New Patient',
-      referringSource: 'doctor_referral',
+      referringSourceId: 'src-doctor-referral',
       referringSourceDetail: 'Dr. Mehta',
     });
-    expect(patient).toMatchObject({ referringSource: 'doctor_referral', referringSourceDetail: 'Dr. Mehta' });
+    expect(patient).toMatchObject({ referringSourceId: 'src-doctor-referral', referringSourceDetail: 'Dr. Mehta' });
   });
 
   it('defaults referring source to null when omitted', async () => {
     const fake = makeFakeRepos();
     const patient = await createPatientService(fake.repos).create({ clinicId: 'clinic-1', name: 'New Patient' });
-    expect(patient.referringSource).toBeNull();
+    expect(patient.referringSourceId).toBeNull();
     expect(patient.referringSourceDetail).toBeNull();
   });
 
@@ -172,21 +172,12 @@ describe('patientService.update', () => {
   it('sets the referring source and detail on an existing patient', async () => {
     const original = seedPatient(fake.patients);
     const updated = await createPatientService(fake.repos).update(original.id, {
-      referringSource: 'word_of_mouth',
+      referringSourceId: 'src-word-of-mouth',
       referringSourceDetail: 'Referred by Anita Rao',
     });
     expect(updated).toMatchObject({
-      referringSource: 'word_of_mouth',
+      referringSourceId: 'src-word-of-mouth',
       referringSourceDetail: 'Referred by Anita Rao',
     });
-  });
-
-  it('maps leftover Edit-patient values (hospital, doctor) onto the DB check constraint', async () => {
-    const fake = makeFakeRepos();
-    const original = seedPatient(fake.patients);
-    const updated = await createPatientService(fake.repos).update(original.id, {
-      referringSource: 'hospital' as never,
-    });
-    expect(updated.referringSource).toBe('hospital_referral');
   });
 });

@@ -89,6 +89,15 @@ begin
     (v_clinic_id, 'Scheduling conflict',                false),
     (v_clinic_id, 'Referred elsewhere',                 true);
 
+  -- Starter referring-source list (clinic-editable afterward in Settings).
+  insert into referring_source_catalog (clinic_id, name, detail_label) values
+    (v_clinic_id, 'Hospital referral', 'Referring doctor'),
+    (v_clinic_id, 'Doctor referral',    'Referring doctor'),
+    (v_clinic_id, 'Walk-in',            null),
+    (v_clinic_id, 'Word of mouth',      'Referred by (patient name)'),
+    (v_clinic_id, 'Online',             'Online channel (e.g. Google, Instagram)'),
+    (v_clinic_id, 'Other',              'Details');
+
   -- Therapist records (for per-therapist attribution; separate from logins).
   foreach v_therapist in array v_therapists loop
     insert into therapists (clinic_id, name, active) values (v_clinic_id, v_therapist, true);

@@ -1,4 +1,4 @@
-import { REFERRING_SOURCE_LABELS, type UUID, type Visit } from '@/domain/types';
+import { REFERRING_SOURCE_LABELS, referringSourceDetailLabel, type UUID, type Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { currentWeekRange, monthDateRange, type FyMonth } from '@/domain/fiscalYear';
 import { daysSince, groupOpenPackages, isStale, STALE_PACKAGE_DAYS } from '@/domain/packageTracking';
@@ -105,6 +105,8 @@ export interface ReferralSourceStat {
   count: number;
   revenuePaise: Paise;
   avgRevenuePaise: Paise;
+  /** Detail-field label for this source (e.g. "Referring doctor"), or null if it needs none. */
+  detailLabel: string | null;
   patients: ReferralSourcePatientRow[];
 }
 
@@ -804,13 +806,29 @@ export function createDashboardService(repos: Repos) {
       const visits = await repos.visits.list({ clinicId });
       const patients = await repos.patients.list(clinicId);
       const patientById = new Map(patients.map((p) => [p.id, p]));
+      const sources = await repos.referringSourceCatalog.list(clinicId, true);
+      const sourceById = new Map(sources.map((s) => [s.id, s]));
 
-      const bySource = new Map<string, { count: number; revenuePaise: number; patients: Map<UUID, ReferralSourcePatientRow> }>();
+      const bySource = new Map<
+        string,
+        { count: number; revenuePaise: number; detailLabel: string | null; patients: Map<UUID, ReferralSourcePatientRow> }
+      >();
       for (const v of visits) {
         const patient = patientById.get(v.patientId);
-        const source = patient?.referringSource ?? null;
-        const sourceLabel = source ? REFERRING_SOURCE_LABELS[source] : 'Unknown';
-        const entry = bySource.get(sourceLabel) ?? { count: 0, revenuePaise: 0, patients: new Map() };
+        // referringSourceId is the source of truth for patients created after the
+        // catalog existed; older patients fall back to the legacy fixed-enum label.
+        const catalogSource = patient?.referringSourceId ? sourceById.get(patient.referringSourceId) : undefined;
+        const sourceLabel = catalogSource
+          ? catalogSource.name
+          : patient?.referringSource
+            ? REFERRING_SOURCE_LABELS[patient.referringSource]
+            : 'Unknown';
+        const detailLabel = catalogSource
+          ? catalogSource.detailLabel
+          : patient?.referringSource
+            ? referringSourceDetailLabel(patient.referringSource)
+            : null;
+        const entry = bySource.get(sourceLabel) ?? { count: 0, revenuePaise: 0, detailLabel, patients: new Map() };
         entry.count += 1;
         entry.revenuePaise += v.actualBillPaise;
         const patientRow = entry.patients.get(v.patientId) ?? {
@@ -828,11 +846,12 @@ export function createDashboardService(repos: Repos) {
       }
 
       return Array.from(bySource.entries())
-        .map(([source, { count, revenuePaise, patients: patientRows }]) => ({
+        .map(([source, { count, revenuePaise, detailLabel, patients: patientRows }]) => ({
           source,
           count,
           revenuePaise: revenuePaise as Paise,
           avgRevenuePaise: Math.round(revenuePaise / count) as Paise,
+          detailLabel,
           patients: [...patientRows.values()].sort((a, b) => b.revenuePaise - a.revenuePaise),
         }))
         .sort((a, b) => b.count - a.count);

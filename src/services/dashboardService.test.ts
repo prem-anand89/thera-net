@@ -82,6 +82,11 @@ function makeFakeRepos() {
       get: async (id) => reasons.get(id),
       put: async (r) => void reasons.set(r.id, r),
     },
+    referringSourceCatalog: {
+      list: async () => [],
+      get: async () => undefined,
+      put: async () => {},
+    },
     patients: {
       get: async (id) => patients.get(id),
       getByMrno: async (_c, mrno) => [...patients.values()].find((p) => p.mrno === mrno),

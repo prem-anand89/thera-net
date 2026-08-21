@@ -7,7 +7,7 @@ import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import { monthName, formatDateDMY, fiscalYearOf, monthsOfFiscalYear, type FyMonth } from '@/domain/fiscalYear';
-import { clinicBillingConfig, clinicShareLabels, referringSourceDetailLabel, type NoReturnReasonItem } from '@/domain/types';
+import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
 import { SectionCard, StatTile, Pill, th, td, tdNum, thNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
@@ -306,8 +306,7 @@ export function ReportsOverviewPage() {
   const [referralSelectedIdx, setReferralSelectedIdx] = useState<number | null>(null);
   const referralActiveIdx = referralSelectedIdx ?? 0;
   const referralActive = referralSources?.[referralActiveIdx];
-  const referralNeedsDetail =
-    referralActive?.source === 'Hospital referral' || referralActive?.source === 'Doctor referral';
+  const referralNeedsDetail = referralActive?.detailLabel != null;
   const referralDetailGroups = useMemo(() => {
     if (!referralActive || !referralNeedsDetail) return [];
     const byDetail = new Map<string, { patients: number; visits: number; revenuePaise: number }>();
@@ -858,9 +857,7 @@ export function ReportsOverviewPage() {
                           <>
                             <thead className="bg-[var(--paper)]">
                               <tr>
-                                <th className={th}>{referringSourceDetailLabel(
-                                  referralActive.source === 'Doctor referral' ? 'doctor_referral' : 'hospital_referral'
-                                ) ?? 'Name'}</th>
+                                <th className={th}>{referralActive.detailLabel ?? 'Name'}</th>
                                 <th className={thNum}>Patients</th>
                                 <th className={thNum}>Visits</th>
                                 <th className={thNum}>Revenue</th>

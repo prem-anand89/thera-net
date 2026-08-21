@@ -17,6 +17,7 @@ import {
   effectivePricePerSession,
   type CatalogItem,
   type Clinic,
+  type ReferringSourceItem,
   type Therapist,
 } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
@@ -358,7 +359,12 @@ export function SettingsPage() {
               <Therapists />
             </>
           )}
-          {activeKey === 'services' && <Catalog />}
+          {activeKey === 'services' && (
+            <>
+              <Catalog />
+              <ReferringSources />
+            </>
+          )}
           {activeKey === 'data' && (
             <>
               <HistoricalData />
@@ -1629,6 +1635,127 @@ function Catalog() {
       </div>
       <div className="mt-2">
         <ErrorNote message={error} />
+      </div>
+    </SectionCard>
+  );
+}
+
+/**
+ * Clinic-editable list of referral channels — same add / deactivate-not-
+ * delete / rename shape as the no-return-reason catalog managed inline on
+ * Reports. Seeded with the app's original six labels as defaults; a clinic
+ * can rename, add, or deactivate any of them without losing how existing
+ * patients display (see referringSourceDetailLabel/REFERRING_SOURCE_LABELS
+ * fallback in dashboardService for patients tagged before this catalog
+ * existed).
+ */
+function ReferringSources() {
+  const clinic = useClinic();
+  const items = useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id, true), [clinic.id]) ?? [];
+  const [draftName, setDraftName] = useState('');
+  const [draftDetailLabel, setDraftDetailLabel] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  async function addItem() {
+    setError(null);
+    const name = draftName.trim();
+    if (!name) {
+      setError('Name is required');
+      return;
+    }
+    const item: ReferringSourceItem = {
+      id: crypto.randomUUID(),
+      clinicId: clinic.id,
+      name,
+      detailLabel: draftDetailLabel.trim() || null,
+      active: true,
+      updatedAt: new Date().toISOString(),
+    };
+    await repos.referringSourceCatalog.put(item);
+    setDraftName('');
+    setDraftDetailLabel('');
+  }
+
+  async function toggleActive(item: ReferringSourceItem) {
+    await repos.referringSourceCatalog.put({ ...item, active: !item.active, updatedAt: new Date().toISOString() });
+  }
+
+  async function rename(item: ReferringSourceItem, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === item.name) return;
+    await repos.referringSourceCatalog.put({ ...item, name: trimmed, updatedAt: new Date().toISOString() });
+  }
+
+  async function updateDetailLabel(item: ReferringSourceItem, detailLabel: string) {
+    const trimmed = detailLabel.trim() || null;
+    if (trimmed === item.detailLabel) return;
+    await repos.referringSourceCatalog.put({ ...item, detailLabel: trimmed, updatedAt: new Date().toISOString() });
+  }
+
+  return (
+    <SectionCard title="Referral sources">
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        Shown when adding or editing a patient. Deactivate instead of deleting so existing patients keep
+        displaying correctly. The optional detail label adds a follow-up field (e.g. "Referring doctor")
+        when that source is picked.
+      </p>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 ${item.active ? '' : 'opacity-50'}`}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className={`${inputCls} min-w-0 flex-1`}
+                defaultValue={item.name}
+                onBlur={(e) => void rename(item, e.target.value)}
+                aria-label="Source name"
+              />
+              <button
+                type="button"
+                className="shrink-0 text-xs text-[var(--teal)] hover:underline"
+                onClick={() => void toggleActive(item)}
+              >
+                {item.active ? 'Deactivate' : 'Reactivate'}
+              </button>
+            </div>
+            <input
+              className={`${inputCls} mt-2 text-xs`}
+              placeholder="Detail field label (optional), e.g. Referring doctor"
+              defaultValue={item.detailLabel ?? ''}
+              onBlur={(e) => void updateDetailLabel(item, e.target.value)}
+              aria-label="Detail field label"
+            />
+          </div>
+        ))}
+      </div>
+
+      {error && <ErrorNote message={error} />}
+
+      <div className="mt-3 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-3.5">
+        <p className="mb-2 text-xs font-medium text-[var(--muted)]">Add a source</p>
+        <div className="space-y-2">
+          <Field label="Name">
+            <input
+              className={inputCls}
+              placeholder="e.g. Instagram ad"
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+            />
+          </Field>
+          <Field label="Detail field label (optional)">
+            <input
+              className={inputCls}
+              placeholder="e.g. Referring doctor"
+              value={draftDetailLabel}
+              onChange={(e) => setDraftDetailLabel(e.target.value)}
+            />
+          </Field>
+          <button className={`${btnSecondary} w-full`} onClick={() => void addItem()}>
+            + Add
+          </button>
+        </div>
       </div>
     </SectionCard>
   );

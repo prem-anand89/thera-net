@@ -200,6 +200,26 @@ export interface NoReturnReasonItem {
 
 export type MrnoSource = 'hospital' | 'auto';
 
+/**
+ * Clinic-editable referral-source list — same shape as
+ * NoReturnReasonItem/CatalogItem (add / deactivate-not-delete / rename from
+ * Settings). Seeded with the 6 legacy ReferringSource labels below as
+ * defaults for every clinic, so nothing changes on day one; clinics can
+ * rename, deactivate, or add their own from there. detailLabel drives the
+ * optional free-text "who/where" field next to the picker — null means this
+ * source needs no detail (e.g. "Walk-in"); a per-item flag rather than
+ * hardcoding specific source names, for the same reason NoReturnReasonItem's
+ * isClosed is per-item rather than name-matched.
+ */
+export interface ReferringSourceItem {
+  id: UUID;
+  clinicId: UUID;
+  name: string;
+  detailLabel: string | null;
+  active: boolean;
+  updatedAt: string;
+}
+
 export type ReferringSource =
   | 'hospital_referral'
   | 'doctor_referral'
@@ -260,9 +280,18 @@ export interface Patient {
   sex: 'M' | 'F' | 'Other' | null;
   phone: string | null;
   primaryCondition: string | null;
-  /** How the patient found the clinic. Optional: older cached rows lack the key. */
+  /** How the patient found the clinic, from the clinic's own editable
+   *  ReferringSourceItem list — the current source of truth going forward.
+   *  Optional: older cached rows and patients created before this catalog
+   *  existed lack the key; those fall back to the legacy referringSource
+   *  enum below for display. */
+  referringSourceId?: UUID | null;
+  /** Legacy fixed-enum value — no longer written by new patient saves, kept
+   *  only so patients created before the catalog existed still display a
+   *  referral source. Optional: older cached rows lack the key. */
   referringSource?: ReferringSource | null;
-  /** Free text alongside referringSource — which doctor, who referred them, which online channel. */
+  /** Free text alongside referringSourceId/referringSource — which doctor,
+   *  who referred them, which online channel. */
   referringSourceDetail?: string | null;
   /** Why a single-visit patient hasn't come back — set from the Trends
    *  dashboard once known. References NoReturnReasonItem, the clinic's own
