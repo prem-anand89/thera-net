@@ -784,18 +784,33 @@ Both are folded into ONE number, `TherapistMonthRow.netPostTaxPaise`
 (`reportService.ts`), rather than kept as parallel concepts: the base is
 each row's summed `postTaxPaise`, adjusted by (1) the manual-split delta
 (a same-visit % moved between two named therapists, always net-zero across
-the month) and (2) an automatic package-attribution delta — a package's
-total Post-Tax BM divided evenly across the therapists who ran its
-sessions, using an exact whole-rupee **largest-remainder distribution**
-(not independent per-session rounding) so the shares always sum to the
-package's exact total with zero drift. Package attribution deltas are
-applied **only to each visit's own row, never to `total.netPostTaxPaise`**
-— attribution redistributes which row a rupee counts under, it never
-changes what the clinic-wide total claims. This means a package spanning
-two report periods (started one month, finished the next) can leave a
-single month's row-level sum not exactly matching that month's total —
-expected, since the whole point of attribution is that a session's true
-credit doesn't always land in the billing month.
+the month) and (2) an automatic package-attribution delta, computed
+**per package group, as explicit deltas the biller gives away** —
+`packageAttributionDeltas()`:
+1. Find the group's **billing visit** (the one with the largest bill —
+   everything else is logged at ₹0 by convention).
+2. `perSessionShare = floor(billingVisit.postTaxPaise / packageTotal)`
+   — a fixed whole-rupee amount, computed from the package's **declared**
+   session count so it stays stable as later sessions get logged.
+3. For every *other* logged session run by a **different** therapist than
+   the biller, move one `perSessionShare` from the biller's row to
+   theirs. A session the biller ran themselves needs no delta.
+4. Whatever isn't explicitly claimed this way stays with the biller —
+   including the share reserved for sessions **not yet logged**. Earlier
+   versions of this algorithm divided evenly across only the *logged*
+   sessions, which silently dropped the un-logged share into neither
+   row (confirmed on live data as ~53% of a month's revenue missing from
+   every therapist's Net); the current version never leaves a rupee
+   unattributed.
+
+Deltas always sum to zero within a group, so `total.netPostTaxPaise`
+is untouched, and — within a single report period — `sum(rows.netPostTaxPaise)`
+always equals `total.netPostTaxPaise`. The one exception is a package
+spanning two report periods (started one month, finished the next): the
+delta only lands on a therapist's row if they already have a row this
+period (i.e., a visit of their own in it), so a biller with no visit in
+the current period gets no row from attribution alone — same reasoning
+`total` itself only reflects this period's own visits.
 
 This is the one number used everywhere a therapist's own "how much revenue
 did I generate" is shown — Trends KPI/chart, Therapist Comparison (both the

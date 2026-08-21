@@ -187,6 +187,50 @@ describe('reportService.monthly — netPostTaxPaise package attribution', () => 
     expect(aish.billPaise).toBe(0);
   });
 
+  it("keeps an in-progress package's un-logged share with the biller instead of dropping it", async () => {
+    // The bug this guards against: a 3-session, ₹1500 package with only 2
+    // sessions logged used to divide by the declared total (3) but only
+    // ever assign shares to the sessions actually in the group, silently
+    // leaving the 3rd slot's ₹500 unattributed to anyone. The fix: the
+    // biller keeps everything not explicitly claimed by another
+    // therapist's logged session — including the not-yet-logged share.
+    const groupId = 'pkg-4';
+    const repos = makeFakeRepos([
+      visit({
+        id: 'v1',
+        therapistId: PREM,
+        visitDate: '2026-07-01',
+        actualBillPaise: rs(1500),
+        postTaxPaise: rs(1500),
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 1,
+      }),
+      // Session 2, run by a different therapist. Session 3 hasn't happened
+      // yet — it doesn't exist as a visit at all.
+      visit({
+        id: 'v2',
+        therapistId: AISH,
+        visitDate: '2026-07-08',
+        actualBillPaise: 0,
+        postTaxPaise: 0,
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 2,
+      }),
+    ]);
+    const report = await createReportService(repos).monthly(CLINIC, JULY);
+    const prem = report.rows.find((r) => r.therapistId === PREM)!;
+    const aish = report.rows.find((r) => r.therapistId === AISH)!;
+    // ₹1500 / 3 = ₹500 per session. Aishwarya logged 1 session → ₹500.
+    // Prem billed it and keeps the rest — ₹1000, not just his own ₹500 —
+    // because session 3's share hasn't been claimed by anyone yet.
+    expect(aish.netPostTaxPaise).toBe(rs(500));
+    expect(prem.netPostTaxPaise).toBe(rs(1000));
+    // Nothing vanishes: every rupee of this period's total lands on some row.
+    expect(prem.netPostTaxPaise + aish.netPostTaxPaise).toBe(report.total.netPostTaxPaise);
+  });
+
   it('distributes an uneven package total in whole rupees with zero rounding drift', async () => {
     const groupId = 'pkg-3';
     const repos = makeFakeRepos([
@@ -224,9 +268,10 @@ describe('reportService.monthly — netPostTaxPaise package attribution', () => 
     const report = await createReportService(repos).monthly(CLINIC, JULY);
     const prem = report.rows.find((r) => r.therapistId === PREM)!;
     const aish = report.rows.find((r) => r.therapistId === AISH)!;
-    // ₹100 / 3 = ₹33.33 — not evenly divisible into whole rupees. The
-    // earliest-logged session (v1) gets the leftover rupee, not an
-    // independently-rounded (and therefore drifting) share.
+    // ₹100 / 3 = ₹33.33 — not evenly divisible into whole rupees. Each
+    // other-therapist session gets a whole-rupee floor share (₹33); the
+    // biller (v1) keeps whatever's left, ₹34 — not an independently
+    // rounded (and therefore drifting) share of their own.
     expect(prem.netPostTaxPaise).toBe(rs(34));
     expect(aish.netPostTaxPaise).toBe(rs(66));
     expect(prem.netPostTaxPaise + aish.netPostTaxPaise).toBe(rs(100));

@@ -27,21 +27,20 @@ export interface TherapistMonthRow {
    * Post-Tax BM directly (not derived from sharedPaise, a different base):
    * (1) same-visit manual Shared/Split — a share given to/from a named
    * assisting therapist; (2) automatic package attribution — a package's
-   * full price is billed on one session's visit, with every other session
-   * logged separately at ₹0 so it isn't double-billed, which otherwise
-   * credits 100% of a multi-session package to whichever therapist logged
-   * session 1 even when a colleague delivered the rest. This spreads a
-   * package's Post-Tax BM evenly (whole rupees, exact remainder
-   * distribution — never rounding-drifts from the package's own total)
-   * across its sessions, credited to each session's own therapist.
-   * `total.netPostTaxPaise` always equals `total.postTaxPaise` unchanged —
-   * attribution only redistributes which ROW a rupee counts under, never
-   * what the clinic-wide total claims. A package spanning two report
-   * periods (started one month, finished the next) therefore moves some
-   * credit across rows within a single period without the row-level sum
-   * necessarily equaling that period's total — the point of attribution is
-   * exactly that a session's true credit doesn't always land in the
-   * billing month.
+   * full price is billed on one session's visit (the "billing visit"),
+   * with every other session logged separately at ₹0 so it isn't
+   * double-billed, which otherwise credits 100% of a multi-session
+   * package to whichever therapist logged the billing visit even when a
+   * colleague delivered other sessions. For every OTHER session in the
+   * group logged by a DIFFERENT therapist, a fixed per-session share
+   * (billing visit's Post-Tax BM ÷ declared session count, whole rupees)
+   * moves from the biller to that therapist. Everything not explicitly
+   * claimed this way — including the share reserved for sessions not yet
+   * logged — stays with the biller; nothing is ever left unattributed.
+   * `total.netPostTaxPaise` always equals `total.postTaxPaise` unchanged,
+   * and `sum(rows.netPostTaxPaise)` always equals `total.netPostTaxPaise`
+   * — attribution only redistributes which ROW a rupee counts under,
+   * never what the clinic-wide total claims, and never drops a rupee.
    */
   netPostTaxPaise: Paise;
   visitCount: number;
@@ -57,47 +56,58 @@ export interface MonthlyReport {
 }
 
 /**
- * Per-visit attributed Post-Tax BM for a set of visits (see
- * TherapistMonthRow.netPostTaxPaise). A non-package visit (or a package's
- * own solo session) attributes to itself, unchanged. A visit inside a
- * multi-session package instead gets an equal share of the WHOLE package's
- * Post-Tax BM, regardless of which single session actually carries the
- * bill (and therefore the tax/split maths) — divided by the package's
- * declared `packageTotal` (not how many sessions have been logged so far),
- * so an in-progress package's per-session share stays stable rather than
- * jumping around as later sessions get logged. Shares are whole rupees
- * (every visit's own `postTaxPaise` already is) distributed with a
- * deterministic largest-remainder rule — the earliest-logged sessions get
- * any leftover rupee — so they sum EXACTLY to the package's total, never
- * rounding-drifting the way independently rounding each share would.
- * `listByPackageGroup` pulls every session in the package regardless of
- * the requested report's date range, so a package spanning two report
- * periods (started one month, finished the next) still attributes
- * correctly to whichever period each session actually happened in.
+ * Per-therapist Post-Tax BM deltas from automatic package-session
+ * attribution (see TherapistMonthRow.netPostTaxPaise). For each
+ * multi-session package group, the "billing visit" (the one carrying the
+ * package's price — everything else is logged at ₹0) defines a fixed
+ * `perSessionShare = floor(billingVisit.postTaxPaise / packageTotal)`,
+ * whole rupees, using the package's DECLARED session count so the share
+ * stays stable regardless of how many sessions have been logged so far.
+ * For every OTHER session in the group whose therapist differs from the
+ * billing visit's therapist, one `perSessionShare` moves from the biller
+ * to that therapist. Sessions the biller logged themselves need no delta
+ * — they already own that revenue. Deltas always sum to zero per group
+ * (whatever's given away is exactly what's subtracted from the biller),
+ * so `total.netPostTaxPaise` is untouched and nothing is ever left
+ * unattributed — a share for a session that hasn't been logged yet simply
+ * stays with the biller instead of vanishing. `listByPackageGroup` pulls
+ * every session in the package regardless of the requested report's date
+ * range, so a package spanning two report periods (started one month,
+ * finished the next) still attributes correctly to whichever period each
+ * session actually happened in.
  */
-async function attributedPostTaxPaiseByVisit(
+async function packageAttributionDeltas(
   visits: Visit[],
   repos: Pick<Repos, 'visits'>
 ): Promise<Map<UUID, Paise>> {
   const packageGroupIds = new Set(
     visits.filter((v) => v.packageGroupId && (v.packageTotal ?? 1) > 1).map((v) => v.packageGroupId!)
   );
-  const attributed = new Map<UUID, Paise>();
+  const deltas = new Map<UUID, Paise>();
+  const add = (id: UUID, amt: number) => deltas.set(id, ((deltas.get(id) ?? 0) + amt) as Paise);
   await Promise.all(
     [...packageGroupIds].map(async (groupId) => {
-      const group = (await repos.visits.listByPackageGroup(groupId)).sort(
-        (a, b) => a.visitDate.localeCompare(b.visitDate) || a.id.localeCompare(b.id)
-      );
+      const group = await repos.visits.listByPackageGroup(groupId);
       const packageTotal = group[0]?.packageTotal || group.length;
-      const totalRupees = group.reduce((sum, g) => sum + g.postTaxPaise, 0) / 100;
-      const baseRupees = Math.floor(totalRupees / packageTotal);
-      const remainder = totalRupees - baseRupees * packageTotal;
-      group.forEach((g, i) => {
-        attributed.set(g.id, ((i < remainder ? baseRupees + 1 : baseRupees) * 100) as Paise);
-      });
+      const billingVisit = group.reduce(
+        (max, g) => (g.actualBillPaise > max.actualBillPaise ? g : max),
+        group[0]
+      );
+      const perSessionShare = Math.floor(billingVisit.postTaxPaise / 100 / packageTotal) * 100;
+      if (perSessionShare <= 0) return;
+      // Overlogging beyond the declared packageTotal can, in theory, give
+      // away more than the billing visit's total — rare, self-correcting
+      // once the package total is fixed; not worth guarding speculatively.
+      let givenAway = 0;
+      for (const g of group) {
+        if (g.id === billingVisit.id || g.therapistId === billingVisit.therapistId) continue;
+        add(g.therapistId, perSessionShare);
+        givenAway += perSessionShare;
+      }
+      if (givenAway > 0) add(billingVisit.therapistId, -givenAway);
     })
   );
-  return attributed;
+  return deltas;
 }
 
 /**
@@ -176,14 +186,18 @@ export function createReportService(repos: Repos) {
         // total.netPostTaxPaise stays equal to total.postTaxPaise
       }
 
-      // Automatic package-session attribution — applied only to each
-      // visit's own row, never to `total`, so the clinic-wide total always
-      // stays exactly what was actually billed and split this period;
-      // attribution only redistributes which row a rupee counts under.
-      const attributedPostTax = await attributedPostTaxPaiseByVisit(visits, repos);
-      for (const v of visits) {
-        const attributed = attributedPostTax.get(v.id) ?? v.postTaxPaise;
-        rowFor(v.therapistId).netPostTaxPaise += attributed - v.postTaxPaise;
+      // Automatic package-session attribution — deltas net to zero per
+      // package group, so `total` is never touched; attribution only
+      // redistributes which row a rupee counts under. Unlike the manual
+      // split above, this never creates a row for a therapist with no
+      // visit of their own in this period — e.g. the biller of a package
+      // billed last month has no row in this month's report even if a
+      // colleague logged a session this month, matching how `total` for
+      // this period is scoped to this period's own visits.
+      const packageDeltas = await packageAttributionDeltas(visits, repos);
+      for (const [therapistId, delta] of packageDeltas) {
+        const row = rowsById.get(therapistId);
+        if (row) row.netPostTaxPaise += delta;
       }
 
       const rows = [...rowsById.values()].sort((a, b) =>
