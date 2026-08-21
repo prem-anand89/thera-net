@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, visitService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import { paiseToRupees, rupeesToPaise } from '@/domain/money';
-import { formatDateDMY } from '@/domain/fiscalYear';
+import { formatDateDM } from '@/domain/fiscalYear';
 import type { UUID } from '@/domain/types';
 import { Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
 
@@ -105,7 +105,7 @@ export function EditVisitModal({
 
         <div className="modal-body space-y-4">
           <div className="text-xs text-[var(--muted)]">
-            {patient?.name ?? '—'} · {catalogItem?.name ?? '—'} · {formatDateDMY(visit.visitDate)}
+            {patient?.name ?? '—'} · {catalogItem?.name ?? '—'} · {formatDateDM(visit.visitDate)}
           </div>
 
           {frozen && (

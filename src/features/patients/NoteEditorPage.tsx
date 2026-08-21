@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { getSupabase } from '@/lib/supabase';
-import { formatDateDMY } from '@/domain/fiscalYear';
+import { formatDateDM } from '@/domain/fiscalYear';
 import { ScaleWidget } from '@/components/ScaleWidget';
 import { BodyChart } from '@/components/BodyChart';
 import { Pill } from '@/components/ui';
@@ -982,7 +982,7 @@ export function NoteEditorPage() {
             <h3>Attending therapist</h3>
             <p className="sub">
               {linkedVisit
-                ? `Visit on ${formatDateDMY(linkedVisit.visitDate)} — defaults to that visit's therapist, editable if someone else is recording this assessment`
+                ? `Visit on ${formatDateDM(linkedVisit.visitDate)} — defaults to that visit's therapist, editable if someone else is recording this assessment`
                 : 'Who is recording this assessment — not linked to a visit'}
             </p>
           </div>

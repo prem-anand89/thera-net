@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { VISIT_COLUMN_LABELS, VISIT_OPTIONAL_COLUMN_ORDER, type UUID, type VisitColumnKey } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
-import { formatDateDMY } from '@/domain/fiscalYear';
+import { formatDateDM } from '@/domain/fiscalYear';
 import type { VisitPaymentState } from '@/domain/paymentState';
 import { paymentActions, paymentStatusPhrase, paymentStatusShortPhrase } from '@/domain/paymentState';
 import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
@@ -402,7 +402,7 @@ export function SharedVisitCard({
             {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
             {showDate && (
               <div className={`text-xs text-[var(--muted)] ${showPatient ? 'mt-0.5' : ''}`}>
-                {formatDateDMY(data.visitDate)}
+                {formatDateDM(data.visitDate)}
                 {data.editedBy && (
                   <span className="ml-1" title={`Edited by ${data.editedBy}`}>
                     ✎
@@ -564,7 +564,7 @@ function VisitTable({
               >
                 {showDate && (
                   <td className={td}>
-                    {formatDateDMY(row.visitDate)}
+                    {formatDateDM(row.visitDate)}
                     {row.editedBy && (
                       <span className="ml-1 text-[var(--muted)]" title={`Edited by ${row.editedBy}`}>
                         ✎

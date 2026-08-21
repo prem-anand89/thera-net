@@ -7,7 +7,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { Pill, btnPrimary, btnSecondary } from '@/components/ui';
 import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
-import { formatDateDMY } from '@/domain/fiscalYear';
+import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
@@ -488,7 +488,7 @@ function ConsultationNotePanel({
                 className="flex items-center justify-between gap-2 hover:underline"
               >
                 <span className="min-w-0">
-                  <span className="font-num text-[var(--ink)]">{formatDateDMY(n.updatedAt.slice(0, 10))}</span>
+                  <span className="font-num text-[var(--ink)]">{formatDateDM(n.updatedAt.slice(0, 10))}</span>
                   <span className="ml-1.5 text-[var(--muted)]">
                     {n.noteMode === 'followup' ? 'Follow-up' : 'Initial'}
                   </span>

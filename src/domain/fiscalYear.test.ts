@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, formatDateDMY } from './fiscalYear';
+import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, formatDateDMY, formatDateDM } from './fiscalYear';
 import { formatInvoiceNo } from './invoiceNumber';
 import { effectivePricePerSession } from './types';
 import { rupeesToPaise as rs } from './money';
@@ -43,6 +43,15 @@ describe('formatDateDMY', () => {
   });
   it('formats a full ISO timestamp by taking just the date part', () => {
     expect(formatDateDMY('2026-07-05T00:00:00.000Z')).toBe('05/07/26');
+  });
+});
+
+describe('formatDateDM', () => {
+  it('formats an ISO date as DD/MM, dropping the year', () => {
+    expect(formatDateDM('2026-07-05')).toBe('05/07');
+  });
+  it('formats a full ISO timestamp by taking just the date part', () => {
+    expect(formatDateDM('2026-07-05T00:00:00.000Z')).toBe('05/07');
   });
 });
 
