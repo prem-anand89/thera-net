@@ -218,9 +218,21 @@ function PaymentStatusDisplay({
   const statusLabel = compact ? paymentStatusShortPhrase(data.paymentState) : chip.label;
   const statusTitle = compact ? paymentStatusPhrase(data.paymentState) : undefined;
 
+  // Billing fields freeze the moment a visit is invoiced (see
+  // EditVisitModal's `frozen` check), independent of whether it's since
+  // been collected — but only 'outstanding'/'partially_collected' chips
+  // read ambiguously about that ("Due"/"Partial" say nothing about billing
+  // being locked). 'paid' already says "Invoiced" in its own label.
+  const billingLocked = Boolean(data.invoiceId) && data.paymentState !== 'paid';
+
   if (compact) {
     return (
       <div className="flex max-w-[8.5rem] flex-wrap items-center gap-1">
+        {billingLocked && (
+          <span className="text-[10px]" title="Billing locked — this visit is invoiced">
+            🔒
+          </span>
+        )}
         <Pill tone={chip.tone}>
           <span className="whitespace-nowrap" title={statusTitle}>
             {statusLabel}
@@ -256,7 +268,14 @@ function PaymentStatusDisplay({
       {showAmount && data.paymentState !== 'zero_session' && (
         <div className="font-num text-sm text-[var(--ink)]">{bill}</div>
       )}
-      <Pill tone={chip.tone}>{chip.label}</Pill>
+      <div className="flex items-center gap-1">
+        {billingLocked && (
+          <span className="text-xs" title="Billing locked — this visit is invoiced">
+            🔒
+          </span>
+        )}
+        <Pill tone={chip.tone}>{chip.label}</Pill>
+      </div>
       {canInvoice && actions.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1">
           {actions.includes('take_payment') && (
