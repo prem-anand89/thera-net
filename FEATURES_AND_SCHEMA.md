@@ -211,6 +211,9 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Editable fields**: age, sex, phone, primary condition, referring source
 - Phone is searchable everywhere but only *displayed* on the Patient Profile
   page — dropped from the Patients list/card to save space there
+- **Patients list period filter** — FY picker + a second dropdown: Full FY
+  (default), Year to date, a specific month, or Custom range (From/To date
+  inputs, same pattern as Ledger's custom date range)
 
 #### Patient Profile
 - **Visit history** — responsive table (tab-and-up widths) / card list

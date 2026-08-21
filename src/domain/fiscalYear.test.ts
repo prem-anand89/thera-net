@@ -4,6 +4,7 @@ import {
   monthsOfFiscalYear,
   monthDateRange,
   fiscalYearDateRange,
+  fiscalYearToDateRange,
   currentWeekRange,
   formatDateDMY,
   formatDateDM,
@@ -56,6 +57,21 @@ describe('fiscalYearDateRange', () => {
     expect(fiscalYearDateRange(2026, 1)).toEqual({
       from: '2026-01-01',
       to: '2026-12-31',
+    });
+  });
+});
+
+describe('fiscalYearToDateRange', () => {
+  it('spans FY start through the given asOf date', () => {
+    expect(fiscalYearToDateRange(2026, 4, new Date(2026, 7, 21))).toEqual({
+      from: '2026-04-01',
+      to: '2026-08-21',
+    });
+  });
+  it('clamps to the FY start when asOf is before the FY begins', () => {
+    expect(fiscalYearToDateRange(2026, 4, new Date(2026, 2, 15))).toEqual({
+      from: '2026-04-01',
+      to: '2026-04-01',
     });
   });
 });

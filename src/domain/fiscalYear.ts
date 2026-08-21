@@ -69,6 +69,21 @@ export function fiscalYearDateRange(startYear: number, fyStartMonth = 4): { from
   };
 }
 
+/** Year-to-date: the selected FY's start through `asOf` (defaults to
+ *  today) — a "YTD" filter option, distinct from `fiscalYearDateRange`'s
+ *  full 12-month span. `asOf` before the FY's own start (picking a future
+ *  FY) clamps `to` to the FY's first day rather than returning a range
+ *  that ends before it begins. */
+export function fiscalYearToDateRange(
+  startYear: number,
+  fyStartMonth = 4,
+  asOf: Date = new Date()
+): { from: string; to: string } {
+  const { from } = fiscalYearDateRange(startYear, fyStartMonth);
+  const today = `${asOf.getFullYear()}-${String(asOf.getMonth() + 1).padStart(2, '0')}-${String(asOf.getDate()).padStart(2, '0')}`;
+  return { from, to: today > from ? today : from };
+}
+
 /** ISO date (or timestamp) to display format, e.g. "2026-07-05" -> "05/07/26".
  *  Reserved for dates that can meaningfully be a different year from
  *  today — "last visit"/"first seen" stats, a stale package's start date,
