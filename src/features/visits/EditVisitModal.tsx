@@ -132,24 +132,23 @@ export function EditVisitModal({
             />
           </Field>
 
-          <Field label="Treatment notes">
-            <textarea
-              className={`${inputCls} min-h-20 resize-none`}
-              value={treatmentNotes}
-              onChange={(e) => setTreatmentNotes(e.target.value)}
-              placeholder="Clinical notes about the treatment"
-            />
-          </Field>
-
-          {treatments.length > 0 && (
-            <Field label="Treatments performed">
-              <MultiToggle
-                options={treatments.map((t) => ({ value: t.id, label: t.name }))}
-                value={treatmentIds}
-                onChange={setTreatmentIds}
+          <Field label="Treatments">
+            <div className="space-y-2">
+              {treatments.length > 0 && (
+                <MultiToggle
+                  options={treatments.map((t) => ({ value: t.id, label: t.name }))}
+                  value={treatmentIds}
+                  onChange={setTreatmentIds}
+                />
+              )}
+              <textarea
+                className={`${inputCls} min-h-20 resize-none`}
+                value={treatmentNotes}
+                onChange={(e) => setTreatmentNotes(e.target.value)}
+                placeholder="Add something not in the list above…"
               />
-            </Field>
-          )}
+            </div>
+          </Field>
 
           {!frozen && (
             <>

@@ -871,23 +871,23 @@ export function NewVisitPage() {
               onChange={(e) => setCondition(e.target.value)}
             />
           </Field>
-          <Field label="Treatment notes">
-            <input
-              className={inputCls}
-              placeholder='e.g. "FM An/Re S,S", "CST Sph Dysfunction"'
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </Field>
-          {treatments.length > 0 && (
-            <Field label="Treatments performed">
-              <MultiToggle
-                options={treatments.map((t) => ({ value: t.id, label: t.name }))}
-                value={treatmentIds}
-                onChange={setTreatmentIds}
+          <Field label="Treatments">
+            <div className="space-y-2">
+              {treatments.length > 0 && (
+                <MultiToggle
+                  options={treatments.map((t) => ({ value: t.id, label: t.name }))}
+                  value={treatmentIds}
+                  onChange={setTreatmentIds}
+                />
+              )}
+              <input
+                className={inputCls}
+                placeholder="Add something not in the list above…"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
               />
-            </Field>
-          )}
+            </div>
+          </Field>
         </div>
       </SectionCard>
 

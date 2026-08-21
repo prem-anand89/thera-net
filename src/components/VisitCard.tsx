@@ -22,6 +22,16 @@ export const PAYMENT_CHIP: Record<
   zero_session: { tone: 'slate', label: paymentStatusPhrase('zero_session') },
 };
 
+/** Combines catalog treatment picks with the free-text add-on into one
+ *  display string for the single "Treatments" column/cell — e.g. "Manual
+ *  Therapy, Exercise Therapy — FM An/Re S,S". Either half can be absent. */
+export function treatmentsDisplayText(treatmentNames: string[], treatmentNotes: string | null): string {
+  const parts = [];
+  if (treatmentNames.length) parts.push(treatmentNames.join(', '));
+  if (treatmentNotes) parts.push(treatmentNotes);
+  return parts.join(' — ') || '—';
+}
+
 /** ID · age · sex under the name, matching New visit's Patient panel. */
 export function patientIdentityLine(
   mrno: string,
@@ -363,14 +373,9 @@ function VisitCardDetails({ data }: { data: VisitCardData }) {
         </CardDetailRow>
       )}
       {data.condition && <CardDetailRow label="Condition">{data.condition}</CardDetailRow>}
-      {data.treatmentNotes && (
-        <CardDetailRow label="Treatment" clamp>
-          {data.treatmentNotes}
-        </CardDetailRow>
-      )}
-      {data.treatmentNames.length > 0 && (
+      {(data.treatmentNames.length > 0 || data.treatmentNotes) && (
         <CardDetailRow label="Treatments" clamp>
-          {data.treatmentNames.join(', ')}
+          {treatmentsDisplayText(data.treatmentNames, data.treatmentNotes)}
         </CardDetailRow>
       )}
       {data.serviceName && <CardDetailRow label="Service">{data.serviceName}</CardDetailRow>}
@@ -683,16 +688,10 @@ function VisitTable({
                           {row.condition ?? '—'}
                         </td>
                       );
-                    case 'treatment':
-                      return (
-                        <td key={key} className={td}>
-                          {row.treatmentNotes ?? '—'}
-                        </td>
-                      );
                     case 'treatments':
                       return (
                         <td key={key} className={td}>
-                          {row.treatmentNames.length ? row.treatmentNames.join(', ') : '—'}
+                          {treatmentsDisplayText(row.treatmentNames, row.treatmentNotes)}
                         </td>
                       );
                   }

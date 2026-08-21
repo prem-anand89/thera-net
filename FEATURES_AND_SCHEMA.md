@@ -721,12 +721,19 @@ alongside Services and Referral sources (all three used to be stacked in
 one "Services" tab; split apart so each is its own scroll). Independent of
 the billing-side `service_catalog` — one visit is
 billed under one service package but can record several treatment types
-performed via `visits.treatment_ids`, checked off on a "Treatments
-performed" picker on both the visit-logging and edit-visit forms.
-Independent of Core Assessment/clinical docs too, so it works for every
-clinic regardless of `clinicalDocsEnabled`. Patient Profile's Care plan
-card shows a per-package breakdown (e.g. "Manual Therapy: 4 · Exercise: 6")
-computed client-side from the patient's own visits — no separate
+performed via `visits.treatment_ids`, picked from the catalog on both the
+visit-logging and edit-visit forms — plus a free-text add-on
+(`visits.treatment_notes`, the same field clinical shorthand notes always
+used) for anything not in the list, grouped under one "Treatments" field
+on both forms. Displayed as a single combined "Treatments" column/cell
+everywhere the visits table shows it (Ledger, Workspace, Patient Profile)
+— catalog names joined by commas, then the free-text add-on after a dash
+if present (`treatmentsDisplayText` in `components/VisitCard.tsx`) — not
+two separate columns. Independent of Core Assessment/clinical docs too, so
+it works for every clinic regardless of `clinicalDocsEnabled`. Patient
+Profile's Care plan card shows a per-package breakdown (e.g. "Manual
+Therapy: 4 · Exercise: 6") computed client-side from the patient's own
+visits — no separate
 aggregation query. Seeded with a 6-item starter set for every clinic.
 Also shown as a toggleable "Treatments" column/row on the Visits table
 (Ledger, Workspace, Patient Profile) — a separate `VisitColumnKey` from the
