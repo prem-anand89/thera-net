@@ -92,6 +92,7 @@ export function AttributionAuditPage() {
               <th className={th}>From</th>
               <th className={th}>To</th>
               <th className={th}>Mechanism</th>
+              <th className={th}>Basis</th>
               <th className={thNum}>Gross</th>
               <th className={thNum}>Post-Tax {labels.own}</th>
             </tr>
@@ -106,13 +107,27 @@ export function AttributionAuditPage() {
                 <td className={td}>
                   {e.mechanism === 'manual_split' ? 'Manual split' : 'Package attribution'}
                 </td>
-                <td className={tdNum}>{e.grossPaise != null ? formatINR(e.grossPaise) : '—'}</td>
+                <td className={`${td} text-[var(--muted)]`}>
+                  {e.mechanism === 'manual_split'
+                    ? `${e.sharedPct}% of ${formatINR(e.visitBillPaise ?? 0)} bill`
+                    : `Session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'} · ${formatINR(e.packageTotalPaise ?? 0)} package`}
+                </td>
+                <td
+                  className={tdNum}
+                  title={
+                    e.grossPaise == null
+                      ? 'No gross figure for package attribution — the continuation session was billed at ₹0; only the Post-Tax share (from the billing visit) moves.'
+                      : undefined
+                  }
+                >
+                  {e.grossPaise != null ? formatINR(e.grossPaise) : '—'}
+                </td>
                 <td className={tdNum}>{formatINR(e.postTaxPaise)}</td>
               </tr>
             ))}
             {entries && entries.length === 0 && (
               <tr>
-                <td className={`${td} text-center text-[var(--muted)]`} colSpan={7}>
+                <td className={`${td} text-center text-[var(--muted)]`} colSpan={8}>
                   No money moved between therapists this month.
                 </td>
               </tr>

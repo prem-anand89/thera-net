@@ -21,6 +21,20 @@ export interface AttributionEntry {
   grossPaise: Paise | null;
   postTaxPaise: Paise;
   packageGroupId: UUID | null;
+  /**
+   * What the moved amount is a share OF — without this, a bare "₹500"
+   * moved between two names is unverifiable. `manual_split`: the full
+   * visit bill and the % applied to it (`grossPaise` is just that %
+   * pre-computed). `package_attribution`: the billing visit's total price,
+   * the package's declared session count, and which session number this
+   * row's visit is — so "₹500" reads as "1 of 3 sessions of a ₹1,500
+   * package," not an unexplained figure.
+   */
+  sharedPct: number | null;
+  visitBillPaise: Paise | null;
+  packageTotalPaise: Paise | null;
+  packageSessionCount: number | null;
+  sessionIndex: number | null;
 }
 
 /**
@@ -50,6 +64,11 @@ export function createAttributionAuditService(repos: Repos) {
           grossPaise: roundToRupeeHalfUp((v.actualBillPaise * v.sharedPct) / 100),
           postTaxPaise: roundToRupeeHalfUp((v.postTaxPaise * v.sharedPct) / 100),
           packageGroupId: null,
+          sharedPct: v.sharedPct,
+          visitBillPaise: v.actualBillPaise,
+          packageTotalPaise: null,
+          packageSessionCount: null,
+          sessionIndex: null,
         });
       }
 
@@ -79,6 +98,11 @@ export function createAttributionAuditService(repos: Repos) {
               grossPaise: null,
               postTaxPaise: perSessionShare as Paise,
               packageGroupId: groupId,
+              sharedPct: null,
+              visitBillPaise: null,
+              packageTotalPaise: billingVisit.actualBillPaise,
+              packageSessionCount: packageTotal,
+              sessionIndex: g.sessionIndex,
             });
           }
         })

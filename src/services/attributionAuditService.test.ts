@@ -75,6 +75,11 @@ describe('attributionAuditService.monthly', () => {
     });
     expect(entries[0].grossPaise).toBe(Math.round((rs(5400) * 33.33) / 100 / 100 + 0.5) * 100);
     expect(entries[0].postTaxPaise).toBeGreaterThan(0);
+    expect(entries[0].sharedPct).toBe(33.33);
+    expect(entries[0].visitBillPaise).toBe(rs(5400));
+    expect(entries[0].packageTotalPaise).toBeNull();
+    expect(entries[0].packageSessionCount).toBeNull();
+    expect(entries[0].sessionIndex).toBeNull();
   });
 
   it('emits one entry per in-window package-attribution sibling, with null gross', async () => {
@@ -112,6 +117,13 @@ describe('attributionAuditService.monthly', () => {
       postTaxPaise: rs(500),
       packageGroupId: groupId,
     });
+    expect(entries[0].sharedPct).toBeNull();
+    expect(entries[0].visitBillPaise).toBeNull();
+    // Basis for the ₹500 that moved: the ₹1500 package's declared 3
+    // sessions, and this is session 2 of it — not a bare unexplained figure.
+    expect(entries[0].packageTotalPaise).toBe(rs(1500));
+    expect(entries[0].packageSessionCount).toBe(3);
+    expect(entries[0].sessionIndex).toBe(2);
   });
 
   it('excludes a package sibling outside the requested month', async () => {

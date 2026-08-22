@@ -871,7 +871,16 @@ so a disputed Shared or Net figure can be traced back to the specific
 visit(s) that produced it, rather than taken on faith. Mirrors
 `reportService.monthly`'s own two loops exactly (same source visits, same
 in-window scoping for package attribution) so the list always sums to the
-same deltas that produced that month's Net figures.
+same deltas that produced that month's Net figures. A **Basis** column
+shows what the moved amount is a share OF — a bare "₹500" moved between
+two names is unverifiable on its own: for `manual_split`, the full visit
+bill and the % applied; for `package_attribution`, the billing visit's
+total price, the package's declared session count, and which session
+number triggered this row (e.g. "Session 2 of 3 · ₹1,500 package"). Gross
+is null for every `package_attribution` row by design — continuation
+sessions are billed at ₹0, so only a Post-Tax share (derived from the
+billing visit) ever moves there; the UI explains this via a tooltip on
+the empty cell rather than leaving it unexplained.
 
 **`hv_paise` (Partner Share) is the bill split between the two
 organizations, pre-tax — not "everything that isn't the clinic's post-tax
