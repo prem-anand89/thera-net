@@ -52,10 +52,22 @@ export function isCollected(state: VisitPaymentState): boolean {
   return state === 'paid' || state === 'collected_no_receipt';
 }
 
-export function paymentStatusPhrase(state: VisitPaymentState): string {
+/**
+ * `zero_session` (bill = ₹0) covers two situations staff read very
+ * differently: a session that's part of a multi-session package whose
+ * price was already billed on an earlier visit (nothing new owed — the
+ * session-progress dots already show this is a package), and a standalone
+ * complimentary/free visit (never meant to be charged at all — no package
+ * involved). Both are "nothing to collect, nothing to invoice" so they
+ * share one `VisitPaymentState`; only the label differs, chosen by the
+ * caller from context (`sessionIndex`/`packageTotal`) that payment state
+ * itself doesn't carry. `isPackageSession` is ignored for every other
+ * state, so passing nothing is always safe there.
+ */
+export function paymentStatusPhrase(state: VisitPaymentState, isPackageSession = false): string {
   switch (state) {
     case 'zero_session':
-      return '₹0 session';
+      return isPackageSession ? 'package session' : 'complimentary session';
     case 'paid':
       return 'collected · invoiced';
     case 'collected_no_receipt':
@@ -70,10 +82,10 @@ export function paymentStatusPhrase(state: VisitPaymentState): string {
 }
 
 /** Shorter labels for cramped table cells — full phrase stays on cards (title attr). */
-export function paymentStatusShortPhrase(state: VisitPaymentState): string {
+export function paymentStatusShortPhrase(state: VisitPaymentState, isPackageSession = false): string {
   switch (state) {
     case 'zero_session':
-      return 'No charge';
+      return isPackageSession ? 'Package' : 'Free';
     case 'paid':
       return 'Invoiced';
     case 'collected_no_receipt':
@@ -92,9 +104,25 @@ export function paymentStatusShortPhrase(state: VisitPaymentState): string {
  * `bill` is already formatted (e.g. ₹500). Prefer `paymentStatusPhrase`
  * next to a separate amount so the rupee figure is not repeated.
  */
-export function paymentStatusLine(state: VisitPaymentState, bill: string): string {
-  if (state === 'zero_session') return paymentStatusPhrase(state);
+export function paymentStatusLine(state: VisitPaymentState, bill: string, isPackageSession = false): string {
+  if (state === 'zero_session') return paymentStatusPhrase(state, isPackageSession);
   return `${bill} billed · ${paymentStatusPhrase(state)}`;
+}
+
+/**
+ * Whether a zero-bill visit is a package continuation (its session was
+ * already billed on an earlier visit in the same package) rather than a
+ * standalone complimentary/free visit — the one signal
+ * `paymentStatusPhrase`/`paymentStatusShortPhrase`/`paymentStatusLine`
+ * need to label `zero_session` correctly but don't carry themselves,
+ * since it comes from the visit's session/package fields, not its
+ * billing fields.
+ */
+export function isPackageContinuation(
+  sessionIndex: number | null | undefined,
+  packageTotal: number | null | undefined
+): boolean {
+  return Boolean(sessionIndex && packageTotal);
 }
 
 export type VisitPaymentAction = 'take_payment' | 'issue_invoice';

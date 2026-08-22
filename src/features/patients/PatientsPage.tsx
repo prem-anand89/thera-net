@@ -6,7 +6,7 @@ import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
-import { computeVisitPaymentState, paymentActions, paymentStatusLine } from '@/domain/paymentState';
+import { computeVisitPaymentState, isPackageContinuation, paymentActions, paymentStatusLine } from '@/domain/paymentState';
 import { EditPatientModal } from './EditPatientModal';
 import {
   fiscalYearOf,
@@ -374,7 +374,11 @@ function AllPatientsSection() {
                     visitStatsByPatient.get(p.id)
                       ? paymentStatusLine(
                           latestState(visitStatsByPatient.get(p.id)!.latestVisit),
-                          formatINR(visitStatsByPatient.get(p.id)!.latestVisit.actualBillPaise)
+                          formatINR(visitStatsByPatient.get(p.id)!.latestVisit.actualBillPaise),
+                          isPackageContinuation(
+                            visitStatsByPatient.get(p.id)!.latestVisit.sessionIndex,
+                            visitStatsByPatient.get(p.id)!.latestVisit.packageTotal
+                          )
                         )
                       : null
                   }
@@ -474,7 +478,11 @@ function AllPatientsSection() {
                       </td>
                       <td className={`${td} text-xs`}>
                         {stats?.latestVisit
-                          ? paymentStatusLine(latestState(stats.latestVisit), formatINR(stats.latestVisit.actualBillPaise))
+                          ? paymentStatusLine(
+                              latestState(stats.latestVisit),
+                              formatINR(stats.latestVisit.actualBillPaise),
+                              isPackageContinuation(stats.latestVisit.sessionIndex, stats.latestVisit.packageTotal)
+                            )
                           : '-'}
                       </td>
                       <td className={`${td} whitespace-nowrap`}>

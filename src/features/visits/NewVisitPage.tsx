@@ -30,7 +30,7 @@ import {
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { PAYMENT_CHIP } from '@/components/VisitCard';
-import { computeVisitPaymentState } from '@/domain/paymentState';
+import { computeVisitPaymentState, isPackageContinuation, paymentStatusPhrase } from '@/domain/paymentState';
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
 
 /** Digits only, so "98765 43210" and "+91-98765-43210" compare equal. */
@@ -555,12 +555,16 @@ export function NewVisitPage() {
                     lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
                   );
                   const chip = PAYMENT_CHIP[state];
+                  const statusLabel = paymentStatusPhrase(
+                    state,
+                    isPackageContinuation(lastVisit.sessionIndex, lastVisit.packageTotal)
+                  );
                   return (
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span>
                         {formatDateDMY(lastVisit.visitDate)} — {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
                       </span>
-                      <Pill tone={chip.tone}>{chip.label}</Pill>
+                      <Pill tone={chip.tone}>{statusLabel}</Pill>
                     </div>
                   );
                 })()

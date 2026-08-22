@@ -31,7 +31,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 
 #### Today-First Workspace
 - **Default landing page** showing:
-  - Today's visits with payment state at a glance (Paid / Collect ₹X / ₹0 session) — boxed cards on phone, a table on tablet/desktop
+  - Today's visits with payment state at a glance (Paid / Collect ₹X / Package / Free) — boxed cards on phone, a table on tablet/desktop
   - Packages panel — Open/Stale/All status filter, plus a "Mine only" checkbox for anyone with a linked therapist record (admin included)
 - **Stat strip** — Collected today, new patients this month, and either "My open packages" (linked therapist) or "Packages this month" (clinic-wide)
 - **Quick actions** — take payment / issue invoice / split revenue / delete directly from each visit row's kebab menu; "Log visit" from a Packages row resumes the right package
@@ -124,6 +124,17 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Three-fact payment model**: Billed / Collected / Receipted
   - Distinguishes cash collected without receipt from issued-but-unpaid invoice
   - Neither reads as the other
+- **Zero-bill visits are labeled by why, not just that**: `zero_session`
+  (bill = ₹0) covers two situations staff read very differently — a
+  **package continuation** (session already billed on an earlier visit
+  in the same package, `sessionIndex`/`packageTotal` both set — labeled
+  "Package"/"package session") vs. a **standalone complimentary visit**
+  (never meant to be charged, no package involved — labeled
+  "Free"/"complimentary session"). Both share one `VisitPaymentState`
+  (nothing to collect or invoice either way); only the label differs,
+  computed per-row from session/package fields via
+  `isPackageContinuation()` (`src/domain/paymentState.ts`) rather than
+  stored on the state itself.
 - **Quick "Mark paid"** action from Workspace pending feed
 - **Monthly report** shows HV settlement card for variance tracking
 
