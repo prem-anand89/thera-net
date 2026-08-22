@@ -153,6 +153,19 @@ export function PatientProfilePage() {
     [openPackages]
   );
 
+  // Which package groups have AT LEAST ONE invoiced sibling — `visits`
+  // here is this one patient's full, unbounded history, so unlike
+  // Ledger/Workspace (date/day-scoped) a direct scan is already accurate,
+  // no need for the listByPackageGroup round-trip those pages need.
+  const invoicedPackageGroupIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const v of visits ?? []) {
+      if (v.deleted || !v.packageGroupId || !v.invoiceId) continue;
+      ids.add(v.packageGroupId);
+    }
+    return ids;
+  }, [visits]);
+
   const visitCardRows: VisitCardData[] = useMemo(
     () =>
       visitRows.map((v) => ({
@@ -186,6 +199,13 @@ export function PatientProfilePage() {
         canDelete: !v.invoiceId && (isAdmin || v.therapistId === myTherapistId),
         needsNote: v.clinicalStatus === 'pending',
         canViewNotes: canViewClinicalNotes,
+        packageInvoicePending:
+          v.actualBillPaise === 0 &&
+          !!v.sessionIndex &&
+          !!v.packageTotal &&
+          !v.invoiceId &&
+          !!v.packageGroupId &&
+          invoicedPackageGroupIds.has(v.packageGroupId),
       })),
     [
       visitRows,
@@ -203,6 +223,7 @@ export function PatientProfilePage() {
       isAdmin,
       myTherapistId,
       canViewClinicalNotes,
+      invoicedPackageGroupIds,
     ]
   );
 

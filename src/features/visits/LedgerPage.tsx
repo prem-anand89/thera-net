@@ -72,7 +72,8 @@ function visitToCardData(
   directPaymentByVisitId: Map<UUID, number>,
   isAdmin: boolean,
   myTherapistId: UUID | undefined,
-  canViewClinicalNotes: boolean
+  canViewClinicalNotes: boolean,
+  invoicedSiblingGroupIds: Set<UUID>
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy = v.createdBy && v.updatedBy && v.createdBy !== v.updatedBy
@@ -122,6 +123,13 @@ function visitToCardData(
     needsNote: v.clinicalStatus === 'pending',
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: v.consultationNoteId ?? null,
+    packageInvoicePending:
+      v.actualBillPaise === 0 &&
+      !!v.sessionIndex &&
+      !!v.packageTotal &&
+      !v.invoiceId &&
+      !!v.packageGroupId &&
+      invoicedSiblingGroupIds.has(v.packageGroupId),
   };
 }
 
@@ -267,6 +275,33 @@ export function LedgerPage() {
   );
   const outstanding = useLiveQuery(() => dashboardService.outstandingInvoices(clinic.id), [clinic.id]);
 
+  // Candidate ₹0 package rows whose OWN invoiceId is null — for each
+  // distinct packageGroupId among them, check the full group (not just
+  // whatever's in the current date-filtered `visits`, which would miss
+  // a sibling invoiced outside this window) for any invoiced sibling.
+  // Same dedupe-and-fetch-per-group shape as packageAttributionDeltas.
+  const candidatePendingGroupIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          (visits ?? [])
+            .filter((v) => v.actualBillPaise === 0 && v.sessionIndex && v.packageTotal && !v.invoiceId && v.packageGroupId)
+            .map((v) => v.packageGroupId!)
+        ),
+      ],
+    [visits]
+  );
+  const invoicedSiblingGroupIds = useLiveQuery(async () => {
+    const result = new Set<UUID>();
+    await Promise.all(
+      candidatePendingGroupIds.map(async (groupId) => {
+        const group = await repos.visits.listByPackageGroup(groupId);
+        if (group.some((v) => v.invoiceId)) result.add(groupId);
+      })
+    );
+    return result;
+  }, [candidatePendingGroupIds]);
+
   const cardRows = useMemo(
     () =>
       (visits ?? []).map((v) =>
@@ -284,7 +319,8 @@ export function LedgerPage() {
           directPaymentByVisitId,
           isAdmin,
           myTherapistId,
-          canViewClinicalNotes
+          canViewClinicalNotes,
+          invoicedSiblingGroupIds ?? new Set()
         )
       ),
     [
@@ -302,6 +338,7 @@ export function LedgerPage() {
       isAdmin,
       myTherapistId,
       canViewClinicalNotes,
+      invoicedSiblingGroupIds,
     ]
   );
 

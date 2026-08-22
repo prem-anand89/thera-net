@@ -2498,7 +2498,7 @@ function MemberCard({
   const displayName = member.displayName ?? member.email;
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+    <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
       <div className="flex items-center gap-2.5">
         <span
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-sm font-semibold"
@@ -2513,9 +2513,9 @@ function MemberCard({
       </div>
       <RolePill role={role} />
       {isLastAdmin && (
-        <p className="text-[11px] text-[var(--muted)]">Only admin — can't be demoted or revoked from here.</p>
+        <p className="text-[11px] text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
       )}
-      <div className="flex gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
+      <div className="mt-auto flex gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
         <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setEditing(true)}>
           Edit
         </button>

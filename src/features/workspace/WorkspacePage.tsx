@@ -40,7 +40,8 @@ function todayRowToCardData(
   myTherapistId: string | undefined,
   canViewClinicalNotes: boolean,
   therapistSplit: boolean,
-  treatmentName: Map<string, string>
+  treatmentName: Map<string, string>,
+  invoicedSiblingGroupIds: Set<string>
 ): VisitCardData {
   const canModify = isAdmin || row.therapistId === myTherapistId;
   return {
@@ -72,6 +73,13 @@ function todayRowToCardData(
     needsNote: row.needsNote,
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: row.consultationNoteId,
+    packageInvoicePending:
+      row.billPaise === 0 &&
+      !!row.sessionIndex &&
+      !!row.packageTotal &&
+      !row.invoiceId &&
+      !!row.packageGroupId &&
+      invoicedSiblingGroupIds.has(row.packageGroupId),
   };
 }
 
@@ -138,6 +146,33 @@ export function WorkspacePage() {
   const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
 
+  // A ₹0 package continuation logged today whose OWN invoiceId is null —
+  // check the full package group (unbounded by "today") for an invoiced
+  // sibling, so a session trailing an already-issued invoice gets flagged
+  // instead of just silently showing no lock icon with nothing explaining
+  // why. Same dedupe-and-fetch-per-group shape as packageAttributionDeltas.
+  const candidatePendingGroupIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          (today?.visits ?? [])
+            .filter((v) => v.billPaise === 0 && v.sessionIndex && v.packageTotal && !v.invoiceId && v.packageGroupId)
+            .map((v) => v.packageGroupId!)
+        ),
+      ],
+    [today]
+  );
+  const invoicedSiblingGroupIds = useLiveQuery(async () => {
+    const result = new Set<string>();
+    await Promise.all(
+      candidatePendingGroupIds.map(async (groupId) => {
+        const group = await repos.visits.listByPackageGroup(groupId);
+        if (group.some((v) => v.invoiceId)) result.add(groupId);
+      })
+    );
+    return result;
+  }, [candidatePendingGroupIds]);
+
   function openInvoiceFor(data: VisitCardData) {
     setInvoicing({
       visitId: data.visitId,
@@ -197,7 +232,8 @@ export function WorkspacePage() {
                 scope.myTherapistId,
                 canViewClinicalNotes,
                 therapistSplit,
-                treatmentName
+                treatmentName,
+                invoicedSiblingGroupIds ?? new Set()
               )
             )}
             showDate={false}
