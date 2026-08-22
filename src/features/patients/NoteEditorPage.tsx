@@ -626,7 +626,7 @@ export function NoteEditorPage() {
   if (!canViewClinicalNotes) {
     return (
       <div className="space-y-4">
-        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Clinical note</h1>
+        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Clinical Note</h1>
         <p className="text-sm text-[var(--muted)]">
           Clinical notes are managed by clinical staff.
         </p>
@@ -678,7 +678,7 @@ export function NoteEditorPage() {
             Print
           </Link>
         )}
-        <h1 className="screen-title">Clinical note</h1>
+        <h1 className="screen-title">Clinical Note</h1>
       </header>
 
       <div className="screen-body">
