@@ -616,6 +616,23 @@ created_by, updated_by    uuid (NULLABLE)
 updated_at                timestamptz NOT NULL
 ```
 
+**`visits.consultation_note_id` only ever points at a *completed* note —
+a draft never gets written back onto the visit row.**
+`consultationNoteService.saveAssessment()` deliberately updates
+`visits.clinical_status`/`consultation_note_id` only when `status ===
+'completed'` ("a draft save deliberately does not — the note isn't
+finished yet, so the visit should keep prompting until it is"). So any
+UI that wants to show a visit's note status (draft vs. completed vs.
+none) — the Ledger/Workspace/Patient-Profile visit-row "Note" column —
+can't trust the visit's own field alone; it has to join against
+`consultation_notes` on `visit_id` (`VisitCardData.consultationNoteId`/
+`noteStatus`, computed independently at each of those three call sites,
+same pattern as `packageInvoicePending` above). Ledger/Workspace fetch
+`consultationNotes.listByClinic()` once (clinic-wide, skipped for a
+viewer without `canViewClinicalNotes`) and index it by `visitId`; Patient
+Profile already loads the patient's full note history via
+`listByPatient`, so it just re-indexes what it has.
+
 #### `patient_module_enrollments`
 ```sql
 id              uuid PRIMARY KEY

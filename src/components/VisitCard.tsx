@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { VISIT_COLUMN_LABELS, VISIT_OPTIONAL_COLUMN_ORDER, type UUID, type VisitColumnKey } from '@/domain/types';
+import { VISIT_COLUMN_LABELS, VISIT_OPTIONAL_COLUMN_ORDER, type ConsultationNoteStatus, type UUID, type VisitColumnKey } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
@@ -134,11 +134,17 @@ export interface VisitCardData {
    * Patient Profile.
    */
   canViewNotes?: boolean;
-  /** Set once this visit's note is completed — routes the row action to
-   *  view it instead of starting a new one. Unset for a draft-in-progress
-   *  note too (drafts don't populate this field, same gap `needsNote`'s
-   *  own "+ Note" link already has) — both route to /notes/new. */
+  /** The note (draft OR completed) attached to this visit, if any — set
+   *  by joining against consultationNotes on visitId, not the visit's own
+   *  stale completed-only field (see `noteStatus`). Routes the Note
+   *  column's action to that note instead of starting a new one. */
   consultationNoteId?: UUID | null;
+  /** Status of `consultationNoteId`'s note, so the Note column can show
+   *  "Draft" (still editable) vs "Completed" (locked, view-only in
+   *  NoteEditorPage — `readOnly = status === 'completed'`) rather than
+   *  treating every existing note the same way. Unset/null when there's
+   *  no note at all for this visit yet. */
+  noteStatus?: ConsultationNoteStatus | null;
   /**
    * True for a ₹0 package-continuation visit whose OWN `invoiceId` is
    * null but a sibling session in the same package group already has
@@ -380,11 +386,37 @@ function PaymentStatusDisplay({
   );
 }
 
+const NOTE_STATUS_CELL: Record<'draft' | 'completed' | 'archived', { tone: 'green' | 'amber' | 'slate'; label: string; action: string }> = {
+  draft: { tone: 'amber', label: 'Draft', action: 'Edit' },
+  completed: { tone: 'green', label: 'Completed', action: 'View' },
+  archived: { tone: 'slate', label: 'Archived', action: 'View' },
+};
+
 /** The table's dedicated Note column — split out from the Status column so
  *  a billing concern (chip/actions) and a documentation concern (clinical
- *  note nudge) don't compete for space on the same crowded line. */
+ *  note nudge) don't compete for space on the same crowded line. Three
+ *  states: an existing note (Draft — still editable in NoteEditorPage, or
+ *  Completed/Archived — read-only there) links straight to it; no note
+ *  yet but one's expected offers "+ Note" to start one; no note and none
+ *  expected renders nothing. */
 function NoteCell({ data }: { data: VisitCardData }) {
-  if (!data.needsNote || !data.canViewNotes) return null;
+  if (!data.canViewNotes) return null;
+  if (data.consultationNoteId && data.noteStatus) {
+    const { tone, label, action } = NOTE_STATUS_CELL[data.noteStatus];
+    return (
+      <div className="flex flex-col items-start gap-0.5">
+        <Pill tone={tone}>{label}</Pill>
+        <Link
+          to="/patients/$patientId/notes/$noteId"
+          params={{ patientId: data.patientId, noteId: data.consultationNoteId }}
+          className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+        >
+          {action}
+        </Link>
+      </div>
+    );
+  }
+  if (!data.needsNote) return null;
   return (
     <Link
       to="/patients/$patientId/notes/new"

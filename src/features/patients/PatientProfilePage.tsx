@@ -153,6 +153,17 @@ export function PatientProfilePage() {
     [openPackages]
   );
 
+  // `notes` (fetched above via listByPatient) already covers this
+  // patient's full history including drafts — no extra query needed,
+  // unlike Ledger/Workspace which join against a separate clinic-wide fetch.
+  const noteByVisitId = useMemo(() => {
+    const map = new Map<string, ConsultationNote>();
+    for (const n of notes ?? []) {
+      if (n.visitId) map.set(n.visitId, n);
+    }
+    return map;
+  }, [notes]);
+
   // Which package groups have AT LEAST ONE invoiced sibling — `visits`
   // here is this one patient's full, unbounded history, so unlike
   // Ledger/Workspace (date/day-scoped) a direct scan is already accurate,
@@ -199,6 +210,8 @@ export function PatientProfilePage() {
         canDelete: !v.invoiceId && (isAdmin || v.therapistId === myTherapistId),
         needsNote: v.clinicalStatus === 'pending',
         canViewNotes: canViewClinicalNotes,
+        consultationNoteId: noteByVisitId.get(v.id)?.id ?? null,
+        noteStatus: noteByVisitId.get(v.id)?.status ?? null,
         packageInvoicePending:
           v.actualBillPaise === 0 &&
           !!v.sessionIndex &&
@@ -224,6 +237,7 @@ export function PatientProfilePage() {
       myTherapistId,
       canViewClinicalNotes,
       invoicedPackageGroupIds,
+      noteByVisitId,
     ]
   );
 

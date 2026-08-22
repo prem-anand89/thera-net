@@ -14,6 +14,7 @@ import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import {
   clinicBillingConfig,
   clinicShareLabels,
+  type ConsultationNote,
   type Patient,
   type PaymentStatus,
   type UUID,
@@ -73,7 +74,8 @@ function visitToCardData(
   isAdmin: boolean,
   myTherapistId: UUID | undefined,
   canViewClinicalNotes: boolean,
-  invoicedSiblingGroupIds: Set<UUID>
+  invoicedSiblingGroupIds: Set<UUID>,
+  noteByVisitId: Map<UUID, ConsultationNote>
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy = v.createdBy && v.updatedBy && v.createdBy !== v.updatedBy
@@ -122,7 +124,8 @@ function visitToCardData(
     canDelete: !v.invoiceId && canModify,
     needsNote: v.clinicalStatus === 'pending',
     canViewNotes: canViewClinicalNotes,
-    consultationNoteId: v.consultationNoteId ?? null,
+    consultationNoteId: noteByVisitId.get(v.id)?.id ?? null,
+    noteStatus: noteByVisitId.get(v.id)?.status ?? null,
     packageInvoicePending:
       v.actualBillPaise === 0 &&
       !!v.sessionIndex &&
@@ -237,6 +240,23 @@ export function LedgerPage() {
   const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
 
+  // Draft notes never get written back onto the visit row itself (only a
+  // completed note does — see consultationNoteService.saveAssessment), so
+  // showing draft-vs-completed status per visit needs a real join against
+  // the notes table, not just the visit's own (completed-only) field.
+  // Skipped entirely for a viewer who can't see notes anyway.
+  const consultationNotes = useLiveQuery(
+    () => (canViewClinicalNotes ? repos.consultationNotes.listByClinic(clinic.id) : undefined),
+    [clinic.id, canViewClinicalNotes]
+  );
+  const noteByVisitId = useMemo(() => {
+    const map = new Map<UUID, ConsultationNote>();
+    for (const n of consultationNotes ?? []) {
+      if (n.visitId) map.set(n.visitId, n);
+    }
+    return map;
+  }, [consultationNotes]);
+
   // Payment state needs both facts a bare `invoiceId` check misses: whether
   // the invoice itself was ever marked paid (statusByInvoiceId), and
   // whether money was collected directly with no invoice at all
@@ -320,7 +340,8 @@ export function LedgerPage() {
           isAdmin,
           myTherapistId,
           canViewClinicalNotes,
-          invoicedSiblingGroupIds ?? new Set()
+          invoicedSiblingGroupIds ?? new Set(),
+          noteByVisitId
         )
       ),
     [
@@ -339,6 +360,7 @@ export function LedgerPage() {
       myTherapistId,
       canViewClinicalNotes,
       invoicedSiblingGroupIds,
+      noteByVisitId,
     ]
   );
 
