@@ -228,6 +228,12 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Patients list period filter** — FY picker + a second dropdown: Full FY
   (default), Year to date, a specific month, or Custom range (From/To date
   inputs, same pattern as Ledger's custom date range)
+- **Patients list "Bill" column** — a patient-level summary (lifetime
+  billed total, plus an outstanding-due figure when nonzero), not the
+  latest visit's own status phrase or package-session detail — those stay
+  exclusively on the Ledger/Workspace visits table and the Packages
+  panel, which already show them in full. Same reasoning for "Last
+  visit," which is just date + visit count with no per-session dots.
 
 #### Patient Profile
 - **Visit history** — responsive table (tab-and-up widths) / card list
@@ -610,6 +616,23 @@ created_by, updated_by    uuid (NULLABLE)
 updated_at                timestamptz NOT NULL
 ```
 
+**`visits.consultation_note_id` only ever points at a *completed* note —
+a draft never gets written back onto the visit row.**
+`consultationNoteService.saveAssessment()` deliberately updates
+`visits.clinical_status`/`consultation_note_id` only when `status ===
+'completed'` ("a draft save deliberately does not — the note isn't
+finished yet, so the visit should keep prompting until it is"). So any
+UI that wants to show a visit's note status (draft vs. completed vs.
+none) — the Ledger/Workspace/Patient-Profile visit-row "Note" column —
+can't trust the visit's own field alone; it has to join against
+`consultation_notes` on `visit_id` (`VisitCardData.consultationNoteId`/
+`noteStatus`, computed independently at each of those three call sites,
+same pattern as `packageInvoicePending` above). Ledger/Workspace fetch
+`consultationNotes.listByClinic()` once (clinic-wide, skipped for a
+viewer without `canViewClinicalNotes`) and index it by `visitId`; Patient
+Profile already loads the patient's full note history via
+`listByPatient`, so it just re-indexes what it has.
+
 #### `patient_module_enrollments`
 ```sql
 id              uuid PRIMARY KEY
@@ -948,6 +971,25 @@ should honor.
   query `visits` directly, and each visit's `invoice_id` always points to
   whichever invoice currently claims it, so reports automatically reflect
   only the latest state.
+
+**"Not invoiced" nudge for a trailing package session** — `issue_invoice()`
+sweeps in every session that exists in a package group *at issue time*
+(including ₹0 continuations), stamping `invoice_id` on all of them. A
+session logged **after** that point never gets swept in, so two ₹0 rows
+of the same package can show arbitrarily different lock state (one 🔒,
+one not) with nothing explaining why — this is exactly the case
+Invoice Amendments exists to fix, but nothing pointed a viewer at it.
+`VisitCardData.packageInvoicePending` (`src/components/VisitCard.tsx`)
+closes that gap: true for a ₹0 package-continuation row whose own
+`invoiceId` is null but a sibling in the same `packageGroupId` already
+has one, rendered as an amber "Not invoiced" pill next to the status
+chip. Computed independently at each of the three places that build
+`VisitCardData` (Ledger, Workspace, Patient Profile) since each already
+shapes its own rows from a different source query — Ledger/Workspace
+check the full package group via `repos.visits.listByPackageGroup()`
+(their loaded visit list is date/day-scoped and would miss an
+out-of-window sibling), while Patient Profile scans its already-loaded,
+unbounded per-patient visit history directly.
 
 ### 4. Walk-In MRNO Auto-Generation
 - **Sequential per clinic per year**: `PREFIXYY-NNNN` (W26-0001, W26-0002)

@@ -14,6 +14,7 @@ import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import {
   clinicBillingConfig,
   clinicShareLabels,
+  type ConsultationNote,
   type Patient,
   type PaymentStatus,
   type UUID,
@@ -72,7 +73,9 @@ function visitToCardData(
   directPaymentByVisitId: Map<UUID, number>,
   isAdmin: boolean,
   myTherapistId: UUID | undefined,
-  canViewClinicalNotes: boolean
+  canViewClinicalNotes: boolean,
+  invoicedSiblingGroupIds: Set<UUID>,
+  noteByVisitId: Map<UUID, ConsultationNote>
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy = v.createdBy && v.updatedBy && v.createdBy !== v.updatedBy
@@ -121,7 +124,15 @@ function visitToCardData(
     canDelete: !v.invoiceId && canModify,
     needsNote: v.clinicalStatus === 'pending',
     canViewNotes: canViewClinicalNotes,
-    consultationNoteId: v.consultationNoteId ?? null,
+    consultationNoteId: noteByVisitId.get(v.id)?.id ?? null,
+    noteStatus: noteByVisitId.get(v.id)?.status ?? null,
+    packageInvoicePending:
+      v.actualBillPaise === 0 &&
+      !!v.sessionIndex &&
+      !!v.packageTotal &&
+      !v.invoiceId &&
+      !!v.packageGroupId &&
+      invoicedSiblingGroupIds.has(v.packageGroupId),
   };
 }
 
@@ -229,6 +240,23 @@ export function LedgerPage() {
   const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
 
+  // Draft notes never get written back onto the visit row itself (only a
+  // completed note does — see consultationNoteService.saveAssessment), so
+  // showing draft-vs-completed status per visit needs a real join against
+  // the notes table, not just the visit's own (completed-only) field.
+  // Skipped entirely for a viewer who can't see notes anyway.
+  const consultationNotes = useLiveQuery(
+    () => (canViewClinicalNotes ? repos.consultationNotes.listByClinic(clinic.id) : undefined),
+    [clinic.id, canViewClinicalNotes]
+  );
+  const noteByVisitId = useMemo(() => {
+    const map = new Map<UUID, ConsultationNote>();
+    for (const n of consultationNotes ?? []) {
+      if (n.visitId) map.set(n.visitId, n);
+    }
+    return map;
+  }, [consultationNotes]);
+
   // Payment state needs both facts a bare `invoiceId` check misses: whether
   // the invoice itself was ever marked paid (statusByInvoiceId), and
   // whether money was collected directly with no invoice at all
@@ -267,6 +295,33 @@ export function LedgerPage() {
   );
   const outstanding = useLiveQuery(() => dashboardService.outstandingInvoices(clinic.id), [clinic.id]);
 
+  // Candidate ₹0 package rows whose OWN invoiceId is null — for each
+  // distinct packageGroupId among them, check the full group (not just
+  // whatever's in the current date-filtered `visits`, which would miss
+  // a sibling invoiced outside this window) for any invoiced sibling.
+  // Same dedupe-and-fetch-per-group shape as packageAttributionDeltas.
+  const candidatePendingGroupIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          (visits ?? [])
+            .filter((v) => v.actualBillPaise === 0 && v.sessionIndex && v.packageTotal && !v.invoiceId && v.packageGroupId)
+            .map((v) => v.packageGroupId!)
+        ),
+      ],
+    [visits]
+  );
+  const invoicedSiblingGroupIds = useLiveQuery(async () => {
+    const result = new Set<UUID>();
+    await Promise.all(
+      candidatePendingGroupIds.map(async (groupId) => {
+        const group = await repos.visits.listByPackageGroup(groupId);
+        if (group.some((v) => v.invoiceId)) result.add(groupId);
+      })
+    );
+    return result;
+  }, [candidatePendingGroupIds]);
+
   const cardRows = useMemo(
     () =>
       (visits ?? []).map((v) =>
@@ -284,7 +339,9 @@ export function LedgerPage() {
           directPaymentByVisitId,
           isAdmin,
           myTherapistId,
-          canViewClinicalNotes
+          canViewClinicalNotes,
+          invoicedSiblingGroupIds ?? new Set(),
+          noteByVisitId
         )
       ),
     [
@@ -302,6 +359,8 @@ export function LedgerPage() {
       isAdmin,
       myTherapistId,
       canViewClinicalNotes,
+      invoicedSiblingGroupIds,
+      noteByVisitId,
     ]
   );
 

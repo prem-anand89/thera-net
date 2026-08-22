@@ -7,7 +7,7 @@ import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
-import { clinicBillingConfig, type Visit } from '@/domain/types';
+import { clinicBillingConfig, type ConsultationNote, type Visit } from '@/domain/types';
 import type { TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
@@ -40,7 +40,9 @@ function todayRowToCardData(
   myTherapistId: string | undefined,
   canViewClinicalNotes: boolean,
   therapistSplit: boolean,
-  treatmentName: Map<string, string>
+  treatmentName: Map<string, string>,
+  invoicedSiblingGroupIds: Set<string>,
+  noteByVisitId: Map<string, ConsultationNote>
 ): VisitCardData {
   const canModify = isAdmin || row.therapistId === myTherapistId;
   return {
@@ -71,7 +73,15 @@ function todayRowToCardData(
     canDelete: !row.invoiceId && canModify,
     needsNote: row.needsNote,
     canViewNotes: canViewClinicalNotes,
-    consultationNoteId: row.consultationNoteId,
+    consultationNoteId: noteByVisitId.get(row.visitId)?.id ?? null,
+    noteStatus: noteByVisitId.get(row.visitId)?.status ?? null,
+    packageInvoicePending:
+      row.billPaise === 0 &&
+      !!row.sessionIndex &&
+      !!row.packageTotal &&
+      !row.invoiceId &&
+      !!row.packageGroupId &&
+      invoicedSiblingGroupIds.has(row.packageGroupId),
   };
 }
 
@@ -138,6 +148,49 @@ export function WorkspacePage() {
   const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
 
+  // Draft notes never get written back onto the visit row itself (only a
+  // completed note does), so showing draft-vs-completed status per visit
+  // needs a real join against the notes table — see the identical note in
+  // LedgerPage.tsx. Skipped for a viewer who can't see notes anyway.
+  const consultationNotes = useLiveQuery(
+    () => (canViewClinicalNotes ? repos.consultationNotes.listByClinic(clinic.id) : undefined),
+    [clinic.id, canViewClinicalNotes]
+  );
+  const noteByVisitId = useMemo(() => {
+    const map = new Map<string, ConsultationNote>();
+    for (const n of consultationNotes ?? []) {
+      if (n.visitId) map.set(n.visitId, n);
+    }
+    return map;
+  }, [consultationNotes]);
+
+  // A ₹0 package continuation logged today whose OWN invoiceId is null —
+  // check the full package group (unbounded by "today") for an invoiced
+  // sibling, so a session trailing an already-issued invoice gets flagged
+  // instead of just silently showing no lock icon with nothing explaining
+  // why. Same dedupe-and-fetch-per-group shape as packageAttributionDeltas.
+  const candidatePendingGroupIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          (today?.visits ?? [])
+            .filter((v) => v.billPaise === 0 && v.sessionIndex && v.packageTotal && !v.invoiceId && v.packageGroupId)
+            .map((v) => v.packageGroupId!)
+        ),
+      ],
+    [today]
+  );
+  const invoicedSiblingGroupIds = useLiveQuery(async () => {
+    const result = new Set<string>();
+    await Promise.all(
+      candidatePendingGroupIds.map(async (groupId) => {
+        const group = await repos.visits.listByPackageGroup(groupId);
+        if (group.some((v) => v.invoiceId)) result.add(groupId);
+      })
+    );
+    return result;
+  }, [candidatePendingGroupIds]);
+
   function openInvoiceFor(data: VisitCardData) {
     setInvoicing({
       visitId: data.visitId,
@@ -197,7 +250,9 @@ export function WorkspacePage() {
                 scope.myTherapistId,
                 canViewClinicalNotes,
                 therapistSplit,
-                treatmentName
+                treatmentName,
+                invoicedSiblingGroupIds ?? new Set(),
+                noteByVisitId
               )
             )}
             showDate={false}
