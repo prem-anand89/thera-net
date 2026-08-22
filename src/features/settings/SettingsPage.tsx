@@ -650,7 +650,7 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         <Field
           label={
             <>
-              Clinical documentation
+              Clinical notes
               <InfoTip text="When on, new visits are flagged for a clinical note until one is completed — filterable via Ledger's 'Not documented' checkbox. Off by default; turn on for clinics that track a note per visit." />
             </>
           }

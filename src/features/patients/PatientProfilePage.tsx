@@ -594,7 +594,7 @@ function ConsultationNotePanel({
 
   return (
     <SideCard
-      title="Consultation notes"
+      title="Clinical notes"
       action={
         <Link
           to={draft ? '/patients/$patientId/notes/$noteId' : '/patients/$patientId/notes/new'}

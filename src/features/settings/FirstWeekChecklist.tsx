@@ -23,7 +23,7 @@ const STEPS: { title: string; body: string }[] = [
     body: 'Settings → Team → Service roster → Linked login. An unlinked therapist sees an empty Today board and will think the app is broken.',
   },
   {
-    title: 'Keep Core Assessment off until asked',
+    title: 'Keep clinical notes off until asked',
     body: 'Settings → Clinic profile → Optional modules. First week should be ledger + billing only. Turn clinical notes on for one willing therapist, not the whole roster.',
   },
   {
