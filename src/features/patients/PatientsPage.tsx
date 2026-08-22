@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService, patientService } from '@/services';
+import { repos, patientService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
-import { computeVisitPaymentState, isPackageContinuation, paymentActions, paymentStatusLine } from '@/domain/paymentState';
+import { computeVisitPaymentState, isCollected, paymentActions } from '@/domain/paymentState';
 import { EditPatientModal } from './EditPatientModal';
 import {
   fiscalYearOf,
@@ -25,7 +25,6 @@ import {
   td,
   ErrorNote,
   Pill,
-  PackageThread,
   SectionCard,
   KebabMenu,
   menuItem,
@@ -101,8 +100,6 @@ function AllPatientsSection() {
 
   const all = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
   const allVisits = useLiveQuery(() => repos.visits.list({ clinicId: clinic.id }), [clinic.id]);
-  const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
-  const outstanding = useLiveQuery(() => dashboardService.outstandingInvoices(clinic.id), [clinic.id]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
   const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
@@ -156,18 +153,30 @@ function AllPatientsSection() {
     lastVisit: byString<Patient>((p) => visitStatsByPatient.get(p.id)?.lastVisitOn ?? ''),
   };
 
-  const openPackageByPatient = useMemo(() => {
-    const map = new Map<string, { sessionsLogged: number; packageTotal: number }>();
-    for (const p of openPackages ?? []) {
-      if (!map.has(p.patientId)) map.set(p.patientId, { sessionsLogged: p.sessionsLogged, packageTotal: p.packageTotal });
+  /**
+   * Patient-level billing summary — lifetime billed + outstanding
+   * balance across ALL of this patient's visits, not just the latest
+   * one. Same "non-collected, non-zero-session visits count toward
+   * outstanding" definition already trusted on PatientProfilePage's
+   * billingSummary, just keyed by patient instead of scoped to one.
+   */
+  const billingByPatient = useMemo(() => {
+    const map = new Map<string, { totalBilledPaise: number; outstandingBalancePaise: number }>();
+    for (const v of allVisits ?? []) {
+      if (v.deleted) continue;
+      const cur = map.get(v.patientId) ?? { totalBilledPaise: 0, outstandingBalancePaise: 0 };
+      cur.totalBilledPaise += v.actualBillPaise;
+      const state = computeVisitPaymentState(
+        v.actualBillPaise,
+        v.invoiceId ?? null,
+        directPaymentByVisitId.get(v.id) ?? 0,
+        v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+      );
+      if (!isCollected(state) && state !== 'zero_session') cur.outstandingBalancePaise += v.actualBillPaise;
+      map.set(v.patientId, cur);
     }
     return map;
-  }, [openPackages]);
-
-  const outstandingMrnos = useMemo(
-    () => new Set((outstanding?.rows ?? []).map((r) => r.mrno)),
-    [outstanding]
-  );
+  }, [allVisits, directPaymentByVisitId, statusByInvoiceId]);
 
   const q = query.trim().toLowerCase();
   const phoneQ = q.replace(/\D/g, '');
@@ -369,19 +378,7 @@ function AllPatientsSection() {
                 <PatientCard
                   patient={p}
                   stats={visitStatsByPatient.get(p.id)}
-                  pkg={openPackageByPatient.get(p.id)}
-                  paymentLine={
-                    visitStatsByPatient.get(p.id)
-                      ? paymentStatusLine(
-                          latestState(visitStatsByPatient.get(p.id)!.latestVisit),
-                          formatINR(visitStatsByPatient.get(p.id)!.latestVisit.actualBillPaise),
-                          isPackageContinuation(
-                            visitStatsByPatient.get(p.id)!.latestVisit.sessionIndex,
-                            visitStatsByPatient.get(p.id)!.latestVisit.packageTotal
-                          )
-                        )
-                      : null
-                  }
+                  billing={billingByPatient.get(p.id)}
                   nextAction={
                     visitStatsByPatient.get(p.id) &&
                     canBill &&
@@ -414,8 +411,7 @@ function AllPatientsSection() {
               <tbody className="divide-y divide-[var(--border)]">
                 {rows.map((p) => {
                   const stats = visitStatsByPatient.get(p.id);
-                  const pkg = openPackageByPatient.get(p.id);
-                  const isOutstanding = outstandingMrnos.has(p.mrno);
+                  const billing = billingByPatient.get(p.id);
                   return (
                     <tr key={p.id} className="hover:bg-[var(--paper)]">
                       <td className={td}>
@@ -458,32 +454,25 @@ function AllPatientsSection() {
                       </td>
                       <td className={td}>
                         {stats ? (
-                          <>
-                            <div className="font-num text-xs text-[var(--ink)]">
-                              {formatDateDMY(stats.lastVisitOn)}
-                              <span className="text-[var(--muted)]"> · {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}</span>
-                            </div>
-                            {(pkg || isOutstanding) && (
-                              <div className="mt-1 flex items-center gap-1.5">
-                                {pkg && (
-                                  <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />
-                                )}
-                                {isOutstanding && <Pill tone="amber">Outstanding</Pill>}
-                              </div>
-                            )}
-                          </>
+                          <div className="font-num text-xs text-[var(--ink)]">
+                            {formatDateDMY(stats.lastVisitOn)}
+                            <span className="text-[var(--muted)]"> · {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}</span>
+                          </div>
                         ) : (
                           <span className="text-xs text-[var(--muted)]">No visits yet</span>
                         )}
                       </td>
                       <td className={`${td} text-xs`}>
-                        {stats?.latestVisit
-                          ? paymentStatusLine(
-                              latestState(stats.latestVisit),
-                              formatINR(stats.latestVisit.actualBillPaise),
-                              isPackageContinuation(stats.latestVisit.sessionIndex, stats.latestVisit.packageTotal)
-                            )
-                          : '-'}
+                        {stats ? (
+                          <>
+                            <div className="font-num text-[var(--ink)]">{formatINR(billing?.totalBilledPaise ?? 0)} billed</div>
+                            {(billing?.outstandingBalancePaise ?? 0) > 0 && (
+                              <div className="mt-0.5 font-num text-[var(--rust)]">{formatINR(billing!.outstandingBalancePaise)} due</div>
+                            )}
+                          </>
+                        ) : (
+                          '-'
+                        )}
                       </td>
                       <td className={`${td} whitespace-nowrap`}>
                         <Link
@@ -552,8 +541,7 @@ function AllPatientsSection() {
 function PatientCard({
   patient: p,
   stats,
-  pkg,
-  paymentLine,
+  billing,
   nextAction,
   therapistName,
   onEdit,
@@ -561,8 +549,7 @@ function PatientCard({
 }: {
   patient: Patient;
   stats: { lastVisitOn: string; visitCount: number; latestVisit: Visit } | undefined;
-  pkg: { sessionsLogged: number; packageTotal: number } | undefined;
-  paymentLine: string | null;
+  billing: { totalBilledPaise: number; outstandingBalancePaise: number } | undefined;
   nextAction: 'invoice' | 'visit';
   therapistName: Map<string, string>;
   onEdit: () => void;
@@ -647,15 +634,10 @@ function PatientCard({
               <span>
                 {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
               </span>
-              {pkg && (
-                <span className="inline-flex items-center gap-1.5">
-                  <PackageThread sessionIndex={pkg.sessionsLogged} packageTotal={pkg.packageTotal} />
-                  <span className="font-num">
-                    {pkg.sessionsLogged}/{pkg.packageTotal}
-                  </span>
-                </span>
+              <span className="font-num">{formatINR(billing?.totalBilledPaise ?? 0)} billed</span>
+              {(billing?.outstandingBalancePaise ?? 0) > 0 && (
+                <span className="font-num text-[var(--rust)]">{formatINR(billing!.outstandingBalancePaise)} due</span>
               )}
-              {paymentLine && <span>{paymentLine}</span>}
             </>
           ) : (
             <span>No visits yet</span>

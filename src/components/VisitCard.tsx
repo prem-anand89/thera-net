@@ -139,6 +139,16 @@ export interface VisitCardData {
    *  note too (drafts don't populate this field, same gap `needsNote`'s
    *  own "+ Note" link already has) — both route to /notes/new. */
   consultationNoteId?: UUID | null;
+  /**
+   * True for a ₹0 package-continuation visit whose OWN `invoiceId` is
+   * null but a sibling session in the same package group already has
+   * one — i.e. this session was logged after the package's invoice was
+   * issued, so it never got swept in (`invoiceService.collectVisits`
+   * only grabs whatever's in the group at issue time). Without this
+   * flag, two ₹0 rows of the same package look arbitrarily different
+   * (one 🔒, one not) with nothing explaining why.
+   */
+  packageInvoicePending?: boolean;
 }
 
 /** Row actions kebab — Repeat / Edit visit / Split / Delete. Note lives on
@@ -253,49 +263,70 @@ function PaymentStatusDisplay({
   const billingLocked = Boolean(data.invoiceId) && data.paymentState !== 'paid';
 
   if (compact) {
+    const hasSecondaryRow =
+      (canInvoice && (actions.includes('take_payment') || actions.includes('issue_invoice'))) ||
+      (!canInvoice && paymentActions(data.paymentState).length > 0) ||
+      data.packageInvoicePending ||
+      (data.needsNote && data.canViewNotes);
     return (
-      <div className="flex max-w-[8.5rem] flex-wrap items-center gap-1">
-        {billingLocked && (
-          <span className="text-[10px]" title="Billing locked — this visit is invoiced">
-            🔒
-          </span>
-        )}
-        <Pill tone={chip.tone}>
-          <span className="whitespace-nowrap" title={statusTitle}>
-            {statusLabel}
-          </span>
-        </Pill>
-        {canInvoice && actions.includes('take_payment') && (
-          <button
-            type="button"
-            className="whitespace-nowrap rounded-full bg-[var(--rust-light)] px-2 py-0.5 text-[10px] font-medium text-[var(--rust)] hover:opacity-80"
-            onClick={onTakePayment}
-          >
-            Pay
-          </button>
-        )}
-        {canInvoice && actions.includes('issue_invoice') && (
-          <button
-            type="button"
-            className="whitespace-nowrap rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10px] font-medium text-[var(--teal)] hover:opacity-80"
-            onClick={onInvoice}
-          >
-            Invoice
-          </button>
-        )}
-        {!canInvoice && paymentActions(data.paymentState).length > 0 && (
-          <Pill tone="slate">Ask billing</Pill>
-        )}
-        {data.needsNote && data.canViewNotes && (
-          <Link
-            to="/patients/$patientId/notes/new"
-            params={{ patientId: data.patientId }}
-            search={{ visitId: data.visitId }}
-            className="whitespace-nowrap text-[10px] font-medium text-[var(--amber)] hover:underline"
-            title="Clinical note not started for this visit"
-          >
-            + Note
-          </Link>
+      <div className="flex flex-col items-start gap-1">
+        <div className="flex items-center gap-1">
+          {billingLocked && (
+            <span className="text-[10px]" title="Billing locked — this visit is invoiced">
+              🔒
+            </span>
+          )}
+          <Pill tone={chip.tone}>
+            <span className="whitespace-nowrap" title={statusTitle}>
+              {statusLabel}
+            </span>
+          </Pill>
+        </div>
+        {hasSecondaryRow && (
+          <div className="flex flex-wrap items-center gap-1">
+            {canInvoice && actions.includes('take_payment') && (
+              <button
+                type="button"
+                className="whitespace-nowrap rounded-full bg-[var(--rust-light)] px-2 py-0.5 text-[10px] font-medium text-[var(--rust)] hover:opacity-80"
+                onClick={onTakePayment}
+              >
+                Pay
+              </button>
+            )}
+            {canInvoice && actions.includes('issue_invoice') && (
+              <button
+                type="button"
+                className="whitespace-nowrap rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10px] font-medium text-[var(--teal)] hover:opacity-80"
+                onClick={onInvoice}
+              >
+                Invoice
+              </button>
+            )}
+            {!canInvoice && paymentActions(data.paymentState).length > 0 && (
+              <Pill tone="slate">Ask billing</Pill>
+            )}
+            {data.packageInvoicePending && (
+              <Pill tone="amber">
+                <span
+                  className="whitespace-nowrap"
+                  title="This session isn't on the package's invoice yet — amend the invoice to include it."
+                >
+                  Not invoiced
+                </span>
+              </Pill>
+            )}
+            {data.needsNote && data.canViewNotes && (
+              <Link
+                to="/patients/$patientId/notes/new"
+                params={{ patientId: data.patientId }}
+                search={{ visitId: data.visitId }}
+                className="whitespace-nowrap text-[10px] font-medium text-[var(--amber)] hover:underline"
+                title="Clinical note not started for this visit"
+              >
+                + Note
+              </Link>
+            )}
+          </div>
         )}
       </div>
     );
@@ -338,6 +369,13 @@ function PaymentStatusDisplay({
       )}
       {!canInvoice && paymentActions(data.paymentState).length > 0 && (
         <Pill tone="slate">Ask billing</Pill>
+      )}
+      {data.packageInvoicePending && (
+        <Pill tone="amber">
+          <span title="This session isn't on the package's invoice yet — amend the invoice to include it.">
+            Not invoiced
+          </span>
+        </Pill>
       )}
       {data.needsNote && data.canViewNotes && (
         <Link
@@ -642,7 +680,7 @@ function VisitTable({
             {rows.map((row, i) => (
               <tr
                 key={row.visitId}
-                className={`hover:bg-[var(--teal-light)] ${i % 2 === 1 ? 'bg-[var(--paper)]' : ''}`}
+                className={`align-top hover:bg-[var(--teal-light)] ${i % 2 === 1 ? 'bg-[var(--paper)]' : ''}`}
               >
                 {selection && (
                   <td className={td}>
