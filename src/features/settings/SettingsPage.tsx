@@ -2513,7 +2513,7 @@ function MemberCard({
       </div>
       <RolePill role={role} />
       {isLastAdmin && (
-        <p className="text-[11px] text-[var(--muted)]">Only admin — can't be demoted or revoked from here.</p>
+        <p className="text-[11px] text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
       )}
       <div className="mt-auto flex gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
         <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setEditing(true)}>
