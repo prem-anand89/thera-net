@@ -135,6 +135,6 @@ describe('paymentStatusShortPhrase', () => {
     // continuation (already billed elsewhere, nothing new owed) vs. a
     // standalone complimentary visit (never meant to be charged at all).
     expect(paymentStatusShortPhrase('zero_session', true)).toBe('Package');
-    expect(paymentStatusShortPhrase('zero_session', false)).toBe('Free');
+    expect(paymentStatusShortPhrase('zero_session', false)).toBe('No charge');
   });
 });

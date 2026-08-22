@@ -85,7 +85,7 @@ export function paymentStatusPhrase(state: VisitPaymentState, isPackageSession =
 export function paymentStatusShortPhrase(state: VisitPaymentState, isPackageSession = false): string {
   switch (state) {
     case 'zero_session':
-      return isPackageSession ? 'Package' : 'Free';
+      return isPackageSession ? 'Package' : 'No charge';
     case 'paid':
       return 'Invoiced';
     case 'collected_no_receipt':
