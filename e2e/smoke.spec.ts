@@ -33,7 +33,6 @@ test.describe('authenticated flow', () => {
   );
 
   test('login → log visit offline → sync', async ({ page, context }) => {
-    test.skip(!creds);
     await page.goto('/');
     await page.getByLabel('Email').fill(creds!.email);
     await page.getByLabel('Password').fill(creds!.password);

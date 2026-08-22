@@ -5,9 +5,18 @@ on:
     branches: ['**']
   pull_request:
 
+# A same-repo PR triggers both `push` and `pull_request` for the same
+# commit, and rapid pushes to one branch each spin up their own full
+# build+e2e set — cancel whatever's still running for the same ref
+# when a newer run starts, instead of letting superseded runs finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,6 +31,10 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    # Every authenticated spec self-skips without Supabase env (see below),
+    # so a hang here would mean a future spec was added without that guard —
+    # bound it well under GitHub's 360-minute default so that shows up fast.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
