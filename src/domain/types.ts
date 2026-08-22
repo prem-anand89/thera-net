@@ -91,21 +91,24 @@ export interface Clinic {
 }
 
 /** Optional (toggleable) Visits-table columns — the essentials (patient, bill, status) aren't listed. */
-export type VisitColumnKey = 'condition' | 'treatment' | 'therapist' | 'service';
+export type VisitColumnKey = 'condition' | 'treatments' | 'therapist' | 'service';
 
 export const VISIT_COLUMN_LABELS: Record<VisitColumnKey, string> = {
   service: 'Service',
   therapist: 'Therapist',
   condition: 'Condition',
-  treatment: 'Treatment',
+  // One combined column: catalog picks from treatment_catalog plus any
+  // free-text add-on for something not in the list — a single cell, not
+  // two separate "Treatment" (notes) and "Treatments" (catalog) columns.
+  treatments: 'Treatments',
 };
 
 /** Column order for visit tables and card detail rows — who → context → notes → service. */
-export const VISIT_OPTIONAL_COLUMN_ORDER: VisitColumnKey[] = ['therapist', 'condition', 'treatment', 'service'];
+export const VISIT_OPTIONAL_COLUMN_ORDER: VisitColumnKey[] = ['therapist', 'condition', 'treatments', 'service'];
 
 export const DEFAULT_VISIT_COLUMN_PREFS: Record<VisitColumnKey, boolean> = {
   condition: true,
-  treatment: true,
+  treatments: true,
   therapist: true,
   service: true,
 };
@@ -200,6 +203,43 @@ export interface NoReturnReasonItem {
 
 export type MrnoSource = 'hospital' | 'auto';
 
+/**
+ * Clinic-editable referral-source list — same shape as
+ * NoReturnReasonItem/CatalogItem (add / deactivate-not-delete / rename from
+ * Settings). Seeded with the 6 legacy ReferringSource labels below as
+ * defaults for every clinic, so nothing changes on day one; clinics can
+ * rename, deactivate, or add their own from there. detailLabel drives the
+ * optional free-text "who/where" field next to the picker — null means this
+ * source needs no detail (e.g. "Walk-in"); a per-item flag rather than
+ * hardcoding specific source names, for the same reason NoReturnReasonItem's
+ * isClosed is per-item rather than name-matched.
+ */
+export interface ReferringSourceItem {
+  id: UUID;
+  clinicId: UUID;
+  name: string;
+  detailLabel: string | null;
+  active: boolean;
+  updatedAt: string;
+}
+
+/**
+ * Clinic-editable list of treatment types (Exercise, Manual Therapy, Kinesio
+ * Taping, ...) — same shape as NoReturnReasonItem/CatalogItem (add /
+ * deactivate-not-delete / rename from Settings). Independent of the
+ * billing-side service_catalog: one visit can be billed under one service
+ * package while performing several treatment types, tracked via
+ * Visit.treatmentIds. Also independent of Core Assessment/clinical docs, so
+ * it works for every clinic regardless of clinicalDocsEnabled.
+ */
+export interface TreatmentItem {
+  id: UUID;
+  clinicId: UUID;
+  name: string;
+  active: boolean;
+  updatedAt: string;
+}
+
 export type ReferringSource =
   | 'hospital_referral'
   | 'doctor_referral'
@@ -260,9 +300,18 @@ export interface Patient {
   sex: 'M' | 'F' | 'Other' | null;
   phone: string | null;
   primaryCondition: string | null;
-  /** How the patient found the clinic. Optional: older cached rows lack the key. */
+  /** How the patient found the clinic, from the clinic's own editable
+   *  ReferringSourceItem list — the current source of truth going forward.
+   *  Optional: older cached rows and patients created before this catalog
+   *  existed lack the key; those fall back to the legacy referringSource
+   *  enum below for display. */
+  referringSourceId?: UUID | null;
+  /** Legacy fixed-enum value — no longer written by new patient saves, kept
+   *  only so patients created before the catalog existed still display a
+   *  referral source. Optional: older cached rows lack the key. */
   referringSource?: ReferringSource | null;
-  /** Free text alongside referringSource — which doctor, who referred them, which online channel. */
+  /** Free text alongside referringSourceId/referringSource — which doctor,
+   *  who referred them, which online channel. */
   referringSourceDetail?: string | null;
   /** Why a single-visit patient hasn't come back — set from the Trends
    *  dashboard once known. References NoReturnReasonItem, the clinic's own
@@ -282,6 +331,8 @@ export interface Visit {
   visitDate: string;
   condition: string | null;
   treatmentNotes: string | null;
+  /** Which TreatmentItem catalog entries were performed this visit. Optional: older cached rows predate treatment tracking. */
+  treatmentIds?: UUID[];
   serviceCatalogId: UUID;
   /** Catalog price snapshot at time of billing — discounts never touch the catalog */
   catalogPricePaise: Paise;
@@ -375,6 +426,11 @@ export interface Invoice {
   totalPaise: Paise;
   paymentMode: PaymentMode;
   therapistId: UUID | null;
+  /** Set when this invoice is a correction that replaces an earlier one
+   *  (e.g. a TPA asked for added visit dates) — points at the original.
+   *  One-directional: the original invoice is never updated to point
+   *  forward, since issued invoices are immutable. */
+  supersedesInvoiceId: UUID | null;
   updatedAt: string;
 }
 

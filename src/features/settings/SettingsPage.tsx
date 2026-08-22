@@ -17,7 +17,9 @@ import {
   effectivePricePerSession,
   type CatalogItem,
   type Clinic,
+  type ReferringSourceItem,
   type Therapist,
+  type TreatmentItem,
 } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
 import {
@@ -39,7 +41,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { FirstWeekChecklist, useFirstWeekChecklistVisible } from './FirstWeekChecklist';
 import { isValidUpiVpa } from '@/domain/upiPay';
 
-type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'data';
+type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'treatments' | 'referrals' | 'data';
 
 /**
  * Grouped into the three jobs an admin actually comes here to do, rather
@@ -52,7 +54,7 @@ type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'dat
  */
 const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
   { label: 'Clinic', keys: ['profile', 'billing', 'partner'] },
-  { label: 'People & services', keys: ['team', 'services'] },
+  { label: 'People & services', keys: ['team', 'services', 'treatments', 'referrals'] },
   { label: 'System', keys: ['data'] },
 ];
 
@@ -83,6 +85,18 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
   { key: 'team', label: 'Team', description: 'Invite and manage logins, therapist roster.', accent: 'moss' },
   { key: 'services', label: 'Services', description: 'Catalog of billable services and package prices.', accent: 'teal' },
   {
+    key: 'treatments',
+    label: 'Treatments',
+    description: 'Treatment types tracked per visit, independent of billing.',
+    accent: 'moss',
+  },
+  {
+    key: 'referrals',
+    label: 'Referral sources',
+    description: 'Channels shown when adding or editing a patient.',
+    accent: 'rust',
+  },
+  {
     key: 'data',
     label: 'Data & maintenance',
     description: 'Import historical visits, back up or restore, reset this device, wipe clinic data.',
@@ -109,6 +123,8 @@ const SECTION_ICON_PATHS: Record<SectionKey, string> = {
   partner: 'M8 2.5l1.4 3.1 3.4.4-2.5 2.3.7 3.4L8 10l-3 1.7.7-3.4-2.5-2.3 3.4-.4L8 2.5z',
   team: 'M2.3 13c.4-2.5 2-3.9 3.9-3.9s3.5 1.4 3.9 3.9M9.9 9.5c1.6.2 2.8 1.4 3.1 3.5',
   services: 'M3 4h10M3 8h10M3 12h6',
+  treatments: 'M5 3l6 10M11 3l-6 10M3 8h10',
+  referrals: 'M4 13V3l4 2.5L12 3v10M4 8h8',
   data: 'M3 5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2zM3 5v6c0 1.1 2.2 2 5 2s5-.9 5-2V5M3 8c0 1.1 2.2 2 5 2s5-.9 5-2',
 };
 
@@ -359,6 +375,8 @@ export function SettingsPage() {
             </>
           )}
           {activeKey === 'services' && <Catalog />}
+          {activeKey === 'treatments' && <TreatmentCatalog />}
+          {activeKey === 'referrals' && <ReferringSources />}
           {activeKey === 'data' && (
             <>
               <HistoricalData />
@@ -583,7 +601,13 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
           />
         </Field>
         <Field label="Address">
-          <input className={inputCls} value={form.address ?? ''} onChange={(e) => set({ address: e.target.value || null })} />
+          <textarea
+            className={`${inputCls} min-h-16 resize-none`}
+            rows={3}
+            placeholder={'Street\nCity, State — PIN'}
+            value={form.address ?? ''}
+            onChange={(e) => set({ address: e.target.value || null })}
+          />
         </Field>
         <Field label="Phone">
           <input className={inputCls} value={form.phone ?? ''} onChange={(e) => set({ phone: e.target.value || null })} />
@@ -1623,6 +1647,216 @@ function Catalog() {
       </div>
       <div className="mt-2">
         <ErrorNote message={error} />
+      </div>
+    </SectionCard>
+  );
+}
+
+/**
+ * Clinic-editable list of treatment types (Exercise, Manual Therapy, Kinesio
+ * Taping, ...) — same add / deactivate-not-delete / rename shape as the
+ * other catalogs on this tab. Independent of the billing-side service
+ * catalog above: a visit can be billed under one package while recording
+ * several treatment types performed, via the "Treatments performed" picker
+ * on the visit-logging and edit-visit forms.
+ */
+function TreatmentCatalog() {
+  const clinic = useClinic();
+  const items = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]) ?? [];
+  const [draftName, setDraftName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  async function addItem() {
+    setError(null);
+    const name = draftName.trim();
+    if (!name) {
+      setError('Name is required');
+      return;
+    }
+    const item: TreatmentItem = {
+      id: crypto.randomUUID(),
+      clinicId: clinic.id,
+      name,
+      active: true,
+      updatedAt: new Date().toISOString(),
+    };
+    await repos.treatmentCatalog.put(item);
+    setDraftName('');
+  }
+
+  async function toggleActive(item: TreatmentItem) {
+    await repos.treatmentCatalog.put({ ...item, active: !item.active, updatedAt: new Date().toISOString() });
+  }
+
+  async function rename(item: TreatmentItem, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === item.name) return;
+    await repos.treatmentCatalog.put({ ...item, name: trimmed, updatedAt: new Date().toISOString() });
+  }
+
+  return (
+    <SectionCard title="Treatments">
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        Tracked per visit as a "Treatments performed" checklist, independent of billing. Deactivate
+        instead of deleting so past visits keep displaying correctly.
+      </p>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className={`flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 ${item.active ? '' : 'opacity-50'}`}
+          >
+            <input
+              className={`${inputCls} min-w-0 flex-1`}
+              defaultValue={item.name}
+              onBlur={(e) => void rename(item, e.target.value)}
+              aria-label="Treatment name"
+            />
+            <button
+              type="button"
+              className="shrink-0 text-xs text-[var(--teal)] hover:underline"
+              onClick={() => void toggleActive(item)}
+            >
+              {item.active ? 'Deactivate' : 'Reactivate'}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {error && <ErrorNote message={error} />}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={draftName}
+          onChange={(e) => setDraftName(e.target.value)}
+          placeholder="Add a treatment…"
+          className={`${inputCls} min-w-0 flex-1`}
+        />
+        <button className={btnSecondary} onClick={() => void addItem()}>
+          + Add
+        </button>
+      </div>
+    </SectionCard>
+  );
+}
+
+/**
+ * Clinic-editable list of referral channels — same add / deactivate-not-
+ * delete / rename shape as the no-return-reason catalog managed inline on
+ * Reports. Seeded with the app's original six labels as defaults; a clinic
+ * can rename, add, or deactivate any of them without losing how existing
+ * patients display (see referringSourceDetailLabel/REFERRING_SOURCE_LABELS
+ * fallback in dashboardService for patients tagged before this catalog
+ * existed).
+ */
+function ReferringSources() {
+  const clinic = useClinic();
+  const items = useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id, true), [clinic.id]) ?? [];
+  const [draftName, setDraftName] = useState('');
+  const [draftDetailLabel, setDraftDetailLabel] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  async function addItem() {
+    setError(null);
+    const name = draftName.trim();
+    if (!name) {
+      setError('Name is required');
+      return;
+    }
+    const item: ReferringSourceItem = {
+      id: crypto.randomUUID(),
+      clinicId: clinic.id,
+      name,
+      detailLabel: draftDetailLabel.trim() || null,
+      active: true,
+      updatedAt: new Date().toISOString(),
+    };
+    await repos.referringSourceCatalog.put(item);
+    setDraftName('');
+    setDraftDetailLabel('');
+  }
+
+  async function toggleActive(item: ReferringSourceItem) {
+    await repos.referringSourceCatalog.put({ ...item, active: !item.active, updatedAt: new Date().toISOString() });
+  }
+
+  async function rename(item: ReferringSourceItem, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === item.name) return;
+    await repos.referringSourceCatalog.put({ ...item, name: trimmed, updatedAt: new Date().toISOString() });
+  }
+
+  async function updateDetailLabel(item: ReferringSourceItem, detailLabel: string) {
+    const trimmed = detailLabel.trim() || null;
+    if (trimmed === item.detailLabel) return;
+    await repos.referringSourceCatalog.put({ ...item, detailLabel: trimmed, updatedAt: new Date().toISOString() });
+  }
+
+  return (
+    <SectionCard title="Referral sources">
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        Shown when adding or editing a patient. Deactivate instead of deleting so existing patients keep
+        displaying correctly. The optional detail label adds a follow-up field (e.g. "Referring doctor")
+        when that source is picked.
+      </p>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 ${item.active ? '' : 'opacity-50'}`}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className={`${inputCls} min-w-0 flex-1`}
+                defaultValue={item.name}
+                onBlur={(e) => void rename(item, e.target.value)}
+                aria-label="Source name"
+              />
+              <button
+                type="button"
+                className="shrink-0 text-xs text-[var(--teal)] hover:underline"
+                onClick={() => void toggleActive(item)}
+              >
+                {item.active ? 'Deactivate' : 'Reactivate'}
+              </button>
+            </div>
+            <input
+              className={`${inputCls} mt-2 text-xs`}
+              placeholder="Detail field label (optional), e.g. Referring doctor"
+              defaultValue={item.detailLabel ?? ''}
+              onBlur={(e) => void updateDetailLabel(item, e.target.value)}
+              aria-label="Detail field label"
+            />
+          </div>
+        ))}
+      </div>
+
+      {error && <ErrorNote message={error} />}
+
+      <div className="mt-3 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-3.5">
+        <p className="mb-2 text-xs font-medium text-[var(--muted)]">Add a source</p>
+        <div className="space-y-2">
+          <Field label="Name">
+            <input
+              className={inputCls}
+              placeholder="e.g. Instagram ad"
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+            />
+          </Field>
+          <Field label="Detail field label (optional)">
+            <input
+              className={inputCls}
+              placeholder="e.g. Referring doctor"
+              value={draftDetailLabel}
+              onChange={(e) => setDraftDetailLabel(e.target.value)}
+            />
+          </Field>
+          <button className={`${btnSecondary} w-full`} onClick={() => void addItem()}>
+            + Add
+          </button>
+        </div>
       </div>
     </SectionCard>
   );

@@ -7,7 +7,7 @@ import { getSupabase } from '@/lib/supabase';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { ScaleWidget } from '@/components/ScaleWidget';
 import { BodyChart } from '@/components/BodyChart';
-import { Pill } from '@/components/ui';
+import { Pill, MultiToggle } from '@/components/ui';
 import { repos, consultationNoteService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import {
@@ -109,27 +109,6 @@ if (SECTION_GROUPS.flatMap((g) => g.keys).length !== NOTE_SECTION_KEYS.length) {
  *  fight the click by re-highlighting whatever section scrolls past on
  *  the way to the target. */
 const SCROLL_SPY_SUPPRESS_MS = 700;
-
-/** Toggle-chip multi-select: value is the array of selected labels. */
-function MultiToggle({ options, value, onChange }: { options: readonly string[]; value: string[]; onChange: (next: string[]) => void }) {
-  return (
-    <div className="chip-row">
-      {options.map((opt) => {
-        const on = value.includes(opt);
-        return (
-          <button
-            key={opt}
-            type="button"
-            className={`toggle-chip ${on ? 'on' : ''}`}
-            onClick={() => onChange(on ? value.filter((v) => v !== opt) : [...value, opt])}
-          >
-            {opt}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function RedFlagPill({ item, state, onChange }: { item: RedFlagItem; state: RedFlagState; onChange: (next: RedFlagState) => void }) {
   const cycle: RedFlagState[] = ['not-assessed', 'yes', 'no'];

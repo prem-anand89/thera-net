@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { computeVisitPaymentState, isCollected, paymentActions, paymentStatusLine, paymentStatusPhrase, paymentStatusShortPhrase } from './paymentState';
+import {
+  computeVisitPaymentState,
+  isCollected,
+  isPackageContinuation,
+  paymentActions,
+  paymentStatusLine,
+  paymentStatusPhrase,
+  paymentStatusShortPhrase,
+} from './paymentState';
 import { rupeesToPaise as rs } from './money';
 
 const INV = 'invoice-1';
@@ -70,7 +78,12 @@ describe('paymentStatusPhrase', () => {
     expect(paymentStatusPhrase('partially_collected')).toBe('partially collected');
     expect(paymentStatusPhrase('outstanding')).toBe('not collected · invoiced');
     expect(paymentStatusPhrase('uninvoiced')).toBe('not collected · no invoice');
-    expect(paymentStatusPhrase('zero_session')).toBe('₹0 session');
+  });
+
+  it('distinguishes a package continuation from a standalone complimentary visit', () => {
+    expect(paymentStatusPhrase('zero_session', true)).toBe('package session');
+    expect(paymentStatusPhrase('zero_session', false)).toBe('complimentary session');
+    expect(paymentStatusPhrase('zero_session')).toBe('complimentary session'); // default: not a package
   });
 });
 
@@ -80,7 +93,21 @@ describe('paymentStatusLine', () => {
     expect(paymentStatusLine('collected_no_receipt', '₹500')).toBe('₹500 billed · collected · no invoice');
     expect(paymentStatusLine('outstanding', '₹500')).toBe('₹500 billed · not collected · invoiced');
     expect(paymentStatusLine('uninvoiced', '₹500')).toBe('₹500 billed · not collected · no invoice');
-    expect(paymentStatusLine('zero_session', '₹500')).toBe('₹0 session');
+  });
+
+  it('passes the package flag through for zero_session instead of restating the (always ₹0) bill', () => {
+    expect(paymentStatusLine('zero_session', '₹500', true)).toBe('package session');
+    expect(paymentStatusLine('zero_session', '₹500', false)).toBe('complimentary session');
+  });
+});
+
+describe('isPackageContinuation', () => {
+  it('is true only when both sessionIndex and packageTotal are set (and nonzero)', () => {
+    expect(isPackageContinuation(2, 3)).toBe(true);
+    expect(isPackageContinuation(null, 3)).toBe(false);
+    expect(isPackageContinuation(2, null)).toBe(false);
+    expect(isPackageContinuation(null, null)).toBe(false);
+    expect(isPackageContinuation(0, 3)).toBe(false); // 0 is falsy — matches Boolean(sessionIndex && packageTotal)
   });
 });
 
@@ -99,5 +126,15 @@ describe('paymentStatusShortPhrase', () => {
   it('uses compact table labels', () => {
     expect(paymentStatusShortPhrase('collected_no_receipt')).toBe('Collected');
     expect(paymentStatusPhrase('collected_no_receipt')).toBe('collected · no invoice');
+  });
+
+  it('distinguishes a package continuation from a standalone complimentary visit, instead of a bare repeated ₹0', () => {
+    // The table's Bill column already shows ₹0 for these rows — the Status
+    // cell restating the same figure explains nothing, and collapsing both
+    // situations into one word hid that they're unrelated: a package
+    // continuation (already billed elsewhere, nothing new owed) vs. a
+    // standalone complimentary visit (never meant to be charged at all).
+    expect(paymentStatusShortPhrase('zero_session', true)).toBe('Package');
+    expect(paymentStatusShortPhrase('zero_session', false)).toBe('No charge');
   });
 });

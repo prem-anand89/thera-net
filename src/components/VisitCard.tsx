@@ -5,21 +5,36 @@ import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import type { VisitPaymentState } from '@/domain/paymentState';
-import { paymentActions, paymentStatusPhrase, paymentStatusShortPhrase } from '@/domain/paymentState';
+import { isPackageContinuation, paymentActions, paymentStatusPhrase, paymentStatusShortPhrase } from '@/domain/paymentState';
 import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
+import type { PatientProfileBackTarget } from '@/app/router';
 
-export const PAYMENT_CHIP: Record<
-  VisitPaymentState,
-  { tone: 'green' | 'amber' | 'slate'; label: string }
-> = {
-  paid: { tone: 'green', label: paymentStatusPhrase('paid') },
-  collected_no_receipt: { tone: 'green', label: paymentStatusPhrase('collected_no_receipt') },
-  partially_collected: { tone: 'amber', label: paymentStatusPhrase('partially_collected') },
-  outstanding: { tone: 'amber', label: paymentStatusPhrase('outstanding') },
-  uninvoiced: { tone: 'amber', label: paymentStatusPhrase('uninvoiced') },
-  zero_session: { tone: 'slate', label: paymentStatusPhrase('zero_session') },
+/**
+ * Pill color per payment state. Label is deliberately not stored here —
+ * `zero_session` reads differently depending on whether it's a package
+ * continuation or a standalone complimentary visit, a distinction this
+ * map has no per-row context for; every caller computes its label fresh
+ * via `paymentStatusPhrase`/`paymentStatusShortPhrase` instead.
+ */
+export const PAYMENT_CHIP: Record<VisitPaymentState, { tone: 'green' | 'amber' | 'slate' }> = {
+  paid: { tone: 'green' },
+  collected_no_receipt: { tone: 'green' },
+  partially_collected: { tone: 'amber' },
+  outstanding: { tone: 'amber' },
+  uninvoiced: { tone: 'amber' },
+  zero_session: { tone: 'slate' },
 };
+
+/** Combines catalog treatment picks with the free-text add-on into one
+ *  display string for the single "Treatments" column/cell — e.g. "Manual
+ *  Therapy, Exercise Therapy — FM An/Re S,S". Either half can be absent. */
+export function treatmentsDisplayText(treatmentNames: string[], treatmentNotes: string | null): string {
+  const parts = [];
+  if (treatmentNames.length) parts.push(treatmentNames.join(', '));
+  if (treatmentNotes) parts.push(treatmentNotes);
+  return parts.join(' — ') || '—';
+}
 
 /** ID · age · sex under the name, matching New visit's Patient panel. */
 export function patientIdentityLine(
@@ -36,9 +51,15 @@ export function patientIdentityLine(
 function PatientNameBlock({
   data,
   onEditPatient,
+  backTo,
 }: {
   data: VisitCardData;
   onEditPatient?: () => void;
+  /** Where the patient profile's own "← Back" link should return to —
+   *  set by whichever list is rendering this row (Ledger, Workspace).
+   *  Omitted where clicking through doesn't leave the current page in
+   *  any meaningful sense (e.g. Patient Profile's own visit history). */
+  backTo?: PatientProfileBackTarget;
 }) {
   return (
     <div className="min-w-0">
@@ -46,6 +67,7 @@ function PatientNameBlock({
         <Link
           to="/patients/$patientId"
           params={{ patientId: data.patientId }}
+          search={backTo ? { from: backTo } : undefined}
           className="font-display text-sm font-medium text-[var(--ink)] hover:underline"
         >
           {data.patientName}
@@ -87,6 +109,8 @@ export interface VisitCardData {
   packageTotal: number | null;
   therapistName: string;
   treatmentNotes: string | null;
+  /** Resolved treatment_catalog names for this visit's "Treatments performed" — pre-resolved, not raw ids. */
+  treatmentNames: string[];
   billPaise: Paise;
   paymentState: VisitPaymentState;
   invoiceId: UUID | null;
@@ -215,8 +239,11 @@ function PaymentStatusDisplay({
   const chip = PAYMENT_CHIP[data.paymentState];
   const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
-  const statusLabel = compact ? paymentStatusShortPhrase(data.paymentState) : chip.label;
-  const statusTitle = compact ? paymentStatusPhrase(data.paymentState) : undefined;
+  const isPackage = isPackageContinuation(data.sessionIndex, data.packageTotal);
+  const statusLabel = compact
+    ? paymentStatusShortPhrase(data.paymentState, isPackage)
+    : paymentStatusPhrase(data.paymentState, isPackage);
+  const statusTitle = compact ? paymentStatusPhrase(data.paymentState, isPackage) : undefined;
 
   // Billing fields freeze the moment a visit is invoiced (see
   // EditVisitModal's `frozen` check), independent of whether it's since
@@ -259,6 +286,17 @@ function PaymentStatusDisplay({
         {!canInvoice && paymentActions(data.paymentState).length > 0 && (
           <Pill tone="slate">Ask billing</Pill>
         )}
+        {data.needsNote && data.canViewNotes && (
+          <Link
+            to="/patients/$patientId/notes/new"
+            params={{ patientId: data.patientId }}
+            search={{ visitId: data.visitId }}
+            className="whitespace-nowrap text-[10px] font-medium text-[var(--amber)] hover:underline"
+            title="Clinical note not started for this visit"
+          >
+            + Note
+          </Link>
+        )}
       </div>
     );
   }
@@ -274,7 +312,7 @@ function PaymentStatusDisplay({
             🔒
           </span>
         )}
-        <Pill tone={chip.tone}>{chip.label}</Pill>
+        <Pill tone={chip.tone}>{statusLabel}</Pill>
       </div>
       {canInvoice && actions.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1">
@@ -301,7 +339,7 @@ function PaymentStatusDisplay({
       {!canInvoice && paymentActions(data.paymentState).length > 0 && (
         <Pill tone="slate">Ask billing</Pill>
       )}
-      {data.needsNote && (
+      {data.needsNote && data.canViewNotes && (
         <Link
           to="/patients/$patientId/notes/new"
           params={{ patientId: data.patientId }}
@@ -337,7 +375,12 @@ export function CardDetailRow({
 function VisitCardDetails({ data }: { data: VisitCardData }) {
   const hasSession = Boolean(data.sessionIndex && data.packageTotal);
   const hasDetails =
-    data.serviceName || data.therapistName || data.condition || data.treatmentNotes || hasSession;
+    data.serviceName ||
+    data.therapistName ||
+    data.condition ||
+    data.treatmentNotes ||
+    data.treatmentNames.length > 0 ||
+    hasSession;
   if (!hasDetails) return null;
 
   return (
@@ -348,9 +391,9 @@ function VisitCardDetails({ data }: { data: VisitCardData }) {
         </CardDetailRow>
       )}
       {data.condition && <CardDetailRow label="Condition">{data.condition}</CardDetailRow>}
-      {data.treatmentNotes && (
-        <CardDetailRow label="Treatment" clamp>
-          {data.treatmentNotes}
+      {(data.treatmentNames.length > 0 || data.treatmentNotes) && (
+        <CardDetailRow label="Treatments" clamp>
+          {treatmentsDisplayText(data.treatmentNames, data.treatmentNotes)}
         </CardDetailRow>
       )}
       {data.serviceName && <CardDetailRow label="Service">{data.serviceName}</CardDetailRow>}
@@ -380,6 +423,7 @@ export function SharedVisitCard({
   onSplit,
   onDelete,
   canInvoice = true,
+  backTo,
 }: {
   data: VisitCardData;
   showDate: boolean;
@@ -395,6 +439,7 @@ export function SharedVisitCard({
   onSplit?: () => void;
   onDelete: () => void;
   canInvoice?: boolean;
+  backTo?: PatientProfileBackTarget;
 }) {
   const initials = showPatient
     ? data.patientName
@@ -407,6 +452,10 @@ export function SharedVisitCard({
   const chip = PAYMENT_CHIP[data.paymentState];
   const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
+  const statusLabel = paymentStatusPhrase(
+    data.paymentState,
+    isPackageContinuation(data.sessionIndex, data.packageTotal)
+  );
 
   const content = (
     <>
@@ -418,7 +467,7 @@ export function SharedVisitCard({
             </div>
           )}
           <div className="min-w-0 flex-1">
-            {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} />}
+            {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} backTo={backTo} />}
             {showDate && (
               <div className={`text-xs text-[var(--muted)] ${showPatient ? 'mt-0.5' : ''}`}>
                 {formatDateDM(data.visitDate)}
@@ -447,7 +496,7 @@ export function SharedVisitCard({
       <VisitCardDetails data={data} />
 
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
-        <Pill tone={chip.tone}>{chip.label}</Pill>
+        <Pill tone={chip.tone}>{statusLabel}</Pill>
         <div className="flex flex-wrap items-center justify-end gap-1.5">
           {actions.includes('take_payment') && (
             <button
@@ -468,7 +517,7 @@ export function SharedVisitCard({
             </button>
           )}
           {!canInvoice && paymentActions(data.paymentState).length > 0 && <Pill tone="slate">Ask billing</Pill>}
-          {data.needsNote && (
+          {data.needsNote && data.canViewNotes && (
             <Link
               to="/patients/$patientId/notes/new"
               params={{ patientId: data.patientId }}
@@ -518,6 +567,7 @@ function VisitTable({
   onDelete,
   canInvoice,
   selection,
+  backTo,
 }: {
   rows: VisitCardData[];
   showDate: boolean;
@@ -532,6 +582,7 @@ function VisitTable({
   onDelete: (row: VisitCardData) => void;
   canInvoice: boolean;
   selection?: VisitSelectionProps;
+  backTo?: PatientProfileBackTarget;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -623,7 +674,11 @@ function VisitTable({
                 )}
                 {showPatient && (
                   <td className={td}>
-                    <PatientNameBlock data={row} onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined} />
+                    <PatientNameBlock
+                      data={row}
+                      onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
+                      backTo={backTo}
+                    />
                   </td>
                 )}
                 {VISIT_OPTIONAL_COLUMN_ORDER.map((key) => {
@@ -655,10 +710,10 @@ function VisitTable({
                           {row.condition ?? '—'}
                         </td>
                       );
-                    case 'treatment':
+                    case 'treatments':
                       return (
                         <td key={key} className={td}>
-                          {row.treatmentNotes ?? '—'}
+                          {treatmentsDisplayText(row.treatmentNames, row.treatmentNotes)}
                         </td>
                       );
                   }
@@ -779,6 +834,7 @@ export function ResponsiveVisitList({
   onDelete,
   canInvoice = true,
   selection,
+  backTo,
 }: {
   rows: VisitCardData[];
   showDate: boolean;
@@ -795,6 +851,9 @@ export function ResponsiveVisitList({
    *  visits, issue one invoice"). Only wired up in the flat (non-grouped)
    *  card list and the table — grouped mode has no caller that needs it. */
   selection?: VisitSelectionProps;
+  /** Where the patient name link's "← Back" should return to. Omit when
+   *  showPatient is false, or when this list is the patient's own profile. */
+  backTo?: PatientProfileBackTarget;
 }) {
   const { prefs, setPref } = useVisitColumnPrefs();
 
@@ -825,6 +884,7 @@ export function ResponsiveVisitList({
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
                     canInvoice={canInvoice}
+                    backTo={backTo}
                   />
                 ))}
               </div>
@@ -857,6 +917,7 @@ export function ResponsiveVisitList({
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
                     canInvoice={canInvoice}
+                    backTo={backTo}
                   />
                 </div>
               </div>
@@ -881,6 +942,7 @@ export function ResponsiveVisitList({
           onDelete={onDelete}
           canInvoice={canInvoice}
           selection={selection}
+          backTo={backTo}
         />
       </div>
     </>

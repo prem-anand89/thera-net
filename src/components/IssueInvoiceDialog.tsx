@@ -4,6 +4,7 @@ import type { PaymentMode } from '@/domain/types';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
 import { invoiceService, paymentService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
+import type { InvoicePrintBackTarget } from '@/app/router';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 
@@ -12,19 +13,28 @@ export interface IssueInvoiceTarget {
   patientLabel: string;
   serviceLabel: string;
   isPackage: boolean;
+  /** Visit already has a direct payment covering the bill (paymentState
+   *  'collected_no_receipt') — pre-selects "Collected now" so staff aren't
+   *  asked a question that's already been answered. Issuing the invoice
+   *  itself never touches the existing direct payment either way. */
+  alreadyCollected?: boolean;
 }
 
 export function IssueInvoiceDialog({
   clinicId,
   target,
   onClose,
+  returnTo,
 }: {
   clinicId: string;
   target: IssueInvoiceTarget;
   onClose: () => void;
+  /** Where the print page's own "← Back" should return to — this dialog
+   *  opens from both Ledger and Workspace. */
+  returnTo: InvoicePrintBackTarget;
 }) {
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
-  const [collectedNow, setCollectedNow] = useState(true);
+  const [collectedNow, setCollectedNow] = useState(target.alreadyCollected ?? true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<{ invoiceId: string; invoiceNo: string } | null>(null);
@@ -65,6 +75,7 @@ export function IssueInvoiceDialog({
               <Link
                 to="/invoices/$invoiceId/print"
                 params={{ invoiceId: issued.invoiceId }}
+                search={{ from: returnTo }}
                 className={btnSecondary}
               >
                 Print
@@ -92,6 +103,11 @@ export function IssueInvoiceDialog({
                 ))}
               </select>
             </Field>
+            {target.alreadyCollected && (
+              <p className="text-xs text-[var(--muted)]">
+                Already collected for this visit — defaulting to "Collected now" below.
+              </p>
+            )}
             <div className="flex gap-4 text-sm">
               <label className="flex items-center gap-2">
                 <input type="radio" checked={collectedNow} onChange={() => setCollectedNow(true)} />

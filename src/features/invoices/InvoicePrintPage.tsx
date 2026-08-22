@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from '@tanstack/react-router';
+import { Link, useParams, useSearch } from '@tanstack/react-router';
+import type { InvoicePrintBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
@@ -8,10 +9,12 @@ import { amountInWords } from '@/domain/amountInWords';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
+import { AmendInvoiceDialog } from '@/components/AmendInvoiceDialog';
 
 export function InvoicePrintPage() {
   const clinic = useClinic();
   const { invoiceId } = useParams({ strict: false }) as { invoiceId: string };
+  const { from: backTo } = useSearch({ strict: false }) as { from?: InvoicePrintBackTarget };
   const invoice = useLiveQuery(() => repos.invoices.get(invoiceId), [invoiceId]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   // Missing row reads as paid, matching computeVisitPaymentState's convention
@@ -21,8 +24,16 @@ export function InvoicePrintPage() {
     () => (invoice ? repos.invoicePayments.getByInvoiceId(invoice.id) : undefined),
     [invoice?.id]
   );
+  const allInvoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
+  const supersededBy = (allInvoices ?? []).find((inv) => inv.supersedesInvoiceId === invoice?.id);
+  const supersedes = useLiveQuery(
+    () => (invoice?.supersedesInvoiceId ? repos.invoices.get(invoice.supersedesInvoiceId) : undefined),
+    [invoice?.supersedesInvoiceId]
+  );
+
   const [paper, setPaper] = useState<'A4' | 'A5'>('A4');
   const [showVisitDates, setShowVisitDates] = useState(true);
+  const [amending, setAmending] = useState(false);
 
   const logoUrl = useMemo(() => publicLogoUrl(clinic.logoPath), [clinic.logoPath]);
   const partnerLogoUrl = useMemo(
@@ -58,7 +69,7 @@ export function InvoicePrintPage() {
       <style>{`@page { size: ${paper}; margin: ${paper === 'A5' ? '10mm' : '16mm'}; }`}</style>
 
       <div className="no-print mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
-        <Link to="/ledger" className={btnSecondary}>
+        <Link to={backTo ?? '/ledger'} className={btnSecondary}>
           ← Back
         </Link>
         <div className="ml-auto flex items-center gap-3">
@@ -81,17 +92,67 @@ export function InvoicePrintPage() {
           <button className={btnPrimary} onClick={() => window.print()}>
             Print / Save PDF
           </button>
+          {!supersededBy && (
+            <button className={btnSecondary} onClick={() => setAmending(true)}>
+              Amend this invoice
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="mx-auto max-w-3xl bg-[var(--surface)] p-8 print:max-w-none print:p-0">
+      {(supersededBy || supersedes) && (
+        <div className="no-print mx-auto max-w-3xl px-4">
+          {supersededBy && (
+            <div className="mb-3 rounded-md border-l-4 border-[var(--rust)] bg-[var(--rust-light)] p-3 text-xs text-[var(--ink)]">
+              Superseded by{' '}
+              <Link
+                to="/invoices/$invoiceId/print"
+                params={{ invoiceId: supersededBy.id }}
+                search={{ from: backTo }}
+                className="font-medium underline"
+              >
+                {supersededBy.invoiceNo}
+              </Link>{' '}
+              — that invoice is the current version of this bill.
+            </div>
+          )}
+          {supersedes && (
+            <div className="mb-3 rounded-md border-l-4 border-[var(--teal)] bg-[var(--teal-light)] p-3 text-xs text-[var(--ink)]">
+              Amendment to{' '}
+              <Link
+                to="/invoices/$invoiceId/print"
+                params={{ invoiceId: supersedes.id }}
+                search={{ from: backTo }}
+                className="font-medium underline"
+              >
+                {supersedes.invoiceNo}
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {amending && (
+        <AmendInvoiceDialog
+          clinicId={clinic.id}
+          invoice={invoice}
+          onClose={() => setAmending(false)}
+          returnTo={backTo ?? '/ledger'}
+        />
+      )}
+
+      <div
+        className={`mx-auto max-w-3xl bg-[var(--surface)] p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm]' : 'print:max-w-[178mm]'}`}
+      >
         {/* Letterhead */}
         <header className="flex items-start justify-between border-b border-[var(--border)] pb-4">
-          <div className="flex items-center gap-3">
-            {logoUrl && <img src={logoUrl} alt="" className="h-14 w-auto object-contain" />}
-            <div>
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {logoUrl && <img src={logoUrl} alt="" className="h-14 w-auto shrink-0 object-contain" />}
+            <div className="min-w-0">
               <h1 className="font-display text-xl font-bold text-[var(--ink)]">{clinic.name}</h1>
-              {clinic.address && <p className="text-xs text-[var(--muted)]">{clinic.address}</p>}
+              {clinic.address && (
+                <p className="whitespace-pre-line break-words text-xs text-[var(--muted)]">{clinic.address}</p>
+              )}
               <p className="text-xs text-[var(--muted)]">
                 {[clinic.phone, clinic.email].filter(Boolean).join(' · ')}
               </p>
@@ -99,7 +160,7 @@ export function InvoicePrintPage() {
             </div>
           </div>
           {clinic.partnerHospitalName && (
-            <div className="flex items-center gap-2 text-right">
+            <div className="flex shrink-0 items-center gap-2 text-right">
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">In partnership with</p>
                 <p className="text-sm font-medium text-[var(--ink)]">{clinic.partnerHospitalName}</p>

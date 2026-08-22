@@ -10,11 +10,8 @@ import { formatDateDMY } from '@/domain/fiscalYear';
 import { DUPLICATE_NAME_THRESHOLD, nameSimilarity } from '@/domain/nameSimilarity';
 import {
   effectivePricePerSession,
-  referringSourceDetailLabel,
-  REFERRING_SOURCE_LABELS,
   type Patient,
   type PaymentMethod,
-  type ReferringSource,
   type UUID,
 } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -28,11 +25,12 @@ import {
   SectionCard,
   Pill,
   PackageThread,
+  MultiToggle,
 } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { PAYMENT_CHIP } from '@/components/VisitCard';
-import { computeVisitPaymentState } from '@/domain/paymentState';
+import { computeVisitPaymentState, isPackageContinuation, paymentStatusPhrase } from '@/domain/paymentState';
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
 
 /** Digits only, so "98765 43210" and "+91-98765-43210" compare equal. */
@@ -114,6 +112,18 @@ export function NewVisitPage() {
     prefillName?: string;
   };
 
+  // "Done"/"Cancel" used to always land on Workspace, even when this page
+  // was opened from a patient's own profile (via its "New visit" button,
+  // which passes patientId) — leaving that patient behind instead of
+  // returning to them.
+  function goBack() {
+    if (search.patientId) {
+      void navigate({ to: '/patients/$patientId', params: { patientId: search.patientId } });
+    } else {
+      void navigate({ to: '/workspace' });
+    }
+  }
+
   // Patient selection — a small state machine: searching (default) → either
   // creating (no existing patient matched) or confirmed (patient is set).
   // Only one of these three views renders at a time, so the create-patient
@@ -129,9 +139,10 @@ export function NewVisitPage() {
     sex: '',
     phone: '',
     primaryCondition: '',
-    referringSource: '' as ReferringSource | '',
+    referringSourceId: '',
     referringSourceDetail: '',
   });
+  const referringSources = useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id), [clinic.id]) ?? [];
 
   // Visit fields
   const today = new Date().toISOString().slice(0, 10);
@@ -144,6 +155,7 @@ export function NewVisitPage() {
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [condition, setCondition] = useState('');
   const [notes, setNotes] = useState('');
+  const [treatmentIds, setTreatmentIds] = useState<string[]>([]);
   const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending'>('paid');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [pendingNote, setPendingNote] = useState('');
@@ -162,6 +174,7 @@ export function NewVisitPage() {
     [therapists, session?.user?.id]
   );
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
+  const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id), [clinic.id]) ?? [];
   const matches = useLiveQuery(
     () => (patient ? Promise.resolve([]) : repos.patients.search(clinic.id, query)),
     [clinic.id, query, patient]
@@ -407,7 +420,7 @@ export function NewVisitPage() {
         sex: (newPatient.sex || null) as Patient['sex'],
         phone: newPatient.phone || null,
         primaryCondition: newPatient.primaryCondition || null,
-        referringSource: newPatient.referringSource || null,
+        referringSourceId: newPatient.referringSourceId || null,
         referringSourceDetail: newPatient.referringSourceDetail || null,
       });
       setPatient(created);
@@ -434,6 +447,7 @@ export function NewVisitPage() {
         serviceCatalogId: mode === 'continuation' ? selectedPackage!.serviceCatalogId : serviceCatalogId,
         condition,
         treatmentNotes: notes,
+        treatmentIds,
         actualBillPaise: billOverride ?? undefined,
         adjustmentReason,
         ...(mode === 'continuation'
@@ -493,7 +507,7 @@ export function NewVisitPage() {
             >
               Another visit for {justSaved.patientName}
             </button>
-            <button className={btnSecondary} onClick={() => void navigate({ to: '/workspace' })}>
+            <button className={btnSecondary} onClick={goBack}>
               Done
             </button>
           </div>
@@ -541,12 +555,16 @@ export function NewVisitPage() {
                     lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
                   );
                   const chip = PAYMENT_CHIP[state];
+                  const statusLabel = paymentStatusPhrase(
+                    state,
+                    isPackageContinuation(lastVisit.sessionIndex, lastVisit.packageTotal)
+                  );
                   return (
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span>
                         {formatDateDMY(lastVisit.visitDate)} — {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
                       </span>
-                      <Pill tone={chip.tone}>{chip.label}</Pill>
+                      <Pill tone={chip.tone}>{statusLabel}</Pill>
                     </div>
                   );
                 })()
@@ -668,27 +686,25 @@ export function NewVisitPage() {
               <Field label="Referring source">
                 <select
                   className={inputCls}
-                  value={newPatient.referringSource}
+                  value={newPatient.referringSourceId}
                   onChange={(e) =>
                     setNewPatient({
                       ...newPatient,
-                      referringSource: e.target.value as ReferringSource | '',
+                      referringSourceId: e.target.value,
                       referringSourceDetail: '',
                     })
                   }
                 >
                   <option value="">—</option>
-                  {(Object.entries(REFERRING_SOURCE_LABELS) as [ReferringSource, string][]).map(
-                    ([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    )
-                  )}
+                  {referringSources.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
                 </select>
               </Field>
-              {referringSourceDetailLabel(newPatient.referringSource) && (
-                <Field label={referringSourceDetailLabel(newPatient.referringSource)!}>
+              {referringSources.find((s) => s.id === newPatient.referringSourceId)?.detailLabel && (
+                <Field label={referringSources.find((s) => s.id === newPatient.referringSourceId)!.detailLabel!}>
                   <input
                     className={inputCls}
                     value={newPatient.referringSourceDetail}
@@ -859,13 +875,22 @@ export function NewVisitPage() {
               onChange={(e) => setCondition(e.target.value)}
             />
           </Field>
-          <Field label="Treatment notes">
-            <input
-              className={inputCls}
-              placeholder='e.g. "FM An/Re S,S", "CST Sph Dysfunction"'
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
+          <Field label="Treatments">
+            <div className="space-y-2">
+              {treatments.length > 0 && (
+                <MultiToggle
+                  options={treatments.map((t) => ({ value: t.id, label: t.name }))}
+                  value={treatmentIds}
+                  onChange={setTreatmentIds}
+                />
+              )}
+              <input
+                className={inputCls}
+                placeholder="Add something not in the list above…"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
           </Field>
         </div>
       </SectionCard>
@@ -951,7 +976,7 @@ export function NewVisitPage() {
         <button className={btnPrimary} disabled={busy} onClick={() => void save()}>
           {busy ? 'Saving…' : 'Save visit'}
         </button>
-        <button className={btnSecondary} onClick={() => void navigate({ to: '/workspace' })}>
+        <button className={btnSecondary} onClick={goBack}>
           Cancel
         </button>
       </div>

@@ -1,4 +1,4 @@
-import { REFERRING_SOURCE_LABELS, type UUID, type Visit } from '@/domain/types';
+import { REFERRING_SOURCE_LABELS, referringSourceDetailLabel, type UUID, type Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { currentWeekRange, monthDateRange, type FyMonth } from '@/domain/fiscalYear';
 import { daysSince, groupOpenPackages, isStale, STALE_PACKAGE_DAYS } from '@/domain/packageTracking';
@@ -105,6 +105,8 @@ export interface ReferralSourceStat {
   count: number;
   revenuePaise: Paise;
   avgRevenuePaise: Paise;
+  /** Detail-field label for this source (e.g. "Referring doctor"), or null if it needs none. */
+  detailLabel: string | null;
   patients: ReferralSourcePatientRow[];
 }
 
@@ -158,6 +160,7 @@ export interface TodayVisitRow {
   therapistName: string;
   serviceName: string;
   treatmentNotes: string | null;
+  treatmentIds: UUID[];
   sessionIndex: number | null;
   packageTotal: number | null;
   packageGroupId: UUID | null;
@@ -541,6 +544,7 @@ export function createDashboardService(repos: Repos) {
             sessionIndex: v.sessionIndex,
             packageTotal: v.packageTotal,
             treatmentNotes: v.treatmentNotes,
+            treatmentIds: v.treatmentIds ?? [],
             billPaise: v.actualBillPaise,
             hasInvoice: Boolean(v.invoiceId),
             invoiceId: v.invoiceId,
@@ -604,6 +608,7 @@ export function createDashboardService(repos: Repos) {
             sessionIndex: v.sessionIndex,
             packageTotal: v.packageTotal,
             treatmentNotes: v.treatmentNotes,
+            treatmentIds: v.treatmentIds ?? [],
             billPaise: v.actualBillPaise,
             hasInvoice: Boolean(v.invoiceId),
             invoiceId: v.invoiceId,
@@ -734,6 +739,7 @@ export function createDashboardService(repos: Repos) {
             therapistName: therapistNameById.get(v.therapistId) ?? '—',
             serviceName: serviceNameById.get(v.serviceCatalogId) ?? '—',
             treatmentNotes: v.treatmentNotes,
+            treatmentIds: v.treatmentIds ?? [],
             sessionIndex: v.sessionIndex,
             packageTotal: v.packageTotal,
             packageGroupId: v.packageGroupId,
@@ -768,7 +774,13 @@ export function createDashboardService(repos: Repos) {
      */
     async monthlyNewCounts(clinicId: UUID, asOf = new Date(), therapistId?: UUID): Promise<MonthlyNewCounts> {
       const visits = await repos.visits.list({ clinicId, therapistId });
-      const monthStart = `${asOf.getFullYear()}-${String(asOf.getMonth() + 1).padStart(2, '0')}-01`;
+      // Bounded both ends — an unbounded `>= monthStart` check (the old bug)
+      // silently turns "new last month" into "new since last month started,"
+      // double-counting anything new this month too.
+      const { from: monthStart, to: monthEnd } = monthDateRange({
+        year: asOf.getFullYear(),
+        month: asOf.getMonth() + 1,
+      });
 
       const packageGroups = new Map<UUID, Visit[]>();
       for (const v of visits) {
@@ -779,13 +791,13 @@ export function createDashboardService(repos: Repos) {
       let newPackages = 0;
       for (const group of packageGroups.values()) {
         const earliest = group.map((v) => v.visitDate).sort()[0];
-        if (earliest >= monthStart) newPackages++;
+        if (earliest >= monthStart && earliest <= monthEnd) newPackages++;
       }
 
       let newPatients = 0;
       for (const patientVisits of groupByPatient(visits).values()) {
         const earliest = patientVisits.map((v) => v.visitDate).sort()[0];
-        if (earliest >= monthStart) newPatients++;
+        if (earliest >= monthStart && earliest <= monthEnd) newPatients++;
       }
 
       return { newPackages, newPatients };
@@ -804,13 +816,29 @@ export function createDashboardService(repos: Repos) {
       const visits = await repos.visits.list({ clinicId });
       const patients = await repos.patients.list(clinicId);
       const patientById = new Map(patients.map((p) => [p.id, p]));
+      const sources = await repos.referringSourceCatalog.list(clinicId, true);
+      const sourceById = new Map(sources.map((s) => [s.id, s]));
 
-      const bySource = new Map<string, { count: number; revenuePaise: number; patients: Map<UUID, ReferralSourcePatientRow> }>();
+      const bySource = new Map<
+        string,
+        { count: number; revenuePaise: number; detailLabel: string | null; patients: Map<UUID, ReferralSourcePatientRow> }
+      >();
       for (const v of visits) {
         const patient = patientById.get(v.patientId);
-        const source = patient?.referringSource ?? null;
-        const sourceLabel = source ? REFERRING_SOURCE_LABELS[source] : 'Unknown';
-        const entry = bySource.get(sourceLabel) ?? { count: 0, revenuePaise: 0, patients: new Map() };
+        // referringSourceId is the source of truth for patients created after the
+        // catalog existed; older patients fall back to the legacy fixed-enum label.
+        const catalogSource = patient?.referringSourceId ? sourceById.get(patient.referringSourceId) : undefined;
+        const sourceLabel = catalogSource
+          ? catalogSource.name
+          : patient?.referringSource
+            ? REFERRING_SOURCE_LABELS[patient.referringSource]
+            : 'Unknown';
+        const detailLabel = catalogSource
+          ? catalogSource.detailLabel
+          : patient?.referringSource
+            ? referringSourceDetailLabel(patient.referringSource)
+            : null;
+        const entry = bySource.get(sourceLabel) ?? { count: 0, revenuePaise: 0, detailLabel, patients: new Map() };
         entry.count += 1;
         entry.revenuePaise += v.actualBillPaise;
         const patientRow = entry.patients.get(v.patientId) ?? {
@@ -828,11 +856,12 @@ export function createDashboardService(repos: Repos) {
       }
 
       return Array.from(bySource.entries())
-        .map(([source, { count, revenuePaise, patients: patientRows }]) => ({
+        .map(([source, { count, revenuePaise, detailLabel, patients: patientRows }]) => ({
           source,
           count,
           revenuePaise: revenuePaise as Paise,
           avgRevenuePaise: Math.round(revenuePaise / count) as Paise,
+          detailLabel,
           patients: [...patientRows.values()].sort((a, b) => b.revenuePaise - a.revenuePaise),
         }))
         .sort((a, b) => b.count - a.count);

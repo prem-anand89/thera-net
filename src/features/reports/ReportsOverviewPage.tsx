@@ -7,7 +7,7 @@ import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import { monthName, formatDateDMY, fiscalYearOf, monthsOfFiscalYear, type FyMonth } from '@/domain/fiscalYear';
-import { clinicBillingConfig, clinicShareLabels, referringSourceDetailLabel, type NoReturnReasonItem } from '@/domain/types';
+import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
 import { SectionCard, StatTile, Pill, th, td, tdNum, thNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
@@ -49,11 +49,15 @@ function KpiCard({
   value,
   trendPct,
   trendLabel,
+  lastMonthValue,
 }: {
   label: string;
   value: ReactNode;
   trendPct?: number | null;
   trendLabel?: string;
+  /** The prior month's raw value, e.g. "₹38,200" — the ▲/▼ badge alone
+   *  never showed what it was a percentage OF. */
+  lastMonthValue?: ReactNode;
 }) {
   return (
     <div className="min-w-[140px] flex-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-sm">
@@ -69,7 +73,13 @@ function KpiCard({
           </span>
         )}
       </div>
-      {trendLabel && <div className="mt-0.5 text-[11px] text-[var(--muted)]">{trendLabel}</div>}
+      {(trendLabel || lastMonthValue != null) && (
+        <div className="mt-0.5 text-[11px] text-[var(--muted)]">
+          {trendLabel}
+          {trendLabel && lastMonthValue != null && ' · '}
+          {lastMonthValue != null && <>Last month: {lastMonthValue}</>}
+        </div>
+      )}
     </div>
   );
 }
@@ -83,7 +93,6 @@ const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> =
   adjustmentPaise: 0,
   sharedPaise: 0,
   netPostTaxPaise: 0,
-  attributedRevenuePaise: 0,
   visitCount: 0,
   uniquePatients: 0,
 };
@@ -189,6 +198,15 @@ export function ReportsOverviewPage() {
     () => dashboardService.monthlyNewCounts(clinic.id, prevMonthDate, scope.scopeTherapistId),
     [clinic.id, prevMonthDate.getFullYear(), prevMonthDate.getMonth(), scope.scopeTherapistId]
   );
+  const repeatVisitsLastMonth = useLiveQuery(
+    () =>
+      dashboardService.repeatVisits(
+        clinic.id,
+        { year: prevMonthDate.getFullYear(), month: prevMonthDate.getMonth() + 1 },
+        scope.scopeTherapistId
+      ),
+    [clinic.id, prevMonthDate.getFullYear(), prevMonthDate.getMonth(), scope.scopeTherapistId]
+  );
 
   const categories = useMemo(
     () => (trend ?? []).map((r) => `${monthName(r.month.month).slice(0, 3)} '${String(r.month.year).slice(2)}`),
@@ -221,13 +239,18 @@ export function ReportsOverviewPage() {
   // Clinic-wide (admin) keeps the actual post-tax/billed figure — the
   // financial number the clinic runs on, unaffected by attribution since a
   // total is invariant to how it's split across therapists. A single
-  // therapist's own figure instead uses attributedRevenuePaise: without it,
-  // "my revenue" credits 100% of a package to whoever logged its first
-  // (billed) session and 0% to a colleague who ran the rest of it.
+  // therapist's own figure instead uses netPostTaxPaise: without package
+  // attribution folded in, "my revenue" credits 100% of a package to
+  // whoever logged its first (billed) session and 0% to a colleague who
+  // ran the rest of it. netPostTaxPaise is genuinely post-tax in
+  // hospital_split mode, and equals the plain net bill in simple mode
+  // (postTaxPaise === actualBillPaise there) — so revenueLabel's
+  // "Post-Tax {own}" / "Revenue" split above already describes it
+  // accurately in both modes.
   const revenueRow = (report: MonthlyReport | undefined) => {
     if (!report) return null;
     if (scope.isClinicWideView) return hospitalSplit ? report.total.postTaxPaise : report.total.billPaise;
-    return myMonthRow(report.rows).attributedRevenuePaise;
+    return myMonthRow(report.rows).netPostTaxPaise;
   };
   const revenueThisMonth = trend ? revenueRow(trend[trend.length - 1]) : null;
   const revenueLastMonth = trend && trend.length > 1 ? revenueRow(trend[trend.length - 2]) : null;
@@ -287,8 +310,7 @@ export function ReportsOverviewPage() {
   const [referralSelectedIdx, setReferralSelectedIdx] = useState<number | null>(null);
   const referralActiveIdx = referralSelectedIdx ?? 0;
   const referralActive = referralSources?.[referralActiveIdx];
-  const referralNeedsDetail =
-    referralActive?.source === 'Hospital referral' || referralActive?.source === 'Doctor referral';
+  const referralNeedsDetail = referralActive?.detailLabel != null;
   const referralDetailGroups = useMemo(() => {
     if (!referralActive || !referralNeedsDetail) return [];
     const byDetail = new Map<string, { patients: number; visits: number; revenuePaise: number }>();
@@ -377,6 +399,7 @@ export function ReportsOverviewPage() {
           value={revenueThisMonth != null ? formatINR(revenueThisMonth) : '—'}
           trendPct={revenueThisMonth != null && revenueLastMonth != null ? pctChange(revenueThisMonth, revenueLastMonth) : null}
           trendLabel="vs last month"
+          lastMonthValue={revenueLastMonth != null ? formatINR(revenueLastMonth) : undefined}
         />
         <KpiCard
           label="Avg charge/session"
@@ -386,11 +409,17 @@ export function ReportsOverviewPage() {
         <KpiCard
           label={scope.isClinicWideView ? 'Repeat visits (30d)' : 'My repeat visits (30d)'}
           value={repeatVisitsThisMonth?.ratePct != null ? `${repeatVisitsThisMonth.ratePct}%` : '—'}
+          trendPct={
+            repeatVisitsThisMonth?.ratePct != null && repeatVisitsLastMonth?.ratePct != null
+              ? pctChange(repeatVisitsThisMonth.ratePct, repeatVisitsLastMonth.ratePct)
+              : null
+          }
           trendLabel={
             repeatVisitsThisMonth
               ? `${repeatVisitsThisMonth.repeatCount} of ${repeatVisitsThisMonth.totalVisits} visits`
               : undefined
           }
+          lastMonthValue={repeatVisitsLastMonth?.ratePct != null ? `${repeatVisitsLastMonth.ratePct}%` : undefined}
         />
         <KpiCard
           label={scope.isClinicWideView ? 'New patients' : 'My new patients'}
@@ -401,10 +430,12 @@ export function ReportsOverviewPage() {
               : null
           }
           trendLabel="vs last month"
+          lastMonthValue={newPatientsLastMonth ? newPatientsLastMonth.newPatients : undefined}
         />
         <KpiCard
           label={scope.isClinicWideView ? 'Packages this month' : 'My packages this month'}
           value={newPatientsThisMonth?.newPackages ?? '—'}
+          lastMonthValue={newPatientsLastMonth ? newPatientsLastMonth.newPackages : undefined}
         />
       </div>
 
@@ -642,7 +673,7 @@ export function ReportsOverviewPage() {
                     barValues={
                       scope.isClinicWideView
                         ? trend.map((r) => (hospitalSplit ? r.total.postTaxPaise : r.total.billPaise))
-                        : trend.map((r) => myMonthRow(r.rows).attributedRevenuePaise)
+                        : trend.map((r) => myMonthRow(r.rows).netPostTaxPaise)
                     }
                     lineLabel="Visits"
                     lineColor={SERIES_COLORS[1]}
@@ -693,7 +724,7 @@ export function ReportsOverviewPage() {
                 <p className="py-6 text-center text-sm text-[var(--muted)]">No visits logged yet this month.</p>
               ) : (
                 <ul className="space-y-2">
-                  {serviceUsage.slice(0, 8).map((s) => (
+                  {serviceUsage.slice(0, 5).map((s) => (
                     <li key={s.serviceId} className="flex items-center justify-between gap-3 text-sm">
                       <span className="text-[var(--ink)]">{s.serviceName}</span>
                       <span className="flex items-center gap-3">
@@ -830,9 +861,7 @@ export function ReportsOverviewPage() {
                           <>
                             <thead className="bg-[var(--paper)]">
                               <tr>
-                                <th className={th}>{referringSourceDetailLabel(
-                                  referralActive.source === 'Doctor referral' ? 'doctor_referral' : 'hospital_referral'
-                                ) ?? 'Name'}</th>
+                                <th className={th}>{referralActive.detailLabel ?? 'Name'}</th>
                                 <th className={thNum}>Patients</th>
                                 <th className={thNum}>Visits</th>
                                 <th className={thNum}>Revenue</th>

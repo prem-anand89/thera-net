@@ -1,5 +1,4 @@
-import type { Patient, MrnoSource, ReferringSource, UUID } from '@/domain/types';
-import { coerceReferringSource } from '@/domain/types';
+import type { Patient, MrnoSource, UUID } from '@/domain/types';
 import type { Repos } from '@/repositories/types';
 import { getSupabase } from '@/lib/supabase';
 
@@ -11,7 +10,7 @@ export interface NewPatientInput {
   sex?: 'M' | 'F' | 'Other' | null;
   phone?: string | null;
   primaryCondition?: string | null;
-  referringSource?: ReferringSource | null;
+  referringSourceId?: UUID | null;
   referringSourceDetail?: string | null;
 }
 
@@ -22,7 +21,7 @@ export interface UpdatePatientInput {
   sex?: 'M' | 'F' | 'Other' | null;
   phone?: string | null;
   primaryCondition?: string | null;
-  referringSource?: ReferringSource | null;
+  referringSourceId?: UUID | null;
   referringSourceDetail?: string | null;
 }
 
@@ -92,7 +91,7 @@ export function createPatientService(repos: Repos) {
         sex: input.sex ?? null,
         phone: input.phone?.trim() || null,
         primaryCondition: input.primaryCondition?.trim() || null,
-        referringSource: coerceReferringSource(input.referringSource) ?? null,
+        referringSourceId: input.referringSourceId ?? null,
         referringSourceDetail: input.referringSourceDetail?.trim() || null,
         deletedAt: null,
         updatedAt: new Date().toISOString(),
@@ -136,10 +135,8 @@ export function createPatientService(repos: Repos) {
           patch.primaryCondition !== undefined
             ? patch.primaryCondition?.trim() || null
             : patient.primaryCondition,
-        referringSource:
-          patch.referringSource !== undefined
-            ? coerceReferringSource(patch.referringSource)
-            : coerceReferringSource(patient.referringSource),
+        referringSourceId:
+          patch.referringSourceId !== undefined ? patch.referringSourceId : patient.referringSourceId,
         referringSourceDetail:
           patch.referringSourceDetail !== undefined
             ? patch.referringSourceDetail?.trim() || null

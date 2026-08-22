@@ -8,9 +8,14 @@ import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService'
  *
  * `hospitalSplit` (default on) shows the clinic-share / TDS / Post-Tax /
  * partner-share columns; a simple clinic turns it off and sees just billed
- * totals. `showShared` adds the internal therapist-split columns (Shared/Net);
- * the hospital-facing PDF leaves it off so that document stays purely about
- * billed figures the hospital reconciles.
+ * totals. `Net` (Post-Tax BM adjusted for same-visit Shared/Split splits AND
+ * automatic package-session attribution — see TherapistMonthRow.netPostTaxPaise)
+ * always shows, on both the Reports page and the hospital-facing PDF, since
+ * it's the one number that answers "how much did this therapist actually
+ * generate" regardless of billing quirks. `showShared` additionally reveals
+ * the raw internal-split mechanics (the Shared column) — off by default on
+ * the hospital PDF, which otherwise stays purely about billed figures the
+ * hospital reconciles.
  */
 export function MonthlyReportTable({
   report,
@@ -28,13 +33,12 @@ export function MonthlyReportTable({
   const cells = (r: TherapistMonthRow) => (
     <>
       <td className={tdNum}>{formatINR(r.billPaise)}</td>
-      <td className={tdNum}>{formatINR(r.attributedRevenuePaise)}</td>
       {hospitalSplit && <td className={tdNum}>{formatINR(r.bmSharePaise)}</td>}
       {hospitalSplit && <td className={tdNum}>{formatINR(r.tdsPaise)}</td>}
       {hospitalSplit && <td className={tdNum}>{formatINR(r.postTaxPaise)}</td>}
       {hospitalSplit && <td className={tdNum}>{formatINR(r.hvPaise)}</td>}
       {showShared && <td className={tdNum}>{r.sharedPaise !== 0 ? formatINR(r.sharedPaise) : '—'}</td>}
-      {showShared && <td className={tdNum}>{formatINR(r.netPostTaxPaise)}</td>}
+      <td className={tdNum}>{formatINR(r.netPostTaxPaise)}</td>
       <td className={tdNum}>{r.visitCount}</td>
       <td className={tdNum}>{r.uniquePatients}</td>
     </>
@@ -46,10 +50,6 @@ export function MonthlyReportTable({
         <tr>
           <th className={`${th} sticky left-0 z-[1] bg-[var(--paper)]`}>Therapist</th>
           <th className={thNum}>Bill Amount</th>
-          <th className={thNum}>
-            Revenue Generated
-            <InfoTip text="Gross revenue credited to whoever actually delivered each session — a multi-session package's total is split evenly across the therapists who ran its sessions, instead of all going to whoever it was billed under. Independent of Shared/Net (the manual same-visit override) and of the Clinic/Partner split below." />
-          </th>
           {hospitalSplit && (
             <th className={thNum}>
               {own} Share
@@ -80,12 +80,10 @@ export function MonthlyReportTable({
               <InfoTip text="Money moved between therapists on split visits — negative for who gave it up, positive for who received it. Always nets to zero." />
             </th>
           )}
-          {showShared && (
-            <th className={thNum}>
-              Net
-              <InfoTip text={`Post Tax ${own}, adjusted for that therapist's splits — their real take-home figure.`} />
-            </th>
-          )}
+          <th className={thNum}>
+            Net
+            <InfoTip text={`Post Tax ${own}, adjusted for same-visit splits and for a multi-session package's total spread evenly across the therapists who ran its sessions — the real figure for "how much did this therapist generate," not just whoever it was billed under.`} />
+          </th>
           <th className={thNum}>Visits</th>
           <th className={thNum}>Patients</th>
         </tr>

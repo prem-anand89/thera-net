@@ -31,7 +31,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 
 #### Today-First Workspace
 - **Default landing page** showing:
-  - Today's visits with payment state at a glance (Paid / Collect ₹X / ₹0 session) — boxed cards on phone, a table on tablet/desktop
+  - Today's visits with payment state at a glance (Paid / Collect ₹X / Package / No charge) — boxed cards on phone, a table on tablet/desktop
   - Packages panel — Open/Stale/All status filter, plus a "Mine only" checkbox for anyone with a linked therapist record (admin included)
 - **Stat strip** — Collected today, new patients this month, and either "My open packages" (linked therapist) or "Packages this month" (clinic-wide)
 - **Quick actions** — take payment / issue invoice / split revenue / delete directly from each visit row's kebab menu; "Log visit" from a Packages row resumes the right package
@@ -124,6 +124,17 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Three-fact payment model**: Billed / Collected / Receipted
   - Distinguishes cash collected without receipt from issued-but-unpaid invoice
   - Neither reads as the other
+- **Zero-bill visits are labeled by why, not just that**: `zero_session`
+  (bill = ₹0) covers two situations staff read very differently — a
+  **package continuation** (session already billed on an earlier visit
+  in the same package, `sessionIndex`/`packageTotal` both set — labeled
+  "Package"/"package session") vs. a **standalone complimentary visit**
+  (never meant to be charged, no package involved — labeled
+  "No charge"/"complimentary session"). Both share one `VisitPaymentState`
+  (nothing to collect or invoice either way); only the label differs,
+  computed per-row from session/package fields via
+  `isPackageContinuation()` (`src/domain/paymentState.ts`) rather than
+  stored on the state itself.
 - **Quick "Mark paid"** action from Workspace pending feed
 - **Monthly report** shows HV settlement card for variance tracking
 
@@ -172,6 +183,9 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Shows side-by-side**: revenue and visit-count per therapist
 - **Visible to therapists too**, not just admins — deliberate exception to "financial aggregates are admin-only"
 - **3 key metrics** per therapist
+- **6-month trend charts** need at least 2 months of history to render (otherwise read as a false spike);
+  below them, a **live "this month" table** (revenue, visits, open packages per therapist) always shows
+  as soon as there's at least one visit this month — not gated behind the trend's own history requirement
 
 #### Analytics Capabilities
 - Condition pie chart (grouped raw text)
@@ -208,6 +222,9 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Editable fields**: age, sex, phone, primary condition, referring source
 - Phone is searchable everywhere but only *displayed* on the Patient Profile
   page — dropped from the Patients list/card to save space there
+- **Patients list period filter** — FY picker + a second dropdown: Full FY
+  (default), Year to date, a specific month, or Custom range (From/To date
+  inputs, same pattern as Ledger's custom date range)
 
 #### Patient Profile
 - **Visit history** — responsive table (tab-and-up widths) / card list
@@ -424,7 +441,11 @@ sex                   text (NULLABLE) — 'M' | 'F' | 'Other'
 phone                 text (NULLABLE) — searchable everywhere, but only
                        *displayed* on Patient Profile, not the Patients list
 primary_condition     text (NULLABLE)
-referring_source      text (NULLABLE)
+referring_source      text (NULLABLE) — legacy fixed enum, kept only so
+                       patients tagged before referring_source_catalog
+                       existed keep displaying correctly; no longer written
+referring_source_id   uuid (FOREIGN KEY → referring_source_catalog.id, NULLABLE)
+                       — current source of truth for new/edited patients
 referring_source_detail text (NULLABLE)
 no_return_reason_id   uuid (FOREIGN KEY → no_return_reason_catalog.id, NULLABLE)
 deleted_at            timestamptz (NULLABLE) — soft delete
@@ -440,6 +461,8 @@ patient_id            uuid NOT NULL (FOREIGN KEY → patients.id)
 therapist_id          uuid NOT NULL (FOREIGN KEY → therapists.id)
 visit_date            date NOT NULL
 condition, treatment_notes  text (NULLABLE)
+treatment_ids         uuid[] NOT NULL (default '{}') — which treatment_catalog
+                       entries were performed this visit
 service_catalog_id    uuid NOT NULL (FOREIGN KEY → service_catalog.id)
 catalog_price_paise   bigint NOT NULL — snapshot at billing time
 actual_bill_paise     bigint NOT NULL
@@ -662,6 +685,70 @@ active          boolean NOT NULL (default true)
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 ```
+Every clinic gets an 8-item starter set (Moved away / relocated, Discomfort
+with treatment, Cost / could not afford, Recovered — no longer needed care,
+Switched to another provider, Lost contact / unreachable, Scheduling
+conflict, Referred elsewhere) — seeded by `create_clinic_with_admin()` for
+new clinics and by a one-time backfill migration for existing ones. Fully
+editable afterward from Reports' "Manage reasons" panel (add / deactivate /
+mark "counts as closed"); the starter rows aren't locked, just pre-filled.
+
+#### `referring_source_catalog`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+name            text NOT NULL
+detail_label    text (NULLABLE) — label for the follow-up detail field this
+                source needs (e.g. "Referring doctor"), null if it needs none
+active          boolean NOT NULL (default true)
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+UNIQUE (clinic_id, name)
+```
+Clinic-editable list of referral channels shown when adding/editing a
+patient (Settings → Referral sources, its own tab), same add / deactivate-not-delete / rename
+pattern as `no_return_reason_catalog`. Seeded with the app's original six
+labels (Hospital referral, Doctor referral, Walk-in, Word of mouth, Online,
+Other) for every clinic — new via `create_clinic_with_admin()`, existing via
+a backfill migration. `patients.referring_source_id` is the source of truth
+for patients tagged after this catalog existed; the legacy
+`patients.referring_source` enum column is kept (not backfilled) so older
+patients keep displaying via the old `REFERRING_SOURCE_LABELS` fallback —
+see `dashboardService.referralSourceStats` for how both are reconciled.
+
+#### `treatment_catalog`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+name            text NOT NULL
+active          boolean NOT NULL (default true)
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+UNIQUE (clinic_id, name)
+```
+Clinic-editable list of treatment types (Manual Therapy, Exercise Therapy,
+Kinesio Taping, ...), managed from Settings → Treatments, its own tab
+alongside Services and Referral sources (all three used to be stacked in
+one "Services" tab; split apart so each is its own scroll). Independent of
+the billing-side `service_catalog` — one visit is
+billed under one service package but can record several treatment types
+performed via `visits.treatment_ids`, picked from the catalog on both the
+visit-logging and edit-visit forms — plus a free-text add-on
+(`visits.treatment_notes`, the same field clinical shorthand notes always
+used) for anything not in the list, grouped under one "Treatments" field
+on both forms. Displayed as a single combined "Treatments" column/cell
+everywhere the visits table shows it (Ledger, Workspace, Patient Profile)
+— catalog names joined by commas, then the free-text add-on after a dash
+if present (`treatmentsDisplayText` in `components/VisitCard.tsx`) — not
+two separate columns. Independent of Core Assessment/clinical docs too, so
+it works for every clinic regardless of `clinicalDocsEnabled`. Patient
+Profile's Care plan card shows a per-package breakdown (e.g. "Manual
+Therapy: 4 · Exercise: 6") computed client-side from the patient's own
+visits — no separate
+aggregation query. Seeded with a 6-item starter set for every clinic.
+Also shown as a toggleable "Treatments" column/row on the Visits table
+(Ledger, Workspace, Patient Profile) — a separate `VisitColumnKey` from the
+pre-existing free-text `'treatment'` (treatmentNotes) column.
 
 #### `clinic_module_settings`, `clinic_entitlements` — dead infrastructure
 Both tables still exist (RLS enabled, no policies) but have **zero client
@@ -689,11 +776,104 @@ be resurrected — as of this writing they're inert.
 - **Immutable invoice** via DB trigger
 - **Rate changes** only affect new visits, not historical records
 
+### 2b. Reporting-Layer Attribution (`reportService.monthly`'s `netPostTaxPaise`)
+The per-visit split above answers "how was this bill divided between the
+clinic and the partner hospital" — a billing fact, never touched after the
+fact. A separate question, answered only at the reporting layer (never
+stored on the visit itself), is "how much did this THERAPIST actually
+generate" — which the raw per-visit numbers get wrong for two real cases:
+
+- **Multi-session packages**: a package's full price is billed on one
+  session's visit; every other session is logged separately at ₹0 so it
+  isn't double-billed. Naively summing `postTaxPaise` per therapist credits
+  100% of a 3-session package to whoever logged session 1, even when a
+  colleague ran the other two.
+- **Manual same-visit Shared/Split**: an admin can explicitly move a % of
+  one visit's Post-Tax BM to an assisting therapist (`visits.shared_therapist_id`/`shared_pct`, set via `visitService.setSplit`).
+
+Both are folded into ONE number, `TherapistMonthRow.netPostTaxPaise`
+(`reportService.ts`), rather than kept as parallel concepts: the base is
+each row's summed `postTaxPaise`, adjusted by (1) the manual-split delta
+(a same-visit % moved between two named therapists, always net-zero across
+the month) and (2) an automatic package-attribution delta, computed
+**per package group, as explicit deltas the biller gives away** —
+`packageAttributionDeltas()`:
+1. Find the group's **billing visit** (the one with the largest bill —
+   everything else is logged at ₹0 by convention).
+2. `perSessionShare = floor(billingVisit.postTaxPaise / packageTotal)`
+   — a fixed whole-rupee amount, computed from the package's **declared**
+   session count so it stays stable as later sessions get logged.
+3. For every *other* logged session run by a **different** therapist than
+   the biller, move one `perSessionShare` from the biller's row to
+   theirs. A session the biller ran themselves needs no delta.
+4. Whatever isn't explicitly claimed this way stays with the biller —
+   including the share reserved for sessions **not yet logged**. Earlier
+   versions of this algorithm divided evenly across only the *logged*
+   sessions, which silently dropped the un-logged share into neither
+   row (confirmed on live data as ~53% of a month's revenue missing from
+   every therapist's Net); the current version never leaves a rupee
+   unattributed.
+
+Deltas always sum to zero within a group, so `total.netPostTaxPaise`
+is untouched, and — within a single report period — `sum(rows.netPostTaxPaise)`
+always equals `total.netPostTaxPaise`. The one exception is a package
+spanning two report periods (started one month, finished the next): the
+delta only lands on a therapist's row if they already have a row this
+period (i.e., a visit of their own in it), so a biller with no visit in
+the current period gets no row from attribution alone — same reasoning
+`total` itself only reflects this period's own visits.
+
+This is the one number used everywhere a therapist's own "how much revenue
+did I generate" is shown — Trends KPI/chart, Therapist Comparison (both the
+trend and the live table), and the Monthly Statement's "Net" column (shown
+unconditionally, unlike "Shared" which stays behind the `enableTherapistSplit`
+opt-in). There is no separate "gross attributed revenue, ignoring splits"
+concept anymore — that used to be a parallel `attributedRevenuePaise` field/
+column, folded into `netPostTaxPaise` instead so there's one lens, not two.
+
 ### 3. Sequential Gap-Free Invoices
 - **Server-issued numbers** via `issue_invoice()` RPC
 - **Per-clinic per-FY counter** in `invoice_counters` table
 - **Prevents concurrent duplicates** with DB locking
 - **Online-only** to maintain gap-free guarantee
+
+### 3b. Invoice Amendments
+A TPA/insurance payer sometimes asks for a corrected bill-cum-receipt on an
+already-issued invoice (e.g. missing visit dates added). Invoices are
+immutable by design (`invoices_immutable` trigger, corrections raise "issued
+invoices are immutable; corrections require an amendment record") — so a
+correction is a brand-new invoice that **supersedes** the old one, never an
+edit to it. Both stay on record for audit; only the latest is what a payer
+should honor.
+
+- **`invoices.supersedes_invoice_id`** — a one-directional forward pointer
+  (new → old) only. The old invoice can never be updated to point at its
+  replacement without violating immutability, so "X is amended by Y" is
+  always derived by querying `where supersedes_invoice_id = X.id`, never
+  stored on X itself.
+- **`amend_invoice()` RPC** mirrors `issue_invoice()`'s membership/
+  entitlement/access checks and gets its own real, gap-free sequential
+  invoice number from the same counter — but accepts visit IDs already on
+  the invoice being amended (in addition to any newly-added, previously
+  uninvoiced visits) and stamps `supersedes_invoice_id`.
+- **`protect_invoiced_visit()` trigger bypass**: re-pointing `invoice_id`
+  on an already-invoiced visit is normally blocked unconditionally.
+  `amend_invoice()` sets a transaction-local flag
+  (`set_config('app.allow_invoice_amendment', 'true', true)`) that the
+  trigger checks specifically for that one field — every other financial-
+  field freeze on an invoiced visit stays fully enforced even during an
+  amendment, so an amendment can only add/re-point visits, never edit a
+  visit's billed amount.
+- **UI**: `InvoicePrintPage` shows a "Superseded by …" banner on an old
+  invoice and an "Amendment to …" banner on the new one, each linking to
+  the other. "Amend this invoice" opens `AmendInvoiceDialog`
+  (`src/components/AmendInvoiceDialog.tsx`), which carries the original's
+  own visits forward and lets staff pick additional uninvoiced visits for
+  the same patient before issuing.
+- **Reporting impact**: none needed — `reportService`/`dashboardService`
+  query `visits` directly, and each visit's `invoice_id` always points to
+  whichever invoice currently claims it, so reports automatically reflect
+  only the latest state.
 
 ### 4. Walk-In MRNO Auto-Generation
 - **Sequential per clinic per year**: `PREFIXYY-NNNN` (W26-0001, W26-0002)
@@ -768,7 +948,7 @@ be resurrected — as of this writing they're inert.
 
 - **Every table carries `clinic_id`** — RLS restricts all access to clinic members
 - **Patient data is health data** — no anonymous read path
-- **Issued invoices and visits frozen** by DB triggers (corrections = future amendment/credit-note feature)
+- **Issued invoices and visits frozen** by DB triggers; corrections go through the invoice-amendment feature (§3b) — a new invoice that supersedes the old one, never an edit to it
 - **Rate/tax changes apply to new visits only** — history keeps the rates it was billed under
 - **Export monthly CSVs** — this app should never be the only copy of financial records
 

@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { Patient, ReferringSource } from '@/domain/types';
-import {
-  REFERRING_SOURCE_LABELS,
-  coerceReferringSource,
-  referringSourceDetailLabel,
-} from '@/domain/types';
+import { useLiveQuery } from 'dexie-react-hooks';
+import type { Patient, ReferringSourceItem } from '@/domain/types';
+import { REFERRING_SOURCE_LABELS } from '@/domain/types';
+import { useClinic } from '@/app/clinicContext';
 import { toFriendlyMessage } from '@/lib/errors';
-import { patientService } from '@/services';
+import { patientService, repos } from '@/services';
 
 interface EditPatientModalProps {
   patient: Patient;
@@ -15,30 +13,48 @@ interface EditPatientModalProps {
   onSave?: () => void;
 }
 
+// Stable reference so useLiveQuery's transient `undefined` while loading
+// doesn't produce a fresh [] on every render and thrash the useEffect below.
+const NO_REFERRING_SOURCES: ReferringSourceItem[] = [];
+
 export function EditPatientModal({ patient, open, onClose, onSave }: EditPatientModalProps) {
+  const clinic = useClinic();
+  const referringSources =
+    useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id), [clinic.id]) ?? NO_REFERRING_SOURCES;
+
   const [formData, setFormData] = useState({
     name: patient.name,
     mrno: patient.mrno,
     age: patient.age ?? '',
     sex: patient.sex ?? '',
     phone: patient.phone ?? '',
-    referringSource: (coerceReferringSource(patient.referringSource) ?? '') as ReferringSource | '',
+    referringSourceId: patient.referringSourceId ?? '',
     referringSourceDetail: patient.referringSourceDetail ?? '',
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    // A patient saved before this catalog existed only has the legacy
+    // referringSource enum — best-effort match it to a seeded catalog entry
+    // of the same name so it still shows selected, rather than the picker
+    // reading as blank for every patient created before this change.
+    const matchedLegacyId =
+      patient.referringSourceId ??
+      (patient.referringSource
+        ? referringSources.find((s) => s.name === REFERRING_SOURCE_LABELS[patient.referringSource!])?.id
+        : undefined) ??
+      '';
     setFormData({
       name: patient.name,
       mrno: patient.mrno,
       age: patient.age ?? '',
       sex: patient.sex ?? '',
       phone: patient.phone ?? '',
-      referringSource: (coerceReferringSource(patient.referringSource) ?? '') as ReferringSource | '',
+      referringSourceId: matchedLegacyId,
       referringSourceDetail: patient.referringSourceDetail ?? '',
     });
-  }, [patient]);
+  }, [patient, referringSources]);
 
   async function handleSave() {
     setSaving(true);
@@ -50,7 +66,7 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
         age: formData.age === '' ? null : Number(formData.age),
         sex: (formData.sex as Patient['sex']) || null,
         phone: formData.phone || null,
-        referringSource: formData.referringSource || null,
+        referringSourceId: formData.referringSourceId || null,
         referringSourceDetail: formData.referringSourceDetail || null,
       });
       onSave?.();
@@ -64,7 +80,7 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
 
   if (!open) return null;
 
-  const detailLabel = referringSourceDetailLabel(formData.referringSource);
+  const detailLabel = referringSources.find((s) => s.id === formData.referringSourceId)?.detailLabel ?? null;
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -150,11 +166,11 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
           <div className="field-block">
             <label className="field-label">Referral source</label>
             <select
-              value={formData.referringSource}
+              value={formData.referringSourceId}
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  referringSource: e.target.value as ReferringSource | '',
+                  referringSourceId: e.target.value,
                   referringSourceDetail: '',
                 })
               }
@@ -163,13 +179,11 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
               aria-label="Referral source"
             >
               <option value="">—</option>
-              {(Object.entries(REFERRING_SOURCE_LABELS) as [ReferringSource, string][]).map(
-                ([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                )
-              )}
+              {referringSources.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
             </select>
           </div>
 

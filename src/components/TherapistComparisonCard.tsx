@@ -3,9 +3,10 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { formatINR } from '@/domain/money';
 import { monthName } from '@/domain/fiscalYear';
-import { SectionCard } from '@/components/ui';
+import { SectionCard, th, thNum, td, tdNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
 import { SERIES_COLORS } from '@/components/chartColors';
 
@@ -22,12 +23,14 @@ import { SERIES_COLORS } from '@/components/chartColors';
 export function TherapistComparisonCard() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
-  // Gross revenue actually attributed per therapist (package-session-aware —
-  // see reportService's attributedRevenuePaise), not the post-tax clinic
-  // share — this chart compares therapists' own output, not the clinic's
-  // take after a hospital split, so the same figure applies whether or not
-  // a partner split is configured.
-  const revenueLabel = 'Revenue generated';
+  // Post-Tax BM adjusted for same-visit splits and automatic package-session
+  // attribution (reportService's netPostTaxPaise) — genuinely post-tax for a
+  // hospital-split clinic, and equal to the plain net bill for a simple one
+  // (postTaxPaise === actualBillPaise there), so the same mode-aware label
+  // ReportsOverviewPage's KPI strip uses applies here too.
+  const { hospitalSplit } = clinicBillingConfig(clinic);
+  const labels = clinicShareLabels(clinic);
+  const revenueLabel = hospitalSplit ? `Post-Tax ${labels.own}` : 'Revenue generated';
 
   const trend = useLiveQuery(
     () => (clinic.showTherapistComparison && !scope.isFrontDesk ? dashboardService.revenueTrend(clinic.id) : undefined),
@@ -70,13 +73,19 @@ export function TherapistComparisonCard() {
     openPackageCountByName.set(name, (openPackageCountByName.get(name) ?? 0) + 1);
   }
 
+  // trend's last entry is always the current calendar month, and useLiveQuery
+  // re-runs it the moment a visit is logged — so this table stays real-time
+  // even while the charts above it are gated behind two months of history.
+  const currentMonthRow = trend?.[trend.length - 1];
+
   if (!clinic.showTherapistComparison || scope.isFrontDesk) return null;
 
   return (
     <SectionCard title="Therapist comparison">
       {trend && !hasEnoughTrendHistory && (
-        <p className="py-8 text-center text-sm text-[var(--muted)]">
-          Not enough data yet — a comparison needs at least two months of visits to be meaningful.
+        <p className="py-4 text-center text-sm text-[var(--muted)]">
+          Trend charts need at least two months of visits to be meaningful — the table below already
+          reflects this month.
         </p>
       )}
       {trend && hasEnoughTrendHistory && therapistNames.length > 0 && (
@@ -92,7 +101,7 @@ export function TherapistComparisonCard() {
                 color: SERIES_COLORS[i],
                 values: trend.map((r) => {
                   const row = r.rows.find((row) => row.therapistName === name);
-                  return row?.attributedRevenuePaise ?? 0;
+                  return row?.netPostTaxPaise ?? 0;
                 }),
               }))}
               formatValue={formatINR}
@@ -129,6 +138,40 @@ export function TherapistComparisonCard() {
       )}
       {trend && hasEnoughTrendHistory && therapistNames.length === 0 && (
         <p className="text-sm text-[var(--muted)]">No visits in the last 6 months.</p>
+      )}
+      {trend && therapistNames.length > 0 && (
+        <div className={hasEnoughTrendHistory ? 'mt-6' : ''}>
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+            This month — live
+          </h3>
+          <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+            <table className="min-w-full divide-y divide-[var(--border)]">
+              <thead className="bg-[var(--paper)]">
+                <tr>
+                  <th className={th}>Therapist</th>
+                  <th className={thNum}>Bill Amount</th>
+                  <th className={thNum}>Net</th>
+                  <th className={thNum}>Visits</th>
+                  <th className={thNum}>Open packages</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {therapistNames.map((name) => {
+                  const row = currentMonthRow?.rows.find((r) => r.therapistName === name);
+                  return (
+                    <tr key={name}>
+                      <td className={td}>{name}</td>
+                      <td className={tdNum}>{formatINR(row?.billPaise ?? 0)}</td>
+                      <td className={tdNum}>{formatINR(row?.netPostTaxPaise ?? 0)}</td>
+                      <td className={tdNum}>{row?.visitCount ?? 0}</td>
+                      <td className={tdNum}>{openPackageCountByName.get(name) ?? 0}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </SectionCard>
   );

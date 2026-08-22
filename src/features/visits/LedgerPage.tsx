@@ -8,7 +8,7 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
-import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
+import { formatDateDMY, formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import {
@@ -52,7 +52,11 @@ const DATE_PRESETS: { key: DatePreset; label: string }[] = [
   { key: 'all', label: 'All time' },
   { key: 'custom', label: 'Custom' },
 ];
-const toIsoDate = (d: Date) => d.toISOString().slice(0, 10);
+// Local Y/M/D components, not toISOString() — that converts to UTC first,
+// which puts "today" a day behind for roughly the first ~5.5 hours of the
+// local day for an India-based clinic (UTC+5:30).
+const toIsoDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 function visitToCardData(
   v: Visit,
@@ -60,6 +64,7 @@ function visitToCardData(
   therapistName: Map<UUID, string>,
   therapistNameByUserId: Map<string, string>,
   serviceName: Map<UUID, string>,
+  treatmentName: Map<UUID, string>,
   syncErrorByVisitId: Map<UUID, string>,
   openPackageGroupIds: Set<UUID>,
   therapistSplit: boolean,
@@ -99,6 +104,7 @@ function visitToCardData(
     packageTotal: v.packageTotal ?? null,
     therapistName: therapistName.get(v.therapistId) ?? '-',
     treatmentNotes: v.treatmentNotes ?? null,
+    treatmentNames: (v.treatmentIds ?? []).map((id) => treatmentName.get(id)).filter((n): n is string => !!n),
     billPaise: v.actualBillPaise,
     paymentState,
     invoiceId: v.invoiceId ?? null,
@@ -149,8 +155,9 @@ export function LedgerPage() {
   useEffect(() => {
     if (recordsView === 'invoices' && !canBill) setRecordsView('visits');
   }, [recordsView, canBill, setRecordsView]);
-  const [from, setFrom] = useState(() => toIsoDate(new Date(Date.now() - 6 * 86400000)));
-  const [to, setTo] = useState(() => toIsoDate(new Date()));
+  const initialWeek = currentWeekRange();
+  const [from, setFrom] = useState(initialWeek.from);
+  const [to, setTo] = useState(initialWeek.to);
   const [datePreset, setDatePreset] = useState<DatePreset>('week');
   const [therapistId, setTherapistId] = useState('');
   const [onlyCollectedNoReceipt, setOnlyCollectedNoReceipt] = useState(false);
@@ -168,10 +175,9 @@ export function LedgerPage() {
     setDatePreset(preset);
     const now = new Date();
     if (preset === 'week') {
-      const start = new Date(now);
-      start.setDate(start.getDate() - 6);
-      setFrom(toIsoDate(start));
-      setTo(toIsoDate(now));
+      const { from: weekFrom, to: weekTo } = currentWeekRange(now);
+      setFrom(weekFrom);
+      setTo(weekTo);
     } else if (preset === 'month') {
       setFrom(toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)));
       setTo(toIsoDate(now));
@@ -220,6 +226,8 @@ export function LedgerPage() {
   );
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
   const serviceName = useMemo(() => new Map((catalog ?? []).map((c) => [c.id, c.name])), [catalog]);
+  const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
+  const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
 
   // Payment state needs both facts a bare `invoiceId` check misses: whether
   // the invoice itself was ever marked paid (statusByInvoiceId), and
@@ -268,6 +276,7 @@ export function LedgerPage() {
           therapistName,
           therapistNameByUserId,
           serviceName,
+          treatmentName,
           syncErrorByVisitId,
           openPackageGroupIds,
           therapistSplit,
@@ -284,6 +293,7 @@ export function LedgerPage() {
       therapistName,
       therapistNameByUserId,
       serviceName,
+      treatmentName,
       syncErrorByVisitId,
       openPackageGroupIds,
       therapistSplit,
@@ -604,6 +614,7 @@ export function LedgerPage() {
                       <Link
                         to="/invoices/$invoiceId/print"
                         params={{ invoiceId: r.invoiceId }}
+                        search={{ from: '/ledger' }}
                         className="text-[var(--teal)] hover:underline"
                       >
                         {r.invoiceNo}
@@ -640,6 +651,7 @@ export function LedgerPage() {
                     patientLabel: row.patientName,
                     serviceLabel: row.serviceName,
                     isPackage: row.packageTotal != null,
+                    alreadyCollected: row.paymentState === 'collected_no_receipt',
                   });
                 }}
                 onTakePayment={(row) => setTakingPayment(row)}
@@ -662,6 +674,7 @@ export function LedgerPage() {
                   if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
                 }}
                 canInvoice={canBill}
+                backTo="/ledger"
               />
               <div className="sticky bottom-0 z-10 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm font-semibold text-[var(--ink)] shadow-[0_-2px_6px_rgba(0,0,0,0.06)]">
                 Totals: {visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'} · Billed{' '}
@@ -686,7 +699,7 @@ export function LedgerPage() {
       {recordsView === 'invoices' && <InvoicesPage />}
 
       {invoicing && (
-        <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} />
+        <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} returnTo="/ledger" />
       )}
 
       {takingPayment && (

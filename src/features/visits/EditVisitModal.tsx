@@ -5,7 +5,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { paiseToRupees, rupeesToPaise } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import type { UUID } from '@/domain/types';
-import { Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
+import { Field, inputCls, btnPrimary, btnSecondary, MultiToggle } from '@/components/ui';
 
 /** Edits a visit's billing, therapist assignment, and clinical notes.
  *  If the visit is invoiced, only clinical fields (condition, treatmentNotes)
@@ -36,11 +36,16 @@ export function EditVisitModal({
     () => (visit ? repos.catalog.get(visit.serviceCatalogId) : undefined),
     [visit?.serviceCatalogId]
   );
+  const treatments = useLiveQuery(
+    () => (visit ? repos.treatmentCatalog.list(visit.clinicId) : undefined),
+    [visit?.clinicId]
+  ) ?? [];
 
   const [therapistId, setTherapistId] = useState('');
   const [visitDate, setVisitDate] = useState('');
   const [condition, setCondition] = useState('');
   const [treatmentNotes, setTreatmentNotes] = useState('');
+  const [treatmentIds, setTreatmentIds] = useState<string[]>([]);
   const [billRupees, setBillRupees] = useState('');
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -52,6 +57,7 @@ export function EditVisitModal({
     setVisitDate(visit.visitDate);
     setCondition(visit.condition ?? '');
     setTreatmentNotes(visit.treatmentNotes ?? '');
+    setTreatmentIds(visit.treatmentIds ?? []);
     setBillRupees(paiseToRupees(visit.actualBillPaise).toString());
     setAdjustmentReason(visit.adjustmentReason ?? '');
     setLoaded(true);
@@ -70,6 +76,7 @@ export function EditVisitModal({
           ? {
               condition: condition.trim() || null,
               treatmentNotes: treatmentNotes.trim() || null,
+              treatmentIds,
             }
           : {
               actualBillPaise: rupeesToPaise(Number(billRupees)),
@@ -78,6 +85,7 @@ export function EditVisitModal({
               visitDate,
               condition: condition.trim() || null,
               treatmentNotes: treatmentNotes.trim() || null,
+              treatmentIds,
             }
       );
       onClose();
@@ -124,13 +132,22 @@ export function EditVisitModal({
             />
           </Field>
 
-          <Field label="Treatment notes">
-            <textarea
-              className={`${inputCls} min-h-20 resize-none`}
-              value={treatmentNotes}
-              onChange={(e) => setTreatmentNotes(e.target.value)}
-              placeholder="Clinical notes about the treatment"
-            />
+          <Field label="Treatments">
+            <div className="space-y-2">
+              {treatments.length > 0 && (
+                <MultiToggle
+                  options={treatments.map((t) => ({ value: t.id, label: t.name }))}
+                  value={treatmentIds}
+                  onChange={setTreatmentIds}
+                />
+              )}
+              <textarea
+                className={`${inputCls} min-h-20 resize-none`}
+                value={treatmentNotes}
+                onChange={(e) => setTreatmentNotes(e.target.value)}
+                placeholder="Add something not in the list above…"
+              />
+            </div>
           </Field>
 
           {!frozen && (

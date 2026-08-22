@@ -6,6 +6,7 @@ import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
+import { formatDateDM } from '@/domain/fiscalYear';
 import { clinicBillingConfig, type Visit } from '@/domain/types';
 import type { TodayVisitRow } from '@/services/dashboardService';
 import {
@@ -38,7 +39,8 @@ function todayRowToCardData(
   isAdmin: boolean,
   myTherapistId: string | undefined,
   canViewClinicalNotes: boolean,
-  therapistSplit: boolean
+  therapistSplit: boolean,
+  treatmentName: Map<string, string>
 ): VisitCardData {
   const canModify = isAdmin || row.therapistId === myTherapistId;
   return {
@@ -56,6 +58,7 @@ function todayRowToCardData(
     packageTotal: row.packageTotal,
     therapistName: row.therapistName,
     treatmentNotes: row.treatmentNotes,
+    treatmentNames: row.treatmentIds.map((id) => treatmentName.get(id)).filter((n): n is string => !!n),
     billPaise: row.billPaise,
     paymentState: row.paymentState,
     invoiceId: row.invoiceId,
@@ -132,6 +135,8 @@ export function WorkspacePage() {
     () => (therapistSplit ? repos.therapists.list(clinic.id, true) : undefined),
     [clinic.id, therapistSplit]
   );
+  const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
+  const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
 
   function openInvoiceFor(data: VisitCardData) {
     setInvoicing({
@@ -139,6 +144,7 @@ export function WorkspacePage() {
       patientLabel: data.patientName,
       serviceLabel: data.serviceName,
       isPackage: data.packageTotal != null,
+      alreadyCollected: data.paymentState === 'collected_no_receipt',
     });
   }
 
@@ -190,7 +196,8 @@ export function WorkspacePage() {
                 scope.isAdmin,
                 scope.myTherapistId,
                 canViewClinicalNotes,
-                therapistSplit
+                therapistSplit,
+                treatmentName
               )
             )}
             showDate={false}
@@ -215,6 +222,7 @@ export function WorkspacePage() {
               if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
             }}
             canInvoice={canBill}
+            backTo="/workspace"
           />
         )}
       </SectionCard>
@@ -269,7 +277,12 @@ export function WorkspacePage() {
                   className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <Link to="/patients/$patientId" params={{ patientId: p.patientId }} className="min-w-0">
+                    <Link
+                      to="/patients/$patientId"
+                      params={{ patientId: p.patientId }}
+                      search={{ from: '/workspace' }}
+                      className="min-w-0"
+                    >
                       <div className="font-display text-sm font-medium text-[var(--ink)]">{p.patientName}</div>
                       <div className="text-xs text-[var(--muted)]">{p.mrno}</div>
                     </Link>
@@ -280,12 +293,14 @@ export function WorkspacePage() {
                     <Pill tone="slate">{p.startedByTherapistName}</Pill>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
+                    <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--muted)]">
                       <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
                       <span className="font-num">
                         {p.sessionsLogged}/{p.packageTotal}
                       </span>
-                      <span className="ml-1">· {p.daysSinceLastVisit}d ago</span>
+                      <span className="ml-1">
+                        Started {formatDateDM(p.startedOn)} · Last {formatDateDM(p.lastVisitOn)} ({p.daysSinceLastVisit}d ago)
+                      </span>
                     </div>
                     <Link
                       to="/visits/new"
@@ -307,6 +322,7 @@ export function WorkspacePage() {
                     <th className={th}>Package</th>
                     <th className={th}>Therapist</th>
                     <th className={thNum}>Sessions</th>
+                    <th className={th}>Started</th>
                     <th className={th}>Last visit</th>
                     <th className={th}>Status</th>
                     <th className={th}></th>
@@ -328,7 +344,11 @@ export function WorkspacePage() {
                           </span>
                         </span>
                       </td>
-                      <td className={td}>{p.daysSinceLastVisit}d ago</td>
+                      <td className={td}>{formatDateDM(p.startedOn)}</td>
+                      <td className={td}>
+                        {formatDateDM(p.lastVisitOn)}{' '}
+                        <span className="text-[var(--muted)]">({p.daysSinceLastVisit}d ago)</span>
+                      </td>
                       <td className={td}>
                         <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
                       </td>
@@ -358,7 +378,7 @@ export function WorkspacePage() {
       {!scope.isClinicWideView && <TherapistComparisonCard />}
 
       {invoicing && (
-        <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} />
+        <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} returnTo="/workspace" />
       )}
 
       {takingPayment && (

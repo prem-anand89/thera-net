@@ -4,6 +4,8 @@ import type {
   Therapist,
   CatalogItem,
   NoReturnReasonItem,
+  ReferringSourceItem,
+  TreatmentItem,
   Patient,
   Visit,
   Invoice,
@@ -47,6 +49,8 @@ export type SyncedTable =
   | 'therapists'
   | 'service_catalog'
   | 'no_return_reason_catalog'
+  | 'referring_source_catalog'
+  | 'treatment_catalog'
   | 'patients'
   | 'visits'
   | 'invoices'
@@ -71,6 +75,8 @@ export const ALL_SYNCED_TABLES = [
   'therapists',
   'service_catalog',
   'no_return_reason_catalog',
+  'referring_source_catalog',
+  'treatment_catalog',
   'patients',
   'visits',
   'invoices',
@@ -93,6 +99,8 @@ export const CLIENT_WRITABLE_TABLES = [
   'therapists',
   'service_catalog',
   'no_return_reason_catalog',
+  'referring_source_catalog',
+  'treatment_catalog',
   'patients',
   'visits',
   'invoice_payments',
@@ -108,6 +116,8 @@ export class ClinicDB extends Dexie {
   therapists!: Table<Therapist, string>;
   service_catalog!: Table<CatalogItem, string>;
   no_return_reason_catalog!: Table<NoReturnReasonItem, string>;
+  referring_source_catalog!: Table<ReferringSourceItem, string>;
+  treatment_catalog!: Table<TreatmentItem, string>;
   patients!: Table<Patient, string>;
   visits!: Table<Visit, string>;
   invoices!: Table<Invoice, string>;
@@ -163,6 +173,12 @@ export class ClinicDB extends Dexie {
       // the matching rows instead of loading every visit the clinic has
       // ever logged and filtering in memory.
       visits: 'id, clinicId, visitDate, patientId, therapistId, packageGroupId, invoiceId, [clinicId+visitDate]',
+    });
+    this.version(11).stores({
+      referring_source_catalog: 'id, clinicId',
+    });
+    this.version(12).stores({
+      treatment_catalog: 'id, clinicId',
     });
   }
 }

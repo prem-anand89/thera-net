@@ -6,9 +6,18 @@ import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
-import { computeVisitPaymentState, paymentActions, paymentStatusLine } from '@/domain/paymentState';
+import { computeVisitPaymentState, isPackageContinuation, paymentActions, paymentStatusLine } from '@/domain/paymentState';
 import { EditPatientModal } from './EditPatientModal';
-import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, monthName, formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
+import {
+  fiscalYearOf,
+  monthsOfFiscalYear,
+  monthDateRange,
+  fiscalYearDateRange,
+  fiscalYearToDateRange,
+  monthName,
+  formatDateDMY,
+  formatDateDM,
+} from '@/domain/fiscalYear';
 import { type Patient, type Visit } from '@/domain/types';
 import {
   inputCls,
@@ -56,23 +65,35 @@ function AllPatientsSection() {
 
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
   const [fyStartYear, setFyStartYear] = useState(currentFy.startYear);
-  const [month, setMonth] = useState(''); // '' = all time
+  // '' = Full FY, 'ytd' = year to date, 'custom' = customFrom/customTo,
+  // otherwise a specific "YYYY-M" month value.
+  const [month, setMonth] = useState('');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   const months = useMemo(
     () => monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth),
     [fyStartYear, clinic.fyStartMonth]
   );
   const selectedPeriod = useMemo(() => {
-    if (!month) return null;
+    if (!month || month === 'ytd' || month === 'custom') return null;
     const [y, m] = month.split('-').map(Number);
     return { year: y, month: m };
   }, [month]);
 
-  const periodVisits = useLiveQuery(() => {
-    if (!selectedPeriod) return Promise.resolve(null);
-    const { from, to } = monthDateRange(selectedPeriod);
-    return repos.visits.list({ clinicId: clinic.id, from, to });
-  }, [clinic.id, selectedPeriod?.year, selectedPeriod?.month]);
+  // No month picked doesn't mean "no filter" — it means "the whole selected
+  // fiscal year," so the FY dropdown actually does something. A genuinely
+  // unfiltered "every patient ever" view isn't offered by this control.
+  const selectedRange = useMemo(() => {
+    if (selectedPeriod) return monthDateRange(selectedPeriod);
+    if (month === 'ytd') return fiscalYearToDateRange(fyStartYear, clinic.fyStartMonth);
+    if (month === 'custom') return { from: customFrom, to: customTo };
+    return fiscalYearDateRange(fyStartYear, clinic.fyStartMonth);
+  }, [selectedPeriod, month, fyStartYear, clinic.fyStartMonth, customFrom, customTo]);
+  const periodVisits = useLiveQuery(
+    () => repos.visits.list({ clinicId: clinic.id, from: selectedRange.from, to: selectedRange.to }),
+    [clinic.id, selectedRange.from, selectedRange.to]
+  );
   const periodPatientIds = useMemo(
     () => (periodVisits ? new Set(periodVisits.map((v) => v.patientId)) : null),
     [periodVisits]
@@ -236,14 +257,34 @@ function AllPatientsSection() {
               ))}
             </select>
             <select className={inputCls} value={month} onChange={(e) => setMonth(e.target.value)}>
-              <option value="">All time</option>
+              <option value="">Full FY</option>
+              <option value="ytd">Year to date</option>
               {months.map((m) => (
                 <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
                   {monthName(m.month)} {m.year}
                 </option>
               ))}
+              <option value="custom">Custom range…</option>
             </select>
           </div>
+          {month === 'custom' && (
+            <div className="flex gap-2">
+              <input
+                type="date"
+                className={inputCls}
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                aria-label="From"
+              />
+              <input
+                type="date"
+                className={inputCls}
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                aria-label="To"
+              />
+            </div>
+          )}
           <input
             className={`${inputCls} max-w-xs`}
             placeholder="Search by Patient ID, name, or phone…"
@@ -272,14 +313,42 @@ function AllPatientsSection() {
           </button>
         ))}
       </div>
-      {selectedPeriod && (
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          Showing patients seen in {monthName(selectedPeriod.month)} {selectedPeriod.year}.{' '}
-          <button className="font-medium text-[var(--teal)] hover:underline" onClick={() => setMonth('')}>
-            Show all time
-          </button>
-        </p>
-      )}
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        {selectedPeriod ? (
+          <>
+            Showing patients seen in {monthName(selectedPeriod.month)} {selectedPeriod.year}.{' '}
+            <button className="font-medium text-[var(--teal)] hover:underline" onClick={() => setMonth('')}>
+              Show Full FY
+            </button>
+          </>
+        ) : month === 'ytd' ? (
+          <>
+            Showing patients seen since the start of FY{' '}
+            {fiscalYearOf(new Date(fyStartYear, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label}, through
+            today.{' '}
+            <button className="font-medium text-[var(--teal)] hover:underline" onClick={() => setMonth('')}>
+              Show Full FY
+            </button>
+          </>
+        ) : month === 'custom' ? (
+          customFrom && customTo ? (
+            customFrom > customTo ? (
+              <span className="text-[var(--rust)]">From date must be before To date.</span>
+            ) : (
+              <>
+                Showing patients seen {formatDateDMY(customFrom)}–{formatDateDMY(customTo)}.{' '}
+                <button className="font-medium text-[var(--teal)] hover:underline" onClick={() => setMonth('')}>
+                  Show Full FY
+                </button>
+              </>
+            )
+          ) : (
+            'Pick a From and To date above.'
+          )
+        ) : (
+          `Showing patients seen in FY ${fiscalYearOf(new Date(fyStartYear, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label}.`
+        )}
+      </p>
 
       <ErrorNote message={error} />
 
@@ -287,9 +356,9 @@ function AllPatientsSection() {
         <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-8 text-center text-sm text-[var(--muted)]">
           {q
             ? 'No patients match your search.'
-            : selectedPeriod
-              ? 'No patients were seen in this period.'
-              : "No patients yet - they're created from the \"New visit\" flow."}
+            : (all ?? []).filter((p) => !p.deletedAt).length === 0
+              ? "No patients yet - they're created from the \"New visit\" flow."
+              : 'No patients were seen in this period.'}
         </div>
       ) : (
         <>
@@ -305,7 +374,11 @@ function AllPatientsSection() {
                     visitStatsByPatient.get(p.id)
                       ? paymentStatusLine(
                           latestState(visitStatsByPatient.get(p.id)!.latestVisit),
-                          formatINR(visitStatsByPatient.get(p.id)!.latestVisit.actualBillPaise)
+                          formatINR(visitStatsByPatient.get(p.id)!.latestVisit.actualBillPaise),
+                          isPackageContinuation(
+                            visitStatsByPatient.get(p.id)!.latestVisit.sessionIndex,
+                            visitStatsByPatient.get(p.id)!.latestVisit.packageTotal
+                          )
                         )
                       : null
                   }
@@ -354,7 +427,12 @@ function AllPatientsSection() {
                         )}
                       </td>
                       <td className={`${td} font-display`}>
-                        <Link to="/patients/$patientId" params={{ patientId: p.id }} className="hover:underline">
+                        <Link
+                          to="/patients/$patientId"
+                          params={{ patientId: p.id }}
+                          search={{ from: '/patients' }}
+                          className="hover:underline"
+                        >
                           {p.name}
                         </Link>
                         {(p.age || p.sex) && (
@@ -400,7 +478,11 @@ function AllPatientsSection() {
                       </td>
                       <td className={`${td} text-xs`}>
                         {stats?.latestVisit
-                          ? paymentStatusLine(latestState(stats.latestVisit), formatINR(stats.latestVisit.actualBillPaise))
+                          ? paymentStatusLine(
+                              latestState(stats.latestVisit),
+                              formatINR(stats.latestVisit.actualBillPaise),
+                              isPackageContinuation(stats.latestVisit.sessionIndex, stats.latestVisit.packageTotal)
+                            )
                           : '-'}
                       </td>
                       <td className={`${td} whitespace-nowrap`}>
@@ -497,7 +579,12 @@ function PatientCard({
   return (
     <div className="py-3">
       <div className="flex items-start justify-between gap-2">
-        <Link to="/patients/$patientId" params={{ patientId: p.id }} className="flex min-w-0 flex-1 items-start gap-2.5">
+        <Link
+          to="/patients/$patientId"
+          params={{ patientId: p.id }}
+          search={{ from: '/patients' }}
+          className="flex min-w-0 flex-1 items-start gap-2.5"
+        >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-[11px] font-semibold text-[var(--teal)]">
             {initials || '?'}
           </div>

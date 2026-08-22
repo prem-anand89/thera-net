@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
-import { Link, useParams } from '@tanstack/react-router';
+import { Link, useParams, useSearch } from '@tanstack/react-router';
+import type { PatientProfileBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, consultationNoteService, invoiceService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
@@ -36,6 +37,7 @@ export function PatientProfilePage() {
   const { canBill, canViewClinicalNotes, isAdmin } = usePermissions();
   const { myTherapistId } = useWorkspaceScope();
   const { patientId } = useParams({ strict: false }) as { patientId: string };
+  const { from: backTo } = useSearch({ strict: false }) as { from?: PatientProfileBackTarget };
   const [editOpen, setEditOpen] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
@@ -62,6 +64,7 @@ export function PatientProfilePage() {
   );
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
+  const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
   const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
 
@@ -93,6 +96,27 @@ export function PatientProfilePage() {
     () => (openPackages ?? []).filter((p) => p.patientId === patientId),
     [openPackages, patientId]
   );
+
+  const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
+
+  // How many sessions of each treatment type this package has had so far —
+  // e.g. "Manual Therapy: 4 · Exercise: 6 · Kinesio Taping: 2" — derived
+  // from each visit's own treatmentIds rather than a separate aggregation
+  // query, since every visit for this patient is already loaded above.
+  const treatmentCountsByPackage = useMemo(() => {
+    const byPackage = new Map<string, Map<string, number>>();
+    for (const v of visits ?? []) {
+      if (v.deleted || !v.packageGroupId || !v.treatmentIds?.length) continue;
+      const counts = byPackage.get(v.packageGroupId) ?? new Map<string, number>();
+      for (const id of v.treatmentIds) {
+        const name = treatmentName.get(id);
+        if (!name) continue;
+        counts.set(name, (counts.get(name) ?? 0) + 1);
+      }
+      byPackage.set(v.packageGroupId, counts);
+    }
+    return byPackage;
+  }, [visits, treatmentName]);
 
   // One pass over the patient's visits for all three headline money facts —
   // billed (every visit's bill, including ₹0 package sessions), collected
@@ -145,6 +169,7 @@ export function PatientProfilePage() {
         packageTotal: v.packageTotal ?? null,
         therapistName: therapistName.get(v.therapistId) ?? '—',
         treatmentNotes: v.treatmentNotes ?? null,
+        treatmentNames: (v.treatmentIds ?? []).map((id) => treatmentName.get(id)).filter((n): n is string => !!n),
         billPaise: v.actualBillPaise,
         paymentState: computeVisitPaymentState(
           v.actualBillPaise,
@@ -160,6 +185,7 @@ export function PatientProfilePage() {
         // admin can delete it.
         canDelete: !v.invoiceId && (isAdmin || v.therapistId === myTherapistId),
         needsNote: v.clinicalStatus === 'pending',
+        canViewNotes: canViewClinicalNotes,
       })),
     [
       visitRows,
@@ -170,11 +196,13 @@ export function PatientProfilePage() {
       patient?.sex,
       serviceName,
       therapistName,
+      treatmentName,
       directPaymentByVisitId,
       statusByInvoiceId,
       openPackageIds,
       isAdmin,
       myTherapistId,
+      canViewClinicalNotes,
     ]
   );
 
@@ -269,8 +297,8 @@ export function PatientProfilePage() {
 
   return (
     <div className="space-y-4">
-      <Link to="/workspace" className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]">
-        ← All patients
+      <Link to={backTo ?? '/patients'} className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]">
+        ← Back
       </Link>
 
       {safetyFlags.length > 0 && (
@@ -395,6 +423,17 @@ export function PatientProfilePage() {
                             last {formatDateDMY(p.lastVisitOn)} · {p.daysSinceLastVisit}d ago
                           </span>
                         </div>
+                        {treatmentCountsByPackage.get(p.packageGroupId) && (
+                          <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-[var(--muted)]">
+                            {[...treatmentCountsByPackage.get(p.packageGroupId)!.entries()].map(
+                              ([name, count]) => (
+                                <span key={name}>
+                                  {name}: {count}
+                                </span>
+                              )
+                            )}
+                          </div>
+                        )}
                       </li>
                     );
                   })}
