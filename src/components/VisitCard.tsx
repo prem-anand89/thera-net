@@ -279,6 +279,17 @@ function PaymentStatusDisplay({
         {!canInvoice && paymentActions(data.paymentState).length > 0 && (
           <Pill tone="slate">Ask billing</Pill>
         )}
+        {data.needsNote && data.canViewNotes && (
+          <Link
+            to="/patients/$patientId/notes/new"
+            params={{ patientId: data.patientId }}
+            search={{ visitId: data.visitId }}
+            className="whitespace-nowrap text-[10px] font-medium text-[var(--amber)] hover:underline"
+            title="Clinical note not started for this visit"
+          >
+            + Note
+          </Link>
+        )}
       </div>
     );
   }
@@ -321,7 +332,7 @@ function PaymentStatusDisplay({
       {!canInvoice && paymentActions(data.paymentState).length > 0 && (
         <Pill tone="slate">Ask billing</Pill>
       )}
-      {data.needsNote && (
+      {data.needsNote && data.canViewNotes && (
         <Link
           to="/patients/$patientId/notes/new"
           params={{ patientId: data.patientId }}
@@ -495,7 +506,7 @@ export function SharedVisitCard({
             </button>
           )}
           {!canInvoice && paymentActions(data.paymentState).length > 0 && <Pill tone="slate">Ask billing</Pill>}
-          {data.needsNote && (
+          {data.needsNote && data.canViewNotes && (
             <Link
               to="/patients/$patientId/notes/new"
               params={{ patientId: data.patientId }}

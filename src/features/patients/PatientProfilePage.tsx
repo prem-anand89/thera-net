@@ -185,6 +185,7 @@ export function PatientProfilePage() {
         // admin can delete it.
         canDelete: !v.invoiceId && (isAdmin || v.therapistId === myTherapistId),
         needsNote: v.clinicalStatus === 'pending',
+        canViewNotes: canViewClinicalNotes,
       })),
     [
       visitRows,
@@ -201,6 +202,7 @@ export function PatientProfilePage() {
       openPackageIds,
       isAdmin,
       myTherapistId,
+      canViewClinicalNotes,
     ]
   );
 
