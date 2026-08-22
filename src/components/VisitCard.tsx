@@ -266,8 +266,7 @@ function PaymentStatusDisplay({
     const hasSecondaryRow =
       (canInvoice && (actions.includes('take_payment') || actions.includes('issue_invoice'))) ||
       (!canInvoice && paymentActions(data.paymentState).length > 0) ||
-      data.packageInvoicePending ||
-      (data.needsNote && data.canViewNotes);
+      data.packageInvoicePending;
     return (
       <div className="flex flex-col items-start gap-1">
         <div className="flex items-center gap-1">
@@ -314,17 +313,6 @@ function PaymentStatusDisplay({
                   Not invoiced
                 </span>
               </Pill>
-            )}
-            {data.needsNote && data.canViewNotes && (
-              <Link
-                to="/patients/$patientId/notes/new"
-                params={{ patientId: data.patientId }}
-                search={{ visitId: data.visitId }}
-                className="whitespace-nowrap text-[10px] font-medium text-[var(--amber)] hover:underline"
-                title="Clinical note not started for this visit"
-              >
-                + Note
-              </Link>
             )}
           </div>
         )}
@@ -389,6 +377,24 @@ function PaymentStatusDisplay({
         </Link>
       )}
     </div>
+  );
+}
+
+/** The table's dedicated Note column — split out from the Status column so
+ *  a billing concern (chip/actions) and a documentation concern (clinical
+ *  note nudge) don't compete for space on the same crowded line. */
+function NoteCell({ data }: { data: VisitCardData }) {
+  if (!data.needsNote || !data.canViewNotes) return null;
+  return (
+    <Link
+      to="/patients/$patientId/notes/new"
+      params={{ patientId: data.patientId }}
+      search={{ visitId: data.visitId }}
+      className="whitespace-nowrap text-xs font-medium text-[var(--amber)] hover:underline"
+      title="Clinical note not started for this visit"
+    >
+      + Note
+    </Link>
   );
 }
 
@@ -673,6 +679,7 @@ function VisitTable({
               )}
               <th className={thNum}>Bill</th>
               <th className={th}>Status</th>
+              <th className={th}>Note</th>
               <th className={th}></th>
             </tr>
           </thead>
@@ -768,6 +775,9 @@ function VisitTable({
                   />
                 </td>
                 <td className={td}>
+                  <NoteCell data={row} />
+                </td>
+                <td className={td}>
                   <RowActionsMenu
                     data={row}
                     onEdit={onEdit ? () => onEdit(row) : undefined}
@@ -785,7 +795,7 @@ function VisitTable({
                     (showDate ? 1 : 0) +
                     (showPatient ? 1 : 0) +
                     (VISIT_OPTIONAL_COLUMN_ORDER.filter((key) => columnPrefs[key]).length) +
-                    3
+                    4
                   }
                   className="px-3 py-8 text-center text-sm text-[var(--muted)]"
                 >
