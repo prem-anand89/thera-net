@@ -47,7 +47,11 @@ class in this repo; don't reintroduce it.
 
 Run before every commit that touches `src/`:
 ```
-npm run typecheck && npm run lint && npm run test -- --run
+npm run typecheck && npm run lint && npm run test
 ```
-`npm run build` too for anything touching shared components, routing, or
-Tailwind config (breakpoints, theme tokens).
+(`npm run test` is already non-watch — `vitest run` in `package.json` —
+so no extra `-- --run` flag is needed.) `npm run build` too for anything
+touching shared components, routing, or Tailwind config (breakpoints,
+theme tokens). CI (`.github/workflows/ci.yml`) runs these same four
+checks as separate steps rather than one chained command, so a failure
+shows exactly which one broke.
