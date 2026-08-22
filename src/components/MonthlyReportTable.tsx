@@ -71,13 +71,17 @@ export function MonthlyReportTable({
           {hospitalSplit && (
             <th className={thNum}>
               {partner} Share
-              {showShared && <InfoTip text={`The remainder of the bill after ${own}'s cut — what goes to ${partner}.`} />}
+              {showShared && (
+                <InfoTip
+                  text={`${partner}'s share of the bill — the remainder after ${own}'s split %, before either side's tax. See TDS Deducted separately for what's withheld from ${own}'s cut.`}
+                />
+              )}
             </th>
           )}
           {showShared && (
             <th className={thNum}>
               Shared
-              <InfoTip text="Money moved between therapists on split visits — negative for who gave it up, positive for who received it. Always nets to zero." />
+              <InfoTip text="Money moved between therapists on split visits — negative for who gave it up, positive for who received it. Always nets to zero. Shown here as a share of the gross bill; the amount actually reflected in Net is the same % applied to the post-tax figure, so the two won't match exactly when tax applies." />
             </th>
           )}
           <th className={thNum}>

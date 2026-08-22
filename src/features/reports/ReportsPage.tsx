@@ -4,8 +4,9 @@ import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { ReportsOverviewPage } from './ReportsOverviewPage';
 import { MonthlyStatementPage } from './MonthlyStatementPage';
+import { AttributionAuditPage } from './AttributionAuditPage';
 
-type InsightsView = 'overview' | 'monthly';
+type InsightsView = 'overview' | 'monthly' | 'audit';
 
 /**
  * Reports nav tab: what you read periodically, as opposed to Ledger (what
@@ -24,7 +25,8 @@ export function ReportsPage() {
   const { isClinicWideView } = useWorkspaceScope();
   const navigate = useNavigate();
   const search = useSearch({ from: '/insights' });
-  const view: InsightsView = search.tab === 'monthly' ? 'monthly' : 'overview';
+  const view: InsightsView =
+    search.tab === 'monthly' ? 'monthly' : search.tab === 'audit' ? 'audit' : 'overview';
 
   const setView = useCallback(
     (next: InsightsView) => {
@@ -38,7 +40,7 @@ export function ReportsPage() {
   // Wait until role resolves — while it's still 'unknown', canViewPayouts is
   // false and we'd incorrectly strip ?tab=monthly back to Trends on load.
   useEffect(() => {
-    if (view === 'monthly' && role !== 'unknown' && !canViewPayouts) setView('overview');
+    if (view !== 'overview' && role !== 'unknown' && !canViewPayouts) setView('overview');
   }, [view, canViewPayouts, role, setView]);
 
   // Nav already hides the Reports link for a plain therapist (Shell.tsx);
@@ -64,9 +66,10 @@ export function ReportsPage() {
           [
             { key: 'overview', label: 'Trends' },
             { key: 'monthly', label: 'Monthly statement' },
+            { key: 'audit', label: 'Attribution audit' },
           ] as const
         )
-          .filter((v) => v.key !== 'monthly' || canViewPayouts)
+          .filter((v) => v.key === 'overview' || canViewPayouts)
           .map((v) => (
             <button
               key={v.key}
@@ -83,6 +86,7 @@ export function ReportsPage() {
 
       {view === 'overview' && <ReportsOverviewPage />}
       {view === 'monthly' && canViewPayouts && <MonthlyStatementPage />}
+      {view === 'audit' && canViewPayouts && <AttributionAuditPage />}
     </div>
   );
 }

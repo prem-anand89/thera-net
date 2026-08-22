@@ -246,8 +246,14 @@ const importVisitsRedirectRoute = createRoute({
 const insightsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/insights',
-  validateSearch: (search: Record<string, unknown>): { tab?: 'monthly' } =>
-    search.tab === 'monthly' ? { tab: 'monthly' } : {},
+  validateSearch: (
+    search: Record<string, unknown>
+  ): { tab?: 'monthly' | 'audit'; year?: number; month?: number } => ({
+    ...(search.tab === 'monthly' || search.tab === 'audit' ? { tab: search.tab } : {}),
+    ...(typeof search.year === 'number' && typeof search.month === 'number'
+      ? { year: search.year, month: search.month }
+      : {}),
+  }),
   component: ReportsPage,
 });
 

@@ -57,6 +57,7 @@ function visit(over: Partial<Visit>): Visit {
   };
 }
 
+const JUNE = { year: 2026, month: 6 };
 const JULY = { year: 2026, month: 7 };
 
 describe('reportService.monthly — therapist split', () => {
@@ -121,6 +122,21 @@ describe('reportService.monthly — therapist split', () => {
     expect(report.total.sharedPaise).toBe(0);
     for (const r of report.rows) expect(r.netPostTaxPaise).toBe(r.postTaxPaise);
     expect(report.total.netPostTaxPaise).toBe(report.total.postTaxPaise);
+  });
+
+  it('makes Net Total equal Bill Total for a simple (non-hospital-split) clinic', async () => {
+    // In simple mode visitService bills self-consistently: share=bill,
+    // post-tax=bill, tds=0, hv=0 (no hospital to split with or withhold
+    // for). Net should therefore reconcile to the plain bill total, with
+    // no tax/split machinery to obscure it — this is the guarantee behind
+    // "for clinics with no TDS and partner, Net should match the bill."
+    const repos = makeFakeRepos([
+      visit({ therapistId: PREM, actualBillPaise: rs(2000), bmSharePaise: rs(2000), postTaxPaise: rs(2000), tdsPaise: 0, hvPaise: 0 }),
+      visit({ therapistId: AISH, actualBillPaise: rs(3000), bmSharePaise: rs(3000), postTaxPaise: rs(3000), tdsPaise: 0, hvPaise: 0 }),
+    ]);
+    const report = await createReportService(repos).monthly(CLINIC, JULY);
+    expect(report.total.netPostTaxPaise).toBe(report.total.billPaise);
+    expect(report.total.netPostTaxPaise).toBe(rs(5000));
   });
 });
 
@@ -277,7 +293,7 @@ describe('reportService.monthly — netPostTaxPaise package attribution', () => 
     expect(prem.netPostTaxPaise + aish.netPostTaxPaise).toBe(rs(100));
   });
 
-  it('resolves a package spanning two report periods via listByPackageGroup', async () => {
+  it('resolves a package spanning two report periods, settling incrementally', async () => {
     const groupId = 'pkg-2';
     const repos = makeFakeRepos([
       // Billed in June — outside this report's July window.
@@ -310,8 +326,126 @@ describe('reportService.monthly — netPostTaxPaise package attribution', () => 
     // the whole package's ₹4500 Post-Tax BM (not ₹0, and not something
     // derived only from what's visible in this month).
     const aish = report.rows.find((r) => r.therapistId === AISH)!;
+    const prem = report.rows.find((r) => r.therapistId === PREM)!;
     expect(aish.netPostTaxPaise).toBe(roundToRupeeHalfUp(rs(4500) / 3));
-    expect(report.rows.find((r) => r.therapistId === PREM)).toBeUndefined(); // Prem's visit is outside this month
+    // Prem billed the package in June but ran no session this period — he
+    // still gets a row in July, with zero visits, carrying the debit for
+    // the share Aishwarya's July session claimed. Dropping this row would
+    // silently overcredit Aishwarya without debiting anyone.
+    expect(prem).toBeDefined();
+    expect(prem.visitCount).toBe(0);
+    expect(prem.netPostTaxPaise).toBe(-roundToRupeeHalfUp(rs(4500) / 3));
+    // The invariant this whole fix exists for: every rupee attributed this
+    // period lands on some row, summing exactly to the period's total.
+    const sumRows = report.rows.reduce((s, r) => s + r.netPostTaxPaise, 0);
+    expect(sumRows).toBe(report.total.netPostTaxPaise);
+  });
+
+  it("keeps a past month's report byte-identical after a later month's session moves money", async () => {
+    // The exact scenario the user raised: does re-viewing June's report
+    // after July happens change what June shows? It must not — June's
+    // numbers are fixed the moment June's own window has no more visits
+    // to add, regardless of what a package's later sessions do elsewhere.
+    const groupId = 'pkg-immutable';
+    const visits = [
+      visit({
+        id: 'v1',
+        therapistId: PREM,
+        visitDate: '2026-06-05',
+        actualBillPaise: rs(1500),
+        postTaxPaise: rs(1500),
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 1,
+      }),
+      visit({
+        id: 'v2',
+        therapistId: AISH,
+        visitDate: '2026-06-12',
+        actualBillPaise: 0,
+        postTaxPaise: 0,
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 2,
+      }),
+    ];
+    const reposBeforeJuly = makeFakeRepos(visits);
+    const juneBefore = await createReportService(reposBeforeJuly).monthly(CLINIC, JUNE);
+
+    // Now session 3 happens in July, run by a third therapist.
+    const CHIT = 'th-chit';
+    const reposAfterJuly = makeFakeRepos([
+      ...visits,
+      visit({
+        id: 'v3',
+        therapistId: CHIT,
+        visitDate: '2026-07-02',
+        actualBillPaise: 0,
+        postTaxPaise: 0,
+        packageGroupId: groupId,
+        packageTotal: 3,
+        sessionIndex: 3,
+      }),
+    ]);
+    const juneAfter = await createReportService(reposAfterJuly).monthly(CLINIC, JUNE);
+
+    expect(juneAfter).toEqual(juneBefore);
+  });
+
+  it("settles the user's three-month worked example: same biller returns next month vs. a third therapist takes over", async () => {
+    const groupId = 'pkg-worked-example';
+    const CHIT = 'th-chit';
+    const baseVisits = (thirdSessionTherapist: string) => [
+      // June: Prem bills the ₹1500/3-session package (session 1), Aish
+      // runs session 2 the same month — settles fully within June.
+      visit({
+        id: 'v1', therapistId: PREM, visitDate: '2026-06-01',
+        actualBillPaise: rs(1500), postTaxPaise: rs(1500),
+        packageGroupId: groupId, packageTotal: 3, sessionIndex: 1,
+      }),
+      visit({
+        id: 'v2', therapistId: AISH, visitDate: '2026-06-15',
+        actualBillPaise: 0, postTaxPaise: 0,
+        packageGroupId: groupId, packageTotal: 3, sessionIndex: 2,
+      }),
+      // July: session 3, run by whoever the test variant specifies.
+      visit({
+        id: 'v3', therapistId: thirdSessionTherapist, visitDate: '2026-07-10',
+        actualBillPaise: 0, postTaxPaise: 0,
+        packageGroupId: groupId, packageTotal: 3, sessionIndex: 3,
+      }),
+    ];
+
+    // Variant A: Prem (the biller) runs session 3 himself next month — he
+    // already holds the full remaining share, so no package delta moves in
+    // July (he still has a row, from his own ₹0 continuation visit, but
+    // its Net is just that visit's own ₹0 Post-Tax, untouched by attribution).
+    const repos1 = makeFakeRepos(baseVisits(PREM));
+    const june1 = await createReportService(repos1).monthly(CLINIC, JUNE);
+    const july1 = await createReportService(repos1).monthly(CLINIC, JULY);
+    expect(june1.rows.find((r) => r.therapistId === PREM)!.netPostTaxPaise).toBe(rs(1000));
+    expect(june1.rows.find((r) => r.therapistId === AISH)!.netPostTaxPaise).toBe(rs(500));
+    expect(july1.rows.find((r) => r.therapistId === PREM)!.netPostTaxPaise).toBe(0);
+
+    // Variant B: a third therapist (Chit) runs session 3 next month instead
+    // — July debits Prem ₹500 and credits Chit ₹500. June is untouched
+    // (still Prem=1000, Aish=500); across both months Prem=500, Aish=500,
+    // Chit=500 — the ₹1500 fully accounted for, split three ways.
+    const repos2 = makeFakeRepos(baseVisits(CHIT));
+    const june2 = await createReportService(repos2).monthly(CLINIC, JUNE);
+    const july2 = await createReportService(repos2).monthly(CLINIC, JULY);
+    expect(june2.rows.find((r) => r.therapistId === PREM)!.netPostTaxPaise).toBe(rs(1000));
+    expect(june2.rows.find((r) => r.therapistId === AISH)!.netPostTaxPaise).toBe(rs(500));
+    const premJuly = july2.rows.find((r) => r.therapistId === PREM)!;
+    const chitJuly = july2.rows.find((r) => r.therapistId === CHIT)!;
+    expect(premJuly.visitCount).toBe(0);
+    expect(premJuly.netPostTaxPaise).toBe(-rs(500));
+    expect(chitJuly.netPostTaxPaise).toBe(rs(500));
+    // Each period's own invariant holds independently.
+    for (const report of [june2, july2]) {
+      const sumRows = report.rows.reduce((s, r) => s + r.netPostTaxPaise, 0);
+      expect(sumRows).toBe(report.total.netPostTaxPaise);
+    }
   });
 
   it('leaves a single-session (non-package) visit unaffected by attribution', async () => {

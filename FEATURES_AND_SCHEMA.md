@@ -136,6 +136,9 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Fiscal-year-aware** (Apr–Mar)
 - **Per-therapist metrics**: Bill, BM Share, TDS, Post-Tax, HV, unique patients, total
 - **CSV export** capability
+- **Attribution audit tab** (Reports → "Attribution audit"): a per-visit
+  ledger of every rupee a manual split or automatic package attribution
+  moved between therapists that month — see §2b.
 
 ---
 
@@ -803,22 +806,81 @@ the month) and (2) an automatic package-attribution delta, computed
    every therapist's Net); the current version never leaves a rupee
    unattributed.
 
-Deltas always sum to zero within a group, so `total.netPostTaxPaise`
-is untouched, and — within a single report period — `sum(rows.netPostTaxPaise)`
-always equals `total.netPostTaxPaise`. The one exception is a package
-spanning two report periods (started one month, finished the next): the
-delta only lands on a therapist's row if they already have a row this
-period (i.e., a visit of their own in it), so a biller with no visit in
-the current period gets no row from attribution alone — same reasoning
-`total` itself only reflects this period's own visits.
+**Settlement is scoped to the report's own month, not the whole package.**
+Step 3's giving-loop only considers sibling sessions whose own `visitDate`
+falls inside the report's `[from,to]` window — a package spanning several
+months settles **incrementally**, one month's sessions at a time, instead
+of re-applying every session's share retroactively whenever a later
+month's report touches the same group. Two consequences worth knowing:
+- **A past month's report is immutable to later events.** Re-running
+  `monthly()` for a month that has already "closed" always reproduces the
+  same numbers, because no future visit's date can ever fall inside a
+  past window — there is no stored/materialized report to retroactively
+  edit, only a live computation over dated rows.
+- **The biller can get a zero-visit row with a negative Net** in a later
+  period, if a colleague runs that period's session of a package the
+  biller billed earlier. This is the debit actually landing, not a bug —
+  the row is forced into existence via `rowFor` specifically so the debit
+  has somewhere to go; an earlier version of this fix instead skipped
+  creating the row (`rowsById.get` returning nothing), which silently
+  credited the colleague without debiting anyone and broke the invariant
+  below for any package spanning more than one report period.
+
+Deltas always sum to zero **within a single `monthly()` call**, so
+`total.netPostTaxPaise` is untouched, and `sum(rows.netPostTaxPaise)`
+always equals `total.netPostTaxPaise` for every report period — with no
+exception, unlike an earlier version of this doc that carved one out for
+cross-month packages (that carve-out described the bug, not a real
+limit).
 
 This is the one number used everywhere a therapist's own "how much revenue
 did I generate" is shown — Trends KPI/chart, Therapist Comparison (both the
-trend and the live table), and the Monthly Statement's "Net" column (shown
-unconditionally, unlike "Shared" which stays behind the `enableTherapistSplit`
-opt-in). There is no separate "gross attributed revenue, ignoring splits"
-concept anymore — that used to be a parallel `attributedRevenuePaise` field/
-column, folded into `netPostTaxPaise` instead so there's one lens, not two.
+trend and the live table — which also gained a `Post Tax {own}` column and a
+Total row alongside Net, so the reconciliation is visible there too, not
+just on the Monthly Statement), and the Monthly Statement's "Net" column
+(shown unconditionally, unlike "Shared" which stays behind the
+`enableTherapistSplit` opt-in). There is no separate "gross attributed
+revenue, ignoring splits" concept anymore — that used to be a parallel
+`attributedRevenuePaise` field/column, folded into `netPostTaxPaise` instead
+so there's one lens, not two.
+
+**Manual Shared and package attribution move money on different bases.**
+The `Shared` column is a % of the **gross** bill; the amount actually
+reflected in `Net` for the same split is the same % applied to
+**post-tax**. Same visit, two different numbers by design — `Shared` is a
+useful gross reconciliation figure against the original bill, `Net` is the
+real take-home. The Monthly Statement's Shared column tooltip states this
+explicitly so it doesn't read as the two disagreeing by mistake.
+
+**Attribution audit view** (`attributionAuditService.ts`,
+`AttributionAuditPage.tsx`, Reports → "Attribution audit" tab): a
+per-transaction ledger for a month — every rupee either mechanism moved,
+with the visit, patient, from/to therapist, and gross/post-tax amounts —
+so a disputed Shared or Net figure can be traced back to the specific
+visit(s) that produced it, rather than taken on faith. Mirrors
+`reportService.monthly`'s own two loops exactly (same source visits, same
+in-window scoping for package attribution) so the list always sums to the
+same deltas that produced that month's Net figures.
+
+**`hv_paise` (Partner Share) is the bill split between the two
+organizations, pre-tax — not "everything that isn't the clinic's post-tax
+take."** `hvPaise = billPaise - bmSharePaise`, so `bmSharePaise + hvPaise
+=== billPaise` always. An earlier formula (`billPaise - postTaxPaise`)
+silently folded TDS into the partner-share figure, since
+`postTaxPaise = bmSharePaise - tdsPaise` — the partner's column read as
+their share plus the clinic's own withheld tax, overstating it by exactly
+the TDS every time. `TDS Deducted` already has its own column, so this was
+a wrong formula, not a missing one. Fixed going forward in
+`computeVisitSplit` (`src/domain/split.ts`); existing rows were backfilled
+live via a flag-gated bypass of the invoice-freeze trigger (migration
+`20260822034435_backfill_hv_paise.sql` — the same `app.allow_invoice_amendment`
+flag `amend_invoice()` uses for `invoice_id` re-points, extended to also
+cover `hv_paise`, since correcting this one snapshot field is the same
+kind of narrow, flag-gated exception; every other financial field on an
+invoiced visit stays frozen either way). `hv_paise` never drives real
+payout logic — the hospital settlement in `MonthlyStatementPage` reconciles
+against `postTaxPaise` only — so the backfill carries no risk to real
+figures, only to a previously-mislabeled report column.
 
 ### 3. Sequential Gap-Free Invoices
 - **Server-issued numbers** via `issue_invoice()` RPC
@@ -852,7 +914,10 @@ should honor.
   trigger checks specifically for that one field — every other financial-
   field freeze on an invoiced visit stays fully enforced even during an
   amendment, so an amendment can only add/re-point visits, never edit a
-  visit's billed amount.
+  visit's billed amount. The same flag also gates `hv_paise` (extended in
+  `20260822034435_backfill_hv_paise.sql` to backfill the corrected
+  Partner Share formula, §2b) — the only two fields this bypass ever
+  covers; every other check in the trigger's OR-chain is unconditional.
 - **UI**: `InvoicePrintPage` shows a "Superseded by …" banner on an old
   invoice and an "Amendment to …" banner on the new one, each linking to
   the other. "Amend this invoice" opens `AmendInvoiceDialog`

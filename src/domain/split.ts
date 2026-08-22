@@ -14,6 +14,7 @@ export interface VisitSplit {
   bmSharePaise: Paise;
   postTaxPaise: Paise;
   tdsPaise: Paise;
+  /** The partner hospital's share of the bill, pre-tax: bmSharePaise + hvPaise === billPaise. */
   hvPaise: Paise;
 }
 
@@ -22,6 +23,14 @@ export interface VisitSplit {
  * matching the clinics table. Multiplications are ordered so intermediate
  * values stay integral until the single divide, avoiding float drift on
  * exact-half cases (e.g. ₹22,700 × 67.5% = ₹15,322.50 → ₹15,323).
+ *
+ * hvPaise and postTaxPaise are two independent splits of the same bill, not
+ * one derived from the other: hvPaise divides the bill between the two
+ * organizations (own vs partner, both pre-tax — bmSharePaise + hvPaise ===
+ * billPaise), while postTaxPaise/tdsPaise divide the clinic's OWN share
+ * between its post-tax take and what's withheld (bmSharePaise === postTaxPaise
+ * + tdsPaise, under either tdsBasis). TDS is money withheld from the clinic's
+ * own cut, not the partner's, so it must never be folded into hvPaise.
  */
 export function computeVisitSplit(
   billPaise: Paise,
@@ -35,6 +44,6 @@ export function computeVisitSplit(
     tdsBasis === 'gross_bill'
       ? roundToRupeeHalfUp((billPaise * taxPct) / 100)
       : bmSharePaise - postTaxPaise;
-  const hvPaise = billPaise - postTaxPaise;
+  const hvPaise = billPaise - bmSharePaise;
   return { bmSharePaise, postTaxPaise, tdsPaise, hvPaise };
 }
