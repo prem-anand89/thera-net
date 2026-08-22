@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { paiseToRupees, rupeesToPaise, type Paise } from '@/domain/money';
 
 export const inputCls =
@@ -101,17 +102,27 @@ export function TherapistPill({ children }: { children: ReactNode }) {
 }
 
 /**
- * Generic ⋮ trigger + dropdown menu for a row's actions. Flips to open
- * above the trigger whenever there isn't room to open below within the
- * viewport, computed from the button's position at the moment it's
- * opened — a kebab near the bottom of a short list otherwise opens
- * off-screen, forcing a scroll to see it. Every row-actions menu in the
- * app shares this one implementation so that fix only has to be gotten
- * right once. Note for callers: any scrollable ancestor built with
- * `overflow-x-auto` alone needs `overflow-y-visible` alongside it — per
- * the CSS overflow spec, leaving overflow-y unset there computes it to
- * 'auto' too, silently clipping this menu instead of letting it render
- * past the container's edge.
+ * Generic ⋮ trigger + dropdown menu for a row's actions. Rendered via a
+ * portal to `document.body`, positioned with `position: fixed` from the
+ * trigger button's own `getBoundingClientRect()` — NOT nested inside the
+ * trigger's own DOM subtree. This isn't cosmetic: a row-actions menu
+ * lives inside a horizontally-scrollable table wrapper
+ * (`overflow-x-auto`), and per the CSS Overflow spec, once one axis of a
+ * box has a non-`visible` overflow, the UA forces the OTHER axis's
+ * computed value to `auto` too, even if it's explicitly authored as
+ * `visible` — there is no CSS-only way to scroll one axis while a
+ * descendant genuinely overflows the other. (Confirmed directly: a bare
+ * `overflow-x: auto; overflow-y: visible` div still computes
+ * `overflow-y: auto`, clipping any child that pokes past its bottom
+ * edge.) An earlier fix attempted `overflow-y-visible` on the wrapper for
+ * exactly this reason and didn't actually solve it, for exactly this
+ * reason — only escaping the scroll container's DOM subtree entirely
+ * (this portal) does. Flips to open above the trigger whenever there
+ * isn't room to open below within the viewport, computed at the moment
+ * it's opened, and closes automatically on scroll (any scroll container,
+ * captured via a window-level capture-phase listener since `scroll`
+ * doesn't bubble) since a `position: fixed` menu can't track its trigger
+ * moving under it.
  */
 export function KebabMenu({
   children,
@@ -121,20 +132,34 @@ export function KebabMenu({
   ariaLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [openUpward, setOpenUpward] = useState(false);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   function toggle() {
     if (!open && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       const estimatedMenuHeight = 170;
-      setOpenUpward(window.innerHeight - rect.bottom < estimatedMenuHeight);
+      const openUpward = window.innerHeight - rect.bottom < estimatedMenuHeight;
+      const right = window.innerWidth - rect.right;
+      setPos(openUpward ? { bottom: window.innerHeight - rect.top + 4, right } : { top: rect.bottom + 4, right });
     }
     setOpen((o) => !o);
   }
 
+  const close = () => setOpen(false);
+
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [open]);
+
   return (
-    <div className="relative shrink-0">
+    <div className="shrink-0">
       <button
         ref={buttonRef}
         type="button"
@@ -144,18 +169,20 @@ export function KebabMenu({
       >
         ⋮
       </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div
-            className={`absolute right-0 z-20 min-w-32 rounded-md border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg ${
-              openUpward ? 'bottom-full mb-1' : 'top-full mt-1'
-            }`}
-          >
-            {children(() => setOpen(false))}
-          </div>
-        </>
-      )}
+      {open &&
+        pos &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-10" onClick={close} />
+            <div
+              className="fixed z-30 min-w-32 rounded-md border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg"
+              style={{ top: pos.top, bottom: pos.bottom, right: pos.right }}
+            >
+              {children(close)}
+            </div>
+          </>,
+          document.body
+        )}
     </div>
   );
 }

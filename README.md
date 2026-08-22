@@ -21,7 +21,7 @@ framework.
 - **Visit entry & patient lookup** — search by MRNO/name (create-if-missing, walk-in MRNO auto-generation with sequential format `PREFIXYY-NNNN`, e.g. `W26-0001` for the first walk-in of 2026, resetting yearly and auto-widening past 9999), visit entry with catalog price autofill, price override with mandatory adjustment reason, package session tracking (1/3, 2/3 … with ₹0 continuations). Once a patient's confirmed, a reference panel shows their last visit and open-package progress alongside the form.
 - **Edit visit** — condition, treatment notes, treatments performed, and (while not yet invoiced) bill amount, therapist, and date, editable after the fact from Ledger's row menu — scoped to the visit's own therapist or an admin. Clinical fields stay editable after invoicing; only billing locks.
 - **Treatment tracking** — a clinic-editable list of treatment types (Manual Therapy, Exercise Therapy, Kinesio Taping, ...), independent of billing and of Core Assessment. Checked off per visit as "Treatments performed"; Patient Profile's Care plan card shows a running per-package count (e.g. "Manual Therapy: 4 · Exercise: 6").
-- **Today-first workspace** — default landing page showing today's visits with payment state at a glance (Paid / Collect ₹X / ₹0 session) as boxed cards on phone, a table on tablet/desktop, and a Packages panel (Open/Stale/All, "Mine only" for anyone with a linked therapist record) for tracking sessions still owed.
+- **Today-first workspace** — default landing page showing today's visits with payment state at a glance (Paid / Collect ₹X / Package / No charge — the last two both mean ₹0 billed, but for different reasons: a package session already billed elsewhere vs. a standalone complimentary visit) as boxed cards on phone, a table on tablet/desktop, and a Packages panel (Open/Stale/All, "Mine only" for anyone with a linked therapist record) for tracking sessions still owed.
 - **Ledger** — full visit history with dense table, patient enrichment (last visit + count, treatment, condition, bill amount), therapist filter, date range search, bulk actions (invoice, repeat, split, delete). Visits/Invoices sub-tabs are URL-addressable (`/ledger?tab=invoices`); the Invoices sub-tab only appears for clinics with billing access. Invoices are only ever issued against a real visit — there's no standalone "manual invoice" path.
 
 ### Clinical Assessment & Notes
@@ -119,7 +119,7 @@ patients work.
 
 **WorkspacePage (New Default Landing)**
 - `/` now redirects to `/workspace` as the primary entry point
-- **Today section** — visits entered today with payment state chips (Paid / Collect ₹X / ₹0 session), organized as table rows
+- **Today section** — visits entered today with payment state chips (Paid / Collect ₹X / Package / No charge), organized as table rows
 - **Recent section** — rolling 7/15/30 day windows with same column structure as Today, excludes today's visits for continuous timeline
 - **Open Packages** — active treatment packages with stale indicators (14+ days since last visit)
 - **Pending Work feed** — unresolved items (stale packages, outstanding invoices, incomplete notes) with "Mark paid" actions for quick invoice payment recording

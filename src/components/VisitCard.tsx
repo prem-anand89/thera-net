@@ -5,21 +5,25 @@ import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import type { VisitPaymentState } from '@/domain/paymentState';
-import { paymentActions, paymentStatusPhrase, paymentStatusShortPhrase } from '@/domain/paymentState';
+import { isPackageContinuation, paymentActions, paymentStatusPhrase, paymentStatusShortPhrase } from '@/domain/paymentState';
 import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 import type { PatientProfileBackTarget } from '@/app/router';
 
-export const PAYMENT_CHIP: Record<
-  VisitPaymentState,
-  { tone: 'green' | 'amber' | 'slate'; label: string }
-> = {
-  paid: { tone: 'green', label: paymentStatusPhrase('paid') },
-  collected_no_receipt: { tone: 'green', label: paymentStatusPhrase('collected_no_receipt') },
-  partially_collected: { tone: 'amber', label: paymentStatusPhrase('partially_collected') },
-  outstanding: { tone: 'amber', label: paymentStatusPhrase('outstanding') },
-  uninvoiced: { tone: 'amber', label: paymentStatusPhrase('uninvoiced') },
-  zero_session: { tone: 'slate', label: paymentStatusPhrase('zero_session') },
+/**
+ * Pill color per payment state. Label is deliberately not stored here —
+ * `zero_session` reads differently depending on whether it's a package
+ * continuation or a standalone complimentary visit, a distinction this
+ * map has no per-row context for; every caller computes its label fresh
+ * via `paymentStatusPhrase`/`paymentStatusShortPhrase` instead.
+ */
+export const PAYMENT_CHIP: Record<VisitPaymentState, { tone: 'green' | 'amber' | 'slate' }> = {
+  paid: { tone: 'green' },
+  collected_no_receipt: { tone: 'green' },
+  partially_collected: { tone: 'amber' },
+  outstanding: { tone: 'amber' },
+  uninvoiced: { tone: 'amber' },
+  zero_session: { tone: 'slate' },
 };
 
 /** Combines catalog treatment picks with the free-text add-on into one
@@ -235,8 +239,11 @@ function PaymentStatusDisplay({
   const chip = PAYMENT_CHIP[data.paymentState];
   const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
-  const statusLabel = compact ? paymentStatusShortPhrase(data.paymentState) : chip.label;
-  const statusTitle = compact ? paymentStatusPhrase(data.paymentState) : undefined;
+  const isPackage = isPackageContinuation(data.sessionIndex, data.packageTotal);
+  const statusLabel = compact
+    ? paymentStatusShortPhrase(data.paymentState, isPackage)
+    : paymentStatusPhrase(data.paymentState, isPackage);
+  const statusTitle = compact ? paymentStatusPhrase(data.paymentState, isPackage) : undefined;
 
   // Billing fields freeze the moment a visit is invoiced (see
   // EditVisitModal's `frozen` check), independent of whether it's since
@@ -279,6 +286,17 @@ function PaymentStatusDisplay({
         {!canInvoice && paymentActions(data.paymentState).length > 0 && (
           <Pill tone="slate">Ask billing</Pill>
         )}
+        {data.needsNote && data.canViewNotes && (
+          <Link
+            to="/patients/$patientId/notes/new"
+            params={{ patientId: data.patientId }}
+            search={{ visitId: data.visitId }}
+            className="whitespace-nowrap text-[10px] font-medium text-[var(--amber)] hover:underline"
+            title="Clinical note not started for this visit"
+          >
+            + Note
+          </Link>
+        )}
       </div>
     );
   }
@@ -294,7 +312,7 @@ function PaymentStatusDisplay({
             🔒
           </span>
         )}
-        <Pill tone={chip.tone}>{chip.label}</Pill>
+        <Pill tone={chip.tone}>{statusLabel}</Pill>
       </div>
       {canInvoice && actions.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1">
@@ -321,7 +339,7 @@ function PaymentStatusDisplay({
       {!canInvoice && paymentActions(data.paymentState).length > 0 && (
         <Pill tone="slate">Ask billing</Pill>
       )}
-      {data.needsNote && (
+      {data.needsNote && data.canViewNotes && (
         <Link
           to="/patients/$patientId/notes/new"
           params={{ patientId: data.patientId }}
@@ -434,6 +452,10 @@ export function SharedVisitCard({
   const chip = PAYMENT_CHIP[data.paymentState];
   const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
+  const statusLabel = paymentStatusPhrase(
+    data.paymentState,
+    isPackageContinuation(data.sessionIndex, data.packageTotal)
+  );
 
   const content = (
     <>
@@ -474,7 +496,7 @@ export function SharedVisitCard({
       <VisitCardDetails data={data} />
 
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
-        <Pill tone={chip.tone}>{chip.label}</Pill>
+        <Pill tone={chip.tone}>{statusLabel}</Pill>
         <div className="flex flex-wrap items-center justify-end gap-1.5">
           {actions.includes('take_payment') && (
             <button
@@ -495,7 +517,7 @@ export function SharedVisitCard({
             </button>
           )}
           {!canInvoice && paymentActions(data.paymentState).length > 0 && <Pill tone="slate">Ask billing</Pill>}
-          {data.needsNote && (
+          {data.needsNote && data.canViewNotes && (
             <Link
               to="/patients/$patientId/notes/new"
               params={{ patientId: data.patientId }}
