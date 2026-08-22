@@ -73,7 +73,7 @@ export function paymentStatusPhrase(state: VisitPaymentState): string {
 export function paymentStatusShortPhrase(state: VisitPaymentState): string {
   switch (state) {
     case 'zero_session':
-      return '₹0';
+      return 'No charge';
     case 'paid':
       return 'Invoiced';
     case 'collected_no_receipt':

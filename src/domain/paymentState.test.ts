@@ -100,4 +100,11 @@ describe('paymentStatusShortPhrase', () => {
     expect(paymentStatusShortPhrase('collected_no_receipt')).toBe('Collected');
     expect(paymentStatusPhrase('collected_no_receipt')).toBe('collected · no invoice');
   });
+
+  it('explains a zero-bill package-continuation row instead of repeating the Bill column', () => {
+    // The table's Bill column already shows ₹0 for these rows — the Status
+    // cell restating the same figure ("₹0") explains nothing new. "No
+    // charge" says why there's nothing to collect or invoice here.
+    expect(paymentStatusShortPhrase('zero_session')).toBe('No charge');
+  });
 });
