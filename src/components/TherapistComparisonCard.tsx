@@ -150,6 +150,7 @@ export function TherapistComparisonCard() {
                 <tr>
                   <th className={th}>Therapist</th>
                   <th className={thNum}>Bill Amount</th>
+                  {hospitalSplit && <th className={thNum}>Post Tax {labels.own}</th>}
                   <th className={thNum}>Net</th>
                   <th className={thNum}>Visits</th>
                   <th className={thNum}>Open packages</th>
@@ -162,12 +163,27 @@ export function TherapistComparisonCard() {
                     <tr key={name}>
                       <td className={td}>{name}</td>
                       <td className={tdNum}>{formatINR(row?.billPaise ?? 0)}</td>
+                      {hospitalSplit && <td className={tdNum}>{formatINR(row?.postTaxPaise ?? 0)}</td>}
                       <td className={tdNum}>{formatINR(row?.netPostTaxPaise ?? 0)}</td>
                       <td className={tdNum}>{row?.visitCount ?? 0}</td>
                       <td className={tdNum}>{openPackageCountByName.get(name) ?? 0}</td>
                     </tr>
                   );
                 })}
+                {currentMonthRow && (
+                  <tr className="bg-[var(--paper)] font-semibold">
+                    <td className={td}>Total</td>
+                    <td className={tdNum}>{formatINR(currentMonthRow.total.billPaise)}</td>
+                    {hospitalSplit && (
+                      <td className={tdNum}>{formatINR(currentMonthRow.total.postTaxPaise)}</td>
+                    )}
+                    <td className={tdNum}>{formatINR(currentMonthRow.total.netPostTaxPaise)}</td>
+                    <td className={tdNum}>{currentMonthRow.total.visitCount}</td>
+                    <td className={tdNum}>
+                      {[...openPackageCountByName.values()].reduce((s, n) => s + n, 0)}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

@@ -94,6 +94,19 @@ export function MonthlyStatementPage() {
           partner={labels.partner}
         />
       </div>
+      {therapistSplit && (
+        <p className="text-xs text-[var(--muted)]">
+          Wondering where a Shared or Net figure came from?{' '}
+          <Link
+            to="/insights"
+            search={{ tab: 'audit', year: selected.year, month: selected.month }}
+            className="font-medium text-[var(--teal)] hover:underline"
+          >
+            See the attribution audit
+          </Link>{' '}
+          for this month's per-visit detail.
+        </p>
+      )}
 
       <p className="text-xs text-[var(--muted)]">
         Patients = unique patients in the month, not visit count.
