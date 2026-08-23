@@ -872,6 +872,58 @@ pure tier → feature map (`tierIncludes()`) the hook's `can()` reads, plus
 No UI reads this yet — Phase 1 only builds the read path. Enforcement
 (Phase 2) and the Settings `plan` section (Phase 3) are what consume it.
 
+**Enforcement (Phase 2):** four gates, all reading `clinic_plans` directly
+(server-side) so none of them can be bypassed by a client that doesn't call
+`useEntitlements()`:
+
+- **Invoicing** — `issue_invoice()` checks plan status and tier *before*
+  the pre-existing `clinic_entitlements('invoicing')` /
+  `billing_enabled` / `invoicing_access` chain. Full precedence: **plan
+  status (`read_only` blocks outright) → plan tier (`lite` blocks) →
+  `clinic_entitlements` → `billing_enabled` → `invoicing_access`.** Each
+  layer raises its own distinct error message.
+- **New patients** — `enforce_clinic_plan_on_patient_insert()`, a
+  `BEFORE INSERT` trigger on `patients`, blocks while `status <> 'active'`.
+  Edits to existing patients are unaffected — only new rows are gated.
+- **New visits** — `enforce_clinic_plan_on_visit_insert()`, a
+  `BEFORE INSERT` trigger on `visits`, blocks while `status <> 'active'`,
+  and separately enforces `visit_cap_per_month` **with a +20 buffer**
+  (a hard block at the exact cap risks losing a real visit to a
+  multi-device offline-sync race — the buffer absorbs that, the client
+  pre-check below is the real day-to-day gate). Counted by the visit's own
+  `visit_date`'s calendar month, not today's date — this is also what
+  makes `importVisitsService.ts`'s bulk historical importer safe with no
+  special-casing: it writes through this exact same insert path (no
+  separate RPC to exempt), but imported rows are virtually always dated in
+  past months, so they don't touch the current month's count. A same-month
+  bulk import can still hit the buffer.
+- **Seat cap** — the `invite-therapist` edge function counts
+  `clinic_members` against `clinic_plans.max_members` before inviting or
+  re-linking an existing account to the clinic (both add a
+  `clinic_members` row, both count). Fails open if a clinic somehow has no
+  `clinic_plans` row (shouldn't happen — every clinic is seeded one).
+- **Client pre-check** — `NewVisitPage.tsx`'s `save()` reads
+  `useEntitlements(clinic.id)` and blocks before attempting to save once
+  `visitsThisMonth >= visitCapPerMonth`, so a normal user sees a clear
+  message before ever reaching the server buffer above.
+
+Deliberately **not** touched: `can_use_module()` / `consultation_notes` /
+the five assessment-module keys. `clinics.clinical_docs_enabled` and
+`clinic_module_settings('consultation_notes')` are two separate gates for
+the same live, actively-used feature (see the dead-infrastructure section
+above) — adding a third (plan-tier) gate on top without reconciling those
+first risks breaking real clinical documentation. The five module keys have
+zero client code today regardless, so gating them has no practical effect
+yet. Deferred to the still-open "advanced modules content" planning pass.
+
+**Bug fixed during Phase 2 testing:** `clinic_plans_updated` (Phase 0) used
+the generic `set_updated_at()` trigger function, which unconditionally sets
+`updated_by`/`created_by` — columns `clinic_plans` doesn't have (there's no
+write path through an authenticated user's own session for this table).
+Every `UPDATE` failed until `20260823130001_fix_clinic_plans_updated_trigger.sql`
+gave it its own minimal trigger function that only sets `updated_at`. Caught
+by direct testing before anything in production exercised the broken path.
+
 ---
 
 ## Key Design Patterns
