@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useBlocker, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
@@ -246,6 +246,15 @@ export function NoteEditorPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  /** Set after the first successful save (manual or autosave) for /notes/new. */
+  const [persistedNoteId, setPersistedNoteId] = useState<string | undefined>(noteId);
+  const [saveIndicator, setSaveIndicator] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autosavingRef = useRef(false);
+
+  useEffect(() => {
+    if (noteId) setPersistedNoteId(noteId);
+  }, [noteId]);
 
   // Last-saved (or last-hydrated) snapshot of `payload`, so a close/reload/
   // back-navigation can tell "nothing changed" apart from "there's unsaved
@@ -257,7 +266,10 @@ export function NoteEditorPage() {
   const isDirtyRef = useRef(false);
   useEffect(() => {
     isDirtyRef.current = JSON.stringify(payload) !== savedSnapshotRef.current;
-  }, [payload]);
+    if (ready && status !== 'completed' && isDirtyRef.current) {
+      setSaveIndicator((prev) => (prev === 'saving' ? prev : 'unsaved'));
+    }
+  }, [payload, ready, status]);
 
   // Read isDirtyRef (not a plain boolean) in both callbacks below so they
   // always see the latest value rather than whatever it was when this
@@ -410,13 +422,26 @@ export function NoteEditorPage() {
         setNoteMode(mode);
         setStatus(existingNote.status === 'completed' ? 'completed' : 'draft');
         setTherapistId(existingNote.therapistId);
+        setPersistedNoteId(existingNote.id);
         if (existingNote.assessmentPayload) {
           const hydrated = upcastPayload(existingNote.assessmentPayload);
           setPayload(hydrated);
           savedSnapshotRef.current = JSON.stringify(hydrated);
         }
         if (mode === 'followup') setExpanded(new Set());
+        setSaveIndicator('saved');
         setReady(true);
+        return;
+      }
+      const openDraft = await repos.consultationNotes.getOpenDraft(clinic.id, patientId);
+      if (openDraft) {
+        if (cancelled) return;
+        void navigate({
+          to: '/patients/$patientId/notes/$noteId',
+          params: { patientId, noteId: openDraft.id },
+          replace: true,
+          search: promptedVisitId ? { visitId: promptedVisitId } : {},
+        });
         return;
       }
       const enrollment = await consultationNoteService.getOrCreateActiveEnrollment(clinic.id, patientId);
@@ -456,7 +481,7 @@ export function NoteEditorPage() {
     return () => {
       cancelled = true;
     };
-  }, [noteId, existingNote, clinic.id, patientId]);
+  }, [noteId, existingNote, clinic.id, patientId, navigate, promptedVisitId]);
 
   const derived = computeDerivedFields(payload);
   const psfsImproving = payload.functionalStatus.activities.filter(
@@ -528,30 +553,34 @@ export function NoteEditorPage() {
     });
   }
 
-  async function save(nextStatus: 'draft' | 'completed') {
-    if (!enrollmentId || !therapistId) return;
-    if (!payload.chiefComplaint.anatomicalRegion) {
-      setError('Anatomical region is required before saving.');
-      return;
+  const persistDraft = useCallback(async (options: {
+    nextStatus: 'draft' | 'completed';
+    navigateAway: boolean;
+    requireRegion: boolean;
+  }) => {
+    const { nextStatus, navigateAway, requireRegion } = options;
+    if (!enrollmentId || !therapistId) return false;
+    if (requireRegion && !payload.chiefComplaint.anatomicalRegion) {
+      if (navigateAway) setError('Anatomical region is required before saving.');
+      return false;
     }
-    // The Screening banner (red flags) is otherwise purely informational —
-    // nothing stopped a note with e.g. cauda equina or fracture marked
-    // 'yes' from being marked completed same as any other. Not a silent
-    // block (a red flag can be a real, correctly-documented clinical
-    // state) — just a deliberate "are you sure" instead of a click that
-    // reads the same as every routine save.
     if (nextStatus === 'completed' && derived.redFlagCount > 0) {
       const proceed = confirm(
         `This note has ${derived.redFlagCount} red flag${derived.redFlagCount > 1 ? 's' : ''} marked in Screening. Mark completed anyway?`
       );
-      if (!proceed) return;
+      if (!proceed) return false;
     }
-    setBusy(true);
+    if (navigateAway) {
+      setBusy(true);
+    } else {
+      autosavingRef.current = true;
+      setSaveIndicator('saving');
+    }
     setError(null);
     try {
-      await consultationNoteService.saveAssessment(
+      const saved = await consultationNoteService.saveAssessment(
         {
-          id: existingNote?.id,
+          id: persistedNoteId ?? existingNote?.id,
           clinicId: clinic.id,
           patientId,
           therapistId,
@@ -563,14 +592,67 @@ export function NoteEditorPage() {
         payload,
         nextStatus
       );
+      setPersistedNoteId(saved.id);
+      hydratedNoteIdRef.current = saved.id;
       savedSnapshotRef.current = JSON.stringify(payload);
       isDirtyRef.current = false;
-      navigate({ to: '/patients/$patientId', params: { patientId } });
+      setSaveIndicator('saved');
+      if (!noteId && saved.id) {
+        void navigate({
+          to: '/patients/$patientId/notes/$noteId',
+          params: { patientId, noteId: saved.id },
+          replace: true,
+          search: promptedVisitId ? { visitId: promptedVisitId } : {},
+        });
+      }
+      if (navigateAway) {
+        navigate({ to: '/patients/$patientId', params: { patientId } });
+      }
+      return true;
     } catch (e) {
-      setError(toFriendlyMessage(e));
+      if (navigateAway) {
+        setError(toFriendlyMessage(e));
+      } else {
+        setSaveIndicator('unsaved');
+      }
+      return false;
     } finally {
-      setBusy(false);
+      if (navigateAway) {
+        setBusy(false);
+      } else {
+        autosavingRef.current = false;
+      }
     }
+  }, [
+    enrollmentId,
+    therapistId,
+    payload,
+    derived.redFlagCount,
+    persistedNoteId,
+    existingNote?.id,
+    existingNote?.visitId,
+    clinic.id,
+    patientId,
+    promptedVisitId,
+    noteMode,
+    noteId,
+    navigate,
+  ]);
+
+  useEffect(() => {
+    if (!ready || status === 'completed' || !enrollmentId || !therapistId) return;
+    if (!isDirtyRef.current) return;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      void persistDraft({ nextStatus: 'draft', navigateAway: false, requireRegion: false });
+    }, 2500);
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [payload, ready, status, enrollmentId, therapistId, persistDraft]);
+
+  async function save(nextStatus: 'draft' | 'completed') {
+    await persistDraft({ nextStatus, navigateAway: true, requireRegion: true });
   }
 
   function update<K extends keyof CoreAssessmentPayload>(key: K, value: CoreAssessmentPayload[K]) {
@@ -706,6 +788,15 @@ export function NoteEditorPage() {
             <span className={`note-status-chip ${status === 'completed' ? 'completed' : ''}`}>
               {status === 'completed' ? 'Completed' : 'Draft'}
             </span>
+            {!readOnly && saveIndicator === 'saving' && (
+              <span className="text-xs text-[var(--muted)]">Saving…</span>
+            )}
+            {!readOnly && saveIndicator === 'unsaved' && (
+              <span className="text-xs text-[var(--amber)]">Unsaved changes</span>
+            )}
+            {!readOnly && saveIndicator === 'saved' && (
+              <span className="text-xs text-[var(--muted)]">Saved</span>
+            )}
           </div>
         </div>
 
@@ -1796,7 +1887,8 @@ export function NoteEditorPage() {
             <span className="chev">›</span>
           </button>
           <div className="setup-section-body">
-          <div className="initial-only">
+          {noteMode === 'initial' && (
+          <>
           <p className="section-label">Gait</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
             <MultiToggle
@@ -1818,7 +1910,8 @@ export function NoteEditorPage() {
               onChange={(v) => update('gaitPosture', { ...payload.gaitPosture, posture: v })}
             />
           </div>
-        </div>
+          </>
+          )}
 
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -1852,7 +1945,8 @@ export function NoteEditorPage() {
           ))}
         </div>
 
-        <div className="initial-only">
+        {noteMode === 'initial' && (
+        <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <p className="section-label" style={{ margin: 0 }}>Neurological screen</p>
             <button type="button" className="btn-secondary" disabled={readOnly} onClick={() => {
@@ -1949,9 +2043,10 @@ export function NoteEditorPage() {
           </div>
           )}
         </div>
+        )}
 
-        {region && SPINE_REGIONS.includes(region) && (
-          <div className="initial-only">
+        {noteMode === 'initial' && region && SPINE_REGIONS.includes(region) && (
+          <div>
             <p className="section-label" style={{ marginTop: 14 }}>ROM quick preset — {region}</p>
             <table className="mini-table">
               <thead><tr><th>Movement</th><th>Degrees</th><th>Pain</th></tr></thead>
@@ -2052,7 +2147,8 @@ export function NoteEditorPage() {
           ))}
         </div>
 
-        <div className="initial-only">
+        {noteMode === 'initial' && (
+        <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <p className="section-label" style={{ margin: 0 }}>Special tests</p>
             <button className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, specialTests: [...payload.objective.specialTests, { testId: '', result: 'inconclusive' }] })}>+ Add</button>
@@ -2077,6 +2173,7 @@ export function NoteEditorPage() {
             </div>
           ))}
         </div>
+        )}
           </div>
         </div>
 
