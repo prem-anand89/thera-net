@@ -638,11 +638,17 @@ Profile already loads the patient's full note history via
 id              uuid PRIMARY KEY
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
-module_type     text NOT NULL (e.g., "core_assessment")
+module_type     text NOT NULL, CHECK in ('gut_screening', 'return_to_sport',
+                 'scoliosis_screening', 'face_scale', 'facial_palsy',
+                 'consultation_notes')
 status          text NOT NULL — episode open/closed state
 created_by, updated_by  uuid (NULLABLE)
 enrolled_at, updated_at  timestamptz NOT NULL
 ```
+Only `'consultation_notes'` is actually written client-side today
+(`consultationNoteService.ts`) — the other five values are schema-permitted
+(matching the five region-module response tables above) but nothing in
+`src/` creates an enrollment with them.
 
 #### `ai_generation_log`
 ```sql
@@ -669,6 +675,15 @@ jsonb` blob, one or two derived score/category columns, `created_by`/
 - **`facial_palsy_assessments`** — `side_affected`, `visit_label`, `hb_grade`,
   `sunnybrook_resting/voluntary/synkinesis jsonb`, `sunnybrook_score numeric`,
   `synkinesis_total int`
+
+None of the five has a Dexie table, repo, sync entry, or any UI anywhere in
+`src/` — they're reserved schema for modules that haven't been built, not
+available features. Only `face_scale_responses` and
+`facial_palsy_assessments` even have `can_use_module()`-gated RLS on insert/
+update (see `clinic_module_settings`/`clinic_entitlements` below); the
+other three (`screening_responses`, `return_to_sport_responses`,
+`scoliosis_screening_responses`) have no entitlement check at all — any
+clinic member can write to them.
 
 #### Consent tables
 ```sql
@@ -776,15 +791,27 @@ Also shown as a toggleable "Treatments" column/row on the Visits table
 (Ledger, Workspace, Patient Profile) — a separate `VisitColumnKey` from the
 pre-existing free-text `'treatment'` (treatmentNotes) column.
 
-#### `clinic_module_settings`, `clinic_entitlements` — dead infrastructure
-Both tables still exist (RLS enabled, no policies) but have **zero client
-code** reading or writing them anywhere in `src/` — no Dexie table, no repo,
-no sync. They were built for a Tier-1/Tier-2 module-gating mechanism that
-was never wired up. The `modules` reference table they originally pointed
-to was dropped (`20260820000001_drop_unused_modules_table.sql`); these two
-were left in place since removing them wasn't asked for. Don't build new
-features against them without first confirming they're actually meant to
-be resurrected — as of this writing they're inert.
+#### `clinic_module_settings`, `clinic_entitlements` — live at the RLS layer, zero client integration
+Not dead — `can_use_module(clinic_id, module_key)` (defined in
+`20260718000001_module_registry.sql`, revised in
+`20260721000001_entitlements_audit_log.sql`) checks `clinic_entitlements`
+(fail-open: no row = entitled) then `clinic_module_settings` (fail-closed
+otherwise), and is called from the insert/update RLS policies on
+`consultation_notes`, `face_scale_responses`, and `facial_palsy_assessments`.
+Every write to those three tables runs through it today.
+
+What's genuinely missing is the **client side**: no Dexie table, no repo,
+no sync, no UI anywhere in `src/` reads or writes either table — so nothing
+in the app currently sets a narrower entitlement or surfaces a "this module
+is off" state. In practice every clinic reads as fully entitled, because
+nothing has ever populated `clinic_entitlements` with a restrictive row.
+The `modules` reference table these two originally pointed to was dropped
+(`20260820000001_drop_unused_modules_table.sql`); `module_key` is now
+unconstrained free text on both tables. Don't build new gating logic on top
+of this without first confirming the tier-subscription plan (see
+`theranettierplan.md` discussion) is what's meant to populate it —
+`can_use_module()`'s fail-open default is backwards for a paywall and would
+need to change before these tables can gate a paid tier.
 
 ---
 

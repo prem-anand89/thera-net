@@ -11,9 +11,11 @@ multi-clinic operations from day one, with configurable revenue-split models
 **Current scope:** the visit ledger (visits, invoices, reports, dashboard),
 revenue tracking, multi-clinic isolation, and Core Assessment (clinical
 consultation notes with comprehensive pain profiling, functional status tracking,
-and objective neurological examination). Additional assessment modules (FaCE Scale,
-Facial Palsy, and others) can be added as Region Modules within the Core Assessment
-framework.
+and objective neurological examination). The database already has schema and
+RLS scaffolding for optional Region Modules (FaCE Scale, Facial Palsy, and
+others) as future extensions of Core Assessment, but none of them has any
+client-side implementation yet — no UI, no Dexie/sync integration. See
+`FEATURES_AND_SCHEMA.md` for the current state of that scaffolding.
 
 ## What it does
 

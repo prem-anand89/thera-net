@@ -491,7 +491,8 @@ export type EnrollmentStatus = 'active' | 'completed' | 'discharged';
  * later one in the same enrollment is Follow-up. `moduleType` matches the
  * live `patient_module_enrollments.module_type` column name and its CHECK
  * constraint's allowed values (see docs/CORE-ASSESSMENT-PORT-PLAN.md §3) —
- * not an FK to a modules table.
+ * not an FK to a modules table. Only 'consultation_notes' is written by any
+ * client code today; the other five values are schema-permitted but unused.
  */
 export interface PatientModuleEnrollment {
   id: UUID;
