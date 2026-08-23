@@ -806,12 +806,56 @@ in the app currently sets a narrower entitlement or surfaces a "this module
 is off" state. In practice every clinic reads as fully entitled, because
 nothing has ever populated `clinic_entitlements` with a restrictive row.
 The `modules` reference table these two originally pointed to was dropped
-(`20260820000001_drop_unused_modules_table.sql`); `module_key` is now
-unconstrained free text on both tables. Don't build new gating logic on top
-of this without first confirming the tier-subscription plan (see
-`theranettierplan.md` discussion) is what's meant to populate it —
-`can_use_module()`'s fail-open default is backwards for a paywall and would
-need to change before these tables can gate a paid tier.
+(`20260820000001_drop_unused_modules_table.sql`), taking its FK on
+`module_key` with it via CASCADE. Restored as a plain `CHECK` constraint
+(`20260823120000_restore_module_key_check.sql`) against the same seven
+keys the `modules` table used to hold: `'gut_screening'`,
+`'return_to_sport'`, `'scoliosis_screening'`, `'face_scale'`,
+`'facial_palsy'`, `'consultation_notes'`, `'invoicing'`. Don't build new
+gating logic on top of this without first confirming the tier-subscription
+plan is what's meant to populate it — `can_use_module()`'s fail-open
+default is backwards for a paywall and would need to change before these
+tables can gate a paid tier.
+
+#### `clinic_plans` — the tier boundary, service-role write only
+Added as Phase 0 of the tier-subscription plan
+(`20260823120001_clinic_plans.sql`). One row per clinic:
+
+```sql
+clinic_plans (
+  clinic_id             uuid PRIMARY KEY (FOREIGN KEY → clinics.id, CASCADE)
+  plan_tier             text NOT NULL, CHECK in ('lite', 'solo', 'clinic', 'clinic_plus')
+  status                text NOT NULL DEFAULT 'active', CHECK in ('active', 'past_due', 'read_only')
+  max_members           int NOT NULL       -- tunable per clinic, seeded from tier
+  visit_cap_per_month   int                -- NULL = unlimited
+  updated_at            timestamptz NOT NULL DEFAULT now()
+)
+```
+
+RLS is deliberately asymmetric: `clinic_plans_select` lets any clinic
+member read their own clinic's row, and there is **no write policy at
+all**. With RLS enabled and zero write policies, Postgres denies every
+`INSERT`/`UPDATE`/`DELETE` from the `authenticated` role outright — only
+`service_role` (which bypasses RLS) can write this table. This is the
+actual fix for the plan-tier-must-not-be-self-serve-editable problem: a
+`plan_tier` column on `clinics` itself couldn't get this property, since
+`clinics_update` already grants clinic admins unrestricted column access
+and `clinics` rides the client-writable outbox.
+
+Seeded automatically, mirroring `add_creator_as_admin()` and
+`seed_default_module_settings()` (both existing AFTER INSERT triggers on
+`clinics`): `seed_default_clinic_plan()` inserts a `lite` / `active` / 1
+seat / 50 visits-per-month row for every newly created clinic. All four
+existing clinics at migration time were backfilled as `clinic_plus` /
+`active` / unlimited — a deliberate placeholder that grandfathers today's
+de-facto behavior (nothing has ever been gated), not a real tier
+assignment; real per-clinic tiers need deciding before enforcement
+(seat cap, visit cap, invoicing gate — none of it is wired up yet) lands
+on top of this table.
+
+No client integration yet (no Dexie table, no repo, no sync, no UI) — this
+is Phase 0 of a staged build; the read path and enforcement land in later
+phases.
 
 ---
 
