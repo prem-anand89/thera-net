@@ -853,9 +853,24 @@ assignment; real per-clinic tiers need deciding before enforcement
 (seat cap, visit cap, invoicing gate — none of it is wired up yet) lands
 on top of this table.
 
-No client integration yet (no Dexie table, no repo, no sync, no UI) — this
-is Phase 0 of a staged build; the read path and enforcement land in later
-phases.
+**Read path (Phase 1):** `useEntitlements(clinicId)` (`src/app/useEntitlements.ts`)
+is the sole read point. `clinic_plans` has no Dexie table and isn't part of
+the sync engine's generic per-table pull (`ALL_SYNCED_TABLES` in
+`src/lib/db.ts`) — that loop assumes every table has an `id` primary key,
+and this one is keyed by `clinicId`. Instead the hook fetches it directly
+via Supabase, exactly mirroring `useClinicRole`'s pattern: cached as JSON in
+Dexie's `meta` table (key `plan:${clinicId}`) so the tier survives offline,
+a fresh online fetch always wins, and an unresolved fetch never flashes the
+least-restrictive default (`lite`/1 seat/50 visits — the same fail-closed
+default `DEFAULT_PLAN` uses when nothing has loaded yet). The hook also
+returns `seatsUsed` (a live `clinic_members` count, online-only — `null`
+when unknown) and `visitsThisMonth` (computed from local Dexie visits via
+`repos.visits.list`, so it works offline). `src/domain/plans.ts` holds the
+pure tier → feature map (`tierIncludes()`) the hook's `can()` reads, plus
+`currentMonthRange()` — both unit-tested.
+
+No UI reads this yet — Phase 1 only builds the read path. Enforcement
+(Phase 2) and the Settings `plan` section (Phase 3) are what consume it.
 
 ---
 
