@@ -8,6 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { clinicBillingConfig, type ConsultationNote, type Visit } from '@/domain/types';
+import { noteForVisit } from '@/domain/noteLinks';
 import type { TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
@@ -42,9 +43,10 @@ function todayRowToCardData(
   therapistSplit: boolean,
   treatmentName: Map<string, string>,
   invoicedSiblingGroupIds: Set<string>,
-  noteByVisitId: Map<string, ConsultationNote>
+  consultationNotes: ConsultationNote[] | undefined
 ): VisitCardData {
   const canModify = isAdmin || row.therapistId === myTherapistId;
+  const linkedNote = noteForVisit(consultationNotes ?? [], row.visitId, row.patientId, row.needsNote);
   return {
     visitId: row.visitId,
     visitDate: new Date().toISOString().slice(0, 10),
@@ -73,8 +75,8 @@ function todayRowToCardData(
     canDelete: !row.invoiceId && canModify,
     needsNote: row.needsNote,
     canViewNotes: canViewClinicalNotes,
-    consultationNoteId: noteByVisitId.get(row.visitId)?.id ?? null,
-    noteStatus: noteByVisitId.get(row.visitId)?.status ?? null,
+    consultationNoteId: linkedNote?.id ?? null,
+    noteStatus: linkedNote?.status ?? null,
     packageInvoicePending:
       row.billPaise === 0 &&
       !!row.sessionIndex &&
@@ -156,13 +158,6 @@ export function WorkspacePage() {
     () => (canViewClinicalNotes ? repos.consultationNotes.listByClinic(clinic.id) : undefined),
     [clinic.id, canViewClinicalNotes]
   );
-  const noteByVisitId = useMemo(() => {
-    const map = new Map<string, ConsultationNote>();
-    for (const n of consultationNotes ?? []) {
-      if (n.visitId) map.set(n.visitId, n);
-    }
-    return map;
-  }, [consultationNotes]);
 
   // A ₹0 package continuation logged today whose OWN invoiceId is null —
   // check the full package group (unbounded by "today") for an invoiced
@@ -252,7 +247,7 @@ export function WorkspacePage() {
                 therapistSplit,
                 treatmentName,
                 invoicedSiblingGroupIds ?? new Set(),
-                noteByVisitId
+                consultationNotes
               )
             )}
             showDate={false}

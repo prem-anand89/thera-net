@@ -371,17 +371,6 @@ function PaymentStatusDisplay({
           </span>
         </Pill>
       )}
-      {data.needsNote && data.canViewNotes && (
-        <Link
-          to="/patients/$patientId/notes/new"
-          params={{ patientId: data.patientId }}
-          search={{ visitId: data.visitId }}
-          className="text-xs font-medium text-[var(--amber)] hover:underline"
-          title="Clinical note not started for this visit"
-        >
-          + Note
-        </Link>
-      )}
     </div>
   );
 }
@@ -392,17 +381,23 @@ const NOTE_STATUS_CELL: Record<'draft' | 'completed' | 'archived', { tone: 'gree
   archived: { tone: 'slate', label: 'Archived', action: 'View' },
 };
 
-/** The table's dedicated Note column — split out from the Status column so
- *  a billing concern (chip/actions) and a documentation concern (clinical
- *  note nudge) don't compete for space on the same crowded line. Three
- *  states: an existing note (Draft — still editable in NoteEditorPage, or
- *  Completed/Archived — read-only there) links straight to it; no note
- *  yet but one's expected offers "+ Note" to start one; no note and none
- *  expected renders nothing. */
-function NoteCell({ data }: { data: VisitCardData }) {
+/** Clinical-note entry point for a visit row — shared by the table Note
+ *  column and mobile cards so draft/continue/view routing stays consistent. */
+export function VisitNoteLink({ data, inline }: { data: VisitCardData; inline?: boolean }) {
   if (!data.canViewNotes) return null;
   if (data.consultationNoteId && data.noteStatus) {
     const { tone, label, action } = NOTE_STATUS_CELL[data.noteStatus];
+    if (inline) {
+      return (
+        <Link
+          to="/patients/$patientId/notes/$noteId"
+          params={{ patientId: data.patientId, noteId: data.consultationNoteId }}
+          className="text-xs font-medium text-[var(--teal)] hover:underline"
+        >
+          {action} note
+        </Link>
+      );
+    }
     return (
       <div className="flex flex-col items-start gap-0.5">
         <Pill tone={tone}>{label}</Pill>
@@ -428,6 +423,10 @@ function NoteCell({ data }: { data: VisitCardData }) {
       + Note
     </Link>
   );
+}
+
+function NoteCell({ data }: { data: VisitCardData }) {
+  return <VisitNoteLink data={data} />;
 }
 
 /** Label + value rows for mobile cards — same field order as the optional table columns. */
@@ -593,17 +592,7 @@ export function SharedVisitCard({
             </button>
           )}
           {!canInvoice && paymentActions(data.paymentState).length > 0 && <Pill tone="slate">Ask billing</Pill>}
-          {data.needsNote && data.canViewNotes && (
-            <Link
-              to="/patients/$patientId/notes/new"
-              params={{ patientId: data.patientId }}
-              search={{ visitId: data.visitId }}
-              className="text-xs font-medium text-[var(--amber)] hover:underline"
-              title="Clinical note not started for this visit"
-            >
-              + Note
-            </Link>
-          )}
+          <VisitNoteLink data={data} inline />
         </div>
       </div>
     </>

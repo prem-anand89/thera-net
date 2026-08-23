@@ -11,6 +11,7 @@ import { formatINR } from '@/domain/money';
 import { formatDateDMY, formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
+import { noteForVisit } from '@/domain/noteLinks';
 import {
   clinicBillingConfig,
   clinicShareLabels,
@@ -75,7 +76,7 @@ function visitToCardData(
   myTherapistId: UUID | undefined,
   canViewClinicalNotes: boolean,
   invoicedSiblingGroupIds: Set<UUID>,
-  noteByVisitId: Map<UUID, ConsultationNote>
+  consultationNotes: ConsultationNote[] | undefined
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy = v.createdBy && v.updatedBy && v.createdBy !== v.updatedBy
@@ -92,6 +93,8 @@ function visitToCardData(
   // a clickable Delete/Split on every colleague's visit in this clinic-wide
   // list and only found out it was blocked after the server rejected it.
   const canModify = isAdmin || v.therapistId === myTherapistId;
+  const needsNote = v.clinicalStatus === 'pending';
+  const linkedNote = noteForVisit(consultationNotes ?? [], v.id, v.patientId, needsNote);
 
   return {
     visitId: v.id,
@@ -122,10 +125,10 @@ function visitToCardData(
     canSplit: therapistSplit && v.actualBillPaise > 0 && canModify,
     hasSplit: v.sharedTherapistId ? true : false,
     canDelete: !v.invoiceId && canModify,
-    needsNote: v.clinicalStatus === 'pending',
+    needsNote,
     canViewNotes: canViewClinicalNotes,
-    consultationNoteId: noteByVisitId.get(v.id)?.id ?? null,
-    noteStatus: noteByVisitId.get(v.id)?.status ?? null,
+    consultationNoteId: linkedNote?.id ?? null,
+    noteStatus: linkedNote?.status ?? null,
     packageInvoicePending:
       v.actualBillPaise === 0 &&
       !!v.sessionIndex &&
@@ -249,13 +252,6 @@ export function LedgerPage() {
     () => (canViewClinicalNotes ? repos.consultationNotes.listByClinic(clinic.id) : undefined),
     [clinic.id, canViewClinicalNotes]
   );
-  const noteByVisitId = useMemo(() => {
-    const map = new Map<UUID, ConsultationNote>();
-    for (const n of consultationNotes ?? []) {
-      if (n.visitId) map.set(n.visitId, n);
-    }
-    return map;
-  }, [consultationNotes]);
 
   // Payment state needs both facts a bare `invoiceId` check misses: whether
   // the invoice itself was ever marked paid (statusByInvoiceId), and
@@ -341,7 +337,7 @@ export function LedgerPage() {
           myTherapistId,
           canViewClinicalNotes,
           invoicedSiblingGroupIds ?? new Set(),
-          noteByVisitId
+          consultationNotes
         )
       ),
     [
@@ -360,7 +356,7 @@ export function LedgerPage() {
       myTherapistId,
       canViewClinicalNotes,
       invoicedSiblingGroupIds,
-      noteByVisitId,
+      consultationNotes,
     ]
   );
 
