@@ -5,7 +5,9 @@ import { repos, backupService, therapistService, visitService } from '@/services
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
+import { useEntitlements } from '@/app/useEntitlements';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from '@/app/useClinicRole';
+import { PLAN_TIER_LABELS, minimumTierFor, type PlanFeature } from '@/domain/plans';
 import { getSupabase, publicTherapistPhotoUrl, publicLogoUrl } from '@/lib/supabase';
 import { resizeImageToBlob } from '@/lib/resizeImage';
 import { SUPABASE_URL } from '@/lib/env';
@@ -36,12 +38,14 @@ import {
   td,
   tdNum,
   InfoTip,
+  Pill,
+  StatTile,
 } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
 import { FirstWeekChecklist, useFirstWeekChecklistVisible } from './FirstWeekChecklist';
 import { isValidUpiVpa } from '@/domain/upiPay';
 
-type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'treatments' | 'referrals' | 'data';
+type SectionKey = 'plan' | 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'treatments' | 'referrals' | 'data';
 
 /**
  * Grouped into the three jobs an admin actually comes here to do, rather
@@ -53,6 +57,7 @@ type SectionKey = 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'tre
  * adjacent tabs held it.
  */
 const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
+  { label: 'Account', keys: ['plan'] },
   { label: 'Clinic', keys: ['profile', 'billing', 'partner'] },
   { label: 'People & services', keys: ['team', 'services', 'treatments', 'referrals'] },
   { label: 'System', keys: ['data'] },
@@ -64,6 +69,12 @@ const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
 type Accent = 'teal' | 'amber' | 'rust' | 'moss' | 'slate';
 
 const SECTIONS: { key: SectionKey; label: string; description: string; accent: Accent }[] = [
+  {
+    key: 'plan',
+    label: 'Plan',
+    description: 'Your current tier, what it includes, and seat/visit limits.',
+    accent: 'slate',
+  },
   {
     key: 'profile',
     label: 'Clinic profile',
@@ -118,6 +129,7 @@ const ACCENT_VARS: Record<Accent, { color: string; light: string }> = {
 };
 
 const SECTION_ICON_PATHS: Record<SectionKey, string> = {
+  plan: 'M3 12.5V3.5h10v9M3 12.5h10M6 6.5h4M6 9h2.5',
   profile: 'M2.5 3h11v10h-11zM5.5 6h5M5.5 8.3h5M5.5 10.6h3',
   billing: 'M2.5 6.5L8 2.8l5.5 3.7M3.7 5.8V12a1 1 0 001 1h6.6a1 1 0 001-1V5.8',
   partner: 'M8 2.5l1.4 3.1 3.4.4-2.5 2.3.7 3.4L8 10l-3 1.7.7-3.4-2.5-2.3 3.4-.4L8 2.5z',
@@ -155,12 +167,19 @@ function SettingsSectionNavButton({
   section,
   active,
   dirty,
+  locked,
   onSelect,
   variant,
 }: {
   section: (typeof SECTIONS)[number];
   active: boolean;
   dirty: boolean;
+  /** Section is above the clinic's plan tier — stays clickable (shows a
+   *  locked notice instead of the real content) and stays in the rail for
+   *  discoverability, just greyed with a lock glyph. See Part 3 of the
+   *  tier plan: "locked ≠ irrelevant" — hiding a paid feature is how you
+   *  get zero upgrades. */
+  locked?: boolean;
   onSelect: () => void;
   variant: 'mobile' | 'rail';
 }) {
@@ -172,9 +191,10 @@ function SettingsSectionNavButton({
       data-section={section.key}
       onClick={onSelect}
       className={
-        mobile
+        (mobile
           ? 'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-2 text-xs font-medium'
-          : 'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm font-medium desktop:w-full'
+          : 'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm font-medium desktop:w-full') +
+        (locked && !active ? ' opacity-60' : '')
       }
       style={
         active
@@ -190,6 +210,12 @@ function SettingsSectionNavButton({
     >
       <SectionIcon sectionKey={section.key} accent={section.accent} />
       {section.label}
+      {locked && (
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-label="Locked" className="shrink-0">
+          <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
+          <path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        </svg>
+      )}
       {dirty && <span className="text-[var(--rust)]">•</span>}
     </button>
   );
@@ -219,6 +245,14 @@ export function SettingsPage() {
   const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
   const catalogEmpty = catalog !== undefined && catalog.length === 0;
+  const entitlements = useEntitlements(clinic.id);
+  // partner is hidden (not locked) below Clinic — a Lite/Solo clinic can't
+  // have a hospital revenue-split relationship at all under its plan, so
+  // showing it as a purchasable upsell would be a lie (Part 3 of the tier
+  // plan). billing stays visible everywhere, just locked — hiding a paid
+  // feature is how you get zero upgrades.
+  const canSeePartner = entitlements.can('revenueSplit');
+  const canSeeBilling = entitlements.can('invoicing');
 
   // `replace` so switching tabs doesn't spam browser history — a `?tab=`
   // link is meant to be bookmarkable/shareable, not a Back-button stepper.
@@ -244,6 +278,17 @@ export function SettingsPage() {
     const el = mobileNavRef.current?.querySelector(`[data-section="${activeKey}"]`);
     el?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
   }, [activeKey]);
+
+  // partner disappears from the rail once the resolved plan doesn't include
+  // it — same "don't strand someone on a tab that just vanished" reasoning
+  // as Ledger's Invoices tab and Reports' Attribution Audit tab already use
+  // for a mid-session role change. Held off while entitlements are still
+  // loading so a fresh page load doesn't bounce a real Clinic/Clinic+ admin
+  // off partner before the real tier resolves.
+  useEffect(() => {
+    if (activeKey === 'partner' && !entitlements.loading && !canSeePartner) setActiveKey('profile');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey, entitlements.loading, canSeePartner]);
 
   // First week's own two checkable gates (the rest of its steps are
   // behavioral tips, not something Dexie can confirm) — once both clear,
@@ -311,7 +356,7 @@ export function SettingsPage() {
           {SECTION_GROUPS.map((group, groupIndex) => (
             <div key={group.label} className="flex shrink-0 items-center gap-2">
               {groupIndex > 0 && <div className="h-8 w-px shrink-0 bg-[var(--border)]" aria-hidden />}
-              {group.keys.map((key) => {
+              {group.keys.filter((key) => key !== 'partner' || canSeePartner).map((key) => {
                 const s = SECTIONS.find((x) => x.key === key)!;
                 return (
                   <SettingsSectionNavButton
@@ -319,6 +364,7 @@ export function SettingsPage() {
                     section={s}
                     active={activeKey === s.key}
                     dirty={dirtyKeys.has(s.key)}
+                    locked={s.key === 'billing' && !canSeeBilling}
                     onSelect={() => selectSection(s.key)}
                     variant="mobile"
                   />
@@ -333,7 +379,7 @@ export function SettingsPage() {
               <p className="hidden px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]/70 desktop:block">
                 {group.label}
               </p>
-              {group.keys.map((key) => {
+              {group.keys.filter((key) => key !== 'partner' || canSeePartner).map((key) => {
                 const s = SECTIONS.find((x) => x.key === key)!;
                 return (
                   <SettingsSectionNavButton
@@ -341,6 +387,7 @@ export function SettingsPage() {
                     section={s}
                     active={activeKey === s.key}
                     dirty={dirtyKeys.has(s.key)}
+                    locked={s.key === 'billing' && !canSeeBilling}
                     onSelect={() => selectSection(s.key)}
                     variant="rail"
                   />
@@ -360,9 +407,15 @@ export function SettingsPage() {
           <p className="mb-2 text-xs text-[var(--muted)]">
             {SECTIONS.find((s) => s.key === activeKey)?.description}
           </p>
+          {activeKey === 'plan' && <PlanSection />}
           {activeKey === 'profile' && <ClinicProfileSection onDirtyChange={setProfileDirty} />}
-          {activeKey === 'billing' && <BillingSection onDirtyChange={setBillingDirty} />}
-          {activeKey === 'partner' && <PartnerSection onDirtyChange={setPartnerDirty} />}
+          {activeKey === 'billing' &&
+            (canSeeBilling ? (
+              <BillingSection onDirtyChange={setBillingDirty} />
+            ) : (
+              <LockedSectionNotice feature="invoicing" sectionLabel="Billing & invoicing" />
+            ))}
+          {activeKey === 'partner' && canSeePartner && <PartnerSection onDirtyChange={setPartnerDirty} />}
           {activeKey === 'team' && (
             <>
               {unlinkedCount > 0 && (
@@ -504,6 +557,94 @@ function SectionSaveBar({
         <ErrorNote message={error} />
       </div>
     </>
+  );
+}
+
+const PLAN_STATUS_LABELS: Record<'active' | 'past_due' | 'read_only', string> = {
+  active: 'Active',
+  past_due: 'Past due',
+  read_only: 'Read-only',
+};
+
+/**
+ * Placeholder shown instead of a section's real content once it's above the
+ * clinic's plan tier. Informational only, no CTA — there's no self-serve
+ * upgrade flow yet (tier changes are still a manual update, see
+ * FEATURES_AND_SCHEMA.md's clinic_plans section); a real "Upgrade" button
+ * would go nowhere. Revisit once one exists.
+ */
+function LockedSectionNotice({ feature, sectionLabel }: { feature: PlanFeature; sectionLabel: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-8 text-center">
+      <p className="text-sm font-medium text-[var(--ink)]">{sectionLabel} isn’t included in your plan.</p>
+      <p className="mt-1 text-xs text-[var(--muted)]">
+        Included in {PLAN_TIER_LABELS[minimumTierFor(feature)]} and above.
+      </p>
+    </div>
+  );
+}
+
+/** Read-only — nothing here is admin-editable, matching the server model
+ *  (clinic_plans has no write policy at all; see Phase 0 of the tier plan). */
+function PlanSection() {
+  const clinic = useClinic();
+  const entitlements = useEntitlements(clinic.id);
+  const { tier, status, maxMembers, visitCapPerMonth, seatsUsed, visitsThisMonth, loading, enforcementEnabled } =
+    entitlements;
+  const statusTone = status === 'active' ? 'green' : status === 'read_only' ? 'amber' : 'slate';
+  const features: { key: PlanFeature; label: string }[] = [
+    { key: 'invoicing', label: 'Billing & invoicing' },
+    { key: 'team', label: 'Multiple team logins' },
+    { key: 'revenueSplit', label: 'Hospital revenue split & attribution audit' },
+    { key: 'advancedModules', label: 'Advanced assessment modules' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <SectionCard title="Your plan">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-display text-lg font-semibold text-[var(--ink)]">
+            {loading ? '…' : PLAN_TIER_LABELS[tier]}
+          </span>
+          {!loading && <Pill tone={statusTone}>{PLAN_STATUS_LABELS[status]}</Pill>}
+        </div>
+        {!loading && !enforcementEnabled && (
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            Tier limits are paused for pilot testing — every plan currently has full access
+            regardless of what's shown below.
+          </p>
+        )}
+        {status === 'read_only' && (
+          <p className="mt-2 text-xs text-[var(--rust)]">
+            New visits, invoices, and patients are on hold until payment resumes. Existing records
+            stay fully visible.
+          </p>
+        )}
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:w-fit sm:grid-cols-2">
+          <StatTile label="Seats" value={seatsUsed == null ? `— / ${maxMembers}` : `${seatsUsed} / ${maxMembers}`} />
+          <StatTile
+            label="Visits this month"
+            value={visitCapPerMonth == null ? `${visitsThisMonth}` : `${visitsThisMonth} / ${visitCapPerMonth}`}
+          />
+        </div>
+      </SectionCard>
+      <SectionCard title="What's included">
+        <ul className="divide-y divide-[var(--border)]">
+          {features.map((f) => (
+            <li key={f.key} className="flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0">
+              <span className="text-[var(--ink)]">{f.label}</span>
+              {entitlements.can(f.key) ? (
+                <Pill tone="green">Included</Pill>
+              ) : (
+                <span className="text-right text-xs text-[var(--muted)]">
+                  Included in {PLAN_TIER_LABELS[minimumTierFor(f.key)]} and above
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </SectionCard>
+    </div>
   );
 }
 
@@ -1903,6 +2044,7 @@ function therapistInitials(name: string): string {
 
 function Therapists() {
   const clinic = useClinic();
+  const entitlements = useEntitlements(clinic.id);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
   // Members+Invite (who can log in) and Service roster (who patients get
@@ -1930,6 +2072,15 @@ function Therapists() {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  // Client-side hint only — invite-therapist itself is the real boundary
+  // (Phase 2 of the tier plan). Held off while entitlements/members are
+  // still loading so a fresh page load doesn't flash "locked" for a real
+  // Clinic-tier admin before the real seat count resolves.
+  const atSeatCap =
+    entitlements.enforcementEnabled &&
+    !entitlements.loading &&
+    members !== null &&
+    members.length >= entitlements.maxMembers;
 
   const refetchMembers = useCallback(async () => {
     const supabase = getSupabase();
@@ -2190,6 +2341,17 @@ function Therapists() {
 
       <div className="border-t border-[var(--border)] pt-6">
         <h3 className="mb-3 text-sm font-semibold text-[var(--ink)]">Invite a team member</h3>
+        {atSeatCap ? (
+          <div className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4 text-center">
+            <p className="text-sm font-medium text-[var(--ink)]">
+              This clinic's plan allows up to {entitlements.maxMembers} team login
+              {entitlements.maxMembers === 1 ? '' : 's'}.
+            </p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Included in {PLAN_TIER_LABELS[minimumTierFor('team')]} and above.
+            </p>
+          </div>
+        ) : (
         <div className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4">
           <div className="mb-3 flex gap-2">
             {inviteRoles.map((r) => {
@@ -2243,6 +2405,7 @@ function Therapists() {
               : "They can rename themselves from the account menu once they've signed in — this is just the starting name."}
           </p>
         </div>
+        )}
         {inviteSuccess && <p className="mt-2 text-sm text-[var(--moss)]">{inviteSuccess}</p>}
         {inviteError && <ErrorNote message={inviteError} />}
       </div>

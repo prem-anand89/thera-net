@@ -150,6 +150,55 @@ export default async function handler(req: Request): Promise<Response> {
       },
     });
 
+    // Seat cap (tier-subscriptions plan, Phase 2): clinic_plans.max_members
+    // is the enforced ceiling on logins, counted against clinic_members —
+    // this is the one chokepoint every new login passes through (a
+    // re-linked existing account below still adds a clinic_members row for
+    // THIS clinic, so it counts too). A missing clinic_plans row (shouldn't
+    // happen — every clinic is seeded one on creation, Phase 0) fails open
+    // rather than locking an admin out over a data gap that isn't their
+    // fault.
+    //
+    // Phase 4: platform_config.tier_enforcement_enabled is the global pilot
+    // kill switch — skip both checks below entirely while it's off, same as
+    // the SQL-side enforcement points (issue_invoice(), the patients/visits
+    // insert triggers) via tier_enforcement_enabled().
+    const { data: platformConfig } = await serviceClient
+      .from('platform_config')
+      .select('tier_enforcement_enabled')
+      .maybeSingle();
+    const tierEnforcementEnabled = platformConfig?.tier_enforcement_enabled ?? true;
+
+    if (tierEnforcementEnabled) {
+      const { data: planData } = await serviceClient
+        .from('clinic_plans')
+        .select('max_members, status')
+        .eq('clinic_id', clinicId)
+        .maybeSingle();
+
+      if (planData && planData.status !== 'active') {
+        return json(
+          { error: "This clinic's plan is read-only — invites are unavailable until payment resumes." },
+          403
+        );
+      }
+
+      if (planData) {
+        const { count: memberCount } = await serviceClient
+          .from('clinic_members')
+          .select('*', { count: 'exact', head: true })
+          .eq('clinic_id', clinicId);
+        if ((memberCount ?? 0) >= planData.max_members) {
+          return json(
+            {
+              error: `This clinic's plan allows up to ${planData.max_members} team login${planData.max_members === 1 ? '' : 's'}. Upgrade to invite more.`,
+            },
+            403
+          );
+        }
+      }
+    }
+
     // Invite the user via Supabase Admin API
     const { data: inviteData, error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(
       email,

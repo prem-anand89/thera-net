@@ -638,11 +638,17 @@ Profile already loads the patient's full note history via
 id              uuid PRIMARY KEY
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
 patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
-module_type     text NOT NULL (e.g., "core_assessment")
+module_type     text NOT NULL, CHECK in ('gut_screening', 'return_to_sport',
+                 'scoliosis_screening', 'face_scale', 'facial_palsy',
+                 'consultation_notes')
 status          text NOT NULL — episode open/closed state
 created_by, updated_by  uuid (NULLABLE)
 enrolled_at, updated_at  timestamptz NOT NULL
 ```
+Only `'consultation_notes'` is actually written client-side today
+(`consultationNoteService.ts`) — the other five values are schema-permitted
+(matching the five region-module response tables above) but nothing in
+`src/` creates an enrollment with them.
 
 #### `ai_generation_log`
 ```sql
@@ -669,6 +675,15 @@ jsonb` blob, one or two derived score/category columns, `created_by`/
 - **`facial_palsy_assessments`** — `side_affected`, `visit_label`, `hb_grade`,
   `sunnybrook_resting/voluntary/synkinesis jsonb`, `sunnybrook_score numeric`,
   `synkinesis_total int`
+
+None of the five has a Dexie table, repo, sync entry, or any UI anywhere in
+`src/` — they're reserved schema for modules that haven't been built, not
+available features. Only `face_scale_responses` and
+`facial_palsy_assessments` even have `can_use_module()`-gated RLS on insert/
+update (see `clinic_module_settings`/`clinic_entitlements` below); the
+other three (`screening_responses`, `return_to_sport_responses`,
+`scoliosis_screening_responses`) have no entitlement check at all — any
+clinic member can write to them.
 
 #### Consent tables
 ```sql
@@ -776,15 +791,236 @@ Also shown as a toggleable "Treatments" column/row on the Visits table
 (Ledger, Workspace, Patient Profile) — a separate `VisitColumnKey` from the
 pre-existing free-text `'treatment'` (treatmentNotes) column.
 
-#### `clinic_module_settings`, `clinic_entitlements` — dead infrastructure
-Both tables still exist (RLS enabled, no policies) but have **zero client
-code** reading or writing them anywhere in `src/` — no Dexie table, no repo,
-no sync. They were built for a Tier-1/Tier-2 module-gating mechanism that
-was never wired up. The `modules` reference table they originally pointed
-to was dropped (`20260820000001_drop_unused_modules_table.sql`); these two
-were left in place since removing them wasn't asked for. Don't build new
-features against them without first confirming they're actually meant to
-be resurrected — as of this writing they're inert.
+#### `clinic_module_settings`, `clinic_entitlements` — live at the RLS layer, zero client integration
+Not dead — `can_use_module(clinic_id, module_key)` (defined in
+`20260718000001_module_registry.sql`, revised in
+`20260721000001_entitlements_audit_log.sql`) checks `clinic_entitlements`
+(fail-open: no row = entitled) then `clinic_module_settings` (fail-closed
+otherwise), and is called from the insert/update RLS policies on
+`consultation_notes`, `face_scale_responses`, and `facial_palsy_assessments`.
+Every write to those three tables runs through it today.
+
+What's genuinely missing is the **client side**: no Dexie table, no repo,
+no sync, no UI anywhere in `src/` reads or writes either table — so nothing
+in the app currently sets a narrower entitlement or surfaces a "this module
+is off" state. In practice every clinic reads as fully entitled, because
+nothing has ever populated `clinic_entitlements` with a restrictive row.
+The `modules` reference table these two originally pointed to was dropped
+(`20260820000001_drop_unused_modules_table.sql`), taking its FK on
+`module_key` with it via CASCADE. Restored as a plain `CHECK` constraint
+(`20260823120000_restore_module_key_check.sql`) against the same seven
+keys the `modules` table used to hold: `'gut_screening'`,
+`'return_to_sport'`, `'scoliosis_screening'`, `'face_scale'`,
+`'facial_palsy'`, `'consultation_notes'`, `'invoicing'`. Don't build new
+gating logic on top of this without first confirming the tier-subscription
+plan is what's meant to populate it — `can_use_module()`'s fail-open
+default is backwards for a paywall and would need to change before these
+tables can gate a paid tier.
+
+#### `clinic_plans` — the tier boundary, service-role write only
+Added as Phase 0 of the tier-subscription plan
+(`20260823120001_clinic_plans.sql`). One row per clinic:
+
+```sql
+clinic_plans (
+  clinic_id             uuid PRIMARY KEY (FOREIGN KEY → clinics.id, CASCADE)
+  plan_tier             text NOT NULL, CHECK in ('lite', 'solo', 'clinic', 'clinic_plus')
+  status                text NOT NULL DEFAULT 'active', CHECK in ('active', 'past_due', 'read_only')
+  max_members           int NOT NULL       -- tunable per clinic, seeded from tier
+  visit_cap_per_month   int                -- NULL = unlimited
+  updated_at            timestamptz NOT NULL DEFAULT now()
+)
+```
+
+RLS is deliberately asymmetric: `clinic_plans_select` lets any clinic
+member read their own clinic's row, and there is **no write policy at
+all**. With RLS enabled and zero write policies, Postgres denies every
+`INSERT`/`UPDATE`/`DELETE` from the `authenticated` role outright — only
+`service_role` (which bypasses RLS) can write this table. This is the
+actual fix for the plan-tier-must-not-be-self-serve-editable problem: a
+`plan_tier` column on `clinics` itself couldn't get this property, since
+`clinics_update` already grants clinic admins unrestricted column access
+and `clinics` rides the client-writable outbox.
+
+Seeded automatically, mirroring `add_creator_as_admin()` and
+`seed_default_module_settings()` (both existing AFTER INSERT triggers on
+`clinics`): `seed_default_clinic_plan()` inserts a `lite` / `active` / 1
+seat / 50 visits-per-month row for every newly created clinic. All four
+existing clinics at migration time were backfilled as `clinic_plus` /
+`active` / unlimited — a deliberate placeholder that grandfathers today's
+de-facto behavior (nothing has ever been gated), not a real tier
+assignment; real per-clinic tiers need deciding before enforcement
+(seat cap, visit cap, invoicing gate — none of it is wired up yet) lands
+on top of this table.
+
+**Read path (Phase 1):** `useEntitlements(clinicId)` (`src/app/useEntitlements.ts`)
+is the sole read point. `clinic_plans` has no Dexie table and isn't part of
+the sync engine's generic per-table pull (`ALL_SYNCED_TABLES` in
+`src/lib/db.ts`) — that loop assumes every table has an `id` primary key,
+and this one is keyed by `clinicId`. Instead the hook fetches it directly
+via Supabase, exactly mirroring `useClinicRole`'s pattern: cached as JSON in
+Dexie's `meta` table (key `plan:${clinicId}`) so the tier survives offline,
+a fresh online fetch always wins, and an unresolved fetch never flashes the
+least-restrictive default (`lite`/1 seat/50 visits — the same fail-closed
+default `DEFAULT_PLAN` uses when nothing has loaded yet). The hook also
+returns `seatsUsed` (a live `clinic_members` count, online-only — `null`
+when unknown) and `visitsThisMonth` (computed from local Dexie visits via
+`repos.visits.list`, so it works offline). `src/domain/plans.ts` holds the
+pure tier → feature map (`tierIncludes()`) the hook's `can()` reads, plus
+`currentMonthRange()` — both unit-tested.
+
+No UI reads this yet — Phase 1 only builds the read path. Enforcement
+(Phase 2) and the Settings `plan` section (Phase 3) are what consume it.
+
+**Enforcement (Phase 2):** four gates, all reading `clinic_plans` directly
+(server-side) so none of them can be bypassed by a client that doesn't call
+`useEntitlements()`:
+
+- **Invoicing** — `issue_invoice()` checks plan status and tier *before*
+  the pre-existing `clinic_entitlements('invoicing')` /
+  `billing_enabled` / `invoicing_access` chain. Full precedence: **plan
+  status (`read_only` blocks outright) → plan tier (`lite` blocks) →
+  `clinic_entitlements` → `billing_enabled` → `invoicing_access`.** Each
+  layer raises its own distinct error message.
+- **New patients** — `enforce_clinic_plan_on_patient_insert()`, a
+  `BEFORE INSERT` trigger on `patients`, blocks while `status <> 'active'`.
+  Edits to existing patients are unaffected — only new rows are gated.
+- **New visits** — `enforce_clinic_plan_on_visit_insert()`, a
+  `BEFORE INSERT` trigger on `visits`, blocks while `status <> 'active'`,
+  and separately enforces `visit_cap_per_month` **with a +20 buffer**
+  (a hard block at the exact cap risks losing a real visit to a
+  multi-device offline-sync race — the buffer absorbs that, the client
+  pre-check below is the real day-to-day gate). Counted by the visit's own
+  `visit_date`'s calendar month, not today's date — this is also what
+  makes `importVisitsService.ts`'s bulk historical importer safe with no
+  special-casing: it writes through this exact same insert path (no
+  separate RPC to exempt), but imported rows are virtually always dated in
+  past months, so they don't touch the current month's count. A same-month
+  bulk import can still hit the buffer.
+- **Seat cap** — the `invite-therapist` edge function counts
+  `clinic_members` against `clinic_plans.max_members` before inviting or
+  re-linking an existing account to the clinic (both add a
+  `clinic_members` row, both count). Fails open if a clinic somehow has no
+  `clinic_plans` row (shouldn't happen — every clinic is seeded one).
+- **Client pre-check** — `NewVisitPage.tsx`'s `save()` reads
+  `useEntitlements(clinic.id)` and blocks before attempting to save once
+  `visitsThisMonth >= visitCapPerMonth`, so a normal user sees a clear
+  message before ever reaching the server buffer above.
+
+Deliberately **not** touched: `can_use_module()` / `consultation_notes` /
+the five assessment-module keys. `clinics.clinical_docs_enabled` and
+`clinic_module_settings('consultation_notes')` are two separate gates for
+the same live, actively-used feature (see the dead-infrastructure section
+above) — adding a third (plan-tier) gate on top without reconciling those
+first risks breaking real clinical documentation. The five module keys have
+zero client code today regardless, so gating them has no practical effect
+yet. Deferred to the still-open "advanced modules content" planning pass.
+
+**Bug fixed during Phase 2 testing:** `clinic_plans_updated` (Phase 0) used
+the generic `set_updated_at()` trigger function, which unconditionally sets
+`updated_by`/`created_by` — columns `clinic_plans` doesn't have (there's no
+write path through an authenticated user's own session for this table).
+Every `UPDATE` failed until `20260823130001_fix_clinic_plans_updated_trigger.sql`
+gave it its own minimal trigger function that only sets `updated_at`. Caught
+by direct testing before anything in production exercised the broken path.
+
+**Settings UI (Phase 3)** — the first user-visible part of the tier plan.
+`SettingsPage.tsx` gains an "Account" group with a read-only `plan` section
+(`PlanSection`): tier, status, seats used/limit, visits this month/cap, and
+a per-feature "what's included" list, all read from `useEntitlements()`.
+Every section resolves to one of three states, per the design in Part 3 of
+the tier plan:
+
+- **available** — normal.
+- **locked** — above the tier (`billing`, gated on `can('invoicing')`).
+  Stays visible in the rail, greyed with a lock glyph; clicking it shows
+  `LockedSectionNotice` (informational only — "Included in Solo and
+  above," no CTA button, since there's no self-serve upgrade flow yet) in
+  place of the real form.
+- **hidden** — genuinely inapplicable, not a paywall (`partner`, gated on
+  `can('revenueSplit')` — a Lite/Solo clinic can't have a hospital
+  revenue-split relationship at all under its plan). Filtered out of both
+  nav lists at render time; a mid-session redirect effect bounces `activeKey`
+  away from `partner` if the resolved plan stops including it, mirroring
+  the existing pattern `LedgerPage.tsx`/`ReportsPage.tsx` already use for a
+  role changing mid-session.
+
+`usePermissions()` folds `useEntitlements()` into `canBill` (also requires
+`can('invoicing')` now, ahead of the pre-existing `billingEnabled`/
+`invoicingAccess` checks) and `canViewPayouts` (also requires
+`can('revenueSplit')`) — since `LedgerPage.tsx`'s Invoices tab and
+`ReportsPage.tsx`'s Attribution Audit tab both already consume those two
+booleans, tier-gating happens there for free. `TherapistComparisonCard.tsx`
+needed its own `can('revenueSplit')` check instead (it's gated on
+`clinic.showTherapistComparison`, not a `usePermissions()` flag).
+
+Team's Invite form locks (with the same informational-only copy) once
+`clinic_members.length >= maxMembers` — a client-side hint only, since
+`invite-therapist`'s own seat-cap check (Phase 2) is the real boundary.
+
+`FirstWeekChecklist.tsx` was rewritten into an actual 8-step setup
+sequence (clinic profile → services → invite team → link therapists → log
+a visit → wait for Synced → clinical notes decision → backup), replacing
+the old flat list of gotcha tips with no ordering logic. Two steps get
+plan-aware copy (`invite-team`, `wait-synced`). Completion is now tracked
+per-step (`db.meta` key `firstWeekChecklistCompletedSteps`, a JSON array of
+stable step ids — not indices, so reordering the list later can't corrupt
+someone's in-progress state) rather than the old single dismiss flag; the
+card collapses to a "Setup complete" summary once all 8 are checked. The
+original single dismiss flag (`firstWeekChecklistDismissed`) still exists
+unchanged for the explicit "Hide" button, which fully removes the card
+regardless of completion.
+
+**Pilot kill switch (Phase 4)** — pilot clinics need to run with zero tier
+limits until payments are integrated, without hand-editing every clinic's
+`clinic_plans` row (that's the wrong tool: per-clinic override, not a
+global pause). `platform_config` is a singleton-row table (`id boolean
+primary key default true check (id)` forces exactly one row):
+
+```sql
+platform_config (
+  id                          boolean PRIMARY KEY DEFAULT true CHECK (id)
+  tier_enforcement_enabled    boolean NOT NULL DEFAULT true
+  updated_at                  timestamptz NOT NULL DEFAULT now()
+)
+```
+
+RLS: `select` for any authenticated user (a boolean, not sensitive — every
+clinic needs to read it), **no write policy** — same service-role-only
+pattern as `clinic_plans`; flipped via manual SQL, same as tier assignment
+itself. `tier_enforcement_enabled()` (SQL function, `stable`) wraps the
+read with `coalesce(..., true)` so a missing row fails toward *enforced*,
+matching the fail-closed-for-monetization principle the whole tier design
+follows.
+
+Every Phase 2 enforcement point checks it first and skips its own logic
+entirely when it's `false`: `issue_invoice()` (only the two tier checks —
+the pre-existing `clinic_entitlements`/`billing_enabled`/`invoicing_access`
+checks are a separate, unrelated concern and stay active regardless),
+`enforce_clinic_plan_on_patient_insert()`/`enforce_clinic_plan_on_visit_insert()`
+(early-return), and `invite-therapist` (reads `platform_config` alongside
+`clinic_plans`).
+
+Client-side, `useEntitlements()` fetches `platform_config` in the same
+round trip as `clinic_plans`, cached in `db.meta` under a fixed
+(non-clinic-scoped) key with the same fail-closed-to-`true` default. The
+hook exposes `enforcementEnabled: boolean`, and `can()` returns `true`
+unconditionally when it's `false` — since every Phase 3 UI gate
+(`SettingsPage.tsx`'s locked/hidden resolution, `usePermissions()`'s
+`canBill`/`canViewPayouts`) already derives from `can()`, this alone
+unlocks all of them with no changes needed in those files. Three call
+sites read `maxMembers`/`visitCapPerMonth` directly instead of through
+`can()`, so they carry an explicit `enforcementEnabled` guard: `Therapists()`'s
+`atSeatCap`, `NewVisitPage.tsx`'s visit-cap pre-check, and
+`FirstWeekChecklist.tsx`'s seat-limited copy branch. `PlanSection` shows a
+"Tier limits are paused for pilot testing" note when disabled, so a future
+admin doesn't mistake fully-unlocked plans for a bug.
+
+Verified live against a disposable test clinic set to `read_only` status
+and a deliberately-impossible visit cap: with the switch off, a patient
+insert, a visit insert, and (implicitly, same code path) invoicing all
+succeed despite both restrictions; flipping the switch back on immediately
+re-blocks the same clinic with no other change.
 
 ---
 

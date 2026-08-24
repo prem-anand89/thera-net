@@ -5,6 +5,7 @@ import { repos, visitService, patientService, directPaymentService, dashboardSer
 import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
 import { usePermissions } from '@/app/usePermissions';
+import { useEntitlements } from '@/app/useEntitlements';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { DUPLICATE_NAME_THRESHOLD, nameSimilarity } from '@/domain/nameSimilarity';
@@ -106,6 +107,7 @@ export function NewVisitPage() {
   const { canBill } = usePermissions();
   const navigate = useNavigate();
   const { session } = useSession();
+  const entitlements = useEntitlements(clinic.id);
   const search = useSearch({ strict: false }) as {
     repeatVisitId?: string;
     patientId?: string;
@@ -437,6 +439,15 @@ export function NewVisitPage() {
     if (!therapistId) return setError('Select a therapist');
     if (mode === 'new' && !serviceCatalogId) return setError('Select a service');
     if (mode === 'continuation' && !selectedPackage) return setError('Select the open package');
+    if (
+      entitlements.enforcementEnabled &&
+      entitlements.visitCapPerMonth != null &&
+      entitlements.visitsThisMonth >= entitlements.visitCapPerMonth
+    ) {
+      return setError(
+        `This clinic's plan allows ${entitlements.visitCapPerMonth} visits per month, and that limit's been reached. Upgrade to log more.`
+      );
+    }
     setBusy(true);
     try {
       const visit = await visitService.create({

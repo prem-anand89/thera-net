@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { useEntitlements } from '@/app/useEntitlements';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { formatINR } from '@/domain/money';
 import { monthName } from '@/domain/fiscalYear';
@@ -23,6 +24,11 @@ import { SERIES_COLORS } from '@/components/chartColors';
 export function TherapistComparisonCard() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
+  const entitlements = useEntitlements(clinic.id);
+  // Clinic/Clinic+ feature (Part 3 of the tier plan) — the clinic-wide
+  // opt-in still applies on top, but a Lite/Solo clinic doesn't get this
+  // regardless of whether the toggle happens to be on.
+  const showComparison = clinic.showTherapistComparison && !scope.isFrontDesk && entitlements.can('revenueSplit');
   // Post-Tax BM adjusted for same-visit splits and automatic package-session
   // attribution (reportService's netPostTaxPaise) — genuinely post-tax for a
   // hospital-split clinic, and equal to the plain net bill for a simple one
@@ -33,20 +39,20 @@ export function TherapistComparisonCard() {
   const revenueLabel = hospitalSplit ? `Post-Tax ${labels.own}` : 'Revenue generated';
 
   const trend = useLiveQuery(
-    () => (clinic.showTherapistComparison && !scope.isFrontDesk ? dashboardService.revenueTrend(clinic.id) : undefined),
-    [clinic.id, clinic.showTherapistComparison, scope.isFrontDesk]
+    () => (showComparison ? dashboardService.revenueTrend(clinic.id) : undefined),
+    [clinic.id, showComparison]
   );
   // Packages don't come back keyed by therapist name the way trend's rows
   // do (openPackages only has startedByTherapistId, a real id) — fetch the
   // roster once to resolve it, same join every other packages-by-therapist
   // spot in the app already needs.
   const openPackages = useLiveQuery(
-    () => (clinic.showTherapistComparison && !scope.isFrontDesk ? dashboardService.openPackages(clinic.id) : undefined),
-    [clinic.id, clinic.showTherapistComparison, scope.isFrontDesk]
+    () => (showComparison ? dashboardService.openPackages(clinic.id) : undefined),
+    [clinic.id, showComparison]
   );
   const therapists = useLiveQuery(
-    () => (clinic.showTherapistComparison && !scope.isFrontDesk ? repos.therapists.list(clinic.id, true) : undefined),
-    [clinic.id, clinic.showTherapistComparison, scope.isFrontDesk]
+    () => (showComparison ? repos.therapists.list(clinic.id, true) : undefined),
+    [clinic.id, showComparison]
   );
 
   const categories = useMemo(
@@ -78,7 +84,7 @@ export function TherapistComparisonCard() {
   // even while the charts above it are gated behind two months of history.
   const currentMonthRow = trend?.[trend.length - 1];
 
-  if (!clinic.showTherapistComparison || scope.isFrontDesk) return null;
+  if (!showComparison) return null;
 
   return (
     <SectionCard title="Therapist comparison">

@@ -1,5 +1,6 @@
 import { useClinic } from './clinicContext';
 import { useWorkspaceScope } from './useWorkspaceScope';
+import { useEntitlements } from './useEntitlements';
 
 export interface Permissions {
   role: 'admin' | 'therapist' | 'front_desk' | 'unknown';
@@ -37,14 +38,23 @@ export interface Permissions {
 export function usePermissions(): Permissions {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
+  const entitlements = useEntitlements(clinic.id);
   const billingEnabled = clinic.billingEnabled ?? true;
   const invoicingAccess = clinic.invoicingAccess ?? 'everyone';
   return {
     role: scope.role,
     isAdmin: scope.isAdmin,
     canEditSettings: scope.isAdmin,
-    canViewPayouts: scope.isAdmin,
+    // Attribution Audit is a Clinic/Clinic+ feature regardless of role —
+    // an admin on Lite/Solo doesn't get it either.
+    canViewPayouts: scope.isAdmin && entitlements.can('revenueSplit'),
     canViewClinicalNotes: !scope.isFrontDesk,
-    canBill: billingEnabled && (invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk),
+    // Plan tier is the outermost gate (a Lite clinic can't bill no matter
+    // what billingEnabled/invoicingAccess say — see issue_invoice()'s own
+    // precedence), then the two existing clinic-owned preferences.
+    canBill:
+      entitlements.can('invoicing') &&
+      billingEnabled &&
+      (invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk),
   };
 }

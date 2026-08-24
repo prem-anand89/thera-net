@@ -11,9 +11,11 @@ multi-clinic operations from day one, with configurable revenue-split models
 **Current scope:** the visit ledger (visits, invoices, reports, dashboard),
 revenue tracking, multi-clinic isolation, and Core Assessment (clinical
 consultation notes with comprehensive pain profiling, functional status tracking,
-and objective neurological examination). Additional assessment modules (FaCE Scale,
-Facial Palsy, and others) can be added as Region Modules within the Core Assessment
-framework.
+and objective neurological examination). The database already has schema and
+RLS scaffolding for optional Region Modules (FaCE Scale, Facial Palsy, and
+others) as future extensions of Core Assessment, but none of them has any
+client-side implementation yet — no UI, no Dexie/sync integration. See
+`FEATURES_AND_SCHEMA.md` for the current state of that scaffolding.
 
 ## What it does
 
@@ -25,6 +27,7 @@ framework.
 - **Ledger** — full visit history with dense table, patient enrichment (last visit + count, treatment, condition, bill amount), therapist filter, date range search, bulk actions (invoice, repeat, split, delete). Visits/Invoices sub-tabs are URL-addressable (`/ledger?tab=invoices`); the Invoices sub-tab only appears for clinics with billing access. Invoices are only ever issued against a real visit — there's no standalone "manual invoice" path.
 
 ### Clinical Assessment & Notes
+- **Clinical note status in visit tables** — the Workspace, Ledger, and Patient Profile visit tables now display note status: a "Draft" pill with an Edit link for in-progress notes, a "Completed" pill with a View link for finished notes (read-only after completion), "+ Note" for visits needing a note, and nothing when no note is needed. Completed notes are locked to prevent accidental re-editing after they've been finalized.
 - **Core Assessment (Initial/Follow-up)** — comprehensive consultation notes with automatic episode-of-care tracking via patient enrollments. Follow-up notes collapse read-only carry-forward sections (medical history, screening) while narrowing objective examination to new findings.
 - **Chief Complaint & History** — anatomical region selection (9 regions: Cervical/Thoracic/Lumbar Spine, Shoulder, Elbow, Wrist/Hand, Hip, Knee, Ankle/Foot), onset/mechanism/episode pattern timeline, occupation/activity context, trauma & surgical history with structured dates, and secondary complaints array.
 - **Pain Profiling** — NRS current/best/worst (3-point scale tracking), pain pattern (constant/intermittent/night-only/morning stiffness), sleep disturbance, aggravating/easing factors. Previous pain history section for tracking historical episodes.
