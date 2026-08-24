@@ -924,6 +924,53 @@ Every `UPDATE` failed until `20260823130001_fix_clinic_plans_updated_trigger.sql
 gave it its own minimal trigger function that only sets `updated_at`. Caught
 by direct testing before anything in production exercised the broken path.
 
+**Settings UI (Phase 3)** — the first user-visible part of the tier plan.
+`SettingsPage.tsx` gains an "Account" group with a read-only `plan` section
+(`PlanSection`): tier, status, seats used/limit, visits this month/cap, and
+a per-feature "what's included" list, all read from `useEntitlements()`.
+Every section resolves to one of three states, per the design in Part 3 of
+the tier plan:
+
+- **available** — normal.
+- **locked** — above the tier (`billing`, gated on `can('invoicing')`).
+  Stays visible in the rail, greyed with a lock glyph; clicking it shows
+  `LockedSectionNotice` (informational only — "Included in Solo and
+  above," no CTA button, since there's no self-serve upgrade flow yet) in
+  place of the real form.
+- **hidden** — genuinely inapplicable, not a paywall (`partner`, gated on
+  `can('revenueSplit')` — a Lite/Solo clinic can't have a hospital
+  revenue-split relationship at all under its plan). Filtered out of both
+  nav lists at render time; a mid-session redirect effect bounces `activeKey`
+  away from `partner` if the resolved plan stops including it, mirroring
+  the existing pattern `LedgerPage.tsx`/`ReportsPage.tsx` already use for a
+  role changing mid-session.
+
+`usePermissions()` folds `useEntitlements()` into `canBill` (also requires
+`can('invoicing')` now, ahead of the pre-existing `billingEnabled`/
+`invoicingAccess` checks) and `canViewPayouts` (also requires
+`can('revenueSplit')`) — since `LedgerPage.tsx`'s Invoices tab and
+`ReportsPage.tsx`'s Attribution Audit tab both already consume those two
+booleans, tier-gating happens there for free. `TherapistComparisonCard.tsx`
+needed its own `can('revenueSplit')` check instead (it's gated on
+`clinic.showTherapistComparison`, not a `usePermissions()` flag).
+
+Team's Invite form locks (with the same informational-only copy) once
+`clinic_members.length >= maxMembers` — a client-side hint only, since
+`invite-therapist`'s own seat-cap check (Phase 2) is the real boundary.
+
+`FirstWeekChecklist.tsx` was rewritten into an actual 8-step setup
+sequence (clinic profile → services → invite team → link therapists → log
+a visit → wait for Synced → clinical notes decision → backup), replacing
+the old flat list of gotcha tips with no ordering logic. Two steps get
+plan-aware copy (`invite-team`, `wait-synced`). Completion is now tracked
+per-step (`db.meta` key `firstWeekChecklistCompletedSteps`, a JSON array of
+stable step ids — not indices, so reordering the list later can't corrupt
+someone's in-progress state) rather than the old single dismiss flag; the
+card collapses to a "Setup complete" summary once all 8 are checked. The
+original single dismiss flag (`firstWeekChecklistDismissed`) still exists
+unchanged for the explicit "Hide" button, which fully removes the card
+regardless of completion.
+
 ---
 
 ## Key Design Patterns

@@ -33,6 +33,15 @@ export const PLAN_TIER_LABELS: Record<PlanTier, string> = {
   clinic_plus: 'Clinic+',
 };
 
+const TIER_ORDER: PlanTier[] = ['lite', 'solo', 'clinic', 'clinic_plus'];
+
+/** The lowest tier that includes `feature` — for "Included in Solo and
+ *  above" style locked-section copy. Every feature is included by at least
+ *  one tier (clinic_plus always has everything), so this never falls through. */
+export function minimumTierFor(feature: PlanFeature): PlanTier {
+  return TIER_ORDER.find((tier) => tierIncludes(tier, feature))!;
+}
+
 /**
  * [from, to] bounds (YYYY-MM-DD, both inclusive) for the calendar month
  * containing `now` — matches `visitCapPerMonth`'s "per month" and the

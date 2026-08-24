@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tierIncludes, PLAN_TIER_LABELS, currentMonthRange, type PlanFeature } from './plans';
+import { tierIncludes, PLAN_TIER_LABELS, currentMonthRange, minimumTierFor, type PlanFeature } from './plans';
 import type { PlanTier } from './types';
 
 const TIERS: PlanTier[] = ['lite', 'solo', 'clinic', 'clinic_plus'];
@@ -41,6 +41,18 @@ describe('PLAN_TIER_LABELS', () => {
     for (const tier of TIERS) {
       expect(PLAN_TIER_LABELS[tier]).toBeTruthy();
     }
+  });
+});
+
+describe('minimumTierFor', () => {
+  it('invoicing is included from Solo', () => {
+    expect(minimumTierFor('invoicing')).toBe('solo');
+  });
+
+  it('team/revenueSplit/advancedModules are included from Clinic', () => {
+    expect(minimumTierFor('team')).toBe('clinic');
+    expect(minimumTierFor('revenueSplit')).toBe('clinic');
+    expect(minimumTierFor('advancedModules')).toBe('clinic');
   });
 });
 
