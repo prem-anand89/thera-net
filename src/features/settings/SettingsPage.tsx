@@ -589,7 +589,8 @@ function LockedSectionNotice({ feature, sectionLabel }: { feature: PlanFeature; 
 function PlanSection() {
   const clinic = useClinic();
   const entitlements = useEntitlements(clinic.id);
-  const { tier, status, maxMembers, visitCapPerMonth, seatsUsed, visitsThisMonth, loading } = entitlements;
+  const { tier, status, maxMembers, visitCapPerMonth, seatsUsed, visitsThisMonth, loading, enforcementEnabled } =
+    entitlements;
   const statusTone = status === 'active' ? 'green' : status === 'read_only' ? 'amber' : 'slate';
   const features: { key: PlanFeature; label: string }[] = [
     { key: 'invoicing', label: 'Billing & invoicing' },
@@ -607,6 +608,12 @@ function PlanSection() {
           </span>
           {!loading && <Pill tone={statusTone}>{PLAN_STATUS_LABELS[status]}</Pill>}
         </div>
+        {!loading && !enforcementEnabled && (
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            Tier limits are paused for pilot testing — every plan currently has full access
+            regardless of what's shown below.
+          </p>
+        )}
         {status === 'read_only' && (
           <p className="mt-2 text-xs text-[var(--rust)]">
             New visits, invoices, and patients are on hold until payment resumes. Existing records
@@ -2070,7 +2077,10 @@ function Therapists() {
   // still loading so a fresh page load doesn't flash "locked" for a real
   // Clinic-tier admin before the real seat count resolves.
   const atSeatCap =
-    !entitlements.loading && members !== null && members.length >= entitlements.maxMembers;
+    entitlements.enforcementEnabled &&
+    !entitlements.loading &&
+    members !== null &&
+    members.length >= entitlements.maxMembers;
 
   const refetchMembers = useCallback(async () => {
     const supabase = getSupabase();

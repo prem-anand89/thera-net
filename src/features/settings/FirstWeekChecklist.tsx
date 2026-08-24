@@ -22,7 +22,7 @@ interface Step {
   body: string;
 }
 
-function buildSteps(maxMembers: number, canInvoice: boolean): Step[] {
+function buildSteps(seatLimited: boolean, canInvoice: boolean): Step[] {
   return [
     {
       id: 'clinic-profile',
@@ -37,10 +37,9 @@ function buildSteps(maxMembers: number, canInvoice: boolean): Step[] {
     {
       id: 'invite-team',
       title: 'Invite your team',
-      body:
-        maxMembers <= 1
-          ? 'Your plan allows 1 login for now — invite a teammate once you upgrade. If it’s a shared reception PC, still sign out at the end of every shift so the next person doesn’t see this login’s data.'
-          : 'Settings → Team → Invite. Each person needs their own login, not shared credentials — per-therapist revenue and the attribution audit both depend on it. On a shared reception PC, sign out at the end of every shift.',
+      body: seatLimited
+        ? 'Your plan allows 1 login for now — invite a teammate once you upgrade. If it’s a shared reception PC, still sign out at the end of every shift so the next person doesn’t see this login’s data.'
+        : 'Settings → Team → Invite. Each person needs their own login, not shared credentials — per-therapist revenue and the attribution audit both depend on it. On a shared reception PC, sign out at the end of every shift.',
     },
     {
       id: 'link-therapist',
@@ -128,7 +127,10 @@ export function FirstWeekChecklist({ compact }: { compact?: boolean }) {
   const clinic = useClinic();
   const entitlements = useEntitlements(clinic.id);
   const completed = useCompletedStepIds();
-  const steps = buildSteps(entitlements.maxMembers, entitlements.can('invoicing'));
+  const steps = buildSteps(
+    entitlements.enforcementEnabled && entitlements.maxMembers <= 1,
+    entitlements.can('invoicing')
+  );
   const allDone = completed !== undefined && steps.every((s) => completed.has(s.id));
 
   return (

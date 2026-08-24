@@ -971,6 +971,57 @@ original single dismiss flag (`firstWeekChecklistDismissed`) still exists
 unchanged for the explicit "Hide" button, which fully removes the card
 regardless of completion.
 
+**Pilot kill switch (Phase 4)** — pilot clinics need to run with zero tier
+limits until payments are integrated, without hand-editing every clinic's
+`clinic_plans` row (that's the wrong tool: per-clinic override, not a
+global pause). `platform_config` is a singleton-row table (`id boolean
+primary key default true check (id)` forces exactly one row):
+
+```sql
+platform_config (
+  id                          boolean PRIMARY KEY DEFAULT true CHECK (id)
+  tier_enforcement_enabled    boolean NOT NULL DEFAULT true
+  updated_at                  timestamptz NOT NULL DEFAULT now()
+)
+```
+
+RLS: `select` for any authenticated user (a boolean, not sensitive — every
+clinic needs to read it), **no write policy** — same service-role-only
+pattern as `clinic_plans`; flipped via manual SQL, same as tier assignment
+itself. `tier_enforcement_enabled()` (SQL function, `stable`) wraps the
+read with `coalesce(..., true)` so a missing row fails toward *enforced*,
+matching the fail-closed-for-monetization principle the whole tier design
+follows.
+
+Every Phase 2 enforcement point checks it first and skips its own logic
+entirely when it's `false`: `issue_invoice()` (only the two tier checks —
+the pre-existing `clinic_entitlements`/`billing_enabled`/`invoicing_access`
+checks are a separate, unrelated concern and stay active regardless),
+`enforce_clinic_plan_on_patient_insert()`/`enforce_clinic_plan_on_visit_insert()`
+(early-return), and `invite-therapist` (reads `platform_config` alongside
+`clinic_plans`).
+
+Client-side, `useEntitlements()` fetches `platform_config` in the same
+round trip as `clinic_plans`, cached in `db.meta` under a fixed
+(non-clinic-scoped) key with the same fail-closed-to-`true` default. The
+hook exposes `enforcementEnabled: boolean`, and `can()` returns `true`
+unconditionally when it's `false` — since every Phase 3 UI gate
+(`SettingsPage.tsx`'s locked/hidden resolution, `usePermissions()`'s
+`canBill`/`canViewPayouts`) already derives from `can()`, this alone
+unlocks all of them with no changes needed in those files. Three call
+sites read `maxMembers`/`visitCapPerMonth` directly instead of through
+`can()`, so they carry an explicit `enforcementEnabled` guard: `Therapists()`'s
+`atSeatCap`, `NewVisitPage.tsx`'s visit-cap pre-check, and
+`FirstWeekChecklist.tsx`'s seat-limited copy branch. `PlanSection` shows a
+"Tier limits are paused for pilot testing" note when disabled, so a future
+admin doesn't mistake fully-unlocked plans for a bug.
+
+Verified live against a disposable test clinic set to `read_only` status
+and a deliberately-impossible visit cap: with the switch off, a patient
+insert, a visit insert, and (implicitly, same code path) invoicing all
+succeed despite both restrictions; flipping the switch back on immediately
+re-blocks the same clinic with no other change.
+
 ---
 
 ## Key Design Patterns

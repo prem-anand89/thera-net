@@ -158,31 +158,44 @@ export default async function handler(req: Request): Promise<Response> {
     // happen — every clinic is seeded one on creation, Phase 0) fails open
     // rather than locking an admin out over a data gap that isn't their
     // fault.
-    const { data: planData } = await serviceClient
-      .from('clinic_plans')
-      .select('max_members, status')
-      .eq('clinic_id', clinicId)
+    //
+    // Phase 4: platform_config.tier_enforcement_enabled is the global pilot
+    // kill switch — skip both checks below entirely while it's off, same as
+    // the SQL-side enforcement points (issue_invoice(), the patients/visits
+    // insert triggers) via tier_enforcement_enabled().
+    const { data: platformConfig } = await serviceClient
+      .from('platform_config')
+      .select('tier_enforcement_enabled')
       .maybeSingle();
+    const tierEnforcementEnabled = platformConfig?.tier_enforcement_enabled ?? true;
 
-    if (planData && planData.status !== 'active') {
-      return json(
-        { error: "This clinic's plan is read-only — invites are unavailable until payment resumes." },
-        403
-      );
-    }
+    if (tierEnforcementEnabled) {
+      const { data: planData } = await serviceClient
+        .from('clinic_plans')
+        .select('max_members, status')
+        .eq('clinic_id', clinicId)
+        .maybeSingle();
 
-    if (planData) {
-      const { count: memberCount } = await serviceClient
-        .from('clinic_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('clinic_id', clinicId);
-      if ((memberCount ?? 0) >= planData.max_members) {
+      if (planData && planData.status !== 'active') {
         return json(
-          {
-            error: `This clinic's plan allows up to ${planData.max_members} team login${planData.max_members === 1 ? '' : 's'}. Upgrade to invite more.`,
-          },
+          { error: "This clinic's plan is read-only — invites are unavailable until payment resumes." },
           403
         );
+      }
+
+      if (planData) {
+        const { count: memberCount } = await serviceClient
+          .from('clinic_members')
+          .select('*', { count: 'exact', head: true })
+          .eq('clinic_id', clinicId);
+        if ((memberCount ?? 0) >= planData.max_members) {
+          return json(
+            {
+              error: `This clinic's plan allows up to ${planData.max_members} team login${planData.max_members === 1 ? '' : 's'}. Upgrade to invite more.`,
+            },
+            403
+          );
+        }
       }
     }
 

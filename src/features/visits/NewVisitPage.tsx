@@ -440,6 +440,7 @@ export function NewVisitPage() {
     if (mode === 'new' && !serviceCatalogId) return setError('Select a service');
     if (mode === 'continuation' && !selectedPackage) return setError('Select the open package');
     if (
+      entitlements.enforcementEnabled &&
       entitlements.visitCapPerMonth != null &&
       entitlements.visitsThisMonth >= entitlements.visitCapPerMonth
     ) {
