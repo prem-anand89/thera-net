@@ -89,7 +89,7 @@ export function InvoicePrintPage() {
             <option value="A4">A4</option>
             <option value="A5">A5 (receipt)</option>
           </select>
-          <button className={btnPrimary} onClick={() => window.print()}>
+          <button type="button" className={btnPrimary} onClick={() => window.print()}>
             Print / Save PDF
           </button>
           {!supersededBy && (
