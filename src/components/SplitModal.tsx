@@ -90,16 +90,17 @@ export function SplitModal({
         <div className="flex justify-between gap-2">
           <div>
             {visit.sharedTherapistId && (
-              <button className={btnSecondary} disabled={busy} onClick={() => void save(true)}>
+              <button type="button" className={btnSecondary} disabled={busy} onClick={() => void save(true)}>
                 Remove split
               </button>
             )}
           </div>
           <div className="flex gap-2">
-            <button className={btnSecondary} onClick={onClose}>
+            <button type="button" className={btnSecondary} onClick={onClose}>
               Cancel
             </button>
             <button
+              type="button"
               className={btnPrimary}
               disabled={busy || !sharedTherapistId || !(pctNum > 0)}
               onClick={() => void save(false)}

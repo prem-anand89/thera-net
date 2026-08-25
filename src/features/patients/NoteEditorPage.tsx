@@ -140,7 +140,7 @@ function CarryForward({ summary, onUpdate }: { summary: string; onUpdate: () => 
   return (
     <div className="followup-only carry-forward">
       {summary}
-      <button className="cf-update" onClick={onUpdate}>Update</button>
+      <button type="button" className="cf-update" onClick={onUpdate}>Update</button>
     </div>
   );
 }
@@ -685,7 +685,7 @@ export function NoteEditorPage() {
         {error && (
           <div className="frozen-note" style={{ background: 'var(--rust-light)', color: 'var(--rust)' }}>
             {error}
-            <button className="panel-close" onClick={() => setError(null)}>✕</button>
+            <button type="button" className="panel-close" onClick={() => setError(null)}>✕</button>
           </div>
         )}
         {readOnly && (
@@ -1429,7 +1429,7 @@ export function NoteEditorPage() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label className="field-label">Trauma history</label>
-                  <button className="btn-secondary" disabled={readOnly} onClick={() => update('history', { ...payload.history, traumas: [...payload.history.traumas, { date: '', bodyPart: '', nature: '', treatment: '', sequelae: 'none' }] })}>+ Add</button>
+                  <button type="button" className="btn-secondary" disabled={readOnly} onClick={() => update('history', { ...payload.history, traumas: [...payload.history.traumas, { date: '', bodyPart: '', nature: '', treatment: '', sequelae: 'none' }] })}>+ Add</button>
                 </div>
                 {payload.history.traumas.length === 0 ? (
                   <p className="empty-note">No trauma history added.</p>
@@ -1441,7 +1441,7 @@ export function NoteEditorPage() {
                           <label>Body part</label>
                           <input value={t.bodyPart} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, traumas: payload.history.traumas.map((x, j) => (j === i ? { ...x, bodyPart: e.target.value } : x)) })} />
                         </div>
-                        <button className="kebab" disabled={readOnly} onClick={() => update('history', { ...payload.history, traumas: payload.history.traumas.filter((_, j) => j !== i) })}>✕</button>
+                        <button type="button" className="kebab" disabled={readOnly} onClick={() => update('history', { ...payload.history, traumas: payload.history.traumas.filter((_, j) => j !== i) })}>✕</button>
                       </div>
                       <div className="field-row">
                         <div className="field-block" style={{ margin: 0 }}>
@@ -1461,7 +1461,7 @@ export function NoteEditorPage() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <label className="field-label">Surgical history</label>
-                  <button className="btn-secondary" disabled={readOnly} onClick={() => update('history', { ...payload.history, surgeries: [...payload.history.surgeries, { date: '', procedure: '', outcome: 'good', currentStatus: 'recovered' }] })}>+ Add</button>
+                  <button type="button" className="btn-secondary" disabled={readOnly} onClick={() => update('history', { ...payload.history, surgeries: [...payload.history.surgeries, { date: '', procedure: '', outcome: 'good', currentStatus: 'recovered' }] })}>+ Add</button>
                 </div>
                 {payload.history.surgeries.length === 0 ? (
                   <p className="empty-note">No surgical history added.</p>
@@ -1473,7 +1473,7 @@ export function NoteEditorPage() {
                           <label>Procedure</label>
                           <input value={s.procedure} disabled={readOnly} onChange={(e) => update('history', { ...payload.history, surgeries: payload.history.surgeries.map((x, j) => (j === i ? { ...x, procedure: e.target.value } : x)) })} />
                         </div>
-                        <button className="kebab" disabled={readOnly} onClick={() => update('history', { ...payload.history, surgeries: payload.history.surgeries.filter((_, j) => j !== i) })}>✕</button>
+                        <button type="button" className="kebab" disabled={readOnly} onClick={() => update('history', { ...payload.history, surgeries: payload.history.surgeries.filter((_, j) => j !== i) })}>✕</button>
                       </div>
                       <div className="field-row">
                         <div className="field-block" style={{ margin: 0 }}>
@@ -1751,7 +1751,7 @@ export function NoteEditorPage() {
                     }
                   />
                 </div>
-                <button className="kebab" disabled={readOnly} onClick={() => update('functionalStatus', { activities: payload.functionalStatus.activities.filter((_, j) => j !== i) })}>✕</button>
+                <button type="button" className="kebab" disabled={readOnly} onClick={() => update('functionalStatus', { activities: payload.functionalStatus.activities.filter((_, j) => j !== i) })}>✕</button>
               </div>
               <div>
                 <label className="field-label">
@@ -1823,7 +1823,7 @@ export function NoteEditorPage() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <p className="section-label" style={{ margin: 0 }}>Palpation</p>
-            <button className="btn-secondary" disabled={readOnly} onClick={() => update('palpation', [...payload.palpation, { region: '', findings: [], painOnPalpation: 'none', notes: '' }])}>+ Add</button>
+            <button type="button" className="btn-secondary" disabled={readOnly} onClick={() => update('palpation', [...payload.palpation, { region: '', findings: [], painOnPalpation: 'none', notes: '' }])}>+ Add</button>
           </div>
           {payload.palpation.map((p, i) => (
             <div className="list-entry" key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1832,7 +1832,7 @@ export function NoteEditorPage() {
                   <label>Region</label>
                   <input value={p.region} disabled={readOnly} onChange={(e) => update('palpation', payload.palpation.map((x, j) => (j === i ? { ...x, region: e.target.value } : x)))} />
                 </div>
-                <button className="kebab" disabled={readOnly} onClick={() => update('palpation', payload.palpation.filter((_, j) => j !== i))}>✕</button>
+                <button type="button" className="kebab" disabled={readOnly} onClick={() => update('palpation', payload.palpation.filter((_, j) => j !== i))}>✕</button>
               </div>
               <div className="field-block" style={{ margin: 0 }}>
                 <label>Pain on palpation</label>
@@ -1866,7 +1866,7 @@ export function NoteEditorPage() {
           {!showNeuroTable ? (
             <div className="carry-forward" style={{ marginTop: 8 }}>
               All levels within normal limits.
-              <button className="cf-update" onClick={() => setNeuroExpanded(true)}>Expand</button>
+              <button type="button" className="cf-update" onClick={() => setNeuroExpanded(true)}>Expand</button>
             </div>
           ) : (
           <div style={{ overflowX: 'auto', marginTop: 8 }}>
@@ -1990,7 +1990,7 @@ export function NoteEditorPage() {
             <p className="section-label" style={{ margin: 0 }}>ROM</p>
             <div style={{ display: 'flex', gap: 6 }}>
               <MovementQuickPick region={region} disabled={readOnly} onPick={(m) => update('objective', { ...payload.objective, rom: [...payload.objective.rom, { movement: m, active: null, passive: null, unit: 'deg', painProvoked: false }] })} />
-              <button className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, rom: [...payload.objective.rom, { movement: '', active: null, passive: null, unit: 'deg', painProvoked: false }] })}>+ Add</button>
+              <button type="button" className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, rom: [...payload.objective.rom, { movement: '', active: null, passive: null, unit: 'deg', painProvoked: false }] })}>+ Add</button>
             </div>
           </div>
           {payload.objective.rom.map((r, i) => (
@@ -2000,7 +2000,7 @@ export function NoteEditorPage() {
                   <label>Movement</label>
                   <input value={r.movement} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, rom: payload.objective.rom.map((x, j) => (j === i ? { ...x, movement: e.target.value } : x)) })} />
                 </div>
-                <button className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, rom: payload.objective.rom.filter((_, j) => j !== i) })}>✕</button>
+                <button type="button" className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, rom: payload.objective.rom.filter((_, j) => j !== i) })}>✕</button>
               </div>
               <div className="field-row">
                 <div className="field-block" style={{ margin: 0 }}>
@@ -2021,7 +2021,7 @@ export function NoteEditorPage() {
             <p className="section-label" style={{ margin: 0 }}>Strength / MMT</p>
             <div style={{ display: 'flex', gap: 6 }}>
               <MovementQuickPick region={region} disabled={readOnly} onPick={(m) => update('objective', { ...payload.objective, strength: [...payload.objective.strength, { movement: m, grade: 'not-tested' }] })} />
-              <button className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, strength: [...payload.objective.strength, { movement: '', grade: 'not-tested' }] })}>+ Add</button>
+              <button type="button" className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, strength: [...payload.objective.strength, { movement: '', grade: 'not-tested' }] })}>+ Add</button>
             </div>
           </div>
           {payload.objective.strength.map((s, i) => (
@@ -2031,7 +2031,7 @@ export function NoteEditorPage() {
                   <label>Movement</label>
                   <input value={s.movement} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, strength: payload.objective.strength.map((x, j) => (j === i ? { ...x, movement: e.target.value } : x)) })} />
                 </div>
-                <button className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, strength: payload.objective.strength.filter((_, j) => j !== i) })}>✕</button>
+                <button type="button" className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, strength: payload.objective.strength.filter((_, j) => j !== i) })}>✕</button>
               </div>
               <div className="field-row">
                 <div className="field-block" style={{ margin: 0 }}>
@@ -2055,7 +2055,7 @@ export function NoteEditorPage() {
         <div className="initial-only">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <p className="section-label" style={{ margin: 0 }}>Special tests</p>
-            <button className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, specialTests: [...payload.objective.specialTests, { testId: '', result: 'inconclusive' }] })}>+ Add</button>
+            <button type="button" className="btn-secondary" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, specialTests: [...payload.objective.specialTests, { testId: '', result: 'inconclusive' }] })}>+ Add</button>
           </div>
           {payload.objective.specialTests.map((t, i) => (
             <div key={i} className="list-entry" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -2064,7 +2064,7 @@ export function NoteEditorPage() {
                   <label>Test</label>
                   <input placeholder="e.g. FABER" value={t.testId} disabled={readOnly} onChange={(e) => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.map((x, j) => (j === i ? { ...x, testId: e.target.value } : x)) })} />
                 </div>
-                <button className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.filter((_, j) => j !== i) })}>✕</button>
+                <button type="button" className="kebab" disabled={readOnly} onClick={() => update('objective', { ...payload.objective, specialTests: payload.objective.specialTests.filter((_, j) => j !== i) })}>✕</button>
               </div>
               <div className="field-block" style={{ margin: 0 }}>
                 <label>Result</label>
@@ -2214,7 +2214,7 @@ export function NoteEditorPage() {
           <div className="setup-section-body">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <p className="section-label" style={{ margin: 0 }}>Home exercise program</p>
-            <button className="btn-secondary" disabled={readOnly} onClick={() => update('hep', { ...payload.hep, exercises: [...payload.hep.exercises, { name: '', sets: 3, reps: 10, unit: 'reps', frequency: 'Daily' }] })}>+ Add exercise</button>
+            <button type="button" className="btn-secondary" disabled={readOnly} onClick={() => update('hep', { ...payload.hep, exercises: [...payload.hep.exercises, { name: '', sets: 3, reps: 10, unit: 'reps', frequency: 'Daily' }] })}>+ Add exercise</button>
           </div>
           <p className="empty-note" style={{ marginTop: 0 }}>Manual entry only — the exercise library browser isn't built yet.</p>
           {payload.hep.exercises.map((ex, i) => (
@@ -2224,7 +2224,7 @@ export function NoteEditorPage() {
                   <label>Exercise name</label>
                   <input placeholder="e.g. Wall slides" value={ex.name} disabled={readOnly} onChange={(e) => update('hep', { ...payload.hep, exercises: payload.hep.exercises.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
                 </div>
-                <button className="kebab" disabled={readOnly} onClick={() => update('hep', { ...payload.hep, exercises: payload.hep.exercises.filter((_, j) => j !== i) })}>✕</button>
+                <button type="button" className="kebab" disabled={readOnly} onClick={() => update('hep', { ...payload.hep, exercises: payload.hep.exercises.filter((_, j) => j !== i) })}>✕</button>
               </div>
               <div className="field-row">
                 <div className="field-block" style={{ margin: 0 }}>
@@ -2327,7 +2327,7 @@ export function NoteEditorPage() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label className="field-label">Goals</label>
-                <button className="btn-secondary" disabled={readOnly} onClick={() => update('plan', { ...payload.plan, goals: [...payload.plan.goals, { text: '', targetTerm: '' }] })}>+ Add</button>
+                <button type="button" className="btn-secondary" disabled={readOnly} onClick={() => update('plan', { ...payload.plan, goals: [...payload.plan.goals, { text: '', targetTerm: '' }] })}>+ Add</button>
               </div>
               {payload.plan.goals.length === 0 ? (
                 <p className="empty-note">No goals added.</p>
@@ -2339,7 +2339,7 @@ export function NoteEditorPage() {
                         <label>Goal</label>
                         <input value={g.text} disabled={readOnly} onChange={(e) => update('plan', { ...payload.plan, goals: payload.plan.goals.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)) })} />
                       </div>
-                      <button className="kebab" disabled={readOnly} onClick={() => update('plan', { ...payload.plan, goals: payload.plan.goals.filter((_, j) => j !== i) })}>✕</button>
+                      <button type="button" className="kebab" disabled={readOnly} onClick={() => update('plan', { ...payload.plan, goals: payload.plan.goals.filter((_, j) => j !== i) })}>✕</button>
                     </div>
                     <div className="field-row">
                       <div className="field-block" style={{ margin: 0 }}>
@@ -2481,10 +2481,10 @@ export function NoteEditorPage() {
             className="modal-actions sticky bottom-20 z-[2] justify-start bg-[var(--paper)] sm:bottom-0"
             style={{ justifyContent: 'flex-start', marginBottom: 0, paddingBottom: 16 }}
           >
-            <button className="btn-secondary" onClick={() => save('draft')} disabled={busy}>
+            <button type="button" className="btn-secondary" onClick={() => save('draft')} disabled={busy}>
               {busy ? 'Saving…' : 'Save draft'}
             </button>
-            <button className="btn-primary" onClick={() => save('completed')} disabled={busy}>
+            <button type="button" className="btn-primary" onClick={() => save('completed')} disabled={busy}>
               {busy ? 'Saving…' : 'Mark completed'}
             </button>
           </div>
