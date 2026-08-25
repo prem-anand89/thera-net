@@ -77,7 +77,7 @@ export function NotePrintPage() {
             <option value="A4">A4</option>
             <option value="A5">A5</option>
           </select>
-          <button className={btnPrimary} onClick={() => window.print()}>
+          <button type="button" className={btnPrimary} onClick={() => window.print()}>
             Print / Save PDF
           </button>
         </div>

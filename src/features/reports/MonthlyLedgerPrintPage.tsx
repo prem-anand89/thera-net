@@ -53,7 +53,7 @@ export function MonthlyLedgerPrintPage() {
         <Link to="/insights" search={{ tab: 'monthly' }} className={btnSecondary}>
           ← Back
         </Link>
-        <button className={`${btnPrimary} ml-auto`} onClick={() => window.print()}>
+        <button type="button" className={`${btnPrimary} ml-auto`} onClick={() => window.print()}>
           Print / Save PDF
         </button>
       </div>
