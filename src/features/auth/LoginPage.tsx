@@ -251,6 +251,18 @@ export function LoginPage() {
           >
             Forgot password?
           </button>
+          <button
+            type="button"
+            className="text-center text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+            onClick={() => {
+              setMode('signup');
+              setError(null);
+              setEmail('');
+              setPassword('');
+            }}
+          >
+            Don't have an account? Sign up
+          </button>
         </div>
         <p className="text-xs text-[var(--muted)]">
           First sign-in needs a connection; after that the app works offline and syncs when back
