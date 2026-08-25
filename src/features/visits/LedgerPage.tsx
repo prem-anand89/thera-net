@@ -79,9 +79,10 @@ function visitToCardData(
   consultationNotes: ConsultationNote[] | undefined
 ): VisitCardData {
   const p = patientById.get(v.patientId);
-  const editedBy = v.createdBy && v.updatedBy && v.createdBy !== v.updatedBy
-    ? therapistNameByUserId.get(v.updatedBy) ?? 'another user'
-    : null;
+  const editedBy =
+    v.createdBy && v.updatedBy && v.createdBy !== v.updatedBy
+      ? (therapistNameByUserId.get(v.updatedBy) ?? 'another user')
+      : null;
   const paymentState = computeVisitPaymentState(
     v.actualBillPaise,
     v.invoiceId ?? null,
@@ -110,7 +111,9 @@ function visitToCardData(
     packageTotal: v.packageTotal ?? null,
     therapistName: therapistName.get(v.therapistId) ?? '-',
     treatmentNotes: v.treatmentNotes ?? null,
-    treatmentNames: (v.treatmentIds ?? []).map((id) => treatmentName.get(id)).filter((n): n is string => !!n),
+    treatmentNames: (v.treatmentIds ?? [])
+      .map((id) => treatmentName.get(id))
+      .filter((n): n is string => !!n),
     billPaise: v.actualBillPaise,
     paymentState,
     invoiceId: v.invoiceId ?? null,
@@ -225,7 +228,8 @@ export function LedgerPage() {
     [therapists]
   );
   const therapistNameByUserId = useMemo(
-    () => new Map((therapists ?? []).filter((t) => t.userId).map((t) => [t.userId as string, t.name])),
+    () =>
+      new Map((therapists ?? []).filter((t) => t.userId).map((t) => [t.userId as string, t.name])),
     [therapists]
   );
   const patientById = useMemo(() => new Map((patients ?? []).map((p) => [p.id, p])), [patients]);
@@ -241,7 +245,10 @@ export function LedgerPage() {
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
   const serviceName = useMemo(() => new Map((catalog ?? []).map((c) => [c.id, c.name])), [catalog]);
   const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
-  const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
+  const treatmentName = useMemo(
+    () => new Map((treatments ?? []).map((t) => [t.id, t.name])),
+    [treatments]
+  );
 
   // Draft notes never get written back onto the visit row itself (only a
   // completed note does — see consultationNoteService.saveAssessment), so
@@ -273,13 +280,19 @@ export function LedgerPage() {
   }, [directPayments]);
 
   const filteredPatient = search.patientId ? patientById.get(search.patientId) : undefined;
-  const editPatient = useLiveQuery(() => (editPatientId ? repos.patients.get(editPatientId) : undefined), [editPatientId]);
+  const editPatient = useLiveQuery(
+    () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
+    [editPatientId]
+  );
 
   const patientMatches = useMemo(() => {
     const q = patientQuery.trim().toLowerCase();
     if (!q) return [];
     return (patients ?? [])
-      .filter((p) => !p.deletedAt && (p.mrno.toLowerCase().startsWith(q) || p.name.toLowerCase().includes(q)))
+      .filter(
+        (p) =>
+          !p.deletedAt && (p.mrno.toLowerCase().startsWith(q) || p.name.toLowerCase().includes(q))
+      )
       .slice(0, PATIENT_SEARCH_LIMIT);
   }, [patients, patientQuery]);
 
@@ -289,7 +302,10 @@ export function LedgerPage() {
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
   );
-  const outstanding = useLiveQuery(() => dashboardService.outstandingInvoices(clinic.id), [clinic.id]);
+  const outstanding = useLiveQuery(
+    () => dashboardService.outstandingInvoices(clinic.id),
+    [clinic.id]
+  );
 
   // Candidate ₹0 package rows whose OWN invoiceId is null — for each
   // distinct packageGroupId among them, check the full group (not just
@@ -297,14 +313,20 @@ export function LedgerPage() {
   // a sibling invoiced outside this window) for any invoiced sibling.
   // Same dedupe-and-fetch-per-group shape as packageAttributionDeltas.
   const candidatePendingGroupIds = useMemo(
-    () =>
-      [
-        ...new Set(
-          (visits ?? [])
-            .filter((v) => v.actualBillPaise === 0 && v.sessionIndex && v.packageTotal && !v.invoiceId && v.packageGroupId)
-            .map((v) => v.packageGroupId!)
-        ),
-      ],
+    () => [
+      ...new Set(
+        (visits ?? [])
+          .filter(
+            (v) =>
+              v.actualBillPaise === 0 &&
+              v.sessionIndex &&
+              v.packageTotal &&
+              !v.invoiceId &&
+              v.packageGroupId
+          )
+          .map((v) => v.packageGroupId!)
+      ),
+    ],
     [visits]
   );
   const invoicedSiblingGroupIds = useLiveQuery(async () => {
@@ -364,7 +386,10 @@ export function LedgerPage() {
     () =>
       cardRows
         .filter((r) => !onlyCollectedNoReceipt || r.paymentState === 'collected_no_receipt')
-        .filter((r) => !onlyNotCollected || r.paymentState === 'outstanding' || r.paymentState === 'uninvoiced')
+        .filter(
+          (r) =>
+            !onlyNotCollected || r.paymentState === 'outstanding' || r.paymentState === 'uninvoiced'
+        )
         .filter((r) => !onlyNotDocumented || r.needsNote),
     [cardRows, onlyCollectedNoReceipt, onlyNotCollected, onlyNotDocumented]
   );
@@ -378,7 +403,9 @@ export function LedgerPage() {
         (acc, r) => ({
           bill: acc.bill + r.billPaise,
           collected: acc.collected + (isCollected(r.paymentState) ? r.billPaise : 0),
-          outstanding: acc.outstanding + (!isCollected(r.paymentState) && r.paymentState !== 'zero_session' ? r.billPaise : 0),
+          outstanding:
+            acc.outstanding +
+            (!isCollected(r.paymentState) && r.paymentState !== 'zero_session' ? r.billPaise : 0),
         }),
         { bill: 0, collected: 0, outstanding: 0 }
       ),
@@ -398,7 +425,9 @@ export function LedgerPage() {
             ? `through ${formatDateDMY(to)}`
             : 'all dates';
     const therapistText = therapistId ? (therapistName.get(therapistId) ?? 'Unknown') : 'All';
-    const patientText = filteredPatient ? `${filteredPatient.name} (${filteredPatient.mrno})` : 'All';
+    const patientText = filteredPatient
+      ? `${filteredPatient.name} (${filteredPatient.mrno})`
+      : 'All';
     return `Ledger export — ${dateLabel} (${rangeText}) · Therapist: ${therapistText} · Patient: ${patientText} · generated ${new Date().toLocaleString()}`;
   }, [datePreset, from, to, therapistId, therapistName, filteredPatient]);
 
@@ -434,7 +463,8 @@ export function LedgerPage() {
   // last-sync timestamp, since "as of 14:02" would understate what's
   // actually showing if newer edits are still queued.
   const syncSnapshot = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
-  const unsyncedVisitCount = useLiveQuery(() => db.outbox.filter((e) => e.table === 'visits').count(), []) ?? 0;
+  const unsyncedVisitCount =
+    useLiveQuery(() => db.outbox.filter((e) => e.table === 'visits').count(), []) ?? 0;
   const syncCaption =
     unsyncedVisitCount > 0
       ? `Includes ${unsyncedVisitCount} unsynced visit${unsyncedVisitCount === 1 ? '' : 's'}.`
@@ -462,14 +492,14 @@ export function LedgerPage() {
       </div>
 
       <div className="flex w-fit gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
-          {(
-            [
-              { key: 'visits', label: 'Visits' },
-              { key: 'invoices', label: 'Invoices' },
-            ] as const
-          )
-            .filter((v) => v.key !== 'invoices' || canBill)
-            .map((v) => (
+        {(
+          [
+            { key: 'visits', label: 'Visits' },
+            { key: 'invoices', label: 'Invoices' },
+          ] as const
+        )
+          .filter((v) => v.key !== 'invoices' || canBill)
+          .map((v) => (
             <button
               key={v.key}
               type="button"
@@ -483,7 +513,7 @@ export function LedgerPage() {
               {v.label}
             </button>
           ))}
-        </div>
+      </div>
 
       {recordsView === 'visits' && (
         <>
@@ -519,7 +549,11 @@ export function LedgerPage() {
               )}
             </div>
             <Field label="Therapist">
-              <select className={inputCls} value={therapistId} onChange={(e) => setTherapistId(e.target.value)}>
+              <select
+                className={inputCls}
+                value={therapistId}
+                onChange={(e) => setTherapistId(e.target.value)}
+              >
                 <option value="">All</option>
                 {(therapists ?? []).map((t) => (
                   <option key={t.id} value={t.id}>
@@ -574,14 +608,29 @@ export function LedgerPage() {
               {datePreset === 'custom' && (
                 <div className="flex flex-wrap gap-2">
                   <Field label="From">
-                    <input type="date" className={inputCls} value={from} onChange={(e) => setFrom(e.target.value)} />
+                    <input
+                      type="date"
+                      className={inputCls}
+                      value={from}
+                      onChange={(e) => setFrom(e.target.value)}
+                    />
                   </Field>
                   <Field label="To">
-                    <input type="date" className={inputCls} value={to} onChange={(e) => setTo(e.target.value)} />
+                    <input
+                      type="date"
+                      className={inputCls}
+                      value={to}
+                      onChange={(e) => setTo(e.target.value)}
+                    />
                   </Field>
                 </div>
               )}
-              <button className={btnSecondary} disabled={!visits?.length} onClick={downloadCsv}>
+              <button
+                type="button"
+                className={btnSecondary}
+                disabled={!visits?.length}
+                onClick={downloadCsv}
+              >
                 Export CSV
               </button>
               {canViewPayouts && (
@@ -754,7 +803,12 @@ export function LedgerPage() {
       {recordsView === 'invoices' && <InvoicesPage />}
 
       {invoicing && (
-        <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} returnTo="/ledger" />
+        <IssueInvoiceDialog
+          clinicId={clinic.id}
+          target={invoicing}
+          onClose={() => setInvoicing(null)}
+          returnTo="/ledger"
+        />
       )}
 
       {takingPayment && (
@@ -789,13 +843,8 @@ export function LedgerPage() {
       )}
 
       {editing && (
-        <EditVisitModal
-          visitId={editing}
-          onClose={() => setEditing(null)}
-          setError={setError}
-        />
+        <EditVisitModal visitId={editing} onClose={() => setEditing(null)} setError={setError} />
       )}
     </div>
   );
 }
-

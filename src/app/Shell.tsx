@@ -1,4 +1,11 @@
-import { Suspense, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, ALL_SYNCED_TABLES } from '@/lib/db';
@@ -17,50 +24,143 @@ import { SyncBadge, SyncStatusBanners } from '@/components/SyncBadge';
  *  round caps, no fill). */
 function IconWorkspace({ className }: { className?: string }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
-      <path d="M3.5 9.5L10 4l6.5 5.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M5.5 8.5V15a1 1 0 001 1h3v-4.5h1V16h3a1 1 0 001-1V8.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M3.5 9.5L10 4l6.5 5.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5.5 8.5V15a1 1 0 001 1h3v-4.5h1V16h3a1 1 0 001-1V8.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
 function IconLedger({ className }: { className?: string }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
       <rect x="4.5" y="3" width="11" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M7 7.2h6M7 10h6M7 12.8h3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path
+        d="M7 7.2h6M7 10h6M7 12.8h3.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
 function IconPatients({ className }: { className?: string }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
       <circle cx="7.3" cy="6.3" r="2.3" stroke="currentColor" strokeWidth="1.6" />
       <circle cx="13.2" cy="7" r="1.9" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M2.5 16c.5-3 2.5-4.7 4.8-4.7s4.3 1.7 4.8 4.7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M12.3 11.6c1.9.2 3.4 1.7 3.8 4.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path
+        d="M2.5 16c.5-3 2.5-4.7 4.8-4.7s4.3 1.7 4.8 4.7"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12.3 11.6c1.9.2 3.4 1.7 3.8 4.1"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
 function IconReports({ className }: { className?: string }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
-      <path d="M4 16.5V11M10 16.5V4M16 16.5V8.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M4 16.5V11M10 16.5V4M16 16.5V8.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
       <path d="M3 16.5h14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
 function IconSettings({ className }: { className?: string }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
-      <path d="M4 5.5h7.5M4 10h11M4 14.5h7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <circle cx="14" cy="5.5" r="1.7" fill="var(--surface)" stroke="currentColor" strokeWidth="1.6" />
-      <circle cx="8.5" cy="14.5" r="1.7" fill="var(--surface)" stroke="currentColor" strokeWidth="1.6" />
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M4 5.5h7.5M4 10h11M4 14.5h7.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <circle
+        cx="14"
+        cy="5.5"
+        r="1.7"
+        fill="var(--surface)"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <circle
+        cx="8.5"
+        cy="14.5"
+        r="1.7"
+        fill="var(--surface)"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
     </svg>
   );
 }
 function IconMore({ className }: { className?: string }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" className={className}>
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
       <circle cx="5" cy="10" r="1.4" fill="currentColor" />
       <circle cx="10" cy="10" r="1.4" fill="currentColor" />
       <circle cx="15" cy="10" r="1.4" fill="currentColor" />
@@ -177,7 +277,12 @@ export function Shell() {
     // for it here is what actually confirms "zero clinics," not just
     // "haven't checked yet."
     const initialSyncSettled = sync.lastSyncAt != null;
-    if (!syncKicked || clinics === undefined || activeClinicId === undefined || !initialSyncSettled) {
+    if (
+      !syncKicked ||
+      clinics === undefined ||
+      activeClinicId === undefined ||
+      !initialSyncSettled
+    ) {
       return (
         <Centered>
           <div className="space-y-2 text-center text-sm text-[var(--muted)]">
@@ -221,8 +326,12 @@ export function Shell() {
         <header className="no-print sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--surface)]">
           <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
             <div className="flex min-w-0 items-center gap-2">
-              {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto shrink-0 object-contain" />}
-              <div className="font-display truncate text-lg font-semibold text-[var(--ink)]">{clinic.name}</div>
+              {logoUrl && (
+                <img src={logoUrl} alt="" className="h-8 w-auto shrink-0 object-contain" />
+              )}
+              <div className="font-display truncate text-lg font-semibold text-[var(--ink)]">
+                {clinic.name}
+              </div>
             </div>
             {/* Desktop nav — the same items reappear as the bottom tab bar
                 below sm:, so this one only needs to render at sm: and up. */}
@@ -249,6 +358,7 @@ export function Shell() {
                   setDisplayName={setDisplayName}
                 />
                 <button
+                  type="button"
                   className="text-xs text-[var(--muted)] hover:text-[var(--ink)]"
                   onClick={() => getSupabase()?.auth.signOut()}
                 >
@@ -261,6 +371,7 @@ export function Shell() {
                   the full nav. */}
               <div className="relative sm:hidden">
                 <button
+                  type="button"
                   className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--paper)]"
                   aria-label="Account"
                   aria-expanded={menuOpen}
@@ -268,7 +379,12 @@ export function Shell() {
                 >
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                     <circle cx="10" cy="7" r="2.6" stroke="currentColor" strokeWidth="1.6" />
-                    <path d="M3.5 16c.7-3.4 3-5.2 6.5-5.2s5.8 1.8 6.5 5.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    <path
+                      d="M3.5 16c.7-3.4 3-5.2 6.5-5.2s5.8 1.8 6.5 5.2"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                    />
                   </svg>
                 </button>
                 {menuOpen && (
@@ -283,6 +399,7 @@ export function Shell() {
                         setDisplayName={setDisplayName}
                       />
                       <button
+                        type="button"
                         className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--muted)] hover:bg-[var(--paper)]"
                         onClick={() => getSupabase()?.auth.signOut()}
                       >
@@ -297,7 +414,9 @@ export function Shell() {
         </header>
         <SyncStatusBanners />
         <main className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:pb-6">
-          <Suspense fallback={<div className="py-16 text-center text-sm text-[var(--muted)]">Loading…</div>}>
+          <Suspense
+            fallback={<div className="py-16 text-center text-sm text-[var(--muted)]">Loading…</div>}
+          >
             <Outlet />
           </Suspense>
         </main>
@@ -305,8 +424,18 @@ export function Shell() {
           className="no-print fixed inset-x-0 bottom-0 z-10 flex items-end border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] sm:hidden"
           aria-label="Main"
         >
-          <PhoneTab to="/workspace" label="Workspace" Icon={IconWorkspace} active={pathname.startsWith('/workspace')} />
-          <PhoneTab to="/patients" label="Patients" Icon={IconPatients} active={pathname.startsWith('/patients')} />
+          <PhoneTab
+            to="/workspace"
+            label="Workspace"
+            Icon={IconWorkspace}
+            active={pathname.startsWith('/workspace')}
+          />
+          <PhoneTab
+            to="/patients"
+            label="Patients"
+            Icon={IconPatients}
+            active={pathname.startsWith('/patients')}
+          />
           <Link
             to="/visits/new"
             aria-label="New visit"
@@ -317,13 +446,20 @@ export function Shell() {
             </span>
             <span className="sr-only">New visit</span>
           </Link>
-          <PhoneTab to="/ledger" label="Ledger" Icon={IconLedger} active={pathname.startsWith('/ledger')} />
+          <PhoneTab
+            to="/ledger"
+            label="Ledger"
+            Icon={IconLedger}
+            active={pathname.startsWith('/ledger')}
+          />
           <PhoneTab
             to="/more"
             label="More"
             Icon={IconMore}
             active={
-              pathname.startsWith('/more') || pathname.startsWith('/settings') || pathname.startsWith('/insights')
+              pathname.startsWith('/more') ||
+              pathname.startsWith('/settings') ||
+              pathname.startsWith('/insights')
             }
           />
         </nav>
@@ -417,10 +553,19 @@ function NameEditor({
           placeholder="Your name"
         />
         <div className="flex gap-2">
-          <button type="button" className="text-xs font-medium text-[var(--teal)] disabled:opacity-50" disabled={saving} onClick={() => void save()}>
+          <button
+            type="button"
+            className="text-xs font-medium text-[var(--teal)] disabled:opacity-50"
+            disabled={saving}
+            onClick={() => void save()}
+          >
             {saving ? 'Saving…' : 'Save'}
           </button>
-          <button type="button" className="text-xs text-[var(--muted)]" onClick={() => setEditing(false)}>
+          <button
+            type="button"
+            className="text-xs text-[var(--muted)]"
+            onClick={() => setEditing(false)}
+          >
             Cancel
           </button>
         </div>
@@ -447,7 +592,13 @@ function NameEditor({
         {displayName ?? fallbackName}
       </button>
       {roleLabel && (
-        <div className={variant === 'desktop' ? 'text-[10px] uppercase tracking-wide text-[var(--muted)]' : 'text-xs text-[var(--muted)]'}>
+        <div
+          className={
+            variant === 'desktop'
+              ? 'text-[10px] uppercase tracking-wide text-[var(--muted)]'
+              : 'text-xs text-[var(--muted)]'
+          }
+        >
           {roleLabel}
         </div>
       )}

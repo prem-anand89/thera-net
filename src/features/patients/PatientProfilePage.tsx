@@ -12,7 +12,11 @@ import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
-import { REFERRING_SOURCE_LABELS, type ConsultationNote, type ConsultationNoteStatus } from '@/domain/types';
+import {
+  REFERRING_SOURCE_LABELS,
+  type ConsultationNote,
+  type ConsultationNoteStatus,
+} from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
@@ -21,12 +25,14 @@ import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal
  *  "+N older" line — the full history stays reachable by opening any note. */
 const NOTE_LIST_LIMIT = 6;
 
-const NOTE_STATUS_PILL: Record<ConsultationNoteStatus, { tone: 'green' | 'amber' | 'slate'; label: string }> = {
+const NOTE_STATUS_PILL: Record<
+  ConsultationNoteStatus,
+  { tone: 'green' | 'amber' | 'slate'; label: string }
+> = {
   draft: { tone: 'amber', label: 'Draft' },
   completed: { tone: 'green', label: 'Completed' },
   archived: { tone: 'slate', label: 'Archived' },
 };
-
 
 /**
  * Patient Hub — the patient-centric home of the app. One patient's identity,
@@ -52,7 +58,10 @@ export function PatientProfilePage() {
   const [hideZeroBilled, setHideZeroBilled] = useState(false);
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
-  const editPatient = useLiveQuery(() => (editPatientId ? repos.patients.get(editPatientId) : undefined), [editPatientId]);
+  const editPatient = useLiveQuery(
+    () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
+    [editPatientId]
+  );
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
   const notes = useLiveQuery(
     () => consultationNoteService.listByPatient(clinic.id, patientId),
@@ -89,7 +98,10 @@ export function PatientProfilePage() {
     return map;
   }, [directPayments]);
   const visitRows = useMemo(
-    () => [...(visits ?? [])].filter((v) => !v.deleted).sort((a, b) => b.visitDate.localeCompare(a.visitDate)),
+    () =>
+      [...(visits ?? [])]
+        .filter((v) => !v.deleted)
+        .sort((a, b) => b.visitDate.localeCompare(a.visitDate)),
     [visits]
   );
 
@@ -98,7 +110,10 @@ export function PatientProfilePage() {
     [openPackages, patientId]
   );
 
-  const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
+  const treatmentName = useMemo(
+    () => new Map((treatments ?? []).map((t) => [t.id, t.name])),
+    [treatments]
+  );
 
   // How many sessions of each treatment type this package has had so far —
   // e.g. "Manual Therapy: 4 · Exercise: 6 · Kinesio Taping: 2" — derived
@@ -177,46 +192,48 @@ export function PatientProfilePage() {
         const needsNote = v.clinicalStatus === 'pending';
         const linkedNote = noteForVisit(notes ?? [], v.id, patientId, needsNote);
         return {
-        visitId: v.id,
-        visitDate: v.visitDate,
-        patientId,
-        patientName: patient?.name ?? '—',
-        mrno: patient?.mrno ?? '—',
-        age: patient?.age,
-        sex: patient?.sex,
-        condition: v.condition ?? null,
-        serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
-        sessionIndex: v.sessionIndex ?? null,
-        packageTotal: v.packageTotal ?? null,
-        therapistName: therapistName.get(v.therapistId) ?? '—',
-        treatmentNotes: v.treatmentNotes ?? null,
-        treatmentNames: (v.treatmentIds ?? []).map((id) => treatmentName.get(id)).filter((n): n is string => !!n),
-        billPaise: v.actualBillPaise,
-        paymentState: computeVisitPaymentState(
-          v.actualBillPaise,
-          v.invoiceId ?? null,
-          directPaymentByVisitId.get(v.id) ?? 0,
-          v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
-        ),
-        invoiceId: v.invoiceId ?? null,
-        canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
-        // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
-        // is_own_therapist) — a patient's history is clinic-wide (any
-        // therapist can view it), but only the visit's own therapist or an
-        // admin can delete it.
-        canDelete: !v.invoiceId && (isAdmin || v.therapistId === myTherapistId),
-        needsNote,
-        canViewNotes: canViewClinicalNotes,
-        consultationNoteId: linkedNote?.id ?? null,
-        noteStatus: linkedNote?.status ?? null,
-        packageInvoicePending:
-          v.actualBillPaise === 0 &&
-          !!v.sessionIndex &&
-          !!v.packageTotal &&
-          !v.invoiceId &&
-          !!v.packageGroupId &&
-          invoicedPackageGroupIds.has(v.packageGroupId),
-      };
+          visitId: v.id,
+          visitDate: v.visitDate,
+          patientId,
+          patientName: patient?.name ?? '—',
+          mrno: patient?.mrno ?? '—',
+          age: patient?.age,
+          sex: patient?.sex,
+          condition: v.condition ?? null,
+          serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
+          sessionIndex: v.sessionIndex ?? null,
+          packageTotal: v.packageTotal ?? null,
+          therapistName: therapistName.get(v.therapistId) ?? '—',
+          treatmentNotes: v.treatmentNotes ?? null,
+          treatmentNames: (v.treatmentIds ?? [])
+            .map((id) => treatmentName.get(id))
+            .filter((n): n is string => !!n),
+          billPaise: v.actualBillPaise,
+          paymentState: computeVisitPaymentState(
+            v.actualBillPaise,
+            v.invoiceId ?? null,
+            directPaymentByVisitId.get(v.id) ?? 0,
+            v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+          ),
+          invoiceId: v.invoiceId ?? null,
+          canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
+          // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
+          // is_own_therapist) — a patient's history is clinic-wide (any
+          // therapist can view it), but only the visit's own therapist or an
+          // admin can delete it.
+          canDelete: !v.invoiceId && (isAdmin || v.therapistId === myTherapistId),
+          needsNote,
+          canViewNotes: canViewClinicalNotes,
+          consultationNoteId: linkedNote?.id ?? null,
+          noteStatus: linkedNote?.status ?? null,
+          packageInvoicePending:
+            v.actualBillPaise === 0 &&
+            !!v.sessionIndex &&
+            !!v.packageTotal &&
+            !v.invoiceId &&
+            !!v.packageGroupId &&
+            invoicedPackageGroupIds.has(v.packageGroupId),
+        };
       }),
     [
       visitRows,
@@ -294,7 +311,9 @@ export function PatientProfilePage() {
       flags.push('On blood thinner — caution with dry needling and manual therapy (bleeding risk)');
     }
     if (payload.history.implants.present) {
-      flags.push('Implants/pacemaker — avoid electrotherapy modalities (TENS, IFC, ultrasound over the site)');
+      flags.push(
+        'Implants/pacemaker — avoid electrotherapy modalities (TENS, IFC, ultrasound over the site)'
+      );
     }
     if (payload.history.pregnancyStatus === 'yes') {
       flags.push('Pregnant — avoid contraindicated modalities and positions');
@@ -330,13 +349,18 @@ export function PatientProfilePage() {
 
   return (
     <div className="space-y-4">
-      <Link to={backTo ?? '/patients'} className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]">
+      <Link
+        to={backTo ?? '/patients'}
+        className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]"
+      >
         ← Back
       </Link>
 
       {safetyFlags.length > 0 && (
         <div className="flex items-start gap-2 rounded-[10px] border border-[var(--rust)] bg-[var(--rust-light)] px-3.5 py-3 text-sm text-[var(--rust)]">
-          <span className="shrink-0" aria-hidden>⚠</span>
+          <span className="shrink-0" aria-hidden>
+            ⚠
+          </span>
           <div>
             <p className="font-semibold">Contraindications</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-4">
@@ -356,8 +380,11 @@ export function PatientProfilePage() {
           </div>
           <div className="min-w-[12rem] flex-1">
             <div className="flex items-center gap-2">
-              <h1 className="font-display text-xl font-semibold text-[var(--ink)]">{patient.name}</h1>
+              <h1 className="font-display text-xl font-semibold text-[var(--ink)]">
+                {patient.name}
+              </h1>
               <button
+                type="button"
                 onClick={() => setEditOpen(true)}
                 className="text-[var(--muted)] hover:text-[var(--ink)]"
                 title="Edit patient"
@@ -419,7 +446,9 @@ export function PatientProfilePage() {
                 canViewClinicalNotes's "reception has no clinical-documentation
                 need" (NoteEditorPage enforces the same gate for anyone who
                 navigates to a note URL directly). */}
-            {canViewClinicalNotes && <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />}
+            {canViewClinicalNotes && (
+              <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />
+            )}
 
             {visitRows.length > 0 && (
               <PaymentsSummarySection
@@ -435,7 +464,10 @@ export function PatientProfilePage() {
               ) : (
                 <ul className="space-y-3">
                   {patientPackages.map((p) => {
-                    const pct = Math.min(100, Math.round((p.sessionsLogged / p.packageTotal) * 100));
+                    const pct = Math.min(
+                      100,
+                      Math.round((p.sessionsLogged / p.packageTotal) * 100)
+                    );
                     return (
                       <li key={p.packageGroupId}>
                         <div className="flex items-center justify-between text-sm font-medium text-[var(--ink)]">
@@ -620,12 +652,16 @@ function ConsultationNotePanel({
                 className="flex items-center justify-between gap-2 hover:underline"
               >
                 <span className="min-w-0">
-                  <span className="font-num text-[var(--ink)]">{formatDateDM(n.updatedAt.slice(0, 10))}</span>
+                  <span className="font-num text-[var(--ink)]">
+                    {formatDateDM(n.updatedAt.slice(0, 10))}
+                  </span>
                   <span className="ml-1.5 text-[var(--muted)]">
                     {n.noteMode === 'followup' ? 'Follow-up' : 'Initial'}
                   </span>
                 </span>
-                <Pill tone={NOTE_STATUS_PILL[n.status].tone}>{NOTE_STATUS_PILL[n.status].label}</Pill>
+                <Pill tone={NOTE_STATUS_PILL[n.status].tone}>
+                  {NOTE_STATUS_PILL[n.status].label}
+                </Pill>
               </Link>
             </li>
           ))}
@@ -688,11 +724,15 @@ function PaymentsSummarySection({
     <SideCard title="Payments">
       <div className="grid grid-cols-3 gap-2 text-center">
         <div>
-          <div className="font-num text-sm font-semibold text-[var(--ink)]">₹{(billed / 100).toFixed(0)}</div>
+          <div className="font-num text-sm font-semibold text-[var(--ink)]">
+            ₹{(billed / 100).toFixed(0)}
+          </div>
           <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Billed</div>
         </div>
         <div>
-          <div className="font-num text-sm font-semibold text-[var(--teal)]">₹{(collected / 100).toFixed(0)}</div>
+          <div className="font-num text-sm font-semibold text-[var(--teal)]">
+            ₹{(collected / 100).toFixed(0)}
+          </div>
           <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">Collected</div>
         </div>
         <div>

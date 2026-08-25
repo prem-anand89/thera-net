@@ -41,7 +41,9 @@ export function ImportVisitsPage() {
       const { extractHistoricalRows } = await import('@/services/import/xlsxReader');
       const rawRows = await extractHistoricalRows(file);
       if (rawRows.length === 0) {
-        setError('No visit rows found. Expected month tabs named April/May/June with a Date/Patients/MRNO/Service Name/Bill Amount header row.');
+        setError(
+          'No visit rows found. Expected month tabs named April/May/June with a Date/Patients/MRNO/Service Name/Bill Amount header row.'
+        );
         return;
       }
       const preview = await importVisitsService.preview(rawRows, clinic.id);
@@ -76,10 +78,12 @@ export function ImportVisitsPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
-      <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Import historical visits</h1>
+      <h1 className="font-display text-lg font-semibold text-[var(--ink)]">
+        Import historical visits
+      </h1>
       <p className="text-sm text-[var(--muted)]">
-        One-time import of visits logged before go-live in the Excel ledger. Patients are matched
-        or created by MRNO; no invoices are generated for imported visits.
+        One-time import of visits logged before go-live in the Excel ledger. Patients are matched or
+        created by MRNO; no invoices are generated for imported visits.
       </p>
 
       {stage.kind === 'upload' && (
@@ -127,13 +131,18 @@ export function ImportVisitsPage() {
           <ErrorNote message={error} />
           <div className="flex gap-2">
             <button
+              type="button"
               className={btnPrimary}
               disabled={!allRowsResolved(stage.preview, resolutions)}
               onClick={() => void handleImport(stage.preview)}
             >
               Import {stage.preview.rows.filter((r) => !resolutions[r.key]?.skip).length} visits
             </button>
-            <button className={btnSecondary} onClick={() => setStage({ kind: 'upload' })}>
+            <button
+              type="button"
+              className={btnSecondary}
+              onClick={() => setStage({ kind: 'upload' })}
+            >
               Start over
             </button>
           </div>
@@ -148,7 +157,9 @@ export function ImportVisitsPage() {
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--paper)]">
             <div
               className="h-full bg-[var(--teal)] transition-all"
-              style={{ width: `${(100 * stage.progress.done) / Math.max(1, stage.progress.total)}%` }}
+              style={{
+                width: `${(100 * stage.progress.done) / Math.max(1, stage.progress.total)}%`,
+              }}
             />
           </div>
         </SectionCard>

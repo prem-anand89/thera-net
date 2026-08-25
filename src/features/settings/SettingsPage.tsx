@@ -45,7 +45,16 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { FirstWeekChecklist, useFirstWeekChecklistVisible } from './FirstWeekChecklist';
 import { isValidUpiVpa } from '@/domain/upiPay';
 
-type SectionKey = 'plan' | 'profile' | 'billing' | 'partner' | 'team' | 'services' | 'treatments' | 'referrals' | 'data';
+type SectionKey =
+  | 'plan'
+  | 'profile'
+  | 'billing'
+  | 'partner'
+  | 'team'
+  | 'services'
+  | 'treatments'
+  | 'referrals'
+  | 'data';
 
 /**
  * Grouped into the three jobs an admin actually comes here to do, rather
@@ -93,8 +102,18 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
     description: 'Revenue share with a partner hospital, therapist splits, TDS.',
     accent: 'rust',
   },
-  { key: 'team', label: 'Team', description: 'Invite and manage logins, therapist roster.', accent: 'moss' },
-  { key: 'services', label: 'Services', description: 'Catalog of billable services and package prices.', accent: 'teal' },
+  {
+    key: 'team',
+    label: 'Team',
+    description: 'Invite and manage logins, therapist roster.',
+    accent: 'moss',
+  },
+  {
+    key: 'services',
+    label: 'Services',
+    description: 'Catalog of billable services and package prices.',
+    accent: 'teal',
+  },
   {
     key: 'treatments',
     label: 'Treatments',
@@ -110,7 +129,8 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
   {
     key: 'data',
     label: 'Data & maintenance',
-    description: 'Import historical visits, back up or restore, reset this device, wipe clinic data.',
+    description:
+      'Import historical visits, back up or restore, reset this device, wipe clinic data.',
     accent: 'slate',
   },
 ];
@@ -152,11 +172,24 @@ function SectionIcon({ sectionKey, accent }: { sectionKey: SectionKey; accent: A
       style={{ background: light, color }}
     >
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-        {sectionKey === 'team' && <circle cx="6" cy="5.3" r="2" stroke="currentColor" strokeWidth="1.4" />}
+        {sectionKey === 'team' && (
+          <circle cx="6" cy="5.3" r="2" stroke="currentColor" strokeWidth="1.4" />
+        )}
         {sectionKey === 'partner' ? (
-          <path d={SECTION_ICON_PATHS[sectionKey]} stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+          <path
+            d={SECTION_ICON_PATHS[sectionKey]}
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
         ) : (
-          <path d={SECTION_ICON_PATHS[sectionKey]} stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d={SECTION_ICON_PATHS[sectionKey]}
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         )}
       </svg>
     </span>
@@ -211,9 +244,29 @@ function SettingsSectionNavButton({
       <SectionIcon sectionKey={section.key} accent={section.accent} />
       {section.label}
       {locked && (
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-label="Locked" className="shrink-0">
-          <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
-          <path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-label="Locked"
+          className="shrink-0"
+        >
+          <rect
+            x="3.5"
+            y="7"
+            width="9"
+            height="6.5"
+            rx="1.2"
+            stroke="currentColor"
+            strokeWidth="1.3"
+          />
+          <path
+            d="M5.5 7V5a2.5 2.5 0 015 0v2"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+          />
         </svg>
       )}
       {dirty && <span className="text-[var(--rust)]">•</span>}
@@ -296,8 +349,14 @@ export function SettingsPage() {
   // Hide button. Held back while either query is still loading so it
   // doesn't flash visible-then-hidden on a fast setup.
   const firstWeekNotDismissed = useFirstWeekChecklistVisible();
-  const setupIncomplete = therapists === undefined || catalog === undefined ? undefined : unlinkedCount > 0 || catalogEmpty;
-  const showFirstWeek = firstWeekNotDismissed === undefined || setupIncomplete === undefined ? false : firstWeekNotDismissed && setupIncomplete;
+  const setupIncomplete =
+    therapists === undefined || catalog === undefined
+      ? undefined
+      : unlinkedCount > 0 || catalogEmpty;
+  const showFirstWeek =
+    firstWeekNotDismissed === undefined || setupIncomplete === undefined
+      ? false
+      : firstWeekNotDismissed && setupIncomplete;
 
   // Left-rail sections that edit the clinic row report their dirty state up
   // here, so switching tabs with unsaved changes can warn before discarding
@@ -305,9 +364,18 @@ export function SettingsPage() {
   // sections actually introduces (there was nowhere to "navigate away to"
   // before). Team/Services/Data/Danger zone act immediately per row/button
   // and never register as dirty.
-  const setProfileDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'profile', d)), []);
-  const setBillingDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'billing', d)), []);
-  const setPartnerDirty = useCallback((d: boolean) => setDirtyKeys((s) => toggleSet(s, 'partner', d)), []);
+  const setProfileDirty = useCallback(
+    (d: boolean) => setDirtyKeys((s) => toggleSet(s, 'profile', d)),
+    []
+  );
+  const setBillingDirty = useCallback(
+    (d: boolean) => setDirtyKeys((s) => toggleSet(s, 'billing', d)),
+    []
+  );
+  const setPartnerDirty = useCallback(
+    (d: boolean) => setDirtyKeys((s) => toggleSet(s, 'partner', d)),
+    []
+  );
 
   function selectSection(key: SectionKey) {
     if (key === activeKey) return;
@@ -327,9 +395,7 @@ export function SettingsPage() {
     return (
       <div className="space-y-4">
         <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Settings</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Settings are managed by your clinic admin.
-        </p>
+        <p className="text-sm text-[var(--muted)]">Settings are managed by your clinic admin.</p>
       </div>
     );
   }
@@ -355,21 +421,25 @@ export function SettingsPage() {
         >
           {SECTION_GROUPS.map((group, groupIndex) => (
             <div key={group.label} className="flex shrink-0 items-center gap-2">
-              {groupIndex > 0 && <div className="h-8 w-px shrink-0 bg-[var(--border)]" aria-hidden />}
-              {group.keys.filter((key) => key !== 'partner' || canSeePartner).map((key) => {
-                const s = SECTIONS.find((x) => x.key === key)!;
-                return (
-                  <SettingsSectionNavButton
-                    key={s.key}
-                    section={s}
-                    active={activeKey === s.key}
-                    dirty={dirtyKeys.has(s.key)}
-                    locked={s.key === 'billing' && !canSeeBilling}
-                    onSelect={() => selectSection(s.key)}
-                    variant="mobile"
-                  />
-                );
-              })}
+              {groupIndex > 0 && (
+                <div className="h-8 w-px shrink-0 bg-[var(--border)]" aria-hidden />
+              )}
+              {group.keys
+                .filter((key) => key !== 'partner' || canSeePartner)
+                .map((key) => {
+                  const s = SECTIONS.find((x) => x.key === key)!;
+                  return (
+                    <SettingsSectionNavButton
+                      key={s.key}
+                      section={s}
+                      active={activeKey === s.key}
+                      dirty={dirtyKeys.has(s.key)}
+                      locked={s.key === 'billing' && !canSeeBilling}
+                      onSelect={() => selectSection(s.key)}
+                      variant="mobile"
+                    />
+                  );
+                })}
             </div>
           ))}
         </nav>
@@ -379,20 +449,22 @@ export function SettingsPage() {
               <p className="hidden px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]/70 desktop:block">
                 {group.label}
               </p>
-              {group.keys.filter((key) => key !== 'partner' || canSeePartner).map((key) => {
-                const s = SECTIONS.find((x) => x.key === key)!;
-                return (
-                  <SettingsSectionNavButton
-                    key={s.key}
-                    section={s}
-                    active={activeKey === s.key}
-                    dirty={dirtyKeys.has(s.key)}
-                    locked={s.key === 'billing' && !canSeeBilling}
-                    onSelect={() => selectSection(s.key)}
-                    variant="rail"
-                  />
-                );
-              })}
+              {group.keys
+                .filter((key) => key !== 'partner' || canSeePartner)
+                .map((key) => {
+                  const s = SECTIONS.find((x) => x.key === key)!;
+                  return (
+                    <SettingsSectionNavButton
+                      key={s.key}
+                      section={s}
+                      active={activeKey === s.key}
+                      dirty={dirtyKeys.has(s.key)}
+                      locked={s.key === 'billing' && !canSeeBilling}
+                      onSelect={() => selectSection(s.key)}
+                      variant="rail"
+                    />
+                  );
+                })}
             </div>
           ))}
         </nav>
@@ -415,7 +487,9 @@ export function SettingsPage() {
             ) : (
               <LockedSectionNotice feature="invoicing" sectionLabel="Billing & invoicing" />
             ))}
-          {activeKey === 'partner' && canSeePartner && <PartnerSection onDirtyChange={setPartnerDirty} />}
+          {activeKey === 'partner' && canSeePartner && (
+            <PartnerSection onDirtyChange={setPartnerDirty} />
+          )}
           {activeKey === 'team' && (
             <>
               {unlinkedCount > 0 && (
@@ -545,10 +619,10 @@ function SectionSaveBar({
   return (
     <>
       <div className="mt-4 flex items-center gap-3">
-        <button className={btnPrimary} disabled={busy || !dirty} onClick={onSave}>
+        <button type="button" className={btnPrimary} disabled={busy || !dirty} onClick={onSave}>
           {busy ? 'Saving…' : 'Save'}
         </button>
-        <button className={btnSecondary} disabled={!dirty} onClick={onCancel}>
+        <button type="button" className={btnSecondary} disabled={!dirty} onClick={onCancel}>
           Cancel
         </button>
         {saved && !dirty && <span className="text-sm text-[var(--moss)]">Saved ✓</span>}
@@ -573,10 +647,18 @@ const PLAN_STATUS_LABELS: Record<'active' | 'past_due' | 'read_only', string> = 
  * FEATURES_AND_SCHEMA.md's clinic_plans section); a real "Upgrade" button
  * would go nowhere. Revisit once one exists.
  */
-function LockedSectionNotice({ feature, sectionLabel }: { feature: PlanFeature; sectionLabel: string }) {
+function LockedSectionNotice({
+  feature,
+  sectionLabel,
+}: {
+  feature: PlanFeature;
+  sectionLabel: string;
+}) {
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-8 text-center">
-      <p className="text-sm font-medium text-[var(--ink)]">{sectionLabel} isn’t included in your plan.</p>
+      <p className="text-sm font-medium text-[var(--ink)]">
+        {sectionLabel} isn’t included in your plan.
+      </p>
       <p className="mt-1 text-xs text-[var(--muted)]">
         Included in {PLAN_TIER_LABELS[minimumTierFor(feature)]} and above.
       </p>
@@ -589,8 +671,16 @@ function LockedSectionNotice({ feature, sectionLabel }: { feature: PlanFeature; 
 function PlanSection() {
   const clinic = useClinic();
   const entitlements = useEntitlements(clinic.id);
-  const { tier, status, maxMembers, visitCapPerMonth, seatsUsed, visitsThisMonth, loading, enforcementEnabled } =
-    entitlements;
+  const {
+    tier,
+    status,
+    maxMembers,
+    visitCapPerMonth,
+    seatsUsed,
+    visitsThisMonth,
+    loading,
+    enforcementEnabled,
+  } = entitlements;
   const statusTone = status === 'active' ? 'green' : status === 'read_only' ? 'amber' : 'slate';
   const features: { key: PlanFeature; label: string }[] = [
     { key: 'invoicing', label: 'Billing & invoicing' },
@@ -621,17 +711,27 @@ function PlanSection() {
           </p>
         )}
         <div className="mt-4 grid grid-cols-2 gap-3 sm:w-fit sm:grid-cols-2">
-          <StatTile label="Seats" value={seatsUsed == null ? `— / ${maxMembers}` : `${seatsUsed} / ${maxMembers}`} />
+          <StatTile
+            label="Seats"
+            value={seatsUsed == null ? `— / ${maxMembers}` : `${seatsUsed} / ${maxMembers}`}
+          />
           <StatTile
             label="Visits this month"
-            value={visitCapPerMonth == null ? `${visitsThisMonth}` : `${visitsThisMonth} / ${visitCapPerMonth}`}
+            value={
+              visitCapPerMonth == null
+                ? `${visitsThisMonth}`
+                : `${visitsThisMonth} / ${visitCapPerMonth}`
+            }
           />
         </div>
       </SectionCard>
       <SectionCard title="What's included">
         <ul className="divide-y divide-[var(--border)]">
           {features.map((f) => (
-            <li key={f.key} className="flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0">
+            <li
+              key={f.key}
+              className="flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0"
+            >
               <span className="text-[var(--ink)]">{f.label}</span>
               {entitlements.can(f.key) ? (
                 <Pill tone="green">Included</Pill>
@@ -724,7 +824,11 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
     <SectionCard title="Clinic profile">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Clinic name">
-          <input className={inputCls} value={form.name} onChange={(e) => set({ name: e.target.value })} />
+          <input
+            className={inputCls}
+            value={form.name}
+            onChange={(e) => set({ name: e.target.value })}
+          />
         </Field>
         <Field
           label={
@@ -751,10 +855,18 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
           />
         </Field>
         <Field label="Phone">
-          <input className={inputCls} value={form.phone ?? ''} onChange={(e) => set({ phone: e.target.value || null })} />
+          <input
+            className={inputCls}
+            value={form.phone ?? ''}
+            onChange={(e) => set({ phone: e.target.value || null })}
+          />
         </Field>
         <Field label="Email">
-          <input className={inputCls} value={form.email ?? ''} onChange={(e) => set({ email: e.target.value || null })} />
+          <input
+            className={inputCls}
+            value={form.email ?? ''}
+            onChange={(e) => set({ email: e.target.value || null })}
+          />
         </Field>
         <Field
           label={
@@ -781,12 +893,18 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
             onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])}
           />
           {logoPreviewUrl && (
-            <img src={logoPreviewUrl} alt="Current clinic logo" className="mt-2 h-14 w-auto object-contain" />
+            <img
+              src={logoPreviewUrl}
+              alt="Current clinic logo"
+              className="mt-2 h-14 w-auto object-contain"
+            />
           )}
         </Field>
       </div>
 
-      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">Optional modules</h3>
+      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">
+        Optional modules
+      </h3>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field
           label={
@@ -796,7 +914,10 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
             </>
           }
         >
-          <BoolToggle value={form.clinicalDocsEnabled ?? false} onChange={(v) => set({ clinicalDocsEnabled: v })} />
+          <BoolToggle
+            value={form.clinicalDocsEnabled ?? false}
+            onChange={(v) => set({ clinicalDocsEnabled: v })}
+          />
         </Field>
         <Field
           label={
@@ -806,12 +927,22 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
             </>
           }
         >
-          <BoolToggle value={form.showTherapistComparison ?? false} onChange={(v) => set({ showTherapistComparison: v })} />
+          <BoolToggle
+            value={form.showTherapistComparison ?? false}
+            onChange={(v) => set({ showTherapistComparison: v })}
+          />
         </Field>
       </div>
 
       {recomputeMsg && <p className="mt-2 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
-      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void saveProfile()} onCancel={cancel} error={error} />
+      <SectionSaveBar
+        dirty={dirty}
+        saved={saved}
+        busy={busy}
+        onSave={() => void saveProfile()}
+        onCancel={cancel}
+        error={error}
+      />
     </SectionCard>
   );
 }
@@ -913,7 +1044,11 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             </>
           }
         >
-          <input className={inputCls} value={form.gstNo ?? ''} onChange={(e) => set({ gstNo: e.target.value || null })} />
+          <input
+            className={inputCls}
+            value={form.gstNo ?? ''}
+            onChange={(e) => set({ gstNo: e.target.value || null })}
+          />
         </Field>
         <Field label="Fiscal year starts in month">
           <select
@@ -936,7 +1071,10 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             </>
           }
         >
-          <BoolToggle value={form.billingEnabled ?? true} onChange={(v) => set({ billingEnabled: v })} />
+          <BoolToggle
+            value={form.billingEnabled ?? true}
+            onChange={(v) => set({ billingEnabled: v })}
+          />
         </Field>
         {form.billingEnabled && (
           <Field
@@ -950,7 +1088,9 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             <select
               className={inputCls}
               value={form.invoicingAccess}
-              onChange={(e) => set({ invoicingAccess: e.target.value as 'everyone' | 'billing_staff' })}
+              onChange={(e) =>
+                set({ invoicingAccess: e.target.value as 'everyone' | 'billing_staff' })
+              }
             >
               <option value="everyone">Everyone</option>
               <option value="billing_staff">Front desk and admins only</option>
@@ -959,10 +1099,13 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         )}
       </div>
 
-      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">UPI collection</h3>
+      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">
+        UPI collection
+      </h3>
       <p className="mb-3 text-xs text-[var(--muted)]">
-        One clinic UPI for the front desk. When collection method is UPI, staff can show a QR the patient scans. A UPI
-        ID builds a QR with the visit amount and Patient ID in the note; an uploaded image is the fallback.
+        One clinic UPI for the front desk. When collection method is UPI, staff can show a QR the
+        patient scans. A UPI ID builds a QR with the visit amount and Patient ID in the note; an
+        uploaded image is the fallback.
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field
@@ -973,7 +1116,10 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             </>
           }
         >
-          <BoolToggle value={form.upiQrEnabled ?? false} onChange={(v) => set({ upiQrEnabled: v })} />
+          <BoolToggle
+            value={form.upiQrEnabled ?? false}
+            onChange={(v) => set({ upiQrEnabled: v })}
+          />
         </Field>
         {form.upiQrEnabled && (
           <>
@@ -1009,14 +1155,20 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
                 onChange={(e) => e.target.files?.[0] && void uploadUpiQr(e.target.files[0])}
               />
               {qrPreviewUrl && (
-                <img src={qrPreviewUrl} alt="Uploaded clinic UPI QR" className="mt-2 h-24 w-24 object-contain" />
+                <img
+                  src={qrPreviewUrl}
+                  alt="Uploaded clinic UPI QR"
+                  className="mt-2 h-24 w-24 object-contain"
+                />
               )}
             </Field>
           </>
         )}
       </div>
 
-      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">Invoice signature</h3>
+      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">
+        Invoice signature
+      </h3>
       <p className="mb-3 text-xs text-[var(--muted)]">
         A one-time uploaded signature image, printed on every invoice in place of the blank
         "Authorised signature" line. Not a cryptographic e-signature — a photo or scan of a hand
@@ -1031,7 +1183,11 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             onChange={(e) => e.target.files?.[0] && void uploadSignature(e.target.files[0])}
           />
           {signaturePreviewUrl && (
-            <img src={signaturePreviewUrl} alt="Uploaded signature" className="mt-2 h-16 w-40 object-contain" />
+            <img
+              src={signaturePreviewUrl}
+              alt="Uploaded signature"
+              className="mt-2 h-16 w-40 object-contain"
+            />
           )}
         </Field>
       </div>
@@ -1149,7 +1305,10 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
               </>
             }
           >
-            <BoolToggle value={form.enableTherapistSplit !== false} onChange={(v) => set({ enableTherapistSplit: v })} />
+            <BoolToggle
+              value={form.enableTherapistSplit !== false}
+              onChange={(v) => set({ enableTherapistSplit: v })}
+            />
           </Field>
         )}
         {form.hasPartner && (
@@ -1193,7 +1352,11 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
                 onChange={(e) => e.target.files?.[0] && void uploadPartnerLogo(e.target.files[0])}
               />
               {partnerLogoPreviewUrl && (
-                <img src={partnerLogoPreviewUrl} alt="Current partner logo" className="mt-2 h-14 w-auto object-contain" />
+                <img
+                  src={partnerLogoPreviewUrl}
+                  alt="Current partner logo"
+                  className="mt-2 h-14 w-auto object-contain"
+                />
               )}
             </Field>
           </>
@@ -1228,18 +1391,28 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
               value={form.tdsBasis}
               onChange={(e) => set({ tdsBasis: e.target.value as TdsBasis })}
             >
-              <option value="gross_bill">{form.taxPct}% of gross bill (matches {labels.partner} sheet)</option>
+              <option value="gross_bill">
+                {form.taxPct}% of gross bill (matches {labels.partner} sheet)
+              </option>
               <option value="bm_share">On clinic share only</option>
             </select>
           </Field>
         )}
       </div>
       <p className="mt-3 text-xs text-[var(--muted)]">
-        Split/tax changes apply going forward automatically, and — on Save — also to any already-logged
-        visit that hasn't been invoiced yet. Invoiced visits keep the rates they were billed under.
+        Split/tax changes apply going forward automatically, and — on Save — also to any
+        already-logged visit that hasn't been invoiced yet. Invoiced visits keep the rates they were
+        billed under.
       </p>
       {recomputeMsg && <p className="mt-1 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
-      <SectionSaveBar dirty={dirty} saved={saved} busy={busy} onSave={() => void savePartner()} onCancel={cancel} error={error} />
+      <SectionSaveBar
+        dirty={dirty}
+        saved={saved}
+        busy={busy}
+        onSave={() => void savePartner()}
+        onCancel={cancel}
+        error={error}
+      />
     </SectionCard>
   );
 }
@@ -1345,10 +1518,20 @@ function DataBackup() {
         reaches the server too.
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        <button className={btnSecondary} disabled={busy} onClick={() => void exportNow()}>
+        <button
+          type="button"
+          className={btnSecondary}
+          disabled={busy}
+          onClick={() => void exportNow()}
+        >
           {busy ? 'Working…' : 'Export backup'}
         </button>
-        <button className={btnSecondary} disabled={busy} onClick={() => fileInputRef.current?.click()}>
+        <button
+          type="button"
+          className={btnSecondary}
+          disabled={busy}
+          onClick={() => fileInputRef.current?.click()}
+        >
           Import backup…
         </button>
         <input
@@ -1364,9 +1547,9 @@ function DataBackup() {
       </div>
       {summary && (
         <p className="mt-3 text-sm text-[var(--moss)]">
-          Restored {summary.patients} patients, {summary.visits} visits, {summary.invoices} invoices,{' '}
-          {summary.payments + summary.invoicePayments} payment records, {summary.catalog} catalog
-          items, {summary.therapists} therapists, and {summary.settlements} settlements.
+          Restored {summary.patients} patients, {summary.visits} visits, {summary.invoices}{' '}
+          invoices, {summary.payments + summary.invoicePayments} payment records, {summary.catalog}{' '}
+          catalog items, {summary.therapists} therapists, and {summary.settlements} settlements.
         </p>
       )}
       <div className="mt-2">
@@ -1391,9 +1574,11 @@ function DangerZone() {
   const [error, setError] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [confirmingWipe, setConfirmingWipe] = useState(false);
-  const [wipeResult, setWipeResult] = useState<{ patients: number; visits: number; invoices: number } | null>(
-    null
-  );
+  const [wipeResult, setWipeResult] = useState<{
+    patients: number;
+    visits: number;
+    invoices: number;
+  } | null>(null);
 
   async function doResetLocalCache() {
     setConfirmingReset(false);
@@ -1459,22 +1644,32 @@ function DangerZone() {
       {wipeResult ? (
         <div className="rounded-md border border-[var(--moss)] bg-[var(--moss-light)] px-3 py-2.5 text-sm text-[var(--moss-strong)]">
           <p>
-            Wiped {wipeResult.patients} patients, {wipeResult.visits} visits, and {wipeResult.invoices} invoices.
-            The app needs to reload to show a clean slate.
+            Wiped {wipeResult.patients} patients, {wipeResult.visits} visits, and{' '}
+            {wipeResult.invoices} invoices. The app needs to reload to show a clean slate.
           </p>
           <p className="mt-1 text-xs">
             On any OTHER device that was already signed in, use "Reset local cache" once there.
           </p>
-          <button className={`${btnPrimary} mt-2.5`} onClick={() => void finishWipeReload()}>
+          <button
+            type="button"
+            className={`${btnPrimary} mt-2.5`}
+            onClick={() => void finishWipeReload()}
+          >
             Reload now
           </button>
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
-          <button className={btnSecondary} disabled={busy} onClick={() => setConfirmingReset(true)}>
+          <button
+            type="button"
+            className={btnSecondary}
+            disabled={busy}
+            onClick={() => setConfirmingReset(true)}
+          >
             {busy ? 'Working…' : 'Reset local cache on this device'}
           </button>
           <button
+            type="button"
             className="rounded-md border border-[var(--rust)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)] disabled:opacity-50"
             disabled={busy}
             onClick={wipeAll}
@@ -1605,7 +1800,9 @@ function Catalog() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="font-display text-sm font-medium text-[var(--ink)]">{item.name}</div>
+                      <div className="font-display text-sm font-medium text-[var(--ink)]">
+                        {item.name}
+                      </div>
                       <div className="text-xs text-[var(--muted)]">
                         {item.sessionCount} session{item.sessionCount === 1 ? '' : 's'}
                       </div>
@@ -1623,12 +1820,18 @@ function Catalog() {
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
-                      <RupeeInput valuePaise={item.basePricePaise} onChange={(p) => void updatePrice(item, p)} />
+                      <RupeeInput
+                        valuePaise={item.basePricePaise}
+                        onChange={(p) => void updatePrice(item, p)}
+                      />
                       {savedItemId === item.id && (
-                        <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">Saved</span>
+                        <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">
+                          Saved
+                        </span>
                       )}
                     </div>
                     <button
+                      type="button"
                       className="text-xs text-[var(--teal)] hover:underline"
                       onClick={() => void toggleActive(item)}
                     >
@@ -1678,7 +1881,11 @@ function Catalog() {
                 <RupeeInput valuePaise={draftPrice} onChange={setDraftPrice} />
               </Field>
             </div>
-            <button className={`${btnSecondary} w-full`} onClick={() => void addItem()}>
+            <button
+              type="button"
+              className={`${btnSecondary} w-full`}
+              onClick={() => void addItem()}
+            >
               + Add
             </button>
           </div>
@@ -1718,7 +1925,9 @@ function Catalog() {
                           onChange={(p) => void updatePrice(item, p)}
                         />
                         {savedItemId === item.id && (
-                          <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">Saved</span>
+                          <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">
+                            Saved
+                          </span>
                         )}
                       </div>
                     </td>
@@ -1736,6 +1945,7 @@ function Catalog() {
                           {item.active ? 'Active' : 'Inactive'}
                         </span>
                         <button
+                          type="button"
                           className="text-xs text-[var(--teal)] hover:underline"
                           onClick={() => void toggleActive(item)}
                         >
@@ -1778,7 +1988,7 @@ function Catalog() {
                 <RupeeInput valuePaise={draftPrice} onChange={setDraftPrice} />
               </td>
               <td className={td} colSpan={2}>
-                <button className={btnSecondary} onClick={() => void addItem()}>
+                <button type="button" className={btnSecondary} onClick={() => void addItem()}>
                   + Add
                 </button>
               </td>
@@ -1826,13 +2036,21 @@ function TreatmentCatalog() {
   }
 
   async function toggleActive(item: TreatmentItem) {
-    await repos.treatmentCatalog.put({ ...item, active: !item.active, updatedAt: new Date().toISOString() });
+    await repos.treatmentCatalog.put({
+      ...item,
+      active: !item.active,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   async function rename(item: TreatmentItem, name: string) {
     const trimmed = name.trim();
     if (!trimmed || trimmed === item.name) return;
-    await repos.treatmentCatalog.put({ ...item, name: trimmed, updatedAt: new Date().toISOString() });
+    await repos.treatmentCatalog.put({
+      ...item,
+      name: trimmed,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   return (
@@ -1874,7 +2092,7 @@ function TreatmentCatalog() {
           placeholder="Add a treatment…"
           className={`${inputCls} min-w-0 flex-1`}
         />
-        <button className={btnSecondary} onClick={() => void addItem()}>
+        <button type="button" className={btnSecondary} onClick={() => void addItem()}>
           + Add
         </button>
       </div>
@@ -1893,7 +2111,8 @@ function TreatmentCatalog() {
  */
 function ReferringSources() {
   const clinic = useClinic();
-  const items = useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id, true), [clinic.id]) ?? [];
+  const items =
+    useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id, true), [clinic.id]) ?? [];
   const [draftName, setDraftName] = useState('');
   const [draftDetailLabel, setDraftDetailLabel] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -1919,27 +2138,39 @@ function ReferringSources() {
   }
 
   async function toggleActive(item: ReferringSourceItem) {
-    await repos.referringSourceCatalog.put({ ...item, active: !item.active, updatedAt: new Date().toISOString() });
+    await repos.referringSourceCatalog.put({
+      ...item,
+      active: !item.active,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   async function rename(item: ReferringSourceItem, name: string) {
     const trimmed = name.trim();
     if (!trimmed || trimmed === item.name) return;
-    await repos.referringSourceCatalog.put({ ...item, name: trimmed, updatedAt: new Date().toISOString() });
+    await repos.referringSourceCatalog.put({
+      ...item,
+      name: trimmed,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   async function updateDetailLabel(item: ReferringSourceItem, detailLabel: string) {
     const trimmed = detailLabel.trim() || null;
     if (trimmed === item.detailLabel) return;
-    await repos.referringSourceCatalog.put({ ...item, detailLabel: trimmed, updatedAt: new Date().toISOString() });
+    await repos.referringSourceCatalog.put({
+      ...item,
+      detailLabel: trimmed,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   return (
     <SectionCard title="Referral sources">
       <p className="mb-3 text-xs text-[var(--muted)]">
-        Shown when adding or editing a patient. Deactivate instead of deleting so existing patients keep
-        displaying correctly. The optional detail label adds a follow-up field (e.g. "Referring doctor")
-        when that source is picked.
+        Shown when adding or editing a patient. Deactivate instead of deleting so existing patients
+        keep displaying correctly. The optional detail label adds a follow-up field (e.g. "Referring
+        doctor") when that source is picked.
       </p>
       <div className="space-y-2">
         {items.map((item) => (
@@ -1994,7 +2225,7 @@ function ReferringSources() {
               onChange={(e) => setDraftDetailLabel(e.target.value)}
             />
           </Field>
-          <button className={`${btnSecondary} w-full`} onClick={() => void addItem()}>
+          <button type="button" className={`${btnSecondary} w-full`} onClick={() => void addItem()}>
             + Add
           </button>
         </div>
@@ -2093,12 +2324,14 @@ function Therapists() {
       return;
     }
     setMembers(
-      (data as { user_id: string; email: string; role: string; display_name: string | null }[]).map((m) => ({
-        userId: m.user_id,
-        email: m.email,
-        role: m.role,
-        displayName: m.display_name,
-      }))
+      (data as { user_id: string; email: string; role: string; display_name: string | null }[]).map(
+        (m) => ({
+          userId: m.user_id,
+          email: m.email,
+          role: m.role,
+          displayName: m.display_name,
+        })
+      )
     );
   }, [clinic.id]);
 
@@ -2131,7 +2364,9 @@ function Therapists() {
         repos.consultationNotes.listByClinic(clinic.id),
         repos.invoices.list(clinic.id),
       ]);
-      const linkedVisits = allVisits.filter((v) => v.therapistId === t.id || v.sharedTherapistId === t.id).length;
+      const linkedVisits = allVisits.filter(
+        (v) => v.therapistId === t.id || v.sharedTherapistId === t.id
+      ).length;
       const linkedNotes = allNotes.filter((n) => n.therapistId === t.id).length;
       const linkedInvoices = allInvoices.filter((i) => i.therapistId === t.id).length;
       const linked = linkedVisits + linkedNotes + linkedInvoices;
@@ -2202,22 +2437,19 @@ function Therapists() {
         throw new Error('Not authenticated');
       }
 
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/invite-therapist`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.data.session.access_token}`,
-          },
-          body: JSON.stringify({
-            clinicId: clinic.id,
-            email: inviteEmail.trim(),
-            role: inviteRole,
-            name: inviteName.trim(),
-          }),
-        }
-      );
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/invite-therapist`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.data.session.access_token}`,
+        },
+        body: JSON.stringify({
+          clinicId: clinic.id,
+          email: inviteEmail.trim(),
+          role: inviteRole,
+          name: inviteName.trim(),
+        }),
+      });
 
       const result = (await response.json()) as {
         success?: boolean;
@@ -2244,9 +2476,12 @@ function Therapists() {
 
   function revokeMember(userId: string, email: string) {
     const target = members?.find((m) => m.userId === userId);
-    const isLastAdmin = target?.role === 'admin' && (members?.filter((m) => m.role === 'admin').length ?? 0) <= 1;
+    const isLastAdmin =
+      target?.role === 'admin' && (members?.filter((m) => m.role === 'admin').length ?? 0) <= 1;
     if (isLastAdmin) {
-      setMembersError('This clinic must keep at least one admin — revoke or demote another admin first.');
+      setMembersError(
+        'This clinic must keep at least one admin — revoke or demote another admin first.'
+      );
       return;
     }
     setRevokeTarget({ userId, email });
@@ -2306,240 +2541,262 @@ function Therapists() {
         })}
       </div>
       {teamView === 'logins' && (
-      <>
-      <div className="mb-6">
-        <div className="mb-3 flex items-baseline justify-between gap-2">
-          <h3 className="text-sm font-semibold text-[var(--ink)]">Members</h3>
-          {members && <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2 py-0.5 font-mono text-[11px] text-[var(--muted)]">{members.length}</span>}
-        </div>
-        {members && members.length > 0 ? (
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {members.map((m) => {
-              // A clinic left with zero admins has no path back into
-              // Settings for anyone (every write there requires
-              // is_clinic_admin) — so the last admin's card can't be
-              // demoted or revoked from here, regardless of who's clicking.
-              const isLastAdmin = m.role === 'admin' && members.filter((x) => x.role === 'admin').length <= 1;
-              return (
-                <MemberCard
-                  key={m.userId}
-                  member={m}
-                  clinicId={clinic.id}
-                  revoking={revokeInProgress === m.userId}
-                  isLastAdmin={isLastAdmin}
-                  onRevoke={() => revokeMember(m.userId, m.email)}
-                  onSaved={() => void refetchMembers()}
-                />
-              );
-            })}
+        <>
+          <div className="mb-6">
+            <div className="mb-3 flex items-baseline justify-between gap-2">
+              <h3 className="text-sm font-semibold text-[var(--ink)]">Members</h3>
+              {members && (
+                <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2 py-0.5 font-mono text-[11px] text-[var(--muted)]">
+                  {members.length}
+                </span>
+              )}
+            </div>
+            {members && members.length > 0 ? (
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {members.map((m) => {
+                  // A clinic left with zero admins has no path back into
+                  // Settings for anyone (every write there requires
+                  // is_clinic_admin) — so the last admin's card can't be
+                  // demoted or revoked from here, regardless of who's clicking.
+                  const isLastAdmin =
+                    m.role === 'admin' && members.filter((x) => x.role === 'admin').length <= 1;
+                  return (
+                    <MemberCard
+                      key={m.userId}
+                      member={m}
+                      clinicId={clinic.id}
+                      revoking={revokeInProgress === m.userId}
+                      isLastAdmin={isLastAdmin}
+                      onRevoke={() => revokeMember(m.userId, m.email)}
+                      onSaved={() => void refetchMembers()}
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-[var(--muted)]">No team members yet.</p>
+            )}
+            <ErrorNote message={membersError} />
           </div>
-        ) : (
-          <p className="text-xs text-[var(--muted)]">No team members yet.</p>
-        )}
-        <ErrorNote message={membersError} />
-      </div>
 
-      <div className="border-t border-[var(--border)] pt-6">
-        <h3 className="mb-3 text-sm font-semibold text-[var(--ink)]">Invite a team member</h3>
-        {atSeatCap ? (
-          <div className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4 text-center">
-            <p className="text-sm font-medium text-[var(--ink)]">
-              This clinic's plan allows up to {entitlements.maxMembers} team login
-              {entitlements.maxMembers === 1 ? '' : 's'}.
-            </p>
-            <p className="mt-1 text-xs text-[var(--muted)]">
-              Included in {PLAN_TIER_LABELS[minimumTierFor('team')]} and above.
-            </p>
+          <div className="border-t border-[var(--border)] pt-6">
+            <h3 className="mb-3 text-sm font-semibold text-[var(--ink)]">Invite a team member</h3>
+            {atSeatCap ? (
+              <div className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4 text-center">
+                <p className="text-sm font-medium text-[var(--ink)]">
+                  This clinic's plan allows up to {entitlements.maxMembers} team login
+                  {entitlements.maxMembers === 1 ? '' : 's'}.
+                </p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  Included in {PLAN_TIER_LABELS[minimumTierFor('team')]} and above.
+                </p>
+              </div>
+            ) : (
+              <div className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4">
+                <div className="mb-3 flex gap-2">
+                  {inviteRoles.map((r) => {
+                    const { color, light } = ACCENT_VARS[ROLE_ACCENT[r]];
+                    const selected = inviteRole === r;
+                    return (
+                      <button
+                        key={r}
+                        type="button"
+                        disabled={inviteBusy}
+                        onClick={() => setInviteRole(r)}
+                        className="flex-1 rounded-lg border px-2 py-2 text-center text-xs font-semibold"
+                        style={{
+                          borderColor: selected ? color : 'var(--border)',
+                          background: selected ? light : 'var(--surface)',
+                          color: selected ? color : 'var(--muted)',
+                        }}
+                      >
+                        {CLINIC_ROLE_LABELS[r]}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <input
+                    className={inputCls}
+                    placeholder={
+                      inviteRole === 'therapist'
+                        ? 'Their name — shows in the therapist picker on visits'
+                        : 'Their name — shown in the app instead of their email'
+                    }
+                    value={inviteName}
+                    onChange={(e) => setInviteName(e.target.value)}
+                    disabled={inviteBusy}
+                  />
+                  <input
+                    className={inputCls}
+                    type="email"
+                    placeholder="Email address"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    disabled={inviteBusy}
+                  />
+                  <button
+                    type="button"
+                    className={btnPrimary}
+                    disabled={inviteBusy}
+                    onClick={() => void inviteTherapist()}
+                  >
+                    {inviteBusy ? 'Sending…' : 'Send invitation'}
+                  </button>
+                </div>
+                <p className="mt-3 text-xs text-[var(--muted)]">
+                  {inviteRole === 'therapist'
+                    ? "Automatically added to the service roster below and linked to their login — no separate setup step needed. They can rename themselves from the account menu once they've signed in."
+                    : "They can rename themselves from the account menu once they've signed in — this is just the starting name."}
+                </p>
+              </div>
+            )}
+            {inviteSuccess && <p className="mt-2 text-sm text-[var(--moss)]">{inviteSuccess}</p>}
+            {inviteError && <ErrorNote message={inviteError} />}
           </div>
-        ) : (
-        <div className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4">
-          <div className="mb-3 flex gap-2">
-            {inviteRoles.map((r) => {
-              const { color, light } = ACCENT_VARS[ROLE_ACCENT[r]];
-              const selected = inviteRole === r;
-              return (
-                <button
-                  key={r}
-                  type="button"
-                  disabled={inviteBusy}
-                  onClick={() => setInviteRole(r)}
-                  className="flex-1 rounded-lg border px-2 py-2 text-center text-xs font-semibold"
-                  style={{
-                    borderColor: selected ? color : 'var(--border)',
-                    background: selected ? light : 'var(--surface)',
-                    color: selected ? color : 'var(--muted)',
-                  }}
-                >
-                  {CLINIC_ROLE_LABELS[r]}
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex flex-col gap-2">
-            <input
-              className={inputCls}
-              placeholder={
-                inviteRole === 'therapist'
-                  ? 'Their name — shows in the therapist picker on visits'
-                  : 'Their name — shown in the app instead of their email'
-              }
-              value={inviteName}
-              onChange={(e) => setInviteName(e.target.value)}
-              disabled={inviteBusy}
-            />
-            <input
-              className={inputCls}
-              type="email"
-              placeholder="Email address"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              disabled={inviteBusy}
-            />
-            <button className={btnPrimary} disabled={inviteBusy} onClick={() => void inviteTherapist()}>
-              {inviteBusy ? 'Sending…' : 'Send invitation'}
-            </button>
-          </div>
-          <p className="mt-3 text-xs text-[var(--muted)]">
-            {inviteRole === 'therapist'
-              ? "Automatically added to the service roster below and linked to their login — no separate setup step needed. They can rename themselves from the account menu once they've signed in."
-              : "They can rename themselves from the account menu once they've signed in — this is just the starting name."}
-          </p>
-        </div>
-        )}
-        {inviteSuccess && <p className="mt-2 text-sm text-[var(--moss)]">{inviteSuccess}</p>}
-        {inviteError && <ErrorNote message={inviteError} />}
-      </div>
-      </>
+        </>
       )}
 
       {teamView === 'roster' && (
-      <div>
-        <div className="mb-3 flex items-baseline justify-between gap-2">
-          <h3 className="text-sm font-semibold text-[var(--ink)]">Service roster</h3>
-          <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2 py-0.5 font-mono text-[11px] text-[var(--muted)]">
-            {(therapists ?? []).filter((t) => t.active).length} active
-          </span>
-        </div>
-        <p className="mb-3 text-xs text-[var(--muted)]">
-          Who patients get billed against and assigned to on a visit — every Member above with the
-          "Therapist" role gets a roster entry automatically; add one manually here for a therapist
-          who doesn't need a login of their own.
-        </p>
-        <div className="mb-3 divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-          {(therapists ?? []).map((t) => (
-            <div key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
-              <label
-                className="block h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-full border border-[var(--border)] bg-[var(--paper)]"
-                title="Change photo"
-              >
-                {t.photoPath ? (
-                  <img src={publicTherapistPhotoUrl(t.photoPath) ?? ''} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-[var(--muted)]">
-                    {therapistInitials(t.name)}
-                  </span>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => e.target.files?.[0] && void uploadTherapistPhoto(t, e.target.files[0])}
-                />
-              </label>
-              <span className="min-w-32 text-[var(--ink)]">{t.name}</span>
-              <input
-                key={t.id}
-                className={`${inputCls} w-36 text-xs`}
-                placeholder="Reg. no."
-                title="Registration/license number — printed on invoices"
-                defaultValue={t.registrationNo ?? ''}
-                onBlur={(e) => {
-                  const value = e.target.value.trim() || null;
-                  if (value === (t.registrationNo ?? null)) return;
-                  void repos.therapists.put({ ...t, registrationNo: value, updatedAt: new Date().toISOString() });
-                }}
-              />
-              <span
-                className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-                style={
-                  t.active
-                    ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
-                    : { background: 'var(--paper)', color: 'var(--muted)' }
-                }
-              >
-                {t.active ? 'Active' : 'Inactive'}
-              </span>
-              <button
-                className="text-xs text-[var(--teal)] hover:underline"
-                onClick={() =>
-                  void repos.therapists.put({
-                    ...t,
-                    active: !t.active,
-                    updatedAt: new Date().toISOString(),
-                  })
-                }
-              >
-                {t.active ? 'Deactivate' : 'Reactivate'}
-              </button>
-              <button
-                className="text-xs text-[var(--rust)] hover:underline"
-                onClick={() => void startDeleteTherapist(t)}
-              >
-                Delete
-              </button>
-              {members && members.length > 0 && (
-                <label className="ml-auto flex items-center gap-2 text-xs text-[var(--muted)]">
-                  Linked login
-                  <select
-                    className={inputCls}
-                    value={t.userId ?? ''}
+        <div>
+          <div className="mb-3 flex items-baseline justify-between gap-2">
+            <h3 className="text-sm font-semibold text-[var(--ink)]">Service roster</h3>
+            <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2 py-0.5 font-mono text-[11px] text-[var(--muted)]">
+              {(therapists ?? []).filter((t) => t.active).length} active
+            </span>
+          </div>
+          <p className="mb-3 text-xs text-[var(--muted)]">
+            Who patients get billed against and assigned to on a visit — every Member above with the
+            "Therapist" role gets a roster entry automatically; add one manually here for a
+            therapist who doesn't need a login of their own.
+          </p>
+          <div className="mb-3 divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+            {(therapists ?? []).map((t) => (
+              <div key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+                <label
+                  className="block h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-full border border-[var(--border)] bg-[var(--paper)]"
+                  title="Change photo"
+                >
+                  {t.photoPath ? (
+                    <img
+                      src={publicTherapistPhotoUrl(t.photoPath) ?? ''}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-[var(--muted)]">
+                      {therapistInitials(t.name)}
+                    </span>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
                     onChange={(e) =>
-                      void repos.therapists.put({
-                        ...t,
-                        userId: e.target.value || null,
-                        updatedAt: new Date().toISOString(),
-                      })
+                      e.target.files?.[0] && void uploadTherapistPhoto(t, e.target.files[0])
                     }
-                  >
-                    <option value="">— None —</option>
-                    {members.map((m) => (
-                      <option key={m.userId} value={m.userId}>
-                        {m.email}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </label>
-              )}
-            </div>
-          ))}
+                <span className="min-w-32 text-[var(--ink)]">{t.name}</span>
+                <input
+                  key={t.id}
+                  className={`${inputCls} w-36 text-xs`}
+                  placeholder="Reg. no."
+                  title="Registration/license number — printed on invoices"
+                  defaultValue={t.registrationNo ?? ''}
+                  onBlur={(e) => {
+                    const value = e.target.value.trim() || null;
+                    if (value === (t.registrationNo ?? null)) return;
+                    void repos.therapists.put({
+                      ...t,
+                      registrationNo: value,
+                      updatedAt: new Date().toISOString(),
+                    });
+                  }}
+                />
+                <span
+                  className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+                  style={
+                    t.active
+                      ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
+                      : { background: 'var(--paper)', color: 'var(--muted)' }
+                  }
+                >
+                  {t.active ? 'Active' : 'Inactive'}
+                </span>
+                <button
+                  type="button"
+                  className="text-xs text-[var(--teal)] hover:underline"
+                  onClick={() =>
+                    void repos.therapists.put({
+                      ...t,
+                      active: !t.active,
+                      updatedAt: new Date().toISOString(),
+                    })
+                  }
+                >
+                  {t.active ? 'Deactivate' : 'Reactivate'}
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-[var(--rust)] hover:underline"
+                  onClick={() => void startDeleteTherapist(t)}
+                >
+                  Delete
+                </button>
+                {members && members.length > 0 && (
+                  <label className="ml-auto flex items-center gap-2 text-xs text-[var(--muted)]">
+                    Linked login
+                    <select
+                      className={inputCls}
+                      value={t.userId ?? ''}
+                      onChange={(e) =>
+                        void repos.therapists.put({
+                          ...t,
+                          userId: e.target.value || null,
+                          updatedAt: new Date().toISOString(),
+                        })
+                      }
+                    >
+                      <option value="">— None —</option>
+                      {members.map((m) => (
+                        <option key={m.userId} value={m.userId}>
+                          {m.email}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex max-w-sm gap-2">
+            <input
+              className={inputCls}
+              placeholder="New therapist name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <button type="button" className={btnSecondary} onClick={() => void add()}>
+              + Add
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            Deactivating keeps history intact — past visits still show the therapist. Delete only
+            works for someone with zero visits, notes, or invoices on record (added by mistake, or
+            left before seeing a patient) — anyone with real history can only be deactivated.
+            {members && members.length > 0 && (
+              <>
+                {' '}
+                Inviting a therapist above links their login automatically; the login dropdown here
+                is for linking one after the fact, or for a roster entry added manually.
+              </>
+            )}
+          </p>
+          <div className="mt-2">
+            <ErrorNote message={rosterError} />
+          </div>
         </div>
-        <div className="flex max-w-sm gap-2">
-          <input
-            className={inputCls}
-            placeholder="New therapist name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <button className={btnSecondary} onClick={() => void add()}>
-            + Add
-          </button>
-        </div>
-        <p className="mt-2 text-xs text-[var(--muted)]">
-          Deactivating keeps history intact — past visits still show the therapist. Delete only
-          works for someone with zero visits, notes, or invoices on record (added by mistake, or
-          left before seeing a patient) — anyone with real history can only be deactivated.
-          {members && members.length > 0 && (
-            <>
-              {' '}
-              Inviting a therapist above links their login automatically; the login dropdown here
-              is for linking one after the fact, or for a roster entry added manually.
-            </>
-          )}
-        </p>
-        <div className="mt-2">
-          <ErrorNote message={rosterError} />
-        </div>
-      </div>
       )}
 
       <ConfirmDialog
@@ -2552,7 +2809,8 @@ function Therapists() {
           deleteTarget
             ? {
                 placeholder: 'Type their name to confirm',
-                isMatch: (typed) => typed.trim().toLowerCase() === deleteTarget.name.trim().toLowerCase(),
+                isMatch: (typed) =>
+                  typed.trim().toLowerCase() === deleteTarget.name.trim().toLowerCase(),
               }
             : undefined
         }
@@ -2599,7 +2857,9 @@ function MemberCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(member.displayName ?? '');
-  const [roleDraft, setRoleDraft] = useState<ClinicRole>(member.role as Exclude<ClinicRole, 'unknown'>);
+  const [roleDraft, setRoleDraft] = useState<ClinicRole>(
+    member.role as Exclude<ClinicRole, 'unknown'>
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const role = (member.role as Exclude<ClinicRole, 'unknown'>) ?? 'therapist';
@@ -2640,16 +2900,30 @@ function MemberCard({
           onChange={(e) => setNameDraft(e.target.value)}
           autoFocus
         />
-        <select className={inputCls} value={roleDraft} onChange={(e) => setRoleDraft(e.target.value as ClinicRole)}>
+        <select
+          className={inputCls}
+          value={roleDraft}
+          onChange={(e) => setRoleDraft(e.target.value as ClinicRole)}
+        >
           <option value="therapist">Therapist</option>
           <option value="front_desk">Front desk</option>
           <option value="admin">Admin</option>
         </select>
         <div className="flex gap-2">
-          <button className={btnPrimary} disabled={saving} onClick={() => void save()}>
+          <button
+            type="button"
+            className={btnPrimary}
+            disabled={saving}
+            onClick={() => void save()}
+          >
             {saving ? 'Saving…' : 'Save'}
           </button>
-          <button className={btnSecondary} disabled={saving} onClick={() => setEditing(false)}>
+          <button
+            type="button"
+            className={btnSecondary}
+            disabled={saving}
+            onClick={() => setEditing(false)}
+          >
             Cancel
           </button>
         </div>
@@ -2679,7 +2953,11 @@ function MemberCard({
         <p className="text-[11px] text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
       )}
       <div className="mt-auto flex gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
-        <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setEditing(true)}>
+        <button
+          type="button"
+          className="text-[var(--teal)] hover:underline"
+          onClick={() => setEditing(true)}
+        >
           Edit
         </button>
         <button

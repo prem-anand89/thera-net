@@ -25,17 +25,16 @@ export function AddPatientDetailsModal({
     <div className="modal-overlay open">
       <div className="modal-card">
         <h3>Add patient details?</h3>
-        <p className="modal-sub">
-          {patient.name}
-        </p>
+        <p className="modal-sub">{patient.name}</p>
         <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
           Optional: add phone, age, and sex to complete the patient profile.
         </p>
         <div className="modal-actions">
-          <button className="btn-secondary" onClick={onClose}>
+          <button type="button" className="btn-secondary" onClick={onClose}>
             Edit later
           </button>
           <button
+            type="button"
             className="btn-primary"
             onClick={() => {
               onOpenEdit();

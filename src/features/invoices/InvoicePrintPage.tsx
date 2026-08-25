@@ -27,7 +27,8 @@ export function InvoicePrintPage() {
   const allInvoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
   const supersededBy = (allInvoices ?? []).find((inv) => inv.supersedesInvoiceId === invoice?.id);
   const supersedes = useLiveQuery(
-    () => (invoice?.supersedesInvoiceId ? repos.invoices.get(invoice.supersedesInvoiceId) : undefined),
+    () =>
+      invoice?.supersedesInvoiceId ? repos.invoices.get(invoice.supersedesInvoiceId) : undefined,
     [invoice?.supersedesInvoiceId]
   );
 
@@ -57,7 +58,9 @@ export function InvoicePrintPage() {
   }, [invoice]);
 
   if (!invoice) {
-    return <div className="p-8 text-sm text-[var(--muted)]">Invoice not found (or not yet synced).</div>;
+    return (
+      <div className="p-8 text-sm text-[var(--muted)]">Invoice not found (or not yet synced).</div>
+    );
   }
 
   const therapist = therapists?.find((t) => t.id === invoice.therapistId);
@@ -93,7 +96,7 @@ export function InvoicePrintPage() {
             Print / Save PDF
           </button>
           {!supersededBy && (
-            <button className={btnSecondary} onClick={() => setAmending(true)}>
+            <button type="button" className={btnSecondary} onClick={() => setAmending(true)}>
               Amend this invoice
             </button>
           )}
@@ -147,11 +150,15 @@ export function InvoicePrintPage() {
         {/* Letterhead */}
         <header className="flex items-start justify-between border-b border-[var(--border)] pb-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            {logoUrl && <img src={logoUrl} alt="" className="h-14 w-auto shrink-0 object-contain" />}
+            {logoUrl && (
+              <img src={logoUrl} alt="" className="h-14 w-auto shrink-0 object-contain" />
+            )}
             <div className="min-w-0">
               <h1 className="font-display text-xl font-bold text-[var(--ink)]">{clinic.name}</h1>
               {clinic.address && (
-                <p className="whitespace-pre-line break-words text-xs text-[var(--muted)]">{clinic.address}</p>
+                <p className="whitespace-pre-line break-words text-xs text-[var(--muted)]">
+                  {clinic.address}
+                </p>
               )}
               <p className="text-xs text-[var(--muted)]">
                 {[clinic.phone, clinic.email].filter(Boolean).join(' · ')}
@@ -162,8 +169,12 @@ export function InvoicePrintPage() {
           {clinic.partnerHospitalName && (
             <div className="flex shrink-0 items-center gap-2 text-right">
               <div>
-                <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">In partnership with</p>
-                <p className="text-sm font-medium text-[var(--ink)]">{clinic.partnerHospitalName}</p>
+                <p className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                  In partnership with
+                </p>
+                <p className="text-sm font-medium text-[var(--ink)]">
+                  {clinic.partnerHospitalName}
+                </p>
               </div>
               {partnerLogoUrl && (
                 <img src={partnerLogoUrl} alt="" className="h-10 w-auto object-contain" />
@@ -175,7 +186,9 @@ export function InvoicePrintPage() {
         {/* Invoice meta + patient */}
         <section className="mt-4 flex justify-between text-sm">
           <div>
-            <p className="font-display font-semibold text-[var(--ink)]">{invoice.patientSnapshot.name}</p>
+            <p className="font-display font-semibold text-[var(--ink)]">
+              {invoice.patientSnapshot.name}
+            </p>
             <p className="text-[var(--muted)]">Patient ID: {invoice.patientSnapshot.mrno}</p>
             {(invoice.patientSnapshot.age != null || invoice.patientSnapshot.sex) && (
               <p className="text-[var(--muted)]">
@@ -264,7 +277,10 @@ export function InvoicePrintPage() {
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={hasAdjustments ? 4 : 3} className="py-3 text-right font-semibold text-[var(--ink)]">
+              <td
+                colSpan={hasAdjustments ? 4 : 3}
+                className="py-3 text-right font-semibold text-[var(--ink)]"
+              >
                 Total
               </td>
               <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)]">
@@ -296,7 +312,11 @@ export function InvoicePrintPage() {
           </div>
           <div className="text-center">
             {signatureUrl ? (
-              <img src={signatureUrl} alt="" className="mb-1 h-10 w-40 object-contain object-bottom" />
+              <img
+                src={signatureUrl}
+                alt=""
+                className="mb-1 h-10 w-40 object-contain object-bottom"
+              />
             ) : (
               <div className="mb-1 h-10 w-40 border-b border-[var(--border)]" />
             )}

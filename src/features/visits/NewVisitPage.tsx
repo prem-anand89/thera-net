@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, visitService, patientService, directPaymentService, dashboardService } from '@/services';
+import {
+  repos,
+  visitService,
+  patientService,
+  directPaymentService,
+  dashboardService,
+} from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
 import { usePermissions } from '@/app/usePermissions';
@@ -31,7 +37,11 @@ import {
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { PAYMENT_CHIP } from '@/components/VisitCard';
-import { computeVisitPaymentState, isPackageContinuation, paymentStatusPhrase } from '@/domain/paymentState';
+import {
+  computeVisitPaymentState,
+  isPackageContinuation,
+  paymentStatusPhrase,
+} from '@/domain/paymentState';
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
 
 /** Digits only, so "98765 43210" and "+91-98765-43210" compare equal. */
@@ -144,7 +154,8 @@ export function NewVisitPage() {
     referringSourceId: '',
     referringSourceDetail: '',
   });
-  const referringSources = useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id), [clinic.id]) ?? [];
+  const referringSources =
+    useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id), [clinic.id]) ?? [];
 
   // Visit fields
   const today = new Date().toISOString().slice(0, 10);
@@ -168,7 +179,11 @@ export function NewVisitPage() {
   // after saving while the therapist is still on the page. Clinics that
   // haven't opted in see no change: save still navigates straight to
   // Workspace.
-  const [justSaved, setJustSaved] = useState<{ visitId: UUID; patientId: UUID; patientName: string } | null>(null);
+  const [justSaved, setJustSaved] = useState<{
+    visitId: UUID;
+    patientId: UUID;
+    patientName: string;
+  } | null>(null);
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
   const myTherapistId = useMemo(
@@ -197,7 +212,8 @@ export function NewVisitPage() {
 
     if (typedPhoneDigits.length >= 3) {
       const phoneHit = active.find((p) => p.phone && phoneDigits(p.phone) === typedPhoneDigits);
-      if (phoneHit) return { name: phoneHit.name, mrno: phoneHit.mrno, matchedBy: 'phone' as const };
+      if (phoneHit)
+        return { name: phoneHit.name, mrno: phoneHit.mrno, matchedBy: 'phone' as const };
     }
 
     if (!typed) return null;
@@ -215,7 +231,10 @@ export function NewVisitPage() {
   // empty — the common case of "who's next" rather than "find someone
   // specific". Deduped to one entry per patient, most recent visit first.
   const recentVisitRows = useLiveQuery(
-    () => (query.trim() || patient || creatingPatient ? undefined : dashboardService.recentVisits(clinic.id, 20)),
+    () =>
+      query.trim() || patient || creatingPatient
+        ? undefined
+        : dashboardService.recentVisits(clinic.id, 20),
     [clinic.id, query, patient, creatingPatient]
   );
   const recentPatients = useMemo(() => {
@@ -335,8 +354,14 @@ export function NewVisitPage() {
     () => (lastVisit ? repos.payments.listByVisit(lastVisit.id) : undefined),
     [lastVisit?.id]
   );
-  const lastVisitDirectPaymentPaise = (lastVisitDirectPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0);
-  const catalogNameById = useMemo(() => new Map((catalog ?? []).map((c) => [c.id, c.name])), [catalog]);
+  const lastVisitDirectPaymentPaise = (lastVisitDirectPayments ?? []).reduce(
+    (sum, p) => sum + p.amountPaise,
+    0
+  );
+  const catalogNameById = useMemo(
+    () => new Map((catalog ?? []).map((c) => [c.id, c.name])),
+    [catalog]
+  );
 
   // Default therapist when patient is selected: whoever saw them last, or
   // left blank (manual pick) if this is their first visit. Skipped for a
@@ -455,7 +480,8 @@ export function NewVisitPage() {
         patientId: patient.id,
         therapistId,
         visitDate,
-        serviceCatalogId: mode === 'continuation' ? selectedPackage!.serviceCatalogId : serviceCatalogId,
+        serviceCatalogId:
+          mode === 'continuation' ? selectedPackage!.serviceCatalogId : serviceCatalogId,
         condition,
         treatmentNotes: notes,
         treatmentIds,
@@ -482,7 +508,14 @@ export function NewVisitPage() {
       // genuinely unbilled, for whoever does handle billing to collect
       // from later (same Workspace pending-list path).
       if (billPaise > 0 && canBill && paymentChoice === 'paid') {
-        await directPaymentService.logPayment(clinic.id, visit.id, billPaise, paymentMethod, visitDate, null);
+        await directPaymentService.logPayment(
+          clinic.id,
+          visit.id,
+          billPaise,
+          paymentMethod,
+          visitDate,
+          null
+        );
       }
 
       setJustSaved({ visitId: visit.id, patientId: patient.id, patientName: patient.name });
@@ -510,6 +543,7 @@ export function NewVisitPage() {
               </Link>
             )}
             <button
+              type="button"
               className={clinic.clinicalDocsEnabled ? btnSecondary : btnPrimary}
               onClick={() => {
                 setJustSaved(null);
@@ -518,7 +552,7 @@ export function NewVisitPage() {
             >
               Another visit for {justSaved.patientName}
             </button>
-            <button className={btnSecondary} onClick={goBack}>
+            <button type="button" className={btnSecondary} onClick={goBack}>
               Done
             </button>
           </div>
@@ -539,7 +573,9 @@ export function NewVisitPage() {
         <div className="space-y-3">
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
-              <div className="font-display text-sm font-medium text-[var(--ink)]">{patient.name}</div>
+              <div className="font-display text-sm font-medium text-[var(--ink)]">
+                {patient.name}
+              </div>
               <div className="text-xs text-[var(--muted)]">
                 Patient ID {patient.mrno}
                 {patient.age != null && ` · ${patient.age}y`}
@@ -548,6 +584,7 @@ export function NewVisitPage() {
               </div>
             </div>
             <button
+              type="button"
               className="shrink-0 text-xs text-[var(--teal)] hover:underline"
               onClick={() => setEditingPatient(true)}
             >
@@ -573,7 +610,8 @@ export function NewVisitPage() {
                   return (
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span>
-                        {formatDateDMY(lastVisit.visitDate)} — {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
+                        {formatDateDMY(lastVisit.visitDate)} —{' '}
+                        {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
                       </span>
                       <Pill tone={chip.tone}>{statusLabel}</Pill>
                     </div>
@@ -590,9 +628,13 @@ export function NewVisitPage() {
               {openPackages.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span>
-                    {openPackages[0].serviceName} — {openPackages[0].logged} of {openPackages[0].packageTotal} used
+                    {openPackages[0].serviceName} — {openPackages[0].logged} of{' '}
+                    {openPackages[0].packageTotal} used
                   </span>
-                  <PackageThread sessionIndex={openPackages[0].logged + 1} packageTotal={openPackages[0].packageTotal} />
+                  <PackageThread
+                    sessionIndex={openPackages[0].logged + 1}
+                    packageTotal={openPackages[0].packageTotal}
+                  />
                   <span className="text-xs text-[var(--muted)]">
                     started {formatDateDMY(openPackages[0].startedOn)}
                   </span>
@@ -605,6 +647,7 @@ export function NewVisitPage() {
 
           {!search.patientId && (
             <button
+              type="button"
               className={`${btnSecondary} w-full`}
               onClick={() => {
                 setPatient(null);
@@ -617,183 +660,197 @@ export function NewVisitPage() {
           )}
         </div>
       ) : creatingPatient ? (
-          // Creating — no existing match; capture the new patient. Only
-          // name and phone are asked for up front, everything else is
-          // explicitly optional and can be filled in later from the profile.
-          // Single column, not sm:grid-cols-2 -- this always renders in the
-          // fixed-width side panel now, and sm: is a viewport breakpoint,
-          // not a container one, so it would force two columns into a
-          // panel too narrow for them on any normal-width screen.
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3">
-              <Field label="Name *">
-                <input
-                  className={inputCls}
-                  value={newPatient.name}
-                  onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
-                  placeholder="Patient name"
-                  autoFocus
-                />
-              </Field>
-              <Field label="Phone">
-                <input
-                  className={inputCls}
-                  placeholder="Recommended — used for search and quick pick"
-                  value={newPatient.phone}
-                  onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
-                />
-              </Field>
-              {duplicateMatch && (
-                <p className="col-span-2 rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-xs text-[var(--rust)]">
-                  ⚠{' '}
-                  {duplicateMatch.matchedBy === 'phone'
-                    ? `A patient with this phone number — "${duplicateMatch.name}" (ID ${duplicateMatch.mrno}) — already exists.`
-                    : `A patient named "${duplicateMatch.name}" (ID ${duplicateMatch.mrno}) already exists.`}{' '}
-                  Use "Back to search" below if this is the same person.
-                </p>
-              )}
-              {!newPatient.phone.trim() && (
-                <p className="col-span-2 text-xs text-[var(--muted)]">
-                  No phone on file — fine for a walk-in with none, but it limits later search and duplicate checks.
-                </p>
-              )}
-              <Field label="ID (optional)">
-                <input
-                  className={inputCls}
-                  placeholder="Leave blank to auto-generate"
-                  value={newPatient.mrno}
-                  onChange={(e) => setNewPatient({ ...newPatient, mrno: e.target.value })}
-                />
-              </Field>
-              <Field label="Age">
-                <input
-                  type="number"
-                  className={inputCls}
-                  placeholder="Optional"
-                  value={newPatient.age}
-                  onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
-                />
-              </Field>
-              <Field label="Sex">
-                <select
-                  className={inputCls}
-                  value={newPatient.sex}
-                  onChange={(e) => setNewPatient({ ...newPatient, sex: e.target.value })}
-                >
-                  <option value="">—</option>
-                  <option value="M">M</option>
-                  <option value="F">F</option>
-                  <option value="Other">Other</option>
-                </select>
-              </Field>
-              <Field label="Primary condition">
-                <input
-                  className={inputCls}
-                  placeholder="e.g. Neck Pain"
-                  value={newPatient.primaryCondition}
-                  onChange={(e) => setNewPatient({ ...newPatient, primaryCondition: e.target.value })}
-                />
-              </Field>
-              <Field label="Referring source">
-                <select
-                  className={inputCls}
-                  value={newPatient.referringSourceId}
-                  onChange={(e) =>
-                    setNewPatient({
-                      ...newPatient,
-                      referringSourceId: e.target.value,
-                      referringSourceDetail: '',
-                    })
-                  }
-                >
-                  <option value="">—</option>
-                  {referringSources.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {referringSources.find((s) => s.id === newPatient.referringSourceId)?.detailLabel && (
-                <Field label={referringSources.find((s) => s.id === newPatient.referringSourceId)!.detailLabel!}>
-                  <input
-                    className={inputCls}
-                    value={newPatient.referringSourceDetail}
-                    onChange={(e) => setNewPatient({ ...newPatient, referringSourceDetail: e.target.value })}
-                  />
-                </Field>
-              )}
-            </div>
-            <p className="text-xs text-[var(--muted)]">You can complete the rest of these later from the profile.</p>
-            <div className="flex gap-2">
-              <button
-                className={btnPrimary}
-                disabled={!newPatient.name.trim()}
-                onClick={() => void createPatient()}
-              >
-                Create patient
-              </button>
-              <button className={btnSecondary} onClick={backToSearch}>
-                Back to search
-              </button>
-            </div>
-          </div>
-        ) : (
-          // Searching — the default state. A single box matches Patient ID,
-          // name, or phone; a recent-patients quick-pick covers the common
-          // "who's next" case without typing anything.
-          <div className="space-y-3">
-            <input
-              className={inputCls}
-              placeholder="Search by Patient ID, name, or phone…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoFocus
-            />
-            {query.trim() ? (
-              <>
-                {(matches ?? []).map((p) => (
-                  <button
-                    key={p.id}
-                    className="flex w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)]"
-                    onClick={() => selectPatientFromSearch(p)}
-                  >
-                    <span>{p.name}</span>
-                    <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                  </button>
-                ))}
-                {matches?.length === 0 && (
-                  <p className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-2 text-xs text-[var(--muted)]">
-                    No existing patient found.
-                  </p>
-                )}
-              </>
-            ) : (
-              recentPatients.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-xs font-medium text-[var(--muted)]">Recently seen</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {recentPatients.map((p) => (
-                      <button
-                        key={p.patientId}
-                        className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
-                        onClick={() =>
-                          void repos.patients.get(p.patientId).then((full) => full && selectPatientFromSearch(full))
-                        }
-                      >
-                        {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )
+        // Creating — no existing match; capture the new patient. Only
+        // name and phone are asked for up front, everything else is
+        // explicitly optional and can be filled in later from the profile.
+        // Single column, not sm:grid-cols-2 -- this always renders in the
+        // fixed-width side panel now, and sm: is a viewport breakpoint,
+        // not a container one, so it would force two columns into a
+        // panel too narrow for them on any normal-width screen.
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3">
+            <Field label="Name *">
+              <input
+                className={inputCls}
+                value={newPatient.name}
+                onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
+                placeholder="Patient name"
+                autoFocus
+              />
+            </Field>
+            <Field label="Phone">
+              <input
+                className={inputCls}
+                placeholder="Recommended — used for search and quick pick"
+                value={newPatient.phone}
+                onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
+              />
+            </Field>
+            {duplicateMatch && (
+              <p className="col-span-2 rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-xs text-[var(--rust)]">
+                ⚠{' '}
+                {duplicateMatch.matchedBy === 'phone'
+                  ? `A patient with this phone number — "${duplicateMatch.name}" (ID ${duplicateMatch.mrno}) — already exists.`
+                  : `A patient named "${duplicateMatch.name}" (ID ${duplicateMatch.mrno}) already exists.`}{' '}
+                Use "Back to search" below if this is the same person.
+              </p>
             )}
-            <button className={btnSecondary} onClick={startCreatingPatient}>
-              + New patient
+            {!newPatient.phone.trim() && (
+              <p className="col-span-2 text-xs text-[var(--muted)]">
+                No phone on file — fine for a walk-in with none, but it limits later search and
+                duplicate checks.
+              </p>
+            )}
+            <Field label="ID (optional)">
+              <input
+                className={inputCls}
+                placeholder="Leave blank to auto-generate"
+                value={newPatient.mrno}
+                onChange={(e) => setNewPatient({ ...newPatient, mrno: e.target.value })}
+              />
+            </Field>
+            <Field label="Age">
+              <input
+                type="number"
+                className={inputCls}
+                placeholder="Optional"
+                value={newPatient.age}
+                onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
+              />
+            </Field>
+            <Field label="Sex">
+              <select
+                className={inputCls}
+                value={newPatient.sex}
+                onChange={(e) => setNewPatient({ ...newPatient, sex: e.target.value })}
+              >
+                <option value="">—</option>
+                <option value="M">M</option>
+                <option value="F">F</option>
+                <option value="Other">Other</option>
+              </select>
+            </Field>
+            <Field label="Primary condition">
+              <input
+                className={inputCls}
+                placeholder="e.g. Neck Pain"
+                value={newPatient.primaryCondition}
+                onChange={(e) => setNewPatient({ ...newPatient, primaryCondition: e.target.value })}
+              />
+            </Field>
+            <Field label="Referring source">
+              <select
+                className={inputCls}
+                value={newPatient.referringSourceId}
+                onChange={(e) =>
+                  setNewPatient({
+                    ...newPatient,
+                    referringSourceId: e.target.value,
+                    referringSourceDetail: '',
+                  })
+                }
+              >
+                <option value="">—</option>
+                {referringSources.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {referringSources.find((s) => s.id === newPatient.referringSourceId)?.detailLabel && (
+              <Field
+                label={
+                  referringSources.find((s) => s.id === newPatient.referringSourceId)!.detailLabel!
+                }
+              >
+                <input
+                  className={inputCls}
+                  value={newPatient.referringSourceDetail}
+                  onChange={(e) =>
+                    setNewPatient({ ...newPatient, referringSourceDetail: e.target.value })
+                  }
+                />
+              </Field>
+            )}
+          </div>
+          <p className="text-xs text-[var(--muted)]">
+            You can complete the rest of these later from the profile.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={btnPrimary}
+              disabled={!newPatient.name.trim()}
+              onClick={() => void createPatient()}
+            >
+              Create patient
+            </button>
+            <button type="button" className={btnSecondary} onClick={backToSearch}>
+              Back to search
             </button>
           </div>
-        )}
-      </SectionCard>
+        </div>
+      ) : (
+        // Searching — the default state. A single box matches Patient ID,
+        // name, or phone; a recent-patients quick-pick covers the common
+        // "who's next" case without typing anything.
+        <div className="space-y-3">
+          <input
+            className={inputCls}
+            placeholder="Search by Patient ID, name, or phone…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+          />
+          {query.trim() ? (
+            <>
+              {(matches ?? []).map((p) => (
+                <button
+                  type="button"
+                  key={p.id}
+                  className="flex w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-[var(--paper)]"
+                  onClick={() => selectPatientFromSearch(p)}
+                >
+                  <span>{p.name}</span>
+                  <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                </button>
+              ))}
+              {matches?.length === 0 && (
+                <p className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-2 text-xs text-[var(--muted)]">
+                  No existing patient found.
+                </p>
+              )}
+            </>
+          ) : (
+            recentPatients.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-[var(--muted)]">Recently seen</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {recentPatients.map((p) => (
+                    <button
+                      type="button"
+                      key={p.patientId}
+                      className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--ink)] hover:bg-[var(--paper)]"
+                      onClick={() =>
+                        void repos.patients
+                          .get(p.patientId)
+                          .then((full) => full && selectPatientFromSearch(full))
+                      }
+                    >
+                      {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          )}
+          <button type="button" className={btnSecondary} onClick={startCreatingPatient}>
+            + New patient
+          </button>
+        </div>
+      )}
+    </SectionCard>
   );
 
   const visitPanel = (
@@ -984,10 +1041,10 @@ export function NewVisitPage() {
 
       <ErrorNote message={error} />
       <div className="flex gap-2">
-        <button className={btnPrimary} disabled={busy} onClick={() => void save()}>
+        <button type="button" className={btnPrimary} disabled={busy} onClick={() => void save()}>
           {busy ? 'Saving…' : 'Save visit'}
         </button>
-        <button className={btnSecondary} onClick={goBack}>
+        <button type="button" className={btnSecondary} onClick={goBack}>
           Cancel
         </button>
       </div>
