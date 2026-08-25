@@ -35,12 +35,7 @@ export function InvoicesPage() {
   );
 
   const sortedInvoices = useMemo(
-    () =>
-      applySort(
-        invoices ?? [],
-        INVOICE_COMPARATORS,
-        sort
-      ),
+    () => applySort(invoices ?? [], INVOICE_COMPARATORS, sort),
     [invoices, sort]
   );
 
@@ -78,11 +73,15 @@ export function InvoicesPage() {
       <div className="flex flex-wrap gap-3">
         <div className="flex-1 min-w-64 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Total Collected</div>
-          <div className="text-2xl font-display font-semibold text-[var(--ink)]">{formatINR(totalCollected)}</div>
+          <div className="text-2xl font-display font-semibold text-[var(--ink)]">
+            {formatINR(totalCollected)}
+          </div>
         </div>
         <div className="flex-1 min-w-64 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Outstanding</div>
-          <div className="text-2xl font-display font-semibold text-[var(--rust)]">{formatINR(totalOutstanding)}</div>
+          <div className="text-2xl font-display font-semibold text-[var(--rust)]">
+            {formatINR(totalOutstanding)}
+          </div>
         </div>
         <div className="flex-1 min-w-64 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Total Invoiced</div>
@@ -194,6 +193,7 @@ export function InvoicesPage() {
                           {status === 'paid' ? 'Paid' : 'Outstanding'}
                         </Pill>
                         <button
+                          type="button"
                           className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                           onClick={() => void toggleInvoiceStatus(inv.id, status)}
                           disabled={busy}

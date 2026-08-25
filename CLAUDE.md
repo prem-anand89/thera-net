@@ -43,6 +43,23 @@ migration history disagree, and the next person (or the next rebuild) can't
 tell what state the schema is actually in. This has been a recurring bug
 class in this repo; don't reintroduce it.
 
+## Button type attribute — required for HTML compliance
+
+Every `<button>` element **must** have an explicit `type` attribute:
+- `type="button"` — generic button, no form action
+- `type="submit"` — submits the containing form
+- `type="reset"` — resets form fields
+
+Without an explicit type, buttons default to `type="submit"`, causing
+unexpected form submission when clicked. This is caught by:
+- ESLint rule `custom/button-has-type` (warns on missing types)
+- Pre-commit hook via lint-staged (auto-fixes with ESLint)
+- TypeScript if using the `Button` wrapper component
+  (`src/components/Button.tsx`)
+
+**Recommended:** Use `<Button type="button">` for new code rather than raw
+`<button>` tags. The wrapper enforces type at the TypeScript level.
+
 ## Verification before committing
 
 Run before every commit that touches `src/`:
@@ -55,3 +72,6 @@ touching shared components, routing, or Tailwind config (breakpoints,
 theme tokens). CI (`.github/workflows/ci.yml`) runs these same four
 checks as separate steps rather than one chained command, so a failure
 shows exactly which one broke.
+
+The pre-commit hook automatically lints and fixes files before commit, so
+button type issues will be caught before they reach the PR.

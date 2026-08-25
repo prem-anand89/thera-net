@@ -24,6 +24,20 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Report buttons without type attributes (informational)
+        continue-on-error: true
+        run: |
+          # This grep check reports buttons that slipped past the ESLint rule
+          # Pattern: <button opening tags without type= attribute
+          # Note: Continue on error for now while existing violations are being fixed
+          buttons_without_type=$(grep -r '<button[^>]*onClick' src/ | grep -v 'type=' | grep -v '.test.tsx' | grep -v '.spec.tsx' | wc -l)
+          if [ "$buttons_without_type" -gt 0 ]; then
+            echo "⚠️  Warning: $buttons_without_type buttons found without type attribute"
+            echo "🎯 Goal: Fix these gradually as code is touched. Use type=\"button\", type=\"submit\", or type=\"reset\""
+            grep -r '<button[^>]*onClick' src/ | grep -v 'type=' | grep -v '.test.tsx' | grep -v '.spec.tsx' | head -10
+          else
+            echo "✅ All interactive buttons have explicit type attributes"
+          fi
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test

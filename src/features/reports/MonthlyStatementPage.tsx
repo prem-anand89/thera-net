@@ -7,7 +7,15 @@ import { formatINR } from '@/domain/money';
 import type { Paise } from '@/domain/money';
 import { fiscalYearOf, monthsOfFiscalYear, monthName, type FyMonth } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
-import { btnPrimary, btnSecondary, inputCls, Field, RupeeInput, SectionCard, ErrorNote } from '@/components/ui';
+import {
+  btnPrimary,
+  btnSecondary,
+  inputCls,
+  Field,
+  RupeeInput,
+  SectionCard,
+  ErrorNote,
+} from '@/components/ui';
 import { MonthlyReportTable } from '@/components/MonthlyReportTable';
 import { toFriendlyMessage } from '@/lib/errors';
 
@@ -37,9 +45,12 @@ export function MonthlyStatementPage() {
 
   function downloadCsv() {
     if (!report) return;
-    const blob = new Blob([reportService.toCsv(report, { labels, hospitalSplit, therapistSplit })], {
-      type: 'text/csv',
-    });
+    const blob = new Blob(
+      [reportService.toCsv(report, { labels, hospitalSplit, therapistSplit })],
+      {
+        type: 'text/csv',
+      }
+    );
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -51,7 +62,9 @@ export function MonthlyStatementPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        <h2 className="font-display text-base font-semibold text-[var(--ink)]">Monthly statement</h2>
+        <h2 className="font-display text-base font-semibold text-[var(--ink)]">
+          Monthly statement
+        </h2>
         <div className="ml-auto flex items-end gap-2">
           <select
             className={inputCls}
@@ -60,7 +73,8 @@ export function MonthlyStatementPage() {
           >
             {[currentFy.startYear - 2, currentFy.startYear - 1, currentFy.startYear].map((y) => (
               <option key={y} value={y}>
-                FY {fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label}
+                FY{' '}
+                {fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label}
               </option>
             ))}
           </select>
@@ -71,7 +85,7 @@ export function MonthlyStatementPage() {
               </option>
             ))}
           </select>
-          <button className={btnSecondary} onClick={downloadCsv}>
+          <button type="button" className={btnSecondary} onClick={downloadCsv}>
             Export CSV
           </button>
           <Link
@@ -84,7 +98,9 @@ export function MonthlyStatementPage() {
         </div>
       </div>
 
-      <p className="mb-2 text-xs text-[var(--muted)] sm:hidden">Swipe sideways to see more columns.</p>
+      <p className="mb-2 text-xs text-[var(--muted)] sm:hidden">
+        Swipe sideways to see more columns.
+      </p>
       <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
         <MonthlyReportTable
           report={report}
@@ -177,12 +193,15 @@ function SettlementCard({
     }
   }
 
-  const variancePaise = amountPaise != null && expectedPaise != null ? amountPaise - expectedPaise : null;
+  const variancePaise =
+    amountPaise != null && expectedPaise != null ? amountPaise - expectedPaise : null;
 
   return (
     <SectionCard title={`${labels.partner} settlement — ${monthName(month.month)} ${month.year}`}>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Field label={`Expected (computed Post Tax ${labels.own})${expectedPaise == null ? '' : `: ${formatINR(expectedPaise)}`}`}>
+        <Field
+          label={`Expected (computed Post Tax ${labels.own})${expectedPaise == null ? '' : `: ${formatINR(expectedPaise)}`}`}
+        >
           <div className="rounded-md border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-sm text-[var(--ink)]">
             {expectedPaise != null ? formatINR(expectedPaise) : '—'}
           </div>
@@ -217,7 +236,7 @@ function SettlementCard({
         </p>
       )}
       <div className="mt-3 flex items-center gap-3">
-        <button className={btnPrimary} onClick={() => void save()}>
+        <button type="button" className={btnPrimary} onClick={() => void save()}>
           Save settlement
         </button>
         {saved && <span className="text-sm text-[var(--moss)]">Saved ✓</span>}

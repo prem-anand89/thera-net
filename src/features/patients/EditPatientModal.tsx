@@ -20,7 +20,8 @@ const NO_REFERRING_SOURCES: ReferringSourceItem[] = [];
 export function EditPatientModal({ patient, open, onClose, onSave }: EditPatientModalProps) {
   const clinic = useClinic();
   const referringSources =
-    useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id), [clinic.id]) ?? NO_REFERRING_SOURCES;
+    useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id), [clinic.id]) ??
+    NO_REFERRING_SOURCES;
 
   const [formData, setFormData] = useState({
     name: patient.name,
@@ -42,7 +43,8 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
     const matchedLegacyId =
       patient.referringSourceId ??
       (patient.referringSource
-        ? referringSources.find((s) => s.name === REFERRING_SOURCE_LABELS[patient.referringSource!])?.id
+        ? referringSources.find((s) => s.name === REFERRING_SOURCE_LABELS[patient.referringSource!])
+            ?.id
         : undefined) ??
       '';
     setFormData({
@@ -80,14 +82,23 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
 
   if (!open) return null;
 
-  const detailLabel = referringSources.find((s) => s.id === formData.referringSourceId)?.detailLabel ?? null;
+  const detailLabel =
+    referringSources.find((s) => s.id === formData.referringSourceId)?.detailLabel ?? null;
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="modal-shell w-full max-w-sm max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="modal-shell w-full max-w-sm max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <h2>Edit patient</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button type="button" className="modal-close" onClick={onClose}>
+            ✕
+          </button>
         </div>
 
         {error && (
@@ -193,7 +204,9 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
               <input
                 type="text"
                 value={formData.referringSourceDetail}
-                onChange={(e) => setFormData({ ...formData, referringSourceDetail: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, referringSourceDetail: e.target.value })
+                }
                 className="field-input"
                 disabled={saving}
               />
@@ -202,10 +215,15 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
         </div>
 
         <div className="modal-actions">
-          <button className="btn-secondary" onClick={onClose} disabled={saving}>
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button className="btn-primary" onClick={() => void handleSave()} disabled={saving}>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => void handleSave()}
+            disabled={saving}
+          >
             {saving ? 'Saving...' : 'Save'}
           </button>
         </div>

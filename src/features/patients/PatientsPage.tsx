@@ -90,7 +90,8 @@ function AllPatientsSection() {
     return fiscalYearDateRange(fyStartYear, clinic.fyStartMonth);
   }, [selectedPeriod, month, fyStartYear, clinic.fyStartMonth, customFrom, customTo]);
   const periodVisits = useLiveQuery(
-    () => repos.visits.list({ clinicId: clinic.id, from: selectedRange.from, to: selectedRange.to }),
+    () =>
+      repos.visits.list({ clinicId: clinic.id, from: selectedRange.from, to: selectedRange.to }),
     [clinic.id, selectedRange.from, selectedRange.to]
   );
   const periodPatientIds = useMemo(
@@ -172,7 +173,8 @@ function AllPatientsSection() {
         directPaymentByVisitId.get(v.id) ?? 0,
         v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
       );
-      if (!isCollected(state) && state !== 'zero_session') cur.outstandingBalancePaise += v.actualBillPaise;
+      if (!isCollected(state) && state !== 'zero_session')
+        cur.outstandingBalancePaise += v.actualBillPaise;
       map.set(v.patientId, cur);
     }
     return map;
@@ -194,7 +196,9 @@ function AllPatientsSection() {
       return stats?.latestVisit.therapistId === myTherapistId;
     }
     if (chip === 'needs_invoice') {
-      return stats ? paymentActions(latestState(stats.latestVisit)).includes('issue_invoice') : false;
+      return stats
+        ? paymentActions(latestState(stats.latestVisit)).includes('issue_invoice')
+        : false;
     }
     return true;
   });
@@ -261,7 +265,8 @@ function AllPatientsSection() {
             >
               {[currentFy.startYear - 2, currentFy.startYear - 1, currentFy.startYear].map((y) => (
                 <option key={y} value={y}>
-                  FY {fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label}
+                  FY{' '}
+                  {fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label}
                 </option>
               ))}
             </select>
@@ -314,7 +319,9 @@ function AllPatientsSection() {
             key={c.key}
             type="button"
             className={`min-h-11 rounded-full px-3 py-1 text-xs font-medium ${
-              chip === c.key ? 'bg-[var(--teal-light)] text-[var(--teal)]' : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+              chip === c.key
+                ? 'bg-[var(--teal-light)] text-[var(--teal)]'
+                : 'text-[var(--muted)] hover:bg-[var(--paper)]'
             }`}
             onClick={() => setChip(c.key)}
           >
@@ -326,16 +333,27 @@ function AllPatientsSection() {
         {selectedPeriod ? (
           <>
             Showing patients seen in {monthName(selectedPeriod.month)} {selectedPeriod.year}.{' '}
-            <button className="font-medium text-[var(--teal)] hover:underline" onClick={() => setMonth('')}>
+            <button
+              type="button"
+              className="font-medium text-[var(--teal)] hover:underline"
+              onClick={() => setMonth('')}
+            >
               Show Full FY
             </button>
           </>
         ) : month === 'ytd' ? (
           <>
             Showing patients seen since the start of FY{' '}
-            {fiscalYearOf(new Date(fyStartYear, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label}, through
-            today.{' '}
-            <button className="font-medium text-[var(--teal)] hover:underline" onClick={() => setMonth('')}>
+            {
+              fiscalYearOf(new Date(fyStartYear, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth)
+                .label
+            }
+            , through today.{' '}
+            <button
+              type="button"
+              className="font-medium text-[var(--teal)] hover:underline"
+              onClick={() => setMonth('')}
+            >
               Show Full FY
             </button>
           </>
@@ -346,7 +364,11 @@ function AllPatientsSection() {
             ) : (
               <>
                 Showing patients seen {formatDateDMY(customFrom)}–{formatDateDMY(customTo)}.{' '}
-                <button className="font-medium text-[var(--teal)] hover:underline" onClick={() => setMonth('')}>
+                <button
+                  type="button"
+                  className="font-medium text-[var(--teal)] hover:underline"
+                  onClick={() => setMonth('')}
+                >
                   Show Full FY
                 </button>
               </>
@@ -366,7 +388,7 @@ function AllPatientsSection() {
           {q
             ? 'No patients match your search.'
             : (all ?? []).filter((p) => !p.deletedAt).length === 0
-              ? "No patients yet - they're created from the \"New visit\" flow."
+              ? 'No patients yet - they\'re created from the "New visit" flow.'
               : 'No patients were seen in this period.'}
         </div>
       ) : (
@@ -382,7 +404,9 @@ function AllPatientsSection() {
                   nextAction={
                     visitStatsByPatient.get(p.id) &&
                     canBill &&
-                    paymentActions(latestState(visitStatsByPatient.get(p.id)!.latestVisit)).includes('issue_invoice')
+                    paymentActions(
+                      latestState(visitStatsByPatient.get(p.id)!.latestVisit)
+                    ).includes('issue_invoice')
                       ? 'invoice'
                       : 'visit'
                   }
@@ -439,7 +463,9 @@ function AllPatientsSection() {
                       </td>
                       <td className={td}>
                         {stats?.latestVisit ? (
-                          <TherapistPill>{therapistName.get(stats.latestVisit.therapistId) ?? '-'}</TherapistPill>
+                          <TherapistPill>
+                            {therapistName.get(stats.latestVisit.therapistId) ?? '-'}
+                          </TherapistPill>
                         ) : (
                           '-'
                         )}
@@ -456,7 +482,10 @@ function AllPatientsSection() {
                         {stats ? (
                           <div className="font-num text-xs text-[var(--ink)]">
                             {formatDateDMY(stats.lastVisitOn)}
-                            <span className="text-[var(--muted)]"> · {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}</span>
+                            <span className="text-[var(--muted)]">
+                              {' '}
+                              · {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
+                            </span>
                           </div>
                         ) : (
                           <span className="text-xs text-[var(--muted)]">No visits yet</span>
@@ -465,9 +494,13 @@ function AllPatientsSection() {
                       <td className={`${td} text-xs`}>
                         {stats ? (
                           <>
-                            <div className="font-num text-[var(--ink)]">{formatINR(billing?.totalBilledPaise ?? 0)} billed</div>
+                            <div className="font-num text-[var(--ink)]">
+                              {formatINR(billing?.totalBilledPaise ?? 0)} billed
+                            </div>
                             {(billing?.outstandingBalancePaise ?? 0) > 0 && (
-                              <div className="mt-0.5 font-num text-[var(--rust)]">{formatINR(billing!.outstandingBalancePaise)} due</div>
+                              <div className="mt-0.5 font-num text-[var(--rust)]">
+                                {formatINR(billing!.outstandingBalancePaise)} due
+                              </div>
                             )}
                           </>
                         ) : (
@@ -495,6 +528,7 @@ function AllPatientsSection() {
       {hidden.length > 0 && (
         <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
           <button
+            type="button"
             className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
             onClick={() => setShowHidden((s) => !s)}
           >
@@ -507,16 +541,25 @@ function AllPatientsSection() {
                 {hidden.map((p) => (
                   <tr key={p.id} className="hover:bg-[var(--paper)]">
                     <td className={td}>
-                      <span className="font-display">{p.name}</span> <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                      <span className="font-display">{p.name}</span>{' '}
+                      <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
                     </td>
                     <td className={td}>
                       <Pill tone="slate">Hidden {p.deletedAt && formatDateDM(p.deletedAt)}</Pill>
                     </td>
                     <td className={`${td} whitespace-nowrap text-right`}>
-                      <button className="text-xs text-[var(--teal)] hover:underline" onClick={() => void restore(p)}>
+                      <button
+                        type="button"
+                        className="text-xs text-[var(--teal)] hover:underline"
+                        onClick={() => void restore(p)}
+                      >
                         Restore
                       </button>
-                      <button className="ml-3 text-xs text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => void hardDelete(p)}>
+                      <button
+                        type="button"
+                        className="ml-3 text-xs text-[var(--muted)] hover:text-[var(--rust)]"
+                        onClick={() => void hardDelete(p)}
+                      >
                         Delete permanently
                       </button>
                     </td>
@@ -529,7 +572,12 @@ function AllPatientsSection() {
       )}
 
       {editing && (
-        <EditPatientModal patient={editing} open={true} onClose={() => setEditing(null)} onSave={() => setEditing(null)} />
+        <EditPatientModal
+          patient={editing}
+          open={true}
+          onClose={() => setEditing(null)}
+          onSave={() => setEditing(null)}
+        />
       )}
     </SectionCard>
   );
@@ -617,7 +665,9 @@ function PatientCard({
               <TherapistPill>{therapistLine}</TherapistPill>
             </CardDetailRow>
           )}
-          {p.primaryCondition && <CardDetailRow label="Condition">{p.primaryCondition}</CardDetailRow>}
+          {p.primaryCondition && (
+            <CardDetailRow label="Condition">{p.primaryCondition}</CardDetailRow>
+          )}
           {stats?.latestVisit?.treatmentNotes && (
             <CardDetailRow label="Treatment" clamp>
               {stats.latestVisit.treatmentNotes}
@@ -636,7 +686,9 @@ function PatientCard({
               </span>
               <span className="font-num">{formatINR(billing?.totalBilledPaise ?? 0)} billed</span>
               {(billing?.outstandingBalancePaise ?? 0) > 0 && (
-                <span className="font-num text-[var(--rust)]">{formatINR(billing!.outstandingBalancePaise)} due</span>
+                <span className="font-num text-[var(--rust)]">
+                  {formatINR(billing!.outstandingBalancePaise)} due
+                </span>
               )}
             </>
           ) : (

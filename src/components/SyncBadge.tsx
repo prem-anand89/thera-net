@@ -17,7 +17,9 @@ export function SyncStatusBanners() {
   return (
     <div className="space-y-1 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2">
       {!status.online && (
-        <p className="text-sm text-[var(--ink)]">You're offline. Visits still save on this device.</p>
+        <p className="text-sm text-[var(--ink)]">
+          You're offline. Visits still save on this device.
+        </p>
       )}
       {headline && (
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -80,6 +82,7 @@ export function SyncBadge() {
             <div className="flex items-center justify-between">
               <span className="font-medium text-[var(--ink)]">Sync</span>
               <button
+                type="button"
                 className="text-xs text-[var(--teal)] hover:underline"
                 onClick={() => syncEngine.schedule(0)}
               >
@@ -104,7 +107,10 @@ export function SyncBadge() {
                 {failed.map((e) => {
                   const permanent = isPermanentFailure(e.errorCode ?? null, e.error ?? '');
                   return (
-                    <li key={e.seq} className="rounded-lg border border-[var(--rust)] bg-[var(--rust-light)] p-2">
+                    <li
+                      key={e.seq}
+                      className="rounded-lg border border-[var(--rust)] bg-[var(--rust-light)] p-2"
+                    >
                       <div className="text-xs font-medium text-[var(--rust)]">
                         {syncRecordLabel(e.table)}
                         {permanent && " · won't succeed by retrying"}
@@ -116,6 +122,7 @@ export function SyncBadge() {
                         })}
                       </div>
                       <button
+                        type="button"
                         className="mt-2 min-h-11 text-xs text-[var(--muted)] hover:text-[var(--rust)]"
                         onClick={() => setDiscarding(e)}
                       >
@@ -130,12 +137,7 @@ export function SyncBadge() {
         </>
       )}
 
-      {discarding && (
-        <DiscardChangeDialog
-          entry={discarding}
-          onClose={() => setDiscarding(null)}
-        />
-      )}
+      {discarding && <DiscardChangeDialog entry={discarding} onClose={() => setDiscarding(null)} />}
     </div>
   );
 }
