@@ -129,23 +129,50 @@ const patientProfileRoute = createRoute({
   component: PatientProfilePage,
 });
 
+// Same "← Back" context-carrying as the patient profile route itself, one
+// hop further out: a note/print screen is always reached via the patient
+// profile, so it needs to forward the same `from` the profile got, or the
+// profile's own "← Back" link has nothing to return to once the user comes
+// back from the note and clicks it again — falling back to the bare
+// patient list instead of wherever they actually started (Ledger,
+// Workspace, Patients).
+const validateFromSearch = (
+  search: Record<string, unknown>
+): { from?: PatientProfileBackTarget } =>
+  PATIENT_PROFILE_BACK_TARGETS.includes(search.from as PatientProfileBackTarget)
+    ? { from: search.from as PatientProfileBackTarget }
+    : {};
+
+// Shared by both note routes: `visitId` (only meaningful as "add a note for
+// this specific visit") survives the redirect from "start a new note" to an
+// already-open draft (NoteEditorPage.tsx re-navigates to noteEditorRoute in
+// that case, carrying it along), so noteEditorRoute needs to accept it too,
+// not just newNoteRoute.
+const validateNoteSearch = (
+  search: Record<string, unknown>
+): { visitId?: string; from?: PatientProfileBackTarget } => ({
+  ...(typeof search.visitId === 'string' ? { visitId: search.visitId } : {}),
+  ...validateFromSearch(search),
+});
+
 const newNoteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId/notes/new',
-  validateSearch: (search: Record<string, unknown>): { visitId?: string } =>
-    typeof search.visitId === 'string' ? { visitId: search.visitId } : {},
+  validateSearch: validateNoteSearch,
   component: NoteEditorPage,
 });
 
 const noteEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId/notes/$noteId',
+  validateSearch: validateNoteSearch,
   component: NoteEditorPage,
 });
 
 const notePrintRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId/notes/$noteId/print',
+  validateSearch: validateFromSearch,
   component: NotePrintPage,
 });
 

@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from '@tanstack/react-router';
+import { Link, useParams, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
+import type { PatientProfileBackTarget } from '@/app/router';
 import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
-import { upcastPayload, outcomeInstrumentDef, frequencyLabel, outcomeTrend, RED_FLAG_ITEMS, YELLOW_FLAG_ITEMS, type CoreAssessmentPayload } from '@/domain/coreAssessment';
+import {
+  upcastPayload,
+  outcomeInstrumentDef,
+  frequencyLabel,
+  outcomeTrend,
+  RED_FLAG_ITEMS,
+  YELLOW_FLAG_ITEMS,
+  type CoreAssessmentPayload,
+} from '@/domain/coreAssessment';
 
 /** One label/value row; omitted entirely when value is empty — printed
  *  documents shouldn't carry blank placeholders for fields nobody filled. */
@@ -34,8 +43,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function NotePrintPage() {
   const clinic = useClinic();
   const { noteId } = useParams({ strict: false }) as { noteId: string };
+  const { from: backTo } = useSearch({ strict: false }) as { from?: PatientProfileBackTarget };
   const note = useLiveQuery(() => repos.consultationNotes.get(noteId), [noteId]);
-  const patient = useLiveQuery(() => (note ? repos.patients.get(note.patientId) : undefined), [note?.patientId]);
+  const patient = useLiveQuery(
+    () => (note ? repos.patients.get(note.patientId) : undefined),
+    [note?.patientId]
+  );
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const [paper, setPaper] = useState<'A4' | 'A5'>('A4');
 
@@ -52,16 +65,26 @@ export function NotePrintPage() {
   }, [note, patient]);
 
   if (!note || patient === undefined) {
-    return <div className="p-8 text-sm text-[var(--muted)]">Note not found (or not yet synced).</div>;
+    return (
+      <div className="p-8 text-sm text-[var(--muted)]">Note not found (or not yet synced).</div>
+    );
   }
 
   const therapist = therapists?.find((t) => t.id === note.therapistId);
-  const payload: CoreAssessmentPayload | null = note.assessmentPayload ? upcastPayload(note.assessmentPayload) : null;
+  const payload: CoreAssessmentPayload | null = note.assessmentPayload
+    ? upcastPayload(note.assessmentPayload)
+    : null;
   const cc = payload?.chiefComplaint;
   const h = payload?.history;
-  const redFlagsPresent = payload ? RED_FLAG_ITEMS.filter((f) => payload.screening.redFlags[f] === 'yes') : [];
+  const redFlagsPresent = payload
+    ? RED_FLAG_ITEMS.filter((f) => payload.screening.redFlags[f] === 'yes')
+    : [];
   const yellowFlagsPresent = payload
-    ? YELLOW_FLAG_ITEMS.filter((f) => payload.screening.yellowFlags[f] === 'some-concern' || payload.screening.yellowFlags[f] === 'significant-concern')
+    ? YELLOW_FLAG_ITEMS.filter(
+        (f) =>
+          payload.screening.yellowFlags[f] === 'some-concern' ||
+          payload.screening.yellowFlags[f] === 'significant-concern'
+      )
     : [];
 
   return (
@@ -69,11 +92,20 @@ export function NotePrintPage() {
       <style>{`@page { size: ${paper}; margin: ${paper === 'A5' ? '10mm' : '16mm'}; }`}</style>
 
       <div className="no-print mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
-        <Link to="/patients/$patientId" params={{ patientId: patient.id }} className={btnSecondary}>
+        <Link
+          to="/patients/$patientId"
+          params={{ patientId: patient.id }}
+          search={backTo ? { from: backTo } : undefined}
+          className={btnSecondary}
+        >
           ← Back
         </Link>
         <div className="ml-auto flex items-center gap-2">
-          <select className={inputCls} value={paper} onChange={(e) => setPaper(e.target.value as 'A4' | 'A5')}>
+          <select
+            className={inputCls}
+            value={paper}
+            onChange={(e) => setPaper(e.target.value as 'A4' | 'A5')}
+          >
             <option value="A4">A4</option>
             <option value="A5">A5</option>
           </select>
@@ -91,7 +123,9 @@ export function NotePrintPage() {
             <div>
               <h1 className="font-display text-xl font-bold text-[var(--ink)]">{clinic.name}</h1>
               {clinic.address && <p className="text-xs text-[var(--muted)]">{clinic.address}</p>}
-              <p className="text-xs text-[var(--muted)]">{[clinic.phone, clinic.email].filter(Boolean).join(' · ')}</p>
+              <p className="text-xs text-[var(--muted)]">
+                {[clinic.phone, clinic.email].filter(Boolean).join(' · ')}
+              </p>
             </div>
           </div>
         </header>
@@ -103,7 +137,9 @@ export function NotePrintPage() {
             <p className="text-[var(--muted)]">Patient ID: {patient.mrno}</p>
             {(patient.age != null || patient.sex) && (
               <p className="text-[var(--muted)]">
-                {[patient.age != null ? `${patient.age}y` : null, patient.sex].filter(Boolean).join(' / ')}
+                {[patient.age != null ? `${patient.age}y` : null, patient.sex]
+                  .filter(Boolean)
+                  .join(' / ')}
               </p>
             )}
           </div>
@@ -111,7 +147,9 @@ export function NotePrintPage() {
             <p className="text-lg font-bold text-[var(--ink)]">CLINICAL NOTE</p>
             <p className="text-[var(--muted)]">{formatDateDMY(note.updatedAt)}</p>
             {note.noteMode && (
-              <p className="text-[var(--muted)]">{note.noteMode === 'initial' ? 'Initial Evaluation' : 'Follow-up'}</p>
+              <p className="text-[var(--muted)]">
+                {note.noteMode === 'initial' ? 'Initial Evaluation' : 'Follow-up'}
+              </p>
             )}
             <p
               className="mt-1 inline-block rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
@@ -126,15 +164,23 @@ export function NotePrintPage() {
           </div>
         </section>
 
-        {payload?.referral && (payload.referral.referringPhysician || payload.referral.diagnosis) && (
-          <Section title="Referral & Diagnosis">
-            <Row label="Referring physician" value={payload.referral.referringPhysician} />
-            <Row label="Physician reg. no." value={payload.referral.physicianRegistrationNo} />
-            <Row label="Referral date" value={payload.referral.referralDate ? formatDateDMY(payload.referral.referralDate) : null} />
-            <Row label="Diagnosis" value={payload.referral.diagnosis} />
-            <Row label="ICD-10 code" value={payload.referral.diagnosisIcdCode} />
-          </Section>
-        )}
+        {payload?.referral &&
+          (payload.referral.referringPhysician || payload.referral.diagnosis) && (
+            <Section title="Referral & Diagnosis">
+              <Row label="Referring physician" value={payload.referral.referringPhysician} />
+              <Row label="Physician reg. no." value={payload.referral.physicianRegistrationNo} />
+              <Row
+                label="Referral date"
+                value={
+                  payload.referral.referralDate
+                    ? formatDateDMY(payload.referral.referralDate)
+                    : null
+                }
+              />
+              <Row label="Diagnosis" value={payload.referral.diagnosis} />
+              <Row label="ICD-10 code" value={payload.referral.diagnosisIcdCode} />
+            </Section>
+          )}
 
         {!payload && note.notesText && (
           <Section title="Note">
@@ -165,10 +211,25 @@ export function NotePrintPage() {
               <Row label="Medical conditions" value={h.medicalConditions.join(', ')} />
               <Row label="Medications" value={h.medications} />
               <Row label="Allergies" value={h.allergies} />
-              <Row label="On blood thinner" value={h.anticoagulant.onBloodThinner ? (h.anticoagulant.details || 'Yes') : null} />
-              <Row label="Implants" value={h.implants.present ? `${h.implants.type ?? 'Present'}${h.implants.details ? ` — ${h.implants.details}` : ''}` : null} />
+              <Row
+                label="On blood thinner"
+                value={h.anticoagulant.onBloodThinner ? h.anticoagulant.details || 'Yes' : null}
+              />
+              <Row
+                label="Implants"
+                value={
+                  h.implants.present
+                    ? `${h.implants.type ?? 'Present'}${h.implants.details ? ` — ${h.implants.details}` : ''}`
+                    : null
+                }
+              />
               {h.surgeries.length > 0 && (
-                <Row label="Prior surgeries" value={h.surgeries.map((s) => `${s.procedure} (${s.date || 'date unknown'})`).join('; ')} />
+                <Row
+                  label="Prior surgeries"
+                  value={h.surgeries
+                    .map((s) => `${s.procedure} (${s.date || 'date unknown'})`)
+                    .join('; ')}
+                />
               )}
             </Section>
 
@@ -213,13 +274,23 @@ export function NotePrintPage() {
               </Section>
             )}
 
-            {(payload.objective.rom.length > 0 || payload.objective.strength.length > 0 || payload.objective.specialTests.length > 0) && (
+            {(payload.objective.rom.length > 0 ||
+              payload.objective.strength.length > 0 ||
+              payload.objective.specialTests.length > 0) && (
               <Section title="Objective">
                 {payload.objective.rom.map((r, i) => (
-                  <Row key={`rom-${i}`} label={`ROM — ${r.movement}${r.side ? ` (${r.side})` : ''}`} value={`Active ${r.active ?? '—'}${r.unit}, Passive ${r.passive ?? '—'}${r.unit}`} />
+                  <Row
+                    key={`rom-${i}`}
+                    label={`ROM — ${r.movement}${r.side ? ` (${r.side})` : ''}`}
+                    value={`Active ${r.active ?? '—'}${r.unit}, Passive ${r.passive ?? '—'}${r.unit}`}
+                  />
                 ))}
                 {payload.objective.strength.map((s, i) => (
-                  <Row key={`str-${i}`} label={`Strength — ${s.movement}${s.side ? ` (${s.side})` : ''}`} value={s.grade} />
+                  <Row
+                    key={`str-${i}`}
+                    label={`Strength — ${s.movement}${s.side ? ` (${s.side})` : ''}`}
+                    value={s.grade}
+                  />
                 ))}
                 {payload.objective.specialTests.map((t, i) => (
                   <Row key={`test-${i}`} label={t.testId} value={t.result} />
@@ -228,10 +299,19 @@ export function NotePrintPage() {
             )}
 
             <Section title="Treatment">
-              <Row label="Manual therapy" value={payload.treatment.session.manualTherapy.join(', ')} />
-              <Row label="Therapeutic exercise" value={payload.treatment.session.therapeuticExercise.join(', ')} />
+              <Row
+                label="Manual therapy"
+                value={payload.treatment.session.manualTherapy.join(', ')}
+              />
+              <Row
+                label="Therapeutic exercise"
+                value={payload.treatment.session.therapeuticExercise.join(', ')}
+              />
               <Row label="Modalities" value={payload.treatment.session.modalities.join(', ')} />
-              <Row label="Duration" value={payload.treatment.session.duration || payload.treatment.session.timeSpent} />
+              <Row
+                label="Duration"
+                value={payload.treatment.session.duration || payload.treatment.session.timeSpent}
+              />
               <Row label="Response" value={payload.treatment.session.response || null} />
               <Row
                 label="Weight-bearing"
@@ -241,16 +321,35 @@ export function NotePrintPage() {
                     : null
                 }
               />
-              <Row label="Brace" value={payload.treatment.session.brace && payload.treatment.session.brace !== 'none' ? `${payload.treatment.session.brace}${payload.treatment.session.lockedDegrees ? ` at ${payload.treatment.session.lockedDegrees}` : ''}` : null} />
+              <Row
+                label="Brace"
+                value={
+                  payload.treatment.session.brace && payload.treatment.session.brace !== 'none'
+                    ? `${payload.treatment.session.brace}${payload.treatment.session.lockedDegrees ? ` at ${payload.treatment.session.lockedDegrees}` : ''}`
+                    : null
+                }
+              />
               <Row label="Wound status" value={payload.treatment.session.woundStatus ?? null} />
-              <Row label="Suture status" value={payload.treatment.session.sutureStatus && payload.treatment.session.sutureStatus !== 'na' ? payload.treatment.session.sutureStatus : null} />
+              <Row
+                label="Suture status"
+                value={
+                  payload.treatment.session.sutureStatus &&
+                  payload.treatment.session.sutureStatus !== 'na'
+                    ? payload.treatment.session.sutureStatus
+                    : null
+                }
+              />
               <Row label="Notes" value={payload.treatment.notes} />
             </Section>
 
             {payload.hep.exercises.length > 0 && (
               <Section title="Home Exercise Program">
                 {payload.hep.exercises.map((ex, i) => (
-                  <Row key={i} label={ex.name} value={`${ex.sets} × ${ex.reps} ${ex.unit}, ${ex.frequency}`} />
+                  <Row
+                    key={i}
+                    label={ex.name}
+                    value={`${ex.sets} × ${ex.reps} ${ex.unit}, ${ex.frequency}`}
+                  />
                 ))}
                 <Row label="Compliance" value={payload.hep.compliance || null} />
               </Section>
@@ -258,10 +357,19 @@ export function NotePrintPage() {
 
             <Section title="Plan">
               <Row label="Phase" value={payload.plan.phase || null} />
-              <Row label="Frequency" value={frequencyLabel(payload.plan.frequencyPerWeek, payload.plan.durationWeeks)} />
+              <Row
+                label="Frequency"
+                value={frequencyLabel(payload.plan.frequencyPerWeek, payload.plan.durationWeeks)}
+              />
               <Row label="Estimated sessions" value={payload.plan.estimatedSessions} />
               {payload.plan.goals.length > 0 && (
-                <Row label="Goals" value={payload.plan.goals.map((g) => g.text).filter(Boolean).join('; ')} />
+                <Row
+                  label="Goals"
+                  value={payload.plan.goals
+                    .map((g) => g.text)
+                    .filter(Boolean)
+                    .join('; ')}
+                />
               )}
               <Row label="Patient education" value={payload.plan.patientEducation.join(', ')} />
             </Section>
@@ -271,7 +379,9 @@ export function NotePrintPage() {
                 {payload.outcomeTracking.instruments.map((entry, i) => {
                   const def = outcomeInstrumentDef(entry.instrumentId);
                   const trend =
-                    entry.previousScore != null ? outcomeTrend(entry.direction, entry.previousScore, entry.latestScore) : entry.trend;
+                    entry.previousScore != null
+                      ? outcomeTrend(entry.direction, entry.previousScore, entry.latestScore)
+                      : entry.trend;
                   return (
                     <Row
                       key={i}
@@ -304,7 +414,11 @@ export function NotePrintPage() {
           </div>
           <div className="text-center">
             {signatureUrl ? (
-              <img src={signatureUrl} alt="" className="mb-1 h-10 w-40 object-contain object-bottom" />
+              <img
+                src={signatureUrl}
+                alt=""
+                className="mb-1 h-10 w-40 object-contain object-bottom"
+              />
             ) : (
               <div className="mb-1 h-10 w-40 border-b border-[var(--border)]" />
             )}

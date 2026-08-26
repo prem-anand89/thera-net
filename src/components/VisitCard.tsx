@@ -1,12 +1,34 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { VISIT_COLUMN_LABELS, VISIT_OPTIONAL_COLUMN_ORDER, type ConsultationNoteStatus, type UUID, type VisitColumnKey } from '@/domain/types';
+import {
+  VISIT_COLUMN_LABELS,
+  VISIT_OPTIONAL_COLUMN_ORDER,
+  type ConsultationNoteStatus,
+  type UUID,
+  type VisitColumnKey,
+} from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import type { VisitPaymentState } from '@/domain/paymentState';
-import { isPackageContinuation, paymentActions, paymentStatusPhrase, paymentStatusShortPhrase } from '@/domain/paymentState';
-import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
+import {
+  isPackageContinuation,
+  paymentActions,
+  paymentStatusPhrase,
+  paymentStatusShortPhrase,
+} from '@/domain/paymentState';
+import {
+  Pill,
+  PackageThread,
+  KebabMenu,
+  menuItem,
+  menuItemDestructive,
+  th,
+  thNum,
+  td,
+  tdNum,
+  TherapistPill,
+} from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 import type { PatientProfileBackTarget } from '@/app/router';
 
@@ -29,7 +51,10 @@ export const PAYMENT_CHIP: Record<VisitPaymentState, { tone: 'green' | 'amber' |
 /** Combines catalog treatment picks with the free-text add-on into one
  *  display string for the single "Treatments" column/cell — e.g. "Manual
  *  Therapy, Exercise Therapy — FM An/Re S,S". Either half can be absent. */
-export function treatmentsDisplayText(treatmentNames: string[], treatmentNotes: string | null): string {
+export function treatmentsDisplayText(
+  treatmentNames: string[],
+  treatmentNotes: string | null
+): string {
   const parts = [];
   if (treatmentNames.length) parts.push(treatmentNames.join(', '));
   if (treatmentNotes) parts.push(treatmentNotes);
@@ -84,7 +109,9 @@ function PatientNameBlock({
           </button>
         )}
       </div>
-      <div className="text-xs text-[var(--muted)]">{patientIdentityLine(data.mrno, data.age, data.sex)}</div>
+      <div className="text-xs text-[var(--muted)]">
+        {patientIdentityLine(data.mrno, data.age, data.sex)}
+      </div>
     </div>
   );
 }
@@ -171,10 +198,7 @@ function RowActionsMenu({
   onDelete: () => void;
 }) {
   const hasMenu =
-    data.canRepeat ||
-    (data.canEdit && onEdit) ||
-    (data.canSplit && onSplit) ||
-    data.canDelete;
+    data.canRepeat || (data.canEdit && onEdit) || (data.canSplit && onSplit) || data.canDelete;
   if (!hasMenu) return null;
 
   return (
@@ -375,15 +399,31 @@ function PaymentStatusDisplay({
   );
 }
 
-const NOTE_STATUS_CELL: Record<'draft' | 'completed' | 'archived', { tone: 'green' | 'amber' | 'slate'; label: string; action: string }> = {
+const NOTE_STATUS_CELL: Record<
+  'draft' | 'completed' | 'archived',
+  { tone: 'green' | 'amber' | 'slate'; label: string; action: string }
+> = {
   draft: { tone: 'amber', label: 'Draft', action: 'Edit' },
   completed: { tone: 'green', label: 'Completed', action: 'View' },
   archived: { tone: 'slate', label: 'Archived', action: 'View' },
 };
 
 /** Clinical-note entry point for a visit row — shared by the table Note
- *  column and mobile cards so draft/continue/view routing stays consistent. */
-export function VisitNoteLink({ data, inline }: { data: VisitCardData; inline?: boolean }) {
+ *  column and mobile cards so draft/continue/view routing stays consistent.
+ *  `backTo` carries the same "which list did this come from" context as
+ *  PatientNameBlock's, one hop further: the note editor's own "← {patient}"
+ *  link forwards it back to the patient profile, whose "← Back" link then
+ *  has somewhere real to return to instead of falling back to the bare
+ *  patient list. */
+export function VisitNoteLink({
+  data,
+  inline,
+  backTo,
+}: {
+  data: VisitCardData;
+  inline?: boolean;
+  backTo?: PatientProfileBackTarget;
+}) {
   if (!data.canViewNotes) return null;
   if (data.consultationNoteId && data.noteStatus) {
     const { tone, label, action } = NOTE_STATUS_CELL[data.noteStatus];
@@ -392,6 +432,7 @@ export function VisitNoteLink({ data, inline }: { data: VisitCardData; inline?: 
         <Link
           to="/patients/$patientId/notes/$noteId"
           params={{ patientId: data.patientId, noteId: data.consultationNoteId }}
+          search={backTo ? { from: backTo } : undefined}
           className="text-xs font-medium text-[var(--teal)] hover:underline"
         >
           {action} note
@@ -404,6 +445,7 @@ export function VisitNoteLink({ data, inline }: { data: VisitCardData; inline?: 
         <Link
           to="/patients/$patientId/notes/$noteId"
           params={{ patientId: data.patientId, noteId: data.consultationNoteId }}
+          search={backTo ? { from: backTo } : undefined}
           className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
         >
           {action}
@@ -416,7 +458,7 @@ export function VisitNoteLink({ data, inline }: { data: VisitCardData; inline?: 
     <Link
       to="/patients/$patientId/notes/new"
       params={{ patientId: data.patientId }}
-      search={{ visitId: data.visitId }}
+      search={{ visitId: data.visitId, from: backTo }}
       className="whitespace-nowrap text-xs font-medium text-[var(--amber)] hover:underline"
       title="Clinical note not started for this visit"
     >
@@ -425,8 +467,8 @@ export function VisitNoteLink({ data, inline }: { data: VisitCardData; inline?: 
   );
 }
 
-function NoteCell({ data }: { data: VisitCardData }) {
-  return <VisitNoteLink data={data} />;
+function NoteCell({ data, backTo }: { data: VisitCardData; backTo?: PatientProfileBackTarget }) {
+  return <VisitNoteLink data={data} backTo={backTo} />;
 }
 
 /** Label + value rows for mobile cards — same field order as the optional table columns. */
@@ -442,7 +484,9 @@ export function CardDetailRow({
   return (
     <div className="flex gap-2 text-xs leading-snug">
       <span className="w-[4.75rem] shrink-0 font-medium text-[var(--muted)]">{label}</span>
-      <span className={`min-w-0 flex-1 text-[var(--ink)] ${clamp ? 'line-clamp-2' : ''}`}>{children}</span>
+      <span className={`min-w-0 flex-1 text-[var(--ink)] ${clamp ? 'line-clamp-2' : ''}`}>
+        {children}
+      </span>
     </div>
   );
 }
@@ -542,7 +586,9 @@ export function SharedVisitCard({
             </div>
           )}
           <div className="min-w-0 flex-1">
-            {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} backTo={backTo} />}
+            {showPatient && (
+              <PatientNameBlock data={data} onEditPatient={onEditPatient} backTo={backTo} />
+            )}
             {showDate && (
               <div className={`text-xs text-[var(--muted)] ${showPatient ? 'mt-0.5' : ''}`}>
                 {formatDateDM(data.visitDate)}
@@ -562,7 +608,9 @@ export function SharedVisitCard({
         </div>
         <div className="flex shrink-0 items-start gap-0.5">
           {data.paymentState !== 'zero_session' && (
-            <span className="font-num text-sm font-semibold tabular-nums text-[var(--ink)]">{bill}</span>
+            <span className="font-num text-sm font-semibold tabular-nums text-[var(--ink)]">
+              {bill}
+            </span>
           )}
           <RowActionsMenu data={data} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
         </div>
@@ -591,15 +639,19 @@ export function SharedVisitCard({
               Issue invoice
             </button>
           )}
-          {!canInvoice && paymentActions(data.paymentState).length > 0 && <Pill tone="slate">Ask billing</Pill>}
-          <VisitNoteLink data={data} inline />
+          {!canInvoice && paymentActions(data.paymentState).length > 0 && (
+            <Pill tone="slate">Ask billing</Pill>
+          )}
+          <VisitNoteLink data={data} inline backTo={backTo} />
         </div>
       </div>
     </>
   );
 
   return boxed ? (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-sm">{content}</div>
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-sm">
+      {content}
+    </div>
   ) : (
     <div className="py-3">{content}</div>
   );
@@ -667,7 +719,10 @@ function VisitTable({
               <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
               <div className="absolute right-0 top-full z-20 mt-1 min-w-40 rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 shadow-lg">
                 {VISIT_OPTIONAL_COLUMN_ORDER.map((key) => (
-                  <label key={key} className="flex items-center gap-2 px-1 py-1 text-xs text-[var(--ink)]">
+                  <label
+                    key={key}
+                    className="flex items-center gap-2 px-1 py-1 text-xs text-[var(--ink)]"
+                  >
                     <input
                       type="checkbox"
                       checked={columnPrefs[key]}
@@ -696,7 +751,12 @@ function VisitTable({
               {showDate && <th className={th}>Date</th>}
               {showPatient && <th className={th}>Patient</th>}
               {VISIT_OPTIONAL_COLUMN_ORDER.map(
-                (key) => columnPrefs[key] && <th key={key} className={th}>{VISIT_COLUMN_LABELS[key]}</th>
+                (key) =>
+                  columnPrefs[key] && (
+                    <th key={key} className={th}>
+                      {VISIT_COLUMN_LABELS[key]}
+                    </th>
+                  )
               )}
               <th className={thNum}>Bill</th>
               <th className={th}>Status</th>
@@ -727,12 +787,18 @@ function VisitTable({
                   <td className={td}>
                     {formatDateDM(row.visitDate)}
                     {row.editedBy && (
-                      <span className="ml-1 text-[var(--muted)]" title={`Edited by ${row.editedBy}`}>
+                      <span
+                        className="ml-1 text-[var(--muted)]"
+                        title={`Edited by ${row.editedBy}`}
+                      >
                         ✎
                       </span>
                     )}
                     {row.syncError && (
-                      <span className="ml-1 text-[var(--rust)]" title={`Sync issue: ${row.syncError}`}>
+                      <span
+                        className="ml-1 text-[var(--rust)]"
+                        title={`Sync issue: ${row.syncError}`}
+                      >
                         ⚠
                       </span>
                     )}
@@ -756,7 +822,10 @@ function VisitTable({
                           <div>{row.serviceName}</div>
                           {row.sessionIndex && row.packageTotal && (
                             <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                              <PackageThread sessionIndex={row.sessionIndex} packageTotal={row.packageTotal} />
+                              <PackageThread
+                                sessionIndex={row.sessionIndex}
+                                packageTotal={row.packageTotal}
+                              />
                               <span className="font-num">
                                 {row.sessionIndex}/{row.packageTotal}
                               </span>
@@ -796,7 +865,7 @@ function VisitTable({
                   />
                 </td>
                 <td className={td}>
-                  <NoteCell data={row} />
+                  <NoteCell data={row} backTo={backTo} />
                 </td>
                 <td className={td}>
                   <RowActionsMenu
@@ -815,7 +884,7 @@ function VisitTable({
                     (selection ? 1 : 0) +
                     (showDate ? 1 : 0) +
                     (showPatient ? 1 : 0) +
-                    (VISIT_OPTIONAL_COLUMN_ORDER.filter((key) => columnPrefs[key]).length) +
+                    VISIT_OPTIONAL_COLUMN_ORDER.filter((key) => columnPrefs[key]).length +
                     4
                   }
                   className="px-3 py-8 text-center text-sm text-[var(--muted)]"
@@ -860,9 +929,12 @@ function groupRowsByDate(rows: VisitCardData[], today: Date): DateGroupedRows[] 
   };
   for (const row of rows) {
     if (row.visitDate === todayStr) buckets.today.push(row);
-    else if (row.visitDate >= startOfWeekStr && row.visitDate < todayStr) buckets['this-week'].push(row);
-    else if (row.visitDate >= startOfMonthStr && row.visitDate < startOfWeekStr) buckets['this-month'].push(row);
-    else if (row.visitDate >= startOfLastMonthStr && row.visitDate <= endOfLastMonthStr) buckets['last-month'].push(row);
+    else if (row.visitDate >= startOfWeekStr && row.visitDate < todayStr)
+      buckets['this-week'].push(row);
+    else if (row.visitDate >= startOfMonthStr && row.visitDate < startOfWeekStr)
+      buckets['this-month'].push(row);
+    else if (row.visitDate >= startOfLastMonthStr && row.visitDate <= endOfLastMonthStr)
+      buckets['last-month'].push(row);
     else buckets.earlier.push(row);
   }
 
@@ -937,7 +1009,9 @@ export function ResponsiveVisitList({
             >
               <div className="border-b border-[var(--border)] px-4 py-3 text-sm font-semibold text-[var(--ink)]">
                 {group.label} ({group.rows.length} visit{group.rows.length === 1 ? '' : 's'})
-                <span className="ml-4 text-xs font-normal text-[var(--muted)]">{formatINR(group.totalBillPaise)}</span>
+                <span className="ml-4 text-xs font-normal text-[var(--muted)]">
+                  {formatINR(group.totalBillPaise)}
+                </span>
               </div>
               <div className="divide-y divide-[var(--border)] px-4">
                 {group.rows.map((row) => (
@@ -993,7 +1067,9 @@ export function ResponsiveVisitList({
             ))}
           </div>
         )}
-        {rows.length === 0 && <p className="py-8 text-center text-sm text-[var(--muted)]">No visits to show.</p>}
+        {rows.length === 0 && (
+          <p className="py-8 text-center text-sm text-[var(--muted)]">No visits to show.</p>
+        )}
       </div>
 
       <div className="hidden tab:block">
