@@ -822,7 +822,8 @@ Not dead — `can_use_module(clinic_id, module_key)` (defined in
 `20260718000001_module_registry.sql`, revised in
 `20260721000001_entitlements_audit_log.sql`) checks `clinic_entitlements`
 (fail-open: no row = entitled) then `clinic_module_settings` (fail-closed
-otherwise), and is called from the insert/update RLS policies on
+otherwise, further gated by the caller's `clinic_members.role` against
+`allowed_roles`), and is called from the insert/update RLS policies on
 `consultation_notes`, `face_scale_responses`, and `facial_palsy_assessments`.
 Every write to those three tables runs through it today.
 
@@ -830,7 +831,29 @@ What's genuinely missing is the **client side**: no Dexie table, no repo,
 no sync, no UI anywhere in `src/` reads or writes either table — so nothing
 in the app currently sets a narrower entitlement or surfaces a "this module
 is off" state. In practice every clinic reads as fully entitled, because
-nothing has ever populated `clinic_entitlements` with a restrictive row.
+nothing has ever populated `clinic_entitlements` with a restrictive row,
+and every clinic gets a `clinic_module_settings` row for `'consultation_notes'`
+seeded `enabled = true` (both the one-time backfill and the
+`seed_default_module_settings()` AFTER INSERT trigger, in
+`20260721000001_entitlements_audit_log.sql`). This is `can_use_module()`'s
+**real, always-on gate for whether a note can be written at all** — but
+there's no Settings toggle for it, so it stays on for every clinic by
+construction, indefinitely, until someone writes SQL by hand.
+
+**This is easy to conflate with `clinics.clinical_docs_enabled` (client-side,
+has a Settings toggle) — they don't actually overlap.** `clinical_docs_enabled`
+only controls whether a newly-logged visit gets flagged `clinicalStatus:
+'pending'` (`visitService.ts`), which drives the "needs note" nudge on visit
+cards and Ledger's "Not documented" filter — nothing more. It has no effect
+on `can_use_module()`, and `PatientProfilePage`'s "New note" entry point
+(`ConsultationNotePanel`) isn't gated by it at all, only by role
+(`canViewClinicalNotes`, i.e. not front desk). So turning `clinical_docs_enabled`
+off silences the per-visit reminder; it does not disable note-taking, and an
+admin expecting it to behave as a master switch for the feature would be
+wrong. A genuine "disable clinical notes for this clinic" control doesn't
+exist today — it would mean flipping `clinic_module_settings.enabled` for
+`'consultation_notes'`, which currently has no admin-facing UI anywhere.
+
 The `modules` reference table these two originally pointed to was dropped
 (`20260820000001_drop_unused_modules_table.sql`), taking its FK on
 `module_key` with it via CASCADE. Restored as a plain `CHECK` constraint
@@ -842,6 +865,13 @@ gating logic on top of this without first confirming the tier-subscription
 plan is what's meant to populate it — `can_use_module()`'s fail-open
 default is backwards for a paywall and would need to change before these
 tables can gate a paid tier.
+
+**Rule for any new consultation-notes entry point** (e.g. a future
+session-note mode): gate visibility on `canViewClinicalNotes` (role), rely
+on `can_use_module()` for the real server-side write gate (already applied
+automatically — it's on the RLS policy, not something a new UI needs to
+re-check), and never gate on `clinical_docs_enabled` expecting it to mean
+"notes are enabled" — its job is strictly the per-visit reminder flag.
 
 #### `clinic_plans` — the tier boundary, service-role write only
 Added as Phase 0 of the tier-subscription plan
@@ -935,12 +965,15 @@ No UI reads this yet — Phase 1 only builds the read path. Enforcement
 
 Deliberately **not** touched: `can_use_module()` / `consultation_notes` /
 the five assessment-module keys. `clinics.clinical_docs_enabled` and
-`clinic_module_settings('consultation_notes')` are two separate gates for
-the same live, actively-used feature (see the dead-infrastructure section
-above) — adding a third (plan-tier) gate on top without reconciling those
-first risks breaking real clinical documentation. The five module keys have
-zero client code today regardless, so gating them has no practical effect
-yet. Deferred to the still-open "advanced modules content" planning pass.
+`clinic_module_settings('consultation_notes')` were previously suspected of
+being two conflicting gates on the same feature; traced precisely, they
+turn out not to overlap at all — see the dead-infrastructure section above
+for the resolved mechanism. Adding a third (plan-tier) gate here would still
+need to go through `can_use_module()` specifically, since that's the one
+that actually governs whether a note can be written. The five module keys
+have zero client code today regardless, so gating them has no practical
+effect yet. Deferred to the still-open "advanced modules content" planning
+pass.
 
 **Bug fixed during Phase 2 testing:** `clinic_plans_updated` (Phase 0) used
 the generic `set_updated_at()` trigger function, which unconditionally sets

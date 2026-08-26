@@ -46,7 +46,20 @@ export interface Clinic {
    * Kept on the type for older cached/server rows; no UI reads or writes it.
    */
   visitColumnPrefs?: Partial<Record<VisitColumnKey, boolean>> | null;
-  /** Whether the clinical documentation module (consultation notes, screening, consent) is on. */
+  /**
+   * NOT a master switch for consultation notes — despite the name, this
+   * only decides whether a newly-logged visit gets auto-flagged as needing
+   * a note (`clinicalStatus: 'pending'` in visitService.ts), which drives
+   * the "needs note" nudge on visit cards and Ledger's "Not documented"
+   * filter. Whether notes can actually be read/written at all is a
+   * completely separate, always-on server-side gate — see
+   * `can_use_module(clinic_id, 'consultation_notes')` in
+   * FEATURES_AND_SCHEMA.md. Turning this off does not hide or disable
+   * note-taking; Patient Profile's "New note" stays fully functional
+   * regardless, which is intentional (a therapist can always document an
+   * unflagged visit) — don't gate a new notes entry point on this field
+   * expecting it to behave like an on/off switch.
+   */
   clinicalDocsEnabled?: boolean;
   /** Whether this clinic uses the invoice module at all. Optional so older cached rows default to true (original behavior). */
   billingEnabled?: boolean;
