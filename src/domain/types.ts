@@ -104,7 +104,12 @@ export const VISIT_COLUMN_LABELS: Record<VisitColumnKey, string> = {
 };
 
 /** Column order for visit tables and card detail rows — who → context → notes → service. */
-export const VISIT_OPTIONAL_COLUMN_ORDER: VisitColumnKey[] = ['therapist', 'condition', 'treatments', 'service'];
+export const VISIT_OPTIONAL_COLUMN_ORDER: VisitColumnKey[] = [
+  'therapist',
+  'condition',
+  'treatments',
+  'service',
+];
 
 export const DEFAULT_VISIT_COLUMN_PREFS: Record<VisitColumnKey, boolean> = {
   condition: true,
@@ -114,9 +119,10 @@ export const DEFAULT_VISIT_COLUMN_PREFS: Record<VisitColumnKey, boolean> = {
 };
 
 /** Resolve a clinic's share-label abbreviations, defaulting to clinic-neutral labels. */
-export function clinicShareLabels(
-  clinic: Pick<Clinic, 'ownShareLabel' | 'partnerShareLabel'>
-): { own: string; partner: string } {
+export function clinicShareLabels(clinic: Pick<Clinic, 'ownShareLabel' | 'partnerShareLabel'>): {
+  own: string;
+  partner: string;
+} {
   return {
     own: clinic.ownShareLabel?.trim() || 'Clinic',
     partner: clinic.partnerShareLabel?.trim() || 'Partner',
@@ -175,7 +181,9 @@ export interface CatalogItem {
 }
 
 /** Derived on display, never stored (spec §6.2). */
-export function effectivePricePerSession(item: Pick<CatalogItem, 'basePricePaise' | 'sessionCount'>): Paise {
+export function effectivePricePerSession(
+  item: Pick<CatalogItem, 'basePricePaise' | 'sessionCount'>
+): Paise {
   return Math.round(item.basePricePaise / item.sessionCount);
 }
 
@@ -241,12 +249,7 @@ export interface TreatmentItem {
 }
 
 export type ReferringSource =
-  | 'hospital_referral'
-  | 'doctor_referral'
-  | 'walk_in'
-  | 'word_of_mouth'
-  | 'online'
-  | 'other';
+  'hospital_referral' | 'doctor_referral' | 'walk_in' | 'word_of_mouth' | 'online' | 'other';
 
 export const REFERRING_SOURCE_LABELS: Record<ReferringSource, string> = {
   hospital_referral: 'Hospital referral',
@@ -274,7 +277,9 @@ export function coerceReferringSource(value: string | null | undefined): Referri
 }
 
 /** Label for the free-text detail field, or null if that source needs no detail. */
-export function referringSourceDetailLabel(source: ReferringSource | '' | null | undefined): string | null {
+export function referringSourceDetailLabel(
+  source: ReferringSource | '' | null | undefined
+): string | null {
   switch (source) {
     case 'hospital_referral':
     case 'doctor_referral':
@@ -451,13 +456,18 @@ export interface InvoicePayment {
   updatedAt: string;
 }
 
-/**
- * Direct payment received for a visit — independent of invoices.
- * Allows tracking cash/UPI payments without requiring an invoice.
- * Can be for a visit (cash payment) or tied to an invoice (invoice payment).
- */
 export type PaymentMethod = 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque';
 
+/**
+ * A payment received toward one visit's bill — cash/UPI/etc, always keyed
+ * by `visitId`, whether or not that visit is invoiced. There's no
+ * `invoiceId` column here: an invoice has no amount-paid field of its own
+ * (invoice_payments is a paid/outstanding flag only, since invoices are
+ * immutable), so a payment toward an invoiced visit's bill is still logged
+ * here exactly like a direct (uninvoiced) one — see
+ * paymentService.recordInvoicePayment, which allocates one entered amount
+ * across a multi-visit invoice's constituent Payment rows when needed.
+ */
 export interface Payment {
   id: UUID;
   clinicId: UUID;
@@ -498,7 +508,13 @@ export interface PatientModuleEnrollment {
   id: UUID;
   clinicId: UUID;
   patientId: UUID;
-  moduleType: 'gut_screening' | 'return_to_sport' | 'scoliosis_screening' | 'face_scale' | 'facial_palsy' | 'consultation_notes';
+  moduleType:
+    | 'gut_screening'
+    | 'return_to_sport'
+    | 'scoliosis_screening'
+    | 'face_scale'
+    | 'facial_palsy'
+    | 'consultation_notes';
   status: EnrollmentStatus;
   enrolledAt: string;
   updatedAt: string;
@@ -585,4 +601,3 @@ export interface ExpectedVisit {
   createdBy?: UUID | null;
   updatedBy?: UUID | null;
 }
-
