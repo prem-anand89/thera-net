@@ -47,18 +47,26 @@ export interface Clinic {
    */
   visitColumnPrefs?: Partial<Record<VisitColumnKey, boolean>> | null;
   /**
-   * NOT a master switch for consultation notes — despite the name, this
-   * only decides whether a newly-logged visit gets auto-flagged as needing
-   * a note (`clinicalStatus: 'pending'` in visitService.ts), which drives
-   * the "needs note" nudge on visit cards and Ledger's "Not documented"
-   * filter. Whether notes can actually be read/written at all is a
-   * completely separate, always-on server-side gate — see
-   * `can_use_module(clinic_id, 'consultation_notes')` in
-   * FEATURES_AND_SCHEMA.md. Turning this off does not hide or disable
-   * note-taking; Patient Profile's "New note" stays fully functional
-   * regardless, which is intentional (a therapist can always document an
-   * unflagged visit) — don't gate a new notes entry point on this field
-   * expecting it to behave like an on/off switch.
+   * Client-side "this clinic uses clinical documentation" feature flag.
+   * Purely a display/visibility switch — it is NOT what permits a note to
+   * be written. That's a separate, always-on server-side gate:
+   * `can_use_module(clinic_id, 'consultation_notes')` on
+   * `consultation_notes`' insert/update RLS policies, seeded enabled for
+   * every clinic with no UI to turn it off (see FEATURES_AND_SCHEMA.md).
+   * The two never conflict — they act at different layers.
+   *
+   * Four surfaces read this flag:
+   *  - `visitService.ts` — auto-flags a new visit `clinicalStatus:'pending'`
+   *  - `NewVisitPage.tsx` — the "Add clinical note" CTA after saving a visit
+   *  - `LedgerPage.tsx` — the "Not documented" filter checkbox
+   *  - `ReportsOverviewPage.tsx` — the modality-usage chart
+   *
+   * ⚠️ One surface deliberately does NOT: Patient Profile's
+   * `ConsultationNotePanel` is gated on role (`canViewClinicalNotes`) only,
+   * so "New note" there stays available even with this off. Whether that's
+   * an intentional always-available escape hatch or an oversight is still
+   * undecided — see FEATURES_AND_SCHEMA.md before adding a new notes entry
+   * point, since it determines whether yours should gate on this flag.
    */
   clinicalDocsEnabled?: boolean;
   /** Whether this clinic uses the invoice module at all. Optional so older cached rows default to true (original behavior). */

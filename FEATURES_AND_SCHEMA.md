@@ -841,18 +841,34 @@ there's no Settings toggle for it, so it stays on for every clinic by
 construction, indefinitely, until someone writes SQL by hand.
 
 **This is easy to conflate with `clinics.clinical_docs_enabled` (client-side,
-has a Settings toggle) — they don't actually overlap.** `clinical_docs_enabled`
-only controls whether a newly-logged visit gets flagged `clinicalStatus:
-'pending'` (`visitService.ts`), which drives the "needs note" nudge on visit
-cards and Ledger's "Not documented" filter — nothing more. It has no effect
-on `can_use_module()`, and `PatientProfilePage`'s "New note" entry point
-(`ConsultationNotePanel`) isn't gated by it at all, only by role
-(`canViewClinicalNotes`, i.e. not front desk). So turning `clinical_docs_enabled`
-off silences the per-visit reminder; it does not disable note-taking, and an
-admin expecting it to behave as a master switch for the feature would be
-wrong. A genuine "disable clinical notes for this clinic" control doesn't
-exist today — it would mean flipping `clinic_module_settings.enabled` for
-`'consultation_notes'`, which currently has no admin-facing UI anywhere.
+has a Settings toggle) — but they act at different layers and never
+conflict.** `can_use_module()` decides whether a note *can be written*
+(server-side, RLS, always on). `clinical_docs_enabled` is a client-side
+*visibility* flag deciding which clinical-documentation surfaces render.
+Four read it:
+
+| Surface | What `clinical_docs_enabled` gates |
+| --- | --- |
+| `visitService.ts` | auto-flags a new visit `clinicalStatus: 'pending'` |
+| `NewVisitPage.tsx` | the "Add clinical note" CTA on the post-save screen |
+| `LedgerPage.tsx` | the "Not documented" filter checkbox |
+| `ReportsOverviewPage.tsx` | the modality-usage chart (query, nav entry, section) |
+
+**⚠️ One surface is inconsistent with those four.** `PatientProfilePage`'s
+`ConsultationNotePanel` — "New note" / "Continue draft" — is gated on role
+(`canViewClinicalNotes`, i.e. not front desk) and *not* on
+`clinical_docs_enabled`. So a clinic with the toggle off still has a fully
+working notes entry point on every patient profile, while the equivalent
+entry point on New Visit is hidden. **Undecided whether that's a deliberate
+always-available escape hatch (a therapist should be able to document
+regardless) or an oversight.** It needs answering before Phase 2 adds a
+session-note entry point, because it determines whether the new one gates
+on this flag.
+
+Note also that no admin-facing control exists for the *real* gate: turning
+consultation notes genuinely off for a clinic means flipping
+`clinic_module_settings.enabled` for `'consultation_notes'` by hand in SQL.
+The Settings toggle does not do this, despite reading like it might.
 
 The `modules` reference table these two originally pointed to was dropped
 (`20260820000001_drop_unused_modules_table.sql`), taking its FK on
@@ -867,11 +883,16 @@ default is backwards for a paywall and would need to change before these
 tables can gate a paid tier.
 
 **Rule for any new consultation-notes entry point** (e.g. a future
-session-note mode): gate visibility on `canViewClinicalNotes` (role), rely
-on `can_use_module()` for the real server-side write gate (already applied
-automatically — it's on the RLS policy, not something a new UI needs to
-re-check), and never gate on `clinical_docs_enabled` expecting it to mean
-"notes are enabled" — its job is strictly the per-visit reminder flag.
+session-note mode):
+
+1. **Role** — gate visibility on `canViewClinicalNotes`. Always.
+2. **Write permission** — nothing to do. `can_use_module()` is enforced on
+   the RLS policy, so it applies automatically; a new UI never re-checks it.
+3. **`clinical_docs_enabled`** — resolve the inconsistency above *first*,
+   then follow whichever way it lands. An entry point attached to a visit
+   (New Visit, a visit row, Ledger) currently gates on it; one attached to
+   a patient (Patient Profile) currently doesn't. Picking either without
+   deciding is what produces a fifth inconsistent surface.
 
 #### `clinic_plans` — the tier boundary, service-role write only
 Added as Phase 0 of the tier-subscription plan
@@ -966,14 +987,17 @@ No UI reads this yet — Phase 1 only builds the read path. Enforcement
 Deliberately **not** touched: `can_use_module()` / `consultation_notes` /
 the five assessment-module keys. `clinics.clinical_docs_enabled` and
 `clinic_module_settings('consultation_notes')` were previously suspected of
-being two conflicting gates on the same feature; traced precisely, they
-turn out not to overlap at all — see the dead-infrastructure section above
-for the resolved mechanism. Adding a third (plan-tier) gate here would still
-need to go through `can_use_module()` specifically, since that's the one
-that actually governs whether a note can be written. The five module keys
-have zero client code today regardless, so gating them has no practical
-effect yet. Deferred to the still-open "advanced modules content" planning
-pass.
+being two conflicting gates on the same feature; traced precisely, they act
+at different layers — server-side write permission vs. client-side surface
+visibility — and never conflict. See the dead-infrastructure section above
+for the full mechanism, including a real inconsistency it surfaced (Patient
+Profile's notes entry point isn't gated by `clinical_docs_enabled` while
+three comparable surfaces are) that is still undecided. Adding a third
+(plan-tier) gate would need to go through `can_use_module()` specifically,
+since that's the one that actually governs whether a note can be written.
+The five module keys have zero client code today regardless, so gating them
+has no practical effect yet. Deferred to the still-open "advanced modules
+content" planning pass.
 
 **Bug fixed during Phase 2 testing:** `clinic_plans_updated` (Phase 0) used
 the generic `set_updated_at()` trigger function, which unconditionally sets
