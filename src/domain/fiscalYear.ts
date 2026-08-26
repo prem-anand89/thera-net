@@ -58,10 +58,49 @@ export function monthDateRange({ year, month }: FyMonth): { from: string; to: st
   return { from, to };
 }
 
-/** ISO date (or timestamp) to display format, e.g. "2026-07-05" -> "05/07/26". */
+/** First/last ISO dates spanning a whole fiscal year — the `from` of its
+ *  first month through the `to` of its last, for filters where "no specific
+ *  month picked" should mean "the whole selected FY," not "no filter." */
+export function fiscalYearDateRange(startYear: number, fyStartMonth = 4): { from: string; to: string } {
+  const months = monthsOfFiscalYear(startYear, fyStartMonth);
+  return {
+    from: monthDateRange(months[0]).from,
+    to: monthDateRange(months[months.length - 1]).to,
+  };
+}
+
+/** Year-to-date: the selected FY's start through `asOf` (defaults to
+ *  today) — a "YTD" filter option, distinct from `fiscalYearDateRange`'s
+ *  full 12-month span. `asOf` before the FY's own start (picking a future
+ *  FY) clamps `to` to the FY's first day rather than returning a range
+ *  that ends before it begins. */
+export function fiscalYearToDateRange(
+  startYear: number,
+  fyStartMonth = 4,
+  asOf: Date = new Date()
+): { from: string; to: string } {
+  const { from } = fiscalYearDateRange(startYear, fyStartMonth);
+  const today = `${asOf.getFullYear()}-${String(asOf.getMonth() + 1).padStart(2, '0')}-${String(asOf.getDate()).padStart(2, '0')}`;
+  return { from, to: today > from ? today : from };
+}
+
+/** ISO date (or timestamp) to display format, e.g. "2026-07-05" -> "05/07/26".
+ *  Reserved for dates that can meaningfully be a different year from
+ *  today — "last visit"/"first seen" stats, a stale package's start date,
+ *  historical import rows, and the like — everywhere else prefer the
+ *  shorter `formatDateDM`. */
 export function formatDateDMY(isoDate: string): string {
   const [y, m, d] = isoDate.slice(0, 10).split('-');
   return `${d}/${m}/${y.slice(2)}`;
+}
+
+/** ISO date (or timestamp) to display format without the year, e.g.
+ *  "2026-07-05" -> "05/07" — the default for dates that are always close
+ *  to "now" in context (a visit row, an invoice's issue date, a printed
+ *  document's date), where the year is redundant and just eats space. */
+export function formatDateDM(isoDate: string): string {
+  const [, m, d] = isoDate.slice(0, 10).split('-');
+  return `${d}/${m}`;
 }
 
 /** First/last ISO dates of the Monday–Sunday calendar week containing `asOf`. */

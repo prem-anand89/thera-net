@@ -5,9 +5,18 @@ on:
     branches: ['**']
   pull_request:
 
+# A same-repo PR triggers both `push` and `pull_request` for the same
+# commit, and rapid pushes to one branch each spin up their own full
+# build+e2e set — cancel whatever's still running for the same ref
+# when a newer run starts, instead of letting superseded runs finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,6 +24,20 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Report buttons without type attributes (informational)
+        continue-on-error: true
+        run: |
+          # This grep check reports buttons that slipped past the ESLint rule
+          # Pattern: <button opening tags without type= attribute
+          # Note: Continue on error for now while existing violations are being fixed
+          buttons_without_type=$(grep -r '<button[^>]*onClick' src/ | grep -v 'type=' | grep -v '.test.tsx' | grep -v '.spec.tsx' | wc -l)
+          if [ "$buttons_without_type" -gt 0 ]; then
+            echo "⚠️  Warning: $buttons_without_type buttons found without type attribute"
+            echo "🎯 Goal: Fix these gradually as code is touched. Use type=\"button\", type=\"submit\", or type=\"reset\""
+            grep -r '<button[^>]*onClick' src/ | grep -v 'type=' | grep -v '.test.tsx' | grep -v '.spec.tsx' | head -10
+          else
+            echo "✅ All interactive buttons have explicit type attributes"
+          fi
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test
@@ -22,6 +45,10 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    # Every authenticated spec self-skips without Supabase env (see below),
+    # so a hang here would mean a future spec was added without that guard —
+    # bound it well under GitHub's 360-minute default so that shows up fast.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

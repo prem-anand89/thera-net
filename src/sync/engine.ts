@@ -1,8 +1,9 @@
-import { db, CLIENT_WRITABLE_TABLES, type SyncedTable } from '@/lib/db';
+import { db, ALL_SYNCED_TABLES, CLIENT_WRITABLE_TABLES, type SyncedTable } from '@/lib/db';
 import { getSupabase } from '@/lib/supabase';
 import { domainToRow, rowToDomain } from '@/repositories/rowMapping';
 import { onLocalWrite } from '@/repositories/local';
-import { syncStatus } from './status';
+import { syncStatus, isPermanentFailure } from './status';
+import { coerceReferringSource } from '@/domain/types';
 
 /**
  * Offline-first sync:
@@ -11,24 +12,15 @@ import { syncStatus } from './status';
  * - pull: per-table delta on updated_at > cursor (server-authoritative
  *   timestamps); rows with a pending local edit are skipped (local wins until
  *   its push lands, then the next pull settles it — last-write-wins)
+ * - a permanently-rejected push (RLS) is the one exception to "local wins
+ *   until the push lands": it never will, so the row is fetched fresh and
+ *   overwritten immediately rather than left showing a rejected edit
+ *   indefinitely — see push()'s error branch
  * - triggers: local writes, connectivity changes, Supabase realtime events,
  *   and a slow fallback interval
  */
 
-const SYNC_TABLES: SyncedTable[] = [
-  'clinics',
-  'therapists',
-  'service_catalog',
-  'patients',
-  'visits',
-  'invoices',
-  'invoice_payments',
-  'payments',
-  'settlements',
-  'consultation_notes',
-  'patient_module_enrollments',
-  'expected_visits',
-];
+const SYNC_TABLES: readonly SyncedTable[] = ALL_SYNCED_TABLES;
 // ai_generation_log is deliberately excluded — online-only, per the clinical
 // docs handoff. It never appears here, in CLIENT_WRITABLE_TABLES, or in the
 // Dexie schema.
@@ -51,6 +43,26 @@ function normalize(table: SyncedTable, obj: Record<string, unknown>) {
     if (obj[f] != null) obj[f] = Number(obj[f]);
   }
   return obj;
+}
+
+/**
+ * Validates that a normalized row is safe to store. Ensures all required
+ * fields are present and have correct types — catches schema mismatches
+ * early instead of silently corrupting data.
+ */
+function validateNormalizedRow(table: SyncedTable, row: Record<string, unknown>): boolean {
+  // Domain objects are camelCase after rowToDomain — do not look for
+  // Postgres snake_case here or every pulled row is skipped and a first
+  // login looks like "create your clinic".
+  if (typeof row.id !== 'string' || !row.id) {
+    console.error(`[Sync] ${table} row missing id:`, row);
+    return false;
+  }
+  if (typeof row.updatedAt !== 'string' || !row.updatedAt) {
+    console.error(`[Sync] ${table} row ${row.id} missing updatedAt:`, row);
+    return false;
+  }
+  return true;
 }
 
 export class SyncEngine {
@@ -168,6 +180,19 @@ export class SyncEngine {
         continue;
       }
 
+      // Older Edit Patient UI wrote referring_source values that fail the
+      // DB check constraint. Rewrite in place (no extra outbox row) so a
+      // stuck patients push can succeed on retry.
+      if (entry.table === 'patients') {
+        const referringSource = coerceReferringSource(
+          (row as { referringSource?: string | null }).referringSource
+        );
+        if (referringSource !== (row as { referringSource?: string | null }).referringSource) {
+          (row as { referringSource: string | null }).referringSource = referringSource;
+          await db.patients.put(row);
+        }
+      }
+
       const { error } = await supabase.from(entry.table).upsert(domainToRow(row));
       if (error) {
         // Network-level failures throw to stop the drain; server rejections
@@ -176,10 +201,38 @@ export class SyncEngine {
         await db.outbox
           .where('seq')
           .equals(entry.seq!)
-          .modify({ error: error.message });
+          .modify({ error: error.message, errorCode: error.code });
+        // An RLS rejection will never succeed by retrying — the row's
+        // ownership isn't going to change on its own — so unlike every
+        // other queued failure (which might genuinely clear on retry),
+        // leaving the local row as-is would show this device's rejected
+        // edit indefinitely: pull() deliberately skips any row with a
+        // pending outbox entry, precisely so a still-retryable edit isn't
+        // clobbered mid-flight, but that same skip means a permanently
+        // failed one is never settled by a normal pull either. Revert this
+        // one row to server truth immediately instead. The outbox entry
+        // itself stays (with its error), so the "won't succeed by
+        // retrying" notice remains until discarded or the row is edited
+        // again — only the stale local *data* is what this fixes.
+        if (isPermanentFailure(error.code, error.message)) {
+          await this.revertToServerTruth(entry.table, entry.rowId);
+        }
         continue;
       }
       await this.clearOutbox(entry.table, entry.rowId, maxSeq);
+    }
+  }
+
+  private async revertToServerTruth(table: SyncedTable, rowId: string) {
+    const supabase = this.supabase!;
+    const { data, error } = await supabase.from(table).select('*').eq('id', rowId).maybeSingle();
+    if (error) return; // best-effort — next sync cycle gets another chance
+    if (data) {
+      await db.table(table).put(normalize(table, rowToDomain<Record<string, unknown>>(data)));
+    } else {
+      // No server row at all under this id (e.g. deleted by someone else) —
+      // don't leave a phantom local row with nothing to revert to.
+      await db.table(table).delete(rowId);
     }
   }
 
@@ -211,8 +264,18 @@ export class SyncEngine {
         const incoming = data
           .map((row) => normalize(table, rowToDomain<Record<string, unknown>>(row)))
           .filter((obj) => !pendingIds.has(obj.id as string));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await db.table(table).bulkPut(incoming as any[]);
+        
+        // Validate rows before bulk insert to catch schema mismatches early
+        for (const row of incoming) {
+          if (!validateNormalizedRow(table, row)) {
+            console.error(`[Sync] Skipping invalid row from ${table}:`, row);
+            incoming.splice(incoming.indexOf(row), 1);
+          }
+        }
+        
+        if (incoming.length > 0) {
+          await db.table(table).bulkPut(incoming);
+        }
 
         cursor = (data[data.length - 1] as { updated_at: string }).updated_at;
         await db.meta.put({ key: `cursor:${table}`, value: cursor });

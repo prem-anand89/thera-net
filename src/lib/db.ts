@@ -3,6 +3,9 @@ import type {
   Clinic,
   Therapist,
   CatalogItem,
+  NoReturnReasonItem,
+  ReferringSourceItem,
+  TreatmentItem,
   Patient,
   Visit,
   Invoice,
@@ -26,6 +29,14 @@ export interface OutboxEntry {
   ts: number;
   /** Last push error, if any — kept visible instead of dropped */
   error?: string;
+  /**
+   * Postgrest/Postgres error code for `error`, when the rejection carried
+   * one (e.g. '42501' for an RLS permission denial). Lets the UI tell a
+   * permanent rejection (retrying will never succeed) apart from a
+   * transient one, instead of showing the same "keep retrying" copy for
+   * both — see SyncBadge.
+   */
+  errorCode?: string;
 }
 
 export interface MetaEntry {
@@ -37,6 +48,9 @@ export type SyncedTable =
   | 'clinics'
   | 'therapists'
   | 'service_catalog'
+  | 'no_return_reason_catalog'
+  | 'referring_source_catalog'
+  | 'treatment_catalog'
   | 'patients'
   | 'visits'
   | 'invoices'
@@ -48,12 +62,45 @@ export type SyncedTable =
   | 'expected_visits';
 
 /**
+ * Every table the sync engine pushes/pulls — the single source of truth
+ * for "what data does this app cache locally," so the push/pull loop and
+ * the sign-out clear can't drift apart the way they did before (sign-out
+ * left consultation_notes/patient_module_enrollments/expected_visits
+ * behind because that list was hand-maintained separately). The
+ * `_exhaustiveCheck` line fails to typecheck if a new SyncedTable member
+ * is ever added here without being added below.
+ */
+export const ALL_SYNCED_TABLES = [
+  'clinics',
+  'therapists',
+  'service_catalog',
+  'no_return_reason_catalog',
+  'referring_source_catalog',
+  'treatment_catalog',
+  'patients',
+  'visits',
+  'invoices',
+  'invoice_payments',
+  'payments',
+  'settlements',
+  'consultation_notes',
+  'patient_module_enrollments',
+  'expected_visits',
+] as const satisfies readonly SyncedTable[];
+type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number] ? true : never;
+const _exhaustiveCheck: _AssertAllSyncedTablesCovered = true;
+void _exhaustiveCheck;
+
+/**
  * Tables the client is allowed to write. Invoices are server-issued only.
  */
 export const CLIENT_WRITABLE_TABLES = [
   'clinics',
   'therapists',
   'service_catalog',
+  'no_return_reason_catalog',
+  'referring_source_catalog',
+  'treatment_catalog',
   'patients',
   'visits',
   'invoice_payments',
@@ -68,6 +115,9 @@ export class ClinicDB extends Dexie {
   clinics!: Table<Clinic, string>;
   therapists!: Table<Therapist, string>;
   service_catalog!: Table<CatalogItem, string>;
+  no_return_reason_catalog!: Table<NoReturnReasonItem, string>;
+  referring_source_catalog!: Table<ReferringSourceItem, string>;
+  treatment_catalog!: Table<TreatmentItem, string>;
   patients!: Table<Patient, string>;
   visits!: Table<Visit, string>;
   invoices!: Table<Invoice, string>;
@@ -113,6 +163,22 @@ export class ClinicDB extends Dexie {
       // Re-declared with enrollmentId added — Dexie index changes on an
       // existing table require the full index string at the new version.
       consultation_notes: 'id, clinicId, patientId, visitId, status, enrollmentId',
+    });
+    this.version(9).stores({
+      no_return_reason_catalog: 'id, clinicId',
+    });
+    this.version(10).stores({
+      // Compound index so a date-bounded query (Workspace's "today",
+      // Ledger's date presets, dashboard aggregations) can jump straight to
+      // the matching rows instead of loading every visit the clinic has
+      // ever logged and filtering in memory.
+      visits: 'id, clinicId, visitDate, patientId, therapistId, packageGroupId, invoiceId, [clinicId+visitDate]',
+    });
+    this.version(11).stores({
+      referring_source_catalog: 'id, clinicId',
+    });
+    this.version(12).stores({
+      treatment_catalog: 'id, clinicId',
     });
   }
 }

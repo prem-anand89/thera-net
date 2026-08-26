@@ -1,409 +1,455 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import {
-  repos,
-  dashboardService,
-  invoiceService,
-  paymentService,
-  directPaymentService,
-  expectedVisitsService,
-} from '@/services';
+import { repos, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { useSession } from '@/app/useSession';
-import { useClinicRole } from '@/app/useClinicRole';
+import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
-import type { ExpectedVisit, PaymentMethod, PaymentMode } from '@/domain/types';
-import type { PendingWorkItem, TodayVisitRow } from '@/services/dashboardService';
+import { formatDateDM } from '@/domain/fiscalYear';
+import { clinicBillingConfig, type ConsultationNote, type Visit } from '@/domain/types';
+import { noteForVisit } from '@/domain/noteLinks';
+import type { TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
-  btnSecondary,
-  inputCls,
-  ErrorNote,
-  Field,
   SectionCard,
   StatTile,
-  SummaryBar,
-  Panel,
+  Pill,
+  PackageThread,
+  th,
+  thNum,
+  td,
+  tdNum,
 } from '@/components/ui';
-import { SharedVisitCard, type VisitCardData } from '@/components/VisitCard';
-import { toFriendlyMessage } from '@/lib/errors';
+import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
+import { TakePaymentDialog } from '@/components/TakePaymentDialog';
+import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
+import { SplitModal } from '@/components/SplitModal';
+import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
-
-const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
-const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'upi', label: 'UPI' },
-  { value: 'card', label: 'Card' },
-  { value: 'bank_transfer', label: 'Bank transfer' },
-  { value: 'cheque', label: 'Cheque' },
-];
+import { EditVisitModal } from '@/features/visits/EditVisitModal';
+import { FirstWeekSetupLink } from '@/features/settings/FirstWeekChecklist';
 
 /** What the invoice-issuance modal needs, independent of which card opened it. */
-interface InvoicingTarget {
-  visitId: string;
-  patientLabel: string;
-  serviceLabel: string;
-  isPackage: boolean;
-}
+type InvoicingTarget = IssueInvoiceTarget;
 
-function todayRowToCardData(row: TodayVisitRow, openPackageGroupIds: Set<string>): VisitCardData {
+function todayRowToCardData(
+  row: TodayVisitRow,
+  openPackageGroupIds: Set<string>,
+  isAdmin: boolean,
+  myTherapistId: string | undefined,
+  canViewClinicalNotes: boolean,
+  therapistSplit: boolean,
+  treatmentName: Map<string, string>,
+  invoicedSiblingGroupIds: Set<string>,
+  consultationNotes: ConsultationNote[] | undefined
+): VisitCardData {
+  const canModify = isAdmin || row.therapistId === myTherapistId;
+  const linkedNote = noteForVisit(consultationNotes ?? [], row.visitId, row.patientId, row.needsNote);
   return {
     visitId: row.visitId,
     visitDate: new Date().toISOString().slice(0, 10),
     patientId: row.patientId,
     patientName: row.patientName,
     mrno: row.mrno,
+    age: row.age,
+    sex: row.sex,
     condition: row.condition,
+    canEdit: canModify,
     serviceName: row.serviceName,
     sessionIndex: row.sessionIndex,
     packageTotal: row.packageTotal,
     therapistName: row.therapistName,
     treatmentNotes: row.treatmentNotes,
+    treatmentNames: row.treatmentIds.map((id) => treatmentName.get(id)).filter((n): n is string => !!n),
     billPaise: row.billPaise,
     paymentState: row.paymentState,
     invoiceId: row.invoiceId,
     canRepeat: Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId)),
-    canDelete: !row.invoiceId,
+    canSplit: therapistSplit && row.billPaise > 0 && canModify,
+    hasSplit: Boolean(row.sharedTherapistId),
+    // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
+    // is_own_therapist). front_desk is never either, so this always comes
+    // out false for them — matching RLS, which rejects their delete too.
+    canDelete: !row.invoiceId && canModify,
+    needsNote: row.needsNote,
+    canViewNotes: canViewClinicalNotes,
+    consultationNoteId: linkedNote?.id ?? null,
+    noteStatus: linkedNote?.status ?? null,
+    packageInvoicePending:
+      row.billPaise === 0 &&
+      !!row.sessionIndex &&
+      !!row.packageTotal &&
+      !row.invoiceId &&
+      !!row.packageGroupId &&
+      invoicedSiblingGroupIds.has(row.packageGroupId),
   };
 }
 
 export function WorkspacePage() {
   const clinic = useClinic();
-  const { session } = useSession();
-  const { role } = useClinicRole(clinic.id);
+  const scope = useWorkspaceScope();
+  const { canBill, canViewClinicalNotes, canEditSettings } = usePermissions();
+  const { therapistSplit } = clinicBillingConfig(clinic);
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
-  const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
-  const [paidNow, setPaidNow] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [attentionOpen, setAttentionOpen] = useState(false);
-  const [addingExpected, setAddingExpected] = useState(false);
-  const [expectedQuery, setExpectedQuery] = useState('');
-  const [expectedPatientId, setExpectedPatientId] = useState<string | null>(null);
-  const [expectedTimeNote, setExpectedTimeNote] = useState('');
+  const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
+  const [, setVisitEditError] = useState<string | null>(null);
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
-  const navigate = useNavigate();
+  const [splitting, setSplitting] = useState<Visit | null>(null);
+  const [pkgStatusFilter, setPkgStatusFilter] = useState<'open' | 'stale' | 'all'>('open');
+  // Defaults on for anyone with a linked therapist record — admin included,
+  // since in most solo/small clinics the admin *is* the primary therapist.
+  // Role plays no part here: only whether this login has a `therapists` row
+  // to scope to.
+  const [pkgMineOnly, setPkgMineOnly] = useState(true);
 
-  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
-  const myTherapistId = useMemo(
-    () => (therapists ?? []).find((t) => t.userId === session?.user?.id)?.id,
-    [therapists, session?.user?.id]
-  );
   // Staff (therapist) tier sees only their own visits in the today-scoped
-  // stats; admin sees the whole clinic. While role hasn't resolved yet
-  // ('unknown'), default to the narrower staff-scoped view rather than
-  // flashing clinic-wide data. Content below the stat row (Needs-attention,
-  // Seen today, Recently-seen) stays clinic-wide for everyone — only the
-  // stat pills are tier-scoped.
-  const myScopeTherapistId = role === 'admin' ? undefined : myTherapistId;
+  // stats and Seen today (one shared query drives both); admin sees the
+  // whole clinic. While role hasn't resolved yet ('unknown'), useWorkspaceScope
+  // defaults to the narrower staff-scoped view rather than flashing
+  // clinic-wide data.
   const today = useLiveQuery(
-    () => dashboardService.todayWorklist(clinic.id, new Date(), myScopeTherapistId),
-    [clinic.id, myScopeTherapistId]
+    () => dashboardService.todayWorklist(clinic.id, new Date(), scope.scopeTherapistId),
+    [clinic.id, scope.scopeTherapistId]
   );
-  const pendingWork = useLiveQuery(() => dashboardService.pendingWork(clinic.id), [clinic.id]);
-  const monthlyNew = useLiveQuery(() => dashboardService.monthlyNewCounts(clinic.id), [clinic.id]);
+  // Clinic-wide for admin/front_desk, scoped to just this therapist's own
+  // visits otherwise — matches "Collected today" above, which already
+  // scopes the same way via scope.scopeTherapistId.
+  const monthlyNew = useLiveQuery(
+    () => dashboardService.monthlyNewCounts(clinic.id, new Date(), scope.scopeTherapistId),
+    [clinic.id, scope.scopeTherapistId]
+  );
+  // Clinic-wide open-packages list — feeds both the "My open packages" stat
+  // tile and the Packages panel below, so fetched once regardless of role.
+  const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
+  const myOpenPackageCount = useMemo(
+    () => (openPackages ?? []).filter((p) => p.startedByTherapistId === scope.myTherapistId).length,
+    [openPackages, scope.myTherapistId]
+  );
   const openPackageGroupIds = useMemo(
-    () => new Set<string>(),
-    []
+    () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
+    [openPackages]
   );
+  const filteredPackages = useMemo(() => {
+    let rows = openPackages ?? [];
+    if (pkgMineOnly && scope.myTherapistId) rows = rows.filter((p) => p.startedByTherapistId === scope.myTherapistId);
+    if (pkgStatusFilter !== 'all') rows = rows.filter((p) => p.stale === (pkgStatusFilter === 'stale'));
+    return rows;
+  }, [openPackages, pkgMineOnly, scope.myTherapistId, pkgStatusFilter]);
 
-  const expectedToday = useLiveQuery(
-    () => (clinic.enableExpectedToday ? expectedVisitsService.listForToday(clinic.id) : undefined),
-    [clinic.id, clinic.enableExpectedToday]
-  );
-  const expectedMatches = useLiveQuery(
-    () => (expectedQuery.trim() && !expectedPatientId ? repos.patients.search(clinic.id, expectedQuery) : []),
-    [clinic.id, expectedQuery, expectedPatientId]
-  );
-  const allPatientsForExpected = useLiveQuery(
-    () => (clinic.enableExpectedToday ? repos.patients.list(clinic.id) : undefined),
-    [clinic.id, clinic.enableExpectedToday]
-  );
   const editPatient = useLiveQuery(() => (editPatientId ? repos.patients.get(editPatientId) : undefined), [editPatientId]);
-  const expectedPatientById = useMemo(
-    () => new Map((allPatientsForExpected ?? []).map((p) => [p.id, p])),
-    [allPatientsForExpected]
+  // Only needed for the split dialog's "assisting therapist" picker — cheap
+  // to skip entirely for a clinic that hasn't turned the feature on.
+  const therapists = useLiveQuery(
+    () => (therapistSplit ? repos.therapists.list(clinic.id, true) : undefined),
+    [clinic.id, therapistSplit]
+  );
+  const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
+  const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
+
+  // Draft notes never get written back onto the visit row itself (only a
+  // completed note does), so showing draft-vs-completed status per visit
+  // needs a real join against the notes table — see the identical note in
+  // LedgerPage.tsx. Skipped for a viewer who can't see notes anyway.
+  const consultationNotes = useLiveQuery(
+    () => (canViewClinicalNotes ? repos.consultationNotes.listByClinic(clinic.id) : undefined),
+    [clinic.id, canViewClinicalNotes]
   );
 
-  async function addExpected() {
-    if (expectedPatientId) {
-      await expectedVisitsService.add({ clinicId: clinic.id, patientId: expectedPatientId, timeNote: expectedTimeNote });
-    } else if (expectedQuery.trim()) {
-      await expectedVisitsService.add({ clinicId: clinic.id, patientName: expectedQuery.trim(), timeNote: expectedTimeNote });
-    } else {
-      return;
-    }
-    setExpectedQuery('');
-    setExpectedPatientId(null);
-    setExpectedTimeNote('');
-    setAddingExpected(false);
-  }
-
-  function openExpectedVisit(entry: ExpectedVisit) {
-    if (entry.patientId) {
-      void navigate({ to: '/visits/new', search: { patientId: entry.patientId } });
-    } else {
-      void navigate({ to: '/visits/new', search: { prefillName: entry.patientName ?? '' } });
-    }
-  }
-
-  async function issue() {
-    if (!invoicing) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const invoice = await invoiceService.issueForVisit(invoicing.visitId, paymentMode);
-      try {
-        await paymentService.setStatus(invoice.id, clinic.id, paidNow ? 'paid' : 'outstanding');
-      } catch (statusError) {
-        // Non-fatal: the invoice IS issued, and a missing status row reads
-        // as Paid — correctable anytime from Archive's Invoices tab.
-        console.error('Could not record payment status', statusError);
-      }
-      setInvoicing(null);
-      void navigate({ to: '/invoices/$invoiceId/print', params: { invoiceId: invoice.id } });
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+  // A ₹0 package continuation logged today whose OWN invoiceId is null —
+  // check the full package group (unbounded by "today") for an invoiced
+  // sibling, so a session trailing an already-issued invoice gets flagged
+  // instead of just silently showing no lock icon with nothing explaining
+  // why. Same dedupe-and-fetch-per-group shape as packageAttributionDeltas.
+  const candidatePendingGroupIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          (today?.visits ?? [])
+            .filter((v) => v.billPaise === 0 && v.sessionIndex && v.packageTotal && !v.invoiceId && v.packageGroupId)
+            .map((v) => v.packageGroupId!)
+        ),
+      ],
+    [today]
+  );
+  const invoicedSiblingGroupIds = useLiveQuery(async () => {
+    const result = new Set<string>();
+    await Promise.all(
+      candidatePendingGroupIds.map(async (groupId) => {
+        const group = await repos.visits.listByPackageGroup(groupId);
+        if (group.some((v) => v.invoiceId)) result.add(groupId);
+      })
+    );
+    return result;
+  }, [candidatePendingGroupIds]);
 
   function openInvoiceFor(data: VisitCardData) {
-    setError(null);
-    setPaidNow(true);
     setInvoicing({
       visitId: data.visitId,
       patientLabel: data.patientName,
       serviceLabel: data.serviceName,
       isPackage: data.packageTotal != null,
+      alreadyCollected: data.paymentState === 'collected_no_receipt',
     });
   }
+
+  const therapistNameById = new Map((therapists ?? []).map((t) => [t.id, t.name]));
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-        <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Workspace</h1>
-        <Link to="/visits/new" className={`${btnPrimary} w-full text-center sm:w-auto`}>
+        <div>
+          <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Workspace</h1>
+          {canEditSettings && <FirstWeekSetupLink />}
+        </div>
+        <Link to="/visits/new" className={`${btnPrimary} hidden text-center sm:inline-flex`}>
           + New visit
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
-        {clinic.enableExpectedToday && <StatTile label="Expected" value={expectedToday?.length ?? 0} />}
+      {scope.isUnlinkedTherapist && (
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+          <h2 className="font-display text-base font-semibold text-[var(--ink)]">Link your login</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Today’s visits and packages aren’t showing because this login isn’t linked to a therapist
+            record yet. Ask your admin to set it from Settings → Team → Linked login.
+          </p>
+        </section>
+      )}
+
+      <div className="grid grid-cols-3 gap-2">
         <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
         <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
-        <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
+        {scope.myTherapistId ? (
+          <StatTile label="My open packages" value={openPackages === undefined ? '—' : myOpenPackageCount} />
+        ) : (
+          <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
+        )}
       </div>
 
-      {pendingWork && pendingWork.length > 0 && (
-        <>
-          {role === 'admin' && (
-            <div className="hidden lg:block">
-              <SectionCard title="Needs attention">
-                <ul className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                  {pendingWork.map((item, i) => (
-                    <li key={i} className="rounded-lg border border-[var(--border)] p-3">
-                      <PendingWorkRow item={item} clinicId={clinic.id} />
-                    </li>
-                  ))}
-                </ul>
-              </SectionCard>
-            </div>
-          )}
-          <div className={role === 'admin' ? 'lg:hidden' : ''}>
-            <SummaryBar tone="rust" label="need attention" count={pendingWork.length} onClick={() => setAttentionOpen(true)} />
-          </div>
-        </>
-      )}
-
-      {clinic.enableExpectedToday && (
-        <SectionCard title="Expected today">
-          {(expectedToday ?? []).length === 0 && !addingExpected && (
-            <p className="text-sm text-[var(--muted)]">Nobody expected yet today.</p>
-          )}
-          {expectedToday && expectedToday.length > 0 && (
-            <ul className="mb-2 divide-y divide-[var(--border)]">
-              {expectedToday.map((entry) => {
-                const linked = entry.patientId ? expectedPatientById.get(entry.patientId) : undefined;
-                const name = linked?.name ?? entry.patientName ?? 'Unnamed';
-                return (
-                  <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
-                    <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openExpectedVisit(entry)}>
-                      <span className="font-display text-[var(--ink)]">{name}</span>
-                      {entry.status !== 'expected' && (
-                        <span className="ml-2 text-xs text-[var(--muted)]">({entry.status})</span>
-                      )}
-                      <div className="text-xs text-[var(--muted)]">
-                        {[entry.timeNote, linked?.primaryCondition, linked?.phone].filter(Boolean).join(' · ') || '—'}
-                      </div>
-                    </button>
-                    {entry.status === 'expected' && (
-                      <div className="flex shrink-0 gap-2 text-xs">
-                        <button
-                          type="button"
-                          className="text-[var(--moss)] hover:underline"
-                          onClick={() => void expectedVisitsService.setStatus(entry, 'arrived')}
-                        >
-                          Arrived
-                        </button>
-                        <button
-                          type="button"
-                          className="text-[var(--muted)] hover:underline"
-                          onClick={() => void expectedVisitsService.setStatus(entry, 'no-show')}
-                        >
-                          No-show
-                        </button>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {addingExpected ? (
-            <div className="space-y-2">
-              <input
-                className={inputCls}
-                placeholder="Patient ID/name, or type a new name"
-                value={expectedQuery}
-                onChange={(e) => {
-                  setExpectedQuery(e.target.value);
-                  setExpectedPatientId(null);
-                }}
-                autoFocus
-              />
-              {!expectedPatientId && expectedQuery.trim() && (expectedMatches ?? []).length > 0 && (
-                <div className="space-y-1">
-                  {(expectedMatches ?? []).map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className="flex w-full items-center justify-between rounded-md border border-[var(--border)] px-3 py-1.5 text-left text-sm hover:bg-[var(--paper)]"
-                      onClick={() => {
-                        setExpectedPatientId(p.id);
-                        setExpectedQuery(p.name);
-                      }}
-                    >
-                      <span>{p.name}</span>
-                      <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <input
-                className={inputCls}
-                placeholder="Time note (e.g. Around 4pm) — optional"
-                value={expectedTimeNote}
-                onChange={(e) => setExpectedTimeNote(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <button className={btnPrimary} disabled={!expectedQuery.trim()} onClick={() => void addExpected()}>
-                  Add
-                </button>
-                <button
-                  className={btnSecondary}
-                  onClick={() => {
-                    setAddingExpected(false);
-                    setExpectedQuery('');
-                    setExpectedPatientId(null);
-                    setExpectedTimeNote('');
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button className={btnSecondary} onClick={() => setAddingExpected(true)}>
-              + Add expected
-            </button>
-          )}
-        </SectionCard>
-      )}
-
-      <SectionCard title="Seen today">
+      <SectionCard title={today && today.visits.length === 1 ? "Today's visit" : "Today's visits"}>
         {!today || today.visits.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">
             No visits logged today — log one with &ldquo;+ New visit&rdquo;.
           </p>
         ) : (
-          <div className="divide-y divide-[var(--border)]">
-            {today.visits.map((row) => (
-              <SharedVisitCard
-                key={row.visitId}
-                data={todayRowToCardData(row, openPackageGroupIds)}
-                showDate={false}
-                showPatient={true}
-                onInvoice={() => openInvoiceFor(todayRowToCardData(row, openPackageGroupIds))}
-                onEditPatient={() => setEditPatientId(row.patientId)}
-                onDelete={() => {
-                  if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
-                }}
-              />
-            ))}
-          </div>
+          <ResponsiveVisitList
+            rows={today.visits.map((row) =>
+              todayRowToCardData(
+                row,
+                openPackageGroupIds,
+                scope.isAdmin,
+                scope.myTherapistId,
+                canViewClinicalNotes,
+                therapistSplit,
+                treatmentName,
+                invoicedSiblingGroupIds ?? new Set(),
+                consultationNotes
+              )
+            )}
+            showDate={false}
+            showPatient={true}
+            onInvoice={(row) => openInvoiceFor(row)}
+            onTakePayment={(row) => setTakingPayment(row)}
+            onEditPatient={(row) => setEditPatientId(row.patientId)}
+            onEdit={(row) => {
+              setVisitEditError(null);
+              setEditingVisitId(row.visitId);
+            }}
+            onSplit={
+              therapistSplit
+                ? (row) => {
+                    void repos.visits.get(row.visitId).then((v) => {
+                      if (v) setSplitting(v);
+                    });
+                  }
+                : undefined
+            }
+            onDelete={(row) => {
+              if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+            }}
+            canInvoice={canBill}
+            backTo="/workspace"
+          />
         )}
       </SectionCard>
 
-      <Panel open={attentionOpen} onClose={() => setAttentionOpen(false)} title="Needs attention">
-        <ul className="divide-y divide-[var(--border)]">
-          {(pendingWork ?? []).map((item, i) => (
-            <PendingWorkRow key={i} item={item} clinicId={clinic.id} />
-          ))}
-        </ul>
-      </Panel>
+      <SectionCard title="Packages">
+        <p className="mb-3 text-xs text-[var(--muted)]">
+          Every patient on a package — who&rsquo;s still owed sessions, and whose package has gone quiet.
+        </p>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            {(
+              [
+                { key: 'open', label: 'Open' },
+                { key: 'stale', label: 'Stale' },
+                { key: 'all', label: 'All' },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setPkgStatusFilter(opt.key)}
+                className="rounded-full border px-3 py-1 text-xs font-medium"
+                style={{
+                  background: pkgStatusFilter === opt.key ? 'var(--teal-light)' : 'var(--surface)',
+                  borderColor: pkgStatusFilter === opt.key ? 'transparent' : 'var(--border)',
+                  color: pkgStatusFilter === opt.key ? 'var(--teal)' : 'var(--muted)',
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {scope.myTherapistId && (
+            <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+              <input type="checkbox" checked={pkgMineOnly} onChange={(e) => setPkgMineOnly(e.target.checked)} />
+              Mine only
+            </label>
+          )}
+          <span className="text-xs text-[var(--muted)]">
+            {filteredPackages.length} package{filteredPackages.length === 1 ? '' : 's'}
+          </span>
+        </div>
+        {filteredPackages.length === 0 ? (
+          <p className="py-6 text-center text-sm text-[var(--muted)]">No packages match this filter.</p>
+        ) : (
+          <>
+            {/* Below tab: pill cards on phone; table from iPad portrait up. */}
+            <div className="tab:hidden space-y-2">
+              {filteredPackages.map((p) => (
+                <div
+                  key={p.packageGroupId}
+                  className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <Link
+                      to="/patients/$patientId"
+                      params={{ patientId: p.patientId }}
+                      search={{ from: '/workspace' }}
+                      className="min-w-0"
+                    >
+                      <div className="font-display text-sm font-medium text-[var(--ink)]">{p.patientName}</div>
+                      <div className="text-xs text-[var(--muted)]">{p.mrno}</div>
+                    </Link>
+                    <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <Pill tone="slate">{p.serviceName}</Pill>
+                    <Pill tone="slate">{p.startedByTherapistName}</Pill>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--muted)]">
+                      <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
+                      <span className="font-num">
+                        {p.sessionsLogged}/{p.packageTotal}
+                      </span>
+                      <span className="ml-1">
+                        Started {formatDateDM(p.startedOn)} · Last {formatDateDM(p.lastVisitOn)} ({p.daysSinceLastVisit}d ago)
+                      </span>
+                    </div>
+                    <Link
+                      to="/visits/new"
+                      search={{ repeatVisitId: p.lastVisitId }}
+                      className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                    >
+                      Log visit
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden tab:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-[var(--border)]">
+                <thead className="bg-[var(--paper)]">
+                  <tr>
+                    <th className={th}>Patient</th>
+                    <th className={th}>Package</th>
+                    <th className={th}>Therapist</th>
+                    <th className={thNum}>Sessions</th>
+                    <th className={th}>Started</th>
+                    <th className={th}>Last visit</th>
+                    <th className={th}>Status</th>
+                    <th className={th}></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {filteredPackages.map((p) => (
+                    <tr key={p.packageGroupId}>
+                      <td className={td}>
+                        {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                      </td>
+                      <td className={td}>{p.serviceName}</td>
+                      <td className={td}>{p.startedByTherapistName}</td>
+                      <td className={tdNum}>
+                        <span className="inline-flex items-center gap-1.5">
+                          <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
+                          <span className="font-num">
+                            {p.sessionsLogged}/{p.packageTotal}
+                          </span>
+                        </span>
+                      </td>
+                      <td className={td}>{formatDateDM(p.startedOn)}</td>
+                      <td className={td}>
+                        {formatDateDM(p.lastVisitOn)}{' '}
+                        <span className="text-[var(--muted)]">({p.daysSinceLastVisit}d ago)</span>
+                      </td>
+                      <td className={td}>
+                        <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
+                      </td>
+                      <td className={td}>
+                        <Link
+                          to="/visits/new"
+                          search={{ repeatVisitId: p.lastVisitId }}
+                          className="text-xs font-medium text-[var(--teal)] hover:underline"
+                        >
+                          Log visit
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </SectionCard>
+
+      {/* A plain therapist can't reach the Reports nav tab (admin/front_desk
+          only, decision 3) — this is the one financial-aggregate exception
+          they do get (decision 4), so it surfaces here instead. Admin and
+          front_desk see it on Reports instead, not here, so it never shows
+          twice. */}
+      {!scope.isClinicWideView && <TherapistComparisonCard />}
 
       {invoicing && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-3 sm:p-4">
-          <div className="w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-4 sm:p-5 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-sm font-semibold text-[var(--ink)]">Issue invoice</h2>
-            <p className="text-sm text-[var(--muted)]">
-              {invoicing.patientLabel} — {invoicing.serviceLabel}
-              {invoicing.isPackage && ', all sessions of this package'}
-            </p>
-            <Field label="Payment mode">
-              <select
-                className={inputCls}
-                value={paymentMode}
-                onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}
-              >
-                {PAYMENT_MODES.map((m) => (
-                  <option key={m}>{m}</option>
-                ))}
-              </select>
-            </Field>
-            <div className="flex gap-4 text-sm">
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={paidNow} onChange={() => setPaidNow(true)} />
-                Paid now
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={!paidNow} onChange={() => setPaidNow(false)} />
-                Outstanding — pay later
-              </label>
-            </div>
-            <ErrorNote message={error} />
-            <p className="text-xs text-[var(--muted)]">
-              The invoice number is issued by the server and the bill becomes immutable — this
-              needs a connection and cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button className={btnSecondary} onClick={() => setInvoicing(null)}>
-                Cancel
-              </button>
-              <button className={btnPrimary} disabled={busy} onClick={() => void issue()}>
-                {busy ? 'Issuing…' : 'Issue invoice'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} returnTo="/workspace" />
+      )}
+
+      {takingPayment && (
+        <TakePaymentDialog
+          clinicId={clinic.id}
+          visitId={takingPayment.visitId}
+          invoiceId={takingPayment.invoiceId}
+          amountPaise={takingPayment.billPaise}
+          visitDate={takingPayment.visitDate}
+          patientLabel={takingPayment.patientName}
+          mrno={takingPayment.mrno}
+          onClose={() => setTakingPayment(null)}
+        />
+      )}
+
+      {editingVisitId && (
+        <EditVisitModal
+          visitId={editingVisitId}
+          onClose={() => setEditingVisitId(null)}
+          setError={setVisitEditError}
+        />
       )}
 
       {editPatientId && editPatient && (
@@ -424,121 +470,15 @@ export function WorkspacePage() {
           onOpenEdit={() => setEditPatientId(newPatientId)}
         />
       )}
+
+      {splitting && (
+        <SplitModal
+          visit={splitting}
+          therapists={(therapists ?? []).filter((t) => t.id !== splitting.therapistId)}
+          primaryName={therapistNameById.get(splitting.therapistId) ?? '-'}
+          onClose={() => setSplitting(null)}
+        />
+      )}
     </div>
-  );
-}
-
-const PENDING_KIND: Record<PendingWorkItem['kind'], { bg: string; fg: string; label: (item: PendingWorkItem) => string }> = {
-  outstanding_payment: { bg: 'var(--rust-light)', fg: 'var(--rust)', label: (item) => `Pending · ${item.daysSince}d` },
-  stale_package: { bg: 'var(--amber-light)', fg: 'var(--amber)', label: (item) => `${item.daysSince}d since last visit` },
-  incomplete_note: { bg: 'var(--paper)', fg: 'var(--muted)', label: () => 'Note not finished' },
-};
-
-function PendingWorkRow({ item, clinicId }: { item: PendingWorkItem; clinicId: string }) {
-  const [choosingMethod, setChoosingMethod] = useState(false);
-  const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [busy, setBusy] = useState(false);
-  const badge = PENDING_KIND[item.kind];
-
-  async function markInvoicePaid() {
-    if (!item.invoiceId) return;
-    setBusy(true);
-    try {
-      await paymentService.setStatus(item.invoiceId, clinicId, 'paid');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirmDirectPayment() {
-    if (!item.visitId || item.amountPaise == null) return;
-    setBusy(true);
-    try {
-      await directPaymentService.logPayment(
-        clinicId,
-        item.visitId,
-        item.amountPaise,
-        method,
-        new Date().toISOString().slice(0, 10),
-        null
-      );
-      setChoosingMethod(false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const canMarkPaid = item.kind === 'outstanding_payment' && (item.invoiceId != null || item.visitId != null);
-
-  return (
-    <li className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span
-          className="rounded-full px-2 py-0.5 text-xs font-medium"
-          style={{ background: badge.bg, color: badge.fg }}
-        >
-          {badge.label(item)}
-        </span>
-        <span className="font-display">{item.patientName}</span>
-        <span className="text-xs text-[var(--muted)]">{item.mrno}</span>
-        <span className="text-[var(--muted)]">{item.detail}</span>
-      </div>
-      <div className="flex items-center gap-3">
-        {item.amountPaise != null && (
-          <span className="font-num text-xs font-semibold text-[var(--rust)]">
-            {formatINR(item.amountPaise)}
-          </span>
-        )}
-        {canMarkPaid && !choosingMethod && (
-          <button
-            type="button"
-            className="text-xs font-medium text-[var(--moss)] hover:underline"
-            disabled={busy}
-            onClick={() => (item.invoiceId ? void markInvoicePaid() : setChoosingMethod(true))}
-          >
-            Mark paid
-          </button>
-        )}
-        {choosingMethod && (
-          <span className="flex items-center gap-1.5">
-            <select
-              className={`${inputCls} py-1 text-xs`}
-              value={method}
-              onChange={(e) => setMethod(e.target.value as PaymentMethod)}
-            >
-              {PAYMENT_METHODS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="text-xs font-medium text-[var(--moss)] hover:underline"
-              disabled={busy}
-              onClick={() => void confirmDirectPayment()}
-            >
-              Confirm
-            </button>
-            <button
-              type="button"
-              className="text-xs text-[var(--muted)] hover:underline"
-              onClick={() => setChoosingMethod(false)}
-            >
-              Cancel
-            </button>
-          </span>
-        )}
-        {item.patientId && (
-          <Link
-            to="/patients/$patientId"
-            params={{ patientId: item.patientId }}
-            className="text-xs font-medium text-[var(--teal)] hover:underline"
-          >
-            View
-          </Link>
-        )}
-      </div>
-    </li>
   );
 }

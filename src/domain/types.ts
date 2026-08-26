@@ -40,13 +40,29 @@ export interface Clinic {
   /** Whether the internal therapist revenue-split feature is available. */
   enableTherapistSplit?: boolean;
   /**
-   * Per-clinic show/hide for the optional Visits-table columns. Missing keys
-   * fall back to the defaults in `visibleVisitColumns`. Optional so older
-   * cached rows are unaffected.
+   * Legacy: clinic-wide Visits-table column show/hide. Superseded by
+   * per-user prefs (useVisitColumnPrefs, stored in Dexie) — this was never
+   * actually read by any table, since none existed yet when it was added.
+   * Kept on the type for older cached/server rows; no UI reads or writes it.
    */
   visitColumnPrefs?: Partial<Record<VisitColumnKey, boolean>> | null;
   /** Whether the clinical documentation module (consultation notes, screening, consent) is on. */
   clinicalDocsEnabled?: boolean;
+  /** Whether this clinic uses the invoice module at all. Optional so older cached rows default to true (original behavior). */
+  billingEnabled?: boolean;
+  /**
+   * Who may issue invoices when billing is on. 'everyone' = any clinical
+   * member (original behavior). 'billing_staff' = admin + front_desk only.
+   * Optional so older cached rows default to 'everyone'.
+   */
+  invoicingAccess?: 'everyone' | 'billing_staff';
+  /**
+   * Therapist comparison chart on Reports: visible to admin + therapist
+   * (not front_desk) when on, for competitive visibility. Off by default
+   * — an admin opts in explicitly. Optional so older cached rows default
+   * to false (original admin-only behavior).
+   */
+  showTherapistComparison?: boolean;
   /**
    * Prefix for auto-generated walk-in MRNOs (format `{prefix}-YYMMDD-XXX`).
    * Optional so older cached rows default to 'W' (original behavior).
@@ -54,38 +70,62 @@ export interface Clinic {
   walkInMrnoPrefix?: string | null;
   /** Opt-in, off by default — the "Expected today" section on Workspace. */
   enableExpectedToday?: boolean;
+  /**
+   * Clinic UPI ID (VPA) used to generate a per-visit QR. Optional so older
+   * cached rows stay valid; unset means no dynamic QR.
+   */
+  upiVpa?: string | null;
+  /** Name shown in the patient's UPI app. Falls back to clinic name when blank. */
+  upiPayeeName?: string | null;
+  /** Path into `clinic-assets` for a static QR image (bank/app screenshot). */
+  upiQrPath?: string | null;
+  /** Off by default — Show UPI QR only appears at collection when this is on. */
+  upiQrEnabled?: boolean;
+  /**
+   * Path into `clinic-assets` (same pattern as logoPath) for a one-time
+   * uploaded signature image, printed on invoices in place of the blank
+   * "Authorised signature" line. Not a cryptographic e-signature.
+   */
+  signaturePath?: string | null;
   updatedAt: string;
 }
 
-/** Optional (toggleable) Visits-table columns — the essentials aren't listed. */
-export type VisitColumnKey = 'condition' | 'treatment';
+/** Optional (toggleable) Visits-table columns — the essentials (patient, bill, status) aren't listed. */
+export type VisitColumnKey = 'condition' | 'treatments' | 'therapist' | 'service';
 
 export const VISIT_COLUMN_LABELS: Record<VisitColumnKey, string> = {
+  service: 'Service',
+  therapist: 'Therapist',
   condition: 'Condition',
-  treatment: 'Treatment',
+  // One combined column: catalog picks from treatment_catalog plus any
+  // free-text add-on for something not in the list — a single cell, not
+  // two separate "Treatment" (notes) and "Treatments" (catalog) columns.
+  treatments: 'Treatments',
 };
 
-/**
- * Which optional Visits columns a clinic shows. Condition and treatment are on.
- * Stored prefs override these per clinic.
- */
-export function visibleVisitColumns(
-  clinic: Pick<Clinic, 'visitColumnPrefs'>
-): Record<VisitColumnKey, boolean> {
-  const prefs = clinic.visitColumnPrefs ?? {};
-  return {
-    condition: prefs.condition ?? true,
-    treatment: prefs.treatment ?? true,
-  };
-}
+/** Column order for visit tables and card detail rows — who → context → notes → service. */
+export const VISIT_OPTIONAL_COLUMN_ORDER: VisitColumnKey[] = [
+  'therapist',
+  'condition',
+  'treatments',
+  'service',
+];
 
-/** Resolve a clinic's share-label abbreviations, defaulting to BM/HV. */
-export function clinicShareLabels(
-  clinic: Pick<Clinic, 'ownShareLabel' | 'partnerShareLabel'>
-): { own: string; partner: string } {
+export const DEFAULT_VISIT_COLUMN_PREFS: Record<VisitColumnKey, boolean> = {
+  condition: true,
+  treatments: true,
+  therapist: true,
+  service: true,
+};
+
+/** Resolve a clinic's share-label abbreviations, defaulting to clinic-neutral labels. */
+export function clinicShareLabels(clinic: Pick<Clinic, 'ownShareLabel' | 'partnerShareLabel'>): {
+  own: string;
+  partner: string;
+} {
   return {
-    own: clinic.ownShareLabel?.trim() || 'BM',
-    partner: clinic.partnerShareLabel?.trim() || 'HV',
+    own: clinic.ownShareLabel?.trim() || 'Clinic',
+    partner: clinic.partnerShareLabel?.trim() || 'Partner',
   };
 }
 
@@ -119,6 +159,13 @@ export interface Therapist {
   active: boolean;
   /** Linked Supabase auth user, if this therapist also logs in themselves. */
   userId?: UUID | null;
+  /** Path into the `clinic-assets` bucket (same pattern as Clinic.logoPath),
+   *  not the image itself. Optional: most existing rows predate this field. */
+  photoPath?: string | null;
+  /** Registration/license number with the state physiotherapy council or
+   *  equivalent body. Printed on invoices — the field TPAs check to confirm
+   *  the treating therapist is a registered practitioner. */
+  registrationNo?: string | null;
   updatedAt: string;
 }
 
@@ -134,19 +181,75 @@ export interface CatalogItem {
 }
 
 /** Derived on display, never stored (spec §6.2). */
-export function effectivePricePerSession(item: Pick<CatalogItem, 'basePricePaise' | 'sessionCount'>): Paise {
+export function effectivePricePerSession(
+  item: Pick<CatalogItem, 'basePricePaise' | 'sessionCount'>
+): Paise {
   return Math.round(item.basePricePaise / item.sessionCount);
+}
+
+/**
+ * A clinic's own list of "why this patient hasn't come back" reasons —
+ * same editable-list shape as CatalogItem (add/deactivate, never delete so
+ * a patient already tagged with one keeps resolving) but without the
+ * pricing fields, since a reason has no session count or price.
+ *
+ * isClosed marks whether this reason means "no longer an active lead"
+ * (e.g. Resolved, Relocated) vs. one worth still following up on (e.g.
+ * Plans to return, Lost contact) — a per-item flag rather than hardcoding
+ * specific reason names, since the list itself is clinic-editable and a
+ * name match would silently break the moment a clinic renames or removes
+ * the item the code was checking for.
+ */
+export interface NoReturnReasonItem {
+  id: UUID;
+  clinicId: UUID;
+  name: string;
+  isClosed: boolean;
+  active: boolean;
+  updatedAt: string;
 }
 
 export type MrnoSource = 'hospital' | 'auto';
 
+/**
+ * Clinic-editable referral-source list — same shape as
+ * NoReturnReasonItem/CatalogItem (add / deactivate-not-delete / rename from
+ * Settings). Seeded with the 6 legacy ReferringSource labels below as
+ * defaults for every clinic, so nothing changes on day one; clinics can
+ * rename, deactivate, or add their own from there. detailLabel drives the
+ * optional free-text "who/where" field next to the picker — null means this
+ * source needs no detail (e.g. "Walk-in"); a per-item flag rather than
+ * hardcoding specific source names, for the same reason NoReturnReasonItem's
+ * isClosed is per-item rather than name-matched.
+ */
+export interface ReferringSourceItem {
+  id: UUID;
+  clinicId: UUID;
+  name: string;
+  detailLabel: string | null;
+  active: boolean;
+  updatedAt: string;
+}
+
+/**
+ * Clinic-editable list of treatment types (Exercise, Manual Therapy, Kinesio
+ * Taping, ...) — same shape as NoReturnReasonItem/CatalogItem (add /
+ * deactivate-not-delete / rename from Settings). Independent of the
+ * billing-side service_catalog: one visit can be billed under one service
+ * package while performing several treatment types, tracked via
+ * Visit.treatmentIds. Also independent of Core Assessment/clinical docs, so
+ * it works for every clinic regardless of clinicalDocsEnabled.
+ */
+export interface TreatmentItem {
+  id: UUID;
+  clinicId: UUID;
+  name: string;
+  active: boolean;
+  updatedAt: string;
+}
+
 export type ReferringSource =
-  | 'hospital_referral'
-  | 'doctor_referral'
-  | 'walk_in'
-  | 'word_of_mouth'
-  | 'online'
-  | 'other';
+  'hospital_referral' | 'doctor_referral' | 'walk_in' | 'word_of_mouth' | 'online' | 'other';
 
 export const REFERRING_SOURCE_LABELS: Record<ReferringSource, string> = {
   hospital_referral: 'Hospital referral',
@@ -157,8 +260,26 @@ export const REFERRING_SOURCE_LABELS: Record<ReferringSource, string> = {
   other: 'Other',
 };
 
+/** Values an older Edit Patient form stored locally — they fail the
+ *  patients_referring_source_check constraint on sync. */
+const LEGACY_REFERRING_SOURCE: Record<string, ReferringSource> = {
+  hospital: 'hospital_referral',
+  doctor: 'doctor_referral',
+  physiotherapist: 'other',
+  patient_referred: 'word_of_mouth',
+  self: 'walk_in',
+};
+
+export function coerceReferringSource(value: string | null | undefined): ReferringSource | null {
+  if (!value) return null;
+  if (value in REFERRING_SOURCE_LABELS) return value as ReferringSource;
+  return LEGACY_REFERRING_SOURCE[value] ?? null;
+}
+
 /** Label for the free-text detail field, or null if that source needs no detail. */
-export function referringSourceDetailLabel(source: ReferringSource | '' | null | undefined): string | null {
+export function referringSourceDetailLabel(
+  source: ReferringSource | '' | null | undefined
+): string | null {
   switch (source) {
     case 'hospital_referral':
     case 'doctor_referral':
@@ -184,10 +305,23 @@ export interface Patient {
   sex: 'M' | 'F' | 'Other' | null;
   phone: string | null;
   primaryCondition: string | null;
-  /** How the patient found the clinic. Optional: older cached rows lack the key. */
+  /** How the patient found the clinic, from the clinic's own editable
+   *  ReferringSourceItem list — the current source of truth going forward.
+   *  Optional: older cached rows and patients created before this catalog
+   *  existed lack the key; those fall back to the legacy referringSource
+   *  enum below for display. */
+  referringSourceId?: UUID | null;
+  /** Legacy fixed-enum value — no longer written by new patient saves, kept
+   *  only so patients created before the catalog existed still display a
+   *  referral source. Optional: older cached rows lack the key. */
   referringSource?: ReferringSource | null;
-  /** Free text alongside referringSource — which doctor, who referred them, which online channel. */
+  /** Free text alongside referringSourceId/referringSource — which doctor,
+   *  who referred them, which online channel. */
   referringSourceDetail?: string | null;
+  /** Why a single-visit patient hasn't come back — set from the Trends
+   *  dashboard once known. References NoReturnReasonItem, the clinic's own
+   *  editable list. Optional: older cached rows lack the key. */
+  noReturnReasonId?: UUID | null;
   /** Set = hidden from search/pickers; visits keep resolving. Optional: older cached rows lack the key. */
   deletedAt?: string | null;
   updatedAt: string;
@@ -202,6 +336,8 @@ export interface Visit {
   visitDate: string;
   condition: string | null;
   treatmentNotes: string | null;
+  /** Which TreatmentItem catalog entries were performed this visit. Optional: older cached rows predate treatment tracking. */
+  treatmentIds?: UUID[];
   serviceCatalogId: UUID;
   /** Catalog price snapshot at time of billing — discounts never touch the catalog */
   catalogPricePaise: Paise;
@@ -250,6 +386,13 @@ export interface Visit {
   clinicalStatus?: 'pending' | 'documented' | 'reviewed';
   consultationNoteId?: UUID | null;
   reauthorizationRequired?: boolean;
+  /**
+   * Where the visit happened. Domiciliary (homecare) billing generally
+   * needs this recorded explicitly and separately justified — a TPA wants
+   * to see why the visit couldn't have been an in-clinic OP visit instead.
+   * Optional: older cached rows predate this and default to 'clinic'.
+   */
+  location?: 'clinic' | 'home';
   updatedAt: string;
   /** Auth user who created/last touched this row. Optional: older cached rows lack the key. */
   createdBy?: UUID | null;
@@ -288,6 +431,11 @@ export interface Invoice {
   totalPaise: Paise;
   paymentMode: PaymentMode;
   therapistId: UUID | null;
+  /** Set when this invoice is a correction that replaces an earlier one
+   *  (e.g. a TPA asked for added visit dates) — points at the original.
+   *  One-directional: the original invoice is never updated to point
+   *  forward, since issued invoices are immutable. */
+  supersedesInvoiceId: UUID | null;
   updatedAt: string;
 }
 
@@ -308,13 +456,18 @@ export interface InvoicePayment {
   updatedAt: string;
 }
 
-/**
- * Direct payment received for a visit — independent of invoices.
- * Allows tracking cash/UPI payments without requiring an invoice.
- * Can be for a visit (cash payment) or tied to an invoice (invoice payment).
- */
 export type PaymentMethod = 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque';
 
+/**
+ * A payment received toward one visit's bill — cash/UPI/etc, always keyed
+ * by `visitId`, whether or not that visit is invoiced. There's no
+ * `invoiceId` column here: an invoice has no amount-paid field of its own
+ * (invoice_payments is a paid/outstanding flag only, since invoices are
+ * immutable), so a payment toward an invoiced visit's bill is still logged
+ * here exactly like a direct (uninvoiced) one — see
+ * paymentService.recordInvoicePayment, which allocates one entered amount
+ * across a multi-visit invoice's constituent Payment rows when needed.
+ */
 export interface Payment {
   id: UUID;
   clinicId: UUID;
@@ -348,18 +501,45 @@ export type EnrollmentStatus = 'active' | 'completed' | 'discharged';
  * later one in the same enrollment is Follow-up. `moduleType` matches the
  * live `patient_module_enrollments.module_type` column name and its CHECK
  * constraint's allowed values (see docs/CORE-ASSESSMENT-PORT-PLAN.md §3) —
- * not an FK to a modules table.
+ * not an FK to a modules table. Only 'consultation_notes' is written by any
+ * client code today; the other five values are schema-permitted but unused.
  */
 export interface PatientModuleEnrollment {
   id: UUID;
   clinicId: UUID;
   patientId: UUID;
-  moduleType: 'gut_screening' | 'return_to_sport' | 'scoliosis_screening' | 'face_scale' | 'facial_palsy' | 'consultation_notes';
+  moduleType:
+    | 'gut_screening'
+    | 'return_to_sport'
+    | 'scoliosis_screening'
+    | 'face_scale'
+    | 'facial_palsy'
+    | 'consultation_notes';
   status: EnrollmentStatus;
   enrolledAt: string;
   updatedAt: string;
   createdBy?: UUID | null;
   updatedBy?: UUID | null;
+}
+
+export type PlanTier = 'lite' | 'solo' | 'clinic' | 'clinic_plus';
+export type PlanStatus = 'active' | 'past_due' | 'read_only';
+
+/**
+ * Mirrors the `clinic_plans` table (tier-based subscriptions plan, Phase 0):
+ * one row per clinic, keyed by `clinicId` (not `id` — there is no surrogate
+ * id column). Written only by `service_role`; the client never writes this,
+ * so it isn't part of `CLIENT_WRITABLE_TABLES`/`ALL_SYNCED_TABLES` — see
+ * `useEntitlements()` for how it's read.
+ */
+export interface ClinicPlan {
+  clinicId: UUID;
+  planTier: PlanTier;
+  status: PlanStatus;
+  maxMembers: number;
+  /** null = unlimited */
+  visitCapPerMonth: number | null;
+  updatedAt: string;
 }
 
 export type ConsultationNoteStatus = 'draft' | 'completed' | 'archived';
@@ -421,4 +601,3 @@ export interface ExpectedVisit {
   createdBy?: UUID | null;
   updatedBy?: UUID | null;
 }
-

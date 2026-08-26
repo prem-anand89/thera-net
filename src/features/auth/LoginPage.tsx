@@ -216,7 +216,7 @@ export function LoginPage() {
   return (
     <div className="mx-auto mt-24 max-w-sm">
       <h1 className="font-display mb-1 text-center text-xl font-semibold text-[var(--ink)]">Thera.Net</h1>
-      <p className="mb-6 text-center text-sm text-[var(--muted)]">Patient visit ledger</p>
+      <p className="mb-6 text-center text-sm text-[var(--muted)]">Sign in</p>
       <form onSubmit={onSubmit} className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
         <Field label="Email">
           <input
@@ -257,6 +257,7 @@ export function LoginPage() {
             onClick={() => {
               setMode('signup');
               setError(null);
+              setEmail('');
               setPassword('');
             }}
           >

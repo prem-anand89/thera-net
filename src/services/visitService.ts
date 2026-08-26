@@ -11,6 +11,8 @@ export interface NewVisitInput {
   serviceCatalogId: UUID;
   condition?: string | null;
   treatmentNotes?: string | null;
+  /** Treatment types performed this visit — TreatmentItem catalog ids. */
+  treatmentIds?: UUID[];
   /** Omit to bill the catalog price; any difference requires a reason */
   actualBillPaise?: Paise;
   adjustmentReason?: string | null;
@@ -40,9 +42,9 @@ export function createVisitService(repos: Repos) {
     input: Pick<NewVisitInput, 'actualBillPaise' | 'adjustmentReason' | 'isContinuation'>
   ) {
     const clinic = await repos.clinics.get(clinicId);
-    if (!clinic) throw new Error('Clinic not found');
+    if (!clinic) throw new Error(`Clinic not found (id: ${clinicId})`);
     const item = await repos.catalog.get(serviceCatalogId);
-    if (!item) throw new Error('Catalog service not found');
+    if (!item) throw new Error(`Catalog service not found (id: ${serviceCatalogId})`);
 
     const catalogPricePaise = input.isContinuation ? 0 : item.basePricePaise;
     const actualBillPaise = input.actualBillPaise ?? catalogPricePaise;
@@ -78,6 +80,7 @@ export function createVisitService(repos: Repos) {
         visitDate: input.visitDate,
         condition: input.condition?.trim() || null,
         treatmentNotes: input.treatmentNotes?.trim() || null,
+        treatmentIds: input.treatmentIds ?? [],
         serviceCatalogId: input.serviceCatalogId,
         catalogPricePaise,
         actualBillPaise,
@@ -98,6 +101,14 @@ export function createVisitService(repos: Repos) {
         invoiceId: null,
         pendingPaymentNote: input.pendingPaymentNote?.trim() || null,
         deleted: false,
+        // Flags the visit for a clinical note until one is completed against
+        // it (see consultationNoteService.saveAssessment, which closes this
+        // out). Gated on the clinic opting in, not on the patient already
+        // having a documentation enrollment — an enrollment is only ever
+        // created lazily when a note is first opened, so gating on it would
+        // mean a patient's very first visit could never prompt for their
+        // first note.
+        ...(clinic.clinicalDocsEnabled ? { clinicalStatus: 'pending' as const } : {}),
         updatedAt: new Date().toISOString(),
       };
       await repos.visits.put(visit);
@@ -117,12 +128,23 @@ export function createVisitService(repos: Repos) {
         visitDate?: string;
         condition?: string | null;
         treatmentNotes?: string | null;
+        treatmentIds?: UUID[];
       }
     ): Promise<Visit> {
       const visit = await repos.visits.get(visitId);
-      if (!visit) throw new Error('Visit not found');
-      if (visit.invoiceId) {
-        throw new Error('This visit is on an issued invoice; its billing is frozen.');
+      if (!visit) throw new Error(`Visit not found (id: ${visitId})`);
+      // "Frozen" means the billed amount and who it's billed to can't move
+      // once invoiced -- it does not mean the visit's clinical record is
+      // locked. A therapist backfilling condition/treatmentNotes on an
+      // already-invoiced visit (the common case: notes get written up a
+      // day or two after the session) must still go through.
+      const changesBilling =
+        changes.actualBillPaise !== undefined ||
+        changes.adjustmentReason !== undefined ||
+        'therapistId' in changes ||
+        'visitDate' in changes;
+      if (visit.invoiceId && changesBilling) {
+        throw new Error(`This visit is on invoice ${visit.invoiceId}; its billing is frozen.`);
       }
 
       const actualBillPaise = changes.actualBillPaise ?? visit.actualBillPaise;
@@ -147,6 +169,7 @@ export function createVisitService(repos: Repos) {
         ...('treatmentNotes' in changes
           ? { treatmentNotes: changes.treatmentNotes?.trim() || null }
           : {}),
+        ...('treatmentIds' in changes ? { treatmentIds: changes.treatmentIds ?? [] } : {}),
         actualBillPaise,
         adjustmentPaise,
         adjustmentReason: adjustmentPaise !== 0 ? (reason?.trim() ?? null) : null,
@@ -169,7 +192,7 @@ export function createVisitService(repos: Repos) {
       split: { sharedTherapistId: UUID | null; sharedPct?: number | null }
     ): Promise<Visit> {
       const visit = await repos.visits.get(visitId);
-      if (!visit) throw new Error('Visit not found');
+      if (!visit) throw new Error(`Visit not found (id: ${visitId})`);
 
       let sharedTherapistId: UUID | null = null;
       let sharedPct: number | null = null;
@@ -181,8 +204,15 @@ export function createVisitService(repos: Repos) {
           throw new Error('Pick a different therapist to share with.');
         }
         const pct = split.sharedPct ?? 0;
-        if (!(pct > 0 && pct <= 100)) {
-          throw new Error('Share must be between 0 and 100 percent.');
+        // Enhanced validation: check for NaN, Infinity, and edge cases
+        if (
+          typeof pct !== 'number' ||
+          !Number.isFinite(pct) ||
+          !(pct > 0 && pct < 100)
+        ) {
+          throw new Error(
+            `Share percentage must be a finite number between 0 and 100 (exclusive), got: ${pct}`
+          );
         }
         sharedTherapistId = split.sharedTherapistId;
         sharedPct = pct;
@@ -196,6 +226,44 @@ export function createVisitService(repos: Repos) {
       };
       await repos.visits.put(updated);
       return updated;
+    },
+
+    /**
+     * Re-snapshots the clinic/partner split (bmSplitPct, taxPct, tdsBasis)
+     * onto every not-yet-invoiced visit, using the clinic's CURRENT settings.
+     * updateBilling deliberately keeps a visit's original rate snapshot on
+     * edit (see its test) — that's correct for a visit whose rates were
+     * already locked in, but it also means a Settings change to the split %
+     * never reaches visits logged before the change. This gives Settings an
+     * explicit, bounded way to catch those up: invoiced visits are skipped
+     * (their billing is already frozen), and a visit already matching the
+     * current rates is left untouched.
+     */
+    async recomputeUninvoicedSplits(clinicId: UUID): Promise<{ updated: number }> {
+      const clinic = await repos.clinics.get(clinicId);
+      if (!clinic) throw new Error(`Clinic not found (id: ${clinicId})`);
+      const { hospitalSplit } = clinicBillingConfig(clinic);
+      const splitPct = hospitalSplit ? clinic.bmSplitPct : 100;
+      const taxPct = hospitalSplit ? clinic.taxPct : 0;
+      const tdsBasis = hospitalSplit ? clinic.tdsBasis : 'gross_bill';
+
+      const visits = await repos.visits.list({ clinicId });
+      let updated = 0;
+      for (const v of visits) {
+        if (v.invoiceId) continue;
+        if (v.bmSplitPct === splitPct && v.taxPct === taxPct && v.tdsBasis === tdsBasis) continue;
+        const split = computeVisitSplit(v.actualBillPaise, splitPct, taxPct, tdsBasis);
+        await repos.visits.put({
+          ...v,
+          bmSplitPct: splitPct,
+          taxPct,
+          tdsBasis,
+          ...split,
+          updatedAt: new Date().toISOString(),
+        });
+        updated++;
+      }
+      return { updated };
     },
   };
 }

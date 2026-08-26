@@ -1,16 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, paymentService, invoiceService, visitService } from '@/services';
+import { repos, paymentService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
-import { formatDateDMY } from '@/domain/fiscalYear';
-import { type Invoice, type PaymentMode } from '@/domain/types';
-import { th, td, tdNum, ErrorNote, Pill, SectionCard, btnPrimary, btnSecondary, inputCls, Field } from '@/components/ui';
+import { formatDateDM } from '@/domain/fiscalYear';
+import { type Invoice } from '@/domain/types';
+import { th, td, tdNum, ErrorNote, Pill, SectionCard } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
-
-const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
+import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 
 type InvoiceSortKey = 'no' | 'date' | 'patient' | 'total' | 'status';
 const INVOICE_COMPARATORS = {
@@ -25,21 +24,16 @@ export function InvoicesPage() {
   const clinic = useClinic();
   const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
   const payments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
-  const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
-  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
-  const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
+  // Needed to compute each invoice's actual collected-so-far amount — there's
+  // no amount column on invoice_payments (see paymentService.invoiceBalance);
+  // it's derived by summing the visit-scoped `payments` rows for whichever
+  // visit(s) this invoice covers.
+  const visits = useLiveQuery(() => repos.visits.list({ clinicId: clinic.id }), [clinic.id]);
+  const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [formData, setFormData] = useState({
-    patientId: '',
-    therapistId: '',
-    serviceCatalogId: '',
-    billPaise: '',
-    paymentMode: 'Cash' as PaymentMode,
-    paidNow: true,
-  });
+  const [takingPayment, setTakingPayment] = useState<Invoice | null>(null);
 
   const sort = useSort<InvoiceSortKey>('date', 'desc');
 
@@ -48,31 +42,56 @@ export function InvoicesPage() {
     [payments]
   );
 
+  const directPaymentByVisitId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of directPayments ?? []) {
+      map.set(p.visitId, (map.get(p.visitId) ?? 0) + p.amountPaise);
+    }
+    return map;
+  }, [directPayments]);
+
+  // Sum of collected `payments` rows across every visit each invoice covers,
+  // plus a lookup of one representative visit per invoice (any one will do —
+  // TakePaymentDialog's invoice-aware path allocates across all of them, the
+  // passed visitId only anchors the dialog to a concrete row).
+  const { paidByInvoiceId, sampleVisitIdByInvoiceId } = useMemo(() => {
+    const paid = new Map<string, number>();
+    const sampleVisit = new Map<string, string>();
+    for (const v of visits ?? []) {
+      if (v.deleted || !v.invoiceId) continue;
+      paid.set(v.invoiceId, (paid.get(v.invoiceId) ?? 0) + (directPaymentByVisitId.get(v.id) ?? 0));
+      if (!sampleVisit.has(v.invoiceId)) sampleVisit.set(v.invoiceId, v.id);
+    }
+    return { paidByInvoiceId: paid, sampleVisitIdByInvoiceId: sampleVisit };
+  }, [visits, directPaymentByVisitId]);
+
+  function balanceFor(inv: Invoice): { paidPaise: number; remainingPaise: number } {
+    const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+    if (status === 'paid') return { paidPaise: inv.totalPaise, remainingPaise: 0 };
+    const paidPaise = paidByInvoiceId.get(inv.id) ?? 0;
+    return { paidPaise, remainingPaise: Math.max(0, inv.totalPaise - paidPaise) };
+  }
+
   const sortedInvoices = useMemo(
-    () =>
-      applySort(
-        invoices ?? [],
-        INVOICE_COMPARATORS,
-        sort
-      ),
+    () => applySort(invoices ?? [], INVOICE_COMPARATORS, sort),
     [invoices, sort]
   );
 
-  const totalOutstanding = useMemo(
-    () =>
-      (invoices ?? [])
-        .filter((inv) => statusByInvoiceId.get(inv.id) === 'outstanding')
-        .reduce((sum, inv) => sum + inv.totalPaise, 0),
-    [invoices, statusByInvoiceId]
-  );
-
-  const totalCollected = useMemo(
-    () =>
-      (invoices ?? [])
-        .filter((inv) => statusByInvoiceId.get(inv.id) !== 'outstanding')
-        .reduce((sum, inv) => sum + inv.totalPaise, 0),
-    [invoices, statusByInvoiceId]
-  );
+  const { totalOutstanding, totalCollected } = useMemo(() => {
+    let outstanding = 0;
+    let collected = 0;
+    for (const inv of invoices ?? []) {
+      const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+      if (status === 'paid') {
+        collected += inv.totalPaise;
+      } else {
+        const paidPaise = paidByInvoiceId.get(inv.id) ?? 0;
+        collected += paidPaise;
+        outstanding += Math.max(0, inv.totalPaise - paidPaise);
+      }
+    }
+    return { totalOutstanding: outstanding, totalCollected: collected };
+  }, [invoices, statusByInvoiceId, paidByInvoiceId]);
 
   async function toggleInvoiceStatus(invoiceId: string, currentStatus: string) {
     setError(null);
@@ -87,71 +106,20 @@ export function InvoicesPage() {
     }
   }
 
-  async function createManualInvoice() {
-    if (!formData.patientId || !formData.therapistId || !formData.serviceCatalogId || !formData.billPaise) {
-      setError('Please fill in all fields');
-      return;
-    }
-
-    setError(null);
-    setBusy(true);
-    try {
-      const billPaise = Math.round(parseInt(formData.billPaise, 10));
-      if (isNaN(billPaise) || billPaise <= 0) {
-        throw new Error('Invalid bill amount');
-      }
-
-      // Auto-create a minimal visit
-      const visit = await visitService.create({
-        clinicId: clinic.id,
-        patientId: formData.patientId,
-        therapistId: formData.therapistId,
-        visitDate: new Date().toISOString().split('T')[0],
-        serviceCatalogId: formData.serviceCatalogId,
-        actualBillPaise: billPaise,
-        condition: 'Manual invoice',
-        treatmentNotes: 'Manual invoice',
-        adjustmentReason: 'Custom billing amount',
-      });
-
-      // Create invoice for the visit
-      const invoice = await invoiceService.issueForVisit(visit.id, formData.paymentMode);
-
-      // Set payment status
-      try {
-        await paymentService.setStatus(invoice.id, clinic.id, formData.paidNow ? 'paid' : 'outstanding');
-      } catch (statusError) {
-        console.error('Could not record payment status', statusError);
-      }
-
-      setShowAddModal(false);
-      setFormData({
-        patientId: '',
-        therapistId: '',
-        serviceCatalogId: '',
-        billPaise: '',
-        paymentMode: 'Cash',
-        paidNow: true,
-      });
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
-      <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Invoices & Billing</h1>
-
       <div className="flex flex-wrap gap-3">
         <div className="flex-1 min-w-64 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Total Collected</div>
-          <div className="text-2xl font-display font-semibold text-[var(--ink)]">{formatINR(totalCollected)}</div>
+          <div className="text-2xl font-display font-semibold text-[var(--ink)]">
+            {formatINR(totalCollected)}
+          </div>
         </div>
         <div className="flex-1 min-w-64 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Outstanding</div>
-          <div className="text-2xl font-display font-semibold text-[var(--rust)]">{formatINR(totalOutstanding)}</div>
+          <div className="text-2xl font-display font-semibold text-[var(--rust)]">
+            {formatINR(totalOutstanding)}
+          </div>
         </div>
         <div className="flex-1 min-w-64 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Total Invoiced</div>
@@ -163,10 +131,94 @@ export function InvoicesPage() {
 
       <SectionCard title="Invoices">
         <div className="space-y-4">
-          <button className={btnPrimary} onClick={() => setShowAddModal(true)}>
-            + Add invoice
-          </button>
-          <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+          {/* Below tab: — same boxed-card treatment Today's visits, Patients,
+              and Packages use, instead of forcing this 8-column table to
+              scroll sideways on a phone. */}
+          <div className="tab:hidden space-y-2">
+            {sortedInvoices.map((inv) => {
+              const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+              const { paidPaise, remainingPaise } = balanceFor(inv);
+              const isPartial = status === 'outstanding' && paidPaise > 0;
+              const initials = inv.patientSnapshot.name
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((w) => w[0]?.toUpperCase() ?? '')
+                .join('');
+              return (
+                <div
+                  key={inv.id}
+                  className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal)]">
+                      {initials || '?'}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-display text-sm font-medium text-[var(--ink)]">
+                        {inv.patientSnapshot.name}
+                      </div>
+                      <div className="text-xs text-[var(--muted)]">{inv.patientSnapshot.mrno}</div>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <Pill tone="slate">{inv.invoiceNo}</Pill>
+                    <Pill tone="slate">{formatDateDM(inv.issuedAt)}</Pill>
+                    <Pill tone="slate">{inv.paymentMode}</Pill>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-num text-sm font-medium text-[var(--ink)]">
+                        {formatINR(inv.totalPaise)}
+                      </span>
+                      <Pill tone={status === 'paid' ? 'green' : 'amber'}>
+                        {status === 'paid' ? 'Paid' : isPartial ? 'Partially paid' : 'Outstanding'}
+                      </Pill>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {status === 'outstanding' && (
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={busy}
+                          onClick={() => setTakingPayment(inv)}
+                        >
+                          Record payment
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={busy}
+                        onClick={() => void toggleInvoiceStatus(inv.id, status)}
+                      >
+                        Mark {status === 'paid' ? 'outstanding' : 'paid'}
+                      </button>
+                      <Link
+                        to="/invoices/$invoiceId/print"
+                        params={{ invoiceId: inv.id }}
+                        search={{ from: '/ledger', tab: 'invoices' }}
+                        className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+                      >
+                        Print
+                      </Link>
+                    </div>
+                  </div>
+                  {isPartial && (
+                    <p className="mt-1.5 text-xs text-[var(--muted)]">
+                      {formatINR(paidPaise)} collected · {formatINR(remainingPaise)} due
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+            {sortedInvoices.length === 0 && (
+              <p className="py-8 text-center text-sm text-[var(--muted)]">
+                No invoices issued yet — issue one from the Visits table.
+              </p>
+            )}
+          </div>
+
+          <div className="hidden tab:block overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
             <table className="min-w-full divide-y divide-[var(--border)]">
               <thead className="bg-[var(--paper)]">
                 <tr>
@@ -183,19 +235,42 @@ export function InvoicesPage() {
               <tbody className="divide-y divide-[var(--border)]">
                 {sortedInvoices.map((inv) => {
                   const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+                  const { paidPaise, remainingPaise } = balanceFor(inv);
+                  const isPartial = status === 'outstanding' && paidPaise > 0;
                   return (
                     <tr key={inv.id} className="hover:bg-[var(--paper)]">
                       <td className={`${td} font-medium`}>{inv.invoiceNo}</td>
-                      <td className={td}>{formatDateDMY(inv.issuedAt)}</td>
+                      <td className={td}>{formatDateDM(inv.issuedAt)}</td>
                       <td className={`${td} font-display`}>{inv.patientSnapshot.name}</td>
                       <td className={td}>{inv.patientSnapshot.mrno}</td>
                       <td className={tdNum}>{formatINR(inv.totalPaise)}</td>
                       <td className={td}>{inv.paymentMode}</td>
                       <td className={td}>
                         <Pill tone={status === 'paid' ? 'green' : 'amber'}>
-                          {status === 'paid' ? 'Paid' : 'Outstanding'}
+                          {status === 'paid'
+                            ? 'Paid'
+                            : isPartial
+                              ? 'Partially paid'
+                              : 'Outstanding'}
                         </Pill>
+                        {isPartial && (
+                          <div className="mt-1 text-xs text-[var(--muted)]">
+                            {formatINR(paidPaise)} of {formatINR(inv.totalPaise)} ·{' '}
+                            {formatINR(remainingPaise)} due
+                          </div>
+                        )}
+                        {status === 'outstanding' && (
+                          <button
+                            type="button"
+                            className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => setTakingPayment(inv)}
+                            disabled={busy}
+                          >
+                            Record payment
+                          </button>
+                        )}
                         <button
+                          type="button"
                           className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                           onClick={() => void toggleInvoiceStatus(inv.id, status)}
                           disabled={busy}
@@ -207,6 +282,7 @@ export function InvoicesPage() {
                         <Link
                           to="/invoices/$invoiceId/print"
                           params={{ invoiceId: inv.id }}
+                          search={{ from: '/ledger', tab: 'invoices' }}
                           className="font-medium text-[var(--teal)] hover:underline"
                         >
                           Print
@@ -232,111 +308,17 @@ export function InvoicesPage() {
           </p>
         </div>
       </SectionCard>
-
-      {showAddModal && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">
-          <div className="w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5">
-            <h2 className="text-sm font-semibold text-[var(--ink)]">Add invoice</h2>
-
-            <Field label="Patient">
-              <select
-                className={inputCls}
-                value={formData.patientId}
-                onChange={(e) => setFormData({ ...formData, patientId: e.target.value })}
-              >
-                <option value="">Select patient</option>
-                {(patients ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.mrno})
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Therapist">
-              <select
-                className={inputCls}
-                value={formData.therapistId}
-                onChange={(e) => setFormData({ ...formData, therapistId: e.target.value })}
-              >
-                <option value="">Select therapist</option>
-                {(therapists ?? []).map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Service">
-              <select
-                className={inputCls}
-                value={formData.serviceCatalogId}
-                onChange={(e) => {
-                  const serviceId = e.target.value;
-                  const service = catalog?.find((s) => s.id === serviceId);
-                  setFormData({
-                    ...formData,
-                    serviceCatalogId: serviceId,
-                    billPaise: service ? Math.round(service.basePricePaise).toString() : '',
-                  });
-                }}
-              >
-                <option value="">Select service</option>
-                {(catalog ?? []).map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Bill amount (₹)">
-              <input
-                type="number"
-                className={inputCls}
-                placeholder="0.00"
-                step="0.01"
-                value={formData.billPaise === '' ? '' : (parseInt(formData.billPaise, 10) / 100).toString()}
-                onChange={(e) => setFormData({ ...formData, billPaise: Math.round((parseFloat(e.target.value || '0') * 100)).toString() })}
-              />
-            </Field>
-
-            <Field label="Payment mode">
-              <select
-                className={inputCls}
-                value={formData.paymentMode}
-                onChange={(e) => setFormData({ ...formData, paymentMode: e.target.value as PaymentMode })}
-              >
-                {PAYMENT_MODES.map((m) => (
-                  <option key={m}>{m}</option>
-                ))}
-              </select>
-            </Field>
-
-            <div className="flex gap-4 text-sm">
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={formData.paidNow} onChange={() => setFormData({ ...formData, paidNow: true })} />
-                Paid now
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={!formData.paidNow} onChange={() => setFormData({ ...formData, paidNow: false })} />
-                Outstanding
-              </label>
-            </div>
-
-            {error && <ErrorNote message={error} />}
-
-            <div className="flex justify-end gap-2">
-              <button className={btnSecondary} onClick={() => setShowAddModal(false)}>
-                Cancel
-              </button>
-              <button className={btnPrimary} disabled={busy} onClick={() => void createManualInvoice()}>
-                {busy ? 'Creating…' : 'Create invoice'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {takingPayment && (
+        <TakePaymentDialog
+          clinicId={clinic.id}
+          visitId={sampleVisitIdByInvoiceId.get(takingPayment.id) ?? ''}
+          invoiceId={takingPayment.id}
+          amountPaise={takingPayment.totalPaise}
+          visitDate={new Date().toISOString().slice(0, 10)}
+          patientLabel={takingPayment.patientSnapshot.name}
+          mrno={takingPayment.patientSnapshot.mrno}
+          onClose={() => setTakingPayment(null)}
+        />
       )}
     </div>
   );

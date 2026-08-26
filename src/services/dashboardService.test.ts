@@ -1,7 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDashboardService } from './dashboardService';
+import { createDashboardService, CONDITION_TOP_N } from './dashboardService';
 import type { Repos, VisitFilter } from '@/repositories/types';
-import type { CatalogItem, Clinic, Invoice, InvoicePayment, Payment, Patient, Therapist, Visit } from '@/domain/types';
+import type {
+  CatalogItem,
+  Clinic,
+  ConsultationNote,
+  Invoice,
+  InvoicePayment,
+  NoReturnReasonItem,
+  Payment,
+  Patient,
+  Therapist,
+  Visit,
+} from '@/domain/types';
 import { rupeesToPaise as rs } from '@/domain/money';
 
 function makeFakeRepos() {
@@ -54,15 +65,33 @@ function makeFakeRepos() {
       },
     ],
   ]);
+  const reasons = new Map<string, NoReturnReasonItem>();
   const visits = new Map<string, Visit>();
   const invoices = new Map<string, Invoice>();
   const invoicePayments = new Map<string, InvoicePayment>();
   const payments = new Map<string, Payment>();
+  const consultationNotesStore = new Map<string, ConsultationNote>();
 
   const repos: Repos = {
     clinics: { get: async (id) => (id === clinic.id ? clinic : undefined), list: async () => [clinic], put: async () => {}, putLocal: async () => {} },
-    therapists: { list: async () => therapists, put: async () => {} },
+    therapists: { list: async () => therapists, put: async () => {}, removeLocal: async () => {} },
     catalog: { list: async () => catalog, get: async (id) => catalog.find((c) => c.id === id), put: async () => {} },
+    noReturnReasonCatalog: {
+      list: async (_c, includeInactive = false) =>
+        [...reasons.values()].filter((r) => includeInactive || r.active),
+      get: async (id) => reasons.get(id),
+      put: async (r) => void reasons.set(r.id, r),
+    },
+    referringSourceCatalog: {
+      list: async () => [],
+      get: async () => undefined,
+      put: async () => {},
+    },
+    treatmentCatalog: {
+      list: async () => [],
+      get: async () => undefined,
+      put: async () => {},
+    },
     patients: {
       get: async (id) => patients.get(id),
       getByMrno: async (_c, mrno) => [...patients.values()].find((p) => p.mrno === mrno),
@@ -116,12 +145,12 @@ function makeFakeRepos() {
       put: async () => {},
     },
     consultationNotes: {
-      get: async () => undefined,
+      get: async (id) => consultationNotesStore.get(id),
       listByPatient: async () => [],
-      listByClinic: async () => [],
+      listByClinic: async (clinicId) => [...consultationNotesStore.values()].filter((n) => n.clinicId === clinicId),
       getOpenDraft: async () => undefined,
       listByEnrollment: async () => [],
-      put: async () => {},
+      put: async (n) => void consultationNotesStore.set(n.id, n),
     },
     patientModuleEnrollments: {
       get: async () => undefined,
@@ -134,7 +163,7 @@ function makeFakeRepos() {
       put: async () => {},
     },
   };
-  return { repos, visits, invoices, invoicePayments, payments, patients };
+  return { repos, visits, invoices, invoicePayments, payments, patients, reasons, consultationNotes: consultationNotesStore };
 }
 
 const baseVisit = (id: string, overrides: Partial<Visit>): Visit => ({
@@ -178,6 +207,7 @@ const baseInvoice = (id: string, overrides: Partial<Invoice>): Invoice => ({
   totalPaise: rs(1500),
   paymentMode: 'Cash',
   therapistId: 'th-prem',
+  supersedesInvoiceId: null,
   updatedAt: '',
   ...overrides,
 });
@@ -216,6 +246,7 @@ describe('dashboardService.openPackages', () => {
       serviceName: 'Manual Therapy',
       sessionsLogged: 1,
       packageTotal: 3,
+      lastVisitId: 'v1',
     });
   });
 
@@ -278,42 +309,39 @@ describe('dashboardService.outstandingInvoices', () => {
   });
 });
 
-describe('dashboardService.pendingWork', () => {
+describe('dashboardService.monthlyCollection', () => {
   let fake: ReturnType<typeof makeFakeRepos>;
   beforeEach(() => {
     fake = makeFakeRepos();
   });
 
-  it('flags a stale open package', async () => {
-    fake.visits.set(
-      'v1',
-      baseVisit('v1', {
-        visitDate: '2026-01-01',
-        packageGroupId: 'pkg-1',
-        packageTotal: 5,
-        sessionIndex: 1,
-      })
-    );
-    // Paid, so this only exercises the stale-package signal, not the
-    // separate (and independently tested) outstanding-payment one.
-    fake.payments.set('pay-1', {
-      id: 'pay-1',
+  it('returns null collectionRatePct when nothing was billed that month', async () => {
+    const svc = createDashboardService(fake.repos);
+    const summary = await svc.monthlyCollection('clinic-1', { year: 2026, month: 6 });
+    expect(summary.billedPaise).toBe(0);
+    expect(summary.collectionRatePct).toBeNull();
+  });
+
+  it('counts a direct-payment visit (no invoice) as fully collected', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-05', actualBillPaise: rs(1000), invoiceId: null }));
+    fake.payments.set('pay1', {
+      id: 'pay1',
       clinicId: 'clinic-1',
       visitId: 'v1',
-      amountPaise: rs(1500),
+      amountPaise: rs(1000),
       method: 'cash',
-      receivedDate: '2026-01-01',
+      receivedDate: '2026-06-05',
       notes: null,
       updatedAt: '',
     });
     const svc = createDashboardService(fake.repos);
-    const items = await svc.pendingWork('clinic-1');
-    expect(items).toHaveLength(1);
-    expect(items[0].kind).toBe('stale_package');
-    expect(items[0].patientName).toBe('Test Patient');
+    const summary = await svc.monthlyCollection('clinic-1', { year: 2026, month: 6 });
+    expect(summary.billedPaise).toBe(rs(1000));
+    expect(summary.collectedPaise).toBe(rs(1000));
+    expect(summary.collectionRatePct).toBe(100);
   });
 
-  it('flags an invoice explicitly marked outstanding', async () => {
+  it('excludes an outstanding invoice from collected but still counts it as billed', async () => {
     fake.invoices.set('inv-1', baseInvoice('inv-1', { totalPaise: rs(1500) }));
     fake.invoicePayments.set('p1', {
       id: 'p1',
@@ -323,77 +351,176 @@ describe('dashboardService.pendingWork', () => {
       paidAt: null,
       updatedAt: '',
     });
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-05', actualBillPaise: rs(1500), invoiceId: 'inv-1' })
+    );
     const svc = createDashboardService(fake.repos);
-    const items = await svc.pendingWork('clinic-1');
-    expect(items).toHaveLength(1);
-    expect(items[0].kind).toBe('outstanding_payment');
-    expect(items[0].amountPaise).toBe(rs(1500));
+    const summary = await svc.monthlyCollection('clinic-1', { year: 2026, month: 6 });
+    expect(summary.billedPaise).toBe(rs(1500));
+    expect(summary.collectedPaise).toBe(0);
+    expect(summary.collectionRatePct).toBe(0);
   });
 
-  it('flags a billed visit with no invoice and no direct payment, carrying the pending note', async () => {
-    fake.visits.set('v1', baseVisit('v1', { pendingPaymentNote: 'Will pay next Monday' }));
+  it('scopes to one therapist when therapistId is passed', async () => {
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-05', therapistId: 'th-prem', actualBillPaise: rs(1000), invoiceId: null })
+    );
+    fake.visits.set(
+      'v2',
+      baseVisit('v2', { visitDate: '2026-06-06', therapistId: 'th-other', actualBillPaise: rs(2000), invoiceId: null })
+    );
     const svc = createDashboardService(fake.repos);
-    const items = await svc.pendingWork('clinic-1');
-    expect(items).toHaveLength(1);
-    expect(items[0].kind).toBe('outstanding_payment');
-    expect(items[0].detail).toBe('Marked pending: Will pay next Monday');
+    const summary = await svc.monthlyCollection('clinic-1', { year: 2026, month: 6 }, 'th-prem');
+    expect(summary.billedPaise).toBe(rs(1000));
+  });
+});
+
+describe('dashboardService.repeatVisits', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
   });
 
-  it('does not flag a billed visit once a direct payment is logged against it', async () => {
-    fake.visits.set('v1', baseVisit('v1', {}));
-    fake.payments.set('pay-1', {
-      id: 'pay-1',
-      clinicId: 'clinic-1',
-      visitId: 'v1',
-      amountPaise: rs(1500),
-      method: 'cash',
-      receivedDate: '2026-06-01',
-      notes: null,
-      updatedAt: '',
-    });
+  it('counts a visit as repeat when the same patient was seen ≤30 days earlier', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-05-20', patientId: 'pat-1' }));
+    fake.visits.set('v2', baseVisit('v2', { visitDate: '2026-06-10', patientId: 'pat-1' }));
     const svc = createDashboardService(fake.repos);
-    expect(await svc.pendingWork('clinic-1')).toHaveLength(0);
+    const stats = await svc.repeatVisits('clinic-1', { year: 2026, month: 6 });
+    expect(stats.repeatCount).toBe(1);
+    expect(stats.totalVisits).toBe(1);
+    expect(stats.ratePct).toBe(100);
   });
 
-  it('does not flag a zero-bill continuation session as an outstanding payment', async () => {
-    fake.visits.set('v1', baseVisit('v1', { actualBillPaise: 0, catalogPricePaise: 0 }));
+  it('does not count a visit whose only prior visit was more than 30 days earlier', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-04-01', patientId: 'pat-1' }));
+    fake.visits.set('v2', baseVisit('v2', { visitDate: '2026-06-10', patientId: 'pat-1' }));
     const svc = createDashboardService(fake.repos);
-    expect(await svc.pendingWork('clinic-1')).toHaveLength(0);
+    const stats = await svc.repeatVisits('clinic-1', { year: 2026, month: 6 });
+    expect(stats.repeatCount).toBe(0);
+    expect(stats.totalVisits).toBe(1);
+    expect(stats.ratePct).toBe(0);
   });
 
-  it('flags a visit whose clinical note was never finished', async () => {
-    fake.visits.set('v1', baseVisit('v1', { clinicalStatus: 'pending', invoiceId: null }));
-    fake.payments.set('pay-1', {
-      id: 'pay-1',
-      clinicId: 'clinic-1',
-      visitId: 'v1',
-      amountPaise: rs(1500),
-      method: 'cash',
-      receivedDate: '2026-06-01',
-      notes: null,
-      updatedAt: '',
-    });
+  it('does not count a patient\'s first-ever visit as a repeat', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-10', patientId: 'pat-1' }));
     const svc = createDashboardService(fake.repos);
-    const items = await svc.pendingWork('clinic-1');
-    // Paid, so no outstanding_payment item — only the incomplete note remains.
-    expect(items).toHaveLength(1);
-    expect(items[0].kind).toBe('incomplete_note');
+    const stats = await svc.repeatVisits('clinic-1', { year: 2026, month: 6 });
+    expect(stats.repeatCount).toBe(0);
+    expect(stats.ratePct).toBe(0);
   });
 
-  it('sorts all items most-overdue-first', async () => {
-    fake.invoices.set('inv-1', baseInvoice('inv-1', { issuedAt: '2026-06-10T00:00:00Z' }));
-    fake.invoicePayments.set('p1', {
-      id: 'p1',
-      clinicId: 'clinic-1',
-      invoiceId: 'inv-1',
-      status: 'outstanding',
-      paidAt: null,
-      updatedAt: '',
-    });
-    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-01-01' }));
+  it('returns null ratePct when there were no visits that month', async () => {
     const svc = createDashboardService(fake.repos);
-    const items = await svc.pendingWork('clinic-1');
-    expect(items[0].visitId).toBe('v1'); // the older unpaid visit sorts before the newer invoice
+    const stats = await svc.repeatVisits('clinic-1', { year: 2026, month: 6 });
+    expect(stats.ratePct).toBeNull();
+  });
+});
+
+describe('dashboardService.serviceUsage', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+
+  it('ranks services by visit count, most-used first', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-05', serviceCatalogId: 'svc-1', actualBillPaise: rs(1000) }));
+    fake.visits.set('v2', baseVisit('v2', { visitDate: '2026-06-06', serviceCatalogId: 'svc-1', actualBillPaise: rs(1000) }));
+    fake.visits.set('v3', baseVisit('v3', { visitDate: '2026-06-07', serviceCatalogId: 'svc-2', actualBillPaise: rs(500) }));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.serviceUsage('clinic-1', { year: 2026, month: 6 });
+    expect(rows[0].serviceId).toBe('svc-1');
+    expect(rows[0].visitCount).toBe(2);
+    expect(rows[0].totalBilledPaise).toBe(rs(2000));
+  });
+});
+
+describe('dashboardService.modalityUsage', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+
+  const baseNote = (id: string, overrides: Partial<ConsultationNote>): ConsultationNote => ({
+    id,
+    clinicId: 'clinic-1',
+    patientId: 'pat-1',
+    therapistId: 'th-prem',
+    visitId: null,
+    enrollmentId: null,
+    authorizedSessionCount: null,
+    notesText: null,
+    assessmentPayload: null,
+    noteMode: null,
+    nrsScore: null,
+    psfsMean: null,
+    redFlagCount: 0,
+    status: 'completed',
+    updatedAt: '',
+    ...overrides,
+  });
+
+  it('tallies modalities across every note, most-used first', async () => {
+    fake.consultationNotes.set(
+      'n1',
+      baseNote('n1', { assessmentPayload: { treatment: { session: { modalities: ['TENS', 'Ultrasound'] } } } })
+    );
+    fake.consultationNotes.set(
+      'n2',
+      baseNote('n2', { assessmentPayload: { treatment: { session: { modalities: ['TENS'] } } } })
+    );
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.modalityUsage('clinic-1');
+    expect(rows[0]).toEqual({ modality: 'TENS', count: 2 });
+    expect(rows[1]).toEqual({ modality: 'Ultrasound', count: 1 });
+  });
+
+  it('skips a note with no modalities recorded rather than throwing', async () => {
+    fake.consultationNotes.set('n1', baseNote('n1', {}));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.modalityUsage('clinic-1');
+    expect(rows).toEqual([]);
+  });
+});
+
+describe('dashboardService.conditionUsage', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+
+  it('groups by condition, most-visited first, with a patient drill-down', async () => {
+    fake.visits.set('v1', baseVisit('v1', { condition: 'Low back pain', actualBillPaise: rs(1000) }));
+    fake.visits.set('v2', baseVisit('v2', { condition: 'Low back pain', actualBillPaise: rs(1000) }));
+    fake.visits.set('v3', baseVisit('v3', { condition: 'Frozen shoulder', actualBillPaise: rs(1500) }));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.conditionUsage('clinic-1');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ condition: 'Low back pain', count: 2 });
+    expect(rows[0].patients[0]).toMatchObject({ patientName: 'Test Patient', visitCount: 2, revenuePaise: rs(2000) });
+    expect(rows[1]).toMatchObject({ condition: 'Frozen shoulder', count: 1 });
+  });
+
+  it('blank/missing condition becomes "Unspecified"', async () => {
+    fake.visits.set('v1', baseVisit('v1', { condition: null }));
+    fake.visits.set('v2', baseVisit('v2', { condition: '   ' }));
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.conditionUsage('clinic-1');
+    expect(rows).toEqual([{ condition: 'Unspecified', count: 2, patients: expect.any(Array) }]);
+  });
+
+  it('folds conditions past the top N into "Other" instead of fragmenting', async () => {
+    // 9 distinct single-visit conditions — one more than CONDITION_TOP_N (7).
+    for (let i = 0; i < 9; i++) {
+      fake.visits.set(`v${i}`, baseVisit(`v${i}`, { condition: `Condition ${i}`, actualBillPaise: rs(100) }));
+    }
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.conditionUsage('clinic-1');
+    expect(rows).toHaveLength(CONDITION_TOP_N + 1); // top 7 + one "Other" row
+    const other = rows.find((r) => r.condition === 'Other');
+    expect(other).toMatchObject({ count: 2 }); // the 2 conditions that didn't make the top 7
+    expect(other?.patients[0].visitCount).toBe(2); // same patient contributed both folded visits
   });
 });
 
@@ -471,6 +598,22 @@ describe('dashboardService.recentVisits', () => {
     const svc = createDashboardService(fake.repos);
     expect((await svc.recentVisits('clinic-1'))[0].outstandingPaise).toBe(0);
   });
+
+  it('reports zero outstanding when a direct payment was logged with no invoice', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: null }));
+    fake.payments.set('pay-1', {
+      id: 'pay-1',
+      clinicId: 'clinic-1',
+      visitId: 'v1',
+      amountPaise: rs(500),
+      method: 'cash',
+      receivedDate: '2026-06-01',
+      notes: null,
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    expect((await svc.recentVisits('clinic-1'))[0].outstandingPaise).toBe(0);
+  });
 });
 
 describe('dashboardService.recentVisitsWindow', () => {
@@ -539,39 +682,37 @@ describe('dashboardService.singleVisitPatients', () => {
     const svc = createDashboardService(fake.repos);
     expect(await svc.singleVisitPatients('clinic-1')).toEqual([]);
   });
-});
 
-describe('dashboardService.recurringPatients', () => {
-  let fake: ReturnType<typeof makeFakeRepos>;
-  beforeEach(() => {
-    fake = makeFakeRepos();
+  it('joins the patient\'s no-return reason when set', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2020-01-01' }));
+    fake.reasons.set('r1', {
+      id: 'r1',
+      clinicId: 'clinic-1',
+      name: 'Relocated',
+      isClosed: true,
+      active: true,
+      updatedAt: '',
+    });
+    const patient = await fake.repos.patients.get('pat-1');
+    await fake.repos.patients.put({ ...patient!, noReturnReasonId: 'r1' });
+    const svc = createDashboardService(fake.repos);
+    const rows = await svc.singleVisitPatients('clinic-1');
+    expect(rows[0]).toMatchObject({
+      noReturnReasonId: 'r1',
+      noReturnReasonName: 'Relocated',
+      noReturnReasonClosed: true,
+    });
   });
 
-  it('surfaces a patient with 3+ visits in the last 30 days', async () => {
-    const today = new Date();
-    for (let i = 0; i < 3; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i * 5);
-      fake.visits.set(`v${i}`, baseVisit(`v${i}`, { visitDate: d.toISOString().slice(0, 10) }));
-    }
+  it('leaves the reason fields null when nothing is set', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2020-01-01' }));
     const svc = createDashboardService(fake.repos);
-    const rows = await svc.recurringPatients('clinic-1');
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ patientName: 'Test Patient', mrno: '1001', visitCount: 3 });
-  });
-
-  it('excludes a patient under the minimum visit count', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: new Date().toISOString().slice(0, 10) }));
-    const svc = createDashboardService(fake.repos);
-    expect(await svc.recurringPatients('clinic-1')).toEqual([]);
-  });
-
-  it('ignores visits outside the rolling window', async () => {
-    for (let i = 0; i < 3; i++) {
-      fake.visits.set(`v${i}`, baseVisit(`v${i}`, { visitDate: '2020-01-0' + (i + 1) }));
-    }
-    const svc = createDashboardService(fake.repos);
-    expect(await svc.recurringPatients('clinic-1')).toEqual([]);
+    const rows = await svc.singleVisitPatients('clinic-1');
+    expect(rows[0]).toMatchObject({
+      noReturnReasonId: null,
+      noReturnReasonName: null,
+      noReturnReasonClosed: false,
+    });
   });
 });
 
@@ -645,6 +786,25 @@ describe('dashboardService.todayWorklist', () => {
     const result = await svc.todayWorklist('clinic-1', today);
     expect(result.visits[0].paymentState).toBe('paid');
     expect(result.collectedPaise).toBe(rs(1500));
+  });
+
+  it('marks a billed visit with a direct payment but no invoice as collected_no_receipt', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr, actualBillPaise: rs(1500) }));
+    fake.payments.set('pay-1', {
+      id: 'pay-1',
+      clinicId: 'clinic-1',
+      visitId: 'v1',
+      amountPaise: rs(1500),
+      method: 'cash',
+      receivedDate: todayStr,
+      notes: null,
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    const result = await svc.todayWorklist('clinic-1', today);
+    expect(result.visits[0].paymentState).toBe('collected_no_receipt');
+    expect(result.collectedPaise).toBe(rs(1500));
+    expect(result.outstandingPaise).toBe(0);
   });
 
   it('marks an invoiced visit with an explicit outstanding row as outstanding', async () => {
@@ -737,5 +897,46 @@ describe('dashboardService.monthlyNewCounts', () => {
     const svc = createDashboardService(fake.repos);
     const counts = await svc.monthlyNewCounts('clinic-1', new Date('2026-06-15'));
     expect(counts.newPatients).toBe(0);
+  });
+
+  it('does not count a patient whose first visit was a LATER month as new for an earlier one', async () => {
+    // Regression: monthStart used to have no upper bound, so querying an
+    // earlier month (e.g. "last month") counted anyone new since then —
+    // including patients who only actually showed up later.
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-07-05' }));
+    const svc = createDashboardService(fake.repos);
+    const counts = await svc.monthlyNewCounts('clinic-1', new Date('2026-06-15'));
+    expect(counts.newPatients).toBe(0);
+  });
+
+  it('does not count a package whose first session was a LATER month as new for an earlier one', async () => {
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-07-05', packageGroupId: 'g1', packageTotal: 3 })
+    );
+    const svc = createDashboardService(fake.repos);
+    const counts = await svc.monthlyNewCounts('clinic-1', new Date('2026-06-15'));
+    expect(counts.newPackages).toBe(0);
+  });
+
+  it('scopes both counts to just one therapist when therapistId is passed', async () => {
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-05', therapistId: 'th-prem', patientId: 'p1' })
+    );
+    fake.visits.set(
+      'v2',
+      baseVisit('v2', {
+        visitDate: '2026-06-06',
+        therapistId: 'th-other',
+        patientId: 'p2',
+        packageGroupId: 'g1',
+        packageTotal: 3,
+      })
+    );
+    const svc = createDashboardService(fake.repos);
+    const counts = await svc.monthlyNewCounts('clinic-1', new Date('2026-06-15'), 'th-prem');
+    expect(counts.newPatients).toBe(1);
+    expect(counts.newPackages).toBe(0);
   });
 });

@@ -10,7 +10,7 @@ describe('computeVisitSplit', () => {
     expect(s.bmSharePaise).toBe(rs(600));
     expect(s.postTaxPaise).toBe(rs(540));
     expect(s.tdsPaise).toBe(rs(80)); // sheet's TDS column: 10% of gross
-    expect(s.hvPaise).toBe(rs(260));
+    expect(s.hvPaise).toBe(rs(200)); // partner's 25% pre-tax, bmSharePaise + hvPaise === bill
   });
 
   it('reports TDS on the BM share only under bm_share basis', () => {
@@ -58,6 +58,6 @@ describe('computeVisitSplit', () => {
     expect(s.bmSharePaise).toBe(rs(800));
     expect(s.postTaxPaise).toBe(rs(760));
     expect(s.tdsPaise).toBe(rs(50));
-    expect(s.hvPaise).toBe(rs(240));
+    expect(s.hvPaise).toBe(rs(200)); // partner's 20% pre-tax, bmSharePaise + hvPaise === bill
   });
 });

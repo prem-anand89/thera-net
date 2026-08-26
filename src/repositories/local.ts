@@ -3,6 +3,9 @@ import type {
   Clinic,
   Therapist,
   CatalogItem,
+  NoReturnReasonItem,
+  ReferringSourceItem,
+  TreatmentItem,
   Patient,
   Visit,
   Invoice,
@@ -12,10 +15,14 @@ import type {
   ConsultationNote,
   UUID,
 } from '@/domain/types';
+import { coerceReferringSource } from '@/domain/types';
 import type {
   ClinicRepo,
   TherapistRepo,
   CatalogRepo,
+  NoReturnReasonCatalogRepo,
+  ReferringSourceCatalogRepo,
+  TreatmentCatalogRepo,
   PatientRepo,
   VisitRepo,
   VisitFilter,
@@ -69,6 +76,9 @@ const therapists: TherapistRepo = {
       .sort((a, b) => a.name.localeCompare(b.name));
   },
   put: (t) => putWithOutbox('therapists', t),
+  removeLocal: async (id) => {
+    await db.therapists.delete(id);
+  },
 };
 
 const catalog: CatalogRepo = {
@@ -82,6 +92,33 @@ const catalog: CatalogRepo = {
   put: (item) => putWithOutbox('service_catalog', item),
 };
 
+const noReturnReasonCatalog: NoReturnReasonCatalogRepo = {
+  async list(clinicId, includeInactive = false) {
+    const all = await db.no_return_reason_catalog.where('clinicId').equals(clinicId).toArray();
+    return all.filter((r) => includeInactive || r.active).sort((a, b) => a.name.localeCompare(b.name));
+  },
+  get: (id) => db.no_return_reason_catalog.get(id),
+  put: (item) => putWithOutbox('no_return_reason_catalog', item),
+};
+
+const referringSourceCatalog: ReferringSourceCatalogRepo = {
+  async list(clinicId, includeInactive = false) {
+    const all = await db.referring_source_catalog.where('clinicId').equals(clinicId).toArray();
+    return all.filter((r) => includeInactive || r.active).sort((a, b) => a.name.localeCompare(b.name));
+  },
+  get: (id) => db.referring_source_catalog.get(id),
+  put: (item) => putWithOutbox('referring_source_catalog', item),
+};
+
+const treatmentCatalog: TreatmentCatalogRepo = {
+  async list(clinicId, includeInactive = false) {
+    const all = await db.treatment_catalog.where('clinicId').equals(clinicId).toArray();
+    return all.filter((r) => includeInactive || r.active).sort((a, b) => a.name.localeCompare(b.name));
+  },
+  get: (id) => db.treatment_catalog.get(id),
+  put: (item) => putWithOutbox('treatment_catalog', item),
+};
+
 const patients: PatientRepo = {
   get: (id) => db.patients.get(id),
   getByMrno: (clinicId, mrno) =>
@@ -89,10 +126,20 @@ const patients: PatientRepo = {
   async search(clinicId, query, limit = 15) {
     const q = query.trim().toLowerCase();
     if (!q) return [];
+    // Phone matching runs on digits only, so "98765 43210", "+91 98765-43210",
+    // and "9876543210" all find the same patient regardless of how either
+    // side was formatted. A short query (e.g. "98") still requires 3+ digits
+    // to avoid matching every record's area code by accident.
+    const qDigits = q.replace(/\D/g, '');
     const all = await db.patients.where('clinicId').equals(clinicId).toArray();
     return all
       .filter((p) => !p.deletedAt)
-      .filter((p) => p.mrno.toLowerCase().startsWith(q) || p.name.toLowerCase().includes(q))
+      .filter(
+        (p) =>
+          p.mrno.toLowerCase().startsWith(q) ||
+          p.name.toLowerCase().includes(q) ||
+          (qDigits.length >= 3 && (p.phone ?? '').replace(/\D/g, '').includes(qDigits))
+      )
       .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, limit);
   },
@@ -100,7 +147,8 @@ const patients: PatientRepo = {
     const all = await db.patients.where('clinicId').equals(clinicId).toArray();
     return all.sort((a, b) => a.name.localeCompare(b.name));
   },
-  put: (p) => putWithOutbox('patients', p),
+  put: (p) =>
+    putWithOutbox('patients', { ...p, referringSource: coerceReferringSource(p.referringSource) }),
   removeLocal: async (id) => {
     await db.patients.delete(id);
   },
@@ -109,10 +157,24 @@ const patients: PatientRepo = {
 const visits: VisitRepo = {
   get: (id) => db.visits.get(id),
   async list(filter: VisitFilter) {
-    let rows = await db.visits.where('clinicId').equals(filter.clinicId).toArray();
+    // A date range (Workspace's "today", Ledger's date presets, dashboard
+    // aggregations) can go straight to the matching rows via the compound
+    // index instead of loading the clinic's entire visit history and
+    // filtering in memory. An open-ended range still needs a bound on each
+    // side, so a missing `from`/`to` is filled with a value date never goes
+    // below/above.
+    let rows: Visit[];
+    if (filter.from || filter.to) {
+      const from = filter.from ?? '0000-00-00';
+      const to = filter.to ?? '9999-99-99';
+      rows = await db.visits
+        .where('[clinicId+visitDate]')
+        .between([filter.clinicId, from], [filter.clinicId, to], true, true)
+        .toArray();
+    } else {
+      rows = await db.visits.where('clinicId').equals(filter.clinicId).toArray();
+    }
     rows = rows.filter((v) => !v.deleted);
-    if (filter.from) rows = rows.filter((v) => v.visitDate >= filter.from!);
-    if (filter.to) rows = rows.filter((v) => v.visitDate <= filter.to!);
     if (filter.therapistId) rows = rows.filter((v) => v.therapistId === filter.therapistId);
     if (filter.patientId) rows = rows.filter((v) => v.patientId === filter.patientId);
     return rows.sort((a, b) => b.visitDate.localeCompare(a.visitDate) || b.updatedAt.localeCompare(a.updatedAt));
@@ -242,6 +304,9 @@ export const repos: Repos = {
   clinics,
   therapists,
   catalog,
+  noReturnReasonCatalog,
+  referringSourceCatalog,
+  treatmentCatalog,
   patients,
   visits,
   invoices,
@@ -258,6 +323,9 @@ export type {
   Clinic,
   Therapist,
   CatalogItem,
+  NoReturnReasonItem,
+  ReferringSourceItem,
+  TreatmentItem,
   Patient,
   Visit,
   Invoice,

@@ -8,16 +8,21 @@ import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService'
  *
  * `hospitalSplit` (default on) shows the clinic-share / TDS / Post-Tax /
  * partner-share columns; a simple clinic turns it off and sees just billed
- * totals. `showShared` adds the internal therapist-split columns (Shared/Net);
- * the hospital-facing PDF leaves it off so that document stays purely about
- * billed figures the hospital reconciles.
+ * totals. `Net` (Post-Tax BM adjusted for same-visit Shared/Split splits AND
+ * automatic package-session attribution — see TherapistMonthRow.netPostTaxPaise)
+ * always shows, on both the Reports page and the hospital-facing PDF, since
+ * it's the one number that answers "how much did this therapist actually
+ * generate" regardless of billing quirks. `showShared` additionally reveals
+ * the raw internal-split mechanics (the Shared column) — off by default on
+ * the hospital PDF, which otherwise stays purely about billed figures the
+ * hospital reconciles.
  */
 export function MonthlyReportTable({
   report,
   hospitalSplit = true,
   showShared = false,
-  own = 'BM',
-  partner = 'HV',
+  own = 'Clinic',
+  partner = 'Partner',
 }: {
   report: MonthlyReport | undefined;
   hospitalSplit?: boolean;
@@ -33,7 +38,7 @@ export function MonthlyReportTable({
       {hospitalSplit && <td className={tdNum}>{formatINR(r.postTaxPaise)}</td>}
       {hospitalSplit && <td className={tdNum}>{formatINR(r.hvPaise)}</td>}
       {showShared && <td className={tdNum}>{r.sharedPaise !== 0 ? formatINR(r.sharedPaise) : '—'}</td>}
-      {showShared && <td className={tdNum}>{formatINR(r.netPostTaxPaise)}</td>}
+      <td className={tdNum}>{formatINR(r.netPostTaxPaise)}</td>
       <td className={tdNum}>{r.visitCount}</td>
       <td className={tdNum}>{r.uniquePatients}</td>
     </>
@@ -43,7 +48,7 @@ export function MonthlyReportTable({
     <table className="min-w-full divide-y divide-[var(--border)]">
       <thead className="bg-[var(--paper)]">
         <tr>
-          <th className={th}>Therapist</th>
+          <th className={`${th} sticky left-0 z-[1] bg-[var(--paper)]`}>Therapist</th>
           <th className={thNum}>Bill Amount</th>
           {hospitalSplit && (
             <th className={thNum}>
@@ -66,21 +71,23 @@ export function MonthlyReportTable({
           {hospitalSplit && (
             <th className={thNum}>
               {partner} Share
-              {showShared && <InfoTip text={`The remainder of the bill after ${own}'s cut — what goes to ${partner}.`} />}
+              {showShared && (
+                <InfoTip
+                  text={`${partner}'s share of the bill — the remainder after ${own}'s split %, before either side's tax. See TDS Deducted separately for what's withheld from ${own}'s cut.`}
+                />
+              )}
             </th>
           )}
           {showShared && (
             <th className={thNum}>
               Shared
-              <InfoTip text="Money moved between therapists on split visits — negative for who gave it up, positive for who received it. Always nets to zero." />
+              <InfoTip text="Money moved between therapists on split visits — negative for who gave it up, positive for who received it. Always nets to zero. Shown here as a share of the gross bill; the amount actually reflected in Net is the same % applied to the post-tax figure, so the two won't match exactly when tax applies." />
             </th>
           )}
-          {showShared && (
-            <th className={thNum}>
-              Net
-              <InfoTip text={`Post Tax ${own}, adjusted for that therapist's splits — their real take-home figure.`} />
-            </th>
-          )}
+          <th className={thNum}>
+            Net
+            <InfoTip text={`Post Tax ${own}, adjusted for same-visit splits and for a multi-session package's total spread evenly across the therapists who ran its sessions — the real figure for "how much did this therapist generate," not just whoever it was billed under.`} />
+          </th>
           <th className={thNum}>Visits</th>
           <th className={thNum}>Patients</th>
         </tr>
@@ -88,13 +95,13 @@ export function MonthlyReportTable({
       <tbody className="divide-y divide-[var(--border)]">
         {(report?.rows ?? []).map((r) => (
           <tr key={r.therapistId}>
-            <td className={td}>{r.therapistName}</td>
+            <td className={`${td} sticky left-0 bg-[var(--surface)]`}>{r.therapistName}</td>
             {cells(r)}
           </tr>
         ))}
         {report && (
           <tr className="bg-[var(--paper)] font-semibold">
-            <td className={td}>Total</td>
+            <td className={`${td} sticky left-0 bg-[var(--paper)]`}>Total</td>
             {cells(report.total)}
           </tr>
         )}

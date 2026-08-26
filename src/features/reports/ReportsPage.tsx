@@ -1,214 +1,103 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from '@tanstack/react-router';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { reportService, settlementService } from '@/services';
-import { useClinic } from '@/app/clinicContext';
-import { formatINR } from '@/domain/money';
-import type { Paise } from '@/domain/money';
-import { fiscalYearOf, monthsOfFiscalYear, monthName, type FyMonth } from '@/domain/fiscalYear';
-import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
-import { btnPrimary, btnSecondary, inputCls, Field, RupeeInput, SectionCard, ErrorNote } from '@/components/ui';
-import { MonthlyReportTable } from '@/components/MonthlyReportTable';
-import { toFriendlyMessage } from '@/lib/errors';
+import { useCallback, useEffect } from 'react';
+import { useNavigate, useSearch } from '@tanstack/react-router';
+import { usePermissions } from '@/app/usePermissions';
+import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { ReportsOverviewPage } from './ReportsOverviewPage';
+import { MonthlyStatementPage } from './MonthlyStatementPage';
+import { AttributionAuditPage } from './AttributionAuditPage';
 
+type InsightsView = 'overview' | 'monthly' | 'audit';
+
+/**
+ * Reports nav tab: what you read periodically, as opposed to Ledger (what
+ * you act on daily). Trends is the Dashboard (patient retention, packages,
+ * revenue trend, referral sources — an "insights" page in substance, so it
+ * now says so); Monthly statement is the
+ * full per-therapist Bill/BM Share/TDS/Post-Tax/HV breakdown, gated on
+ * canViewPayouts (admin-only) the same way Ledger's Invoices sub-tab is
+ * gated on canBill — a colleague's individual earnings, not a per-visit
+ * bill amount. The nav item itself is hidden from plain therapists
+ * entirely (see Shell.tsx), so anyone who reaches this page at all is
+ * already admin or front_desk.
+ */
 export function ReportsPage() {
-  const clinic = useClinic();
-  const labels = clinicShareLabels(clinic);
-  const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
-  const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
-  const [fyStartYear, setFyStartYear] = useState(currentFy.startYear);
-  const now = new Date();
-  const [month, setMonth] = useState(`${now.getFullYear()}-${now.getMonth() + 1}`);
+  const { canViewPayouts, role, entitlementsLoading } = usePermissions();
+  const { isClinicWideView } = useWorkspaceScope();
+  const navigate = useNavigate();
+  const search = useSearch({ from: '/insights' });
+  const view: InsightsView =
+    search.tab === 'monthly' ? 'monthly' : search.tab === 'audit' ? 'audit' : 'overview';
 
-  const months = useMemo(
-    () => monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth),
-    [fyStartYear, clinic.fyStartMonth]
-  );
-
-  const selected = useMemo(() => {
-    const [y, m] = month.split('-').map(Number);
-    return { year: y, month: m };
-  }, [month]);
-
-  const report = useLiveQuery(
-    () => reportService.monthly(clinic.id, selected),
-    [clinic.id, selected.year, selected.month]
-  );
-
-  function downloadCsv() {
-    if (!report) return;
-    const blob = new Blob([reportService.toCsv(report, { labels, hospitalSplit, therapistSplit })], {
-      type: 'text/csv',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${clinic.invoicePrefix}-report-${selected.year}-${String(selected.month).padStart(2, '0')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Monthly report</h1>
-        <div className="ml-auto flex items-end gap-2">
-          <select
-            className={inputCls}
-            value={fyStartYear}
-            onChange={(e) => setFyStartYear(Number(e.target.value))}
-          >
-            {[currentFy.startYear - 2, currentFy.startYear - 1, currentFy.startYear].map((y) => (
-              <option key={y} value={y}>
-                FY {fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label}
-              </option>
-            ))}
-          </select>
-          <select className={inputCls} value={month} onChange={(e) => setMonth(e.target.value)}>
-            {months.map((m) => (
-              <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
-                {monthName(m.month)} {m.year}
-              </option>
-            ))}
-          </select>
-          <button className={btnSecondary} onClick={downloadCsv}>
-            Export CSV
-          </button>
-          <Link
-            to="/reports/print"
-            search={{ year: selected.year, month: selected.month }}
-            className={btnSecondary}
-          >
-            Export as PDF
-          </Link>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-        <MonthlyReportTable
-          report={report}
-          hospitalSplit={hospitalSplit}
-          showShared={therapistSplit}
-          own={labels.own}
-          partner={labels.partner}
-        />
-      </div>
-
-      <p className="text-xs text-[var(--muted)]">
-        Patients = unique patients in the month, not visit count.
-        {hospitalSplit && (
-          <>
-            {' '}
-            TDS basis for new visits:{' '}
-            {clinic.tdsBasis === 'gross_bill'
-              ? `${clinic.taxPct}%-of-gross-bill (matches the ${labels.partner} sheet)`
-              : `on ${labels.own} share`}
-            ; each visit keeps the basis and rates that were active when it was billed.
-          </>
-        )}
-      </p>
-
-      {hospitalSplit && (
-        <SettlementCard
-          clinicId={clinic.id}
-          month={selected}
-          expectedPaise={report?.total.postTaxPaise ?? null}
-          labels={labels}
-        />
-      )}
-    </div>
-  );
-}
-
-function SettlementCard({
-  clinicId,
-  month,
-  expectedPaise,
-  labels,
-}: {
-  clinicId: string;
-  month: FyMonth;
-  expectedPaise: Paise | null;
-  labels: { own: string; partner: string };
-}) {
-  const settlement = useLiveQuery(
-    () => settlementService.get(clinicId, month.year, month.month),
-    [clinicId, month.year, month.month]
-  );
-
-  const [amountPaise, setAmountPaise] = useState<Paise | null>(null);
-  const [receivedDate, setReceivedDate] = useState('');
-  const [notes, setNotes] = useState('');
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setAmountPaise(settlement?.amountReceivedPaise ?? null);
-    setReceivedDate(settlement?.receivedDate ?? '');
-    setNotes(settlement?.notes ?? '');
-    setSaved(false);
-  }, [settlement, month.year, month.month]);
-
-  async function save() {
-    setError(null);
-    try {
-      await settlementService.save(clinicId, month.year, month.month, {
-        amountReceivedPaise: amountPaise ?? 0,
-        receivedDate: receivedDate || null,
-        notes: notes || null,
+  const setView = useCallback(
+    (next: InsightsView) => {
+      void navigate({
+        to: '/insights',
+        search: next === 'overview' ? {} : { tab: next },
+        replace: true,
       });
-      setSaved(true);
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    }
+    },
+    [navigate]
+  );
+
+  // canViewPayouts flipping mid-session (admin role changed on another
+  // device) shouldn't leave someone stranded on a tab that just disappeared.
+  // Wait until role resolves — while it's still 'unknown', canViewPayouts is
+  // false and we'd incorrectly strip ?tab=monthly back to Trends on load.
+  // Also wait for entitlementsLoading: canViewPayouts folds in a plan-tier
+  // check that reads fail-closed (false) on every fresh mount until that
+  // fetch resolves, independent of role — the same trap this comment
+  // already covers for role, but from a different, newer source.
+  useEffect(() => {
+    if (entitlementsLoading) return;
+    if (view !== 'overview' && role !== 'unknown' && !canViewPayouts) setView('overview');
+  }, [view, canViewPayouts, role, entitlementsLoading, setView]);
+
+  // Nav already hides the Reports link for a plain therapist (Shell.tsx);
+  // this guard covers a direct URL hit (old bookmark, typed link) instead
+  // of silently rendering clinic-wide aggregates. The therapist comparison
+  // chart is the one exception (decision 4) — it lives on Workspace instead,
+  // reachable without this tab.
+  if (!isClinicWideView) {
+    return (
+      <div className="space-y-4">
+        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Reports</h1>
+        <p className="text-sm text-[var(--muted)]">
+          Reports are visible to admins and front desk. Your own numbers are on Workspace.
+        </p>
+      </div>
+    );
   }
 
-  const variancePaise = amountPaise != null && expectedPaise != null ? amountPaise - expectedPaise : null;
-
   return (
-    <SectionCard title={`${labels.partner} settlement — ${monthName(month.month)} ${month.year}`}>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Field label={`Expected (computed Post Tax ${labels.own})${expectedPaise == null ? '' : `: ${formatINR(expectedPaise)}`}`}>
-          <div className="rounded-md border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-sm text-[var(--ink)]">
-            {expectedPaise != null ? formatINR(expectedPaise) : '—'}
-          </div>
-        </Field>
-        <Field label={`Amount received from ${labels.partner}`}>
-          <RupeeInput valuePaise={amountPaise} onChange={setAmountPaise} />
-        </Field>
-        <Field label="Received date">
-          <input
-            type="date"
-            className={inputCls}
-            value={receivedDate}
-            onChange={(e) => setReceivedDate(e.target.value)}
-          />
-        </Field>
-        <Field label="Notes">
-          <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </Field>
+    <div className="space-y-5">
+      <div className="flex w-fit gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+        {(
+          [
+            { key: 'overview', label: 'Trends' },
+            { key: 'monthly', label: 'Monthly statement' },
+            { key: 'audit', label: 'Attribution audit' },
+          ] as const
+        )
+          .filter((v) => v.key === 'overview' || canViewPayouts || entitlementsLoading)
+          .map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              className={`rounded-md px-3 py-1 text-xs font-medium ${
+                view === v.key
+                  ? 'bg-[var(--teal)] text-white'
+                  : 'text-[var(--muted)] hover:bg-[var(--surface)]'
+              }`}
+              onClick={() => setView(v.key)}
+            >
+              {v.label}
+            </button>
+          ))}
       </div>
-      {variancePaise != null && (
-        <p
-          className={`mt-3 text-sm font-medium ${
-            variancePaise === 0
-              ? 'text-[var(--moss)]'
-              : Math.abs(variancePaise) < 100
-                ? 'text-[var(--rust)]'
-                : 'text-[var(--rust)]'
-          }`}
-        >
-          Variance: {variancePaise >= 0 ? '+' : ''}
-          {formatINR(variancePaise)}
-        </p>
-      )}
-      <div className="mt-3 flex items-center gap-3">
-        <button className={btnPrimary} onClick={() => void save()}>
-          Save settlement
-        </button>
-        {saved && <span className="text-sm text-[var(--moss)]">Saved ✓</span>}
-      </div>
-      <ErrorNote message={error} />
-    </SectionCard>
+
+      {view === 'overview' && <ReportsOverviewPage />}
+      {view === 'monthly' && canViewPayouts && <MonthlyStatementPage />}
+      {view === 'audit' && canViewPayouts && <AttributionAuditPage />}
+    </div>
   );
 }

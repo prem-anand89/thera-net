@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { fiscalYearOf, monthsOfFiscalYear, monthDateRange, formatDateDMY } from './fiscalYear';
+import {
+  fiscalYearOf,
+  monthsOfFiscalYear,
+  monthDateRange,
+  fiscalYearDateRange,
+  fiscalYearToDateRange,
+  currentWeekRange,
+  formatDateDMY,
+  formatDateDM,
+} from './fiscalYear';
 import { formatInvoiceNo } from './invoiceNumber';
 import { effectivePricePerSession } from './types';
 import { rupeesToPaise as rs } from './money';
@@ -37,12 +46,66 @@ describe('monthDateRange', () => {
   });
 });
 
+describe('fiscalYearDateRange', () => {
+  it('spans the whole FY, Apr 2026 through Mar 2027', () => {
+    expect(fiscalYearDateRange(2026, 4)).toEqual({
+      from: '2026-04-01',
+      to: '2027-03-31',
+    });
+  });
+  it('respects a different fy_start_month', () => {
+    expect(fiscalYearDateRange(2026, 1)).toEqual({
+      from: '2026-01-01',
+      to: '2026-12-31',
+    });
+  });
+});
+
+describe('fiscalYearToDateRange', () => {
+  it('spans FY start through the given asOf date', () => {
+    expect(fiscalYearToDateRange(2026, 4, new Date(2026, 7, 21))).toEqual({
+      from: '2026-04-01',
+      to: '2026-08-21',
+    });
+  });
+  it('clamps to the FY start when asOf is before the FY begins', () => {
+    expect(fiscalYearToDateRange(2026, 4, new Date(2026, 2, 15))).toEqual({
+      from: '2026-04-01',
+      to: '2026-04-01',
+    });
+  });
+});
+
+describe('currentWeekRange', () => {
+  it('spans Monday through Sunday for a mid-week date', () => {
+    expect(currentWeekRange(new Date(2026, 7, 19))).toEqual({
+      from: '2026-08-17',
+      to: '2026-08-23',
+    });
+  });
+  it('treats Monday itself as the start of its own week', () => {
+    expect(currentWeekRange(new Date(2026, 7, 24))).toEqual({
+      from: '2026-08-24',
+      to: '2026-08-30',
+    });
+  });
+});
+
 describe('formatDateDMY', () => {
   it('formats an ISO date as DD/MM/YY', () => {
     expect(formatDateDMY('2026-07-05')).toBe('05/07/26');
   });
   it('formats a full ISO timestamp by taking just the date part', () => {
     expect(formatDateDMY('2026-07-05T00:00:00.000Z')).toBe('05/07/26');
+  });
+});
+
+describe('formatDateDM', () => {
+  it('formats an ISO date as DD/MM, dropping the year', () => {
+    expect(formatDateDM('2026-07-05')).toBe('05/07');
+  });
+  it('formats a full ISO timestamp by taking just the date part', () => {
+    expect(formatDateDM('2026-07-05T00:00:00.000Z')).toBe('05/07');
   });
 });
 

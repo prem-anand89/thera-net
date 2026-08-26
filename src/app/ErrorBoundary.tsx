@@ -35,7 +35,7 @@ export class ErrorBoundary extends Component<Props, State> {
             Try reloading the page. If it keeps happening, tell your admin — nothing you've saved
             has been lost.
           </p>
-          <button className={`${btnPrimary} w-full`} onClick={() => location.reload()}>
+          <button type="button" className={`${btnPrimary} w-full`} onClick={() => location.reload()}>
             Reload
           </button>
         </div>

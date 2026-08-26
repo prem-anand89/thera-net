@@ -33,6 +33,23 @@ describe('toFriendlyMessage', () => {
     ).toBe('A patient with this MR number already exists in this clinic.');
   });
 
+  it('gives an actionable message for an RLS rejection (e.g. editing a colleague\'s visit)', () => {
+    expect(
+      toFriendlyMessage(
+        postgrestError(
+          'new row violates row-level security policy (USING expression) for table "visits"',
+          '42501'
+        )
+      )
+    ).toBe("You don't have permission to save this change — it may belong to another therapist. Ask your admin if this looks wrong.");
+  });
+
+  it('falls back to the generic 42501 code message when the RLS wording doesn\'t match the pattern', () => {
+    expect(toFriendlyMessage(postgrestError('permission denied for table visits', '42501'))).toBe(
+      "You don't have permission to do that."
+    );
+  });
+
   it('falls back to the generic code message for an unrecognized 23505', () => {
     expect(toFriendlyMessage(postgrestError('duplicate key value violates unique constraint "some_other_key"', '23505'))).toBe(
       'That record already exists — check for a duplicate.'
@@ -57,10 +74,21 @@ describe('toFriendlyMessage', () => {
     expect(toFriendlyMessage(new Error('Supabase is not configured'))).toBe('Supabase is not configured');
   });
 
-  it('re-maps a double-leak wrapper Error that embeds a raw Postgrest message', () => {
+  it('translates the hard_delete_therapist rejection', () => {
     expect(
-      toFriendlyMessage(new Error('Could not issue invoice: patient has 3 visit(s); hide the patient instead of deleting'))
-    ).toBe('This patient has recorded visits and cannot be permanently deleted. Use "Hide" instead.');
+      toFriendlyMessage(postgrestError('therapist has 3 linked record(s); deactivate instead of deleting', 'P0001'))
+    ).toBe('This therapist has visits, notes, or invoices on record and cannot be permanently deleted. Deactivate them instead.');
+  });
+
+  it('translates a referring-source check constraint into an actionable message', () => {
+    expect(
+      toFriendlyMessage(
+        postgrestError(
+          'new row for relation "patients" violates check constraint "patients_referring_source_check"',
+          '23514'
+        )
+      )
+    ).toBe('That referral source is not valid. Pick one of the listed options and save again.');
   });
 });
 

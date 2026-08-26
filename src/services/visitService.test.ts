@@ -4,7 +4,7 @@ import { createReportService } from './reportService';
 import { createPatientService } from './patientService';
 import type { Repos, VisitFilter } from '@/repositories/types';
 import type { CatalogItem, Clinic, Patient, Therapist, Visit } from '@/domain/types';
-import { rupeesToPaise as rs } from '@/domain/money';
+import { roundToRupeeHalfUp, rupeesToPaise as rs } from '@/domain/money';
 
 // In-memory Repos double — services never touch Dexie or Supabase directly,
 // which is exactly what makes them testable (and the backend swappable).
@@ -60,18 +60,22 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
     clinics: {
       get: async (id) => (id === clinic.id ? clinic : undefined),
       list: async () => [clinic],
-      put: async () => {},
+      put: async (c) => void Object.assign(clinic, c),
       putLocal: async () => {},
     },
     therapists: {
       list: async () => therapists,
       put: async () => {},
+      removeLocal: async () => {},
     },
     catalog: {
       list: async () => catalog,
       get: async (id) => catalog.find((c) => c.id === id),
       put: async () => {},
     },
+    noReturnReasonCatalog: { list: async () => [], get: async () => undefined, put: async () => {} },
+    referringSourceCatalog: { list: async () => [], get: async () => undefined, put: async () => {} },
+    treatmentCatalog: { list: async () => [], get: async () => undefined, put: async () => {} },
     patients: {
       get: async (id) => patients.get(id),
       getByMrno: async (_c, mrno) => [...patients.values()].find((p) => p.mrno === mrno),
@@ -216,6 +220,27 @@ describe('visitService.create', () => {
     await expect(svc.updateBilling(v.id, { actualBillPaise: rs(100) })).rejects.toThrow(/frozen/);
   });
 
+  it('freezes therapist reassignment and the visit date once invoiced too', async () => {
+    const svc = createVisitService(fake.repos);
+    const v = await svc.create(base);
+    fake.visits.set(v.id, { ...v, invoiceId: 'inv-1' });
+    await expect(svc.updateBilling(v.id, { therapistId: 'th-aish' })).rejects.toThrow(/frozen/);
+    await expect(svc.updateBilling(v.id, { visitDate: '2026-05-10' })).rejects.toThrow(/frozen/);
+  });
+
+  it('still allows condition/treatmentNotes edits on an invoiced visit -- only billing is frozen', async () => {
+    const svc = createVisitService(fake.repos);
+    const v = await svc.create(base);
+    fake.visits.set(v.id, { ...v, invoiceId: 'inv-1' });
+    const updated = await svc.updateBilling(v.id, {
+      condition: 'Cervical radiculopathy',
+      treatmentNotes: 'Manual therapy, cervical traction',
+    });
+    expect(updated.condition).toBe('Cervical radiculopathy');
+    expect(updated.treatmentNotes).toBe('Manual therapy, cervical traction');
+    expect(updated.actualBillPaise).toBe(v.actualBillPaise); // billing itself untouched
+  });
+
   it('recomputes splits with the ORIGINAL rate snapshot on edit', async () => {
     const svc = createVisitService(fake.repos);
     const v = await svc.create(base);
@@ -238,6 +263,17 @@ describe('visitService.create', () => {
     expect(v.postTaxPaise).toBe(v.actualBillPaise);
     expect(v.tdsPaise).toBe(0);
     expect(v.hvPaise).toBe(0);
+  });
+
+  it('leaves clinicalStatus unset when the clinic has not opted into clinical docs', async () => {
+    const v = await createVisitService(fake.repos).create(base);
+    expect(v.clinicalStatus).toBeUndefined();
+  });
+
+  it('flags a fresh visit as pending documentation when the clinic has opted in', async () => {
+    const docsFake = makeFakeRepos({ clinicalDocsEnabled: true });
+    const v = await createVisitService(docsFake.repos).create(base);
+    expect(v.clinicalStatus).toBe('pending');
   });
 });
 
@@ -347,8 +383,50 @@ describe('visitService.setSplit', () => {
   });
 });
 
+describe('visitService.recomputeUninvoicedSplits', () => {
+  const base = {
+    clinicId: 'clinic-1',
+    patientId: 'p1',
+    therapistId: 'th-prem',
+    visitDate: '2026-05-10',
+    serviceCatalogId: 'svc-physio3',
+  };
+
+  it('re-snapshots not-yet-invoiced visits to the clinic\'s current split, leaving invoiced ones alone', async () => {
+    const fake = makeFakeRepos(); // bmSplitPct: 75, taxPct: 10, tdsBasis: 'gross_bill'
+    const svc = createVisitService(fake.repos);
+    const open = await svc.create(base);
+    const invoiced = await svc.create({ ...base, visitDate: '2026-05-11' });
+    fake.visits.set(invoiced.id, { ...invoiced, invoiceId: 'inv-1' });
+
+    // Renegotiate: clinic's split changes after both visits were logged.
+    const clinic = await fake.repos.clinics.get('clinic-1');
+    await fake.repos.clinics.put({ ...clinic!, bmSplitPct: 60, taxPct: 5 });
+
+    const result = await svc.recomputeUninvoicedSplits('clinic-1');
+    expect(result.updated).toBe(1);
+
+    const reopened = await fake.repos.visits.get(open.id);
+    expect(reopened!.bmSplitPct).toBe(60);
+    expect(reopened!.taxPct).toBe(5);
+    expect(reopened!.bmSharePaise).toBe(roundToRupeeHalfUp((open.actualBillPaise * 60) / 100));
+
+    // Invoiced visit's billing stays exactly as it was billed.
+    const stillInvoiced = await fake.repos.visits.get(invoiced.id);
+    expect(stillInvoiced!.bmSplitPct).toBe(75);
+  });
+
+  it('is a no-op when nothing needs updating', async () => {
+    const fake = makeFakeRepos();
+    const svc = createVisitService(fake.repos);
+    await svc.create(base);
+    const result = await svc.recomputeUninvoicedSplits('clinic-1');
+    expect(result.updated).toBe(0);
+  });
+});
+
 describe('patientService MRNO fallback', () => {
-  it('uses the typed hospital MRNO when given, generates W- prefixed otherwise', async () => {
+  it('uses the typed hospital MRNO when given, generates W-prefixed sequential otherwise', async () => {
     const fake = makeFakeRepos();
     const svc = createPatientService(fake.repos);
     const hospital = await svc.create({ clinicId: 'clinic-1', mrno: 'HV12345', name: 'Asha' });
@@ -356,7 +434,8 @@ describe('patientService MRNO fallback', () => {
     expect(hospital.mrnoSource).toBe('hospital');
 
     const walkIn = await svc.create({ clinicId: 'clinic-1', name: 'Ravi' });
-    expect(walkIn.mrno).toMatch(/^W-\d{6}-[A-Z0-9]{3}$/);
+    const yy = String(new Date().getFullYear()).slice(2);
+    expect(walkIn.mrno).toBe(`W${yy}-0001`);
     expect(walkIn.mrnoSource).toBe('auto');
 
     await expect(svc.create({ clinicId: 'clinic-1', mrno: 'HV12345', name: 'Dup' })).rejects.toThrow(

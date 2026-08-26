@@ -25,3 +25,9 @@ export function publicLogoUrl(path: string | null | undefined): string | null {
   if (!supabase) return null;
   return supabase.storage.from('clinic-assets').getPublicUrl(path).data.publicUrl;
 }
+
+/** Same bucket, same shape — a therapist photo is just another
+ *  clinic-assets file, so this is publicLogoUrl in all but name. Kept as
+ *  a separate export rather than reusing publicLogoUrl directly so the
+ *  call site reads as what it is. */
+export const publicTherapistPhotoUrl = publicLogoUrl;

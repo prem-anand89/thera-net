@@ -2,6 +2,9 @@ import type {
   Clinic,
   Therapist,
   CatalogItem,
+  NoReturnReasonItem,
+  ReferringSourceItem,
+  TreatmentItem,
   Patient,
   Visit,
   Invoice,
@@ -32,12 +35,32 @@ export interface ClinicRepo {
 export interface TherapistRepo {
   list(clinicId: UUID, includeInactive?: boolean): Promise<Therapist[]>;
   put(therapist: Therapist): Promise<void>;
+  /** Local cache removal after a server-side hard delete (not outboxed) */
+  removeLocal(id: UUID): Promise<void>;
 }
 
 export interface CatalogRepo {
   list(clinicId: UUID, includeInactive?: boolean): Promise<CatalogItem[]>;
   get(id: UUID): Promise<CatalogItem | undefined>;
   put(item: CatalogItem): Promise<void>;
+}
+
+export interface NoReturnReasonCatalogRepo {
+  list(clinicId: UUID, includeInactive?: boolean): Promise<NoReturnReasonItem[]>;
+  get(id: UUID): Promise<NoReturnReasonItem | undefined>;
+  put(item: NoReturnReasonItem): Promise<void>;
+}
+
+export interface ReferringSourceCatalogRepo {
+  list(clinicId: UUID, includeInactive?: boolean): Promise<ReferringSourceItem[]>;
+  get(id: UUID): Promise<ReferringSourceItem | undefined>;
+  put(item: ReferringSourceItem): Promise<void>;
+}
+
+export interface TreatmentCatalogRepo {
+  list(clinicId: UUID, includeInactive?: boolean): Promise<TreatmentItem[]>;
+  get(id: UUID): Promise<TreatmentItem | undefined>;
+  put(item: TreatmentItem): Promise<void>;
 }
 
 export interface PatientRepo {
@@ -133,6 +156,9 @@ export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
   catalog: CatalogRepo;
+  noReturnReasonCatalog: NoReturnReasonCatalogRepo;
+  referringSourceCatalog: ReferringSourceCatalogRepo;
+  treatmentCatalog: TreatmentCatalogRepo;
   patients: PatientRepo;
   visits: VisitRepo;
   invoices: InvoiceRepo;

@@ -97,6 +97,53 @@ export const ACTIVITY_GROUPS: { group: string; options: string[] }[] = [
 
 export const SESSION_DURATIONS = ['15 min', '30 min', '45 min', '60 min', '90 min'] as const;
 
+/**
+ * Standard outcome measures TPAs actually recognize for these joints,
+ * replacing a free-text instrument name with a fixed catalog — so two
+ * notes scoring the same patient's knee always say "Oxford Knee Score",
+ * never "OKS" in one and "Oxford knee" in another. `region` drives which
+ * instruments the picker suggests once Chief Complaint's anatomical
+ * region is set; every instrument still stays selectable regardless, since
+ * a clinician may track a scale outside the obvious region.
+ */
+export interface OutcomeInstrumentDef {
+  id: string;
+  label: string;
+  region: AnatomicalRegion[];
+  direction: OutcomeDirection;
+  minScore: number;
+  maxScore: number;
+}
+
+export const OUTCOME_INSTRUMENTS: OutcomeInstrumentDef[] = [
+  { id: 'oks', label: 'Oxford Knee Score (OKS)', region: ['Knee'], direction: 'higher-is-better', minScore: 0, maxScore: 48 },
+  { id: 'womac', label: 'WOMAC (Knee/Hip OA)', region: ['Knee', 'Hip'], direction: 'lower-is-better', minScore: 0, maxScore: 96 },
+  { id: 'hhs', label: 'Harris Hip Score (HHS)', region: ['Hip'], direction: 'higher-is-better', minScore: 0, maxScore: 100 },
+  { id: 'hoos', label: 'HOOS (Hip disability & OA Outcome Score)', region: ['Hip'], direction: 'higher-is-better', minScore: 0, maxScore: 100 },
+  { id: 'cms', label: 'Constant-Murley Score (Shoulder)', region: ['Shoulder'], direction: 'higher-is-better', minScore: 0, maxScore: 100 },
+  { id: 'dash', label: 'DASH (Disabilities of Arm, Shoulder, Hand)', region: ['Shoulder', 'Elbow', 'Wrist/Hand'], direction: 'lower-is-better', minScore: 0, maxScore: 100 },
+];
+
+export function outcomeInstrumentDef(id: string): OutcomeInstrumentDef | undefined {
+  return OUTCOME_INSTRUMENTS.find((i) => i.id === id);
+}
+
+/** Instruments relevant to the note's anatomical region, listed first —
+ *  every instrument still appears after them, never hidden outright. */
+export function orderedOutcomeInstruments(region: AnatomicalRegion | ''): OutcomeInstrumentDef[] {
+  if (!region) return OUTCOME_INSTRUMENTS;
+  const applicable = OUTCOME_INSTRUMENTS.filter((i) => i.region.includes(region));
+  const rest = OUTCOME_INSTRUMENTS.filter((i) => !i.region.includes(region));
+  return [...applicable, ...rest];
+}
+
+/** "3×/week for 4 weeks" — null when either half is unset, since half a
+ *  frequency plan isn't a plan a TPA can evaluate. */
+export function frequencyLabel(frequencyPerWeek: number | null | undefined, durationWeeks: number | null | undefined): string | null {
+  if (!frequencyPerWeek || !durationWeeks) return null;
+  return `${frequencyPerWeek}×/week for ${durationWeeks} week${durationWeeks === 1 ? '' : 's'}`;
+}
+
 export interface PsfsActivity {
   label: string;
   baseline: number;
@@ -194,6 +241,21 @@ export interface CoreAssessmentPayload {
 
   /** Region Modules attach here — additive, versioned independently. */
   regionModules?: Record<string, { version: string; data: unknown }>;
+
+  /**
+   * The physician order behind this episode of care. Missing this is one
+   * of the most common reasons a PT claim is rejected outright — a TPA
+   * wants to see who ordered therapy and for what diagnosis, not just the
+   * therapist's own account of the complaint. Optional/undefined until
+   * first touched, same convention as generalHealth/outcomeTracking below.
+   */
+  referral?: {
+    referringPhysician: string;
+    physicianRegistrationNo?: string;
+    referralDate?: string;
+    diagnosis: string;
+    diagnosisIcdCode?: string;
+  };
 
   chiefComplaint: {
     /** Drives the ROM/MMT movement dropdown and the spine-only ROM preset
@@ -332,6 +394,11 @@ export interface CoreAssessmentPayload {
     currentProtocolPhase?: string;
     goals: { text: string; targetDate?: string; targetTerm: 'short-term' | 'long-term' | '' }[];
     estimatedSessions: string;
+    /** Explicit frequency × duration (e.g. "3×/week for 4 weeks"), alongside
+     *  the coarse estimatedSessions bucket — a TPA judging medical necessity
+     *  wants the former, not "6–10 sessions". */
+    frequencyPerWeek?: number;
+    durationWeeks?: number;
     patientEducation: string[];
   };
 
@@ -484,4 +551,114 @@ export function outcomeTrend(direction: OutcomeDirection, previous: number, late
   const increased = latest > previous;
   const better = direction === 'higher-is-better' ? increased : !increased;
   return better ? 'improving' : 'declining';
+}
+
+/** The nine Core Assessment accordion sections, in on-screen order. */
+export const NOTE_SECTION_KEYS = [
+  'chiefComplaint',
+  'history',
+  'subjective',
+  'psfs',
+  'objective',
+  'treatment',
+  'hep',
+  'plan',
+  'outcome',
+] as const;
+export type NoteSectionKey = (typeof NOTE_SECTION_KEYS)[number];
+
+export type SectionCompletion = 'empty' | 'partial' | 'complete' | 'required-empty';
+
+function classify(filled: number, total: number, requiredEmpty: boolean): SectionCompletion {
+  if (requiredEmpty) return 'required-empty';
+  if (filled <= 0) return 'empty';
+  if (filled >= total) return 'complete';
+  return 'partial';
+}
+
+/**
+ * A coarse fill-level per section, for the jump-nav rail's status dots —
+ * not a validation result. `anatomicalRegion` is the only field saving
+ * actually requires (see NoteEditorPage's save()), so Chief Complaint is
+ * the only section that can read `required-empty`; every other section is
+ * optional documentation and only ever reads empty/partial/complete.
+ * Boolean/enum fields with a meaningful default (priorSurgery,
+ * pregnancyStatus, …) are deliberately excluded from the "filled" counts
+ * below — a default value can't be told apart from an untouched one, so
+ * counting it would read as progress that was never actually made.
+ */
+export function sectionCompletion(key: NoteSectionKey, payload: CoreAssessmentPayload): SectionCompletion {
+  switch (key) {
+    case 'chiefComplaint': {
+      const cc = payload.chiefComplaint;
+      const filled = [!!cc.presentingProblem, cc.primaryComplaint.length > 0, !!cc.onset].filter(Boolean).length;
+      return classify(filled, 3, !cc.anatomicalRegion);
+    }
+    case 'history': {
+      const h = payload.history;
+      const filled = [
+        h.medicalConditions.length > 0,
+        !!h.medications,
+        !!h.allergies,
+        h.traumas.length > 0 || h.surgeries.length > 0,
+        (h.previousPainHistory?.length ?? 0) > 0,
+      ].filter(Boolean).length;
+      return classify(filled, 5, false);
+    }
+    case 'subjective': {
+      const filled = [
+        payload.painProfile.nrs.current != null,
+        !!payload.painProfile.pattern,
+        !!(payload.painProfile.aggravating || payload.painProfile.easing),
+        payload.bodyChart.marks.length > 0,
+      ].filter(Boolean).length;
+      return classify(filled, 4, false);
+    }
+    case 'psfs': {
+      const n = payload.functionalStatus.activities.length;
+      return classify(Math.min(n, 2), 2, false);
+    }
+    case 'objective': {
+      const o = payload.objective;
+      const n = payload.neurologicalScreen;
+      const neuroTouched =
+        Object.keys(n.dermatomes).length > 0 ||
+        Object.keys(n.myotomes).length > 0 ||
+        Object.keys(n.reflexes).length > 0 ||
+        n.upperMotorNeuronSigns.present;
+      const filled = [
+        payload.gaitPosture.gait.length > 0 || payload.gaitPosture.posture.length > 0,
+        payload.palpation.length > 0,
+        o.rom.length > 0 || o.strength.length > 0,
+        o.specialTests.length > 0,
+        neuroTouched,
+      ].filter(Boolean).length;
+      return classify(filled, 5, false);
+    }
+    case 'treatment': {
+      const s = payload.treatment.session;
+      const filled = [
+        s.manualTherapy.length > 0 || s.therapeuticExercise.length > 0 || s.modalities.length > 0,
+        !!(s.duration || s.timeSpent),
+        !!s.response,
+        !!payload.treatment.notes,
+      ].filter(Boolean).length;
+      return classify(filled, 4, false);
+    }
+    case 'hep': {
+      const filled = [payload.hep.exercises.length > 0, !!payload.hep.compliance].filter(Boolean).length;
+      return classify(filled, 2, false);
+    }
+    case 'plan': {
+      const p = payload.plan;
+      const filled = [!!p.phase, p.goals.length > 0, !!p.estimatedSessions, p.patientEducation.length > 0].filter(
+        Boolean
+      ).length;
+      return classify(filled, 4, false);
+    }
+    case 'outcome': {
+      const hasData = payload.painProfile.nrs.current != null || payload.functionalStatus.activities.length > 0;
+      return hasData ? 'complete' : 'empty';
+    }
+  }
 }

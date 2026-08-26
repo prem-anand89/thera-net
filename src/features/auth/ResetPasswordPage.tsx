@@ -39,7 +39,9 @@ export function ResetPasswordPage() {
     return (
       <div className="mx-auto mt-24 max-w-md rounded-[10px] border border-[var(--rust)] bg-[var(--rust-light)] p-6 text-sm text-[var(--rust)]">
         <h1 className="font-display mb-2 text-base font-semibold">Supabase not configured</h1>
-        <p>Copy <code>.env.example</code> to <code>.env</code> and restart the dev server.</p>
+        <p>
+          Copy <code>.env.example</code> to <code>.env</code> and restart the dev server.
+        </p>
       </div>
     );
   }
@@ -68,7 +70,9 @@ export function ResetPasswordPage() {
 
   return (
     <div className="mx-auto mt-24 max-w-sm">
-      <h1 className="font-display mb-1 text-center text-xl font-semibold text-[var(--ink)]">Thera.Net</h1>
+      <h1 className="font-display mb-1 text-center text-xl font-semibold text-[var(--ink)]">
+        Thera.Net
+      </h1>
       <p className="mb-6 text-center text-sm text-[var(--muted)]">Choose a new password</p>
       <div className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
         {checking ? (
@@ -78,7 +82,11 @@ export function ResetPasswordPage() {
             <p className="text-sm text-[var(--ink)]">
               Password updated. You're signed in — continue to the app.
             </p>
-            <button className={`${btnPrimary} w-full`} onClick={() => void navigate({ to: '/workspace' })}>
+            <button
+              type="button"
+              className={`${btnPrimary} w-full`}
+              onClick={() => void navigate({ to: '/workspace' })}
+            >
               Continue
             </button>
           </>
