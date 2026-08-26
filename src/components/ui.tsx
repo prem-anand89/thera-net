@@ -13,6 +13,17 @@ export const menuItem = 'block w-full px-3 py-1.5 text-left text-xs text-[var(--
 export const menuItemDestructive =
   'block w-full px-3 py-1.5 text-left text-xs text-[var(--rust)] hover:bg-[var(--rust-light)]';
 
+/** Icon + wordmark header for the sign-in/sign-up/reset-password screens. */
+export function AuthBrandHeader({ subtitle }: { subtitle: string }) {
+  return (
+    <div className="mb-6 flex flex-col items-center gap-2">
+      <img src="/apple-touch-icon.png" alt="" className="h-12 w-12 rounded-[12px]" />
+      <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Thera.Net</h1>
+      <p className="text-sm text-[var(--muted)]">{subtitle}</p>
+    </div>
+  );
+}
+
 export function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <label className="block">

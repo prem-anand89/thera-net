@@ -122,10 +122,11 @@ export function CreateClinicForm({ onSuccess }: CreateClinicFormProps) {
 
   return (
     <div className="mx-auto mt-24 max-w-sm">
-      <h1 className="font-display mb-1 text-center text-xl font-semibold text-[var(--ink)]">
-        Create your clinic
-      </h1>
-      <p className="mb-6 text-center text-sm text-[var(--muted)]">Get started with Thera.Net</p>
+      <div className="mb-6 flex flex-col items-center gap-2">
+        <img src="/apple-touch-icon.png" alt="" className="h-12 w-12 rounded-[12px]" />
+        <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Create your clinic</h1>
+        <p className="text-sm text-[var(--muted)]">Get started with Thera.Net</p>
+      </div>
       <form onSubmit={handleSubmit} className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
         <Field label="Clinic name *">
           <input

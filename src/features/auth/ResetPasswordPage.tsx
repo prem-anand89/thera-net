@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { getSupabase } from '@/lib/supabase';
 import { hasSupabaseConfig } from '@/lib/env';
 import { toFriendlyMessage } from '@/lib/errors';
-import { Field, inputCls, btnPrimary, ErrorNote } from '@/components/ui';
+import { Field, inputCls, btnPrimary, ErrorNote, AuthBrandHeader } from '@/components/ui';
 
 /**
  * Landing page for a Supabase password-recovery email link. Handles both
@@ -70,10 +70,7 @@ export function ResetPasswordPage() {
 
   return (
     <div className="mx-auto mt-24 max-w-sm">
-      <h1 className="font-display mb-1 text-center text-xl font-semibold text-[var(--ink)]">
-        Thera.Net
-      </h1>
-      <p className="mb-6 text-center text-sm text-[var(--muted)]">Choose a new password</p>
+      <AuthBrandHeader subtitle="Choose a new password" />
       <div className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
         {checking ? (
           <p className="text-sm text-[var(--muted)]">Checking your link…</p>
