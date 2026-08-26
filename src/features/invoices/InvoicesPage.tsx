@@ -9,6 +9,7 @@ import { type Invoice } from '@/domain/types';
 import { th, td, tdNum, ErrorNote, Pill, SectionCard } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
+import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 
 type InvoiceSortKey = 'no' | 'date' | 'patient' | 'total' | 'status';
 const INVOICE_COMPARATORS = {
@@ -23,9 +24,16 @@ export function InvoicesPage() {
   const clinic = useClinic();
   const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
   const payments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
+  // Needed to compute each invoice's actual collected-so-far amount — there's
+  // no amount column on invoice_payments (see paymentService.invoiceBalance);
+  // it's derived by summing the visit-scoped `payments` rows for whichever
+  // visit(s) this invoice covers.
+  const visits = useLiveQuery(() => repos.visits.list({ clinicId: clinic.id }), [clinic.id]);
+  const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [takingPayment, setTakingPayment] = useState<Invoice | null>(null);
 
   const sort = useSort<InvoiceSortKey>('date', 'desc');
 
@@ -34,26 +42,56 @@ export function InvoicesPage() {
     [payments]
   );
 
+  const directPaymentByVisitId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of directPayments ?? []) {
+      map.set(p.visitId, (map.get(p.visitId) ?? 0) + p.amountPaise);
+    }
+    return map;
+  }, [directPayments]);
+
+  // Sum of collected `payments` rows across every visit each invoice covers,
+  // plus a lookup of one representative visit per invoice (any one will do —
+  // TakePaymentDialog's invoice-aware path allocates across all of them, the
+  // passed visitId only anchors the dialog to a concrete row).
+  const { paidByInvoiceId, sampleVisitIdByInvoiceId } = useMemo(() => {
+    const paid = new Map<string, number>();
+    const sampleVisit = new Map<string, string>();
+    for (const v of visits ?? []) {
+      if (v.deleted || !v.invoiceId) continue;
+      paid.set(v.invoiceId, (paid.get(v.invoiceId) ?? 0) + (directPaymentByVisitId.get(v.id) ?? 0));
+      if (!sampleVisit.has(v.invoiceId)) sampleVisit.set(v.invoiceId, v.id);
+    }
+    return { paidByInvoiceId: paid, sampleVisitIdByInvoiceId: sampleVisit };
+  }, [visits, directPaymentByVisitId]);
+
+  function balanceFor(inv: Invoice): { paidPaise: number; remainingPaise: number } {
+    const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+    if (status === 'paid') return { paidPaise: inv.totalPaise, remainingPaise: 0 };
+    const paidPaise = paidByInvoiceId.get(inv.id) ?? 0;
+    return { paidPaise, remainingPaise: Math.max(0, inv.totalPaise - paidPaise) };
+  }
+
   const sortedInvoices = useMemo(
     () => applySort(invoices ?? [], INVOICE_COMPARATORS, sort),
     [invoices, sort]
   );
 
-  const totalOutstanding = useMemo(
-    () =>
-      (invoices ?? [])
-        .filter((inv) => statusByInvoiceId.get(inv.id) === 'outstanding')
-        .reduce((sum, inv) => sum + inv.totalPaise, 0),
-    [invoices, statusByInvoiceId]
-  );
-
-  const totalCollected = useMemo(
-    () =>
-      (invoices ?? [])
-        .filter((inv) => statusByInvoiceId.get(inv.id) !== 'outstanding')
-        .reduce((sum, inv) => sum + inv.totalPaise, 0),
-    [invoices, statusByInvoiceId]
-  );
+  const { totalOutstanding, totalCollected } = useMemo(() => {
+    let outstanding = 0;
+    let collected = 0;
+    for (const inv of invoices ?? []) {
+      const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+      if (status === 'paid') {
+        collected += inv.totalPaise;
+      } else {
+        const paidPaise = paidByInvoiceId.get(inv.id) ?? 0;
+        collected += paidPaise;
+        outstanding += Math.max(0, inv.totalPaise - paidPaise);
+      }
+    }
+    return { totalOutstanding: outstanding, totalCollected: collected };
+  }, [invoices, statusByInvoiceId, paidByInvoiceId]);
 
   async function toggleInvoiceStatus(invoiceId: string, currentStatus: string) {
     setError(null);
@@ -99,6 +137,8 @@ export function InvoicesPage() {
           <div className="tab:hidden space-y-2">
             {sortedInvoices.map((inv) => {
               const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+              const { paidPaise, remainingPaise } = balanceFor(inv);
+              const isPartial = status === 'outstanding' && paidPaise > 0;
               const initials = inv.patientSnapshot.name
                 .split(/\s+/)
                 .slice(0, 2)
@@ -131,10 +171,20 @@ export function InvoicesPage() {
                         {formatINR(inv.totalPaise)}
                       </span>
                       <Pill tone={status === 'paid' ? 'green' : 'amber'}>
-                        {status === 'paid' ? 'Paid' : 'Outstanding'}
+                        {status === 'paid' ? 'Paid' : isPartial ? 'Partially paid' : 'Outstanding'}
                       </Pill>
                     </div>
                     <div className="flex items-center gap-2">
+                      {status === 'outstanding' && (
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={busy}
+                          onClick={() => setTakingPayment(inv)}
+                        >
+                          Record payment
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
@@ -146,13 +196,18 @@ export function InvoicesPage() {
                       <Link
                         to="/invoices/$invoiceId/print"
                         params={{ invoiceId: inv.id }}
-                        search={{ from: '/ledger' }}
+                        search={{ from: '/ledger', tab: 'invoices' }}
                         className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
                       >
                         Print
                       </Link>
                     </div>
                   </div>
+                  {isPartial && (
+                    <p className="mt-1.5 text-xs text-[var(--muted)]">
+                      {formatINR(paidPaise)} collected · {formatINR(remainingPaise)} due
+                    </p>
+                  )}
                 </div>
               );
             })}
@@ -180,6 +235,8 @@ export function InvoicesPage() {
               <tbody className="divide-y divide-[var(--border)]">
                 {sortedInvoices.map((inv) => {
                   const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+                  const { paidPaise, remainingPaise } = balanceFor(inv);
+                  const isPartial = status === 'outstanding' && paidPaise > 0;
                   return (
                     <tr key={inv.id} className="hover:bg-[var(--paper)]">
                       <td className={`${td} font-medium`}>{inv.invoiceNo}</td>
@@ -190,8 +247,28 @@ export function InvoicesPage() {
                       <td className={td}>{inv.paymentMode}</td>
                       <td className={td}>
                         <Pill tone={status === 'paid' ? 'green' : 'amber'}>
-                          {status === 'paid' ? 'Paid' : 'Outstanding'}
+                          {status === 'paid'
+                            ? 'Paid'
+                            : isPartial
+                              ? 'Partially paid'
+                              : 'Outstanding'}
                         </Pill>
+                        {isPartial && (
+                          <div className="mt-1 text-xs text-[var(--muted)]">
+                            {formatINR(paidPaise)} of {formatINR(inv.totalPaise)} ·{' '}
+                            {formatINR(remainingPaise)} due
+                          </div>
+                        )}
+                        {status === 'outstanding' && (
+                          <button
+                            type="button"
+                            className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => setTakingPayment(inv)}
+                            disabled={busy}
+                          >
+                            Record payment
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
@@ -205,7 +282,7 @@ export function InvoicesPage() {
                         <Link
                           to="/invoices/$invoiceId/print"
                           params={{ invoiceId: inv.id }}
-                          search={{ from: '/ledger' }}
+                          search={{ from: '/ledger', tab: 'invoices' }}
                           className="font-medium text-[var(--teal)] hover:underline"
                         >
                           Print
@@ -231,6 +308,18 @@ export function InvoicesPage() {
           </p>
         </div>
       </SectionCard>
+      {takingPayment && (
+        <TakePaymentDialog
+          clinicId={clinic.id}
+          visitId={sampleVisitIdByInvoiceId.get(takingPayment.id) ?? ''}
+          invoiceId={takingPayment.id}
+          amountPaise={takingPayment.totalPaise}
+          visitDate={new Date().toISOString().slice(0, 10)}
+          patientLabel={takingPayment.patientSnapshot.name}
+          mrno={takingPayment.patientSnapshot.mrno}
+          onClose={() => setTakingPayment(null)}
+        />
+      )}
     </div>
   );
 }

@@ -34,8 +34,23 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Guards against `patient`/`referringSources` re-firing mid-edit (any
+  // write to either Dexie table, including an unrelated background sync)
+  // and silently clobbering whatever the user is currently typing — same
+  // fix as EditVisitModal's `loaded` flag. Reset on close (rather than
+  // hydrating once forever) because some callers keep this component
+  // mounted across open/close cycles for the same patient (toggling `open`
+  // instead of mounting fresh each time) — without the reset, reopening
+  // after a cancel would keep showing a stale first-open snapshot instead
+  // of picking up real edits made elsewhere in between.
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (!open) {
+      setLoaded(false);
+      return;
+    }
+    if (loaded) return;
     // A patient saved before this catalog existed only has the legacy
     // referringSource enum — best-effort match it to a seeded catalog entry
     // of the same name so it still shows selected, rather than the picker
@@ -56,7 +71,8 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
       referringSourceId: matchedLegacyId,
       referringSourceDetail: patient.referringSourceDetail ?? '',
     });
-  }, [patient, referringSources]);
+    setLoaded(true);
+  }, [patient, referringSources, open, loaded]);
 
   async function handleSave() {
     setSaving(true);

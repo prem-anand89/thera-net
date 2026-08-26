@@ -1,10 +1,5 @@
 import { lazy } from 'react';
-import {
-  createRootRoute,
-  createRoute,
-  createRouter,
-  redirect,
-} from '@tanstack/react-router';
+import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { Shell } from './Shell';
 import { WorkspacePage } from '@/features/workspace/WorkspacePage';
 
@@ -75,9 +70,13 @@ const LEDGER_TABS = ['visits', 'invoices'] as const;
 const ledgerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/ledger',
-  validateSearch: (search: Record<string, unknown>): { patientId?: string; tab?: (typeof LEDGER_TABS)[number] } => ({
+  validateSearch: (
+    search: Record<string, unknown>
+  ): { patientId?: string; tab?: (typeof LEDGER_TABS)[number] } => ({
     ...(typeof search.patientId === 'string' ? { patientId: search.patientId } : {}),
-    ...(LEDGER_TABS.includes(search.tab as (typeof LEDGER_TABS)[number]) ? { tab: search.tab as (typeof LEDGER_TABS)[number] } : {}),
+    ...(LEDGER_TABS.includes(search.tab as (typeof LEDGER_TABS)[number])
+      ? { tab: search.tab as (typeof LEDGER_TABS)[number] }
+      : {}),
   }),
   component: LedgerPage,
 });
@@ -194,18 +193,34 @@ const invoicePrintRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/invoices/$invoiceId/print',
   // Same "← Back" context-carrying as the patient profile route — this
-  // print page is reachable from both Ledger and Workspace.
-  validateSearch: (search: Record<string, unknown>): { from?: InvoicePrintBackTarget } =>
-    INVOICE_PRINT_BACK_TARGETS.includes(search.from as InvoicePrintBackTarget)
+  // print page is reachable from both Ledger and Workspace. `tab` additionally
+  // carries which Ledger sub-tab to return to (only 'invoices' is meaningful
+  // here — 'visits' is Ledger's default, so absence already means that).
+  validateSearch: (
+    search: Record<string, unknown>
+  ): { from?: InvoicePrintBackTarget; tab?: 'invoices' } => ({
+    ...(INVOICE_PRINT_BACK_TARGETS.includes(search.from as InvoicePrintBackTarget)
       ? { from: search.from as InvoicePrintBackTarget }
-      : {},
+      : {}),
+    ...(search.tab === 'invoices' ? { tab: 'invoices' as const } : {}),
+  }),
   component: InvoicePrintPage,
 });
 
 // Kept in sync with SettingsPage's own SectionKey by hand — a route file
 // shouldn't import a feature's internal type just to validate a search
 // param, and the two rarely change.
-const SETTINGS_TABS = ['plan', 'profile', 'billing', 'partner', 'team', 'services', 'treatments', 'referrals', 'data'] as const;
+const SETTINGS_TABS = [
+  'plan',
+  'profile',
+  'billing',
+  'partner',
+  'team',
+  'services',
+  'treatments',
+  'referrals',
+  'data',
+] as const;
 
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,

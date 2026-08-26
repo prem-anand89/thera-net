@@ -23,11 +23,13 @@ export function AmendInvoiceDialog({
   invoice,
   onClose,
   returnTo,
+  returnTab,
 }: {
   clinicId: string;
   invoice: Invoice;
   onClose: () => void;
   returnTo: InvoicePrintBackTarget;
+  returnTab?: 'invoices';
 }) {
   const allVisits = useLiveQuery(() => repos.visits.list({ clinicId }), [clinicId]);
   const catalog = useLiveQuery(() => repos.catalog.list(clinicId, true), [clinicId]);
@@ -93,7 +95,7 @@ export function AmendInvoiceDialog({
               <Link
                 to="/invoices/$invoiceId/print"
                 params={{ invoiceId: amended.invoiceId }}
-                search={{ from: returnTo }}
+                search={{ from: returnTo, tab: returnTab }}
                 className={btnSecondary}
               >
                 Print
@@ -121,7 +123,8 @@ export function AmendInvoiceDialog({
                 {originalVisits.map((v) => (
                   <li key={v.id} className="flex justify-between">
                     <span>
-                      {formatDateDM(v.visitDate)} — {catalogName.get(v.serviceCatalogId) ?? 'Service'}
+                      {formatDateDM(v.visitDate)} —{' '}
+                      {catalogName.get(v.serviceCatalogId) ?? 'Service'}
                     </span>
                     <span className="font-num">{formatINR(v.actualBillPaise)}</span>
                   </li>
@@ -144,7 +147,8 @@ export function AmendInvoiceDialog({
                             checked={selectedExtra.has(v.id)}
                             onChange={() => toggle(v.id)}
                           />
-                          {formatDateDM(v.visitDate)} — {catalogName.get(v.serviceCatalogId) ?? 'Service'}
+                          {formatDateDM(v.visitDate)} —{' '}
+                          {catalogName.get(v.serviceCatalogId) ?? 'Service'}
                         </span>
                         <span className="font-num text-[var(--muted)]">
                           {formatINR(v.actualBillPaise)}
@@ -170,8 +174,8 @@ export function AmendInvoiceDialog({
 
             <ErrorNote message={error} />
             <p className="text-xs text-[var(--muted)]">
-              The amendment gets its own invoice number and needs a connection — it cannot be
-              undone once issued.
+              The amendment gets its own invoice number and needs a connection — it cannot be undone
+              once issued.
             </p>
             <div className="flex justify-end gap-2">
               <button type="button" className={btnSecondary} onClick={onClose}>

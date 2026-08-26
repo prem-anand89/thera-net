@@ -136,6 +136,23 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   `isPackageContinuation()` (`src/domain/paymentState.ts`) rather than
   stored on the state itself.
 - **Quick "Mark paid"** action from Workspace pending feed
+- **Partial payments against an invoice**: recording an amount less than
+  the invoice total leaves it `outstanding` with the balance tracked, not
+  a full-or-nothing toggle. No amount column exists on `invoice_payments`
+  (invoices are immutable, and that table is just a paid/outstanding flag)
+  — instead the amount is logged as a visit-scoped `payments` row, the same
+  mechanism the no-invoice direct-payment path already used, via
+  `paymentService.recordInvoicePayment()`. A payment entered against an
+  invoice spanning several visits (a package billed together) is allocated
+  across those visits in date order, each visit's own bill as the ceiling
+  for what lands on it, so every visit's individual payment state stays
+  correct. The invoice flips to `paid` automatically once the running
+  total reaches its total — same as the manual "Mark paid" toggle. Entry
+  points: the Invoices tab's "Record payment" action (works for
+  multi-visit invoices), and the existing "Take payment" dialog on any
+  visit card (works standalone; for an invoiced visit it now looks up and
+  is bounded by that invoice's real total rather than assuming one visit
+  is the whole bill).
 - **Monthly report** shows HV settlement card for variance tracking
 
 #### Billing Access Control
@@ -541,7 +558,11 @@ created_at, updated_at  timestamptz
 ```
 Lives apart from `invoices` (which is immutable once issued). A missing row
 for an invoice reads as **paid** — see the payment-state note in Key Design
-Patterns below.
+Patterns below. Deliberately has **no amount column** — flipping `status` is
+the only write this table itself supports; a partial amount toward an
+invoice is tracked via `payments` below instead (see
+`paymentService.recordInvoicePayment()`), keyed to the invoice's own
+constituent visits.
 
 #### `payments`
 ```sql
@@ -555,9 +576,14 @@ notes           text (NULLABLE)
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 ```
-Direct payment against a visit, independent of any invoice — lets cash/UPI
-collection be recorded without requiring an invoice first, and supports
-partial payments (an amount less than the visit's bill).
+A payment toward one visit's bill — cash/UPI collection recorded without
+requiring an invoice, and supports partial payments (an amount less than
+the visit's bill). No `invoice_id` column: this same table is also how a
+*partial* payment against an **invoiced** visit's bill is recorded (an
+invoice itself has no amount-paid field — see `invoice_payments` above),
+so a payment stays keyed to the visit it was collected for either way. For
+an invoice spanning several visits, one entered amount is allocated across
+those visits' `payments` rows in date order.
 
 #### `settlements`
 ```sql

@@ -146,7 +146,8 @@ type InvoicingTarget = IssueInvoiceTarget;
 
 export function LedgerPage() {
   const clinic = useClinic();
-  const { canBill, isAdmin, canViewClinicalNotes, canViewPayouts } = usePermissions();
+  const { canBill, isAdmin, canViewClinicalNotes, canViewPayouts, entitlementsLoading } =
+    usePermissions();
   const { myTherapistId } = useWorkspaceScope();
   const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
@@ -169,9 +170,15 @@ export function LedgerPage() {
   );
   // An admin flipping invoicingAccess mid-session (synced live from another
   // device) shouldn't leave someone stranded on a tab that just disappeared.
+  // Wait for entitlementsLoading to clear first — canBill reads fail-closed
+  // (false) on every fresh mount until the plan-tier fetch resolves, tier
+  // notwithstanding, and this effect actively navigates away (not just
+  // hiding UI), so acting on that transient false would kick a fully
+  // entitled admin off the Invoices tab on every page load.
   useEffect(() => {
+    if (entitlementsLoading) return;
     if (recordsView === 'invoices' && !canBill) setRecordsView('visits');
-  }, [recordsView, canBill, setRecordsView]);
+  }, [recordsView, canBill, entitlementsLoading, setRecordsView]);
   const initialWeek = currentWeekRange();
   const [from, setFrom] = useState(initialWeek.from);
   const [to, setTo] = useState(initialWeek.to);
@@ -498,7 +505,7 @@ export function LedgerPage() {
             { key: 'invoices', label: 'Invoices' },
           ] as const
         )
-          .filter((v) => v.key !== 'invoices' || canBill)
+          .filter((v) => v.key !== 'invoices' || canBill || entitlementsLoading)
           .map((v) => (
             <button
               key={v.key}

@@ -21,7 +21,7 @@ type InsightsView = 'overview' | 'monthly' | 'audit';
  * already admin or front_desk.
  */
 export function ReportsPage() {
-  const { canViewPayouts, role } = usePermissions();
+  const { canViewPayouts, role, entitlementsLoading } = usePermissions();
   const { isClinicWideView } = useWorkspaceScope();
   const navigate = useNavigate();
   const search = useSearch({ from: '/insights' });
@@ -30,7 +30,11 @@ export function ReportsPage() {
 
   const setView = useCallback(
     (next: InsightsView) => {
-      void navigate({ to: '/insights', search: next === 'overview' ? {} : { tab: next }, replace: true });
+      void navigate({
+        to: '/insights',
+        search: next === 'overview' ? {} : { tab: next },
+        replace: true,
+      });
     },
     [navigate]
   );
@@ -39,9 +43,14 @@ export function ReportsPage() {
   // device) shouldn't leave someone stranded on a tab that just disappeared.
   // Wait until role resolves — while it's still 'unknown', canViewPayouts is
   // false and we'd incorrectly strip ?tab=monthly back to Trends on load.
+  // Also wait for entitlementsLoading: canViewPayouts folds in a plan-tier
+  // check that reads fail-closed (false) on every fresh mount until that
+  // fetch resolves, independent of role — the same trap this comment
+  // already covers for role, but from a different, newer source.
   useEffect(() => {
+    if (entitlementsLoading) return;
     if (view !== 'overview' && role !== 'unknown' && !canViewPayouts) setView('overview');
-  }, [view, canViewPayouts, role, setView]);
+  }, [view, canViewPayouts, role, entitlementsLoading, setView]);
 
   // Nav already hides the Reports link for a plain therapist (Shell.tsx);
   // this guard covers a direct URL hit (old bookmark, typed link) instead
@@ -69,13 +78,15 @@ export function ReportsPage() {
             { key: 'audit', label: 'Attribution audit' },
           ] as const
         )
-          .filter((v) => v.key === 'overview' || canViewPayouts)
+          .filter((v) => v.key === 'overview' || canViewPayouts || entitlementsLoading)
           .map((v) => (
             <button
               key={v.key}
               type="button"
               className={`rounded-md px-3 py-1 text-xs font-medium ${
-                view === v.key ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)] hover:bg-[var(--surface)]'
+                view === v.key
+                  ? 'bg-[var(--teal)] text-white'
+                  : 'text-[var(--muted)] hover:bg-[var(--surface)]'
               }`}
               onClick={() => setView(v.key)}
             >

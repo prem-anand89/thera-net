@@ -1,6 +1,14 @@
-import type { InvoicePayment, Payment, PaymentStatus, PaymentMethod, UUID } from '@/domain/types';
+import type {
+  Invoice,
+  InvoicePayment,
+  Payment,
+  PaymentStatus,
+  PaymentMethod,
+  UUID,
+} from '@/domain/types';
 import type { Repos } from '@/repositories/types';
 import type { Paise } from '@/domain/money';
+import { formatINR } from '@/domain/money';
 
 /**
  * Pure repo CRUD, deliberately separate from invoiceService (which is
@@ -9,21 +17,114 @@ import type { Paise } from '@/domain/money';
  * it later from the Invoices page.
  */
 export function createPaymentService(repos: Repos) {
-  return {
-    async setStatus(invoiceId: UUID, clinicId: UUID, status: PaymentStatus): Promise<InvoicePayment> {
-      const existing = await repos.invoicePayments.getByInvoiceId(invoiceId);
-      const payment: InvoicePayment = {
-        id: existing?.id ?? crypto.randomUUID(),
+  async function setStatus(
+    invoiceId: UUID,
+    clinicId: UUID,
+    status: PaymentStatus
+  ): Promise<InvoicePayment> {
+    const existing = await repos.invoicePayments.getByInvoiceId(invoiceId);
+    const payment: InvoicePayment = {
+      id: existing?.id ?? crypto.randomUUID(),
+      clinicId,
+      invoiceId,
+      status,
+      paidAt: status === 'paid' ? new Date().toISOString() : null,
+      updatedAt: new Date().toISOString(),
+    };
+    await repos.invoicePayments.put(payment);
+    return payment;
+  }
+
+  /**
+   * How much of an invoice has actually been collected so far. There's no
+   * amount column on invoice_payments (invoices are immutable, and that
+   * table is just a paid/outstanding flag per invoice) — instead this sums
+   * the same visit-scoped `payments` rows the direct-payment (no-invoice)
+   * path already uses, across every visit this invoice covers. Works for
+   * the common one-visit invoice and for a package invoice spanning several
+   * visits alike.
+   */
+  async function invoiceBalance(
+    clinicId: UUID,
+    invoice: Invoice
+  ): Promise<{ paidPaise: Paise; remainingPaise: Paise }> {
+    const visits = (await repos.visits.list({ clinicId })).filter(
+      (v) => v.invoiceId === invoice.id && !v.deleted
+    );
+    let paidPaise = 0;
+    for (const v of visits) {
+      const payments = await repos.payments.listByVisit(v.id);
+      paidPaise += payments.reduce((sum, p) => sum + p.amountPaise, 0);
+    }
+    return { paidPaise, remainingPaise: Math.max(0, invoice.totalPaise - paidPaise) };
+  }
+
+  /**
+   * Records a payment (partial or full) against an invoice. Reuses the
+   * `payments` table rather than adding an amount column to
+   * invoice_payments — see invoiceBalance above. The entered amount is
+   * allocated across the invoice's constituent visits in date order (each
+   * visit's own bill as the ceiling for what lands on it), so a package
+   * invoice covering several visits still leaves every individual visit's
+   * own payment state (computeVisitPaymentState) correct. Once the running
+   * total reaches the invoice total, the invoice is marked paid the same
+   * way the "Mark paid" toggle already does.
+   */
+  async function recordInvoicePayment(
+    clinicId: UUID,
+    invoice: Invoice,
+    amountPaise: Paise,
+    method: PaymentMethod,
+    receivedDate: string,
+    notes: string | null
+  ): Promise<void> {
+    const visits = (await repos.visits.list({ clinicId }))
+      .filter((v) => v.invoiceId === invoice.id && !v.deleted)
+      .sort((a, b) => a.visitDate.localeCompare(b.visitDate));
+    if (visits.length === 0) {
+      throw new Error('No visits found for this invoice — nothing to record the payment against.');
+    }
+
+    const paidByVisit = new Map<UUID, Paise>();
+    let alreadyPaid = 0;
+    for (const v of visits) {
+      const payments = await repos.payments.listByVisit(v.id);
+      const paid = payments.reduce((sum, p) => sum + p.amountPaise, 0);
+      paidByVisit.set(v.id, paid);
+      alreadyPaid += paid;
+    }
+
+    const remaining = invoice.totalPaise - alreadyPaid;
+    if (amountPaise > remaining) {
+      throw new Error(`Amount exceeds the outstanding balance of ${formatINR(remaining)}.`);
+    }
+
+    let toAllocate = amountPaise;
+    for (const v of visits) {
+      if (toAllocate <= 0) break;
+      const visitRemaining = v.actualBillPaise - (paidByVisit.get(v.id) ?? 0);
+      if (visitRemaining <= 0) continue;
+      const slice = Math.min(visitRemaining, toAllocate);
+      const payment: Payment = {
+        id: crypto.randomUUID(),
         clinicId,
-        invoiceId,
-        status,
-        paidAt: status === 'paid' ? new Date().toISOString() : null,
+        visitId: v.id,
+        amountPaise: slice,
+        method,
+        receivedDate,
+        notes,
         updatedAt: new Date().toISOString(),
       };
-      await repos.invoicePayments.put(payment);
-      return payment;
-    },
-  };
+      await repos.payments.put(payment);
+      toAllocate -= slice;
+    }
+
+    if (alreadyPaid + amountPaise >= invoice.totalPaise) {
+      await setStatus(invoice.id, clinicId, 'paid');
+    }
+  }
+
+  return { setStatus, invoiceBalance, recordInvoicePayment };
 }
 
 /**

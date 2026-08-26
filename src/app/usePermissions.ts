@@ -23,6 +23,16 @@ export interface Permissions {
    * real boundary is `issue_invoice()`'s own check on the same two fields.
    */
   canBill: boolean;
+  /**
+   * True until the plan-tier fetch (or its Dexie cache) has resolved at
+   * least once. `canBill`/`canViewPayouts` read fail-closed (false) for
+   * every render before that — real for a genuinely gated clinic, but also
+   * true for every clinic on the very first render, tier notwithstanding.
+   * A caller that reacts to "false" by navigating away (not just hiding UI)
+   * must wait for this to clear first, or it kicks a fully-entitled admin
+   * off a tab on every fresh mount, before their real access ever loads.
+   */
+  entitlementsLoading: boolean;
 }
 
 /**
@@ -56,5 +66,6 @@ export function usePermissions(): Permissions {
       entitlements.can('invoicing') &&
       billingEnabled &&
       (invoicingAccess === 'everyone' || scope.isAdmin || scope.isFrontDesk),
+    entitlementsLoading: entitlements.loading,
   };
 }

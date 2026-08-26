@@ -548,8 +548,23 @@ function useClinicSectionForm<F extends Partial<Clinic>>(
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Hydrate once per mount, not on every `initial` change. `clinic` (from
+  // useClinic()) is a new object reference on any write to the clinics row
+  // — another admin saving a different section, or this section's own save
+  // landing back via the sync pull — and without this guard the effect
+  // below would silently overwrite whatever the user is mid-typing here.
+  // Not needed for the post-save case: `initial` catching up to match the
+  // just-saved `form` already makes `dirty` false via the comparison below,
+  // with no need to reassign `form` itself. Each section unmounts on tab
+  // switch (SettingsPage's `activeKey === 'x' &&` rendering), so returning
+  // to this tab later re-mounts fresh and re-hydrates correctly.
+  const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => setForm(initial), [initial]);
+  useEffect(() => {
+    if (loaded) return;
+    setForm(initial);
+    setLoaded(true);
+  }, [initial, loaded]);
 
   const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(initial), [form, initial]);
   // Cleanup clears the flag on unmount too — switching tabs away from a

@@ -25,12 +25,15 @@ export type VisitPaymentState =
  * second one fails after the first succeeds, the invoice IS real and
  * shouldn't be hidden as if payment failed too. Correctable anytime from
  * the Invoices tab. An invoice explicitly marked paid always wins outright,
- * regardless of amounts (that path has no partial-payment concept of its
- * own — see TakePaymentDialog). Outside that, `directPaymentAmountPaise` is
+ * regardless of amounts. Outside that, `directPaymentAmountPaise` is
  * compared against the bill: less than the bill but still more than zero
  * is a real partial payment, not "done" — treating any nonzero amount as
  * fully collected (the old behavior) hid a ₹300 payment against a ₹500
- * bill as if the whole thing had been paid.
+ * bill as if the whole thing had been paid. This applies identically
+ * whether or not there's an invoice — an invoiced visit's partial payments
+ * are `payments` rows too (see paymentService.recordInvoicePayment), not a
+ * separate mechanism, so a partially-paid invoice reads the same way a
+ * partially-paid direct visit always has.
  */
 export function computeVisitPaymentState(
   actualBillPaise: Paise,
@@ -82,7 +85,10 @@ export function paymentStatusPhrase(state: VisitPaymentState, isPackageSession =
 }
 
 /** Shorter labels for cramped table cells — full phrase stays on cards (title attr). */
-export function paymentStatusShortPhrase(state: VisitPaymentState, isPackageSession = false): string {
+export function paymentStatusShortPhrase(
+  state: VisitPaymentState,
+  isPackageSession = false
+): string {
   switch (state) {
     case 'zero_session':
       return isPackageSession ? 'Package' : 'No charge';
@@ -104,7 +110,11 @@ export function paymentStatusShortPhrase(state: VisitPaymentState, isPackageSess
  * `bill` is already formatted (e.g. ₹500). Prefer `paymentStatusPhrase`
  * next to a separate amount so the rupee figure is not repeated.
  */
-export function paymentStatusLine(state: VisitPaymentState, bill: string, isPackageSession = false): string {
+export function paymentStatusLine(
+  state: VisitPaymentState,
+  bill: string,
+  isPackageSession = false
+): string {
   if (state === 'zero_session') return paymentStatusPhrase(state, isPackageSession);
   return `${bill} billed · ${paymentStatusPhrase(state)}`;
 }
