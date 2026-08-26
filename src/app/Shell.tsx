@@ -326,9 +326,15 @@ export function Shell() {
         <header className="no-print sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--surface)]">
           <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
             <div className="flex min-w-0 items-center gap-2">
-              {logoUrl && (
-                <img src={logoUrl} alt="" className="h-8 w-auto shrink-0 object-contain" />
-              )}
+              <img
+                src={logoUrl || '/apple-touch-icon.png'}
+                alt=""
+                className={
+                  logoUrl
+                    ? 'h-8 w-auto shrink-0 object-contain'
+                    : 'h-8 w-8 shrink-0 rounded-[8px] object-contain'
+                }
+              />
               <div className="font-display truncate text-lg font-semibold text-[var(--ink)]">
                 {clinic.name}
               </div>

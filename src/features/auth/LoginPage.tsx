@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { getSupabase } from '@/lib/supabase';
 import { hasSupabaseConfig } from '@/lib/env';
 import { toFriendlyMessage } from '@/lib/errors';
-import { Field, inputCls, btnPrimary, ErrorNote } from '@/components/ui';
+import { Field, inputCls, btnPrimary, ErrorNote, AuthBrandHeader } from '@/components/ui';
 
 export function LoginPage() {
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>('signin');
@@ -95,8 +95,7 @@ export function LoginPage() {
   if (mode === 'signup') {
     return (
       <div className="mx-auto mt-24 max-w-sm">
-        <h1 className="font-display mb-1 text-center text-xl font-semibold text-[var(--ink)]">Thera.Net</h1>
-        <p className="mb-6 text-center text-sm text-[var(--muted)]">Create an account</p>
+        <AuthBrandHeader subtitle="Create an account" />
         <div className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
           {signupSuccess ? (
             <>
@@ -172,8 +171,7 @@ export function LoginPage() {
   if (mode === 'reset') {
     return (
       <div className="mx-auto mt-24 max-w-sm">
-        <h1 className="font-display mb-1 text-center text-xl font-semibold text-[var(--ink)]">Thera.Net</h1>
-        <p className="mb-6 text-center text-sm text-[var(--muted)]">Reset your password</p>
+        <AuthBrandHeader subtitle="Reset your password" />
         <div className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
           {resetSent ? (
             <p className="text-sm text-[var(--ink)]">
@@ -215,8 +213,7 @@ export function LoginPage() {
 
   return (
     <div className="mx-auto mt-24 max-w-sm">
-      <h1 className="font-display mb-1 text-center text-xl font-semibold text-[var(--ink)]">Thera.Net</h1>
-      <p className="mb-6 text-center text-sm text-[var(--muted)]">Sign in</p>
+      <AuthBrandHeader subtitle="Sign in" />
       <form onSubmit={onSubmit} className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
         <Field label="Email">
           <input
