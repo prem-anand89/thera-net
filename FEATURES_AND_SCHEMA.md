@@ -733,6 +733,24 @@ separate ₹0-context rows. A merged line's `catalogPricePaise` is always the
 is what keeps `catalogPricePaise + adjustmentPaise = totalPaise` holding
 exactly for every line, by construction.
 
+**Long-running packages (e.g. post-op TKR/THR rehab, 20-30+ sessions).**
+Nothing in the schema or invoicing logic caps a package's session count —
+a 24-session package invoices through the exact same line-item build as a
+3-session one. The one place volume affects the printed layout: a line's
+"Dates of service" column would otherwise list every individual date,
+wrapping into an unreadably dense cell past a handful of sessions.
+`sessionDatesDisplay()` (`src/domain/invoiceLine.ts`) condenses to a
+"from – to (N sessions)" range once a line has more than 8 session dates;
+at or under that it still lists every date. Used by both
+`InvoicePrintPage.tsx` table variants (legacy and v2); the Insurer Packet's
+invoice summary and the issue-invoice preview step never showed the date
+list in the first place — they already use the compact `sessionCountLabel`
+— so neither needed a change. `SessionLogPrintPage`'s trend grid is
+unaffected by volume in a different way: it's one row per session with no
+condensing, since a clinical trend genuinely needs every date as its own
+row; print pagination (not this page) is what splits a long table across
+pages.
+
 **Partial-package printing.** A package billed in full but only partly
 delivered prints its real total (not a fabricated partial amount), with a
 caption under the service name whenever the row's own arithmetic doesn't

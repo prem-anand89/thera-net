@@ -14,6 +14,7 @@ import {
   lineReconciles,
   normalizeAuthorizedCount,
   sessionCountLabel,
+  sessionDatesDisplay,
 } from '@/domain/invoiceLine';
 import type { InvoiceLineItem, Therapist } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
@@ -41,6 +42,15 @@ function lineCaption(li: InvoiceLineItem): string | null {
 /** Sessions-column text — only diverges from the plain "N of M sessions"
  *  label when the row genuinely can't be multiplied back to the amount, so
  *  the reader isn't invited to multiply Rate × the smaller number. */
+/** Every date for a short run; a "from – to (N sessions)" range once the
+ *  list would otherwise wrap a wall of dates into one cell — the common
+ *  case for a 20-30 session post-op package (TKR/THR rehab). */
+function sessionDatesCellText(li: InvoiceLineItem): string {
+  const display = sessionDatesDisplay(li);
+  if (display.mode === 'list') return display.dates.map(formatDateDMY).join(', ');
+  return `${formatDateDMY(display.from)} – ${formatDateDMY(display.to)} (${display.count} sessions)`;
+}
+
 function sessionsCellText(li: InvoiceLineItem): string {
   if (!lineReconciles(li)) {
     const authorized = normalizeAuthorizedCount(li.authorizedSessionCount ?? null);
@@ -88,9 +98,7 @@ function LegacyLineItemsTable({
                     ? `${li.sessionDates.length} of ${li.sessionCount}`
                     : `${li.sessionCount} sessions`
                   : '1'}
-                <div className="text-xs text-[var(--muted)]">
-                  {li.sessionDates.map(formatDateDMY).join(', ')}
-                </div>
+                <div className="text-xs text-[var(--muted)]">{sessionDatesCellText(li)}</div>
               </td>
               <td className="font-num py-2 text-right">{formatINR(li.catalogPricePaise)}</td>
               {hasAdjustments && (
@@ -163,9 +171,7 @@ function LineItemsTable({
                   <div className="mt-0.5 text-xs font-normal text-[var(--muted)]">{caption}</div>
                 )}
               </td>
-              <td className="py-2 text-xs text-[var(--muted)]">
-                {li.sessionDates.map(formatDateDMY).join(', ')}
-              </td>
+              <td className="py-2 text-xs text-[var(--muted)]">{sessionDatesCellText(li)}</td>
               <td className="py-2 text-[var(--muted)]">{sessionsCellText(li)}</td>
               <td className="font-num py-2 text-right">
                 {formatINR(lineRatePerSessionPaise(li))}

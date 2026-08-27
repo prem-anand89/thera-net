@@ -57,6 +57,28 @@ export function sessionCountLabel(li: InvoiceLineItem): string {
   return `${clampedBilled} of ${authorized} sessions`;
 }
 
+/** Above this many session dates, the print page condenses to a range
+ *  rather than listing every date — see `sessionDatesDisplay` below. */
+const SESSION_DATE_LIST_THRESHOLD = 8;
+
+export type SessionDatesDisplay =
+  { mode: 'list'; dates: string[] } | { mode: 'range'; from: string; to: string; count: number };
+
+/**
+ * How a line's session dates should render: every date, comma-separated,
+ * for a short run; a "from – to (N sessions)" range once the list would get
+ * unreadably long — a 20-30 session post-op package (TKR/THR rehab is the
+ * common case) otherwise wraps a wall of dates into one table cell. Pure
+ * data shape only — callers own date formatting (`formatDateDMY` etc.),
+ * since this module has no display-formatting dependency of its own.
+ */
+export function sessionDatesDisplay(li: InvoiceLineItem): SessionDatesDisplay {
+  const dates = li.sessionDates;
+  if (dates.length <= SESSION_DATE_LIST_THRESHOLD) return { mode: 'list', dates };
+  const sorted = [...dates].sort();
+  return { mode: 'range', from: sorted[0], to: sorted[sorted.length - 1], count: dates.length };
+}
+
 export interface DatePeriod {
   from: string;
   to: string;

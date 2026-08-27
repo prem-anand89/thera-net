@@ -10,6 +10,7 @@ import {
   linePeriod,
   normalizeAuthorizedCount,
   sessionCountLabel,
+  sessionDatesDisplay,
 } from './invoiceLine';
 import type { InvoiceLineItem, Visit } from './types';
 import { rupeesToPaise as rs } from './money';
@@ -155,6 +156,55 @@ describe('sessionCountLabel', () => {
       authorizedSessionCount: 10,
     };
     expect(sessionCountLabel(li)).toBe('10 sessions');
+  });
+});
+
+describe('sessionDatesDisplay', () => {
+  function lineWithDates(dates: string[]): InvoiceLineItem {
+    return {
+      serviceName: 'X',
+      sessionCount: dates.length,
+      sessionDates: dates,
+      catalogPricePaise: rs(dates.length * 500),
+      adjustmentPaise: 0,
+      adjustmentReason: null,
+      totalPaise: rs(dates.length * 500),
+    };
+  }
+
+  it('lists every date at or under the threshold (8)', () => {
+    const dates = Array.from({ length: 8 }, (_, i) => `2026-01-${String(i + 1).padStart(2, '0')}`);
+    expect(sessionDatesDisplay(lineWithDates(dates))).toEqual({ mode: 'list', dates });
+  });
+
+  it('condenses to a range once past the threshold', () => {
+    const dates = Array.from({ length: 24 }, (_, i) => `2026-01-${String(i + 1).padStart(2, '0')}`);
+    expect(sessionDatesDisplay(lineWithDates(dates))).toEqual({
+      mode: 'range',
+      from: '2026-01-01',
+      to: '2026-01-24',
+      count: 24,
+    });
+  });
+
+  it('sorts unsorted input before taking the range endpoints', () => {
+    const dates = [
+      '2026-03-10',
+      '2026-01-05',
+      '2026-02-20',
+      '2026-01-01',
+      '2026-04-01',
+      '2026-01-15',
+      '2026-02-01',
+      '2026-03-01',
+      '2026-04-15',
+    ];
+    expect(sessionDatesDisplay(lineWithDates(dates))).toEqual({
+      mode: 'range',
+      from: '2026-01-01',
+      to: '2026-04-15',
+      count: 9,
+    });
   });
 });
 
