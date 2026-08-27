@@ -39,9 +39,10 @@ client-side implementation yet — no UI, no Dexie/sync integration. See
 
 ### Revenue & Invoicing
 - **Revenue split** — per visit, computed at billing time and stored with the rate snapshot: BM Share (75%), Post-Tax (90% of share), TDS (configurable basis: % of gross bill or % of BM share), HV share. Rounding: half-up to the rupee, once per visit — rollups reconcile by construction.
-- **Invoices** — server-issued, gap-free sequential numbers per clinic per FY (`BM/26-27/0001`), immutable once issued (DB triggers), printable A4/A5 with clinic letterhead + optional partner-hospital branding. Titled "BILL" while outstanding and "BILL CUM RECEIPT" once paid, rather than "Invoice"/"Tax Invoice" — matches how insurers/TPAs expect these documents to read for GST-exempt healthcare services.
-- **Payment status & HV settlement** — a three-fact payment model (Billed / Collected / Receipted) distinguishes cash collected without a receipt from an issued-but-unpaid invoice, so neither reads as the other; take-payment/issue-invoice actions live directly on each visit row and on the Invoices tab. Monthly report shows HV settlement card for variance tracking.
+- **Invoices** — server-issued, gap-free sequential numbers per clinic per FY (`BM/26-27/0001`), immutable once issued (DB triggers), printable A4/A5 with clinic letterhead + optional partner-hospital branding. Titled "BILL" while outstanding and "BILL CUM RECEIPT" once paid, rather than "Invoice"/"Tax Invoice" — matches how insurers/TPAs expect these documents to read for GST-exempt healthcare services. TPA-facing print layout: dates-of-service and per-session rate get their own columns, a treatment period line, and a caption whenever a package's real total and its printed rate don't multiply out exactly — plus an optional "Clinical details" block (diagnosis, referring physician, place of service) pre-filled from the patient's note at issue time and then frozen with the rest of the bill. Several independently-logged visits of the same service now collapse onto one "bill by service" line instead of a package-only grouping.
+- **Payment status & HV settlement** — a three-fact payment model (Billed / Collected / Receipted) distinguishes cash collected without a receipt from an issued-but-unpaid invoice, so neither reads as the other. Display collapses to Paid / Partial / Due / Overdue (past 30 days unpaid) with a promoted `Collect ₹X` action wherever money can still be taken; a "Needs receipt" queue on the Invoices tab surfaces every visit collected but never invoiced. Monthly report shows HV settlement card for variance tracking.
 - **Billing access control** — clinics can restrict who is allowed to issue invoices ("everyone" vs. "billing staff only"), enforced server-side inside `issue_invoice()`, not just hidden in the UI.
+- **Advance payments** — record money received ahead of treatment from Patient Profile; draws down against real visits (oldest advance first) as ordinary payments once treatment happens, so every existing payment-state computation already handles it correctly.
 - **Monthly report** — fiscal-year-aware (Apr–Mar), per-therapist Bill / BM Share / TDS / Post-Tax / HV / unique patients + total, CSV export.
 
 ### Data & Offline
@@ -58,7 +59,7 @@ client-side implementation yet — no UI, no Dexie/sync integration. See
 src/domain/            pure business logic (money, splits, fiscal year, clinical assessments) — no framework imports, unit-tested
 src/repositories/      data-access interfaces + Dexie implementations (UI reads/writes local only)
 src/sync/              outbox push / delta pull engine against Supabase
-src/services/          visit/invoice/report/patient/dashboard/consultation-note orchestration — no React imports
+src/services/          visit/invoice/report/patient/dashboard/consultation-note/advance orchestration — no React imports
 src/features/          UI pages and components (React + TanStack Router)
   ├── workspace/       WorkspacePage (default landing: Today, Recent, Open Packages, Pending Work)
   ├── visits/          LedgerPage at /ledger (Visits/Invoices sub-tabs); NewVisitPage

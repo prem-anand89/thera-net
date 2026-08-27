@@ -187,6 +187,46 @@ queued with a visible error.
   (generally GST-exempt) healthcare services and doesn't match how insurers/TPAs
   expect these documents to be labeled
 - **Online-only** — gap-free numbers require the server counter
+- **TPA-facing print layout**: dates-of-service get their own column,
+  "Catalog price" becomes "Rate" (per-session, `/session`), a treatment
+  period line ("Treatment period: 1 Jan – 15 Jan") sits above the
+  itemization, and the old "Show visit dates" checkbox is gone — dates are
+  always shown now, for legacy invoices too. See "Invoice line items (v2)"
+  and "Clinical context on the bill" under the `invoices` schema entry
+  above for what actually changed underneath.
+
+#### Payment Status Badge & Collect Action
+- **4-state display collapse** (`src/domain/paymentState.ts`'s
+  `paymentBadge()`) over the raw 6-state `VisitPaymentState`: Paid /
+  Partial / Due / Overdue / (no badge for `zero_session`). A visit reads
+  **Overdue** once its bill has sat unpaid past `OVERDUE_AFTER_DAYS` (30) —
+  the clock anchors on `visitDate` for an uninvoiced visit, or
+  `max(visitDate, issuedAt)` once an invoice exists, so a package invoiced
+  weeks after the visit gets a fresh 30-day window instead of reading
+  Overdue the instant it's issued. A `partially_collected` balance past the
+  threshold gets Overdue's urgent tone while keeping its "₹X of ₹Y" label —
+  losing the partial-payment detail on an already-informative row would be
+  a regression, not a simplification.
+- **Collect promotion**: wherever money can still be taken (`take_payment`
+  available), the passive status pill is replaced by a filled `Collect ₹X`
+  button rather than shown alongside it; `Issue invoice` moved out of the
+  visible row entirely into the row's kebab menu, so there's exactly one
+  primary action per row. Two independent implementations both carry this
+  (the desktop table's `PaymentStatusDisplay` and the mobile
+  `SharedVisitCard` — confirmed they were never actually sharing markup
+  despite an old doc comment implying otherwise) plus New Visit's "Last
+  visit" summary tile, a third, easy-to-miss `PAYMENT_CHIP` consumer.
+
+#### Needs-Receipt Queue
+- **Ledger → Invoices tab**: a "Needs receipt (N)" section lists every
+  visit that's `collected_no_receipt` (money taken, no invoice ever
+  issued) clinic-wide, oldest first, each with a one-click "Issue invoice"
+  into the existing dialog. `dashboardService.needsReceipt()` is the single
+  source of truth for both this section and the tab's own count badge, so
+  the two can never disagree — deliberately unbounded (no date filter),
+  matching the sibling `outstandingInvoices()`'s own precedent, since a
+  backlog like this is by definition old and shouldn't vanish behind a
+  Ledger date preset.
 
 #### Payment Status & HV Settlement
 - **Three-fact payment model**: Billed / Collected / Receipted
@@ -222,6 +262,24 @@ queued with a visible error.
   is bounded by that invoice's real total rather than assuming one visit
   is the whole bill).
 - **Monthly report** shows HV settlement card for variance tracking
+
+#### Advance Payments
+- **Record ahead of treatment**: Patient Profile's "Record advance" button
+  logs money received with no visit attached yet — amount, method, date,
+  optional note — and prints its own small receipt (`ADVANCE RECEIPT`,
+  A5, no dates-of-service block, "Adjustable against future treatment").
+- **Draws down against real visits**, not a separate ledger: applying an
+  advance writes ordinary `payments` rows (stamped `advance_id`), so every
+  existing payment-state computation, badge, and report already handles it
+  correctly with zero special-casing. `TakePaymentDialog` surfaces "₹X
+  advance available — apply" whenever the patient has an open balance,
+  applying oldest-advance-first and capping at what's actually still owed.
+  An advance flips to `exhausted` automatically once its balance reaches
+  zero.
+- **Not visible anywhere payment-state is read** until drawn down — an
+  unapplied advance balance shows only in the two places above (the
+  Patient Profile pill, `TakePaymentDialog`'s nudge), never in the
+  needs-receipt queue, dashboard KPIs, or a visit's own badge.
 
 #### Billing Access Control
 - **Clinic-level toggle** restricts who is allowed to issue invoices
@@ -392,7 +450,7 @@ src/sync/                Outbox push / delta pull engine
 
 src/services/            Orchestration layer (no React imports)
                          Visit, invoice, report, patient, dashboard,
-                         consultation-note, therapist services
+                         consultation-note, therapist, advance services
 
 src/features/            UI pages and components (React + TanStack Router)
   ├── workspace/         WorkspacePage (Today, Recent, Open Packages, Pending)
@@ -585,22 +643,76 @@ INDEXES: clinic+date, patient, clinic+updated
 
 #### `invoices`
 ```sql
-id               uuid PRIMARY KEY
-clinic_id        uuid NOT NULL (FOREIGN KEY → clinics.id)
-invoice_no       text NOT NULL — `PREFIX/FY-LABEL/NNNN`
-fy_label         text NOT NULL (e.g., "26-27")
-seq              int NOT NULL
-issued_at        timestamptz NOT NULL
-patient_snapshot jsonb NOT NULL — patient details at issue time
-line_items       jsonb NOT NULL
-total_paise      bigint NOT NULL
-payment_mode     text NOT NULL — 'Cash' | 'Card' | 'UPI' | 'Insurance'
-therapist_id     uuid (FOREIGN KEY → therapists.id, NULLABLE)
+id                  uuid PRIMARY KEY
+clinic_id           uuid NOT NULL (FOREIGN KEY → clinics.id)
+invoice_no          text NOT NULL — `PREFIX/FY-LABEL/NNNN`
+fy_label            text NOT NULL (e.g., "26-27")
+seq                 int NOT NULL
+issued_at           timestamptz NOT NULL
+patient_snapshot    jsonb NOT NULL — patient details at issue time
+line_items          jsonb NOT NULL — see "Invoice line items (v2)" below
+total_paise         bigint NOT NULL
+payment_mode        text NOT NULL — 'Cash' | 'Card' | 'UPI' | 'Insurance'
+therapist_id        uuid (FOREIGN KEY → therapists.id, NULLABLE)
+supersedes_invoice_id uuid (FOREIGN KEY → invoices.id, NULLABLE) — set on an amendment
+clinical_snapshot   jsonb (NULLABLE) — see "Clinical context on the bill" below
 created_by, updated_by  uuid (NULLABLE)
 updated_at       timestamptz NOT NULL
 ```
 Immutable once issued (DB trigger). Payment status is **not** a column here —
 see `invoice_payments` below.
+
+**Invoice line items (v2).** `line_items` is opaque jsonb — a legacy invoice's
+entries have only the original 6 fields (`serviceName`, `sessionCount`,
+`sessionDates`, `catalogPricePaise`, `adjustmentPaise`, `adjustmentReason`,
+`totalPaise`); every invoice issued or amended since the Billing & Notes
+Rebuild Phase 1 gets a v2 entry, marked by `lineItemVersion: 2`, adding
+`billedSessionCount`, `authorizedSessionCount` (null = not a package),
+`ratePerSessionPaise` (snapshotted, never re-derived from live catalog
+prices), `rateBasis`, `adjustmentReasons` (a merged group can span more than
+one), and `therapistIds` (ditto). `sessionCount`'s meaning is unchanged
+(`authorizedSessionCount ?? billedSessionCount`) so old readers of the raw
+field still work. All build- and print-side code goes through
+`src/domain/invoiceLine.ts` (`isV2Line`, `lineRatePerSessionPaise`,
+`sessionCountLabel`, `lineReconciles`, `normalizeAuthorizedCount`,
+`invoicePeriod`) rather than reading either shape directly, so the two
+sides can't drift the way the invoice-print page and the insurer-packet
+summary once did.
+
+**Bill by service, not just by package.** Invoice line grouping
+(`invoiceService.ts` → `invoiceLine.ts`'s `groupVisitsForInvoicing`) keys on
+`packageGroupId` when present, otherwise on `service + catalog price` — so
+several independently-logged (non-package) visits of the same service at
+the same price collapse into one line reading "10 sessions," not ten
+separate ₹0-context rows. A merged line's `catalogPricePaise` is always the
+**sum** of every visit's own snapshot in the group (not one visit's), which
+is what keeps `catalogPricePaise + adjustmentPaise = totalPaise` holding
+exactly for every line, by construction.
+
+**Partial-package printing.** A package billed in full but only partly
+delivered prints its real total (not a fabricated partial amount), with a
+caption under the service name whenever the row's own arithmetic doesn't
+reconcile (`lineReconciles()` — checks `billedSessionCount ×
+ratePerSessionPaise + adjustmentPaise = totalPaise` exactly, catching both
+a genuine partial delivery and a plain rounding mismatch on a fully-billed
+package). The Sessions column itself reads "N delivered of M authorised" on
+a non-reconciling row so the printed numbers don't invite the reader to
+multiply Rate × the smaller number and land on the wrong answer.
+
+**Clinical context on the bill.** `clinical_snapshot` (nullable jsonb, old
+invoices predate it) holds `diagnosis`, `diagnosisIcdCode`,
+`referringPhysician`, `physicianRegistrationNo`, `placeOfService`
+('clinic' | 'home'), `treatmentPerformed`, `sourceNoteId` (provenance), and
+`editedByBiller`. Pre-filled in `IssueInvoiceDialog` from the visit's own
+completed note, falling back to the patient's most recent completed heavy
+(initial/follow-up) note — a light session note (see Light Session Notes
+below) has no referral field to pull from. Editable before issuing, then
+frozen with the rest of the invoice (never re-read from the note
+afterward). **Known gap, by design**: Patient Profile's bulk-issue path
+(select several visits → issue one invoice) bypasses this dialog entirely
+and always issues with `clinical_snapshot: null` — giving it the same
+pre-fill would need either a second clinical form or a reshaped multi-visit
+dialog, deferred as real follow-up work rather than folded into this pass.
 
 #### `invoice_counters`
 ```sql
@@ -641,6 +753,7 @@ amount_paise    bigint NOT NULL
 method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque'
 received_date   date NOT NULL
 notes           text (NULLABLE)
+advance_id      uuid (FOREIGN KEY → patient_advances.id, NULLABLE — see below)
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 ```
@@ -651,7 +764,53 @@ the visit's bill). No `invoice_id` column: this same table is also how a
 invoice itself has no amount-paid field — see `invoice_payments` above),
 so a payment stays keyed to the visit it was collected for either way. For
 an invoice spanning several visits, one entered amount is allocated across
-those visits' `payments` rows in date order.
+those visits' `payments` rows in date order — the shared
+`allocateAcrossVisits()` helper in `src/services/advanceService.ts` (both
+`paymentService.recordInvoicePayment` and advance draw-down use it, so the
+two paths can't allocate differently). `advance_id` is set only when this
+payment was drawn down from a patient's advance balance rather than
+collected fresh; `visit_id` still stays required either way, so
+`computeVisitPaymentState` needs no special-casing for advance-funded
+payments.
+
+#### `patient_advances`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
+amount_paise    bigint NOT NULL (> 0)
+method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque'
+received_date   date NOT NULL
+receipt_no      text (NULLABLE) — no numbered series yet, see below
+notes           text (NULLABLE)
+status          text NOT NULL default 'open' — 'open' | 'exhausted' | 'refunded' | 'void'
+deleted         boolean NOT NULL default false
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+UNIQUE (id, clinic_id) — backs the composite FK on payments.advance_id below
+```
+Money received ahead of treatment. **Not a `payments` row until drawn
+down** — `computeVisitPaymentState` and everything derived from it (badges,
+the needs-receipt queue, dashboard KPIs) stays untouched by an advance
+until a real `payments` row is written against a real visit
+(`advanceService.applyAdvance`), which stamps that row's `advance_id` and
+flips this row's `status` to `'exhausted'` once the balance reaches zero.
+Remaining balance is computed, not stored:
+`amount_paise − Σ payments.amount_paise where advance_id = this.id`.
+`payments.advance_id` is a **composite** FK to `(id, clinic_id)` rather
+than a plain `references patient_advances(id)`, so a payment can never
+reference a different clinic's advance even by a client bug — RLS already
+scopes reads correctly, but this closes the write-side gap outright.
+`method` uses the `PaymentMethod` vocabulary (`'cash'|'upi'|…`), not the
+older `PaymentMode` (`'Cash'|'Card'|'UPI'|'Insurance'`) that belongs only
+to `Invoice.paymentMode` — easy to confuse. **No gap-free numbered receipt
+series yet** — `receipt_no` exists but is unused; the printed
+`AdvanceReceiptPrintPage` identifies a receipt by date + a short slice of
+its id instead. A real counter can be added later with no data migration
+if it turns out to matter. Entry point: Patient Profile's "Record advance"
+button; `TakePaymentDialog` also surfaces "₹X advance available — apply"
+and draws down (oldest advance first) when a patient with an open balance
+is being collected from elsewhere.
 
 #### `settlements`
 ```sql
@@ -1390,6 +1549,34 @@ check the full package group via `repos.visits.listByPackageGroup()`
 (their loaded visit list is date/day-scoped and would miss an
 out-of-window sibling), while Patient Profile scans its already-loaded,
 unbounded per-patient visit history directly.
+
+### 3c. Adding a Parameter to an Existing RPC Function (Postgres identity gotcha)
+
+Postgres identifies a function by **name + argument types**, not name
+alone. `create or replace function` with a **changed argument list does
+not replace the existing function** — it silently creates a second,
+distinct one alongside it. `issue_invoice()`/`amend_invoice()` needed a new
+optional trailing `p_clinical_snapshot jsonb default null` parameter for
+Billing & Notes Rebuild Phase 1's clinical-context feature; the naive
+`create or replace` approach would have left the old N-arg function live
+next to a new N+1-arg one, and the moment both matched a call (any
+unrefreshed client still sending the old arg set), PostgREST/Postgres can
+no longer tell which one to call — **invoice issuance hard-fails clinic-
+wide for the deploy window**, on the one operation in this app that can't
+be retried offline.
+
+**Correct pattern, used by the migration that added this field**: an
+explicit `drop function <exact old signature>` followed by
+`create function <new signature>`, in the same migration transaction, so
+exactly one candidate function ever exists. PostgREST's own
+missing-key-resolves-to-SQL-default behavior then means an old client
+sending only the original argument set still succeeds against the new
+function (the omitted parameter resolves to its `default`), while a
+refreshed client sending the new key succeeds too. Any signature-scoped
+grant/revoke (e.g. `revoke execute … from anon`, see RLS Hardening in
+Phase-0-era migrations) must be **re-issued against the new signature** —
+it does not carry over from the old one, since as far as Postgres is
+concerned this is a different function, not an edit to the old one.
 
 ### 4. Walk-In MRNO Auto-Generation
 - **Sequential per clinic per year**: `PREFIXYY-NNNN` (W26-0001, W26-0002)

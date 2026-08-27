@@ -1,11 +1,9 @@
-import type {
-  Invoice,
-  InvoiceLineItem,
-  PaymentMode,
-  UUID,
-  Visit,
-} from '@/domain/types';
+import type { Invoice, InvoiceClinicalSnapshot, PaymentMode, UUID, Visit } from '@/domain/types';
 import { fiscalYearOf } from '@/domain/fiscalYear';
+import {
+  buildLineItems as buildLineItemsPure,
+  groupVisitsForInvoicing,
+} from '@/domain/invoiceLine';
 import type { Repos } from '@/repositories/types';
 import { getSupabase } from '@/lib/supabase';
 import { rowToDomain } from '@/repositories/rowMapping';
@@ -27,84 +25,61 @@ export function createInvoiceService(repos: Repos) {
   }
 
   /**
-   * Group visits by package/service for multi-line-item invoicing.
-   * Each group becomes one line item on a combined invoice. `allowInvoiceId`
-   * lets an amendment re-include visits already on the invoice being
-   * amended, in addition to previously-uninvoiced ones.
+   * Fetches and expands the requested visits into a flat list — every
+   * uninvoiced sibling of a package visit gets pulled in too — but does no
+   * grouping itself; that's `invoiceLine.ts`'s pure `groupVisitsForInvoicing`,
+   * called separately by `buildLineItems` below. This half needs `repos`
+   * (fetching by id and by package group), so it can't move into the pure
+   * module; the grouping-key logic that follows it can and does.
    */
-  async function groupVisitsForInvoicing(
-    visitIds: UUID[],
-    allowInvoiceId?: UUID
-  ): Promise<Map<string, Visit[]>> {
+  async function resolveVisits(visitIds: UUID[], allowInvoiceId?: UUID): Promise<Visit[]> {
     const visits = await Promise.all(visitIds.map((id) => repos.visits.get(id)));
     const valid = visits.filter((v): v is Visit => v !== undefined);
 
-    const groups = new Map<string, Visit[]>();
+    const allVisits: Visit[] = [];
     for (const visit of valid) {
       if (!isAvailable(visit, allowInvoiceId)) {
         throw new Error(`Visit ${visit.id} is already invoiced`);
       }
-
-      // Collect full package group if this is a package visit
-      let fullGroup: Visit[];
-      if (visit.packageGroupId) {
-        fullGroup = await collectVisits(visit, allowInvoiceId);
-      } else {
-        fullGroup = [visit];
-      }
-
-      // Group key = packageGroupId (or visitId for standalone visits)
-      const key = visit.packageGroupId || visit.id;
-      const existing = groups.get(key) ?? [];
-      const merged = [...existing, ...fullGroup].filter(
-        (v, i, a) => a.findIndex((x) => x.id === v.id) === i
-      );
-      groups.set(key, merged);
+      allVisits.push(...(await collectVisits(visit, allowInvoiceId)));
     }
-    return groups;
+    // De-duplicated by invoiceLine.ts's groupVisitsForInvoicing, but this
+    // flat list is also what's returned to the caller for markInvoiced/
+    // p_visit_ids, so dedupe it here too rather than relying on the pure
+    // function's side effect for a value used outside it.
+    const seen = new Set<UUID>();
+    return allVisits.filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
   }
 
   /**
-   * Shared by issueForVisits and amendInvoice: groups visits into line
-   * items and computes the total, but doesn't call the server — the two
-   * callers differ only in which RPC they call and whether previously-
-   * invoiced visits are allowed in the input set.
+   * Shared by issueForVisits and amendInvoice: resolves visits, groups and
+   * builds line items via invoiceLine.ts's pure functions, and totals them
+   * — but doesn't call the server. The two callers differ only in which
+   * RPC they call and whether previously-invoiced visits are allowed in.
    */
   async function buildLineItems(
     visitIds: UUID[],
     allowInvoiceId?: UUID
   ): Promise<{
     allVisits: Visit[];
-    lineItems: InvoiceLineItem[];
+    lineItems: ReturnType<typeof buildLineItemsPure>['lineItems'];
     totalPaise: number;
     therapistId: UUID;
   }> {
-    const groups = await groupVisitsForInvoicing(visitIds, allowInvoiceId);
-    const allVisits: Visit[] = [];
-    const lineItems: InvoiceLineItem[] = [];
-    let totalPaise = 0;
-    let therapistId: UUID = visitIds[0];
+    const allVisits = await resolveVisits(visitIds, allowInvoiceId);
+    const groups = groupVisitsForInvoicing(allVisits);
 
-    for (const groupVisits of groups.values()) {
-      const groupBilled = groupVisits.find((v) => v.actualBillPaise > 0) ?? groupVisits[0];
-      const catalogItem = await repos.catalog.get(groupBilled.serviceCatalogId);
-      if (!catalogItem) throw new Error('Service not found');
+    const serviceIds = new Set(allVisits.map((v) => v.serviceCatalogId));
+    const catalogItems = await Promise.all(
+      Array.from(serviceIds).map((id) => repos.catalog.get(id))
+    );
+    const serviceNameById = new Map(
+      catalogItems
+        .filter((c): c is NonNullable<typeof c> => c !== undefined)
+        .map((c) => [c.id, c.name])
+    );
 
-      const groupTotal = groupVisits.reduce((sum, v) => sum + v.actualBillPaise, 0);
-      allVisits.push(...groupVisits);
-      totalPaise += groupTotal;
-      therapistId = groupBilled.therapistId;
-
-      lineItems.push({
-        serviceName: catalogItem.name,
-        sessionCount: groupBilled.packageTotal ?? catalogItem.sessionCount,
-        sessionDates: groupVisits.map((v) => v.visitDate).sort(),
-        catalogPricePaise: groupBilled.catalogPricePaise,
-        adjustmentPaise: groupVisits.reduce((sum, v) => sum + v.adjustmentPaise, 0),
-        adjustmentReason: groupBilled.adjustmentReason,
-        totalPaise: groupTotal,
-      });
-    }
+    const { lineItems, totalPaise, therapistId } = buildLineItemsPure(groups, serviceNameById);
     return { allVisits, lineItems, totalPaise, therapistId };
   }
 
@@ -114,16 +89,31 @@ export function createInvoiceService(repos: Repos) {
      * session in the package group goes on it, so the receipt lists all
      * session dates even though usually only session 1 carried the charge.
      */
-    async issueForVisit(visitId: UUID, paymentMode: PaymentMode): Promise<Invoice> {
-      return this.issueForVisits([visitId], paymentMode);
+    async issueForVisit(
+      visitId: UUID,
+      paymentMode: PaymentMode,
+      clinicalSnapshot?: InvoiceClinicalSnapshot | null
+    ): Promise<Invoice> {
+      return this.issueForVisits([visitId], paymentMode, clinicalSnapshot);
     },
 
     /**
      * Issues a single invoice for multiple visits/packages. Groups visits by
-     * package and creates one line item per group, combining them into a
-     * single invoice. All visits must belong to the same patient.
+     * service (packages by packageGroupId, everything else by service+price
+     * — see invoiceLine.ts) into one line item per group, combining them
+     * into a single invoice. All visits must belong to the same patient.
+     *
+     * `clinicalSnapshot` is optional and defaults to none — the direct
+     * bulk-issue path from Patient Profile (`handleBulkIssueInvoice`)
+     * deliberately doesn't collect one; only `IssueInvoiceDialog` does. See
+     * the Billing & Notes Rebuild Phase 1 plan's 1.4 section for why that
+     * gap is accepted rather than built out in this phase.
      */
-    async issueForVisits(visitIds: UUID[], paymentMode: PaymentMode): Promise<Invoice> {
+    async issueForVisits(
+      visitIds: UUID[],
+      paymentMode: PaymentMode,
+      clinicalSnapshot?: InvoiceClinicalSnapshot | null
+    ): Promise<Invoice> {
       const supabase = getSupabase();
       if (!supabase) throw new Error('Supabase is not configured');
       if (!navigator.onLine) {
@@ -161,6 +151,7 @@ export function createInvoiceService(repos: Repos) {
         p_payment_mode: paymentMode,
         p_therapist_id: therapistId,
         p_visit_ids: allVisits.map((v) => v.id),
+        p_clinical_snapshot: clinicalSnapshot ?? null,
       });
       if (error) throw new Error(`Could not issue invoice: ${error.message}`);
 
@@ -180,11 +171,16 @@ export function createInvoiceService(repos: Repos) {
      * `visitIds` may include visits already on `originalInvoiceId` (they
      * get re-pointed to the new invoice) plus any newly-added, previously
      * uninvoiced visits. The original invoice row itself is never touched.
+     *
+     * `clinicalSnapshot` defaults to carrying the original invoice's own
+     * snapshot forward unchanged — editing it during an amendment is a
+     * deliberate future follow-up, not this phase (Phase 1 plan, 1.4).
      */
     async amendInvoice(
       originalInvoiceId: UUID,
       visitIds: UUID[],
-      paymentMode: PaymentMode
+      paymentMode: PaymentMode,
+      clinicalSnapshot?: InvoiceClinicalSnapshot | null
     ): Promise<Invoice> {
       const supabase = getSupabase();
       if (!supabase) throw new Error('Supabase is not configured');
@@ -220,6 +216,8 @@ export function createInvoiceService(repos: Repos) {
         p_payment_mode: paymentMode,
         p_therapist_id: therapistId,
         p_visit_ids: allVisits.map((v) => v.id),
+        p_clinical_snapshot:
+          clinicalSnapshot !== undefined ? clinicalSnapshot : (original.clinicalSnapshot ?? null),
       });
       if (error) throw new Error(`Could not amend invoice: ${error.message}`);
 

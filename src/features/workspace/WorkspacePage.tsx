@@ -74,6 +74,8 @@ function todayRowToCardData(
     billPaise: row.billPaise,
     paymentState: row.paymentState,
     invoiceId: row.invoiceId,
+    collectedPaise: row.collectedPaise,
+    issuedAt: row.issuedAt,
     canRepeat: Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId)),
     canSplit: therapistSplit && row.billPaise > 0 && canModify,
     hasSplit: Boolean(row.sharedTherapistId),
@@ -225,6 +227,7 @@ export function WorkspacePage() {
   function openInvoiceFor(data: VisitCardData) {
     setInvoicing({
       visitId: data.visitId,
+      patientId: data.patientId,
       patientLabel: data.patientName,
       serviceLabel: data.serviceName,
       isPackage: data.packageTotal != null,
@@ -503,6 +506,7 @@ export function WorkspacePage() {
           visitDate={takingPayment.visitDate}
           patientLabel={takingPayment.patientName}
           mrno={takingPayment.mrno}
+          patientId={takingPayment.patientId}
           onClose={() => setTakingPayment(null)}
         />
       )}

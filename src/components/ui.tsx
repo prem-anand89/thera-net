@@ -25,11 +25,22 @@ export function AuthBrandHeader({ subtitle }: { subtitle: string }) {
   );
 }
 
-export function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
+export function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: ReactNode;
+  /** Small note under the label — e.g. "From patient's note — edit if
+   *  needed" on a pre-filled field. Omit when there's nothing to say. */
+  hint?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <label className="block">
       <span className="mb-1 block text-xs font-medium text-[var(--muted)]">{label}</span>
       {children}
+      {hint && <span className="mt-1 block text-[11px] text-[var(--muted)]">{hint}</span>}
     </label>
   );
 }
@@ -98,7 +109,16 @@ export function StatTile({ label, value }: { label: string; value: ReactNode }) 
 
 const PILL_TONES = {
   green: 'bg-[var(--moss-light)] text-[var(--moss)]',
-  amber: 'bg-[var(--rust-light)] text-[var(--rust)]',
+  // True amber (caution) — was aliased to the rust palette before the
+  // Billing & Notes Rebuild Phase 1 badge collapse needed a genuinely
+  // distinct, more urgent tone for Overdue than for Due/Partial. Callers
+  // using "amber" today (the package "Not invoiced" pill, the "Stale"
+  // patient badge) shift from rust- to amber-toned as a result — a
+  // deliberate, coherent fix, not incidental: it now matches how the rest
+  // of the app already uses these two colors (screening-banner/flag-pill's
+  // amber = caution vs. rust = alert distinction).
+  amber: 'bg-[var(--amber-light)] text-[var(--amber)]',
+  rust: 'bg-[var(--rust-light)] text-[var(--rust)]',
   slate: 'bg-[var(--paper)] text-[var(--muted)]',
   teal: 'bg-[var(--teal-light)] text-[var(--teal)]',
 } as const;
@@ -117,6 +137,24 @@ export function Pill({ tone, children }: { tone: keyof typeof PILL_TONES; childr
 /** Therapist name badge — teal fill so "who treated" stands out from condition/treatment text. */
 export function TherapistPill({ children }: { children: ReactNode }) {
   return <Pill tone="teal">{children}</Pill>;
+}
+
+/**
+ * A small numeric counter badge — genuinely new, not a relabeled `Pill`:
+ * `SyncBadge` is a status pill (a word, not a count) and the Reports trend
+ * badge is a %-with-arrow, neither fits a plain "N of these need
+ * attention" count. Renders nothing at 0 — a badge reading "0" still reads
+ * as something to look at, when there's nothing to do.
+ */
+export function CountBadge({ count, tone }: { count: number; tone: keyof typeof PILL_TONES }) {
+  if (count === 0) return null;
+  return (
+    <span
+      className={`ml-1.5 inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${PILL_TONES[tone]}`}
+    >
+      {count}
+    </span>
+  );
 }
 
 /**

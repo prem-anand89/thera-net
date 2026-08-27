@@ -40,7 +40,7 @@ import { PAYMENT_CHIP } from '@/components/VisitCard';
 import {
   computeVisitPaymentState,
   isPackageContinuation,
-  paymentStatusPhrase,
+  paymentBadge,
 } from '@/domain/paymentState';
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
 
@@ -358,6 +358,14 @@ export function NewVisitPage() {
     (sum, p) => sum + p.amountPaise,
     0
   );
+  // D2's Overdue anchor (max(visitDate, issuedAt)) — this page only ever
+  // needs one visit's invoice, so a direct get() rather than a clinic-wide
+  // map (statusByInvoiceId above answers a different question — status,
+  // not issue date).
+  const lastVisitInvoice = useLiveQuery(
+    () => (lastVisit?.invoiceId ? repos.invoices.get(lastVisit.invoiceId) : undefined),
+    [lastVisit?.invoiceId]
+  );
   const catalogNameById = useMemo(
     () => new Map((catalog ?? []).map((c) => [c.id, c.name])),
     [catalog]
@@ -602,18 +610,26 @@ export function NewVisitPage() {
                     lastVisitDirectPaymentPaise,
                     lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
                   );
-                  const chip = PAYMENT_CHIP[state];
-                  const statusLabel = paymentStatusPhrase(
+                  const badge = paymentBadge({
                     state,
-                    isPackageContinuation(lastVisit.sessionIndex, lastVisit.packageTotal)
-                  );
+                    billPaise: lastVisit.actualBillPaise,
+                    collectedPaise: lastVisitDirectPaymentPaise,
+                    visitDate: lastVisit.visitDate,
+                    issuedAt: lastVisitInvoice?.issuedAt,
+                    isPackageSession: isPackageContinuation(
+                      lastVisit.sessionIndex,
+                      lastVisit.packageTotal
+                    ),
+                  });
                   return (
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span>
                         {formatDateDMY(lastVisit.visitDate)} —{' '}
                         {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
                       </span>
-                      <Pill tone={chip.tone}>{statusLabel}</Pill>
+                      <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+                        <span title={badge.title}>{badge.label}</span>
+                      </Pill>
                     </div>
                   );
                 })()

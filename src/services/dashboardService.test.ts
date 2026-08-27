@@ -163,6 +163,7 @@ function makeFakeRepos() {
         [...consultationNotesStore.values()].filter((n) => n.clinicId === clinicId),
       getOpenDraft: async () => undefined,
       listByEnrollment: async () => [],
+      getByVisitId: async () => undefined,
       put: async (n) => void consultationNotesStore.set(n.id, n),
     },
     patientModuleEnrollments: {
@@ -174,6 +175,11 @@ function makeFakeRepos() {
     },
     expectedVisits: {
       listForDate: async () => [],
+      put: async () => {},
+    },
+    patientAdvances: {
+      get: async () => undefined,
+      listByPatient: async () => [],
       put: async () => {},
     },
   };

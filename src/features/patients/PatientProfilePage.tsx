@@ -2,7 +2,13 @@ import { useMemo, useState, useCallback } from 'react';
 import { Link, useParams, useSearch } from '@tanstack/react-router';
 import type { PatientProfileBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService, consultationNoteService, invoiceService } from '@/services';
+import {
+  repos,
+  dashboardService,
+  consultationNoteService,
+  invoiceService,
+  advanceService,
+} from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -17,9 +23,11 @@ import {
   type ConsultationNote,
   type ConsultationNoteStatus,
 } from '@/domain/types';
+import { formatINR } from '@/domain/money';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
+import { RecordAdvanceDialog } from '@/components/RecordAdvanceDialog';
 
 /** How many notes the side panel lists before collapsing the rest into a
  *  "+N older" line — the full history stays reachable by opening any note. */
@@ -56,8 +64,17 @@ export function PatientProfilePage() {
   // wants the payment/invoice trail. Off by default so nothing disappears
   // without the viewer choosing it.
   const [hideZeroBilled, setHideZeroBilled] = useState(false);
+  const [recordingAdvance, setRecordingAdvance] = useState(false);
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
+  // Billing & Notes Rebuild Phase 1, 1.6 — total open-advance balance for
+  // this patient, re-runs on any local write (a new advance, a draw-down
+  // payment) via the same live-query mechanism every other count here uses.
+  const openAdvances = useLiveQuery(
+    () => advanceService.openAdvancesWithBalance(clinic.id, patientId),
+    [clinic.id, patientId]
+  );
+  const advanceBalancePaise = (openAdvances ?? []).reduce((sum, a) => sum + a.remainingPaise, 0);
   const editPatient = useLiveQuery(
     () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
     [editPatientId]
@@ -89,6 +106,7 @@ export function PatientProfilePage() {
   const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
   const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
+  const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
 
   const therapistName = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
@@ -109,6 +127,12 @@ export function PatientProfilePage() {
     }
     return map;
   }, [directPayments]);
+  // D2's Overdue anchor (max(visitDate, issuedAt)) — see LedgerPage.tsx's
+  // identical map for why statusByInvoiceId alone isn't enough.
+  const issuedAtByInvoiceId = useMemo(
+    () => new Map((invoices ?? []).map((inv) => [inv.id, inv.issuedAt])),
+    [invoices]
+  );
   const visitRows = useMemo(
     () =>
       [...(visits ?? [])]
@@ -228,6 +252,8 @@ export function PatientProfilePage() {
             v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
           ),
           invoiceId: v.invoiceId ?? null,
+          collectedPaise: directPaymentByVisitId.get(v.id) ?? 0,
+          issuedAt: v.invoiceId ? (issuedAtByInvoiceId.get(v.invoiceId) ?? null) : null,
           canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
           // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
           // is_own_therapist) — a patient's history is clinic-wide (any
@@ -260,6 +286,7 @@ export function PatientProfilePage() {
       treatmentName,
       directPaymentByVisitId,
       statusByInvoiceId,
+      issuedAtByInvoiceId,
       openPackageIds,
       isAdmin,
       myTherapistId,
@@ -430,9 +457,23 @@ export function PatientProfilePage() {
                 </span>
               )}
               {patient.mrnoSource === 'auto' && <Pill tone="slate">walk-in</Pill>}
+              {advanceBalancePaise > 0 && (
+                <span className="rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--teal)]">
+                  {formatINR(advanceBalancePaise)} advance available
+                </span>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {canBill && (
+              <button
+                type="button"
+                className={btnSecondary}
+                onClick={() => setRecordingAdvance(true)}
+              >
+                Record advance
+              </button>
+            )}
             <Link to="/visits/new" search={{ patientId }} className={btnPrimary}>
               New visit
             </Link>
@@ -614,6 +655,16 @@ export function PatientProfilePage() {
           patientId={newPatientId}
           onClose={() => setNewPatientId(null)}
           onOpenEdit={() => setEditPatientId(newPatientId)}
+        />
+      )}
+
+      {recordingAdvance && patient && (
+        <RecordAdvanceDialog
+          clinicId={clinic.id}
+          patientId={patientId}
+          patientLabel={patient.name}
+          backTo={backTo}
+          onClose={() => setRecordingAdvance(false)}
         />
       )}
     </div>

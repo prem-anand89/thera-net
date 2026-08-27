@@ -14,6 +14,7 @@ import type {
   ConsultationNote,
   PatientModuleEnrollment,
   ExpectedVisit,
+  PatientAdvance,
   NoteMode,
   UUID,
 } from '@/domain/types';
@@ -148,6 +149,14 @@ export interface ConsultationNoteRepo {
   /** Notes under one enrollment (episode of care) — an empty result means
    *  the next note written is Initial, a non-empty one means Follow-up. */
   listByEnrollment(enrollmentId: UUID): Promise<ConsultationNote[]>;
+  /**
+   * The note to pre-fill an invoice's clinical snapshot from — prefers this
+   * visit's own note; a light session note has no `referral` field (Phase
+   * 2), so callers wanting referral/diagnosis fields fall back to the
+   * patient's most recent completed heavy note themselves via
+   * `listByPatient` when this returns one with no useful fields.
+   */
+  getByVisitId(visitId: UUID): Promise<ConsultationNote | undefined>;
   put(note: ConsultationNote): Promise<void>;
 }
 
@@ -182,6 +191,13 @@ export interface ExpectedVisitRepo {
   put(entry: ExpectedVisit): Promise<void>;
 }
 
+export interface PatientAdvanceRepo {
+  get(id: UUID): Promise<PatientAdvance | undefined>;
+  /** A patient's advances, most-recently-received first. */
+  listByPatient(clinicId: UUID, patientId: UUID): Promise<PatientAdvance[]>;
+  put(advance: PatientAdvance): Promise<void>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -198,4 +214,5 @@ export interface Repos {
   consultationNotes: ConsultationNoteRepo;
   patientModuleEnrollments: PatientModuleEnrollmentRepo;
   expectedVisits: ExpectedVisitRepo;
+  patientAdvances: PatientAdvanceRepo;
 }

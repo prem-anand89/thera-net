@@ -48,6 +48,11 @@ const MonthlyLedgerPrintPage = lazy(() =>
 const InvoicePrintPage = lazy(() =>
   import('@/features/invoices/InvoicePrintPage').then((m) => ({ default: m.InvoicePrintPage }))
 );
+const AdvanceReceiptPrintPage = lazy(() =>
+  import('@/features/invoices/AdvanceReceiptPrintPage').then((m) => ({
+    default: m.AdvanceReceiptPrintPage,
+  }))
+);
 const NotePrintPage = lazy(() =>
   import('@/features/patients/NotePrintPage').then((m) => ({ default: m.NotePrintPage }))
 );
@@ -241,6 +246,15 @@ const insurerPacketRoute = createRoute({
   component: InsurerPacketPage,
 });
 
+// Advance receipt (Billing & Notes Rebuild Phase 1, 1.6) — always reached
+// from Patient Profile, same back-target carrying as the note print routes.
+const advanceReceiptPrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/advances/$advanceId/print',
+  validateSearch: validateFromSearch,
+  component: AdvanceReceiptPrintPage,
+});
+
 // The monthly statement lives under the Reports nav tab (/insights), not
 // Ledger — see ReportsPage.tsx. This standalone route becomes a redirect
 // rather than a hard delete-to-404: nothing in the app links here anymore,
@@ -403,6 +417,7 @@ const routeTree = rootRoute.addChildren([
   notePrintRoute,
   sessionLogPrintRoute,
   insurerPacketRoute,
+  advanceReceiptPrintRoute,
   insightsPrintRoute,
   reportsRedirectRoute,
   reportsPrintRedirectRoute,

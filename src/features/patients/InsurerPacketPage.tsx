@@ -5,6 +5,7 @@ import type { PatientProfileBackTarget } from '@/app/router';
 import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatDateDMY } from '@/domain/fiscalYear';
+import { sessionCountLabel } from '@/domain/invoiceLine';
 import { formatINR } from '@/domain/money';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
@@ -34,7 +35,7 @@ function InvoiceSummary({ invoice }: { invoice: Invoice }) {
           {invoice.lineItems.map((li, i) => (
             <tr key={i} className="border-t border-[var(--border)]">
               <td className="py-1 text-[var(--ink)]">{li.serviceName}</td>
-              <td className="py-1 text-[var(--ink)]">{li.sessionCount}</td>
+              <td className="py-1 text-[var(--ink)]">{sessionCountLabel(li)}</td>
               <td className="font-num py-1 text-right text-[var(--ink)]">
                 {formatINR(li.totalPaise)}
               </td>

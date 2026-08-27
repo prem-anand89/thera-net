@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, paymentService } from '@/services';
+import { repos, paymentService, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { type Invoice } from '@/domain/types';
-import { th, td, tdNum, ErrorNote, Pill, SectionCard } from '@/components/ui';
+import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
+import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 
 type InvoiceSortKey = 'no' | 'date' | 'patient' | 'total' | 'status';
 const INVOICE_COMPARATORS = {
@@ -24,6 +25,12 @@ export function InvoicesPage() {
   const clinic = useClinic();
   const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
   const payments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
+  // 1.7's needs-receipt queue — same live-query mechanism every other
+  // count in the app uses, so it re-runs on any local write or sync pull.
+  const needsReceipt = useLiveQuery(() => dashboardService.needsReceipt(clinic.id), [clinic.id]);
+  const [invoicingNeedsReceipt, setInvoicingNeedsReceipt] = useState<IssueInvoiceTarget | null>(
+    null
+  );
   // Needed to compute each invoice's actual collected-so-far amount — there's
   // no amount column on invoice_payments (see paymentService.invoiceBalance);
   // it's derived by summing the visit-scoped `payments` rows for whichever
@@ -128,6 +135,61 @@ export function InvoicesPage() {
           </div>
         </div>
       </div>
+
+      {needsReceipt && needsReceipt.length > 0 && (
+        <SectionCard title={`Needs receipt (${needsReceipt.length})`}>
+          <div className="space-y-2">
+            <p className="text-xs text-[var(--muted)]">
+              Collected but never invoiced — these visits are settled with the patient but have no
+              receipt on file.
+            </p>
+            <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
+              <table className="min-w-full divide-y divide-[var(--border)]">
+                <thead className="bg-[var(--paper)]">
+                  <tr>
+                    <th className={th}>Date</th>
+                    <th className={th}>Patient</th>
+                    <th className={th}>Service</th>
+                    <th className={thNum}>Collected</th>
+                    <th className={th}></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {needsReceipt.map((row) => (
+                    <tr key={row.visitId} className="hover:bg-[var(--paper)]">
+                      <td className={td}>{formatDateDM(row.visitDate)}</td>
+                      <td className={`${td} font-display`}>
+                        {row.patientName}{' '}
+                        <span className="text-xs text-[var(--muted)]">{row.mrno}</span>
+                      </td>
+                      <td className={td}>{row.serviceName}</td>
+                      <td className={tdNum}>{formatINR(row.collectedPaise)}</td>
+                      <td className={td}>
+                        <button
+                          type="button"
+                          className={btnPrimary}
+                          onClick={() =>
+                            setInvoicingNeedsReceipt({
+                              visitId: row.visitId,
+                              patientId: row.patientId,
+                              patientLabel: row.patientName,
+                              serviceLabel: row.serviceName,
+                              isPackage: false,
+                              alreadyCollected: true,
+                            })
+                          }
+                        >
+                          Issue invoice
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </SectionCard>
+      )}
 
       <SectionCard title="Invoices">
         <div className="space-y-4">
@@ -318,6 +380,14 @@ export function InvoicesPage() {
           patientLabel={takingPayment.patientSnapshot.name}
           mrno={takingPayment.patientSnapshot.mrno}
           onClose={() => setTakingPayment(null)}
+        />
+      )}
+      {invoicingNeedsReceipt && (
+        <IssueInvoiceDialog
+          clinicId={clinic.id}
+          target={invoicingNeedsReceipt}
+          onClose={() => setInvoicingNeedsReceipt(null)}
+          returnTo="/ledger"
         />
       )}
     </div>

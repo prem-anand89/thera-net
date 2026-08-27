@@ -33,6 +33,7 @@ import type {
   ConsultationNoteRepo,
   PatientModuleEnrollmentRepo,
   ExpectedVisitRepo,
+  PatientAdvanceRepo,
   Repos,
 } from './types';
 
@@ -282,6 +283,14 @@ const consultationNotes: ConsultationNoteRepo = {
     const all = await db.consultation_notes.where('enrollmentId').equals(enrollmentId).toArray();
     return all.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
   },
+  async getByVisitId(visitId) {
+    const all = await db.consultation_notes.where('visitId').equals(visitId).toArray();
+    if (all.length === 0) return undefined;
+    return (
+      all.find((n) => n.status === 'completed') ??
+      all.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+    );
+  },
   put: (note) => putWithOutbox('consultation_notes', note),
 };
 
@@ -314,6 +323,17 @@ const expectedVisits: ExpectedVisitRepo = {
   put: (entry) => putWithOutbox('expected_visits', entry),
 };
 
+const patientAdvances: PatientAdvanceRepo = {
+  get: (id) => db.patient_advances.get(id),
+  async listByPatient(clinicId, patientId) {
+    const all = await db.patient_advances.where('patientId').equals(patientId).toArray();
+    return all
+      .filter((a) => a.clinicId === clinicId && !a.deleted)
+      .sort((a, b) => b.receivedDate.localeCompare(a.receivedDate));
+  },
+  put: (advance) => putWithOutbox('patient_advances', advance),
+};
+
 export const repos: Repos = {
   clinics,
   therapists,
@@ -330,6 +350,7 @@ export const repos: Repos = {
   consultationNotes,
   patientModuleEnrollments,
   expectedVisits,
+  patientAdvances,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers

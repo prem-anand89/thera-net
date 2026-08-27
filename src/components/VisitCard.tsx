@@ -10,13 +10,8 @@ import {
 import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
-import type { VisitPaymentState } from '@/domain/paymentState';
-import {
-  isPackageContinuation,
-  paymentActions,
-  paymentStatusPhrase,
-  paymentStatusShortPhrase,
-} from '@/domain/paymentState';
+import type { PaymentBadgeKind, VisitPaymentState } from '@/domain/paymentState';
+import { isPackageContinuation, paymentActions, paymentBadge } from '@/domain/paymentState';
 import {
   Pill,
   PackageThread,
@@ -33,19 +28,22 @@ import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 import type { PatientProfileBackTarget } from '@/app/router';
 
 /**
- * Pill color per payment state. Label is deliberately not stored here —
- * `zero_session` reads differently depending on whether it's a package
- * continuation or a standalone complimentary visit, a distinction this
- * map has no per-row context for; every caller computes its label fresh
- * via `paymentStatusPhrase`/`paymentStatusShortPhrase` instead.
+ * Pill/button color per `paymentBadge()` kind (Billing & Notes Rebuild
+ * Phase 1, D2) — re-keyed from the raw 6-state `VisitPaymentState` to the
+ * 4-state display collapse, since "Due" and "Overdue" need visually
+ * distinct tones and the raw state alone can't tell them apart (that's
+ * `paymentBadge`'s job, using visitDate/issuedAt age). Label is computed
+ * by `paymentBadge` itself, not stored here.
  */
-export const PAYMENT_CHIP: Record<VisitPaymentState, { tone: 'green' | 'amber' | 'slate' }> = {
+export const PAYMENT_CHIP: Record<
+  PaymentBadgeKind,
+  { tone: 'green' | 'amber' | 'rust' | 'slate' }
+> = {
   paid: { tone: 'green' },
-  collected_no_receipt: { tone: 'green' },
-  partially_collected: { tone: 'amber' },
-  outstanding: { tone: 'amber' },
-  uninvoiced: { tone: 'amber' },
-  zero_session: { tone: 'slate' },
+  partial: { tone: 'amber' },
+  due: { tone: 'amber' },
+  overdue: { tone: 'rust' },
+  none: { tone: 'slate' },
 };
 
 /** Combines catalog treatment picks with the free-text add-on into one
@@ -141,6 +139,15 @@ export interface VisitCardData {
   billPaise: Paise;
   paymentState: VisitPaymentState;
   invoiceId: UUID | null;
+  /** Sum of direct `payments` rows against this visit — required (not
+   *  optional) so every builder is forced to assign it; only meaningfully
+   *  read for the `partially_collected` "of" form and the Collect button's
+   *  outstanding-amount calculation. */
+  collectedPaise: Paise;
+  /** This visit's invoice's `issuedAt`, or null if uninvoiced — required so
+   *  every builder assigns it; feeds `paymentBadge()`'s D2
+   *  `max(visitDate, issuedAt)` Overdue anchor. */
+  issuedAt: string | null;
   /** Set when someone other than the original author last touched this row. */
   editedBy?: string | null;
   syncError?: string | null;
@@ -193,21 +200,36 @@ export interface VisitCardData {
   packageInvoicePending?: boolean;
 }
 
-/** Row actions kebab — Repeat / Edit visit / Split / Delete. Note lives on
- *  the status cell as + Note so it is not listed twice. */
+/** Row actions kebab — Repeat / Issue invoice / Edit visit / Split /
+ *  Delete. Note lives on the status cell as + Note so it is not listed
+ *  twice. Issue invoice moved in here (Billing & Notes Rebuild Phase 1,
+ *  1.2) so the status cell/card can promote its one primary action
+ *  (Collect) without a second competing button in the row. */
 function RowActionsMenu({
   data,
   onEdit,
   onSplit,
   onDelete,
+  onInvoice,
+  canInvoice,
 }: {
   data: VisitCardData;
   onEdit?: () => void;
   onSplit?: () => void;
   onDelete: () => void;
+  onInvoice?: () => void;
+  canInvoice?: boolean;
 }) {
+  const canIssueInvoice =
+    Boolean(canInvoice) &&
+    Boolean(onInvoice) &&
+    paymentActions(data.paymentState).includes('issue_invoice');
   const hasMenu =
-    data.canRepeat || (data.canEdit && onEdit) || (data.canSplit && onSplit) || data.canDelete;
+    data.canRepeat ||
+    canIssueInvoice ||
+    (data.canEdit && onEdit) ||
+    (data.canSplit && onSplit) ||
+    data.canDelete;
   if (!hasMenu) return null;
 
   return (
@@ -223,6 +245,18 @@ function RowActionsMenu({
             >
               Repeat
             </Link>
+          )}
+          {canIssueInvoice && (
+            <button
+              type="button"
+              className={menuItem}
+              onClick={() => {
+                close();
+                onInvoice!();
+              }}
+            >
+              Issue invoice
+            </button>
           )}
           {data.canEdit && onEdit && (
             <button
@@ -266,33 +300,40 @@ function RowActionsMenu({
   );
 }
 
-/** Bill amount + payment-status chip/action + invoiced link + note nudge —
- *  shared between the card's vertical stack and the table's status cell. */
+/**
+ * Payment-status chip/action + invoiced lock marker — the table's status
+ * cell (Bill is already its own column, so no amount here). Was also
+ * nominally "shared" with the card's vertical stack per its old doc
+ * comment, but confirmed that never actually happened — `SharedVisitCard`
+ * has always had its own independent inline block; this function has
+ * exactly one caller, `VisitTable`'s status cell.
+ *
+ * Billing & Notes Rebuild Phase 1, 1.1/1.2: the passive status Pill is
+ * *replaced* by a filled `Collect ₹X` button whenever `take_payment` is
+ * available — not shown alongside it. `issue_invoice` moved entirely into
+ * `RowActionsMenu`'s kebab (see that component), so this no longer takes
+ * an `onInvoice` prop; the non-`compact` rendering (dead — no caller ever
+ * passed `compact={false}`) is gone along with the prop itself.
+ */
 function PaymentStatusDisplay({
   data,
-  onInvoice,
   onTakePayment,
   canInvoice,
-  showAmount = true,
-  compact = false,
 }: {
   data: VisitCardData;
-  onInvoice: () => void;
   onTakePayment?: () => void;
   canInvoice: boolean;
-  /** False in the table, where Bill is already its own column. */
-  showAmount?: boolean;
-  /** Table cells: short label, horizontal layout — avoids tall rows on iPad portrait. */
-  compact?: boolean;
 }) {
-  const chip = PAYMENT_CHIP[data.paymentState];
-  const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
-  const isPackage = isPackageContinuation(data.sessionIndex, data.packageTotal);
-  const statusLabel = compact
-    ? paymentStatusShortPhrase(data.paymentState, isPackage)
-    : paymentStatusPhrase(data.paymentState, isPackage);
-  const statusTitle = compact ? paymentStatusPhrase(data.paymentState, isPackage) : undefined;
+  const badge = paymentBadge({
+    state: data.paymentState,
+    billPaise: data.billPaise,
+    collectedPaise: data.collectedPaise,
+    visitDate: data.visitDate,
+    issuedAt: data.issuedAt,
+    isPackageSession: isPackageContinuation(data.sessionIndex, data.packageTotal),
+  });
+  const showCollect = canInvoice && actions.includes('take_payment');
 
   // Billing fields freeze the moment a visit is invoiced (see
   // EditVisitModal's `frozen` check), independent of whether it's since
@@ -301,108 +342,52 @@ function PaymentStatusDisplay({
   // being locked). 'paid' already says "Invoiced" in its own label.
   const billingLocked = Boolean(data.invoiceId) && data.paymentState !== 'paid';
 
-  if (compact) {
-    const hasSecondaryRow =
-      (canInvoice && (actions.includes('take_payment') || actions.includes('issue_invoice'))) ||
-      (!canInvoice && paymentActions(data.paymentState).length > 0) ||
-      data.packageInvoicePending;
-    return (
-      <div className="flex flex-col items-start gap-1">
-        <div className="flex items-center gap-1">
-          {billingLocked && (
-            <span className="text-[10px]" title="Billing locked — this visit is invoiced">
-              🔒
-            </span>
-          )}
-          <Pill tone={chip.tone}>
-            <span className="whitespace-nowrap" title={statusTitle}>
-              {statusLabel}
-            </span>
-          </Pill>
-        </div>
-        {hasSecondaryRow && (
-          <div className="flex flex-wrap items-center gap-1">
-            {canInvoice && actions.includes('take_payment') && (
-              <button
-                type="button"
-                className="whitespace-nowrap rounded-full bg-[var(--rust-light)] px-2 py-0.5 text-[10px] font-medium text-[var(--rust)] hover:opacity-80"
-                onClick={onTakePayment}
-              >
-                Pay
-              </button>
-            )}
-            {canInvoice && actions.includes('issue_invoice') && (
-              <button
-                type="button"
-                className="whitespace-nowrap rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10px] font-medium text-[var(--teal)] hover:opacity-80"
-                onClick={onInvoice}
-              >
-                Invoice
-              </button>
-            )}
-            {!canInvoice && paymentActions(data.paymentState).length > 0 && (
-              <Pill tone="slate">Ask billing</Pill>
-            )}
-            {data.packageInvoicePending && (
-              <Pill tone="amber">
-                <span
-                  className="whitespace-nowrap"
-                  title="This session isn't on the package's invoice yet — amend the invoice to include it."
-                >
-                  Not invoiced
-                </span>
-              </Pill>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
+  const hasSecondaryRow =
+    (!canInvoice && paymentActions(data.paymentState).length > 0) || data.packageInvoicePending;
 
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1">
-      {showAmount && data.paymentState !== 'zero_session' && (
-        <div className="font-num text-sm text-[var(--ink)]">{bill}</div>
-      )}
+    <div className="flex flex-col items-start gap-1">
       <div className="flex items-center gap-1">
         {billingLocked && (
-          <span className="text-xs" title="Billing locked — this visit is invoiced">
+          <span className="text-[10px]" title="Billing locked — this visit is invoiced">
             🔒
           </span>
         )}
-        <Pill tone={chip.tone}>{statusLabel}</Pill>
+        {showCollect ? (
+          <button
+            type="button"
+            className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium text-white hover:opacity-90 ${
+              badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'
+            }`}
+            onClick={onTakePayment}
+            title={badge.title}
+          >
+            Collect {formatINR(data.billPaise - data.collectedPaise)}
+          </button>
+        ) : (
+          <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+            <span className="whitespace-nowrap" title={badge.title}>
+              {badge.label}
+            </span>
+          </Pill>
+        )}
       </div>
-      {canInvoice && actions.length > 0 && (
-        <div className="flex flex-wrap justify-end gap-1">
-          {actions.includes('take_payment') && (
-            <button
-              type="button"
-              className="rounded-full bg-[var(--rust-light)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:opacity-80"
-              onClick={onTakePayment}
-            >
-              Take payment
-            </button>
+      {hasSecondaryRow && (
+        <div className="flex flex-wrap items-center gap-1">
+          {!canInvoice && paymentActions(data.paymentState).length > 0 && (
+            <Pill tone="slate">Ask billing</Pill>
           )}
-          {actions.includes('issue_invoice') && (
-            <button
-              type="button"
-              className="rounded-full bg-[var(--teal-light)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:opacity-80"
-              onClick={onInvoice}
-            >
-              Issue invoice
-            </button>
+          {data.packageInvoicePending && (
+            <Pill tone="amber">
+              <span
+                className="whitespace-nowrap"
+                title="This session isn't on the package's invoice yet — amend the invoice to include it."
+              >
+                Not invoiced
+              </span>
+            </Pill>
           )}
         </div>
-      )}
-      {!canInvoice && paymentActions(data.paymentState).length > 0 && (
-        <Pill tone="slate">Ask billing</Pill>
-      )}
-      {data.packageInvoicePending && (
-        <Pill tone="amber">
-          <span title="This session isn't on the package's invoice yet — amend the invoice to include it.">
-            Not invoiced
-          </span>
-        </Pill>
       )}
     </div>
   );
@@ -593,13 +578,21 @@ export function SharedVisitCard({
         .join('')
     : '';
 
-  const chip = PAYMENT_CHIP[data.paymentState];
   const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
-  const statusLabel = paymentStatusPhrase(
-    data.paymentState,
-    isPackageContinuation(data.sessionIndex, data.packageTotal)
-  );
+  const badge = paymentBadge({
+    state: data.paymentState,
+    billPaise: data.billPaise,
+    collectedPaise: data.collectedPaise,
+    visitDate: data.visitDate,
+    issuedAt: data.issuedAt,
+    isPackageSession: isPackageContinuation(data.sessionIndex, data.packageTotal),
+  });
+  const showCollect = canInvoice && actions.includes('take_payment');
+  // Same freeze-on-invoice signal PaymentStatusDisplay's table cell shows —
+  // added here for parity: this hand-rolled card block never carried it,
+  // which was a pre-existing gap between the two, not a deliberate choice.
+  const billingLocked = Boolean(data.invoiceId) && data.paymentState !== 'paid';
 
   const content = (
     <>
@@ -637,35 +630,53 @@ export function SharedVisitCard({
               {bill}
             </span>
           )}
-          <RowActionsMenu data={data} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
+          <RowActionsMenu
+            data={data}
+            onEdit={onEdit}
+            onSplit={onSplit}
+            onDelete={onDelete}
+            onInvoice={onInvoice}
+            canInvoice={canInvoice}
+          />
         </div>
       </div>
 
       <VisitCardDetails data={data} />
 
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
-        <Pill tone={chip.tone}>{statusLabel}</Pill>
+        {showCollect ? (
+          <button
+            type="button"
+            className={`rounded-full px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 ${
+              badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'
+            }`}
+            onClick={onTakePayment}
+            title={badge.title}
+          >
+            Collect {formatINR(data.billPaise - data.collectedPaise)}
+          </button>
+        ) : (
+          <div className="flex items-center gap-1">
+            {billingLocked && (
+              <span className="text-xs" title="Billing locked — this visit is invoiced">
+                🔒
+              </span>
+            )}
+            <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+              <span title={badge.title}>{badge.label}</span>
+            </Pill>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          {actions.includes('take_payment') && (
-            <button
-              type="button"
-              className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
-              onClick={onTakePayment}
-            >
-              Take payment
-            </button>
-          )}
-          {actions.includes('issue_invoice') && (
-            <button
-              type="button"
-              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
-              onClick={onInvoice}
-            >
-              Issue invoice
-            </button>
-          )}
           {!canInvoice && paymentActions(data.paymentState).length > 0 && (
             <Pill tone="slate">Ask billing</Pill>
+          )}
+          {data.packageInvoicePending && (
+            <Pill tone="amber">
+              <span title="This session isn't on the package's invoice yet — amend the invoice to include it.">
+                Not invoiced
+              </span>
+            </Pill>
           )}
           <VisitNoteLink data={data} inline backTo={backTo} />
         </div>
@@ -882,11 +893,8 @@ function VisitTable({
                 <td className={td}>
                   <PaymentStatusDisplay
                     data={row}
-                    onInvoice={() => onInvoice(row)}
                     onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
                     canInvoice={canInvoice}
-                    showAmount={false}
-                    compact
                   />
                 </td>
                 <td className={td}>
@@ -898,6 +906,8 @@ function VisitTable({
                     onEdit={onEdit ? () => onEdit(row) : undefined}
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
+                    onInvoice={() => onInvoice(row)}
+                    canInvoice={canInvoice}
                   />
                 </td>
               </tr>
