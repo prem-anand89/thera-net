@@ -374,6 +374,26 @@ queued with a visible error.
 - **Therapist invites** from Settings → Team create login *and* service-roster entry in one step
 - **Admin/front_desk invites** only need login
 - **Deactivation** (keeps history intact) or **permanent deletion** (zero visits/notes/invoices only)
+- **Invite email → password setup**: `invite-therapist` calls
+  `auth.admin.inviteUserByEmail()` with `redirectTo` set to the inviting
+  browser's own origin + `/reset-password` (sent as `redirectOrigin` in the
+  request body from `SettingsPage.tsx`). Without this, the link falls back
+  to whatever the Supabase project's Site URL is configured to — the
+  invite token still signs the invitee in, but they land on the app fully
+  authenticated with no password ever set and no UI prompting them to set
+  one. `ResetPasswordPage.tsx` (`/reset-password`) is deliberately
+  invite/recovery-agnostic: it just checks for an active session (however
+  it got established) and lets the visitor choose a password, so no
+  separate "accept invite" page was needed.
+- **Invite email content**: the invite also seeds `user_metadata` with
+  `clinicName`/`invitedByName`/`role` (looked up server-side from
+  `clinics.name` and the caller's `clinic_members.display_name`), but the
+  stock Supabase "Invite user" email template doesn't reference these —
+  the email stays generic (no clinic name, no "invited by") until that
+  template is edited in the Supabase dashboard (Authentication → Email
+  Templates → Invite user) to include e.g. `{{ .Data.clinicName }}` /
+  `{{ .Data.invitedByName }}`. This repo has no way to edit that template
+  from code — it's hosted-project configuration, not migration-tracked.
 
 #### Clinic-Level Toggles (Settings → Features/Billing)
 - **Billing access** — who's allowed to issue invoices

@@ -2463,6 +2463,7 @@ function Therapists() {
           email: inviteEmail.trim(),
           role: inviteRole,
           name: inviteName.trim(),
+          redirectOrigin: window.location.origin,
         }),
       });
 
