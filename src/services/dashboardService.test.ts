@@ -73,9 +73,18 @@ function makeFakeRepos() {
   const consultationNotesStore = new Map<string, ConsultationNote>();
 
   const repos: Repos = {
-    clinics: { get: async (id) => (id === clinic.id ? clinic : undefined), list: async () => [clinic], put: async () => {}, putLocal: async () => {} },
+    clinics: {
+      get: async (id) => (id === clinic.id ? clinic : undefined),
+      list: async () => [clinic],
+      put: async () => {},
+      putLocal: async () => {},
+    },
     therapists: { list: async () => therapists, put: async () => {}, removeLocal: async () => {} },
-    catalog: { list: async () => catalog, get: async (id) => catalog.find((c) => c.id === id), put: async () => {} },
+    catalog: {
+      list: async () => catalog,
+      get: async (id) => catalog.find((c) => c.id === id),
+      put: async () => {},
+    },
     noReturnReasonCatalog: {
       list: async (_c, includeInactive = false) =>
         [...reasons.values()].filter((r) => includeInactive || r.active),
@@ -112,7 +121,8 @@ function makeFakeRepos() {
             (!f.therapistId || v.therapistId === f.therapistId)
         ),
       listByIds: async (ids) => ids.map((id) => visits.get(id)!).filter(Boolean),
-      listByPackageGroup: async (gid) => [...visits.values()].filter((v) => v.packageGroupId === gid && !v.deleted),
+      listByPackageGroup: async (gid) =>
+        [...visits.values()].filter((v) => v.packageGroupId === gid && !v.deleted),
       put: async (v) => void visits.set(v.id, v),
       softDelete: async (id) => {
         const v = visits.get(id);
@@ -126,8 +136,10 @@ function makeFakeRepos() {
       putLocal: async (inv) => void invoices.set(inv.id, inv),
     },
     invoicePayments: {
-      getByInvoiceId: async (invoiceId) => [...invoicePayments.values()].find((p) => p.invoiceId === invoiceId),
-      list: async (clinicId) => [...invoicePayments.values()].filter((p) => p.clinicId === clinicId),
+      getByInvoiceId: async (invoiceId) =>
+        [...invoicePayments.values()].find((p) => p.invoiceId === invoiceId),
+      list: async (clinicId) =>
+        [...invoicePayments.values()].filter((p) => p.clinicId === clinicId),
       put: async (p) => void invoicePayments.set(p.id, p),
     },
     payments: {
@@ -147,7 +159,8 @@ function makeFakeRepos() {
     consultationNotes: {
       get: async (id) => consultationNotesStore.get(id),
       listByPatient: async () => [],
-      listByClinic: async (clinicId) => [...consultationNotesStore.values()].filter((n) => n.clinicId === clinicId),
+      listByClinic: async (clinicId) =>
+        [...consultationNotesStore.values()].filter((n) => n.clinicId === clinicId),
       getOpenDraft: async () => undefined,
       listByEnrollment: async () => [],
       put: async (n) => void consultationNotesStore.set(n.id, n),
@@ -156,6 +169,7 @@ function makeFakeRepos() {
       get: async () => undefined,
       listByPatient: async () => [],
       getActive: async () => undefined,
+      listByClinic: async () => [],
       put: async () => {},
     },
     expectedVisits: {
@@ -163,7 +177,16 @@ function makeFakeRepos() {
       put: async () => {},
     },
   };
-  return { repos, visits, invoices, invoicePayments, payments, patients, reasons, consultationNotes: consultationNotesStore };
+  return {
+    repos,
+    visits,
+    invoices,
+    invoicePayments,
+    payments,
+    patients,
+    reasons,
+    consultationNotes: consultationNotesStore,
+  };
 }
 
 const baseVisit = (id: string, overrides: Partial<Visit>): Visit => ({
@@ -235,7 +258,10 @@ describe('dashboardService.openPackages', () => {
   });
 
   it('attaches patient/service names and computes staleness', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', packageGroupId: 'g1', packageTotal: 3 }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-01', packageGroupId: 'g1', packageTotal: 3 })
+    );
     const svc = createDashboardService(fake.repos);
     const rows = await svc.openPackages('clinic-1');
     expect(rows).toHaveLength(1);
@@ -251,7 +277,10 @@ describe('dashboardService.openPackages', () => {
   });
 
   it('excludes a completed package', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', packageGroupId: 'g1', packageTotal: 1 }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-01', packageGroupId: 'g1', packageTotal: 1 })
+    );
     const svc = createDashboardService(fake.repos);
     expect(await svc.openPackages('clinic-1')).toEqual([]);
   });
@@ -260,9 +289,18 @@ describe('dashboardService.openPackages', () => {
     // Regression: a package whose earlier sessions are older than any
     // "recent months" cutoff must still count them — 3 of 3 logged means
     // NOT open, even if two sessions are a year old.
-    fake.visits.set('v1', baseVisit('v1', { visitDate: '2025-01-05', packageGroupId: 'g1', packageTotal: 3 }));
-    fake.visits.set('v2', baseVisit('v2', { visitDate: '2025-01-12', packageGroupId: 'g1', packageTotal: 3 }));
-    fake.visits.set('v3', baseVisit('v3', { visitDate: '2026-06-20', packageGroupId: 'g1', packageTotal: 3 }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2025-01-05', packageGroupId: 'g1', packageTotal: 3 })
+    );
+    fake.visits.set(
+      'v2',
+      baseVisit('v2', { visitDate: '2025-01-12', packageGroupId: 'g1', packageTotal: 3 })
+    );
+    fake.visits.set(
+      'v3',
+      baseVisit('v3', { visitDate: '2026-06-20', packageGroupId: 'g1', packageTotal: 3 })
+    );
     const svc = createDashboardService(fake.repos);
     expect(await svc.openPackages('clinic-1')).toEqual([]);
   });
@@ -323,7 +361,10 @@ describe('dashboardService.monthlyCollection', () => {
   });
 
   it('counts a direct-payment visit (no invoice) as fully collected', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-05', actualBillPaise: rs(1000), invoiceId: null }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-05', actualBillPaise: rs(1000), invoiceId: null })
+    );
     fake.payments.set('pay1', {
       id: 'pay1',
       clinicId: 'clinic-1',
@@ -365,11 +406,21 @@ describe('dashboardService.monthlyCollection', () => {
   it('scopes to one therapist when therapistId is passed', async () => {
     fake.visits.set(
       'v1',
-      baseVisit('v1', { visitDate: '2026-06-05', therapistId: 'th-prem', actualBillPaise: rs(1000), invoiceId: null })
+      baseVisit('v1', {
+        visitDate: '2026-06-05',
+        therapistId: 'th-prem',
+        actualBillPaise: rs(1000),
+        invoiceId: null,
+      })
     );
     fake.visits.set(
       'v2',
-      baseVisit('v2', { visitDate: '2026-06-06', therapistId: 'th-other', actualBillPaise: rs(2000), invoiceId: null })
+      baseVisit('v2', {
+        visitDate: '2026-06-06',
+        therapistId: 'th-other',
+        actualBillPaise: rs(2000),
+        invoiceId: null,
+      })
     );
     const svc = createDashboardService(fake.repos);
     const summary = await svc.monthlyCollection('clinic-1', { year: 2026, month: 6 }, 'th-prem');
@@ -403,7 +454,7 @@ describe('dashboardService.repeatVisits', () => {
     expect(stats.ratePct).toBe(0);
   });
 
-  it('does not count a patient\'s first-ever visit as a repeat', async () => {
+  it("does not count a patient's first-ever visit as a repeat", async () => {
     fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-10', patientId: 'pat-1' }));
     const svc = createDashboardService(fake.repos);
     const stats = await svc.repeatVisits('clinic-1', { year: 2026, month: 6 });
@@ -425,9 +476,30 @@ describe('dashboardService.serviceUsage', () => {
   });
 
   it('ranks services by visit count, most-used first', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-05', serviceCatalogId: 'svc-1', actualBillPaise: rs(1000) }));
-    fake.visits.set('v2', baseVisit('v2', { visitDate: '2026-06-06', serviceCatalogId: 'svc-1', actualBillPaise: rs(1000) }));
-    fake.visits.set('v3', baseVisit('v3', { visitDate: '2026-06-07', serviceCatalogId: 'svc-2', actualBillPaise: rs(500) }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', {
+        visitDate: '2026-06-05',
+        serviceCatalogId: 'svc-1',
+        actualBillPaise: rs(1000),
+      })
+    );
+    fake.visits.set(
+      'v2',
+      baseVisit('v2', {
+        visitDate: '2026-06-06',
+        serviceCatalogId: 'svc-1',
+        actualBillPaise: rs(1000),
+      })
+    );
+    fake.visits.set(
+      'v3',
+      baseVisit('v3', {
+        visitDate: '2026-06-07',
+        serviceCatalogId: 'svc-2',
+        actualBillPaise: rs(500),
+      })
+    );
     const svc = createDashboardService(fake.repos);
     const rows = await svc.serviceUsage('clinic-1', { year: 2026, month: 6 });
     expect(rows[0].serviceId).toBe('svc-1');
@@ -464,7 +536,9 @@ describe('dashboardService.modalityUsage', () => {
   it('tallies modalities across every note, most-used first', async () => {
     fake.consultationNotes.set(
       'n1',
-      baseNote('n1', { assessmentPayload: { treatment: { session: { modalities: ['TENS', 'Ultrasound'] } } } })
+      baseNote('n1', {
+        assessmentPayload: { treatment: { session: { modalities: ['TENS', 'Ultrasound'] } } },
+      })
     );
     fake.consultationNotes.set(
       'n2',
@@ -491,14 +565,27 @@ describe('dashboardService.conditionUsage', () => {
   });
 
   it('groups by condition, most-visited first, with a patient drill-down', async () => {
-    fake.visits.set('v1', baseVisit('v1', { condition: 'Low back pain', actualBillPaise: rs(1000) }));
-    fake.visits.set('v2', baseVisit('v2', { condition: 'Low back pain', actualBillPaise: rs(1000) }));
-    fake.visits.set('v3', baseVisit('v3', { condition: 'Frozen shoulder', actualBillPaise: rs(1500) }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { condition: 'Low back pain', actualBillPaise: rs(1000) })
+    );
+    fake.visits.set(
+      'v2',
+      baseVisit('v2', { condition: 'Low back pain', actualBillPaise: rs(1000) })
+    );
+    fake.visits.set(
+      'v3',
+      baseVisit('v3', { condition: 'Frozen shoulder', actualBillPaise: rs(1500) })
+    );
     const svc = createDashboardService(fake.repos);
     const rows = await svc.conditionUsage('clinic-1');
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({ condition: 'Low back pain', count: 2 });
-    expect(rows[0].patients[0]).toMatchObject({ patientName: 'Test Patient', visitCount: 2, revenuePaise: rs(2000) });
+    expect(rows[0].patients[0]).toMatchObject({
+      patientName: 'Test Patient',
+      visitCount: 2,
+      revenuePaise: rs(2000),
+    });
     expect(rows[1]).toMatchObject({ condition: 'Frozen shoulder', count: 1 });
   });
 
@@ -513,7 +600,10 @@ describe('dashboardService.conditionUsage', () => {
   it('folds conditions past the top N into "Other" instead of fragmenting', async () => {
     // 9 distinct single-visit conditions — one more than CONDITION_TOP_N (7).
     for (let i = 0; i < 9; i++) {
-      fake.visits.set(`v${i}`, baseVisit(`v${i}`, { condition: `Condition ${i}`, actualBillPaise: rs(100) }));
+      fake.visits.set(
+        `v${i}`,
+        baseVisit(`v${i}`, { condition: `Condition ${i}`, actualBillPaise: rs(100) })
+      );
     }
     const svc = createDashboardService(fake.repos);
     const rows = await svc.conditionUsage('clinic-1');
@@ -560,19 +650,28 @@ describe('dashboardService.recentVisits', () => {
   });
 
   it('carries treatment notes through', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', treatmentNotes: 'Ultrasound + stretch' }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-01', treatmentNotes: 'Ultrasound + stretch' })
+    );
     const svc = createDashboardService(fake.repos);
     expect((await svc.recentVisits('clinic-1'))[0].treatmentNotes).toBe('Ultrasound + stretch');
   });
 
   it('reports the full bill as outstanding when there is no invoice yet', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: null }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: null })
+    );
     const svc = createDashboardService(fake.repos);
     expect((await svc.recentVisits('clinic-1'))[0].outstandingPaise).toBe(rs(500));
   });
 
   it('reports the full bill as outstanding when the invoice is explicitly unpaid', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: 'inv-1' }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: 'inv-1' })
+    );
     fake.invoicePayments.set('p1', {
       id: 'p1',
       clinicId: 'clinic-1',
@@ -586,7 +685,10 @@ describe('dashboardService.recentVisits', () => {
   });
 
   it('reports zero outstanding once the invoice is paid', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: 'inv-1' }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: 'inv-1' })
+    );
     fake.invoicePayments.set('p1', {
       id: 'p1',
       clinicId: 'clinic-1',
@@ -600,7 +702,10 @@ describe('dashboardService.recentVisits', () => {
   });
 
   it('reports zero outstanding when a direct payment was logged with no invoice', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: null }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500), invoiceId: null })
+    );
     fake.payments.set('pay-1', {
       id: 'pay-1',
       clinicId: 'clinic-1',
@@ -633,7 +738,10 @@ describe('dashboardService.recentVisitsWindow', () => {
 
   it('returns every matching visit, not a capped preview', async () => {
     for (let i = 0; i < 10; i++) {
-      fake.visits.set(`v${i}`, baseVisit(`v${i}`, { visitDate: `2026-06-${String(i + 1).padStart(2, '0')}` }));
+      fake.visits.set(
+        `v${i}`,
+        baseVisit(`v${i}`, { visitDate: `2026-06-${String(i + 1).padStart(2, '0')}` })
+      );
     }
     const svc = createDashboardService(fake.repos);
     expect(await svc.recentVisitsWindow('clinic-1', 30, asOf)).toHaveLength(10);
@@ -666,7 +774,11 @@ describe('dashboardService.singleVisitPatients', () => {
     const svc = createDashboardService(fake.repos);
     const rows = await svc.singleVisitPatients('clinic-1');
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ patientName: 'Test Patient', mrno: '1001', serviceName: 'Manual Therapy' });
+    expect(rows[0]).toMatchObject({
+      patientName: 'Test Patient',
+      mrno: '1001',
+      serviceName: 'Manual Therapy',
+    });
   });
 
   it('excludes a single visit still inside the grace window', async () => {
@@ -683,7 +795,7 @@ describe('dashboardService.singleVisitPatients', () => {
     expect(await svc.singleVisitPatients('clinic-1')).toEqual([]);
   });
 
-  it('joins the patient\'s no-return reason when set', async () => {
+  it("joins the patient's no-return reason when set", async () => {
     fake.visits.set('v1', baseVisit('v1', { visitDate: '2020-01-01' }));
     fake.reasons.set('r1', {
       id: 'r1',
@@ -726,9 +838,15 @@ describe('dashboardService.weeklySummary', () => {
     const asOf = new Date(2026, 5, 10); // Wed 10 Jun 2026 (local)
     const inWeek = '2026-06-10';
     // Invoiced with no explicit payment row → reads as paid → counts as collected.
-    fake.visits.set('v1', baseVisit('v1', { visitDate: inWeek, postTaxPaise: rs(3645), invoiceId: 'inv-1' }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: inWeek, postTaxPaise: rs(3645), invoiceId: 'inv-1' })
+    );
     // Invoiced but outstanding → a visit this week, but NOT collected.
-    fake.visits.set('v2', baseVisit('v2', { visitDate: inWeek, postTaxPaise: rs(1000), invoiceId: 'inv-2' }));
+    fake.visits.set(
+      'v2',
+      baseVisit('v2', { visitDate: inWeek, postTaxPaise: rs(1000), invoiceId: 'inv-2' })
+    );
     fake.invoicePayments.set('p2', {
       id: 'p2',
       clinicId: 'clinic-1',
@@ -740,7 +858,10 @@ describe('dashboardService.weeklySummary', () => {
     // Not invoiced yet → not collected.
     fake.visits.set('v3', baseVisit('v3', { visitDate: inWeek, postTaxPaise: rs(500) }));
     // A different (earlier) week → excluded entirely.
-    fake.visits.set('v4', baseVisit('v4', { visitDate: '2026-05-20', postTaxPaise: rs(999), invoiceId: 'inv-4' }));
+    fake.visits.set(
+      'v4',
+      baseVisit('v4', { visitDate: '2026-05-20', postTaxPaise: rs(999), invoiceId: 'inv-4' })
+    );
     const summary = await createDashboardService(fake.repos).weeklySummary('clinic-1', asOf);
     expect(summary.visitCount).toBe(3);
     expect(summary.collectedPaise).toBe(rs(3645));
@@ -781,7 +902,10 @@ describe('dashboardService.todayWorklist', () => {
   });
 
   it('marks an invoiced visit with no payment row as paid (default-paid convention)', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr, actualBillPaise: rs(1500), invoiceId: 'inv-1' }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: todayStr, actualBillPaise: rs(1500), invoiceId: 'inv-1' })
+    );
     const svc = createDashboardService(fake.repos);
     const result = await svc.todayWorklist('clinic-1', today);
     expect(result.visits[0].paymentState).toBe('paid');
@@ -808,7 +932,10 @@ describe('dashboardService.todayWorklist', () => {
   });
 
   it('marks an invoiced visit with an explicit outstanding row as outstanding', async () => {
-    fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr, actualBillPaise: rs(2000), invoiceId: 'inv-1' }));
+    fake.visits.set(
+      'v1',
+      baseVisit('v1', { visitDate: todayStr, actualBillPaise: rs(2000), invoiceId: 'inv-1' })
+    );
     fake.invoicePayments.set('p1', {
       id: 'p1',
       clinicId: 'clinic-1',

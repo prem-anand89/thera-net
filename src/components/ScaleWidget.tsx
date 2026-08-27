@@ -17,14 +17,11 @@ export function ScaleWidget({
   endpoints: [string, string];
   disabled?: boolean;
 }) {
-  if (value === null) {
-    return (
-      <div style={{ padding: '12px 10px', color: 'var(--muted)', fontSize: 12.5, fontStyle: 'italic' }}>
-        Not assessed
-      </div>
-    );
-  }
-
+  // A `null` value ("not assessed") used to short-circuit to plain text
+  // with no click target — a field that started at null (emptyPayload's
+  // default) could then never actually be scored through this widget.
+  // The scale itself is always interactive now; "Not assessed" becomes a
+  // caption alongside it rather than a dead end.
   return (
     <div>
       <div className={`${variant}-scale`}>
@@ -42,6 +39,11 @@ export function ScaleWidget({
         <span>{endpoints[0]}</span>
         <span>{endpoints[1]}</span>
       </div>
+      {value === null && (
+        <div style={{ marginTop: 4, color: 'var(--muted)', fontSize: 12.5, fontStyle: 'italic' }}>
+          Not assessed
+        </div>
+      )}
     </div>
   );
 }

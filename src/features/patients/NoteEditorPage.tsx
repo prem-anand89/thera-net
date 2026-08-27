@@ -253,9 +253,19 @@ export function NoteEditorPage() {
   // profile below so its own "← Back" still has somewhere real to return
   // to (Ledger/Workspace/Patients) instead of falling back to the bare
   // patient list.
-  const { visitId: promptedVisitId, from: backTo } = useSearch({ strict: false }) as {
+  // 'needs-initial': set when a visit-row "+ Note" link (or a direct visit
+  // to the light editor's own route) wanted the light session editor but
+  // sessionNotesAllowed was false — no completed initial assessment yet
+  // for this enrollment. Shows a banner explaining the redirect instead of
+  // silently landing here with no context.
+  const {
+    visitId: promptedVisitId,
+    from: backTo,
+    reason,
+  } = useSearch({ strict: false }) as {
     visitId?: string;
     from?: PatientProfileBackTarget;
+    reason?: 'needs-initial';
   };
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
@@ -467,7 +477,10 @@ export function NoteEditorPage() {
         if (!existingNote) return; // still resolving
         hydratedNoteIdRef.current = noteId;
         setEnrollmentId(existingNote.enrollmentId);
-        const mode = existingNote.noteMode ?? 'initial';
+        // Null (legacy row) and anything that isn't literally 'followup' —
+        // including a 'session' note that reached this heavy-only editor by
+        // mistake — default to 'initial', never silently widen local state.
+        const mode = existingNote.noteMode === 'followup' ? 'followup' : 'initial';
         setNoteMode(mode);
         setStatus(existingNote.status === 'completed' ? 'completed' : 'draft');
         setTherapistId(existingNote.therapistId);
@@ -482,7 +495,10 @@ export function NoteEditorPage() {
         setReady(true);
         return;
       }
-      const openDraft = await repos.consultationNotes.getOpenDraft(clinic.id, patientId);
+      const openDraft = await repos.consultationNotes.getOpenDraft(clinic.id, patientId, [
+        'initial',
+        'followup',
+      ]);
       if (openDraft) {
         if (cancelled) return;
         void navigate({
@@ -500,7 +516,7 @@ export function NoteEditorPage() {
         clinic.id,
         patientId
       );
-      const mode = await consultationNoteService.noteModeFor(enrollment.id);
+      const mode = await consultationNoteService.heavyModeFor(enrollment.id);
       if (cancelled) return;
       setEnrollmentId(enrollment.id);
       setNoteMode(mode);
@@ -896,6 +912,12 @@ export function NoteEditorPage() {
         {readOnly && (
           <div className="frozen-note">
             ⚠ This note is completed and read-only. Corrections need a new dated addendum note.
+          </div>
+        )}
+        {reason === 'needs-initial' && !readOnly && (
+          <div className="frozen-note">
+            Complete this initial assessment first — session notes for this patient open here until
+            then.
           </div>
         )}
 

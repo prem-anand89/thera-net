@@ -152,6 +152,15 @@ export interface VisitCardData {
   /** True when this visit is flagged for a clinical note that hasn't been completed yet. */
   needsNote?: boolean;
   /**
+   * C8's gate: true once this visit's patient has a completed heavy
+   * (initial/follow-up) assessment in their active episode, so "+ Note"
+   * can offer the light session editor. False (or unset) routes "+ Note"
+   * to the heavy editor instead, with a banner explaining why — see
+   * domain/noteLinks.ts's sessionNotesAllowedByPatient, which every
+   * builder of this type derives this from in-memory.
+   */
+  sessionNotesAllowed?: boolean;
+  /**
    * Whether this viewer can open the note editor for this visit's patient
    * at all (mirrors `usePermissions().canViewClinicalNotes` — false for
    * front desk). Independent of `needsNote`: `needsNote` only lights up
@@ -454,11 +463,27 @@ export function VisitNoteLink({
     );
   }
   if (!data.needsNote) return null;
+  if (data.sessionNotesAllowed) {
+    return (
+      <Link
+        to="/patients/$patientId/notes/new-session"
+        params={{ patientId: data.patientId }}
+        search={{ visitId: data.visitId, from: backTo }}
+        className="whitespace-nowrap text-xs font-medium text-[var(--amber)] hover:underline"
+        title="Clinical note not started for this visit"
+      >
+        + Note
+      </Link>
+    );
+  }
+  // No completed initial assessment yet for this patient's episode (C8) —
+  // opens the heavy editor instead, with a banner explaining why, rather
+  // than blocking the link entirely.
   return (
     <Link
       to="/patients/$patientId/notes/new"
       params={{ patientId: data.patientId }}
-      search={{ visitId: data.visitId, from: backTo }}
+      search={{ visitId: data.visitId, from: backTo, reason: 'needs-initial' }}
       className="whitespace-nowrap text-xs font-medium text-[var(--amber)] hover:underline"
       title="Clinical note not started for this visit"
     >

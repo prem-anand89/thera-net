@@ -22,6 +22,24 @@ const PatientProfilePage = lazy(() =>
 const NoteEditorPage = lazy(() =>
   import('@/features/patients/NoteEditorPage').then((m) => ({ default: m.NoteEditorPage }))
 );
+const SessionNoteEditorPage = lazy(() =>
+  import('@/features/patients/SessionNoteEditorPage').then((m) => ({
+    default: m.SessionNoteEditorPage,
+  }))
+);
+const NoteEditorDispatch = lazy(() =>
+  import('@/features/patients/NoteEditorDispatch').then((m) => ({ default: m.NoteEditorDispatch }))
+);
+const SessionLogPrintPage = lazy(() =>
+  import('@/features/patients/SessionLogPrintPage').then((m) => ({
+    default: m.SessionLogPrintPage,
+  }))
+);
+const InsurerPacketPage = lazy(() =>
+  import('@/features/patients/InsurerPacketPage').then((m) => ({
+    default: m.InsurerPacketPage,
+  }))
+);
 const MonthlyLedgerPrintPage = lazy(() =>
   import('@/features/reports/MonthlyLedgerPrintPage').then((m) => ({
     default: m.MonthlyLedgerPrintPage,
@@ -155,18 +173,47 @@ const validateNoteSearch = (
   ...validateFromSearch(search),
 });
 
+// 'needs-initial': set when a visit-row "+ Note" link wanted the light
+// session editor but sessionNotesAllowed was false (no completed initial
+// assessment yet for the enrollment) — tells the heavy editor to show a
+// banner explaining the redirect. Deliberately its own explicit param
+// rather than inferred from `from` (a legitimate follow-up opened via
+// Ledger/Workspace also carries `from` and must not show the banner).
+const NEW_NOTE_REASONS = ['needs-initial'] as const;
+type NewNoteReason = (typeof NEW_NOTE_REASONS)[number];
+
 const newNoteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId/notes/new',
-  validateSearch: validateNoteSearch,
+  validateSearch: (
+    search: Record<string, unknown>
+  ): { visitId?: string; from?: PatientProfileBackTarget; reason?: NewNoteReason } => ({
+    ...validateNoteSearch(search),
+    ...(NEW_NOTE_REASONS.includes(search.reason as NewNoteReason)
+      ? { reason: search.reason as NewNoteReason }
+      : {}),
+  }),
   component: NoteEditorPage,
 });
 
+// The light per-visit SOAP note's own entry point — a distinct path rather
+// than a query param on /notes/new, since the two "new note" callers
+// already differ (one always carries visitId, the other doesn't; only this
+// one is gated on sessionNotesAllowed before the link is ever offered).
+const newSessionNoteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/notes/new-session',
+  validateSearch: validateNoteSearch,
+  component: SessionNoteEditorPage,
+});
+
+// Dispatches to the heavy or light editor based on the note's own
+// noteMode — see NoteEditorDispatch.tsx.
 const noteEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId/notes/$noteId',
   validateSearch: validateNoteSearch,
-  component: NoteEditorPage,
+  component: NoteEditorDispatch,
 });
 
 const notePrintRoute = createRoute({
@@ -174,6 +221,24 @@ const notePrintRoute = createRoute({
   path: '/patients/$patientId/notes/$noteId/print',
   validateSearch: validateFromSearch,
   component: NotePrintPage,
+});
+
+// Multi-visit session log (C6) — one enrollment's completed session notes,
+// the only print surface for session-note content.
+const sessionLogPrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/session-log/$enrollmentId',
+  validateSearch: validateFromSearch,
+  component: SessionLogPrintPage,
+});
+
+// Insurer packet (C7) — assessment + session log + read-only invoice(s)
+// composed in one print job for this enrollment.
+const insurerPacketRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/insurer-packet/$enrollmentId',
+  validateSearch: validateFromSearch,
+  component: InsurerPacketPage,
 });
 
 // The monthly statement lives under the Reports nav tab (/insights), not
@@ -333,8 +398,11 @@ const routeTree = rootRoute.addChildren([
   patientsRoute,
   patientProfileRoute,
   newNoteRoute,
+  newSessionNoteRoute,
   noteEditorRoute,
   notePrintRoute,
+  sessionLogPrintRoute,
+  insurerPacketRoute,
   insightsPrintRoute,
   reportsRedirectRoute,
   reportsPrintRedirectRoute,

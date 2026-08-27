@@ -9,7 +9,8 @@ export const btnPrimary =
 export const btnSecondary =
   'min-h-11 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--paper)] disabled:opacity-50';
 /** A row inside a `KebabMenu` dropdown — pair with `menuItemDestructive` for Delete-style actions. */
-export const menuItem = 'block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]';
+export const menuItem =
+  'block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]';
 export const menuItemDestructive =
   'block w-full px-3 py-1.5 text-left text-xs text-[var(--rust)] hover:bg-[var(--rust-light)]';
 
@@ -85,8 +86,12 @@ export function RupeeInput({
 export function StatTile({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-[86px] flex-1 basis-[86px] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 shadow-sm">
-      <div className="truncate text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
-      <div className="font-num mt-0.5 text-xl font-semibold text-[var(--ink)] sm:text-2xl">{value}</div>
+      <div className="truncate text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
+        {label}
+      </div>
+      <div className="font-num mt-0.5 text-xl font-semibold text-[var(--ink)] sm:text-2xl">
+        {value}
+      </div>
     </div>
   );
 }
@@ -101,7 +106,9 @@ const PILL_TONES = {
 /** Status badge. Pair color with words/icons — never color alone. */
 export function Pill({ tone, children }: { tone: keyof typeof PILL_TONES; children: ReactNode }) {
   return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PILL_TONES[tone]}`}>
+    <span
+      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PILL_TONES[tone]}`}
+    >
       {children}
     </span>
   );
@@ -152,7 +159,11 @@ export function KebabMenu({
       const estimatedMenuHeight = 170;
       const openUpward = window.innerHeight - rect.bottom < estimatedMenuHeight;
       const right = window.innerWidth - rect.right;
-      setPos(openUpward ? { bottom: window.innerHeight - rect.top + 4, right } : { top: rect.bottom + 4, right });
+      setPos(
+        openUpward
+          ? { bottom: window.innerHeight - rect.top + 4, right }
+          : { top: rect.bottom + 4, right }
+      );
     }
     setOpen((o) => !o);
   }
@@ -245,7 +256,12 @@ export function PackageThread({
     >
       {Array.from({ length: packageTotal }, (_, i) => {
         const n = i + 1;
-        const tone = n < sessionIndex ? 'bg-[var(--moss)]' : n === sessionIndex ? 'bg-[var(--teal)]' : 'bg-[var(--border)]';
+        const tone =
+          n < sessionIndex
+            ? 'bg-[var(--moss)]'
+            : n === sessionIndex
+              ? 'bg-[var(--teal)]'
+              : 'bg-[var(--border)]';
         return <span key={n} className={`h-1.5 w-1.5 rounded-full ${tone}`} />;
       })}
     </span>
@@ -307,14 +323,22 @@ export function Panel({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-20 flex items-end justify-center bg-[var(--ink)]/40" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-20 flex items-end justify-center bg-[var(--ink)]/40"
+      onClick={onClose}
+    >
       <div
         className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-[var(--surface)] p-4 sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-display text-base font-semibold text-[var(--ink)]">{title}</h2>
-          <button type="button" aria-label="Close" className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--paper)]" onClick={onClose}>
+          <button
+            type="button"
+            aria-label="Close"
+            className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--paper)]"
+            onClick={onClose}
+          >
             ✕
           </button>
         </div>
@@ -413,7 +437,7 @@ export const tdNum = 'font-num px-3 py-3 text-sm text-[var(--ink)] text-right';
 export const thNum =
   'px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]';
 
-type MultiToggleOption = string | { value: string; label: string };
+export type MultiToggleOption = string | { value: string; label: string };
 
 /** Toggle-chip multi-select: value is the array of selected option values.
  *  Options can be plain strings (value === label) or {value, label} pairs —
@@ -431,14 +455,52 @@ export function MultiToggle({
   return (
     <div className="chip-row">
       {options.map((opt) => {
-        const { value: optValue, label } = typeof opt === 'string' ? { value: opt, label: opt } : opt;
+        const { value: optValue, label } =
+          typeof opt === 'string' ? { value: opt, label: opt } : opt;
         const on = value.includes(optValue);
         return (
           <button
             key={optValue}
             type="button"
             className={`toggle-chip ${on ? 'on' : ''}`}
-            onClick={() => onChange(on ? value.filter((v) => v !== optValue) : [...value, optValue])}
+            onClick={() =>
+              onChange(on ? value.filter((v) => v !== optValue) : [...value, optValue])
+            }
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Toggle-chip single-select: value is the one selected option value, or
+ *  '' for none. Clicking the already-selected chip clears it back to ''
+ *  rather than locking once picked, matching the "not assessed"
+ *  empty-state convention other pickers in this app already use. Same
+ *  .toggle-chip/.chip-row styling as MultiToggle, no new CSS. */
+export function SingleToggle({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly MultiToggleOption[];
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <div className="chip-row">
+      {options.map((opt) => {
+        const { value: optValue, label } =
+          typeof opt === 'string' ? { value: opt, label: opt } : opt;
+        const on = value === optValue;
+        return (
+          <button
+            key={optValue}
+            type="button"
+            className={`toggle-chip ${on ? 'on' : ''}`}
+            onClick={() => onChange(on ? '' : optValue)}
           >
             {label}
           </button>

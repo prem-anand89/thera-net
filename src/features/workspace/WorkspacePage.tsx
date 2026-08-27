@@ -8,7 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { clinicBillingConfig, type ConsultationNote, type Visit } from '@/domain/types';
-import { noteForVisit } from '@/domain/noteLinks';
+import { noteForVisit, sessionNotesAllowedByPatient } from '@/domain/noteLinks';
 import type { TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
@@ -43,10 +43,16 @@ function todayRowToCardData(
   therapistSplit: boolean,
   treatmentName: Map<string, string>,
   invoicedSiblingGroupIds: Set<string>,
-  consultationNotes: ConsultationNote[] | undefined
+  consultationNotes: ConsultationNote[] | undefined,
+  sessionNotesAllowedMap: Map<string, boolean>
 ): VisitCardData {
   const canModify = isAdmin || row.therapistId === myTherapistId;
-  const linkedNote = noteForVisit(consultationNotes ?? [], row.visitId, row.patientId, row.needsNote);
+  const linkedNote = noteForVisit(
+    consultationNotes ?? [],
+    row.visitId,
+    row.patientId,
+    row.needsNote
+  );
   return {
     visitId: row.visitId,
     visitDate: new Date().toISOString().slice(0, 10),
@@ -62,7 +68,9 @@ function todayRowToCardData(
     packageTotal: row.packageTotal,
     therapistName: row.therapistName,
     treatmentNotes: row.treatmentNotes,
-    treatmentNames: row.treatmentIds.map((id) => treatmentName.get(id)).filter((n): n is string => !!n),
+    treatmentNames: row.treatmentIds
+      .map((id) => treatmentName.get(id))
+      .filter((n): n is string => !!n),
     billPaise: row.billPaise,
     paymentState: row.paymentState,
     invoiceId: row.invoiceId,
@@ -77,6 +85,7 @@ function todayRowToCardData(
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: linkedNote?.id ?? null,
     noteStatus: linkedNote?.status ?? null,
+    sessionNotesAllowed: sessionNotesAllowedMap.get(row.patientId) ?? false,
     packageInvoicePending:
       row.billPaise === 0 &&
       !!row.sessionIndex &&
@@ -135,12 +144,17 @@ export function WorkspacePage() {
   );
   const filteredPackages = useMemo(() => {
     let rows = openPackages ?? [];
-    if (pkgMineOnly && scope.myTherapistId) rows = rows.filter((p) => p.startedByTherapistId === scope.myTherapistId);
-    if (pkgStatusFilter !== 'all') rows = rows.filter((p) => p.stale === (pkgStatusFilter === 'stale'));
+    if (pkgMineOnly && scope.myTherapistId)
+      rows = rows.filter((p) => p.startedByTherapistId === scope.myTherapistId);
+    if (pkgStatusFilter !== 'all')
+      rows = rows.filter((p) => p.stale === (pkgStatusFilter === 'stale'));
     return rows;
   }, [openPackages, pkgMineOnly, scope.myTherapistId, pkgStatusFilter]);
 
-  const editPatient = useLiveQuery(() => (editPatientId ? repos.patients.get(editPatientId) : undefined), [editPatientId]);
+  const editPatient = useLiveQuery(
+    () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
+    [editPatientId]
+  );
   // Only needed for the split dialog's "assisting therapist" picker — cheap
   // to skip entirely for a clinic that hasn't turned the feature on.
   const therapists = useLiveQuery(
@@ -148,7 +162,10 @@ export function WorkspacePage() {
     [clinic.id, therapistSplit]
   );
   const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
-  const treatmentName = useMemo(() => new Map((treatments ?? []).map((t) => [t.id, t.name])), [treatments]);
+  const treatmentName = useMemo(
+    () => new Map((treatments ?? []).map((t) => [t.id, t.name])),
+    [treatments]
+  );
 
   // Draft notes never get written back onto the visit row itself (only a
   // completed note does), so showing draft-vs-completed status per visit
@@ -158,6 +175,19 @@ export function WorkspacePage() {
     () => (canViewClinicalNotes ? repos.consultationNotes.listByClinic(clinic.id) : undefined),
     [clinic.id, canViewClinicalNotes]
   );
+  // C8's gate ("+ Note" offers the light editor only once a completed
+  // initial exists) — same in-memory derivation as LedgerPage.tsx.
+  const consultationEnrollments = useLiveQuery(
+    () =>
+      canViewClinicalNotes
+        ? repos.patientModuleEnrollments.listByClinic(clinic.id, 'consultation_notes')
+        : undefined,
+    [clinic.id, canViewClinicalNotes]
+  );
+  const sessionNotesAllowedMap = useMemo(
+    () => sessionNotesAllowedByPatient(consultationNotes ?? [], consultationEnrollments ?? []),
+    [consultationNotes, consultationEnrollments]
+  );
 
   // A ₹0 package continuation logged today whose OWN invoiceId is null —
   // check the full package group (unbounded by "today") for an invoiced
@@ -165,14 +195,20 @@ export function WorkspacePage() {
   // instead of just silently showing no lock icon with nothing explaining
   // why. Same dedupe-and-fetch-per-group shape as packageAttributionDeltas.
   const candidatePendingGroupIds = useMemo(
-    () =>
-      [
-        ...new Set(
-          (today?.visits ?? [])
-            .filter((v) => v.billPaise === 0 && v.sessionIndex && v.packageTotal && !v.invoiceId && v.packageGroupId)
-            .map((v) => v.packageGroupId!)
-        ),
-      ],
+    () => [
+      ...new Set(
+        (today?.visits ?? [])
+          .filter(
+            (v) =>
+              v.billPaise === 0 &&
+              v.sessionIndex &&
+              v.packageTotal &&
+              !v.invoiceId &&
+              v.packageGroupId
+          )
+          .map((v) => v.packageGroupId!)
+      ),
+    ],
     [today]
   );
   const invoicedSiblingGroupIds = useLiveQuery(async () => {
@@ -212,10 +248,12 @@ export function WorkspacePage() {
 
       {scope.isUnlinkedTherapist && (
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-          <h2 className="font-display text-base font-semibold text-[var(--ink)]">Link your login</h2>
+          <h2 className="font-display text-base font-semibold text-[var(--ink)]">
+            Link your login
+          </h2>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Today’s visits and packages aren’t showing because this login isn’t linked to a therapist
-            record yet. Ask your admin to set it from Settings → Team → Linked login.
+            Today’s visits and packages aren’t showing because this login isn’t linked to a
+            therapist record yet. Ask your admin to set it from Settings → Team → Linked login.
           </p>
         </section>
       )}
@@ -224,7 +262,10 @@ export function WorkspacePage() {
         <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
         <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
         {scope.myTherapistId ? (
-          <StatTile label="My open packages" value={openPackages === undefined ? '—' : myOpenPackageCount} />
+          <StatTile
+            label="My open packages"
+            value={openPackages === undefined ? '—' : myOpenPackageCount}
+          />
         ) : (
           <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
         )}
@@ -247,7 +288,8 @@ export function WorkspacePage() {
                 therapistSplit,
                 treatmentName,
                 invoicedSiblingGroupIds ?? new Set(),
-                consultationNotes
+                consultationNotes,
+                sessionNotesAllowedMap
               )
             )}
             showDate={false}
@@ -279,7 +321,8 @@ export function WorkspacePage() {
 
       <SectionCard title="Packages">
         <p className="mb-3 text-xs text-[var(--muted)]">
-          Every patient on a package — who&rsquo;s still owed sessions, and whose package has gone quiet.
+          Every patient on a package — who&rsquo;s still owed sessions, and whose package has gone
+          quiet.
         </p>
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5">
@@ -307,7 +350,11 @@ export function WorkspacePage() {
           </div>
           {scope.myTherapistId && (
             <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-              <input type="checkbox" checked={pkgMineOnly} onChange={(e) => setPkgMineOnly(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={pkgMineOnly}
+                onChange={(e) => setPkgMineOnly(e.target.checked)}
+              />
               Mine only
             </label>
           )}
@@ -316,7 +363,9 @@ export function WorkspacePage() {
           </span>
         </div>
         {filteredPackages.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">No packages match this filter.</p>
+          <p className="py-6 text-center text-sm text-[var(--muted)]">
+            No packages match this filter.
+          </p>
         ) : (
           <>
             {/* Below tab: pill cards on phone; table from iPad portrait up. */}
@@ -333,7 +382,9 @@ export function WorkspacePage() {
                       search={{ from: '/workspace' }}
                       className="min-w-0"
                     >
-                      <div className="font-display text-sm font-medium text-[var(--ink)]">{p.patientName}</div>
+                      <div className="font-display text-sm font-medium text-[var(--ink)]">
+                        {p.patientName}
+                      </div>
                       <div className="text-xs text-[var(--muted)]">{p.mrno}</div>
                     </Link>
                     <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
@@ -344,12 +395,16 @@ export function WorkspacePage() {
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-[var(--muted)]">
-                      <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
+                      <PackageThread
+                        sessionIndex={p.sessionsLogged}
+                        packageTotal={p.packageTotal}
+                      />
                       <span className="font-num">
                         {p.sessionsLogged}/{p.packageTotal}
                       </span>
                       <span className="ml-1">
-                        Started {formatDateDM(p.startedOn)} · Last {formatDateDM(p.lastVisitOn)} ({p.daysSinceLastVisit}d ago)
+                        Started {formatDateDM(p.startedOn)} · Last {formatDateDM(p.lastVisitOn)} (
+                        {p.daysSinceLastVisit}d ago)
                       </span>
                     </div>
                     <Link
@@ -388,7 +443,10 @@ export function WorkspacePage() {
                       <td className={td}>{p.startedByTherapistName}</td>
                       <td className={tdNum}>
                         <span className="inline-flex items-center gap-1.5">
-                          <PackageThread sessionIndex={p.sessionsLogged} packageTotal={p.packageTotal} />
+                          <PackageThread
+                            sessionIndex={p.sessionsLogged}
+                            packageTotal={p.packageTotal}
+                          />
                           <span className="font-num">
                             {p.sessionsLogged}/{p.packageTotal}
                           </span>
@@ -428,7 +486,12 @@ export function WorkspacePage() {
       {!scope.isClinicWideView && <TherapistComparisonCard />}
 
       {invoicing && (
-        <IssueInvoiceDialog clinicId={clinic.id} target={invoicing} onClose={() => setInvoicing(null)} returnTo="/workspace" />
+        <IssueInvoiceDialog
+          clinicId={clinic.id}
+          target={invoicing}
+          onClose={() => setInvoicing(null)}
+          returnTo="/workspace"
+        />
       )}
 
       {takingPayment && (

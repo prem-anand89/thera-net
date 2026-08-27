@@ -101,6 +101,74 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Patient profile integration** — "Clinical notes" section drilling into note editor
 - **Contraindication banner** for clinical safety flags
 
+#### Light Session Notes (SOAP) — per-visit documentation, distinct from Core Assessment
+Two editors share the `consultation_notes` table, distinguished by `noteMode`
+(`src/domain/types.ts`): **heavy** (`'initial' | 'followup'`, the Core
+Assessment accordion above, `NoteEditorPage.tsx`) for initial evaluation and
+periodic full re-assessment, and **light** (`'session'`,
+`SessionNoteEditorPage.tsx`) for routine per-visit documentation — a small
+single-screen SOAP form (`src/domain/sessionNote.ts`'s `SessionNotePayload`):
+Subjective (pain 0–10 via the shared `ScaleWidget`, optional one-liner),
+Objective (free text), Intervention (multi-select from
+`src/domain/treatmentOptions.ts`'s combined manual-therapy/exercise/modality
+vocabulary — the same list the heavy editor's Treatment section uses, kept
+in one place so `dashboardService.ts`'s Modality-usage report recognizes
+picks from either note kind), Assessment and Plan (single-choice chip
+groups). No PSFS, no red-flag screening — `psfsMean`/`redFlagCount` are
+written `null`/`0` for a session note by design.
+
+**Gating (C8):** a light session note can only be written once a *completed*
+heavy note exists for the patient's active enrollment
+(`consultationNoteService.heavyModeFor`/`sessionNotesAllowed`). A visit
+row's "+ Note" link (`VisitNoteLink` in `src/components/VisitCard.tsx`)
+routes to the light editor when allowed, or to the heavy editor with an
+explanatory banner (`?reason=needs-initial`) when not — never blocked
+outright. Patient Profile's own "New assessment" button always opens the
+heavy editor regardless (C5) — the automatic light/heavy choice only
+applies to the visit-row entry point. `sessionNotesAllowed` is derived
+per-patient in-memory (`src/domain/noteLinks.ts`'s
+`sessionNotesAllowedByPatient`) from each list view's already-loaded notes
+list plus one clinic-wide enrollments fetch — no per-row database call.
+
+**`/notes/$noteId` is mode-dispatched**, the first route in this app whose
+rendered component depends on loaded data rather than the URL shape alone
+(`NoteEditorDispatch.tsx`) — renders the heavy or light editor based on the
+note's own `noteMode`, defaulting a legacy `null` value to heavy (never to
+session — the reverse default would run a real Core Assessment through the
+light editor's shallow-merge upcast and let autosave overwrite it with a
+blank session payload). `/notes/$noteId/print` similarly guards against
+rendering a session note as a blank Core Assessment: session notes print
+only from the session log below, never individually.
+
+**Multi-visit session log** (`SessionLogPrintPage.tsx`,
+`/patients/$patientId/session-log/$enrollmentId`) — one enrollment's
+completed session notes as a compact trend grid (date/therapist/pain/
+assessment/plan/treatments, one row per session), narrative blocks for
+sessions with a one-liner, and a single certifying attestation (clinic
+signature + every treating therapist deduped by id — there is no
+per-therapist signature field in the data model, only a clinic-level one).
+
+**Insurer packet** (`InsurerPacketPage.tsx`,
+`/patients/$patientId/insurer-packet/$enrollmentId`) — composes the most
+recent completed heavy note, the session log, and whichever invoice(s)
+already cover the episode's visits (read exactly as issued via the existing
+`visitId → visits.invoiceId → invoice` join, no schema/RPC change) in one
+print job, generated fresh, never stored. A visit with no invoice yet is
+called out rather than silently omitted. Writing *new* clinical fields
+(diagnosis, referring physician) onto an invoice would need schema/RPC
+changes and stays out of scope here — deferred to whenever the billing
+rebuild touches `issue_invoice()` for other reasons.
+
+**Migration:** `consultation_notes.note_mode`'s CHECK constraint was widened
+to allow `'session'` (`20260827000001_allow_session_note_mode.sql`) — a
+**deploy-ordering requirement, not just a schema change**: a CHECK
+violation is a permanent sync failure (`src/sync/status.ts`), and
+`src/sync/engine.ts`'s handling for a permanent failure on an unsynced row
+is to delete it locally (`revertToServerTruth`). The migration must be live
+in Supabase before any deployed client can write `noteMode: 'session'`, or
+the first session note a therapist writes is silently destroyed rather than
+queued with a visible error.
+
 ---
 
 ### 3. Revenue & Invoicing
@@ -627,12 +695,17 @@ patient_id                uuid NOT NULL (FOREIGN KEY → patients.id)
 therapist_id              uuid NOT NULL (FOREIGN KEY → therapists.id)
 visit_id                  uuid (FOREIGN KEY → visits.id, NULLABLE)
 enrollment_id             uuid (FOREIGN KEY → patient_module_enrollments.id, NULLABLE)
-note_mode                 text (NULLABLE) — 'initial' | 'followup'
+note_mode                 text (NULLABLE) — 'initial' | 'followup' | 'session'
+                           ('session' = light SOAP note, everything else is
+                           the heavy Core Assessment editor; null = legacy
+                           row predating this field, treated as heavy)
 status                    text NOT NULL — 'draft' | 'completed' | 'archived'
-assessment_payload        jsonb (NULLABLE) — the whole Core Assessment form
-                           (history, pain, PSFS, body chart, objective exam,
-                           treatment/HEP) as one versioned/upcastable blob,
-                           not separate columns per section
+assessment_payload        jsonb (NULLABLE) — either the whole Core Assessment
+                           form (history, pain, PSFS, body chart, objective
+                           exam, treatment/HEP) or, when note_mode='session',
+                           domain/sessionNote.ts's small SOAP payload — one
+                           versioned/upcastable blob either way, shape keyed
+                           off note_mode, not separate columns per section
 authorized_session_count  int (NULLABLE)
 notes_text                text (NULLABLE)
 nrs_score                 int (NULLABLE) — derived, for outcome tracking

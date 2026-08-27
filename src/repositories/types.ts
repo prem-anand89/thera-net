@@ -14,6 +14,7 @@ import type {
   ConsultationNote,
   PatientModuleEnrollment,
   ExpectedVisit,
+  NoteMode,
   UUID,
 } from '@/domain/types';
 
@@ -128,8 +129,22 @@ export interface ConsultationNoteRepo {
   listByPatient(clinicId: UUID, patientId: UUID): Promise<ConsultationNote[]>;
   /** Every note in the clinic — used for full-clinic export (backup). */
   listByClinic(clinicId: UUID): Promise<ConsultationNote[]>;
-  /** The single open draft for a patient, if one exists (v1: one draft at a time). */
-  getOpenDraft(clinicId: UUID, patientId: UUID): Promise<ConsultationNote | undefined>;
+  /**
+   * The open draft matching `modes` for a patient, if one exists. A
+   * patient can have an open heavy draft AND one or more open light
+   * (session) drafts simultaneously (one per undocumented visit) — `modes`
+   * disambiguates which kind the caller wants; `visitId`, when given,
+   * further scopes to that specific visit's draft (only meaningful for
+   * session notes, which always carry a visitId). Without `visitId`, the
+   * first matching draft for the patient wins, same as the original
+   * one-draft-at-a-time behavior.
+   */
+  getOpenDraft(
+    clinicId: UUID,
+    patientId: UUID,
+    modes: NoteMode[],
+    visitId?: UUID | null
+  ): Promise<ConsultationNote | undefined>;
   /** Notes under one enrollment (episode of care) — an empty result means
    *  the next note written is Initial, a non-empty one means Follow-up. */
   listByEnrollment(enrollmentId: UUID): Promise<ConsultationNote[]>;
@@ -140,9 +155,24 @@ export interface PatientModuleEnrollmentRepo {
   get(id: UUID): Promise<PatientModuleEnrollment | undefined>;
   /** All enrollments for a patient in a given module, oldest first — the
    *  first one is the episode Initial/Follow-up note-mode detection anchors on. */
-  listByPatient(clinicId: UUID, patientId: UUID, moduleType: PatientModuleEnrollment['moduleType']): Promise<PatientModuleEnrollment[]>;
+  listByPatient(
+    clinicId: UUID,
+    patientId: UUID,
+    moduleType: PatientModuleEnrollment['moduleType']
+  ): Promise<PatientModuleEnrollment[]>;
   /** The active enrollment for a patient in a module, if one exists. */
-  getActive(clinicId: UUID, patientId: UUID, moduleType: PatientModuleEnrollment['moduleType']): Promise<PatientModuleEnrollment | undefined>;
+  getActive(
+    clinicId: UUID,
+    patientId: UUID,
+    moduleType: PatientModuleEnrollment['moduleType']
+  ): Promise<PatientModuleEnrollment | undefined>;
+  /** Every enrollment in the clinic for a module, any status — for list
+   *  UIs that need a clinic-wide active-enrollment-per-patient map without
+   *  a per-patient DB call (e.g. sessionNotesAllowed on visit rows). */
+  listByClinic(
+    clinicId: UUID,
+    moduleType: PatientModuleEnrollment['moduleType']
+  ): Promise<PatientModuleEnrollment[]>;
   put(enrollment: PatientModuleEnrollment): Promise<void>;
 }
 

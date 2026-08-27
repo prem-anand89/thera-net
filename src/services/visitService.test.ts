@@ -73,8 +73,16 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       get: async (id) => catalog.find((c) => c.id === id),
       put: async () => {},
     },
-    noReturnReasonCatalog: { list: async () => [], get: async () => undefined, put: async () => {} },
-    referringSourceCatalog: { list: async () => [], get: async () => undefined, put: async () => {} },
+    noReturnReasonCatalog: {
+      list: async () => [],
+      get: async () => undefined,
+      put: async () => {},
+    },
+    referringSourceCatalog: {
+      list: async () => [],
+      get: async () => undefined,
+      put: async () => {},
+    },
     treatmentCatalog: { list: async () => [], get: async () => undefined, put: async () => {} },
     patients: {
       get: async (id) => patients.get(id),
@@ -141,6 +149,7 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       get: async () => undefined,
       listByPatient: async () => [],
       getActive: async () => undefined,
+      listByClinic: async () => [],
       put: async () => {},
     },
     expectedVisits: {
@@ -336,17 +345,17 @@ describe('visitService.setSplit', () => {
   it('rejects splitting with the same (primary) therapist', async () => {
     const svc = createVisitService(fake.repos);
     const v = await svc.create(base);
-    await expect(svc.setSplit(v.id, { sharedTherapistId: 'th-prem', sharedPct: 50 })).rejects.toThrow(
-      /different therapist/
-    );
+    await expect(
+      svc.setSplit(v.id, { sharedTherapistId: 'th-prem', sharedPct: 50 })
+    ).rejects.toThrow(/different therapist/);
   });
 
   it('rejects an out-of-range percentage', async () => {
     const svc = createVisitService(fake.repos);
     const v = await svc.create(base);
-    await expect(svc.setSplit(v.id, { sharedTherapistId: 'th-aish', sharedPct: 150 })).rejects.toThrow(
-      /between 0 and 100/
-    );
+    await expect(
+      svc.setSplit(v.id, { sharedTherapistId: 'th-aish', sharedPct: 150 })
+    ).rejects.toThrow(/between 0 and 100/);
   });
 
   it('refuses to split a ₹0 continuation session', async () => {
@@ -360,9 +369,9 @@ describe('visitService.setSplit', () => {
       packageTotal: 3,
       packageGroupId: first.packageGroupId,
     });
-    await expect(svc.setSplit(zero.id, { sharedTherapistId: 'th-aish', sharedPct: 50 })).rejects.toThrow(
-      /no billed amount/
-    );
+    await expect(
+      svc.setSplit(zero.id, { sharedTherapistId: 'th-aish', sharedPct: 50 })
+    ).rejects.toThrow(/no billed amount/);
   });
 
   it('clears both fields when the assistant is null', async () => {
@@ -392,7 +401,7 @@ describe('visitService.recomputeUninvoicedSplits', () => {
     serviceCatalogId: 'svc-physio3',
   };
 
-  it('re-snapshots not-yet-invoiced visits to the clinic\'s current split, leaving invoiced ones alone', async () => {
+  it("re-snapshots not-yet-invoiced visits to the clinic's current split, leaving invoiced ones alone", async () => {
     const fake = makeFakeRepos(); // bmSplitPct: 75, taxPct: 10, tdsBasis: 'gross_bill'
     const svc = createVisitService(fake.repos);
     const open = await svc.create(base);
@@ -438,8 +447,8 @@ describe('patientService MRNO fallback', () => {
     expect(walkIn.mrno).toBe(`W${yy}-0001`);
     expect(walkIn.mrnoSource).toBe('auto');
 
-    await expect(svc.create({ clinicId: 'clinic-1', mrno: 'HV12345', name: 'Dup' })).rejects.toThrow(
-      /already exists/
-    );
+    await expect(
+      svc.create({ clinicId: 'clinic-1', mrno: 'HV12345', name: 'Dup' })
+    ).rejects.toThrow(/already exists/);
   });
 });

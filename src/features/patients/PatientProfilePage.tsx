@@ -11,7 +11,7 @@ import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard'
 import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
-import { noteForVisit } from '@/domain/noteLinks';
+import { noteForVisit, sessionNotesAllowedByPatient } from '@/domain/noteLinks';
 import {
   REFERRING_SOURCE_LABELS,
   type ConsultationNote,
@@ -66,6 +66,18 @@ export function PatientProfilePage() {
   const notes = useLiveQuery(
     () => consultationNoteService.listByPatient(clinic.id, patientId),
     [clinic.id, patientId]
+  );
+  // C8's gate ("+ Note" on a visit row offers the light editor only once a
+  // completed initial exists) — same in-memory derivation as Ledger's and
+  // Workspace's, just scoped to this one patient's own enrollments rather
+  // than a clinic-wide fetch (this page only ever needs one patient's).
+  const patientEnrollments = useLiveQuery(
+    () => repos.patientModuleEnrollments.listByPatient(clinic.id, patientId, 'consultation_notes'),
+    [clinic.id, patientId]
+  );
+  const sessionNotesAllowedMap = useMemo(
+    () => sessionNotesAllowedByPatient(notes ?? [], patientEnrollments ?? []),
+    [notes, patientEnrollments]
   );
 
   const visits = useLiveQuery(
@@ -226,6 +238,7 @@ export function PatientProfilePage() {
           canViewNotes: canViewClinicalNotes,
           consultationNoteId: linkedNote?.id ?? null,
           noteStatus: linkedNote?.status ?? null,
+          sessionNotesAllowed: sessionNotesAllowedMap.get(patientId) ?? false,
           packageInvoicePending:
             v.actualBillPaise === 0 &&
             !!v.sessionIndex &&
@@ -253,6 +266,7 @@ export function PatientProfilePage() {
       canViewClinicalNotes,
       invoicedPackageGroupIds,
       notes,
+      sessionNotesAllowedMap,
     ]
   );
 
@@ -609,8 +623,12 @@ export function PatientProfilePage() {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Entry point into consultation notes. One open draft per patient at a
- * time (v1 constraint) — surface it instead of offering to start a second.
+ * Entry point into consultation notes — always the HEAVY editor (C5), one
+ * open heavy draft per patient at a time (v1 constraint), surfaced instead
+ * of offering to start a second. Deliberately ignores any open LIGHT
+ * (session) draft: those surface on their own visit row instead, and
+ * "Continue draft" here should never silently open a session note under a
+ * button whose contract is "always heavy."
  */
 function ConsultationNotePanel({
   patientId,
@@ -621,10 +639,21 @@ function ConsultationNotePanel({
   notes: ConsultationNote[];
   backTo?: PatientProfileBackTarget;
 }) {
-  const draft = notes.find((n) => n.status === 'draft');
+  const draft = notes.find(
+    (n) =>
+      n.status === 'draft' &&
+      (n.noteMode == null || n.noteMode === 'initial' || n.noteMode === 'followup')
+  );
   const visible = notes.slice(0, NOTE_LIST_LIMIT);
   const hiddenCount = notes.length - visible.length;
   const backSearch = backTo ? { from: backTo } : undefined;
+  // notes is most-recently-updated-first (listByPatient's own contract),
+  // so the first note's enrollment is the episode a "Session log" link
+  // should point at. Only offered once there's at least one completed
+  // session note to actually show — C6's print surface, not a promise of
+  // an empty page.
+  const mostRecentEnrollmentId = notes[0]?.enrollmentId ?? null;
+  const hasSessionNotes = notes.some((n) => n.noteMode === 'session' && n.status === 'completed');
 
   return (
     <SideCard
@@ -636,7 +665,7 @@ function ConsultationNotePanel({
           search={backSearch}
           className={btnSecondary}
         >
-          {draft ? 'Continue draft' : 'New note'}
+          {draft ? 'Continue draft' : 'New assessment'}
         </Link>
       }
     >
@@ -662,7 +691,11 @@ function ConsultationNotePanel({
                     {formatDateDM(n.updatedAt.slice(0, 10))}
                   </span>
                   <span className="ml-1.5 text-[var(--muted)]">
-                    {n.noteMode === 'followup' ? 'Follow-up' : 'Initial'}
+                    {n.noteMode === 'session'
+                      ? 'Session'
+                      : n.noteMode === 'followup'
+                        ? 'Follow-up'
+                        : 'Initial'}
                   </span>
                 </span>
                 <Pill tone={NOTE_STATUS_PILL[n.status].tone}>
@@ -677,6 +710,26 @@ function ConsultationNotePanel({
             </li>
           )}
         </ul>
+      )}
+      {hasSessionNotes && mostRecentEnrollmentId && (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+          <Link
+            to="/patients/$patientId/session-log/$enrollmentId"
+            params={{ patientId, enrollmentId: mostRecentEnrollmentId }}
+            search={backSearch}
+            className="text-xs font-medium text-[var(--teal)] hover:underline"
+          >
+            View session log
+          </Link>
+          <Link
+            to="/patients/$patientId/insurer-packet/$enrollmentId"
+            params={{ patientId, enrollmentId: mostRecentEnrollmentId }}
+            search={backSearch}
+            className="text-xs font-medium text-[var(--teal)] hover:underline"
+          >
+            Insurer packet
+          </Link>
+        </div>
       )}
     </SideCard>
   );
