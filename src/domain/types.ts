@@ -61,12 +61,13 @@ export interface Clinic {
    *  - `LedgerPage.tsx` — the "Not documented" filter checkbox
    *  - `ReportsOverviewPage.tsx` — the modality-usage chart
    *
-   * ⚠️ One surface deliberately does NOT: Patient Profile's
+   * One surface deliberately does NOT: Patient Profile's
    * `ConsultationNotePanel` is gated on role (`canViewClinicalNotes`) only,
-   * so "New note" there stays available even with this off. Whether that's
-   * an intentional always-available escape hatch or an oversight is still
-   * undecided — see FEATURES_AND_SCHEMA.md before adding a new notes entry
-   * point, since it determines whether yours should gate on this flag.
+   * so "New note" there stays available even with this off. Confirmed
+   * intentional (not an oversight) — every therapist always has notes
+   * access, full stop; this flag is an opt-in reminder/reporting layer on
+   * top of that baseline, not an access gate. See FEATURES_AND_SCHEMA.md
+   * for the full rule before adding a new notes entry point.
    */
   clinicalDocsEnabled?: boolean;
   /** Whether this clinic uses the invoice module at all. Optional so older cached rows default to true (original behavior). */

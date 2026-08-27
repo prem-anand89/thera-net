@@ -854,16 +854,36 @@ Four read it:
 | `LedgerPage.tsx` | the "Not documented" filter checkbox |
 | `ReportsOverviewPage.tsx` | the modality-usage chart (query, nav entry, section) |
 
-**⚠️ One surface is inconsistent with those four.** `PatientProfilePage`'s
-`ConsultationNotePanel` — "New note" / "Continue draft" — is gated on role
-(`canViewClinicalNotes`, i.e. not front desk) and *not* on
-`clinical_docs_enabled`. So a clinic with the toggle off still has a fully
-working notes entry point on every patient profile, while the equivalent
-entry point on New Visit is hidden. **Undecided whether that's a deliberate
-always-available escape hatch (a therapist should be able to document
-regardless) or an oversight.** It needs answering before Phase 2 adds a
-session-note entry point, because it determines whether the new one gates
-on this flag.
+**One surface differs from those four, deliberately.**
+`PatientProfilePage`'s `ConsultationNotePanel` — "New note" / "Continue
+draft" — is gated on role (`canViewClinicalNotes`, i.e. every therapist,
+never front desk) and *not* on `clinical_docs_enabled`. **Confirmed
+intentional, not an inconsistency to fix:** notes access is role-based only
+— every therapist always has it, full stop. The `clinical_docs_enabled`
+surfaces above are a separate, opt-in layer on top of that baseline: does
+*this clinic* want the per-visit reminder, the "Not documented" filter, and
+the modality report — a workflow/reporting preference, not an access gate.
+A clinic with the flag off still has every therapist able to write notes
+from Patient Profile at any time; it just isn't nudged to do so on every
+visit or tracked for completeness.
+
+**Rule for any new consultation-notes entry point:** gate on
+`canViewClinicalNotes` for access (matches Patient Profile). Gate on
+`clinical_docs_enabled` only if the new surface is itself a reminder/filter/
+report in the same spirit as the four above — not if it's a place to
+actually write a note, which should behave like Patient Profile's baseline
+and stay available regardless of the flag.
+
+**Confirmed not tier-gated either** — no `PlanFeature` in `src/domain/plans.ts`
+covers clinical notes today, by design (its own docstring excludes
+"anything clinical-note- or advanced-module-content-shaped ... still open
+design work"). **One tier restriction is planned but not yet built:** Lite
+should not be able to print/export a note as PDF (`NotePrintPage.tsx` is
+currently unrestricted by tier for every clinic). This needs a new
+`PlanFeature` (e.g. `notePrinting`) wired into `TIER_FEATURES`,
+`useEntitlements()`, and a gate on `NotePrintPage.tsx`'s print action —
+not yet scoped or built; captured here so it isn't lost before the Phase 2
+notes work lands.
 
 Note also that no admin-facing control exists for the *real* gate: turning
 consultation notes genuinely off for a clinic means flipping
@@ -881,18 +901,6 @@ gating logic on top of this without first confirming the tier-subscription
 plan is what's meant to populate it — `can_use_module()`'s fail-open
 default is backwards for a paywall and would need to change before these
 tables can gate a paid tier.
-
-**Rule for any new consultation-notes entry point** (e.g. a future
-session-note mode):
-
-1. **Role** — gate visibility on `canViewClinicalNotes`. Always.
-2. **Write permission** — nothing to do. `can_use_module()` is enforced on
-   the RLS policy, so it applies automatically; a new UI never re-checks it.
-3. **`clinical_docs_enabled`** — resolve the inconsistency above *first*,
-   then follow whichever way it lands. An entry point attached to a visit
-   (New Visit, a visit row, Ledger) currently gates on it; one attached to
-   a patient (Patient Profile) currently doesn't. Picking either without
-   deciding is what produces a fifth inconsistent surface.
 
 #### `clinic_plans` — the tier boundary, service-role write only
 Added as Phase 0 of the tier-subscription plan
