@@ -1,19 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { noteForVisit, sessionNotesAllowedByPatient } from './noteLinks';
-import type { ConsultationNote, PatientModuleEnrollment } from './types';
-
-function enrollment(
-  partial: Partial<PatientModuleEnrollment> &
-    Pick<PatientModuleEnrollment, 'id' | 'patientId' | 'status'>
-): PatientModuleEnrollment {
-  return {
-    clinicId: 'clinic-1',
-    moduleType: 'consultation_notes',
-    enrolledAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    ...partial,
-  };
-}
+import { noteForVisit } from './noteLinks';
+import type { ConsultationNote } from './types';
 
 function note(
   partial: Partial<ConsultationNote> & Pick<ConsultationNote, 'id' | 'patientId' | 'status'>
@@ -103,79 +90,5 @@ describe('noteForVisit', () => {
       }),
     ];
     expect(noteForVisit(notes, 'visit-2', 'pat-1', true)?.id).toBe('legacy-draft');
-  });
-});
-
-describe('sessionNotesAllowedByPatient', () => {
-  it('false for a patient with an active enrollment but no completed heavy note', () => {
-    const enrollments = [enrollment({ id: 'enr-1', patientId: 'pat-1', status: 'active' })];
-    const map = sessionNotesAllowedByPatient([], enrollments);
-    expect(map.get('pat-1')).toBe(false);
-  });
-
-  it('true once a completed heavy note exists in the active enrollment', () => {
-    const enrollments = [enrollment({ id: 'enr-1', patientId: 'pat-1', status: 'active' })];
-    const notes = [
-      note({
-        id: 'note-1',
-        patientId: 'pat-1',
-        status: 'completed',
-        enrollmentId: 'enr-1',
-        noteMode: 'initial',
-      }),
-    ];
-    const map = sessionNotesAllowedByPatient(notes, enrollments);
-    expect(map.get('pat-1')).toBe(true);
-  });
-
-  it('a draft heavy note does not unlock session notes', () => {
-    const enrollments = [enrollment({ id: 'enr-1', patientId: 'pat-1', status: 'active' })];
-    const notes = [
-      note({
-        id: 'note-1',
-        patientId: 'pat-1',
-        status: 'draft',
-        enrollmentId: 'enr-1',
-        noteMode: 'initial',
-      }),
-    ];
-    const map = sessionNotesAllowedByPatient(notes, enrollments);
-    expect(map.get('pat-1')).toBe(false);
-  });
-
-  it('a completed heavy note in a different (inactive/past) enrollment does not count', () => {
-    const enrollments = [enrollment({ id: 'enr-2', patientId: 'pat-1', status: 'active' })];
-    const notes = [
-      note({
-        id: 'note-1',
-        patientId: 'pat-1',
-        status: 'completed',
-        enrollmentId: 'enr-1',
-        noteMode: 'initial',
-      }),
-    ];
-    const map = sessionNotesAllowedByPatient(notes, enrollments);
-    expect(map.get('pat-1')).toBe(false);
-  });
-
-  it('a completed session note does not count as the heavy gate', () => {
-    const enrollments = [enrollment({ id: 'enr-1', patientId: 'pat-1', status: 'active' })];
-    const notes = [
-      note({
-        id: 'note-1',
-        patientId: 'pat-1',
-        status: 'completed',
-        enrollmentId: 'enr-1',
-        noteMode: 'session',
-      }),
-    ];
-    const map = sessionNotesAllowedByPatient(notes, enrollments);
-    expect(map.get('pat-1')).toBe(false);
-  });
-
-  it('a patient with no active enrollment has no map entry', () => {
-    const enrollments = [enrollment({ id: 'enr-1', patientId: 'pat-1', status: 'discharged' })];
-    const map = sessionNotesAllowedByPatient([], enrollments);
-    expect(map.has('pat-1')).toBe(false);
   });
 });

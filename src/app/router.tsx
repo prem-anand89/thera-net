@@ -27,6 +27,11 @@ const SessionNoteEditorPage = lazy(() =>
     default: m.SessionNoteEditorPage,
   }))
 );
+const SessionNoteBatchPage = lazy(() =>
+  import('@/features/patients/SessionNoteBatchPage').then((m) => ({
+    default: m.SessionNoteBatchPage,
+  }))
+);
 const NoteEditorDispatch = lazy(() =>
   import('@/features/patients/NoteEditorDispatch').then((m) => ({ default: m.NoteEditorDispatch }))
 );
@@ -178,38 +183,41 @@ const validateNoteSearch = (
   ...validateFromSearch(search),
 });
 
-// 'needs-initial': set when a visit-row "+ Note" link wanted the light
-// session editor but sessionNotesAllowed was false (no completed initial
-// assessment yet for the enrollment) — tells the heavy editor to show a
-// banner explaining the redirect. Deliberately its own explicit param
-// rather than inferred from `from` (a legitimate follow-up opened via
-// Ledger/Workspace also carries `from` and must not show the banner).
-const NEW_NOTE_REASONS = ['needs-initial'] as const;
-type NewNoteReason = (typeof NEW_NOTE_REASONS)[number];
-
 const newNoteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId/notes/new',
-  validateSearch: (
-    search: Record<string, unknown>
-  ): { visitId?: string; from?: PatientProfileBackTarget; reason?: NewNoteReason } => ({
-    ...validateNoteSearch(search),
-    ...(NEW_NOTE_REASONS.includes(search.reason as NewNoteReason)
-      ? { reason: search.reason as NewNoteReason }
-      : {}),
-  }),
+  validateSearch: validateNoteSearch,
   component: NoteEditorPage,
 });
 
 // The light per-visit SOAP note's own entry point — a distinct path rather
 // than a query param on /notes/new, since the two "new note" callers
-// already differ (one always carries visitId, the other doesn't; only this
-// one is gated on sessionNotesAllowed before the link is ever offered).
+// already differ (one always carries visitId, the other doesn't).
 const newSessionNoteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId/notes/new-session',
   validateSearch: validateNoteSearch,
   component: SessionNoteEditorPage,
+});
+
+// Batch/sequential session-note editing (Billing & Notes Rebuild Phase 3)
+// — a caller (Patient Profile's "Write session notes") resolves the queue
+// of visits needing a note once and carries it here as `visitIds`, so the
+// queue survives a refresh instead of being re-derived from route state.
+const validateSessionBatchSearch = (
+  search: Record<string, unknown>
+): { visitIds: string[] } & { from?: PatientProfileBackTarget } => ({
+  visitIds: Array.isArray(search.visitIds)
+    ? search.visitIds.filter((v): v is string => typeof v === 'string')
+    : [],
+  ...validateFromSearch(search),
+});
+
+const sessionNoteBatchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/notes/session-batch',
+  validateSearch: validateSessionBatchSearch,
+  component: SessionNoteBatchPage,
 });
 
 // Dispatches to the heavy or light editor based on the note's own
@@ -413,6 +421,7 @@ const routeTree = rootRoute.addChildren([
   patientProfileRoute,
   newNoteRoute,
   newSessionNoteRoute,
+  sessionNoteBatchRoute,
   noteEditorRoute,
   notePrintRoute,
   sessionLogPrintRoute,

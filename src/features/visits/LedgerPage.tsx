@@ -11,7 +11,7 @@ import { formatINR } from '@/domain/money';
 import { formatDateDMY, formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
-import { noteForVisit, sessionNotesAllowedByPatient } from '@/domain/noteLinks';
+import { noteForVisit } from '@/domain/noteLinks';
 import {
   clinicBillingConfig,
   clinicShareLabels,
@@ -78,8 +78,7 @@ function visitToCardData(
   myTherapistId: UUID | undefined,
   canViewClinicalNotes: boolean,
   invoicedSiblingGroupIds: Set<UUID>,
-  consultationNotes: ConsultationNote[] | undefined,
-  sessionNotesAllowedMap: Map<UUID, boolean>
+  consultationNotes: ConsultationNote[] | undefined
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy =
@@ -137,7 +136,6 @@ function visitToCardData(
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: linkedNote?.id ?? null,
     noteStatus: linkedNote?.status ?? null,
-    sessionNotesAllowed: sessionNotesAllowedMap.get(v.patientId) ?? false,
     packageInvoicePending:
       v.actualBillPaise === 0 &&
       !!v.sessionIndex &&
@@ -273,21 +271,6 @@ export function LedgerPage() {
     [clinic.id, canViewClinicalNotes]
   );
 
-  // C8's gate ("+ Note" offers the light editor only once a completed
-  // initial exists) computed in-memory from consultationNotes above plus
-  // one clinic-wide enrollments fetch — not a per-row DB call.
-  const consultationEnrollments = useLiveQuery(
-    () =>
-      canViewClinicalNotes
-        ? repos.patientModuleEnrollments.listByClinic(clinic.id, 'consultation_notes')
-        : undefined,
-    [clinic.id, canViewClinicalNotes]
-  );
-  const sessionNotesAllowedMap = useMemo(
-    () => sessionNotesAllowedByPatient(consultationNotes ?? [], consultationEnrollments ?? []),
-    [consultationNotes, consultationEnrollments]
-  );
-
   // Payment state needs both facts a bare `invoiceId` check misses: whether
   // the invoice itself was ever marked paid (statusByInvoiceId), and
   // whether money was collected directly with no invoice at all
@@ -400,8 +383,7 @@ export function LedgerPage() {
           myTherapistId,
           canViewClinicalNotes,
           invoicedSiblingGroupIds ?? new Set(),
-          consultationNotes,
-          sessionNotesAllowedMap
+          consultationNotes
         )
       ),
     [
@@ -422,7 +404,6 @@ export function LedgerPage() {
       canViewClinicalNotes,
       invoicedSiblingGroupIds,
       consultationNotes,
-      sessionNotesAllowedMap,
     ]
   );
 

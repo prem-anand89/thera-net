@@ -253,19 +253,9 @@ export function NoteEditorPage() {
   // profile below so its own "← Back" still has somewhere real to return
   // to (Ledger/Workspace/Patients) instead of falling back to the bare
   // patient list.
-  // 'needs-initial': set when a visit-row "+ Note" link (or a direct visit
-  // to the light editor's own route) wanted the light session editor but
-  // sessionNotesAllowed was false — no completed initial assessment yet
-  // for this enrollment. Shows a banner explaining the redirect instead of
-  // silently landing here with no context.
-  const {
-    visitId: promptedVisitId,
-    from: backTo,
-    reason,
-  } = useSearch({ strict: false }) as {
+  const { visitId: promptedVisitId, from: backTo } = useSearch({ strict: false }) as {
     visitId?: string;
     from?: PatientProfileBackTarget;
-    reason?: 'needs-initial';
   };
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
@@ -914,13 +904,6 @@ export function NoteEditorPage() {
             ⚠ This note is completed and read-only. Corrections need a new dated addendum note.
           </div>
         )}
-        {reason === 'needs-initial' && !readOnly && (
-          <div className="frozen-note">
-            Complete this initial assessment first — session notes for this patient open here until
-            then.
-          </div>
-        )}
-
         <div className="ne-topbar">
           <div
             className="mode-toggle"

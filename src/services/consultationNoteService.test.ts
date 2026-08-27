@@ -216,26 +216,6 @@ describe('consultationNoteService', () => {
       expect(mode).toBe('initial');
     });
 
-    it('sessionNotesAllowed is false with no completed heavy note, true once one exists', async () => {
-      const svc = createConsultationNoteService(fake.repos);
-      const enrollment = await svc.getOrCreateActiveEnrollment('clinic-1', 'pat-1');
-      expect(await svc.sessionNotesAllowed(enrollment.id)).toBe(false);
-      await svc.saveAssessment(
-        {
-          clinicId: 'clinic-1',
-          patientId: 'pat-1',
-          therapistId: 'ther-1',
-          visitId: null,
-          enrollmentId: enrollment.id,
-          noteMode: 'initial',
-          authorizedSessionCount: null,
-        },
-        emptyPayload(),
-        'completed'
-      );
-      expect(await svc.sessionNotesAllowed(enrollment.id)).toBe(true);
-    });
-
     it('saveAssessment writes the payload plus its derived scalar fields', async () => {
       const svc = createConsultationNoteService(fake.repos);
       const enrollment = await svc.getOrCreateActiveEnrollment('clinic-1', 'pat-1');

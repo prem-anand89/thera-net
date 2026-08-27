@@ -17,7 +17,7 @@ import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard'
 import { formatDateDMY, formatDateDM } from '@/domain/fiscalYear';
 import { upcastPayload } from '@/domain/coreAssessment';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
-import { noteForVisit, sessionNotesAllowedByPatient } from '@/domain/noteLinks';
+import { noteForVisit } from '@/domain/noteLinks';
 import {
   REFERRING_SOURCE_LABELS,
   type ConsultationNote,
@@ -84,17 +84,13 @@ export function PatientProfilePage() {
     () => consultationNoteService.listByPatient(clinic.id, patientId),
     [clinic.id, patientId]
   );
-  // C8's gate ("+ Note" on a visit row offers the light editor only once a
-  // completed initial exists) — same in-memory derivation as Ledger's and
-  // Workspace's, just scoped to this one patient's own enrollments rather
-  // than a clinic-wide fetch (this page only ever needs one patient's).
-  const patientEnrollments = useLiveQuery(
-    () => repos.patientModuleEnrollments.listByPatient(clinic.id, patientId, 'consultation_notes'),
+  // The patient's currently-active episode, if any — used to resolve which
+  // enrollment "View session log"/"Insurer packet" should point at (see
+  // the Session notes section below), replacing the old most-recently-
+  // touched-note heuristic that could point at a stale, non-active episode.
+  const activeEnrollment = useLiveQuery(
+    () => repos.patientModuleEnrollments.getActive(clinic.id, patientId, 'consultation_notes'),
     [clinic.id, patientId]
-  );
-  const sessionNotesAllowedMap = useMemo(
-    () => sessionNotesAllowedByPatient(notes ?? [], patientEnrollments ?? []),
-    [notes, patientEnrollments]
   );
 
   const visits = useLiveQuery(
@@ -209,6 +205,32 @@ export function PatientProfilePage() {
   // patient's full history including drafts — no extra query needed,
   // unlike Ledger/Workspace which join against a separate clinic-wide fetch.
 
+  // The standalone "Write session notes" entry point's queue — every visit
+  // still flagged for documentation, oldest first (so the batch flow walks
+  // the episode in chronological order, matching how a therapist actually
+  // thinks about "catching up").
+  const needsNoteVisitIds = useMemo(
+    () =>
+      [...visitRows]
+        .filter((v) => v.clinicalStatus === 'pending')
+        .sort((a, b) => a.visitDate.localeCompare(b.visitDate))
+        .map((v) => v.id),
+    [visitRows]
+  );
+  const hasSessionNotes = (notes ?? []).some(
+    (n) => n.noteMode === 'session' && n.status === 'completed'
+  );
+  // Which enrollment "View session log"/"Insurer packet" should point at —
+  // prefer the patient's currently-active episode; only when there isn't
+  // one (discharged with no new episode yet) fall back to the most
+  // recently touched enrollment that actually has a completed session
+  // note, rather than the old "most recently touched note of any kind"
+  // heuristic, which could point at a stale, non-active episode.
+  const sessionNotesEnrollmentId =
+    activeEnrollment?.id ??
+    (notes ?? []).find((n) => n.noteMode === 'session' && n.status === 'completed')?.enrollmentId ??
+    null;
+
   // Which package groups have AT LEAST ONE invoiced sibling — `visits`
   // here is this one patient's full, unbounded history, so unlike
   // Ledger/Workspace (date/day-scoped) a direct scan is already accurate,
@@ -264,7 +286,6 @@ export function PatientProfilePage() {
           canViewNotes: canViewClinicalNotes,
           consultationNoteId: linkedNote?.id ?? null,
           noteStatus: linkedNote?.status ?? null,
-          sessionNotesAllowed: sessionNotesAllowedMap.get(patientId) ?? false,
           packageInvoicePending:
             v.actualBillPaise === 0 &&
             !!v.sessionIndex &&
@@ -293,7 +314,6 @@ export function PatientProfilePage() {
       canViewClinicalNotes,
       invoicedPackageGroupIds,
       notes,
-      sessionNotesAllowedMap,
     ]
   );
 
@@ -565,6 +585,61 @@ export function PatientProfilePage() {
 
         {/* Main column */}
         <div className="order-2 space-y-4 lg:order-none lg:col-start-1 lg:row-start-1">
+          {/* Standalone session-notes entry point — previously two small
+              text links buried at the bottom of the side-panel "Clinical
+              notes" card, only shown once a session note already existed.
+              Promoted to the main column so a therapist scanning the
+              profile sees at a glance whether documentation is caught up,
+              and gets a direct way to catch up on all of it at once. */}
+          {canViewClinicalNotes && visitRows.length > 0 && (
+            <section className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="font-display text-sm font-semibold text-[var(--ink)]">
+                    Session notes
+                  </h2>
+                  <p className="text-xs text-[var(--muted)]">
+                    {needsNoteVisitIds.length > 0
+                      ? `${needsNoteVisitIds.length} session${needsNoteVisitIds.length === 1 ? '' : 's'} need${needsNoteVisitIds.length === 1 ? 's' : ''} a note`
+                      : 'All session notes up to date'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  {needsNoteVisitIds.length > 0 && (
+                    <Link
+                      to="/patients/$patientId/notes/session-batch"
+                      params={{ patientId }}
+                      search={{ visitIds: needsNoteVisitIds, ...(backTo ? { from: backTo } : {}) }}
+                      className={btnPrimary}
+                    >
+                      Write session notes
+                    </Link>
+                  )}
+                  {hasSessionNotes && sessionNotesEnrollmentId && (
+                    <>
+                      <Link
+                        to="/patients/$patientId/session-log/$enrollmentId"
+                        params={{ patientId, enrollmentId: sessionNotesEnrollmentId }}
+                        search={backTo ? { from: backTo } : undefined}
+                        className="text-xs font-medium text-[var(--teal)] hover:underline"
+                      >
+                        View session log
+                      </Link>
+                      <Link
+                        to="/patients/$patientId/insurer-packet/$enrollmentId"
+                        params={{ patientId, enrollmentId: sessionNotesEnrollmentId }}
+                        search={backTo ? { from: backTo } : undefined}
+                        className="text-xs font-medium text-[var(--teal)] hover:underline"
+                      >
+                        Insurer packet
+                      </Link>
+                    </>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
           <div className="flex items-center justify-between">
             <SectionLabel>Visit history</SectionLabel>
             {visitRows.length > 0 && (
@@ -698,13 +773,6 @@ function ConsultationNotePanel({
   const visible = notes.slice(0, NOTE_LIST_LIMIT);
   const hiddenCount = notes.length - visible.length;
   const backSearch = backTo ? { from: backTo } : undefined;
-  // notes is most-recently-updated-first (listByPatient's own contract),
-  // so the first note's enrollment is the episode a "Session log" link
-  // should point at. Only offered once there's at least one completed
-  // session note to actually show — C6's print surface, not a promise of
-  // an empty page.
-  const mostRecentEnrollmentId = notes[0]?.enrollmentId ?? null;
-  const hasSessionNotes = notes.some((n) => n.noteMode === 'session' && n.status === 'completed');
 
   return (
     <SideCard
@@ -761,26 +829,6 @@ function ConsultationNotePanel({
             </li>
           )}
         </ul>
-      )}
-      {hasSessionNotes && mostRecentEnrollmentId && (
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-          <Link
-            to="/patients/$patientId/session-log/$enrollmentId"
-            params={{ patientId, enrollmentId: mostRecentEnrollmentId }}
-            search={backSearch}
-            className="text-xs font-medium text-[var(--teal)] hover:underline"
-          >
-            View session log
-          </Link>
-          <Link
-            to="/patients/$patientId/insurer-packet/$enrollmentId"
-            params={{ patientId, enrollmentId: mostRecentEnrollmentId }}
-            search={backSearch}
-            className="text-xs font-medium text-[var(--teal)] hover:underline"
-          >
-            Insurer packet
-          </Link>
-        </div>
       )}
     </SideCard>
   );

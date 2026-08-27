@@ -651,10 +651,8 @@ export type ConsultationNoteStatus = 'draft' | 'completed' | 'archived';
  * stage AND payload shape collapse onto one column. That's lossless today
  * (each value maps to exactly one shape and one stage), but would stop
  * being lossless if a future light-note variant needed a different stage
- * semantic (e.g. a standalone session note with no prior assessment) —
- * currently forbidden by policy (consultationNoteService's
- * sessionNotesAllowed gate), not by this type. Anywhere this is read
- * off a stored row, treat `null` (legacy rows predate this field) as
+ * semantic. Anywhere this is read off a stored row, treat `null` (legacy
+ * rows predate this field) as
  * 'initial'/'followup' territory, never as 'session' — see
  * NoteEditorPage.tsx's `?? 'initial'` default.
  */

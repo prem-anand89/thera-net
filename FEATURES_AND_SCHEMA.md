@@ -117,18 +117,40 @@ picks from either note kind), Assessment and Plan (single-choice chip
 groups). No PSFS, no red-flag screening — `psfsMean`/`redFlagCount` are
 written `null`/`0` for a session note by design.
 
-**Gating (C8):** a light session note can only be written once a *completed*
-heavy note exists for the patient's active enrollment
-(`consultationNoteService.heavyModeFor`/`sessionNotesAllowed`). A visit
-row's "+ Note" link (`VisitNoteLink` in `src/components/VisitCard.tsx`)
-routes to the light editor when allowed, or to the heavy editor with an
-explanatory banner (`?reason=needs-initial`) when not — never blocked
-outright. Patient Profile's own "New assessment" button always opens the
-heavy editor regardless (C5) — the automatic light/heavy choice only
-applies to the visit-row entry point. `sessionNotesAllowed` is derived
-per-patient in-memory (`src/domain/noteLinks.ts`'s
-`sessionNotesAllowedByPatient`) from each list view's already-loaded notes
-list plus one clinic-wide enrollments fetch — no per-row database call.
+**No heavy-first gate.** A light session note can be written for any visit
+at any time — there is no requirement for a completed heavy (initial/
+follow-up) assessment to exist first. (Billing & Notes Rebuild Phase 2
+originally shipped this as a hard gate, "C8"; Phase 3 removed it — session
+logs are meant to stand on their own, unpaired from the Core Assessment
+episode.) A visit row's "+ Note" link (`VisitNoteLink` in
+`src/components/VisitCard.tsx`) always routes to the light editor once the
+visit `needsNote`. Patient Profile's own "New assessment" button always
+opens the heavy editor (C5) — the two entry points are simply independent,
+not one gating the other.
+
+**Standalone entry point + batch editing (Phase 3).** Patient Profile's
+main column has a "Session notes" section (above Visit History) showing
+how many visits still need a note and a **"Write session notes"** button
+that opens all of them back-to-back — `SessionNoteBatchPage.tsx`
+(`/patients/$patientId/notes/session-batch`, `visitIds` search param).
+Each visit gets its own mount of the shared `SessionNoteEditorBody.tsx`
+(the form/autosave logic extracted out of `SessionNoteEditorPage.tsx` into
+`useSessionNoteEditor.ts` so the two flows share one implementation),
+keyed on visit id so switching visits gets a clean hook instance rather
+than carrying over the previous visit's state. "Save & Next"/"Save draft &
+Next" advance the queue (labeled "…& Finish" on the last visit); "Skip"
+advances without saving; "Prev" revisits an earlier note in the queue
+(read-only once completed). Nothing about the queue is durable session
+state — every note that reaches draft or completed is saved immediately
+via the same path the single editor uses, so leaving mid-queue just means
+the remaining visits are still `needsNote` and reappear next time the
+queue is recomputed. If another tab/device completes a queued visit's note
+concurrently, the batch page auto-skips it with an inline notice rather
+than erroring. "View session log"/"Insurer packet" links live in the same
+section, resolved against the patient's active enrollment
+(`patientModuleEnrollments.getActive`) rather than "whichever episode's
+note was most recently touched" — the latter could point at a stale,
+non-active episode for a patient with more than one enrollment over time.
 
 **`/notes/$noteId` is mode-dispatched**, the first route in this app whose
 rendered component depends on loaded data rather than the URL shape alone

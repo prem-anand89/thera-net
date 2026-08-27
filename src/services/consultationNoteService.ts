@@ -28,8 +28,8 @@ export function createConsultationNoteService(repos: Repos) {
    * and starts fresh gets 'initial' again, not 'followup'. Deliberate
    * behavior change, forward-only (never touches already-saved notes'
    * stored noteMode) — see Billing & Notes Rebuild Phase 2 plan.
-   * Defined as a closure, not an object method, so sessionNotesAllowed
-   * below can call it directly without relying on `this`.
+   * Defined as a closure, not an object method, for consistency with the
+   * rest of this file's private helpers.
    */
   async function heavyModeFor(enrollmentId: UUID): Promise<'initial' | 'followup'> {
     const notes = await repos.consultationNotes.listByEnrollment(enrollmentId);
@@ -75,18 +75,6 @@ export function createConsultationNoteService(repos: Repos) {
     },
 
     heavyModeFor,
-
-    /**
-     * C8's gate: a light session note can only be written once a completed
-     * heavy (initial/follow-up) assessment exists for this enrollment.
-     * Derived from heavyModeFor rather than a second independent query —
-     * the two facts are the same underlying check, kept in one place so
-     * they can't drift apart if edited separately later.
-     */
-    async sessionNotesAllowed(enrollmentId: UUID): Promise<boolean> {
-      const mode = await heavyModeFor(enrollmentId);
-      return mode === 'followup';
-    },
 
     /** Payload-aware save for a Core Assessment note — draft or completed. */
     async saveAssessment(

@@ -175,9 +175,7 @@ export interface PatientModuleEnrollmentRepo {
     patientId: UUID,
     moduleType: PatientModuleEnrollment['moduleType']
   ): Promise<PatientModuleEnrollment | undefined>;
-  /** Every enrollment in the clinic for a module, any status — for list
-   *  UIs that need a clinic-wide active-enrollment-per-patient map without
-   *  a per-patient DB call (e.g. sessionNotesAllowed on visit rows). */
+  /** Every enrollment in the clinic for a module, any status. */
   listByClinic(
     clinicId: UUID,
     moduleType: PatientModuleEnrollment['moduleType']

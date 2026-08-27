@@ -8,7 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { clinicBillingConfig, type ConsultationNote, type Visit } from '@/domain/types';
-import { noteForVisit, sessionNotesAllowedByPatient } from '@/domain/noteLinks';
+import { noteForVisit } from '@/domain/noteLinks';
 import type { TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
@@ -43,8 +43,7 @@ function todayRowToCardData(
   therapistSplit: boolean,
   treatmentName: Map<string, string>,
   invoicedSiblingGroupIds: Set<string>,
-  consultationNotes: ConsultationNote[] | undefined,
-  sessionNotesAllowedMap: Map<string, boolean>
+  consultationNotes: ConsultationNote[] | undefined
 ): VisitCardData {
   const canModify = isAdmin || row.therapistId === myTherapistId;
   const linkedNote = noteForVisit(
@@ -87,7 +86,6 @@ function todayRowToCardData(
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: linkedNote?.id ?? null,
     noteStatus: linkedNote?.status ?? null,
-    sessionNotesAllowed: sessionNotesAllowedMap.get(row.patientId) ?? false,
     packageInvoicePending:
       row.billPaise === 0 &&
       !!row.sessionIndex &&
@@ -177,20 +175,6 @@ export function WorkspacePage() {
     () => (canViewClinicalNotes ? repos.consultationNotes.listByClinic(clinic.id) : undefined),
     [clinic.id, canViewClinicalNotes]
   );
-  // C8's gate ("+ Note" offers the light editor only once a completed
-  // initial exists) — same in-memory derivation as LedgerPage.tsx.
-  const consultationEnrollments = useLiveQuery(
-    () =>
-      canViewClinicalNotes
-        ? repos.patientModuleEnrollments.listByClinic(clinic.id, 'consultation_notes')
-        : undefined,
-    [clinic.id, canViewClinicalNotes]
-  );
-  const sessionNotesAllowedMap = useMemo(
-    () => sessionNotesAllowedByPatient(consultationNotes ?? [], consultationEnrollments ?? []),
-    [consultationNotes, consultationEnrollments]
-  );
-
   // A ₹0 package continuation logged today whose OWN invoiceId is null —
   // check the full package group (unbounded by "today") for an invoiced
   // sibling, so a session trailing an already-issued invoice gets flagged
@@ -291,8 +275,7 @@ export function WorkspacePage() {
                 therapistSplit,
                 treatmentName,
                 invoicedSiblingGroupIds ?? new Set(),
-                consultationNotes,
-                sessionNotesAllowedMap
+                consultationNotes
               )
             )}
             showDate={false}
