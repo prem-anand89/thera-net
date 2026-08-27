@@ -46,7 +46,29 @@ export interface Clinic {
    * Kept on the type for older cached/server rows; no UI reads or writes it.
    */
   visitColumnPrefs?: Partial<Record<VisitColumnKey, boolean>> | null;
-  /** Whether the clinical documentation module (consultation notes, screening, consent) is on. */
+  /**
+   * Client-side "this clinic uses clinical documentation" feature flag.
+   * Purely a display/visibility switch — it is NOT what permits a note to
+   * be written. That's a separate, always-on server-side gate:
+   * `can_use_module(clinic_id, 'consultation_notes')` on
+   * `consultation_notes`' insert/update RLS policies, seeded enabled for
+   * every clinic with no UI to turn it off (see FEATURES_AND_SCHEMA.md).
+   * The two never conflict — they act at different layers.
+   *
+   * Four surfaces read this flag:
+   *  - `visitService.ts` — auto-flags a new visit `clinicalStatus:'pending'`
+   *  - `NewVisitPage.tsx` — the "Add clinical note" CTA after saving a visit
+   *  - `LedgerPage.tsx` — the "Not documented" filter checkbox
+   *  - `ReportsOverviewPage.tsx` — the modality-usage chart
+   *
+   * One surface deliberately does NOT: Patient Profile's
+   * `ConsultationNotePanel` is gated on role (`canViewClinicalNotes`) only,
+   * so "New note" there stays available even with this off. Confirmed
+   * intentional (not an oversight) — every therapist always has notes
+   * access, full stop; this flag is an opt-in reminder/reporting layer on
+   * top of that baseline, not an access gate. See FEATURES_AND_SCHEMA.md
+   * for the full rule before adding a new notes entry point.
+   */
   clinicalDocsEnabled?: boolean;
   /** Whether this clinic uses the invoice module at all. Optional so older cached rows default to true (original behavior). */
   billingEnabled?: boolean;

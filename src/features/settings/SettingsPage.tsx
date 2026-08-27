@@ -925,7 +925,7 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
           label={
             <>
               Clinical notes
-              <InfoTip text="When on, new visits are flagged for a clinical note until one is completed — filterable via Ledger's 'Not documented' checkbox. Off by default; turn on for clinics that track a note per visit." />
+              <InfoTip text="Turn on for clinics that keep a clinical note per visit. New visits get flagged until a note is completed, the 'Add clinical note' shortcut appears after logging a visit, and Ledger's 'Not documented' filter and the Reports modality chart become available. Note: staff can still write notes from a patient's profile even with this off — this controls the per-visit prompts and reporting, not access." />
             </>
           }
         >

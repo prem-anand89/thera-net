@@ -822,7 +822,8 @@ Not dead — `can_use_module(clinic_id, module_key)` (defined in
 `20260718000001_module_registry.sql`, revised in
 `20260721000001_entitlements_audit_log.sql`) checks `clinic_entitlements`
 (fail-open: no row = entitled) then `clinic_module_settings` (fail-closed
-otherwise), and is called from the insert/update RLS policies on
+otherwise, further gated by the caller's `clinic_members.role` against
+`allowed_roles`), and is called from the insert/update RLS policies on
 `consultation_notes`, `face_scale_responses`, and `facial_palsy_assessments`.
 Every write to those three tables runs through it today.
 
@@ -830,7 +831,65 @@ What's genuinely missing is the **client side**: no Dexie table, no repo,
 no sync, no UI anywhere in `src/` reads or writes either table — so nothing
 in the app currently sets a narrower entitlement or surfaces a "this module
 is off" state. In practice every clinic reads as fully entitled, because
-nothing has ever populated `clinic_entitlements` with a restrictive row.
+nothing has ever populated `clinic_entitlements` with a restrictive row,
+and every clinic gets a `clinic_module_settings` row for `'consultation_notes'`
+seeded `enabled = true` (both the one-time backfill and the
+`seed_default_module_settings()` AFTER INSERT trigger, in
+`20260721000001_entitlements_audit_log.sql`). This is `can_use_module()`'s
+**real, always-on gate for whether a note can be written at all** — but
+there's no Settings toggle for it, so it stays on for every clinic by
+construction, indefinitely, until someone writes SQL by hand.
+
+**This is easy to conflate with `clinics.clinical_docs_enabled` (client-side,
+has a Settings toggle) — but they act at different layers and never
+conflict.** `can_use_module()` decides whether a note *can be written*
+(server-side, RLS, always on). `clinical_docs_enabled` is a client-side
+*visibility* flag deciding which clinical-documentation surfaces render.
+Four read it:
+
+| Surface | What `clinical_docs_enabled` gates |
+| --- | --- |
+| `visitService.ts` | auto-flags a new visit `clinicalStatus: 'pending'` |
+| `NewVisitPage.tsx` | the "Add clinical note" CTA on the post-save screen |
+| `LedgerPage.tsx` | the "Not documented" filter checkbox |
+| `ReportsOverviewPage.tsx` | the modality-usage chart (query, nav entry, section) |
+
+**One surface differs from those four, deliberately.**
+`PatientProfilePage`'s `ConsultationNotePanel` — "New note" / "Continue
+draft" — is gated on role (`canViewClinicalNotes`, i.e. every therapist,
+never front desk) and *not* on `clinical_docs_enabled`. **Confirmed
+intentional, not an inconsistency to fix:** notes access is role-based only
+— every therapist always has it, full stop. The `clinical_docs_enabled`
+surfaces above are a separate, opt-in layer on top of that baseline: does
+*this clinic* want the per-visit reminder, the "Not documented" filter, and
+the modality report — a workflow/reporting preference, not an access gate.
+A clinic with the flag off still has every therapist able to write notes
+from Patient Profile at any time; it just isn't nudged to do so on every
+visit or tracked for completeness.
+
+**Rule for any new consultation-notes entry point:** gate on
+`canViewClinicalNotes` for access (matches Patient Profile). Gate on
+`clinical_docs_enabled` only if the new surface is itself a reminder/filter/
+report in the same spirit as the four above — not if it's a place to
+actually write a note, which should behave like Patient Profile's baseline
+and stay available regardless of the flag.
+
+**Confirmed not tier-gated either** — no `PlanFeature` in `src/domain/plans.ts`
+covers clinical notes today, by design (its own docstring excludes
+"anything clinical-note- or advanced-module-content-shaped ... still open
+design work"). **One tier restriction is planned but not yet built:** Lite
+should not be able to print/export a note as PDF (`NotePrintPage.tsx` is
+currently unrestricted by tier for every clinic). This needs a new
+`PlanFeature` (e.g. `notePrinting`) wired into `TIER_FEATURES`,
+`useEntitlements()`, and a gate on `NotePrintPage.tsx`'s print action —
+not yet scoped or built; captured here so it isn't lost before the Phase 2
+notes work lands.
+
+Note also that no admin-facing control exists for the *real* gate: turning
+consultation notes genuinely off for a clinic means flipping
+`clinic_module_settings.enabled` for `'consultation_notes'` by hand in SQL.
+The Settings toggle does not do this, despite reading like it might.
+
 The `modules` reference table these two originally pointed to was dropped
 (`20260820000001_drop_unused_modules_table.sql`), taking its FK on
 `module_key` with it via CASCADE. Restored as a plain `CHECK` constraint
@@ -935,12 +994,18 @@ No UI reads this yet — Phase 1 only builds the read path. Enforcement
 
 Deliberately **not** touched: `can_use_module()` / `consultation_notes` /
 the five assessment-module keys. `clinics.clinical_docs_enabled` and
-`clinic_module_settings('consultation_notes')` are two separate gates for
-the same live, actively-used feature (see the dead-infrastructure section
-above) — adding a third (plan-tier) gate on top without reconciling those
-first risks breaking real clinical documentation. The five module keys have
-zero client code today regardless, so gating them has no practical effect
-yet. Deferred to the still-open "advanced modules content" planning pass.
+`clinic_module_settings('consultation_notes')` were previously suspected of
+being two conflicting gates on the same feature; traced precisely, they act
+at different layers — server-side write permission vs. client-side surface
+visibility — and never conflict. See the dead-infrastructure section above
+for the full mechanism, including a real inconsistency it surfaced (Patient
+Profile's notes entry point isn't gated by `clinical_docs_enabled` while
+three comparable surfaces are) that is still undecided. Adding a third
+(plan-tier) gate would need to go through `can_use_module()` specifically,
+since that's the one that actually governs whether a note can be written.
+The five module keys have zero client code today regardless, so gating them
+has no practical effect yet. Deferred to the still-open "advanced modules
+content" planning pass.
 
 **Bug fixed during Phase 2 testing:** `clinic_plans_updated` (Phase 0) used
 the generic `set_updated_at()` trigger function, which unconditionally sets
