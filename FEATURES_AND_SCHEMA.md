@@ -701,8 +701,10 @@ clinical_snapshot   jsonb (NULLABLE) — see "Clinical context on the bill" belo
 created_by, updated_by  uuid (NULLABLE)
 updated_at       timestamptz NOT NULL
 ```
-Immutable once issued (DB trigger). Payment status is **not** a column here —
-see `invoice_payments` below.
+Immutable once issued (DB trigger) — with one narrow exception:
+`clinical_snapshot` alone can be corrected in place afterward, see "Editing
+clinical details after issuance" below and §3d. Payment status is **not** a
+column here — see `invoice_payments` below.
 
 **Invoice line items (v2).** `line_items` is opaque jsonb — a legacy invoice's
 entries have only the original 6 fields (`serviceName`, `sessionCount`,
@@ -755,6 +757,27 @@ afterward). **Known gap, by design**: Patient Profile's bulk-issue path
 and always issues with `clinical_snapshot: null` — giving it the same
 pre-fill would need either a second clinical form or a reshaped multi-visit
 dialog, deferred as real follow-up work rather than folded into this pass.
+
+**Preview before issuing.** `IssueInvoiceDialog` is a two-step flow: "Review
+invoice" moves from the fields form to a review screen built from
+`invoiceService.previewLineItems()` — the same line-item build
+`issueForVisits` itself calls (via the shared `buildLineItems` closure in
+`invoiceService.ts`), so the preview can never drift from what actually
+gets issued. No RPC call happens until "Confirm & issue" on the review
+screen; "← Back to edit" returns to the form with every field intact.
+
+**Editing clinical details after issuance.** Once issued, `clinical_snapshot`
+alone can still be corrected — a typo'd diagnosis, a missed physician
+registration number — without reopening the financial record. "Edit
+details" on `InvoicePrintPage` opens `EditInvoiceDetailsDialog`
+(`src/components/EditInvoiceDetailsDialog.tsx`), pre-filled from the
+invoice's existing snapshot, calling the `update_invoice_clinical_details()`
+RPC (§3d). This is deliberately narrower than an amendment: the amount,
+line items, and invoice number are untouched and no new invoice number is
+minted — for those, "Amend this invoice" (§3b) is still the only path. The
+clinical-fields form itself (`InvoiceClinicalFieldsForm`,
+`src/components/InvoiceClinicalFields.tsx`) is shared between this dialog
+and `IssueInvoiceDialog` rather than duplicated.
 
 #### `invoice_counters`
 ```sql
@@ -1619,6 +1642,41 @@ grant/revoke (e.g. `revoke execute … from anon`, see RLS Hardening in
 Phase-0-era migrations) must be **re-issued against the new signature** —
 it does not carry over from the old one, since as far as Postgres is
 concerned this is a different function, not an edit to the old one.
+
+### 3d. Invoice Clinical-Details Editing
+Amendment (§3b) is the right tool for a correction that changes what's
+being billed — added visits, a different total. Most real-world "fix this
+invoice" requests are narrower than that: a diagnosis was mistyped, a
+physician's registration number was missing. Minting a whole new invoice
+number for a metadata typo is disproportionate, so `clinical_snapshot` gets
+its own narrow in-place edit path instead.
+
+- **`reject_invoice_mutation()` trigger, narrowed**: previously rejected
+  every update unconditionally. Now allows an update through IFF (a) it
+  runs inside `update_invoice_clinical_details()`'s transaction-local
+  `set_config('app.allow_invoice_clinical_edit', 'true', true)` bypass —
+  the same pattern §3b's amendment flag uses — AND (b) no column outside
+  `clinical_snapshot` actually changed, checked column-by-column in the
+  trigger itself as a second line of defense against a bug in the RPC.
+  Every other financial field (amount, line items, invoice number, payment
+  mode, `supersedes_invoice_id`, …) stays genuinely immutable.
+- **`update_invoice_clinical_details()` RPC** — same membership +
+  `invoicing_access` permission check as `issue_invoice()`/`amend_invoice()`
+  (any clinic member when `all_staff`, admin/front_desk only when
+  `billing_staff`), `security definer` so it can bypass invoices' select-
+  only RLS policy the same way the other two invoice RPCs do.
+- **`invoices` now carries the generic `audit_log` trigger** (see §M0's
+  `audit_row_change()`), added in the same migration. It was deliberately
+  excluded when `audit_log` first shipped, on the reasoning that a fully
+  immutable table could never produce a meaningful before/after row — that
+  reasoning no longer holds now that one field can change, so every
+  clinical-details edit gets a genuine before/after audit row like any
+  other editable table.
+- **UI**: `EditInvoiceDetailsDialog` (see "Editing clinical details after
+  issuance" in §3) — reachable from `InvoicePrintPage`'s "Edit details"
+  button, hidden once an invoice is superseded (same guard as "Amend this
+  invoice").
+- Migration: `20260827000004_invoice_clinical_edit.sql`.
 
 ### 4. Walk-In MRNO Auto-Generation
 - **Sequential per clinic per year**: `PREFIXYY-NNNN` (W26-0001, W26-0002)

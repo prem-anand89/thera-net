@@ -229,5 +229,51 @@ export function createInvoiceService(repos: Repos) {
       );
       return invoice;
     },
+
+    /**
+     * Computes what issuing an invoice for these visits WOULD produce —
+     * same line-item build `issueForVisits` itself calls, just without the
+     * `issue_invoice` RPC — so `IssueInvoiceDialog`'s preview step is
+     * guaranteed to match the real thing rather than an approximation of
+     * it. Read-only: touches no visit/invoice state.
+     */
+    async previewLineItems(visitIds: UUID[]): Promise<{
+      lineItems: ReturnType<typeof buildLineItemsPure>['lineItems'];
+      totalPaise: number;
+    }> {
+      const { lineItems, totalPaise } = await buildLineItems(visitIds);
+      return { lineItems, totalPaise };
+    },
+
+    /**
+     * Edits an already-issued invoice's clinical-context snapshot in place
+     * — the one thing on an invoice that isn't the financial record itself
+     * (diagnosis/referring physician/place of service/treatment performed).
+     * Everything else stays immutable; a correction to the amount or line
+     * items still goes through amendInvoice above. See migration
+     * 20260827000004 for the server-side enforcement of that split.
+     */
+    async updateClinicalDetails(
+      invoiceId: UUID,
+      clinicId: UUID,
+      clinicalSnapshot: InvoiceClinicalSnapshot | null
+    ): Promise<Invoice> {
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('Supabase is not configured');
+      if (!navigator.onLine) {
+        throw new Error('Editing an invoice needs a connection — reconnect and try again.');
+      }
+
+      const { data, error } = await supabase.rpc('update_invoice_clinical_details', {
+        p_invoice_id: invoiceId,
+        p_clinic_id: clinicId,
+        p_clinical_snapshot: clinicalSnapshot,
+      });
+      if (error) throw new Error(`Could not update invoice details: ${error.message}`);
+
+      const invoice = rowToDomain<Invoice>(data as Record<string, unknown>);
+      await repos.invoices.putLocal(invoice);
+      return invoice;
+    },
   };
 }

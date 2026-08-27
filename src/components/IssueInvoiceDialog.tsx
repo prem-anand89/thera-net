@@ -1,13 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { ConsultationNote, InvoiceClinicalSnapshot, PaymentMode } from '@/domain/types';
+import type {
+  ConsultationNote,
+  InvoiceClinicalSnapshot,
+  InvoiceLineItem,
+  PaymentMode,
+} from '@/domain/types';
 import type { CoreAssessmentPayload } from '@/domain/coreAssessment';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
 import { invoiceService, paymentService, repos } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import { treatmentsDisplayText } from '@/components/VisitCard';
 import type { InvoicePrintBackTarget } from '@/app/router';
+import { formatINR } from '@/domain/money';
+import { sessionCountLabel } from '@/domain/invoiceLine';
+import {
+  EMPTY_CLINICAL_FIELDS,
+  InvoiceClinicalFieldsForm,
+  type ClinicalFields,
+} from '@/components/InvoiceClinicalFields';
 
 const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
 
@@ -37,22 +49,6 @@ function noteReferral(
   return payload?.referral;
 }
 
-interface ClinicalFields {
-  diagnosis: string;
-  referringPhysician: string;
-  physicianRegistrationNo: string;
-  placeOfService: 'clinic' | 'home';
-  treatmentPerformed: string;
-}
-
-const EMPTY_FIELDS: ClinicalFields = {
-  diagnosis: '',
-  referringPhysician: '',
-  physicianRegistrationNo: '',
-  placeOfService: 'clinic',
-  treatmentPerformed: '',
-};
-
 export function IssueInvoiceDialog({
   clinicId,
   target,
@@ -71,6 +67,17 @@ export function IssueInvoiceDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<{ invoiceId: string; invoiceNo: string } | null>(null);
+
+  // 'form' -> fill in payment mode/clinical details; 'review' -> a preview
+  // of exactly what will be issued, computed via the same line-item build
+  // issueForVisits itself uses (invoiceService.previewLineItems), so this
+  // never drifts from what actually gets issued. No server write happens
+  // until "Confirm & issue" from the review step.
+  const [step, setStep] = useState<'form' | 'review'>('form');
+  const [preview, setPreview] = useState<{
+    lineItems: InvoiceLineItem[];
+    totalPaise: number;
+  } | null>(null);
 
   // Clinical pre-fill (1.4) — degrades silently to empty fields whenever
   // the source data isn't cached locally (e.g. an offline device that
@@ -107,7 +114,7 @@ export function IssueInvoiceDialog({
   const referral = noteReferral(sourceNote);
 
   const prefill: ClinicalFields = useMemo(() => {
-    if (!visit) return EMPTY_FIELDS;
+    if (!visit) return EMPTY_CLINICAL_FIELDS;
     const treatmentNames = (visit.treatmentIds ?? [])
       .map((id) => treatmentCatalog?.find((t) => t.id === id)?.name)
       .filter((n): n is string => !!n);
@@ -120,7 +127,7 @@ export function IssueInvoiceDialog({
     };
   }, [visit, referral, treatmentCatalog]);
 
-  const [fields, setFields] = useState<ClinicalFields>(EMPTY_FIELDS);
+  const [fields, setFields] = useState<ClinicalFields>(EMPTY_CLINICAL_FIELDS);
   const [touched, setTouched] = useState(false);
 
   // Keep syncing from the (async, live-queried) pre-fill until the biller
@@ -141,37 +148,52 @@ export function IssueInvoiceDialog({
     setFields((f) => ({ ...f, [key]: value }));
   }
 
+  function clinicalSnapshotFromFields(): InvoiceClinicalSnapshot | null {
+    const hasAnyClinicalField =
+      fields.diagnosis.trim() ||
+      fields.referringPhysician.trim() ||
+      fields.physicianRegistrationNo.trim() ||
+      fields.treatmentPerformed.trim();
+    if (!hasAnyClinicalField) return null;
+    return {
+      diagnosis: fields.diagnosis.trim() || null,
+      diagnosisIcdCode: referral?.diagnosisIcdCode ?? null,
+      referringPhysician: fields.referringPhysician.trim() || null,
+      physicianRegistrationNo: fields.physicianRegistrationNo.trim() || null,
+      placeOfService: fields.placeOfService,
+      treatmentPerformed: fields.treatmentPerformed.trim() || null,
+      sourceNoteId: sourceNote?.id ?? null,
+      editedByBiller:
+        fields.diagnosis !== prefill.diagnosis ||
+        fields.referringPhysician !== prefill.referringPhysician ||
+        fields.physicianRegistrationNo !== prefill.physicianRegistrationNo ||
+        fields.placeOfService !== prefill.placeOfService ||
+        fields.treatmentPerformed !== prefill.treatmentPerformed,
+    };
+  }
+
+  async function goToReview() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { lineItems, totalPaise } = await invoiceService.previewLineItems([target.visitId]);
+      setPreview({ lineItems, totalPaise });
+      setStep('review');
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function issue() {
     setBusy(true);
     setError(null);
     try {
-      const hasAnyClinicalField =
-        fields.diagnosis.trim() ||
-        fields.referringPhysician.trim() ||
-        fields.physicianRegistrationNo.trim() ||
-        fields.treatmentPerformed.trim();
-      const clinicalSnapshot: InvoiceClinicalSnapshot | null = hasAnyClinicalField
-        ? {
-            diagnosis: fields.diagnosis.trim() || null,
-            diagnosisIcdCode: referral?.diagnosisIcdCode ?? null,
-            referringPhysician: fields.referringPhysician.trim() || null,
-            physicianRegistrationNo: fields.physicianRegistrationNo.trim() || null,
-            placeOfService: fields.placeOfService,
-            treatmentPerformed: fields.treatmentPerformed.trim() || null,
-            sourceNoteId: sourceNote?.id ?? null,
-            editedByBiller:
-              fields.diagnosis !== prefill.diagnosis ||
-              fields.referringPhysician !== prefill.referringPhysician ||
-              fields.physicianRegistrationNo !== prefill.physicianRegistrationNo ||
-              fields.placeOfService !== prefill.placeOfService ||
-              fields.treatmentPerformed !== prefill.treatmentPerformed,
-          }
-        : null;
-
       const invoice = await invoiceService.issueForVisit(
         target.visitId,
         paymentMode,
-        clinicalSnapshot
+        clinicalSnapshotFromFields()
       );
       try {
         await paymentService.setStatus(invoice.id, clinicId, collectedNow ? 'paid' : 'outstanding');
@@ -213,6 +235,92 @@ export function IssueInvoiceDialog({
               </Link>
               <button type="button" className={btnPrimary} onClick={onClose}>
                 Done
+              </button>
+            </div>
+          </>
+        ) : step === 'review' ? (
+          <>
+            <h2 id="issue-invoice-title" className="text-sm font-semibold text-[var(--ink)]">
+              Review before issuing
+            </h2>
+            <p className="text-sm text-[var(--muted)]">{target.patientLabel}</p>
+
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--muted)]">
+                  <th className="py-1.5">Service</th>
+                  <th className="py-1.5">Sessions</th>
+                  <th className="py-1.5 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(preview?.lineItems ?? []).map((li, i) => (
+                  <tr key={i} className="border-b border-[var(--border)] align-top">
+                    <td className="py-1.5 font-medium text-[var(--ink)]">{li.serviceName}</td>
+                    <td className="py-1.5 text-[var(--muted)]">{sessionCountLabel(li)}</td>
+                    <td className="font-num py-1.5 text-right">{formatINR(li.totalPaise)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={2} className="py-2 text-right font-semibold text-[var(--ink)]">
+                    Total
+                  </td>
+                  <td className="font-num py-2 text-right text-base font-bold text-[var(--ink)]">
+                    {formatINR(preview?.totalPaise ?? 0)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <div className="space-y-1 rounded-md border border-[var(--border)] bg-[var(--paper)] p-3 text-sm text-[var(--ink)]">
+              <p>
+                Payment mode: <span className="font-medium">{paymentMode}</span> —{' '}
+                {collectedNow ? 'collected now' : 'not collected, pay later'}
+              </p>
+              {(fields.diagnosis ||
+                fields.referringPhysician ||
+                fields.treatmentPerformed ||
+                fields.placeOfService === 'home') && (
+                <div className="mt-1.5 border-t border-[var(--border)] pt-1.5 text-xs text-[var(--muted)]">
+                  {fields.diagnosis && <p>Diagnosis: {fields.diagnosis}</p>}
+                  {fields.referringPhysician && (
+                    <p>
+                      Referring physician: {fields.referringPhysician}
+                      {fields.physicianRegistrationNo &&
+                        ` (Reg. No. ${fields.physicianRegistrationNo})`}
+                    </p>
+                  )}
+                  <p>Place of service: {fields.placeOfService === 'home' ? 'Home' : 'Clinic'}</p>
+                  {fields.treatmentPerformed && (
+                    <p>Treatment performed: {fields.treatmentPerformed}</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <ErrorNote message={error} />
+            <p className="text-xs text-[var(--muted)]">
+              The invoice number is issued by the server and the bill becomes immutable — this needs
+              a connection and cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className={btnSecondary}
+                disabled={busy}
+                onClick={() => setStep('form')}
+              >
+                ← Back to edit
+              </button>
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={busy}
+                onClick={() => void issue()}
+              >
+                {busy ? 'Issuing…' : 'Confirm & issue'}
               </button>
             </div>
           </>
@@ -260,72 +368,24 @@ export function IssueInvoiceDialog({
               <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
                 Clinical details (for TPA/insurance bills)
               </p>
-              <Field
-                label="Diagnosis"
-                hint={referral?.diagnosis ? "From patient's note — edit if needed" : undefined}
-              >
-                <input
-                  className={inputCls}
-                  value={fields.diagnosis}
-                  onChange={(e) => updateField('diagnosis', e.target.value)}
-                  placeholder="e.g. Lumbar disc prolapse L4-L5"
-                />
-              </Field>
-              <Field
-                label="Referring physician"
-                hint={
-                  referral?.referringPhysician ? "From patient's note — edit if needed" : undefined
-                }
-              >
-                <div className="flex gap-2">
-                  <input
-                    className={inputCls}
-                    value={fields.referringPhysician}
-                    onChange={(e) => updateField('referringPhysician', e.target.value)}
-                    placeholder="Physician name"
-                  />
-                  <input
-                    className={inputCls}
-                    value={fields.physicianRegistrationNo}
-                    onChange={(e) => updateField('physicianRegistrationNo', e.target.value)}
-                    placeholder="Reg. No."
-                  />
-                </div>
-              </Field>
-              <Field label="Place of service">
-                <select
-                  className={inputCls}
-                  value={fields.placeOfService}
-                  onChange={(e) =>
-                    updateField('placeOfService', e.target.value as 'clinic' | 'home')
-                  }
-                >
-                  <option value="clinic">Clinic (OP visit)</option>
-                  <option value="home">Home (domiciliary)</option>
-                </select>
-              </Field>
-              <Field
-                label="Treatment performed"
-                hint={
-                  prefill.treatmentPerformed
+              <InvoiceClinicalFieldsForm
+                fields={fields}
+                onChange={updateField}
+                hints={{
+                  diagnosis: referral?.diagnosis
+                    ? "From patient's note — edit if needed"
+                    : undefined,
+                  referringPhysician: referral?.referringPhysician
+                    ? "From patient's note — edit if needed"
+                    : undefined,
+                  treatmentPerformed: prefill.treatmentPerformed
                     ? "From this visit's record — edit if needed"
-                    : undefined
-                }
-              >
-                <input
-                  className={inputCls}
-                  value={fields.treatmentPerformed}
-                  onChange={(e) => updateField('treatmentPerformed', e.target.value)}
-                  placeholder="e.g. Manual therapy, therapeutic exercise"
-                />
-              </Field>
+                    : undefined,
+                }}
+              />
             </div>
 
             <ErrorNote message={error} />
-            <p className="text-xs text-[var(--muted)]">
-              The invoice number is issued by the server and the bill becomes immutable — this needs
-              a connection and cannot be undone.
-            </p>
             <div className="flex justify-end gap-2">
               <button type="button" className={btnSecondary} onClick={onClose}>
                 Cancel
@@ -334,9 +394,9 @@ export function IssueInvoiceDialog({
                 type="button"
                 className={btnPrimary}
                 disabled={busy}
-                onClick={() => void issue()}
+                onClick={() => void goToReview()}
               >
-                {busy ? 'Issuing…' : 'Issue invoice'}
+                {busy ? 'Loading…' : 'Review invoice'}
               </button>
             </div>
           </>

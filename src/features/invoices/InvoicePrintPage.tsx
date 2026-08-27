@@ -19,6 +19,7 @@ import type { InvoiceLineItem, Therapist } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { AmendInvoiceDialog } from '@/components/AmendInvoiceDialog';
+import { EditInvoiceDetailsDialog } from '@/components/EditInvoiceDetailsDialog';
 import { PrintLetterhead, PrintSignatureFooter } from './printChrome';
 
 /** Page-specific wording, not a general-purpose helper — the "delivered of
@@ -232,6 +233,7 @@ export function InvoicePrintPage() {
 
   const [paper, setPaper] = useState<'A4' | 'A5'>('A4');
   const [amending, setAmending] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
 
   const logoUrl = useMemo(() => publicLogoUrl(clinic.logoPath), [clinic.logoPath]);
   const partnerLogoUrl = useMemo(
@@ -302,6 +304,11 @@ export function InvoicePrintPage() {
             Print / Save PDF
           </button>
           {!supersededBy && (
+            <button type="button" className={btnSecondary} onClick={() => setEditingDetails(true)}>
+              Edit details
+            </button>
+          )}
+          {!supersededBy && (
             <button type="button" className={btnSecondary} onClick={() => setAmending(true)}>
               Amend this invoice
             </button>
@@ -348,6 +355,14 @@ export function InvoicePrintPage() {
           onClose={() => setAmending(false)}
           returnTo={backTo ?? '/ledger'}
           returnTab={backTab}
+        />
+      )}
+
+      {editingDetails && (
+        <EditInvoiceDetailsDialog
+          clinicId={clinic.id}
+          invoice={invoice}
+          onClose={() => setEditingDetails(false)}
         />
       )}
 
