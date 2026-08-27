@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useBlocker, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
+import type { PatientProfileBackTarget } from '@/app/router';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { getSupabase } from '@/lib/supabase';
@@ -247,8 +248,15 @@ export function NoteEditorPage() {
   // Set only when this note was opened from a specific visit's "add note"
   // nudge (New Visit's save-success offer, a Seen Today card, or the
   // Needs-attention list) — ignored once an existing note is loaded, which
-  // carries its own visitId.
-  const { visitId: promptedVisitId } = useSearch({ strict: false }) as { visitId?: string };
+  // carries its own visitId. `from` is the same back-target the patient
+  // profile itself was opened with — forwarded on every link back to that
+  // profile below so its own "← Back" still has somewhere real to return
+  // to (Ledger/Workspace/Patients) instead of falling back to the bare
+  // patient list.
+  const { visitId: promptedVisitId, from: backTo } = useSearch({ strict: false }) as {
+    visitId?: string;
+    from?: PatientProfileBackTarget;
+  };
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
@@ -481,7 +489,10 @@ export function NoteEditorPage() {
           to: '/patients/$patientId/notes/$noteId',
           params: { patientId, noteId: openDraft.id },
           replace: true,
-          search: promptedVisitId ? { visitId: promptedVisitId } : {},
+          search: {
+            ...(promptedVisitId ? { visitId: promptedVisitId } : {}),
+            ...(backTo ? { from: backTo } : {}),
+          },
         });
         return;
       }
@@ -531,7 +542,7 @@ export function NoteEditorPage() {
     return () => {
       cancelled = true;
     };
-  }, [noteId, existingNote, clinic.id, patientId, navigate, promptedVisitId]);
+  }, [noteId, existingNote, clinic.id, patientId, navigate, promptedVisitId, backTo]);
 
   const derived = computeDerivedFields(payload);
   const psfsImproving = payload.functionalStatus.activities.filter(
@@ -664,11 +675,18 @@ export function NoteEditorPage() {
             to: '/patients/$patientId/notes/$noteId',
             params: { patientId, noteId: saved.id },
             replace: true,
-            search: promptedVisitId ? { visitId: promptedVisitId } : {},
+            search: {
+              ...(promptedVisitId ? { visitId: promptedVisitId } : {}),
+              ...(backTo ? { from: backTo } : {}),
+            },
           });
         }
         if (navigateAway) {
-          navigate({ to: '/patients/$patientId', params: { patientId } });
+          navigate({
+            to: '/patients/$patientId',
+            params: { patientId },
+            search: backTo ? { from: backTo } : undefined,
+          });
         }
         return true;
       } catch (e) {
@@ -700,6 +718,7 @@ export function NoteEditorPage() {
       noteMode,
       noteId,
       navigate,
+      backTo,
     ]
   );
 
@@ -795,6 +814,7 @@ export function NoteEditorPage() {
         <Link
           to="/patients/$patientId"
           params={{ patientId }}
+          search={backTo ? { from: backTo } : undefined}
           className="text-sm text-[var(--teal)] hover:underline"
         >
           ← Back to patient
@@ -836,6 +856,7 @@ export function NoteEditorPage() {
         <Link
           to="/patients/$patientId"
           params={{ patientId }}
+          search={backTo ? { from: backTo } : undefined}
           className="btn-secondary"
           style={{ marginBottom: 8, display: 'inline-block', textDecoration: 'none' }}
         >
@@ -845,6 +866,7 @@ export function NoteEditorPage() {
           <Link
             to="/patients/$patientId/notes/$noteId/print"
             params={{ patientId, noteId: existingNote.id }}
+            search={backTo ? { from: backTo } : undefined}
             className="btn-secondary"
             style={{
               marginBottom: 8,

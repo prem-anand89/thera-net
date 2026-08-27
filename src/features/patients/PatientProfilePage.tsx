@@ -447,7 +447,7 @@ export function PatientProfilePage() {
                 need" (NoteEditorPage enforces the same gate for anyone who
                 navigates to a note URL directly). */}
             {canViewClinicalNotes && (
-              <ConsultationNotePanel patientId={patientId} notes={notes ?? []} />
+              <ConsultationNotePanel patientId={patientId} notes={notes ?? []} backTo={backTo} />
             )}
 
             {visitRows.length > 0 && (
@@ -565,6 +565,7 @@ export function PatientProfilePage() {
                     onToggle: toggleVisitSelection,
                     isSelectable: (row) => !row.invoiceId && canBill,
                   }}
+                  backTo={backTo}
                 />
               </div>
             )}
@@ -614,13 +615,16 @@ export function PatientProfilePage() {
 function ConsultationNotePanel({
   patientId,
   notes,
+  backTo,
 }: {
   patientId: string;
   notes: ConsultationNote[];
+  backTo?: PatientProfileBackTarget;
 }) {
   const draft = notes.find((n) => n.status === 'draft');
   const visible = notes.slice(0, NOTE_LIST_LIMIT);
   const hiddenCount = notes.length - visible.length;
+  const backSearch = backTo ? { from: backTo } : undefined;
 
   return (
     <SideCard
@@ -629,6 +633,7 @@ function ConsultationNotePanel({
         <Link
           to={draft ? '/patients/$patientId/notes/$noteId' : '/patients/$patientId/notes/new'}
           params={draft ? { patientId, noteId: draft.id } : { patientId }}
+          search={backSearch}
           className={btnSecondary}
         >
           {draft ? 'Continue draft' : 'New note'}
@@ -649,6 +654,7 @@ function ConsultationNotePanel({
               <Link
                 to="/patients/$patientId/notes/$noteId"
                 params={{ patientId, noteId: n.id }}
+                search={backSearch}
                 className="flex items-center justify-between gap-2 hover:underline"
               >
                 <span className="min-w-0">
