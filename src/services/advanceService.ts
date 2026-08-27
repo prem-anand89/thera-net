@@ -121,12 +121,20 @@ export function createAdvanceService(repos: Repos) {
       }
 
       const paidByVisit = new Map<UUID, Paise>();
+      let visitsOutstandingPaise = 0;
       for (const v of visits) {
         const existing = await repos.payments.listByVisit(v.id);
-        paidByVisit.set(
-          v.id,
-          existing.reduce((sum, p) => sum + p.amountPaise, 0)
-        );
+        const paid = existing.reduce((sum, p) => sum + p.amountPaise, 0);
+        paidByVisit.set(v.id, paid);
+        visitsOutstandingPaise += Math.max(0, v.actualBillPaise - paid);
+      }
+      // Without this, allocateAcrossVisits silently stops once every visit's
+      // own bill is covered, leaving any excess unrecorded while the advance
+      // below is still marked drawn down by the full amountPaise — money
+      // that would otherwise vanish from the ledger with no Payment row to
+      // show where it went.
+      if (amountPaise > visitsOutstandingPaise) {
+        throw new Error('Amount exceeds what these visits actually owe.');
       }
 
       const ordered = [...visits].sort((a, b) => a.visitDate.localeCompare(b.visitDate));

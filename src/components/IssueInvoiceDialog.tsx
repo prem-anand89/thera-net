@@ -121,19 +121,23 @@ export function IssueInvoiceDialog({
   }, [visit, referral, treatmentCatalog]);
 
   const [fields, setFields] = useState<ClinicalFields>(EMPTY_FIELDS);
-  const [prefilled, setPrefilled] = useState(false);
+  const [touched, setTouched] = useState(false);
 
-  // Sync editable state from the pre-fill exactly once, the moment the
-  // (async, live-queried) source data has actually loaded — not on every
-  // render, or every keystroke would get clobbered by a re-derived prefill.
+  // Keep syncing from the (async, live-queried) pre-fill until the biller
+  // actually edits a field — not just once `visit` resolves. `visit`,
+  // `visitNote`/`patientNotes`, and `treatmentCatalog` are four independent
+  // live queries with no ordering guarantee between them; syncing only on
+  // `visit`'s own resolution risked locking in a blank prefill if the
+  // others were still loading at that moment. Re-running on every `prefill`
+  // change instead means whichever query resolves last still lands
+  // correctly, and `touched` is what stops a later resolution from
+  // clobbering something the biller already typed.
   useEffect(() => {
-    if (prefilled || visit === undefined) return;
-    setFields(prefill);
-    setPrefilled(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visit, prefilled]);
+    if (!touched) setFields(prefill);
+  }, [prefill, touched]);
 
   function updateField<K extends keyof ClinicalFields>(key: K, value: ClinicalFields[K]) {
+    setTouched(true);
     setFields((f) => ({ ...f, [key]: value }));
   }
 
