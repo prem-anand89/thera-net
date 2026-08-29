@@ -364,7 +364,7 @@ export function SettingsPage() {
   // the card auto-hides instead of sitting there until someone notices the
   // Hide button. Held back while either query is still loading so it
   // doesn't flash visible-then-hidden on a fast setup.
-  const firstWeekNotDismissed = useFirstWeekChecklistVisible();
+  const firstWeekNotDismissed = useFirstWeekChecklistVisible(clinic.id);
   const setupIncomplete =
     therapists === undefined || catalog === undefined
       ? undefined

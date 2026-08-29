@@ -6,8 +6,16 @@ import { useClinic } from '@/app/clinicContext';
 import { useEntitlements, type Entitlements } from '@/app/useEntitlements';
 import { btnSecondary } from '@/components/ui';
 
-export const FIRST_WEEK_CHECKLIST_META_KEY = 'firstWeekChecklistDismissed';
-const COMPLETED_STEPS_META_KEY = 'firstWeekChecklistCompletedSteps';
+/** Scoped per clinic, not a bare constant — see `lastBackupMetaKey` below
+ *  for why: `db.meta` is one global table shared by every clinic on this
+ *  device, so an unscoped key would have dismissing/completing the
+ *  checklist for one clinic silently affect every other clinic too. */
+export function firstWeekChecklistDismissedKey(clinicId: string): string {
+  return `firstWeekChecklistDismissed:${clinicId}`;
+}
+export function completedStepsKey(clinicId: string): string {
+  return `firstWeekChecklistCompletedSteps:${clinicId}`;
+}
 /** Written by `SettingsPage.tsx`'s `DataBackup` on a successful export —
  *  the one signal the "Take a backup" step needs to auto-detect itself,
  *  the same way clinic-profile/services/team/log-a-visit already can.
@@ -161,28 +169,29 @@ function StepLinkAnchor({ link, label }: { link: StepLink; label: string }) {
   );
 }
 
-export function useFirstWeekChecklistVisible() {
+export function useFirstWeekChecklistVisible(clinicId: string) {
   // Dexie `get()` returns undefined for a missing key, which is the same
   // sentinel useLiveQuery uses while the query is still opening — so we
   // map "no row" onto an explicit value and only treat `undefined` as
   // "still loading" (hide the card for that one frame).
   const row = useLiveQuery(async () => {
-    const existing = await db.meta.get(FIRST_WEEK_CHECKLIST_META_KEY);
-    return existing ?? { key: FIRST_WEEK_CHECKLIST_META_KEY, value: '0' };
-  }, []);
+    const key = firstWeekChecklistDismissedKey(clinicId);
+    const existing = await db.meta.get(key);
+    return existing ?? { key, value: '0' };
+  }, [clinicId]);
   return row === undefined ? undefined : row.value !== '1';
 }
 
-export async function dismissFirstWeekChecklist() {
-  await db.meta.put({ key: FIRST_WEEK_CHECKLIST_META_KEY, value: '1' });
+export async function dismissFirstWeekChecklist(clinicId: string) {
+  await db.meta.put({ key: firstWeekChecklistDismissedKey(clinicId), value: '1' });
 }
 
 /** `undefined` while still loading (same convention as
  *  `useFirstWeekChecklistVisible`) so callers can hold off rendering
  *  instead of flashing an empty checklist for one frame. Only read for the
  *  two genuinely manual steps now — every auto step ignores this. */
-function useCompletedStepIds(): Set<string> | undefined {
-  const row = useLiveQuery(() => db.meta.get(COMPLETED_STEPS_META_KEY), []);
+function useCompletedStepIds(clinicId: string): Set<string> | undefined {
+  const row = useLiveQuery(() => db.meta.get(completedStepsKey(clinicId)), [clinicId]);
   if (row === undefined) return undefined;
   if (!row) return new Set();
   try {
@@ -195,11 +204,16 @@ function useCompletedStepIds(): Set<string> | undefined {
   return new Set();
 }
 
-async function setStepCompleted(id: string, completed: boolean, current: Set<string>) {
+async function setStepCompleted(
+  clinicId: string,
+  id: string,
+  completed: boolean,
+  current: Set<string>
+) {
   const next = new Set(current);
   if (completed) next.add(id);
   else next.delete(id);
-  await db.meta.put({ key: COMPLETED_STEPS_META_KEY, value: JSON.stringify([...next]) });
+  await db.meta.put({ key: completedStepsKey(clinicId), value: JSON.stringify([...next]) });
 }
 
 /**
@@ -289,8 +303,8 @@ export function useFirstWeekChecklistSummary(clinicId: string):
   | undefined {
   const entitlements = useEntitlements(clinicId);
   const signals = useFirstWeekSignals(clinicId, entitlements);
-  const notDismissed = useFirstWeekChecklistVisible();
-  const completed = useCompletedStepIds();
+  const notDismissed = useFirstWeekChecklistVisible(clinicId);
+  const completed = useCompletedStepIds(clinicId);
 
   if (
     signals === undefined ||
@@ -335,8 +349,8 @@ export function useFirstWeekChecklistSummary(clinicId: string):
   };
 }
 
-export function FirstWeekSetupLink() {
-  const visible = useFirstWeekChecklistVisible();
+export function FirstWeekSetupLink({ clinicId }: { clinicId: string }) {
+  const visible = useFirstWeekChecklistVisible(clinicId);
   if (!visible) return null;
   return (
     <Link to="/settings" className="text-sm text-[var(--muted)] hover:text-[var(--teal)]">
@@ -349,7 +363,7 @@ export function FirstWeekChecklist({ compact }: { compact?: boolean }) {
   const clinic = useClinic();
   const entitlements = useEntitlements(clinic.id);
   const signals = useFirstWeekSignals(clinic.id, entitlements);
-  const completed = useCompletedStepIds();
+  const completed = useCompletedStepIds(clinic.id);
   const steps = buildSteps(
     entitlements.enforcementEnabled && entitlements.maxMembers <= 1,
     entitlements.can('invoicing')
@@ -381,7 +395,7 @@ export function FirstWeekChecklist({ compact }: { compact?: boolean }) {
         <button
           type="button"
           className={`${btnSecondary} shrink-0 px-3 py-1.5 text-xs`}
-          onClick={() => void dismissFirstWeekChecklist()}
+          onClick={() => void dismissFirstWeekChecklist(clinic.id)}
         >
           Hide
         </button>
@@ -421,7 +435,9 @@ export function FirstWeekChecklist({ compact }: { compact?: boolean }) {
                     aria-label={
                       done ? `Mark "${step.title}" not done` : `Mark "${step.title}" done`
                     }
-                    onClick={() => void setStepCompleted(step.id, !done, completed ?? new Set())}
+                    onClick={() =>
+                      void setStepCompleted(clinic.id, step.id, !done, completed ?? new Set())
+                    }
                     className={badgeClass}
                   >
                     {done ? '✓' : i + 1}

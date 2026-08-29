@@ -6,7 +6,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import { Link, Outlet, useRouterState } from '@tanstack/react-router';
+import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, ALL_SYNCED_TABLES } from '@/lib/db';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
@@ -19,6 +19,8 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import { CreateClinicForm } from '@/features/settings/CreateClinicForm';
 import { SyncBadge, SyncStatusBanners } from '@/components/SyncBadge';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
+import { AddClinicDialog } from '@/components/AddClinicDialog';
+import type { Clinic } from '@/domain/types';
 import { useFirstWeekChecklistSummary } from '@/features/settings/FirstWeekChecklist';
 
 /** Minimal stroke icons, one per main nav item — same visual language as
@@ -236,12 +238,17 @@ export function Shell() {
     }
   }, [session]);
 
-  // Default the active clinic to the first membership once data arrives
+  // Default the active clinic to the first membership once data arrives,
+  // and repair a stale pointer — `activeClinicId` can be set to an id that
+  // no longer matches any locally known clinic (a removed membership, or
+  // leftover device state from before a resync) — rather than leaving
+  // `clinic` stuck at null forever with no UI able to fix it.
+  const activeClinicKnown = activeClinicId != null && clinics?.some((c) => c.id === activeClinicId);
   useEffect(() => {
-    if (clinics?.length && activeClinicId === null) {
+    if (clinics?.length && !activeClinicKnown) {
       void db.meta.put({ key: 'activeClinicId', value: clinics[0].id });
     }
-  }, [clinics, activeClinicId]);
+  }, [clinics, activeClinicKnown]);
 
   // The recovery link's own auth flow doesn't need session/clinic gating —
   // it may be opened by someone whose local session has expired, and it
@@ -278,11 +285,17 @@ export function Shell() {
     // for it here is what actually confirms "zero clinics," not just
     // "haven't checked yet."
     const initialSyncSettled = sync.lastSyncAt != null;
+    // A non-empty `clinics` list whose `activeClinicId` doesn't (yet)
+    // match any of them is the repair effect above mid-flight, not a
+    // confirmed zero-clinic account — wait for it rather than flashing
+    // CreateClinicForm at someone who already has clinics.
+    const repairingStalePointer = Boolean(clinics?.length) && !activeClinicKnown;
     if (
       !syncKicked ||
       clinics === undefined ||
       activeClinicId === undefined ||
-      !initialSyncSettled
+      !initialSyncSettled ||
+      repairingStalePointer
     ) {
       return (
         <Centered>
@@ -362,6 +375,7 @@ export function Shell() {
                 role={role}
                 setDisplayName={setDisplayName}
                 clinicId={clinic.id}
+                clinics={clinics ?? []}
               />
             </div>
           </div>
@@ -535,7 +549,9 @@ function SetupNudgeLink({
  * `NameEditor`), a nudge toward the First Week setup checklist for an admin
  * who hasn't finished/dismissed it (`useFirstWeekChecklistSummary` —
  * SettingsPage's own card is the full version of this, this is a one-line
- * "N of M, continue" pointer to it), Change password, and Sign out.
+ * "N of M, continue" pointer to it), a clinic switcher (only rendered once
+ * this account actually has 2+ clinics — most accounts never see it), an
+ * admin-gated "Add another clinic" action, Change password, and Sign out.
  */
 function AccountMenu({
   displayName,
@@ -543,19 +559,31 @@ function AccountMenu({
   role,
   setDisplayName,
   clinicId,
+  clinics,
 }: {
   displayName: string | null;
   fallbackName: string;
   role: ClinicRole;
   setDisplayName: (name: string) => Promise<void>;
   clinicId: string;
+  clinics: Clinic[];
 }) {
   const [open, setOpen] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [addingClinic, setAddingClinic] = useState(false);
+  const navigate = useNavigate();
   const name = displayName ?? fallbackName;
   const roleLabel = role !== 'unknown' ? CLINIC_ROLE_LABELS[role] : '';
   const setup = useFirstWeekChecklistSummary(clinicId);
   const showSetupNudge = role === 'admin' && setup?.visible === true;
+  const sortedClinics = [...clinics].sort((a, b) => a.name.localeCompare(b.name));
+
+  function switchClinic(id: string) {
+    setOpen(false);
+    if (id === clinicId) return;
+    void db.meta.put({ key: 'activeClinicId', value: id });
+    void navigate({ to: '/workspace' });
+  }
 
   return (
     <div className="relative">
@@ -598,6 +626,43 @@ function AccountMenu({
               <SetupNudgeLink setup={setup} onNavigate={() => setOpen(false)} />
             )}
 
+            {sortedClinics.length > 1 && (
+              <div className="border-t border-[var(--border)] py-1.5">
+                <div className="px-2 pb-1 text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
+                  Clinics
+                </div>
+                {sortedClinics.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
+                    onClick={() => switchClinic(c.id)}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${c.id === clinicId ? 'bg-[var(--teal)]' : 'bg-transparent'}`}
+                      aria-hidden="true"
+                    />
+                    <span className="truncate">{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {role === 'admin' && (
+              <div className="border-t border-[var(--border)] pt-1.5">
+                <button
+                  type="button"
+                  className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
+                  onClick={() => {
+                    setOpen(false);
+                    setAddingClinic(true);
+                  }}
+                >
+                  Add another clinic
+                </button>
+              </div>
+            )}
+
             <div className="border-t border-[var(--border)] pt-1.5">
               <button
                 type="button"
@@ -622,6 +687,16 @@ function AccountMenu({
       )}
 
       {changingPassword && <ChangePasswordDialog onClose={() => setChangingPassword(false)} />}
+      {addingClinic && (
+        <AddClinicDialog
+          onClose={() => setAddingClinic(false)}
+          onCreated={() => {
+            setAddingClinic(false);
+            void syncEngine.schedule(0);
+            void navigate({ to: '/workspace' });
+          }}
+        />
+      )}
     </div>
   );
 }

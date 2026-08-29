@@ -195,6 +195,14 @@ export class ClinicDB extends Dexie {
     this.version(14).stores({
       expected_visits: null,
     });
+    // my_memberships (declared at version(5) above) was scaffolded for a
+    // clinic switcher but never wired to a reader or writer — the switcher
+    // built later reads db.clinics.toArray() directly instead, which
+    // already carries every clinic this account belongs to. Same "delete
+    // unused scaffolding" precedent as expected_visits above.
+    this.version(15).stores({
+      my_memberships: null,
+    });
   }
 }
 

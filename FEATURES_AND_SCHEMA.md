@@ -1396,12 +1396,17 @@ reminder with no completion state at all, and "Decide on clinical notes"
 is a decision where On and Off are both valid, so a boolean toggle's value
 can't distinguish "decided" from "never looked at it" — these two alone
 still use the original per-step completion flag (`db.meta` key
-`firstWeekChecklistCompletedSteps`, a JSON array of stable step ids, not
-indices, so reordering the list later can't corrupt in-progress state).
-The card collapses to a "Setup complete" summary once all 8 read done. The
-single dismiss flag (`firstWeekChecklistDismissed`) still exists unchanged
+`` `firstWeekChecklistCompletedSteps:${clinicId}` ``, a JSON array of
+stable step ids, not indices, so reordering the list later can't corrupt
+in-progress state). The card collapses to a "Setup complete" summary once
+all 8 read done. The single dismiss flag (`db.meta` key
+`` `firstWeekChecklistDismissed:${clinicId}` ``) still exists unchanged
 for the explicit "Hide" button, which fully removes the card regardless of
-completion.
+completion. Both keys are clinic-scoped (not bare constants) for the same
+reason `lastBackupMetaKey` is below — `db.meta` is one global table shared
+by every clinic on a multi-clinic device (see "Multi-clinic accounts"),
+so an unscoped key would let dismissing/completing the checklist for one
+clinic silently do the same for every other clinic on the device.
 
 **Account menu** (`AccountMenu` in `src/app/Shell.tsx`) — one dropdown,
 same markup at every breakpoint (the name/role label collapses to just the
@@ -1416,12 +1421,68 @@ with the full card so both read the exact same derived state, and also
 returns `nextStep`: the first not-done step's own title and link, so the
 nudge's "Continue →" opens exactly where setup was left off — a Settings
 tab or `+ New visit` — instead of always bouncing to Settings' own default
-tab), a "Change password" action (`ChangePasswordDialog`,
+tab), a clinic switcher and "Add another clinic" action (only relevant to
+multi-clinic accounts — see "Multi-clinic accounts" below), a "Change
+password" action (`ChangePasswordDialog`,
 `src/components/ChangePasswordDialog.tsx` — calls
 `supabase.auth.updateUser({ password })` directly, since the account menu
 only exists post-login, unlike `ResetPasswordPage.tsx`'s invite/recovery-
 link flow which first has to establish a session from the email link's
 token), and Sign out.
+
+**Multi-clinic accounts** — one admin can create and switch between
+multiple clinics under a single login; the schema/RLS/billing/sync layers
+were already built for this (every policy is keyed off a row's own
+`clinic_id`, `clinic_members`' PK is the composite `(clinic_id, user_id)`,
+`clinic_plans`' PK is `clinic_id` so each clinic gets its own independent
+plan/seat-count) — the gap was entirely client-side UI, closed as follows:
+
+- **Switching clinics**: `AccountMenu` lists every clinic in `db.clinics`
+  (alphabetically) whenever an account has 2+, and clicking one writes
+  `db.meta.put({ key: 'activeClinicId', value: clinic.id })` and navigates
+  to `/workspace` — landing anywhere on a per-record route (e.g.
+  `/patients/$patientId`) would point at an id belonging to the clinic
+  just left. `Shell.tsx`'s `clinic` resolution (`clinics.find(c => c.id
+  === activeClinicId)`) and the `useClinicRole`/`useEntitlements` hooks
+  that key their own `db.meta` caches off `clinicId` do the rest — nothing
+  else needed to change for the switch to ripple through the whole app.
+- **Adding a second clinic**: `CreateClinicForm` (`create_clinic_with_admin`
+  RPC — no DB-level limit on clinics-per-admin) takes a `variant: 'page' |
+  'dialog'` prop. `'page'` is the original zero-clinic-account screen
+  (`Shell.tsx` renders it once sync confirms the account truly has no
+  clinics). `'dialog'` is the same fields/logic, bare, wrapped by
+  `AddClinicDialog` and opened from `AccountMenu`'s "Add another clinic"
+  item — gated to `role === 'admin'` of the currently active clinic, same
+  as the Settings-tab gate. Creating a clinic from either entry point
+  makes it the new active clinic immediately.
+- **Stale `activeClinicId` self-repair**: `Shell.tsx`'s auto-pick effect
+  now also fires when `activeClinicId` no longer matches any locally
+  known clinic (not just when it was never set) — a removed membership or
+  leftover device state resolves back to `clinics[0]` instead of leaving
+  the app stuck showing "Preparing…" or, worse, misreading a real
+  multi-clinic account as having zero clinics and offering to create a
+  duplicate.
+- **Sync cursor reconciliation** (`SyncEngine.reconcileClinicMembership`,
+  `src/sync/engine.ts`) — every table's pull cursor (`db.meta` key
+  `` `cursor:${table}` ``) only moves forward against `updated_at`, so a
+  clinic that becomes newly visible on this device (a fresh invite, or
+  this same account creating/joining a second, pre-existing clinic) can
+  have rows — including its own `clinics` row — older than a cursor this
+  device already advanced while syncing its first clinic; those rows
+  would never come back from an incremental `.gt(cursor)` pull. Before
+  every `push()`/`pull()` cycle, a cheap uncursored
+  `clinic_members` query for the signed-in user's own membership rows is
+  compared against a `db.meta`-cached `knownClinicIds` set; if it grew,
+  every `cursor:*` entry is deleted, forcing one full EPOCH-based re-pull
+  (safe, since RLS still scopes exactly what returns) — a general "always
+  re-verify membership before trusting a cursor" pattern worth applying
+  anywhere else a cursor's validity depends on which rows a user can even
+  see. **Known limitation**: a membership being *removed* is not handled
+  symmetrically — pull only adds/updates, so a clinic's already-synced
+  rows linger in local Dexie after the membership granting access to them
+  is revoked, until that table is cleared for some other reason (e.g.
+  sign-out). Not addressed here; would need explicit tombstone/reconcile
+  logic if it becomes a real problem.
 
 **Pilot kill switch (Phase 4)** — pilot clinics need to run with zero tier
 limits until payments are integrated, without hand-editing every clinic's

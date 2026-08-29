@@ -8,6 +8,12 @@ import { toFriendlyMessage } from '@/lib/errors';
 
 interface CreateClinicFormProps {
   onSuccess: () => void;
+  /** `'page'` (default) is the original zero-clinic-account screen — logo,
+   *  heading, and a Sign out fallback since there's nowhere else to go
+   *  yet. `'dialog'` is the same fields/submit/RPC logic, bare, meant to
+   *  be slotted inside a modal shell (`AddClinicDialog`) that supplies its
+   *  own heading and a Cancel affordance instead. */
+  variant?: 'page' | 'dialog';
 }
 
 /**
@@ -23,7 +29,7 @@ interface CreateClinicFormProps {
  * INSERT trigger (add_creator_as_admin) adds the creator as admin
  * atomically in the same transaction, so there's nothing left to race.
  */
-export function CreateClinicForm({ onSuccess }: CreateClinicFormProps) {
+export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFormProps) {
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -118,58 +124,57 @@ export function CreateClinicForm({ onSuccess }: CreateClinicFormProps) {
     }
   }
 
-  return (
-    <div className="mx-auto mt-24 max-w-sm">
-      <div className="mb-6 flex flex-col items-center gap-2">
-        <img src="/apple-touch-icon.png" alt="" className="h-12 w-12 rounded-[12px]" />
-        <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Create your clinic</h1>
-        <p className="text-sm text-[var(--muted)]">Get started with Thera.Net</p>
-      </div>
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6"
-      >
-        <Field label="Clinic name *">
-          <input
-            type="text"
-            required
-            className={inputCls}
-            placeholder="e.g., Beyond Mechanics"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          />
-        </Field>
-        <Field label="Email">
-          <input
-            type="email"
-            className={inputCls}
-            placeholder="clinic@example.com"
-            value={form.email}
-            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-          />
-        </Field>
-        <Field label="Phone">
-          <input
-            type="tel"
-            className={inputCls}
-            placeholder="Enter phone number"
-            value={form.phone}
-            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-          />
-        </Field>
-        <Field label="Address">
-          <input
-            type="text"
-            className={inputCls}
-            placeholder="Clinic address"
-            value={form.address}
-            onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-          />
-        </Field>
-        <ErrorNote message={error} />
-        <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
-          {busy ? 'Creating clinic…' : 'Create clinic'}
-        </button>
+  const formEl = (
+    <form
+      onSubmit={handleSubmit}
+      className={
+        variant === 'page'
+          ? 'space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6'
+          : 'space-y-4'
+      }
+    >
+      <Field label="Clinic name *">
+        <input
+          type="text"
+          required
+          className={inputCls}
+          placeholder="e.g., Beyond Mechanics"
+          value={form.name}
+          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+        />
+      </Field>
+      <Field label="Email">
+        <input
+          type="email"
+          className={inputCls}
+          placeholder="clinic@example.com"
+          value={form.email}
+          onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+        />
+      </Field>
+      <Field label="Phone">
+        <input
+          type="tel"
+          className={inputCls}
+          placeholder="Enter phone number"
+          value={form.phone}
+          onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+        />
+      </Field>
+      <Field label="Address">
+        <input
+          type="text"
+          className={inputCls}
+          placeholder="Clinic address"
+          value={form.address}
+          onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+        />
+      </Field>
+      <ErrorNote message={error} />
+      <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
+        {busy ? 'Creating clinic…' : 'Create clinic'}
+      </button>
+      {variant === 'page' && (
         <button
           type="button"
           className={`${btnSecondary} w-full`}
@@ -177,7 +182,20 @@ export function CreateClinicForm({ onSuccess }: CreateClinicFormProps) {
         >
           Sign out
         </button>
-      </form>
+      )}
+    </form>
+  );
+
+  if (variant === 'dialog') return formEl;
+
+  return (
+    <div className="mx-auto mt-24 max-w-sm">
+      <div className="mb-6 flex flex-col items-center gap-2">
+        <img src="/apple-touch-icon.png" alt="" className="h-12 w-12 rounded-[12px]" />
+        <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Create your clinic</h1>
+        <p className="text-sm text-[var(--muted)]">Get started with Thera.Net</p>
+      </div>
+      {formEl}
     </div>
   );
 }
