@@ -101,7 +101,6 @@ export function CreateClinicForm({ onSuccess }: CreateClinicFormProps) {
         tdsBasis: row.tds_basis,
         fyStartMonth: row.fy_start_month,
         enableTherapistSplit: row.enable_therapist_split,
-        enableExpectedToday: row.enable_expected_today,
         updatedAt: row.updated_at,
       };
 
@@ -127,7 +126,10 @@ export function CreateClinicForm({ onSuccess }: CreateClinicFormProps) {
         <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Create your clinic</h1>
         <p className="text-sm text-[var(--muted)]">Get started with Thera.Net</p>
       </div>
-      <form onSubmit={handleSubmit} className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6"
+      >
         <Field label="Clinic name *">
           <input
             type="text"

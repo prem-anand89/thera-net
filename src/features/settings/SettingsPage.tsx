@@ -42,7 +42,11 @@ import {
   StatTile,
 } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
-import { FirstWeekChecklist, useFirstWeekChecklistVisible } from './FirstWeekChecklist';
+import {
+  FirstWeekChecklist,
+  useFirstWeekChecklistVisible,
+  LAST_BACKUP_META_KEY,
+} from './FirstWeekChecklist';
 import { isValidUpiVpa } from '@/domain/upiPay';
 
 type SectionKey =
@@ -772,7 +776,6 @@ type ProfileFields = Pick<
   | 'walkInMrnoPrefix'
   | 'logoPath'
   | 'clinicType'
-  | 'enableExpectedToday'
   | 'clinicalDocsEnabled'
   | 'showTherapistComparison'
 >;
@@ -788,7 +791,6 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         walkInMrnoPrefix: c.walkInMrnoPrefix,
         logoPath: c.logoPath,
         clinicType: c.clinicType,
-        enableExpectedToday: c.enableExpectedToday ?? false,
         clinicalDocsEnabled: c.clinicalDocsEnabled ?? false,
         showTherapistComparison: c.showTherapistComparison ?? false,
       }),
@@ -1488,6 +1490,7 @@ function DataBackup() {
     setBusy(true);
     try {
       await backupService.downloadBackup(clinic.id, clinic.name);
+      await db.meta.put({ key: LAST_BACKUP_META_KEY, value: new Date().toISOString() });
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {

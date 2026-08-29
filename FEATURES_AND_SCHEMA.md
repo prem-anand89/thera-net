@@ -572,7 +572,6 @@ own_share_label, partner_share_label  text (NULLABLE) — default "BM"/"HV"
 billing_enabled              boolean NOT NULL
 invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 clinical_docs_enabled       boolean NOT NULL
-enable_expected_today       boolean NOT NULL
 show_therapist_comparison   boolean NOT NULL
 walk_in_mrno_prefix         text (NULLABLE, default 'W')
 visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
@@ -908,22 +907,6 @@ updated_at             timestamptz (NULLABLE)
 ```
 Per-month partner-hospital (HV) settlement record, for the Monthly Report's
 variance tracking.
-
-#### `expected_visits`
-```sql
-id            uuid PRIMARY KEY
-clinic_id     uuid NOT NULL (FOREIGN KEY → clinics.id)
-patient_id    uuid (FOREIGN KEY → patients.id, NULLABLE) — NULL for a
-              not-yet-a-patient expected arrival
-patient_name  text (NULLABLE)
-time_note     text NOT NULL — free text, e.g. "4pm" or "after lunch"
-visit_date    date NOT NULL
-status        text NOT NULL
-created_by, updated_by  uuid (NULLABLE)
-updated_at    timestamptz NOT NULL
-```
-Backs Workspace's "Expected today" list — manually added or matched patients
-expected in that day, independent of any actual visit record.
 
 ---
 
@@ -1364,18 +1347,37 @@ Team's Invite form locks (with the same informational-only copy) once
 `clinic_members.length >= maxMembers` — a client-side hint only, since
 `invite-therapist`'s own seat-cap check (Phase 2) is the real boundary.
 
-`FirstWeekChecklist.tsx` was rewritten into an actual 8-step setup
-sequence (clinic profile → services → invite team → link therapists → log
-a visit → wait for Synced → clinical notes decision → backup), replacing
-the old flat list of gotcha tips with no ordering logic. Two steps get
-plan-aware copy (`invite-team`, `wait-synced`). Completion is now tracked
-per-step (`db.meta` key `firstWeekChecklistCompletedSteps`, a JSON array of
-stable step ids — not indices, so reordering the list later can't corrupt
-someone's in-progress state) rather than the old single dismiss flag; the
-card collapses to a "Setup complete" summary once all 8 are checked. The
-original single dismiss flag (`firstWeekChecklistDismissed`) still exists
-unchanged for the explicit "Hide" button, which fully removes the card
-regardless of completion.
+`FirstWeekChecklist.tsx` is an 8-step setup sequence (clinic profile →
+services → invite team → link therapists → log a visit → wait for Synced →
+clinical notes decision → backup), replacing what was once a flat list of
+gotcha tips with no ordering logic. Two steps get plan-aware copy
+(`invite-team`, `wait-synced`).
+
+**Auto-detected steps, not self-reported.** Six of the eight steps derive
+their own done state from real data instead of asking the admin to
+remember to tick a box — `useFirstWeekSignals(clinicId)` reads
+`clinic.address` (clinic profile), `service_catalog.length` (services),
+`useEntitlements().seatsUsed > 1` (team invited — `clinic_members` gets a
+row the moment an invite is issued, not only once accepted), therapists
+with no unlinked roster row (therapist linking), any visit existing
+(logged a visit), and a new `db.meta` key `lastBackupExportedAt` —
+written by `DataBackup`'s export handler on a successful download — for
+the backup step. Each auto step's "Continue" link goes straight to that
+step's own screen (a specific Settings tab, or `+ New visit`), typed as a
+small closed union (`StepLink`) rather than a generic `{ to, search }`
+shape, since TanStack Router types each route's `search` against that
+route's own schema. Only two steps stay genuinely self-reported, because
+neither is a fact any query can confirm: "Wait for Synced" is a behavioral
+reminder with no completion state at all, and "Decide on clinical notes"
+is a decision where On and Off are both valid, so a boolean toggle's value
+can't distinguish "decided" from "never looked at it" — these two alone
+still use the original per-step completion flag (`db.meta` key
+`firstWeekChecklistCompletedSteps`, a JSON array of stable step ids, not
+indices, so reordering the list later can't corrupt in-progress state).
+The card collapses to a "Setup complete" summary once all 8 read done. The
+single dismiss flag (`firstWeekChecklistDismissed`) still exists unchanged
+for the explicit "Hide" button, which fully removes the card regardless of
+completion.
 
 **Account menu** (`AccountMenu` in `src/app/Shell.tsx`) — one dropdown,
 same markup at every breakpoint (the name/role label collapses to just the
@@ -1383,14 +1385,14 @@ initials-avatar trigger below `sm:`), replacing what used to be two
 separate, independently-built account areas: a flat always-visible
 name+Sign-out pair on desktop, and an ad-hoc hamburger-icon dropdown on
 mobile with its own copy of the same `NameEditor`. Panel contents: the
-existing click-to-edit name/role (`NameEditor`, unchanged), a one-line
-First Week nudge for an admin who hasn't finished or dismissed the
-checklist above (`useFirstWeekChecklistSummary(clinicId)` — a second,
-independent set of live queries against the same `therapists`/`catalog`
-data `SettingsPage`'s own `showFirstWeek` derives from, not a shared hook;
-`SettingsPage` already reads those two lists for its own default-landing-
-tab logic, and coupling that to this one-line summary wasn't worth it), a
-"Change password" action (`ChangePasswordDialog`,
+existing click-to-edit name/role (`NameEditor`, unchanged), a First Week
+nudge for an admin who hasn't finished or dismissed the checklist above
+(`useFirstWeekChecklistSummary(clinicId)` — shares `useFirstWeekSignals`
+with the full card so both read the exact same derived state, and also
+returns `nextStep`: the first not-done step's own title and link, so the
+nudge's "Continue →" opens exactly where setup was left off — a Settings
+tab or `+ New visit` — instead of always bouncing to Settings' own default
+tab), a "Change password" action (`ChangePasswordDialog`,
 `src/components/ChangePasswordDialog.tsx` — calls
 `supabase.auth.updateUser({ password })` directly, since the account menu
 only exists post-login, unlike `ResetPasswordPage.tsx`'s invite/recovery-

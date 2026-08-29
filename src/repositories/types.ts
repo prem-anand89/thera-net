@@ -13,7 +13,6 @@ import type {
   Settlement,
   ConsultationNote,
   PatientModuleEnrollment,
-  ExpectedVisit,
   PatientAdvance,
   NoteMode,
   UUID,
@@ -183,12 +182,6 @@ export interface PatientModuleEnrollmentRepo {
   put(enrollment: PatientModuleEnrollment): Promise<void>;
 }
 
-export interface ExpectedVisitRepo {
-  /** Every expected-visit entry for one date, oldest-created first. */
-  listForDate(clinicId: UUID, visitDate: string): Promise<ExpectedVisit[]>;
-  put(entry: ExpectedVisit): Promise<void>;
-}
-
 export interface PatientAdvanceRepo {
   get(id: UUID): Promise<PatientAdvance | undefined>;
   /** A patient's advances, most-recently-received first. */
@@ -211,6 +204,5 @@ export interface Repos {
   settlements: SettlementRepo;
   consultationNotes: ConsultationNoteRepo;
   patientModuleEnrollments: PatientModuleEnrollmentRepo;
-  expectedVisits: ExpectedVisitRepo;
   patientAdvances: PatientAdvanceRepo;
 }

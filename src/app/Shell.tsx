@@ -467,6 +467,67 @@ function initialsFor(name: string): string {
 }
 
 /**
+ * The setup-nudge card inside the account menu — a real "continue where you
+ * left off" link, not a static `/settings` bounce: `setup.nextStep.link`
+ * names the exact first not-done step's own destination (a Settings tab, or
+ * `+ New visit` for "log your first visit"), computed by
+ * `useFirstWeekChecklistSummary`. Two full `<Link>` branches rather than one
+ * with a dynamic `to` — TanStack Router types each route's `search` against
+ * that route's own schema, so a `to` that varies at runtime can't carry a
+ * correctly-typed `search` alongside it.
+ */
+function SetupNudgeLink({
+  setup,
+  onNavigate,
+}: {
+  setup: NonNullable<ReturnType<typeof useFirstWeekChecklistSummary>>;
+  onNavigate: () => void;
+}) {
+  const className =
+    'mb-2 block rounded-md border border-[var(--teal-light)] bg-[var(--teal-light)] p-2 text-xs text-[var(--ink)] hover:opacity-90';
+  const content = (
+    <>
+      <div className="flex items-center justify-between font-medium">
+        <span>
+          Setup {setup.completedCount} of {setup.totalCount}
+        </span>
+        <span className="text-[var(--teal)]">Continue →</span>
+      </div>
+      {setup.nextStep && (
+        <p className="mt-0.5 truncate text-[var(--muted)]">{setup.nextStep.title}</p>
+      )}
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface)]">
+        <div
+          className="h-full rounded-full bg-[var(--teal)]"
+          style={{
+            width: `${Math.round((setup.completedCount / Math.max(1, setup.totalCount)) * 100)}%`,
+          }}
+        />
+      </div>
+    </>
+  );
+
+  if (setup.nextStep?.link?.kind === 'new-visit') {
+    return (
+      <Link to="/visits/new" onClick={onNavigate} className={className}>
+        {content}
+      </Link>
+    );
+  }
+  const tab = setup.nextStep?.link?.kind === 'settings' ? setup.nextStep.link.tab : undefined;
+  return (
+    <Link
+      to="/settings"
+      search={tab ? { tab } : undefined}
+      onClick={onNavigate}
+      className={className}
+    >
+      {content}
+    </Link>
+  );
+}
+
+/**
  * The one account-corner menu, same markup at every breakpoint — the name/
  * role label collapses to just the avatar circle below `sm:`, same as the
  * old mobile-only hamburger did, but without maintaining a second, parallel
@@ -534,26 +595,7 @@ function AccountMenu({
             />
 
             {showSetupNudge && setup && (
-              <Link
-                to="/settings"
-                onClick={() => setOpen(false)}
-                className="mb-2 block rounded-md border border-[var(--teal-light)] bg-[var(--teal-light)] p-2 text-xs text-[var(--ink)] hover:opacity-90"
-              >
-                <div className="flex items-center justify-between font-medium">
-                  <span>
-                    Setup {setup.completedCount} of {setup.totalCount}
-                  </span>
-                  <span className="text-[var(--teal)]">Continue →</span>
-                </div>
-                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface)]">
-                  <div
-                    className="h-full rounded-full bg-[var(--teal)]"
-                    style={{
-                      width: `${Math.round((setup.completedCount / Math.max(1, setup.totalCount)) * 100)}%`,
-                    }}
-                  />
-                </div>
-              </Link>
+              <SetupNudgeLink setup={setup} onNavigate={() => setOpen(false)} />
             )}
 
             <div className="border-t border-[var(--border)] pt-1.5">
