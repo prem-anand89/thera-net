@@ -3,15 +3,22 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { useEntitlements } from '@/app/useEntitlements';
+import { useEntitlements, type Entitlements } from '@/app/useEntitlements';
 import { btnSecondary } from '@/components/ui';
 
 export const FIRST_WEEK_CHECKLIST_META_KEY = 'firstWeekChecklistDismissed';
 const COMPLETED_STEPS_META_KEY = 'firstWeekChecklistCompletedSteps';
 /** Written by `SettingsPage.tsx`'s `DataBackup` on a successful export —
  *  the one signal the "Take a backup" step needs to auto-detect itself,
- *  the same way clinic-profile/services/team/log-a-visit already can. */
-export const LAST_BACKUP_META_KEY = 'lastBackupExportedAt';
+ *  the same way clinic-profile/services/team/log-a-visit already can.
+ *  Scoped per clinic, not a bare constant — `db.meta` is one global table
+ *  shared by every clinic on this device (Shell.tsx switches the active
+ *  clinic against the same Dexie instance), so an unscoped key would have
+ *  an admin's backup of one clinic silently mark every other clinic's
+ *  "Take a backup" step done too. */
+export function lastBackupMetaKey(clinicId: string): string {
+  return `lastBackupExportedAt:${clinicId}`;
+}
 
 /** Facts about this clinic a live query can actually confirm — everything
  *  a step needs to detect its own completion instead of asking an admin to
@@ -24,6 +31,16 @@ export interface FirstWeekSignals {
   therapistsLinked: boolean;
   visitLogged: boolean;
   backedUp: boolean;
+  /** Raw counts backing SettingsPage's own `showFirstWeek` visibility gate
+   *  — kept separate from `therapistsLinked`/`servicesPriced` above
+   *  because the visibility gate and a step's own "done" state are
+   *  different questions. A clinic with zero therapists has nothing
+   *  "linked" yet (the step should read not-done), but SettingsPage's
+   *  gate only cares about an actually-unlinked therapist — a clinic that
+   *  primes its catalog before adding any therapist would otherwise be
+   *  "not done" here but "setup complete" on Settings, at the same time. */
+  unlinkedTherapistCount: number;
+  catalogEmpty: boolean;
 }
 
 /** The only two places a step's "Continue" link can go — kept as a small
@@ -190,13 +207,20 @@ async function setStepCompleted(id: string, completed: boolean, current: Set<str
  * card and the compact account-menu summary read exactly the same signals.
  * Parameterized by `clinicId` rather than reading `useClinic()` — this gets
  * called from the account menu, which can't assume the calling component
- * sits under `ClinicContext`.
+ * sits under `ClinicContext`. Takes `entitlements` as a parameter rather
+ * than calling `useEntitlements(clinicId)` itself — every caller already
+ * needs its own `entitlements` for `buildSteps`' plan-aware copy, and a
+ * second independent call here would double the `clinic_plans` fetch and
+ * the `visitsThisMonth` live query on every render (this hook backs the
+ * account menu, which mounts on every page).
  */
-function useFirstWeekSignals(clinicId: string): FirstWeekSignals | undefined {
+function useFirstWeekSignals(
+  clinicId: string,
+  entitlements: Entitlements
+): FirstWeekSignals | undefined {
   const clinic = useLiveQuery(() => repos.clinics.get(clinicId), [clinicId]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinicId, true), [clinicId]);
   const catalog = useLiveQuery(() => repos.catalog.list(clinicId), [clinicId]);
-  const entitlements = useEntitlements(clinicId);
   const hasVisits = useLiveQuery(
     () => repos.visits.list({ clinicId }).then((v) => v.length > 0),
     [clinicId]
@@ -204,9 +228,10 @@ function useFirstWeekSignals(clinicId: string): FirstWeekSignals | undefined {
   // Same "no row" vs "still loading" disambiguation as
   // useFirstWeekChecklistVisible above.
   const lastBackupRow = useLiveQuery(async () => {
-    const existing = await db.meta.get(LAST_BACKUP_META_KEY);
-    return existing ?? { key: LAST_BACKUP_META_KEY, value: '' };
-  }, []);
+    const key = lastBackupMetaKey(clinicId);
+    const existing = await db.meta.get(key);
+    return existing ?? { key, value: '' };
+  }, [clinicId]);
 
   if (
     clinic === undefined ||
@@ -230,6 +255,8 @@ function useFirstWeekSignals(clinicId: string): FirstWeekSignals | undefined {
     // yet logged in either way.
     teamInvited: (entitlements.seatsUsed ?? 0) > 1,
     therapistsLinked: therapists.length > 0 && unlinkedCount === 0,
+    unlinkedTherapistCount: unlinkedCount,
+    catalogEmpty: catalog.length === 0,
     visitLogged: hasVisits,
     backedUp: lastBackupRow.value !== '',
   };
@@ -260,8 +287,8 @@ export function useFirstWeekChecklistSummary(clinicId: string):
       nextStep: { title: string; link?: StepLink; linkLabel?: string } | null;
     }
   | undefined {
-  const signals = useFirstWeekSignals(clinicId);
   const entitlements = useEntitlements(clinicId);
+  const signals = useFirstWeekSignals(clinicId, entitlements);
   const notDismissed = useFirstWeekChecklistVisible();
   const completed = useCompletedStepIds();
 
@@ -290,12 +317,15 @@ export function useFirstWeekChecklistSummary(clinicId: string):
           linkLabel: steps[nextIndex].linkLabel,
         };
 
-  // Same gate SettingsPage's own showFirstWeek uses (unlinked therapist or
-  // an empty catalog) — kept here rather than re-derived from `signals`,
-  // since "visible at all" and "individually done" are different questions
-  // (a clinic can clear both real-data gates while still having, say, the
-  // backup step outstanding, and the card should stay up for that).
-  const gatesIncomplete = !signals.therapistsLinked || !signals.servicesPriced;
+  // The literal same formula as SettingsPage's own showFirstWeek gate
+  // (unlinked-therapist count > 0, or an empty catalog) — not derived from
+  // therapistsLinked/servicesPriced above, which answer a different
+  // question ("is this step done") than this one ("should the card show
+  // at all"). A clinic with zero therapists has nothing linked (the step
+  // reads not-done) but SettingsPage's gate doesn't care about that case
+  // at all, only an *unlinked* one — deriving this from therapistsLinked
+  // would make the two surfaces disagree for exactly that clinic.
+  const gatesIncomplete = signals.unlinkedTherapistCount > 0 || signals.catalogEmpty;
 
   return {
     visible: notDismissed && gatesIncomplete,
@@ -318,7 +348,7 @@ export function FirstWeekSetupLink() {
 export function FirstWeekChecklist({ compact }: { compact?: boolean }) {
   const clinic = useClinic();
   const entitlements = useEntitlements(clinic.id);
-  const signals = useFirstWeekSignals(clinic.id);
+  const signals = useFirstWeekSignals(clinic.id, entitlements);
   const completed = useCompletedStepIds();
   const steps = buildSteps(
     entitlements.enforcementEnabled && entitlements.maxMembers <= 1,

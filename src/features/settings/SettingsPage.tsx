@@ -45,7 +45,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 import {
   FirstWeekChecklist,
   useFirstWeekChecklistVisible,
-  LAST_BACKUP_META_KEY,
+  lastBackupMetaKey,
 } from './FirstWeekChecklist';
 import { isValidUpiVpa } from '@/domain/upiPay';
 
@@ -1502,7 +1502,7 @@ function DataBackup() {
     setBusy(true);
     try {
       await backupService.downloadBackup(clinic.id, clinic.name);
-      await db.meta.put({ key: LAST_BACKUP_META_KEY, value: new Date().toISOString() });
+      await db.meta.put({ key: lastBackupMetaKey(clinic.id), value: new Date().toISOString() });
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
