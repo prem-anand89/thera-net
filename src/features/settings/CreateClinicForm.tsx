@@ -81,7 +81,6 @@ export function CreateClinicForm({ onSuccess }: CreateClinicFormProps) {
         tds_basis: 'gross_bill' | 'bm_share';
         fy_start_month: number;
         enable_therapist_split: boolean;
-        enable_expected_today: boolean;
         updated_at: string;
       };
 
