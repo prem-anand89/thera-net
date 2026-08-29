@@ -1377,6 +1377,26 @@ original single dismiss flag (`firstWeekChecklistDismissed`) still exists
 unchanged for the explicit "Hide" button, which fully removes the card
 regardless of completion.
 
+**Account menu** (`AccountMenu` in `src/app/Shell.tsx`) — one dropdown,
+same markup at every breakpoint (the name/role label collapses to just the
+initials-avatar trigger below `sm:`), replacing what used to be two
+separate, independently-built account areas: a flat always-visible
+name+Sign-out pair on desktop, and an ad-hoc hamburger-icon dropdown on
+mobile with its own copy of the same `NameEditor`. Panel contents: the
+existing click-to-edit name/role (`NameEditor`, unchanged), a one-line
+First Week nudge for an admin who hasn't finished or dismissed the
+checklist above (`useFirstWeekChecklistSummary(clinicId)` — a second,
+independent set of live queries against the same `therapists`/`catalog`
+data `SettingsPage`'s own `showFirstWeek` derives from, not a shared hook;
+`SettingsPage` already reads those two lists for its own default-landing-
+tab logic, and coupling that to this one-line summary wasn't worth it), a
+"Change password" action (`ChangePasswordDialog`,
+`src/components/ChangePasswordDialog.tsx` — calls
+`supabase.auth.updateUser({ password })` directly, since the account menu
+only exists post-login, unlike `ResetPasswordPage.tsx`'s invite/recovery-
+link flow which first has to establish a session from the email link's
+token), and Sign out.
+
 **Pilot kill switch (Phase 4)** — pilot clinics need to run with zero tier
 limits until payments are integrated, without hand-editing every clinic's
 `clinic_plans` row (that's the wrong tool: per-clinic override, not a

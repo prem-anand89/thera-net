@@ -18,6 +18,8 @@ import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { CreateClinicForm } from '@/features/settings/CreateClinicForm';
 import { SyncBadge, SyncStatusBanners } from '@/components/SyncBadge';
+import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
+import { useFirstWeekChecklistSummary } from '@/features/settings/FirstWeekChecklist';
 
 /** Minimal stroke icons, one per main nav item — same visual language as
  *  the existing hamburger/close glyphs (currentColor, ~1.6px stroke,
@@ -180,7 +182,6 @@ export function Shell() {
   const { loading, session } = useSession();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [syncKicked, setSyncKicked] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const sync = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
 
   const clinics = useLiveQuery(() => db.clinics.toArray(), []);
@@ -355,66 +356,13 @@ export function Shell() {
             </nav>
             <div className="ml-auto flex items-center gap-4">
               <SyncBadge />
-              <div className="hidden flex-col items-end gap-1 sm:flex">
-                <NameEditor
-                  variant="desktop"
-                  displayName={displayName}
-                  fallbackName={fallbackName}
-                  role={role}
-                  setDisplayName={setDisplayName}
-                />
-                <button
-                  type="button"
-                  className="text-xs text-[var(--muted)] hover:text-[var(--ink)]"
-                  onClick={() => getSupabase()?.auth.signOut()}
-                >
-                  Sign out
-                </button>
-              </div>
-              {/* Mobile account menu — navigation itself lives in the
-                  bottom tab bar now, so this toggle is scoped to just the
-                  account (who's signed in, their name/role, sign out), not
-                  the full nav. */}
-              <div className="relative sm:hidden">
-                <button
-                  type="button"
-                  className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--paper)]"
-                  aria-label="Account"
-                  aria-expanded={menuOpen}
-                  onClick={() => setMenuOpen((o) => !o)}
-                >
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                    <circle cx="10" cy="7" r="2.6" stroke="currentColor" strokeWidth="1.6" />
-                    <path
-                      d="M3.5 16c.7-3.4 3-5.2 6.5-5.2s5.8 1.8 6.5 5.2"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
-                {menuOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                    <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 shadow-lg">
-                      <NameEditor
-                        variant="mobile"
-                        displayName={displayName}
-                        fallbackName={fallbackName}
-                        role={role}
-                        setDisplayName={setDisplayName}
-                      />
-                      <button
-                        type="button"
-                        className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--muted)] hover:bg-[var(--paper)]"
-                        onClick={() => getSupabase()?.auth.signOut()}
-                      >
-                        Sign out
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              <AccountMenu
+                displayName={displayName}
+                fallbackName={fallbackName}
+                role={role}
+                setDisplayName={setDisplayName}
+                clinicId={clinic.id}
+              />
             </div>
           </div>
         </header>
@@ -503,14 +451,145 @@ function Centered({ children }: { children: React.ReactNode }) {
   return <div className="flex min-h-screen items-center justify-center">{children}</div>;
 }
 
+/** First letters of up to two name words, skipping a leading honorific —
+ *  "Dr. Prem Anand" -> "PA", "Ritu" -> "R". Purely decorative (the avatar
+ *  circle in the account menu trigger), so a plain '?' fallback for an
+ *  empty/unparseable name is fine — nothing downstream depends on it. */
+function initialsFor(name: string): string {
+  const words = name
+    .replace(/^(dr|mr|mrs|ms|prof)\.?\s+/i, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0][0].toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+/**
+ * The one account-corner menu, same markup at every breakpoint — the name/
+ * role label collapses to just the avatar circle below `sm:`, same as the
+ * old mobile-only hamburger did, but without maintaining a second, parallel
+ * dropdown implementation. Houses: the click-to-edit name/role (via
+ * `NameEditor`), a nudge toward the First Week setup checklist for an admin
+ * who hasn't finished/dismissed it (`useFirstWeekChecklistSummary` —
+ * SettingsPage's own card is the full version of this, this is a one-line
+ * "N of M, continue" pointer to it), Change password, and Sign out.
+ */
+function AccountMenu({
+  displayName,
+  fallbackName,
+  role,
+  setDisplayName,
+  clinicId,
+}: {
+  displayName: string | null;
+  fallbackName: string;
+  role: ClinicRole;
+  setDisplayName: (name: string) => Promise<void>;
+  clinicId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const name = displayName ?? fallbackName;
+  const roleLabel = role !== 'unknown' ? CLINIC_ROLE_LABELS[role] : '';
+  const setup = useFirstWeekChecklistSummary(clinicId);
+  const showSetupNudge = role === 'admin' && setup?.visible === true;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        className="flex items-center gap-2 rounded-full p-0.5 hover:bg-[var(--paper)] sm:rounded-md sm:px-1.5 sm:py-1"
+        aria-label="Account"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span
+          aria-hidden="true"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--teal)] text-xs font-semibold text-white"
+        >
+          {initialsFor(name)}
+        </span>
+        <span className="hidden flex-col items-start sm:flex">
+          <span className="text-xs font-medium text-[var(--ink)]">{name}</span>
+          {roleLabel && (
+            <span className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
+              {roleLabel}
+            </span>
+          )}
+        </span>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 shadow-lg">
+            <NameEditor
+              variant="mobile"
+              displayName={displayName}
+              fallbackName={fallbackName}
+              role={role}
+              setDisplayName={setDisplayName}
+            />
+
+            {showSetupNudge && setup && (
+              <Link
+                to="/settings"
+                onClick={() => setOpen(false)}
+                className="mb-2 block rounded-md border border-[var(--teal-light)] bg-[var(--teal-light)] p-2 text-xs text-[var(--ink)] hover:opacity-90"
+              >
+                <div className="flex items-center justify-between font-medium">
+                  <span>
+                    Setup {setup.completedCount} of {setup.totalCount}
+                  </span>
+                  <span className="text-[var(--teal)]">Continue →</span>
+                </div>
+                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface)]">
+                  <div
+                    className="h-full rounded-full bg-[var(--teal)]"
+                    style={{
+                      width: `${Math.round((setup.completedCount / Math.max(1, setup.totalCount)) * 100)}%`,
+                    }}
+                  />
+                </div>
+              </Link>
+            )}
+
+            <div className="border-t border-[var(--border)] pt-1.5">
+              <button
+                type="button"
+                className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
+                onClick={() => {
+                  setOpen(false);
+                  setChangingPassword(true);
+                }}
+              >
+                Change password
+              </button>
+              <button
+                type="button"
+                className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--rust)] hover:bg-[var(--rust-light)]"
+                onClick={() => getSupabase()?.auth.signOut()}
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {changingPassword && <ChangePasswordDialog onClose={() => setChangingPassword(false)} />}
+    </div>
+  );
+}
+
 /**
  * Shows the signed-in member's own display name + role instead of raw
  * email, with a click-to-edit affordance so anyone (not just an admin) can
  * set or change their own name — an invited member picks their own on
  * first login rather than being stuck with whatever an admin typed at
- * invite time. Rendered twice (desktop header, mobile dropdown); each
- * instance owns its own editing state independently, which is fine since
- * only one is ever visible at a time (the other is `hidden`/`sm:hidden`).
+ * invite time. Rendered inside `AccountMenu`'s dropdown panel.
  */
 function NameEditor({
   variant,

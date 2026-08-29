@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
+import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useEntitlements } from '@/app/useEntitlements';
 import { btnSecondary } from '@/components/ui';
@@ -96,7 +97,8 @@ function useCompletedStepIds(): Set<string> | undefined {
   if (!row) return new Set();
   try {
     const parsed: unknown = JSON.parse(row.value);
-    if (Array.isArray(parsed)) return new Set(parsed.filter((x): x is string => typeof x === 'string'));
+    if (Array.isArray(parsed))
+      return new Set(parsed.filter((x): x is string => typeof x === 'string'));
   } catch {
     // corrupt value — treated as "nothing completed yet"
   }
@@ -110,14 +112,53 @@ async function setStepCompleted(id: string, completed: boolean, current: Set<str
   await db.meta.put({ key: COMPLETED_STEPS_META_KEY, value: JSON.stringify([...next]) });
 }
 
+/**
+ * Compact summary of the same state `SettingsPage`'s `showFirstWeek`/
+ * `FirstWeekChecklist` already track — for a place that wants a one-line
+ * "N of M" nudge (the account menu) rather than the full card. Deliberately
+ * a second set of live queries against `therapists`/`catalog` rather than a
+ * shared hook `SettingsPage` also switches to: `SettingsPage` already reads
+ * those two lists for its own default-landing-tab logic independent of the
+ * checklist, and forcing both call sites through one hook risked coupling
+ * unrelated concerns for no real benefit — Dexie live queries are cheap and
+ * every other page in this app already queries therapists/catalog
+ * independently the same way.
+ */
+export function useFirstWeekChecklistSummary(
+  clinicId: string
+): { visible: boolean; completedCount: number; totalCount: number } | undefined {
+  const therapists = useLiveQuery(() => repos.therapists.list(clinicId, true), [clinicId]);
+  const catalog = useLiveQuery(() => repos.catalog.list(clinicId), [clinicId]);
+  const entitlements = useEntitlements(clinicId);
+  const notDismissed = useFirstWeekChecklistVisible();
+  const completed = useCompletedStepIds();
+
+  if (
+    therapists === undefined ||
+    catalog === undefined ||
+    notDismissed === undefined ||
+    completed === undefined
+  ) {
+    return undefined;
+  }
+
+  const unlinkedCount = therapists.filter((t) => !t.userId).length;
+  const catalogEmpty = catalog.length === 0;
+  const gatesIncomplete = unlinkedCount > 0 || catalogEmpty;
+  const steps = buildSteps(
+    entitlements.enforcementEnabled && entitlements.maxMembers <= 1,
+    entitlements.can('invoicing')
+  );
+  const completedCount = steps.filter((s) => completed.has(s.id)).length;
+
+  return { visible: notDismissed && gatesIncomplete, completedCount, totalCount: steps.length };
+}
+
 export function FirstWeekSetupLink() {
   const visible = useFirstWeekChecklistVisible();
   if (!visible) return null;
   return (
-    <Link
-      to="/settings"
-      className="text-sm text-[var(--muted)] hover:text-[var(--teal)]"
-    >
+    <Link to="/settings" className="text-sm text-[var(--muted)] hover:text-[var(--teal)]">
       Setup: first week
     </Link>
   );
@@ -140,7 +181,10 @@ export function FirstWeekChecklist({ compact }: { compact?: boolean }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 id="first-week-heading" className="font-display text-base font-semibold text-[var(--ink)]">
+          <h2
+            id="first-week-heading"
+            className="font-display text-base font-semibold text-[var(--ink)]"
+          >
             First week
           </h2>
           <p className="mt-0.5 text-xs text-[var(--muted)]">
@@ -166,7 +210,9 @@ export function FirstWeekChecklist({ compact }: { compact?: boolean }) {
           Setup complete — all 8 steps done.
         </p>
       ) : (
-        <ol className={`mt-3 space-y-3 ${compact ? '' : 'tab:grid tab:grid-cols-2 tab:gap-x-6 tab:space-y-0 tab:gap-y-3'}`}>
+        <ol
+          className={`mt-3 space-y-3 ${compact ? '' : 'tab:grid tab:grid-cols-2 tab:gap-x-6 tab:space-y-0 tab:gap-y-3'}`}
+        >
           {steps.map((step, i) => {
             const done = completed?.has(step.id) ?? false;
             return (
@@ -184,7 +230,13 @@ export function FirstWeekChecklist({ compact }: { compact?: boolean }) {
                   {done ? '✓' : i + 1}
                 </button>
                 <div>
-                  <div className={done ? 'font-medium text-[var(--muted)] line-through' : 'font-medium text-[var(--ink)]'}>
+                  <div
+                    className={
+                      done
+                        ? 'font-medium text-[var(--muted)] line-through'
+                        : 'font-medium text-[var(--ink)]'
+                    }
+                  >
                     {step.title}
                   </div>
                   <p className="mt-0.5 text-xs leading-snug text-[var(--muted)]">{step.body}</p>
