@@ -14,7 +14,6 @@ import type {
   Settlement,
   ConsultationNote,
   PatientModuleEnrollment,
-  ExpectedVisit,
   PatientAdvance,
 } from '@/domain/types';
 
@@ -60,7 +59,6 @@ export type SyncedTable =
   | 'settlements'
   | 'consultation_notes'
   | 'patient_module_enrollments'
-  | 'expected_visits'
   | 'patient_advances';
 
 /**
@@ -87,7 +85,6 @@ export const ALL_SYNCED_TABLES = [
   'settlements',
   'consultation_notes',
   'patient_module_enrollments',
-  'expected_visits',
   'patient_advances',
 ] as const satisfies readonly SyncedTable[];
 type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number]
@@ -113,7 +110,6 @@ export const CLIENT_WRITABLE_TABLES = [
   'settlements',
   'consultation_notes',
   'patient_module_enrollments',
-  'expected_visits',
   'patient_advances',
 ] as const satisfies readonly SyncedTable[];
 
@@ -132,7 +128,6 @@ export class ClinicDB extends Dexie {
   settlements!: Table<Settlement, string>;
   consultation_notes!: Table<ConsultationNote, string>;
   patient_module_enrollments!: Table<PatientModuleEnrollment, string>;
-  expected_visits!: Table<ExpectedVisit, string>;
   patient_advances!: Table<PatientAdvance, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
@@ -190,6 +185,23 @@ export class ClinicDB extends Dexie {
     });
     this.version(13).stores({
       patient_advances: 'id, clinicId, patientId, status',
+    });
+    // Expected-today shipped, got a Workspace section, then that section
+    // was removed during a redesign without anyone dropping this table —
+    // `null` is Dexie's way to delete an object store; the earlier
+    // version(8) call that created it is left untouched (rewriting a past
+    // version's .stores() breaks the upgrade path for anyone whose IndexedDB
+    // is still on an older version).
+    this.version(14).stores({
+      expected_visits: null,
+    });
+    // my_memberships (declared at version(5) above) was scaffolded for a
+    // clinic switcher but never wired to a reader or writer — the switcher
+    // built later reads db.clinics.toArray() directly instead, which
+    // already carries every clinic this account belongs to. Same "delete
+    // unused scaffolding" precedent as expected_visits above.
+    this.version(15).stores({
+      my_memberships: null,
     });
   }
 }

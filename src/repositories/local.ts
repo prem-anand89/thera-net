@@ -32,7 +32,6 @@ import type {
   SettlementRepo,
   ConsultationNoteRepo,
   PatientModuleEnrollmentRepo,
-  ExpectedVisitRepo,
   PatientAdvanceRepo,
   Repos,
 } from './types';
@@ -313,16 +312,6 @@ const patientModuleEnrollments: PatientModuleEnrollmentRepo = {
   put: (enrollment) => putWithOutbox('patient_module_enrollments', enrollment),
 };
 
-const expectedVisits: ExpectedVisitRepo = {
-  async listForDate(clinicId, visitDate) {
-    const all = await db.expected_visits.where('clinicId').equals(clinicId).toArray();
-    return all
-      .filter((e) => e.visitDate === visitDate)
-      .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
-  },
-  put: (entry) => putWithOutbox('expected_visits', entry),
-};
-
 const patientAdvances: PatientAdvanceRepo = {
   get: (id) => db.patient_advances.get(id),
   async listByPatient(clinicId, patientId) {
@@ -349,7 +338,6 @@ export const repos: Repos = {
   settlements,
   consultationNotes,
   patientModuleEnrollments,
-  expectedVisits,
   patientAdvances,
 };
 

@@ -153,10 +153,6 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       listByClinic: async () => [],
       put: async () => {},
     },
-    expectedVisits: {
-      listForDate: async () => [],
-      put: async () => {},
-    },
     patientAdvances: {
       get: async () => undefined,
       listByPatient: async () => [],

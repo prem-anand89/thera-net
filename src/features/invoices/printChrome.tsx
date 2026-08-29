@@ -24,7 +24,13 @@ export function PrintLetterhead({
         <div className="min-w-0">
           <h1 className="font-display text-xl font-bold text-[var(--ink)]">{clinic.name}</h1>
           {clinic.address && (
-            <p className="whitespace-pre-line break-words text-xs text-[var(--muted)]">
+            // max-w keeps this an actual address block (wraps onto ~2
+            // lines) instead of stretching the full width of the header —
+            // most addresses are entered as one line (the Clinic Profile
+            // textarea's own two-line placeholder is just a suggestion,
+            // not enforced), so wrapping can't rely on an admin having
+            // typed a real line break.
+            <p className="max-w-[220px] whitespace-pre-line break-words text-xs text-[var(--muted)]">
               {clinic.address}
             </p>
           )}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearch } from '@tanstack/react-router';
 import type { InvoicePrintBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -18,9 +18,11 @@ import {
 } from '@/domain/invoiceLine';
 import type { InvoiceLineItem, Therapist } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
-import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
+import { btnPrimary, btnSecondary, inputCls, ErrorNote } from '@/components/ui';
 import { AmendInvoiceDialog } from '@/components/AmendInvoiceDialog';
 import { EditInvoiceDetailsDialog } from '@/components/EditInvoiceDetailsDialog';
+import { renderElementToPdf, shareFileToWhatsApp } from '@/lib/pdfShare';
+import { toFriendlyMessage } from '@/lib/errors';
 import { PrintLetterhead, PrintSignatureFooter } from './printChrome';
 
 /** Page-specific wording, not a general-purpose helper — the "delivered of
@@ -240,6 +242,9 @@ export function InvoicePrintPage() {
   const [paper, setPaper] = useState<'A4' | 'A5'>('A4');
   const [amending, setAmending] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const logoUrl = useMemo(() => publicLogoUrl(clinic.logoPath), [clinic.logoPath]);
   const partnerLogoUrl = useMemo(
@@ -285,6 +290,34 @@ export function InvoicePrintPage() {
         (t): t is Therapist => t !== undefined
       );
 
+  // Renders the same content node "Print / Save PDF" shows into a PDF
+  // on-device (renderElementToPdf), then hands it to the OS share sheet so
+  // WhatsApp (or any other installed app) can receive the actual file —
+  // falling back to a text-only wa.me link on a browser without Web Share
+  // API file support (desktop, mainly). See src/lib/pdfShare.ts.
+  async function shareViaWhatsApp() {
+    // TS can't carry the module-level `if (!invoice) return` guard's
+    // narrowing into this closure, so it's re-checked here — also a real
+    // (if practically unreachable) safety net since this function is
+    // defined fresh every render alongside that guard.
+    if (!contentRef.current || !invoice) return;
+    setSharing(true);
+    setShareError(null);
+    try {
+      const file = await renderElementToPdf(
+        contentRef.current,
+        `${invoice.invoiceNo.replace(/\//g, '-')}.pdf`,
+        paper
+      );
+      const summary = `Invoice ${invoice.invoiceNo} for ${invoice.patientSnapshot.name} — ${formatINR(invoice.totalPaise)}. From ${clinic.name}.`;
+      await shareFileToWhatsApp(file, `Invoice ${invoice.invoiceNo}`, summary);
+    } catch (e) {
+      setShareError(toFriendlyMessage(e));
+    } finally {
+      setSharing(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
       <style>{`@page { size: ${paper}; margin: ${paper === 'A5' ? '10mm' : '16mm'}; }`}</style>
@@ -309,6 +342,14 @@ export function InvoicePrintPage() {
           <button type="button" className={btnPrimary} onClick={() => window.print()}>
             Print / Save PDF
           </button>
+          <button
+            type="button"
+            className={btnSecondary}
+            disabled={sharing}
+            onClick={() => void shareViaWhatsApp()}
+          >
+            {sharing ? 'Preparing…' : 'Share via WhatsApp'}
+          </button>
           {!supersededBy && (
             <button type="button" className={btnSecondary} onClick={() => setEditingDetails(true)}>
               Edit details
@@ -321,6 +362,12 @@ export function InvoicePrintPage() {
           )}
         </div>
       </div>
+
+      {shareError && (
+        <div className="no-print mx-auto max-w-3xl px-4">
+          <ErrorNote message={shareError} />
+        </div>
+      )}
 
       {(supersededBy || supersedes) && (
         <div className="no-print mx-auto max-w-3xl px-4">
@@ -373,6 +420,7 @@ export function InvoicePrintPage() {
       )}
 
       <div
+        ref={contentRef}
         className={`mx-auto max-w-3xl bg-[var(--surface)] p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm]' : 'print:max-w-[178mm]'}`}
       >
         <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} />
