@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, backupService, therapistService, visitService } from '@/services';
@@ -295,6 +295,7 @@ export function SettingsPage() {
   const search = useSearch({ from: '/settings' });
   const navigate = useNavigate({ from: '/settings' });
   const [activeKey, setActiveKeyState] = useState<SectionKey>(search.tab ?? 'profile');
+  const [, startTransition] = useTransition();
   const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
   const [pendingSectionKey, setPendingSectionKey] = useState<SectionKey | null>(null);
   const mobileNavRef = useRef<HTMLDivElement>(null);
@@ -313,8 +314,19 @@ export function SettingsPage() {
 
   // `replace` so switching tabs doesn't spam browser history — a `?tab=`
   // link is meant to be bookmarkable/shareable, not a Back-button stepper.
+  //
+  // The state update itself is wrapped in startTransition: swapping section
+  // renders a whole new heavy tab (Team's roster + member cards, Services'
+  // catalog table, ...) in one synchronous commit, which is exactly the
+  // "Event handlers ... blocked UI updates" INP warning Chrome flags on the
+  // rail nav button's click — the click handler is trivial, but the browser
+  // still attributes the render it triggers to that same input. Marking the
+  // update as a transition lets React deprioritize/interrupt that render
+  // instead of blocking the next paint on it.
   function setActiveKey(key: SectionKey) {
-    setActiveKeyState(key);
+    startTransition(() => {
+      setActiveKeyState(key);
+    });
     void navigate({ search: (prev) => ({ ...prev, tab: key }), replace: true });
   }
 

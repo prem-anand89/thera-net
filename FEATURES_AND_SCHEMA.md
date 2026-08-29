@@ -796,6 +796,30 @@ clinical-fields form itself (`InvoiceClinicalFieldsForm`,
 `src/components/InvoiceClinicalFields.tsx`) is shared between this dialog
 and `IssueInvoiceDialog` rather than duplicated.
 
+**Share via WhatsApp.** "Share via WhatsApp" on `InvoicePrintPage` renders
+the same DOM node "Print / Save PDF" shows into an actual PDF, entirely
+on-device (`renderElementToPdf` in `src/lib/pdfShare.ts`, via `html2canvas`
++ `jsPDF` — no server round trip, matching this app's offline-first
+design), then hands that file to the Web Share API so WhatsApp — or any
+other installed app — shows up in the OS share sheet with the real PDF
+attached (`shareFileToWhatsApp`). Both libraries are dynamically imported
+only when the button is clicked (a ~180KB-gzip chunk that every invoice
+view would otherwise pay for, whether or not Share is ever used). Web
+Share API's `files` support is mobile-browser-only (recent Chrome/Android,
+Safari/iOS); on a browser without it (desktop, mainly), this falls back to
+a `wa.me` click-to-chat link carrying just a text summary — WhatsApp's own
+link scheme has no way to carry a file, so the fallback is deliberately
+text-only rather than silently doing nothing.
+
+**UPI listed and defaulted first.** `PAYMENT_MODES` in `IssueInvoiceDialog`/
+`AmendInvoiceDialog` and `PAYMENT_METHODS` in `NewVisitPage`'s direct-
+payment collector all list UPI before Cash, and `IssueInvoiceDialog`/
+`NewVisitPage` default their selection to UPI — the most common collection
+method at an Indian clinic front desk. `AmendInvoiceDialog` is the one
+exception: its default still carries over the original invoice's own
+`paymentMode` rather than defaulting to UPI, since it's correcting an
+already-issued bill's record, not starting a fresh collection.
+
 #### `invoice_counters`
 ```sql
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)

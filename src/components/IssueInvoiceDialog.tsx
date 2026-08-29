@@ -21,7 +21,10 @@ import {
   type ClinicalFields,
 } from '@/components/InvoiceClinicalFields';
 
-const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
+// UPI first — the most common collection method at an Indian clinic front
+// desk, so it's both the default selection below and the top option here
+// rather than making staff scroll past Cash on every single bill.
+const PAYMENT_MODES: PaymentMode[] = ['UPI', 'Cash', 'Card', 'Insurance'];
 
 export interface IssueInvoiceTarget {
   visitId: string;
@@ -62,7 +65,7 @@ export function IssueInvoiceDialog({
    *  opens from both Ledger and Workspace. */
   returnTo: InvoicePrintBackTarget;
 }) {
-  const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>('UPI');
   const [collectedNow, setCollectedNow] = useState(target.alreadyCollected ?? true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

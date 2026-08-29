@@ -58,9 +58,12 @@ interface OpenPackage {
   startedOn: string;
 }
 
+// UPI first — the most common collection method at an Indian clinic front
+// desk, so it's both the default (see paymentMethod's useState below) and
+// the top option here instead of making staff scroll past Cash every time.
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: 'cash', label: 'Cash' },
   { value: 'upi', label: 'UPI' },
+  { value: 'cash', label: 'Cash' },
   { value: 'card', label: 'Card' },
   { value: 'bank_transfer', label: 'Bank transfer' },
   { value: 'cheque', label: 'Cheque' },
@@ -170,7 +173,7 @@ export function NewVisitPage() {
   const [notes, setNotes] = useState('');
   const [treatmentIds, setTreatmentIds] = useState<string[]>([]);
   const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending'>('paid');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi');
   const [pendingNote, setPendingNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
