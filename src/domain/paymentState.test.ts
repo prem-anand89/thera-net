@@ -4,6 +4,7 @@ import {
   isCollected,
   isPackageContinuation,
   paymentActions,
+  paymentBadge,
   paymentStatusLine,
   paymentStatusPhrase,
   paymentStatusShortPhrase,
@@ -23,7 +24,9 @@ describe('computeVisitPaymentState', () => {
   });
 
   it('is collected_no_receipt when a direct payment was logged but no invoice exists', () => {
-    expect(computeVisitPaymentState(rs(500), null, rs(500), undefined)).toBe('collected_no_receipt');
+    expect(computeVisitPaymentState(rs(500), null, rs(500), undefined)).toBe(
+      'collected_no_receipt'
+    );
   });
 
   it('is outstanding when invoiced but the invoice status is explicitly outstanding and nothing was paid directly', () => {
@@ -48,11 +51,15 @@ describe('computeVisitPaymentState', () => {
   });
 
   it('is partially_collected when invoiced-outstanding and a direct payment falls short of the bill', () => {
-    expect(computeVisitPaymentState(rs(500), INV, rs(300), 'outstanding')).toBe('partially_collected');
+    expect(computeVisitPaymentState(rs(500), INV, rs(300), 'outstanding')).toBe(
+      'partially_collected'
+    );
   });
 
   it('is collected_no_receipt (not partial) once the direct payment reaches the bill exactly', () => {
-    expect(computeVisitPaymentState(rs(500), null, rs(500), undefined)).toBe('collected_no_receipt');
+    expect(computeVisitPaymentState(rs(500), null, rs(500), undefined)).toBe(
+      'collected_no_receipt'
+    );
   });
 
   it('is paid, not partially_collected, once an invoice is explicitly marked paid regardless of amount tracked', () => {
@@ -90,9 +97,13 @@ describe('paymentStatusPhrase', () => {
 describe('paymentStatusLine', () => {
   it('uses billed · collected · invoice for everyone', () => {
     expect(paymentStatusLine('paid', '₹500')).toBe('₹500 billed · collected · invoiced');
-    expect(paymentStatusLine('collected_no_receipt', '₹500')).toBe('₹500 billed · collected · no invoice');
+    expect(paymentStatusLine('collected_no_receipt', '₹500')).toBe(
+      '₹500 billed · collected · no invoice'
+    );
     expect(paymentStatusLine('outstanding', '₹500')).toBe('₹500 billed · not collected · invoiced');
-    expect(paymentStatusLine('uninvoiced', '₹500')).toBe('₹500 billed · not collected · no invoice');
+    expect(paymentStatusLine('uninvoiced', '₹500')).toBe(
+      '₹500 billed · not collected · no invoice'
+    );
   });
 
   it('passes the package flag through for zero_session instead of restating the (always ₹0) bill', () => {
@@ -136,5 +147,128 @@ describe('paymentStatusShortPhrase', () => {
     // standalone complimentary visit (never meant to be charged at all).
     expect(paymentStatusShortPhrase('zero_session', true)).toBe('Package');
     expect(paymentStatusShortPhrase('zero_session', false)).toBe('No charge');
+  });
+});
+
+describe('paymentBadge', () => {
+  const asOf = new Date('2026-03-01T00:00:00.000Z');
+
+  it('paid → kind paid, regardless of amounts', () => {
+    const b = paymentBadge({
+      state: 'paid',
+      billPaise: rs(500),
+      collectedPaise: rs(500),
+      visitDate: '2026-01-01',
+      asOf,
+    });
+    expect(b.kind).toBe('paid');
+    expect(b.label).toBe('Paid');
+  });
+
+  it('collected_no_receipt → also kind paid', () => {
+    const b = paymentBadge({
+      state: 'collected_no_receipt',
+      billPaise: rs(500),
+      collectedPaise: rs(500),
+      visitDate: '2026-01-01',
+      asOf,
+    });
+    expect(b.kind).toBe('paid');
+  });
+
+  it('zero_session → kind none, package-aware label', () => {
+    const b = paymentBadge({
+      state: 'zero_session',
+      billPaise: 0,
+      collectedPaise: 0,
+      visitDate: '2026-01-01',
+      isPackageSession: true,
+      asOf,
+    });
+    expect(b.kind).toBe('none');
+    expect(b.label).toBe('Package');
+  });
+
+  it('outstanding, within 30 days of visitDate → Due, not Overdue', () => {
+    const b = paymentBadge({
+      state: 'outstanding',
+      billPaise: rs(500),
+      collectedPaise: 0,
+      visitDate: '2026-02-10', // 19 days before asOf
+      asOf,
+    });
+    expect(b.kind).toBe('due');
+    expect(b.label).toBe('Due');
+  });
+
+  it('uninvoiced, exactly at day 30 → still Due, not Overdue (boundary)', () => {
+    const b = paymentBadge({
+      state: 'uninvoiced',
+      billPaise: rs(500),
+      collectedPaise: 0,
+      visitDate: '2026-01-30', // exactly 30 days before asOf
+      asOf,
+    });
+    expect(b.kind).toBe('due');
+  });
+
+  it('uninvoiced, at day 31 → Overdue', () => {
+    const b = paymentBadge({
+      state: 'uninvoiced',
+      billPaise: rs(500),
+      collectedPaise: 0,
+      visitDate: '2026-01-29', // 31 days before asOf
+      asOf,
+    });
+    expect(b.kind).toBe('overdue');
+    expect(b.label).toBe('Overdue');
+  });
+
+  it('outstanding: anchors on issuedAt, not visitDate, when the invoice was issued later — a just-issued invoice on an old visit reads Due, not Overdue', () => {
+    const b = paymentBadge({
+      state: 'outstanding',
+      billPaise: rs(500),
+      collectedPaise: 0,
+      visitDate: '2026-01-01', // 59 days before asOf — would be Overdue alone
+      issuedAt: '2026-02-25T00:00:00.000Z', // 4 days before asOf
+      asOf,
+    });
+    expect(b.kind).toBe('due');
+  });
+
+  it('outstanding: issuedAt earlier than visitDate is ignored (max(...) never moves the anchor backward)', () => {
+    const b = paymentBadge({
+      state: 'outstanding',
+      billPaise: rs(500),
+      collectedPaise: 0,
+      visitDate: '2026-01-29', // 31 days before asOf
+      issuedAt: '2026-01-01T00:00:00.000Z', // earlier still
+      asOf,
+    });
+    expect(b.kind).toBe('overdue');
+  });
+
+  it('partially_collected within threshold shows the "of" form and kind partial', () => {
+    const b = paymentBadge({
+      state: 'partially_collected',
+      billPaise: rs(500),
+      collectedPaise: rs(300),
+      visitDate: '2026-02-20',
+      asOf,
+    });
+    expect(b.kind).toBe('partial');
+    expect(b.label).toBe('₹300 of ₹500');
+  });
+
+  it('partially_collected past the threshold: tone escalates to overdue, label keeps saying Partial (the "of" form)', () => {
+    const b = paymentBadge({
+      state: 'partially_collected',
+      billPaise: rs(500),
+      collectedPaise: rs(300),
+      visitDate: '2026-01-01', // well past 30 days
+      asOf,
+    });
+    expect(b.kind).toBe('overdue');
+    expect(b.label).toBe('₹300 of ₹500');
   });
 });

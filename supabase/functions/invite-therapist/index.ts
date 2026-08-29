@@ -13,6 +13,13 @@ interface InviteRequest {
    *  instead of needing a separate manual "add to roster, then link"
    *  step an admin has to remember to do afterward. */
   name?: string;
+  /** The inviting browser's own origin (`window.location.origin`) — used
+   *  to build the invite email's redirect link. Without this, the link
+   *  falls back to whatever the Supabase project's Site URL happens to be
+   *  configured to, which lands the invitee on the app already signed in
+   *  (the invite token establishes a session) but with no password ever
+   *  set and no UI prompting them to set one. */
+  redirectOrigin?: string;
 }
 
 // The browser preflights any cross-origin POST that carries an
@@ -70,7 +77,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   try {
     const body: InviteRequest = await req.json();
-    const { clinicId, email, role, name } = body;
+    const { clinicId, email, role, name, redirectOrigin } = body;
 
     if (!clinicId || !email || !role) {
       return json({ error: 'Missing required fields: clinicId, email, role' }, 400);
@@ -129,7 +136,7 @@ export default async function handler(req: Request): Promise<Response> {
     // member.
     const { data: memberData, error: memberError } = await userClient
       .from('clinic_members')
-      .select('role')
+      .select('role, display_name')
       .eq('clinic_id', clinicId)
       .eq('user_id', caller.id)
       .maybeSingle();
@@ -149,6 +156,16 @@ export default async function handler(req: Request): Promise<Response> {
         persistSession: false,
       },
     });
+
+    // Best-effort — feeds the invite email's metadata (below) so a
+    // customized "Invite user" template can greet the invitee by clinic
+    // and inviter name. Missing/failed lookup just means a plainer email,
+    // never blocks the invite itself.
+    const { data: clinicData } = await serviceClient
+      .from('clinics')
+      .select('name')
+      .eq('id', clinicId)
+      .maybeSingle();
 
     // Seat cap (tier-subscriptions plan, Phase 2): clinic_plans.max_members
     // is the enforced ceiling on logins, counted against clinic_members —
@@ -178,7 +195,10 @@ export default async function handler(req: Request): Promise<Response> {
 
       if (planData && planData.status !== 'active') {
         return json(
-          { error: "This clinic's plan is read-only — invites are unavailable until payment resumes." },
+          {
+            error:
+              "This clinic's plan is read-only — invites are unavailable until payment resumes.",
+          },
           403
         );
       }
@@ -199,13 +219,33 @@ export default async function handler(req: Request): Promise<Response> {
       }
     }
 
-    // Invite the user via Supabase Admin API
-    const { data: inviteData, error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(
-      email,
-      {
-        autoConfirm: true,
-      }
-    );
+    // Invite the user via Supabase Admin API. `redirectTo` is what actually
+    // fixes "no option to set a new password" — without it, the link falls
+    // back to the project's default Site URL, which signs the invitee in
+    // (the invite token establishes a session) but drops them on the app
+    // with no password ever set and nothing prompting them to set one.
+    // /reset-password already handles both a password-recovery session and
+    // an invite session identically (see ResetPasswordPage.tsx) — it just
+    // checks for an active session and lets you choose a password, so no
+    // new page was needed here, only routing the link to the one that
+    // already exists. `data` seeds user_metadata with clinic/inviter
+    // context, available to a customized "Invite user" email template via
+    // `{{ .Data.clinicName }}`/`{{ .Data.invitedByName }}` — the stock
+    // Supabase template doesn't reference these, so the email stays generic
+    // until that template is edited in the Supabase dashboard.
+    const redirectTo =
+      redirectOrigin && /^https?:\/\//.test(redirectOrigin)
+        ? `${redirectOrigin}/reset-password`
+        : undefined;
+    const { data: inviteData, error: inviteError } =
+      await serviceClient.auth.admin.inviteUserByEmail(email, {
+        redirectTo,
+        data: {
+          clinicName: clinicData?.name ?? null,
+          invitedByName: memberData?.display_name ?? null,
+          role,
+        },
+      });
 
     let newUserId: string;
     let reLinkedExisting = false;
@@ -222,7 +262,10 @@ export default async function handler(req: Request): Promise<Response> {
         /already.*(registered|exists)/i.test(inviteError?.message ?? '');
 
       if (!looksAlreadyRegistered) {
-        return json({ error: `Failed to invite user: ${inviteError?.message || 'Unknown error'}` }, 400);
+        return json(
+          { error: `Failed to invite user: ${inviteError?.message || 'Unknown error'}` },
+          400
+        );
       }
 
       const existingUserId = await findUserIdByEmail(serviceClient, email);
@@ -230,7 +273,10 @@ export default async function handler(req: Request): Promise<Response> {
         // Matches GoTrue's own claim that the email is taken, but the admin
         // lookup couldn't confirm which account -- surface the original
         // error rather than silently doing nothing.
-        return json({ error: `Failed to invite user: ${inviteError?.message || 'Unknown error'}` }, 400);
+        return json(
+          { error: `Failed to invite user: ${inviteError?.message || 'Unknown error'}` },
+          400
+        );
       }
 
       const { data: existingMembership } = await serviceClient
@@ -250,14 +296,12 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     // Insert clinic_members row
-    const { error: insertError } = await serviceClient
-      .from('clinic_members')
-      .insert({
-        clinic_id: clinicId,
-        user_id: newUserId,
-        role: role,
-        display_name: name!.trim(),
-      });
+    const { error: insertError } = await serviceClient.from('clinic_members').insert({
+      clinic_id: clinicId,
+      user_id: newUserId,
+      role: role,
+      display_name: name!.trim(),
+    });
 
     if (insertError) {
       // For a fresh invite, the login was created but clinic_members insert
@@ -294,11 +338,16 @@ export default async function handler(req: Request): Promise<Response> {
         active: true,
       });
       if (therapistError) {
-        console.error(`Failed to create therapist roster row for user ${newUserId}:`, therapistError);
+        console.error(
+          `Failed to create therapist roster row for user ${newUserId}:`,
+          therapistError
+        );
         return json(
           {
             success: true,
-            message: reLinkedExisting ? `${email} was added to this clinic` : `Invitation sent to ${email}`,
+            message: reLinkedExisting
+              ? `${email} was added to this clinic`
+              : `Invitation sent to ${email}`,
             warning: `Could not add them to the service roster automatically: ${therapistError.message}. Add them from Settings → Team → Service roster.`,
           },
           200
@@ -309,13 +358,18 @@ export default async function handler(req: Request): Promise<Response> {
     return json(
       {
         success: true,
-        message: reLinkedExisting ? `${email} was added to this clinic` : `Invitation sent to ${email}`,
+        message: reLinkedExisting
+          ? `${email} was added to this clinic`
+          : `Invitation sent to ${email}`,
       },
       200
     );
   } catch (error) {
     console.error('Unexpected error:', error);
-    return json({ error: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}` }, 500);
+    return json(
+      { error: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}` },
+      500
+    );
   }
 }
 

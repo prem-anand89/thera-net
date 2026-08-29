@@ -1,8 +1,22 @@
-import { REFERRING_SOURCE_LABELS, referringSourceDetailLabel, type UUID, type Visit } from '@/domain/types';
+import {
+  REFERRING_SOURCE_LABELS,
+  referringSourceDetailLabel,
+  type UUID,
+  type Visit,
+} from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { currentWeekRange, monthDateRange, type FyMonth } from '@/domain/fiscalYear';
-import { daysSince, groupOpenPackages, isStale, STALE_PACKAGE_DAYS } from '@/domain/packageTracking';
-import { computeVisitPaymentState, isCollected, type VisitPaymentState } from '@/domain/paymentState';
+import {
+  daysSince,
+  groupOpenPackages,
+  isStale,
+  STALE_PACKAGE_DAYS,
+} from '@/domain/packageTracking';
+import {
+  computeVisitPaymentState,
+  isCollected,
+  type VisitPaymentState,
+} from '@/domain/paymentState';
 import type { Repos } from '@/repositories/types';
 import { createReportService, type MonthlyReport } from './reportService';
 
@@ -38,6 +52,18 @@ export interface OutstandingSummary {
   rows: OutstandingInvoiceRow[];
   totalPaise: Paise;
   count: number;
+}
+
+export interface NeedsReceiptRow {
+  visitId: UUID;
+  visitDate: string;
+  patientId: UUID;
+  patientName: string;
+  mrno: string;
+  serviceName: string;
+  /** What was actually collected — equals the visit's bill by definition
+   *  of `collected_no_receipt` (fully collected, no invoice yet). */
+  collectedPaise: Paise;
 }
 
 export interface MonthlyCollection {
@@ -173,6 +199,12 @@ export interface TodayVisitRow {
   needsNote: boolean;
   /** Set once this visit's note is completed. */
   consultationNoteId: UUID | null;
+  /** Sum of direct `payments` rows against this visit — see
+   *  `VisitCardData.collectedPaise` in `VisitCard.tsx`. */
+  collectedPaise: Paise;
+  /** This visit's invoice's `issuedAt`, or null — see
+   *  `VisitCardData.issuedAt` in `VisitCard.tsx`. */
+  issuedAt: string | null;
 }
 
 export interface TodayWorklist {
@@ -303,6 +335,59 @@ export function createDashboardService(repos: Repos) {
     },
 
     /**
+     * Visits where money was collected but no invoice was ever issued
+     * (`collected_no_receipt`) — the "needs receipt" work queue (Billing &
+     * Notes Rebuild Phase 1, 1.7). One shared source of truth for both the
+     * Invoices-tab section and its tab badge count, so the two can never
+     * disagree. Deliberately clinic-wide and unbounded, matching
+     * `outstandingInvoices()`'s own precedent — a backlog like this is by
+     * definition old and shouldn't disappear behind a date filter.
+     */
+    async needsReceipt(clinicId: UUID): Promise<NeedsReceiptRow[]> {
+      const [visits, invoicePayments, directPayments, patients, catalog] = await Promise.all([
+        repos.visits.list({ clinicId }),
+        repos.invoicePayments.list(clinicId),
+        repos.payments.list(clinicId),
+        repos.patients.list(clinicId),
+        repos.catalog.list(clinicId, true),
+      ]);
+      const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
+      const directPaymentByVisitId = new Map<UUID, Paise>();
+      for (const p of directPayments) {
+        directPaymentByVisitId.set(
+          p.visitId,
+          (directPaymentByVisitId.get(p.visitId) ?? 0) + p.amountPaise
+        );
+      }
+      const patientById = new Map(patients.map((p) => [p.id, p]));
+      const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
+
+      const rows: NeedsReceiptRow[] = [];
+      for (const v of visits) {
+        if (v.deleted) continue;
+        const collectedPaise = directPaymentByVisitId.get(v.id) ?? 0;
+        const state = computeVisitPaymentState(
+          v.actualBillPaise,
+          v.invoiceId,
+          collectedPaise,
+          v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+        );
+        if (state !== 'collected_no_receipt') continue;
+        const patient = patientById.get(v.patientId);
+        rows.push({
+          visitId: v.id,
+          visitDate: v.visitDate,
+          patientId: v.patientId,
+          patientName: patient?.name ?? 'Unknown',
+          mrno: patient?.mrno ?? '—',
+          serviceName: serviceNameById.get(v.serviceCatalogId) ?? 'Unknown',
+          collectedPaise,
+        });
+      }
+      return rows.sort((a, b) => a.visitDate.localeCompare(b.visitDate));
+    },
+
+    /**
      * Billed vs. actually collected for one calendar month — the "how much
      * of what we billed did we actually get paid" number the reporting
      * pages never surfaced (revenueTrend/MonthlyReport track the BM
@@ -312,7 +397,11 @@ export function createDashboardService(repos: Repos) {
      * items already use — rather than a second, possibly-diverging
      * definition of "collected".
      */
-    async monthlyCollection(clinicId: UUID, month: FyMonth, therapistId?: UUID): Promise<MonthlyCollection> {
+    async monthlyCollection(
+      clinicId: UUID,
+      month: FyMonth,
+      therapistId?: UUID
+    ): Promise<MonthlyCollection> {
       const { from, to } = monthDateRange(month);
       const [visits, invoicePayments, directPayments] = await Promise.all([
         repos.visits.list({ clinicId, from, to, therapistId }),
@@ -341,7 +430,8 @@ export function createDashboardService(repos: Repos) {
       return {
         billedPaise,
         collectedPaise,
-        collectionRatePct: billedPaise > 0 ? Math.round((collectedPaise / billedPaise) * 100) : null,
+        collectionRatePct:
+          billedPaise > 0 ? Math.round((collectedPaise / billedPaise) * 100) : null,
       };
     },
 
@@ -354,7 +444,11 @@ export function createDashboardService(repos: Repos) {
      * lookback before the month starts so a visit on the 3rd can still see
      * a prior visit from the previous month.
      */
-    async repeatVisits(clinicId: UUID, month: FyMonth, therapistId?: UUID): Promise<RepeatVisitStats> {
+    async repeatVisits(
+      clinicId: UUID,
+      month: FyMonth,
+      therapistId?: UUID
+    ): Promise<RepeatVisitStats> {
       const { from, to } = monthDateRange(month);
       const lookbackDate = new Date(`${from}T00:00:00`);
       lookbackDate.setDate(lookbackDate.getDate() - 30);
@@ -385,7 +479,11 @@ export function createDashboardService(repos: Repos) {
      *  first — "frequently used services." Scoped the same way every other
      *  monthly metric here is (clinic-wide for admin/front_desk, this
      *  therapist's own visits otherwise). */
-    async serviceUsage(clinicId: UUID, month: FyMonth, therapistId?: UUID): Promise<ServiceUsageRow[]> {
+    async serviceUsage(
+      clinicId: UUID,
+      month: FyMonth,
+      therapistId?: UUID
+    ): Promise<ServiceUsageRow[]> {
       const { from, to } = monthDateRange(month);
       const [visits, catalog] = await Promise.all([
         repos.visits.list({ clinicId, from, to, therapistId }),
@@ -400,7 +498,11 @@ export function createDashboardService(repos: Repos) {
         byService.set(v.serviceCatalogId, entry);
       }
       return [...byService.entries()]
-        .map(([serviceId, stats]) => ({ serviceId, serviceName: nameById.get(serviceId) ?? 'Unknown', ...stats }))
+        .map(([serviceId, stats]) => ({
+          serviceId,
+          serviceName: nameById.get(serviceId) ?? 'Unknown',
+          ...stats,
+        }))
         .sort((a, b) => b.visitCount - a.visitCount);
     },
 
@@ -418,7 +520,9 @@ export function createDashboardService(repos: Repos) {
       const notes = await repos.consultationNotes.listByClinic(clinicId);
       const counts = new Map<string, number>();
       for (const n of notes) {
-        const payload = n.assessmentPayload as { treatment?: { session?: { modalities?: unknown } } } | null;
+        const payload = n.assessmentPayload as {
+          treatment?: { session?: { modalities?: unknown } };
+        } | null;
         const modalities = payload?.treatment?.session?.modalities;
         if (!Array.isArray(modalities)) continue;
         for (const m of modalities) {
@@ -448,7 +552,10 @@ export function createDashboardService(repos: Repos) {
       ]);
       const patientById = new Map(patients.map((p) => [p.id, p]));
 
-      const byCondition = new Map<string, { count: number; patients: Map<UUID, ConditionUsagePatientRow> }>();
+      const byCondition = new Map<
+        string,
+        { count: number; patients: Map<UUID, ConditionUsagePatientRow> }
+      >();
       for (const v of visits) {
         const condition = v.condition?.trim() || 'Unspecified';
         const entry = byCondition.get(condition) ?? { count: 0, patients: new Map() };
@@ -471,11 +578,13 @@ export function createDashboardService(repos: Repos) {
       const top = ranked.slice(0, CONDITION_TOP_N);
       const rest = ranked.slice(CONDITION_TOP_N);
 
-      const rows: ConditionUsageRow[] = top.map(([condition, { count, patients: patientRows }]) => ({
-        condition,
-        count,
-        patients: [...patientRows.values()].sort((a, b) => b.revenuePaise - a.revenuePaise),
-      }));
+      const rows: ConditionUsageRow[] = top.map(
+        ([condition, { count, patients: patientRows }]) => ({
+          condition,
+          count,
+          patients: [...patientRows.values()].sort((a, b) => b.revenuePaise - a.revenuePaise),
+        })
+      );
 
       if (rest.length > 0) {
         const otherPatients = new Map<UUID, ConditionUsagePatientRow>();
@@ -503,21 +612,25 @@ export function createDashboardService(repos: Repos) {
 
     /** Most recent visits first, for an at-a-glance strip — not filtered by date. */
     async recentVisits(clinicId: UUID, limit = 8): Promise<RecentVisitRow[]> {
-      const [visits, patients, therapists, catalog, invoicePayments, directPayments] = await Promise.all([
-        repos.visits.list({ clinicId }),
-        repos.patients.list(clinicId),
-        repos.therapists.list(clinicId, true),
-        repos.catalog.list(clinicId, true),
-        repos.invoicePayments.list(clinicId),
-        repos.payments.list(clinicId),
-      ]);
+      const [visits, patients, therapists, catalog, invoicePayments, directPayments] =
+        await Promise.all([
+          repos.visits.list({ clinicId }),
+          repos.patients.list(clinicId),
+          repos.therapists.list(clinicId, true),
+          repos.catalog.list(clinicId, true),
+          repos.invoicePayments.list(clinicId),
+          repos.payments.list(clinicId),
+        ]);
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
       const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
       const directPaymentByVisitId = new Map<UUID, Paise>();
       directPayments.forEach((p) => {
-        directPaymentByVisitId.set(p.visitId, (directPaymentByVisitId.get(p.visitId) ?? 0) + p.amountPaise);
+        directPaymentByVisitId.set(
+          p.visitId,
+          (directPaymentByVisitId.get(p.visitId) ?? 0) + p.amountPaise
+        );
       });
 
       return [...visits]
@@ -562,26 +675,34 @@ export function createDashboardService(repos: Repos) {
      * visit in the window since the whole point is a complete recent
      * history, not a capped preview.
      */
-    async recentVisitsWindow(clinicId: UUID, days: number, asOf = new Date()): Promise<RecentVisitRow[]> {
+    async recentVisitsWindow(
+      clinicId: UUID,
+      days: number,
+      asOf = new Date()
+    ): Promise<RecentVisitRow[]> {
       const todayStr = asOf.toISOString().slice(0, 10);
       const cutoff = new Date(asOf);
       cutoff.setDate(cutoff.getDate() - days);
       const fromStr = cutoff.toISOString().slice(0, 10);
-      const [visits, patients, therapists, catalog, invoicePayments, directPayments] = await Promise.all([
-        repos.visits.list({ clinicId, from: fromStr }),
-        repos.patients.list(clinicId),
-        repos.therapists.list(clinicId, true),
-        repos.catalog.list(clinicId, true),
-        repos.invoicePayments.list(clinicId),
-        repos.payments.list(clinicId),
-      ]);
+      const [visits, patients, therapists, catalog, invoicePayments, directPayments] =
+        await Promise.all([
+          repos.visits.list({ clinicId, from: fromStr }),
+          repos.patients.list(clinicId),
+          repos.therapists.list(clinicId, true),
+          repos.catalog.list(clinicId, true),
+          repos.invoicePayments.list(clinicId),
+          repos.payments.list(clinicId),
+        ]);
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
       const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
       const directPaymentByVisitId = new Map<UUID, Paise>();
       directPayments.forEach((p) => {
-        directPaymentByVisitId.set(p.visitId, (directPaymentByVisitId.get(p.visitId) ?? 0) + p.amountPaise);
+        directPaymentByVisitId.set(
+          p.visitId,
+          (directPaymentByVisitId.get(p.visitId) ?? 0) + p.amountPaise
+        );
       });
 
       return visits
@@ -643,7 +764,9 @@ export function createDashboardService(repos: Repos) {
         const since = daysSince(v.visitDate);
         if (since <= thresholdDays) continue;
         const patient = patientById.get(patientId);
-        const reason = patient?.noReturnReasonId ? reasonById.get(patient.noReturnReasonId) : undefined;
+        const reason = patient?.noReturnReasonId
+          ? reasonById.get(patient.noReturnReasonId)
+          : undefined;
         rows.push({
           patientId,
           patientName: patient?.name ?? 'Unknown',
@@ -667,7 +790,11 @@ export function createDashboardService(repos: Repos) {
      * take-home for those that are invoiced AND paid (absence of a payment
      * row reads as paid, matching InvoicePayment's convention).
      */
-    async weeklySummary(clinicId: UUID, asOf = new Date(), therapistId?: UUID): Promise<WeeklySummary> {
+    async weeklySummary(
+      clinicId: UUID,
+      asOf = new Date(),
+      therapistId?: UUID
+    ): Promise<WeeklySummary> {
       const [visits, payments] = await Promise.all([
         repos.visits.list({ clinicId, therapistId }),
         repos.invoicePayments.list(clinicId),
@@ -692,20 +819,27 @@ export function createDashboardService(repos: Repos) {
      * package progress, and a single payment-state chip so "who still
      * needs to be collected from" doesn't require opening the ledger.
      */
-    async todayWorklist(clinicId: UUID, asOf = new Date(), therapistId?: UUID): Promise<TodayWorklist> {
+    async todayWorklist(
+      clinicId: UUID,
+      asOf = new Date(),
+      therapistId?: UUID
+    ): Promise<TodayWorklist> {
       const todayStr = asOf.toISOString().slice(0, 10);
-      const [visits, patients, therapists, catalog, invoicePayments, directPayments] = await Promise.all([
-        repos.visits.list({ clinicId, from: todayStr, to: todayStr, therapistId }),
-        repos.patients.list(clinicId),
-        repos.therapists.list(clinicId, true),
-        repos.catalog.list(clinicId, true),
-        repos.invoicePayments.list(clinicId),
-        repos.payments.listByDate(clinicId, todayStr),
-      ]);
+      const [visits, patients, therapists, catalog, invoicePayments, directPayments, invoices] =
+        await Promise.all([
+          repos.visits.list({ clinicId, from: todayStr, to: todayStr, therapistId }),
+          repos.patients.list(clinicId),
+          repos.therapists.list(clinicId, true),
+          repos.catalog.list(clinicId, true),
+          repos.invoicePayments.list(clinicId),
+          repos.payments.listByDate(clinicId, todayStr),
+          repos.invoices.list(clinicId),
+        ]);
       const patientById = new Map(patients.map((p) => [p.id, p]));
       const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
       const serviceNameById = new Map(catalog.map((c) => [c.id, c.name]));
       const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
+      const issuedAtByInvoiceId = new Map(invoices.map((inv) => [inv.id, inv.issuedAt]));
 
       // Map visits to their direct payment amounts
       const directPaymentByVisitId = new Map<UUID, Paise>();
@@ -749,6 +883,8 @@ export function createDashboardService(repos: Repos) {
             sharedTherapistId: v.sharedTherapistId ?? null,
             needsNote: v.clinicalStatus === 'pending',
             consultationNoteId: v.consultationNoteId ?? null,
+            collectedPaise: directPaymentAmount,
+            issuedAt: v.invoiceId ? (issuedAtByInvoiceId.get(v.invoiceId) ?? null) : null,
           };
         })
         .sort((a, b) => a.patientName.localeCompare(b.patientName));
@@ -772,7 +908,11 @@ export function createDashboardService(repos: Repos) {
      * passes this for a therapist's own scoped tile, omits it for admin's
      * clinic-wide one.
      */
-    async monthlyNewCounts(clinicId: UUID, asOf = new Date(), therapistId?: UUID): Promise<MonthlyNewCounts> {
+    async monthlyNewCounts(
+      clinicId: UUID,
+      asOf = new Date(),
+      therapistId?: UUID
+    ): Promise<MonthlyNewCounts> {
       const visits = await repos.visits.list({ clinicId, therapistId });
       // Bounded both ends — an unbounded `>= monthStart` check (the old bug)
       // silently turns "new last month" into "new since last month started,"
@@ -821,13 +961,20 @@ export function createDashboardService(repos: Repos) {
 
       const bySource = new Map<
         string,
-        { count: number; revenuePaise: number; detailLabel: string | null; patients: Map<UUID, ReferralSourcePatientRow> }
+        {
+          count: number;
+          revenuePaise: number;
+          detailLabel: string | null;
+          patients: Map<UUID, ReferralSourcePatientRow>;
+        }
       >();
       for (const v of visits) {
         const patient = patientById.get(v.patientId);
         // referringSourceId is the source of truth for patients created after the
         // catalog existed; older patients fall back to the legacy fixed-enum label.
-        const catalogSource = patient?.referringSourceId ? sourceById.get(patient.referringSourceId) : undefined;
+        const catalogSource = patient?.referringSourceId
+          ? sourceById.get(patient.referringSourceId)
+          : undefined;
         const sourceLabel = catalogSource
           ? catalogSource.name
           : patient?.referringSource
@@ -838,7 +985,12 @@ export function createDashboardService(repos: Repos) {
           : patient?.referringSource
             ? referringSourceDetailLabel(patient.referringSource)
             : null;
-        const entry = bySource.get(sourceLabel) ?? { count: 0, revenuePaise: 0, detailLabel, patients: new Map() };
+        const entry = bySource.get(sourceLabel) ?? {
+          count: 0,
+          revenuePaise: 0,
+          detailLabel,
+          patients: new Map(),
+        };
         entry.count += 1;
         entry.revenuePaise += v.actualBillPaise;
         const patientRow = entry.patients.get(v.patientId) ?? {

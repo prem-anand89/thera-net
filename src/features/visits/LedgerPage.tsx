@@ -32,6 +32,7 @@ import {
   Field,
   SectionCard,
   StatTile,
+  CountBadge,
 } from '@/components/ui';
 import { PatientOverview } from './PatientOverview';
 import { EditVisitModal } from './EditVisitModal';
@@ -72,6 +73,7 @@ function visitToCardData(
   therapistSplit: boolean,
   statusByInvoiceId: Map<UUID, PaymentStatus>,
   directPaymentByVisitId: Map<UUID, number>,
+  issuedAtByInvoiceId: Map<UUID, string>,
   isAdmin: boolean,
   myTherapistId: UUID | undefined,
   canViewClinicalNotes: boolean,
@@ -117,6 +119,8 @@ function visitToCardData(
     billPaise: v.actualBillPaise,
     paymentState,
     invoiceId: v.invoiceId ?? null,
+    collectedPaise: directPaymentByVisitId.get(v.id) ?? 0,
+    issuedAt: v.invoiceId ? (issuedAtByInvoiceId.get(v.invoiceId) ?? null) : null,
     editedBy,
     syncError: syncErrorByVisitId.get(v.id) ?? null,
     canRepeat: v.packageGroupId ? openPackageGroupIds.has(v.packageGroupId) : false,
@@ -285,6 +289,15 @@ export function LedgerPage() {
     }
     return map;
   }, [directPayments]);
+  // D2's Overdue anchor (max(visitDate, issuedAt)) needs an invoice's issue
+  // date, which statusByInvoiceId (from invoice_payments) doesn't carry —
+  // a separate map off the same invoices list this page's Invoices tab
+  // already loads.
+  const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
+  const issuedAtByInvoiceId = useMemo(
+    () => new Map((invoices ?? []).map((inv) => [inv.id, inv.issuedAt])),
+    [invoices]
+  );
 
   const filteredPatient = search.patientId ? patientById.get(search.patientId) : undefined;
   const editPatient = useLiveQuery(
@@ -313,6 +326,9 @@ export function LedgerPage() {
     () => dashboardService.outstandingInvoices(clinic.id),
     [clinic.id]
   );
+  // 1.7's needs-receipt queue count — same underlying call InvoicesPage's
+  // own section uses, so the tab badge and the section can never disagree.
+  const needsReceipt = useLiveQuery(() => dashboardService.needsReceipt(clinic.id), [clinic.id]);
 
   // Candidate ₹0 package rows whose OWN invoiceId is null — for each
   // distinct packageGroupId among them, check the full group (not just
@@ -362,6 +378,7 @@ export function LedgerPage() {
           therapistSplit,
           statusByInvoiceId,
           directPaymentByVisitId,
+          issuedAtByInvoiceId,
           isAdmin,
           myTherapistId,
           canViewClinicalNotes,
@@ -381,6 +398,7 @@ export function LedgerPage() {
       therapistSplit,
       statusByInvoiceId,
       directPaymentByVisitId,
+      issuedAtByInvoiceId,
       isAdmin,
       myTherapistId,
       canViewClinicalNotes,
@@ -518,6 +536,9 @@ export function LedgerPage() {
               onClick={() => setRecordsView(v.key)}
             >
               {v.label}
+              {v.key === 'invoices' && (
+                <CountBadge count={needsReceipt?.length ?? 0} tone="amber" />
+              )}
             </button>
           ))}
       </div>
@@ -759,6 +780,7 @@ export function LedgerPage() {
                   setError(null);
                   setInvoicing({
                     visitId: row.visitId,
+                    patientId: row.patientId,
                     patientLabel: row.patientName,
                     serviceLabel: row.serviceName,
                     isPackage: row.packageTotal != null,
@@ -827,6 +849,7 @@ export function LedgerPage() {
           visitDate={takingPayment.visitDate}
           patientLabel={takingPayment.patientName}
           mrno={takingPayment.mrno}
+          patientId={takingPayment.patientId}
           onClose={() => setTakingPayment(null)}
         />
       )}

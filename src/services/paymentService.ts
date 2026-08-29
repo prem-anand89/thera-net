@@ -9,6 +9,7 @@ import type {
 import type { Repos } from '@/repositories/types';
 import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
+import { allocateAcrossVisits } from './advanceService';
 
 /**
  * Pure repo CRUD, deliberately separate from invoiceService (which is
@@ -99,25 +100,19 @@ export function createPaymentService(repos: Repos) {
       throw new Error(`Amount exceeds the outstanding balance of ${formatINR(remaining)}.`);
     }
 
-    let toAllocate = amountPaise;
-    for (const v of visits) {
-      if (toAllocate <= 0) break;
-      const visitRemaining = v.actualBillPaise - (paidByVisit.get(v.id) ?? 0);
-      if (visitRemaining <= 0) continue;
-      const slice = Math.min(visitRemaining, toAllocate);
+    await allocateAcrossVisits(visits, paidByVisit, amountPaise, async (visitId, slicePaise) => {
       const payment: Payment = {
         id: crypto.randomUUID(),
         clinicId,
-        visitId: v.id,
-        amountPaise: slice,
+        visitId,
+        amountPaise: slicePaise,
         method,
         receivedDate,
         notes,
         updatedAt: new Date().toISOString(),
       };
       await repos.payments.put(payment);
-      toAllocate -= slice;
-    }
+    });
 
     if (alreadyPaid + amountPaise >= invoice.totalPaise) {
       await setStatus(invoice.id, clinicId, 'paid');

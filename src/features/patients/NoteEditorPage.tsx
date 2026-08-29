@@ -467,7 +467,10 @@ export function NoteEditorPage() {
         if (!existingNote) return; // still resolving
         hydratedNoteIdRef.current = noteId;
         setEnrollmentId(existingNote.enrollmentId);
-        const mode = existingNote.noteMode ?? 'initial';
+        // Null (legacy row) and anything that isn't literally 'followup' —
+        // including a 'session' note that reached this heavy-only editor by
+        // mistake — default to 'initial', never silently widen local state.
+        const mode = existingNote.noteMode === 'followup' ? 'followup' : 'initial';
         setNoteMode(mode);
         setStatus(existingNote.status === 'completed' ? 'completed' : 'draft');
         setTherapistId(existingNote.therapistId);
@@ -482,7 +485,10 @@ export function NoteEditorPage() {
         setReady(true);
         return;
       }
-      const openDraft = await repos.consultationNotes.getOpenDraft(clinic.id, patientId);
+      const openDraft = await repos.consultationNotes.getOpenDraft(clinic.id, patientId, [
+        'initial',
+        'followup',
+      ]);
       if (openDraft) {
         if (cancelled) return;
         void navigate({
@@ -500,7 +506,7 @@ export function NoteEditorPage() {
         clinic.id,
         patientId
       );
-      const mode = await consultationNoteService.noteModeFor(enrollment.id);
+      const mode = await consultationNoteService.heavyModeFor(enrollment.id);
       if (cancelled) return;
       setEnrollmentId(enrollment.id);
       setNoteMode(mode);
@@ -898,7 +904,6 @@ export function NoteEditorPage() {
             ⚠ This note is completed and read-only. Corrections need a new dated addendum note.
           </div>
         )}
-
         <div className="ne-topbar">
           <div
             className="mode-toggle"

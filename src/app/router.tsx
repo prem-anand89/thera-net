@@ -22,6 +22,29 @@ const PatientProfilePage = lazy(() =>
 const NoteEditorPage = lazy(() =>
   import('@/features/patients/NoteEditorPage').then((m) => ({ default: m.NoteEditorPage }))
 );
+const SessionNoteEditorPage = lazy(() =>
+  import('@/features/patients/SessionNoteEditorPage').then((m) => ({
+    default: m.SessionNoteEditorPage,
+  }))
+);
+const SessionNoteBatchPage = lazy(() =>
+  import('@/features/patients/SessionNoteBatchPage').then((m) => ({
+    default: m.SessionNoteBatchPage,
+  }))
+);
+const NoteEditorDispatch = lazy(() =>
+  import('@/features/patients/NoteEditorDispatch').then((m) => ({ default: m.NoteEditorDispatch }))
+);
+const SessionLogPrintPage = lazy(() =>
+  import('@/features/patients/SessionLogPrintPage').then((m) => ({
+    default: m.SessionLogPrintPage,
+  }))
+);
+const InsurerPacketPage = lazy(() =>
+  import('@/features/patients/InsurerPacketPage').then((m) => ({
+    default: m.InsurerPacketPage,
+  }))
+);
 const MonthlyLedgerPrintPage = lazy(() =>
   import('@/features/reports/MonthlyLedgerPrintPage').then((m) => ({
     default: m.MonthlyLedgerPrintPage,
@@ -29,6 +52,11 @@ const MonthlyLedgerPrintPage = lazy(() =>
 );
 const InvoicePrintPage = lazy(() =>
   import('@/features/invoices/InvoicePrintPage').then((m) => ({ default: m.InvoicePrintPage }))
+);
+const AdvanceReceiptPrintPage = lazy(() =>
+  import('@/features/invoices/AdvanceReceiptPrintPage').then((m) => ({
+    default: m.AdvanceReceiptPrintPage,
+  }))
 );
 const NotePrintPage = lazy(() =>
   import('@/features/patients/NotePrintPage').then((m) => ({ default: m.NotePrintPage }))
@@ -162,11 +190,43 @@ const newNoteRoute = createRoute({
   component: NoteEditorPage,
 });
 
+// The light per-visit SOAP note's own entry point — a distinct path rather
+// than a query param on /notes/new, since the two "new note" callers
+// already differ (one always carries visitId, the other doesn't).
+const newSessionNoteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/notes/new-session',
+  validateSearch: validateNoteSearch,
+  component: SessionNoteEditorPage,
+});
+
+// Batch/sequential session-note editing (Billing & Notes Rebuild Phase 3)
+// — a caller (Patient Profile's "Write session notes") resolves the queue
+// of visits needing a note once and carries it here as `visitIds`, so the
+// queue survives a refresh instead of being re-derived from route state.
+const validateSessionBatchSearch = (
+  search: Record<string, unknown>
+): { visitIds: string[] } & { from?: PatientProfileBackTarget } => ({
+  visitIds: Array.isArray(search.visitIds)
+    ? search.visitIds.filter((v): v is string => typeof v === 'string')
+    : [],
+  ...validateFromSearch(search),
+});
+
+const sessionNoteBatchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/notes/session-batch',
+  validateSearch: validateSessionBatchSearch,
+  component: SessionNoteBatchPage,
+});
+
+// Dispatches to the heavy or light editor based on the note's own
+// noteMode — see NoteEditorDispatch.tsx.
 const noteEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients/$patientId/notes/$noteId',
   validateSearch: validateNoteSearch,
-  component: NoteEditorPage,
+  component: NoteEditorDispatch,
 });
 
 const notePrintRoute = createRoute({
@@ -174,6 +234,33 @@ const notePrintRoute = createRoute({
   path: '/patients/$patientId/notes/$noteId/print',
   validateSearch: validateFromSearch,
   component: NotePrintPage,
+});
+
+// Multi-visit session log (C6) — one enrollment's completed session notes,
+// the only print surface for session-note content.
+const sessionLogPrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/session-log/$enrollmentId',
+  validateSearch: validateFromSearch,
+  component: SessionLogPrintPage,
+});
+
+// Insurer packet (C7) — assessment + session log + read-only invoice(s)
+// composed in one print job for this enrollment.
+const insurerPacketRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/insurer-packet/$enrollmentId',
+  validateSearch: validateFromSearch,
+  component: InsurerPacketPage,
+});
+
+// Advance receipt (Billing & Notes Rebuild Phase 1, 1.6) — always reached
+// from Patient Profile, same back-target carrying as the note print routes.
+const advanceReceiptPrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patients/$patientId/advances/$advanceId/print',
+  validateSearch: validateFromSearch,
+  component: AdvanceReceiptPrintPage,
 });
 
 // The monthly statement lives under the Reports nav tab (/insights), not
@@ -333,8 +420,13 @@ const routeTree = rootRoute.addChildren([
   patientsRoute,
   patientProfileRoute,
   newNoteRoute,
+  newSessionNoteRoute,
+  sessionNoteBatchRoute,
   noteEditorRoute,
   notePrintRoute,
+  sessionLogPrintRoute,
+  insurerPacketRoute,
+  advanceReceiptPrintRoute,
   insightsPrintRoute,
   reportsRedirectRoute,
   reportsPrintRedirectRoute,

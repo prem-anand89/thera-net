@@ -1,5 +1,6 @@
-import type { Paise } from './money';
+import { formatINR, type Paise } from './money';
 import type { PaymentStatus, UUID } from './types';
+import { daysSince } from './packageTracking';
 
 /**
  * A visit's payment state is three separate facts collapsed into one label
@@ -150,4 +151,63 @@ export function paymentActions(state: VisitPaymentState): VisitPaymentAction[] {
     default:
       return [];
   }
+}
+
+/** How many days an unpaid balance sits before it reads as Overdue rather
+ *  than just Due. Exported so it's changeable in one place later. */
+export const OVERDUE_AFTER_DAYS = 30;
+
+export type PaymentBadgeKind = 'paid' | 'partial' | 'due' | 'overdue' | 'none';
+
+/**
+ * The 4-state collapse of `VisitPaymentState` for display (Billing & Notes
+ * Rebuild Phase 1, D2): `paid`/`collected_no_receipt` → paid;
+ * `partially_collected` → partial (or overdue tone, see below);
+ * `outstanding`/`uninvoiced` → due or overdue depending on age;
+ * `zero_session` → none. `paymentStatusPhrase`/`paymentStatusShortPhrase`
+ * are unchanged and still used directly by callers that only need a label,
+ * not a badge — this is additive, not a replacement.
+ */
+export function paymentBadge(input: {
+  state: VisitPaymentState;
+  billPaise: Paise;
+  collectedPaise: Paise;
+  visitDate: string;
+  /** This visit's invoice's issuedAt, when one exists — anchors the
+   *  Overdue clock at max(visitDate, issuedAt) instead of visitDate alone,
+   *  so a package invoiced weeks after the visit gets a fresh window
+   *  rather than reading Overdue the instant it's issued. */
+  issuedAt?: string | null;
+  isPackageSession?: boolean;
+  asOf?: Date;
+}): { kind: PaymentBadgeKind; label: string; shortLabel: string; title: string } {
+  const { state, billPaise, collectedPaise, visitDate, issuedAt, isPackageSession, asOf } = input;
+  const fullLabel = paymentStatusPhrase(state, isPackageSession);
+
+  if (state === 'zero_session') {
+    const label = paymentStatusShortPhrase(state, isPackageSession);
+    return { kind: 'none', label, shortLabel: label, title: fullLabel };
+  }
+  if (state === 'paid' || state === 'collected_no_receipt') {
+    return { kind: 'paid', label: 'Paid', shortLabel: 'Paid', title: fullLabel };
+  }
+
+  const anchor = issuedAt && issuedAt.slice(0, 10) > visitDate ? issuedAt.slice(0, 10) : visitDate;
+  const overdue = daysSince(anchor, asOf) > OVERDUE_AFTER_DAYS;
+
+  if (state === 'partially_collected') {
+    const label =
+      collectedPaise > 0 && collectedPaise < billPaise
+        ? `${formatINR(collectedPaise)} of ${formatINR(billPaise)}`
+        : 'Partial';
+    // Tone escalates to overdue past the threshold; the label keeps saying
+    // Partial — the partial-payment fact is more informative than a
+    // generic "Overdue" and losing it on a still-informative row would be
+    // a regression, not an improvement.
+    return { kind: overdue ? 'overdue' : 'partial', label, shortLabel: label, title: fullLabel };
+  }
+
+  // outstanding / uninvoiced
+  const label = overdue ? 'Overdue' : 'Due';
+  return { kind: overdue ? 'overdue' : 'due', label, shortLabel: label, title: fullLabel };
 }

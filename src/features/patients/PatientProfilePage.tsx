@@ -2,7 +2,13 @@ import { useMemo, useState, useCallback } from 'react';
 import { Link, useParams, useSearch } from '@tanstack/react-router';
 import type { PatientProfileBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService, consultationNoteService, invoiceService } from '@/services';
+import {
+  repos,
+  dashboardService,
+  consultationNoteService,
+  invoiceService,
+  advanceService,
+} from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -17,9 +23,11 @@ import {
   type ConsultationNote,
   type ConsultationNoteStatus,
 } from '@/domain/types';
+import { formatINR } from '@/domain/money';
 import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
+import { RecordAdvanceDialog } from '@/components/RecordAdvanceDialog';
 
 /** How many notes the side panel lists before collapsing the rest into a
  *  "+N older" line — the full history stays reachable by opening any note. */
@@ -56,8 +64,17 @@ export function PatientProfilePage() {
   // wants the payment/invoice trail. Off by default so nothing disappears
   // without the viewer choosing it.
   const [hideZeroBilled, setHideZeroBilled] = useState(false);
+  const [recordingAdvance, setRecordingAdvance] = useState(false);
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
+  // Billing & Notes Rebuild Phase 1, 1.6 — total open-advance balance for
+  // this patient, re-runs on any local write (a new advance, a draw-down
+  // payment) via the same live-query mechanism every other count here uses.
+  const openAdvances = useLiveQuery(
+    () => advanceService.openAdvancesWithBalance(clinic.id, patientId),
+    [clinic.id, patientId]
+  );
+  const advanceBalancePaise = (openAdvances ?? []).reduce((sum, a) => sum + a.remainingPaise, 0);
   const editPatient = useLiveQuery(
     () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
     [editPatientId]
@@ -65,6 +82,14 @@ export function PatientProfilePage() {
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
   const notes = useLiveQuery(
     () => consultationNoteService.listByPatient(clinic.id, patientId),
+    [clinic.id, patientId]
+  );
+  // The patient's currently-active episode, if any — used to resolve which
+  // enrollment "View session log"/"Insurer packet" should point at (see
+  // the Session notes section below), replacing the old most-recently-
+  // touched-note heuristic that could point at a stale, non-active episode.
+  const activeEnrollment = useLiveQuery(
+    () => repos.patientModuleEnrollments.getActive(clinic.id, patientId, 'consultation_notes'),
     [clinic.id, patientId]
   );
 
@@ -77,6 +102,7 @@ export function PatientProfilePage() {
   const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]);
   const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
   const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
+  const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
 
   const therapistName = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
@@ -97,6 +123,12 @@ export function PatientProfilePage() {
     }
     return map;
   }, [directPayments]);
+  // D2's Overdue anchor (max(visitDate, issuedAt)) — see LedgerPage.tsx's
+  // identical map for why statusByInvoiceId alone isn't enough.
+  const issuedAtByInvoiceId = useMemo(
+    () => new Map((invoices ?? []).map((inv) => [inv.id, inv.issuedAt])),
+    [invoices]
+  );
   const visitRows = useMemo(
     () =>
       [...(visits ?? [])]
@@ -173,6 +205,32 @@ export function PatientProfilePage() {
   // patient's full history including drafts — no extra query needed,
   // unlike Ledger/Workspace which join against a separate clinic-wide fetch.
 
+  // The standalone "Write session notes" entry point's queue — every visit
+  // still flagged for documentation, oldest first (so the batch flow walks
+  // the episode in chronological order, matching how a therapist actually
+  // thinks about "catching up").
+  const needsNoteVisitIds = useMemo(
+    () =>
+      [...visitRows]
+        .filter((v) => v.clinicalStatus === 'pending')
+        .sort((a, b) => a.visitDate.localeCompare(b.visitDate))
+        .map((v) => v.id),
+    [visitRows]
+  );
+  const hasSessionNotes = (notes ?? []).some(
+    (n) => n.noteMode === 'session' && n.status === 'completed'
+  );
+  // Which enrollment "View session log"/"Insurer packet" should point at —
+  // prefer the patient's currently-active episode; only when there isn't
+  // one (discharged with no new episode yet) fall back to the most
+  // recently touched enrollment that actually has a completed session
+  // note, rather than the old "most recently touched note of any kind"
+  // heuristic, which could point at a stale, non-active episode.
+  const sessionNotesEnrollmentId =
+    activeEnrollment?.id ??
+    (notes ?? []).find((n) => n.noteMode === 'session' && n.status === 'completed')?.enrollmentId ??
+    null;
+
   // Which package groups have AT LEAST ONE invoiced sibling — `visits`
   // here is this one patient's full, unbounded history, so unlike
   // Ledger/Workspace (date/day-scoped) a direct scan is already accurate,
@@ -216,6 +274,8 @@ export function PatientProfilePage() {
             v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
           ),
           invoiceId: v.invoiceId ?? null,
+          collectedPaise: directPaymentByVisitId.get(v.id) ?? 0,
+          issuedAt: v.invoiceId ? (issuedAtByInvoiceId.get(v.invoiceId) ?? null) : null,
           canRepeat: openPackageIds.has(v.packageGroupId ?? ''),
           // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
           // is_own_therapist) — a patient's history is clinic-wide (any
@@ -247,6 +307,7 @@ export function PatientProfilePage() {
       treatmentName,
       directPaymentByVisitId,
       statusByInvoiceId,
+      issuedAtByInvoiceId,
       openPackageIds,
       isAdmin,
       myTherapistId,
@@ -416,9 +477,23 @@ export function PatientProfilePage() {
                 </span>
               )}
               {patient.mrnoSource === 'auto' && <Pill tone="slate">walk-in</Pill>}
+              {advanceBalancePaise > 0 && (
+                <span className="rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-xs font-medium text-[var(--teal)]">
+                  {formatINR(advanceBalancePaise)} advance available
+                </span>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {canBill && (
+              <button
+                type="button"
+                className={btnSecondary}
+                onClick={() => setRecordingAdvance(true)}
+              >
+                Record advance
+              </button>
+            )}
             <Link to="/visits/new" search={{ patientId }} className={btnPrimary}>
               New visit
             </Link>
@@ -510,6 +585,61 @@ export function PatientProfilePage() {
 
         {/* Main column */}
         <div className="order-2 space-y-4 lg:order-none lg:col-start-1 lg:row-start-1">
+          {/* Standalone session-notes entry point — previously two small
+              text links buried at the bottom of the side-panel "Clinical
+              notes" card, only shown once a session note already existed.
+              Promoted to the main column so a therapist scanning the
+              profile sees at a glance whether documentation is caught up,
+              and gets a direct way to catch up on all of it at once. */}
+          {canViewClinicalNotes && visitRows.length > 0 && (
+            <section className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="font-display text-sm font-semibold text-[var(--ink)]">
+                    Session notes
+                  </h2>
+                  <p className="text-xs text-[var(--muted)]">
+                    {needsNoteVisitIds.length > 0
+                      ? `${needsNoteVisitIds.length} session${needsNoteVisitIds.length === 1 ? '' : 's'} need${needsNoteVisitIds.length === 1 ? 's' : ''} a note`
+                      : 'All session notes up to date'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  {needsNoteVisitIds.length > 0 && (
+                    <Link
+                      to="/patients/$patientId/notes/session-batch"
+                      params={{ patientId }}
+                      search={{ visitIds: needsNoteVisitIds, ...(backTo ? { from: backTo } : {}) }}
+                      className={btnPrimary}
+                    >
+                      Write session notes
+                    </Link>
+                  )}
+                  {hasSessionNotes && sessionNotesEnrollmentId && (
+                    <>
+                      <Link
+                        to="/patients/$patientId/session-log/$enrollmentId"
+                        params={{ patientId, enrollmentId: sessionNotesEnrollmentId }}
+                        search={backTo ? { from: backTo } : undefined}
+                        className="text-xs font-medium text-[var(--teal)] hover:underline"
+                      >
+                        View session log
+                      </Link>
+                      <Link
+                        to="/patients/$patientId/insurer-packet/$enrollmentId"
+                        params={{ patientId, enrollmentId: sessionNotesEnrollmentId }}
+                        search={backTo ? { from: backTo } : undefined}
+                        className="text-xs font-medium text-[var(--teal)] hover:underline"
+                      >
+                        Insurer packet
+                      </Link>
+                    </>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
           <div className="flex items-center justify-between">
             <SectionLabel>Visit history</SectionLabel>
             {visitRows.length > 0 && (
@@ -602,6 +732,16 @@ export function PatientProfilePage() {
           onOpenEdit={() => setEditPatientId(newPatientId)}
         />
       )}
+
+      {recordingAdvance && patient && (
+        <RecordAdvanceDialog
+          clinicId={clinic.id}
+          patientId={patientId}
+          patientLabel={patient.name}
+          backTo={backTo}
+          onClose={() => setRecordingAdvance(false)}
+        />
+      )}
     </div>
   );
 }
@@ -609,8 +749,12 @@ export function PatientProfilePage() {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Entry point into consultation notes. One open draft per patient at a
- * time (v1 constraint) — surface it instead of offering to start a second.
+ * Entry point into consultation notes — always the HEAVY editor (C5), one
+ * open heavy draft per patient at a time (v1 constraint), surfaced instead
+ * of offering to start a second. Deliberately ignores any open LIGHT
+ * (session) draft: those surface on their own visit row instead, and
+ * "Continue draft" here should never silently open a session note under a
+ * button whose contract is "always heavy."
  */
 function ConsultationNotePanel({
   patientId,
@@ -621,7 +765,11 @@ function ConsultationNotePanel({
   notes: ConsultationNote[];
   backTo?: PatientProfileBackTarget;
 }) {
-  const draft = notes.find((n) => n.status === 'draft');
+  const draft = notes.find(
+    (n) =>
+      n.status === 'draft' &&
+      (n.noteMode == null || n.noteMode === 'initial' || n.noteMode === 'followup')
+  );
   const visible = notes.slice(0, NOTE_LIST_LIMIT);
   const hiddenCount = notes.length - visible.length;
   const backSearch = backTo ? { from: backTo } : undefined;
@@ -636,7 +784,7 @@ function ConsultationNotePanel({
           search={backSearch}
           className={btnSecondary}
         >
-          {draft ? 'Continue draft' : 'New note'}
+          {draft ? 'Continue draft' : 'New assessment'}
         </Link>
       }
     >
@@ -662,7 +810,11 @@ function ConsultationNotePanel({
                     {formatDateDM(n.updatedAt.slice(0, 10))}
                   </span>
                   <span className="ml-1.5 text-[var(--muted)]">
-                    {n.noteMode === 'followup' ? 'Follow-up' : 'Initial'}
+                    {n.noteMode === 'session'
+                      ? 'Session'
+                      : n.noteMode === 'followup'
+                        ? 'Follow-up'
+                        : 'Initial'}
                   </span>
                 </span>
                 <Pill tone={NOTE_STATUS_PILL[n.status].tone}>
