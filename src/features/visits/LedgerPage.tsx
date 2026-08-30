@@ -286,10 +286,18 @@ export function LedgerPage() {
     () => (clinic.enablePatientComms ? repos.feedbackRequests.listByClinic(clinic.id) : undefined),
     [clinic.id, clinic.enablePatientComms]
   );
-  const feedbackRequestByVisitId = useMemo(
-    () => new Map((feedbackRequests ?? []).map((r) => [r.visitId, r])),
-    [feedbackRequests]
-  );
+  const feedbackRequestByVisitId = useMemo(() => {
+    const map = new Map<UUID, FeedbackRequest>();
+    for (const r of feedbackRequests ?? []) {
+      // A visit can have more than one row over time (an old expired/
+      // responded one plus a fresh pending one after re-asking) — keep
+      // whichever was updated most recently, same tie-break as the repo's
+      // own getByVisitId.
+      const existing = map.get(r.visitId);
+      if (!existing || r.updatedAt > existing.updatedAt) map.set(r.visitId, r);
+    }
+    return map;
+  }, [feedbackRequests]);
 
   // Payment state needs both facts a bare `invoiceId` check misses: whether
   // the invoice itself was ever marked paid (statusByInvoiceId), and

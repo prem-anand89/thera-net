@@ -194,10 +194,18 @@ export function WorkspacePage() {
     () => (clinic.enablePatientComms ? repos.feedbackRequests.listByClinic(clinic.id) : undefined),
     [clinic.id, clinic.enablePatientComms]
   );
-  const feedbackRequestByVisitId = useMemo(
-    () => new Map((feedbackRequests ?? []).map((r) => [r.visitId, r])),
-    [feedbackRequests]
-  );
+  const feedbackRequestByVisitId = useMemo(() => {
+    const map = new Map<string, FeedbackRequest>();
+    for (const r of feedbackRequests ?? []) {
+      // Same "most recently updated wins" tie-break as the repo's own
+      // getByVisitId — a visit can have more than one row over time (an
+      // old expired/responded one plus a fresh pending one after
+      // re-asking).
+      const existing = map.get(r.visitId);
+      if (!existing || r.updatedAt > existing.updatedAt) map.set(r.visitId, r);
+    }
+    return map;
+  }, [feedbackRequests]);
   // A ₹0 package continuation logged today whose OWN invoiceId is null —
   // check the full package group (unbounded by "today") for an invoiced
   // sibling, so a session trailing an already-issued invoice gets flagged
