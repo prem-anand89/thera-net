@@ -14,6 +14,7 @@ import {
   type Visit,
 } from '@/domain/types';
 import { noteForVisit } from '@/domain/noteLinks';
+import { toFriendlyMessage } from '@/lib/errors';
 import type { TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
@@ -338,17 +339,16 @@ export function WorkspacePage() {
               if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
             }}
             onAskForFeedback={(row) => {
-              void feedbackService.askForFeedback(
-                clinic.id,
-                row.visitId,
-                row.patientId,
-                row.therapistId!
-              );
+              void feedbackService
+                .askForFeedback(clinic.id, row.visitId, row.patientId, row.therapistId!)
+                .catch((e) => alert(toFriendlyMessage(e)));
             }}
             onResendFeedback={(row) => {
               const request = feedbackRequestByVisitId.get(row.visitId);
               if (!request?.token) return;
-              void feedbackService.resend(request, row.patientName, clinic.name);
+              void feedbackService
+                .resend(request, row.patientName, clinic.name)
+                .catch((e) => alert(toFriendlyMessage(e)));
             }}
             canInvoice={canBill}
             backTo="/workspace"
