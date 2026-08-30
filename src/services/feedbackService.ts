@@ -145,5 +145,27 @@ export function createFeedbackService(repos: Repos) {
         'Send reminder'
       );
     },
+
+    /**
+     * Front-desk parity for the Google review nudge: `feedback_responses`
+     * (and its `rating` column) never reaches a non-admin's Dexie at all —
+     * RLS's `feedback_responses_select` is `is_clinic_admin()`-only, so the
+     * row is filtered out at sync-pull time, not hidden client-side. A
+     * front_desk caller has no rating to check `>= 4` against locally, so
+     * this calls a role-blind RPC instead: it returns only the set of
+     * `feedback_requests.id`s that currently qualify, never a rating value
+     * or a comment (see the `list_google_review_eligible_requests`
+     * migration's own comment). Online-only, same reasoning as `resend` —
+     * this is a live eligibility check, not sync-engine data.
+     */
+    async listGoogleReviewEligibleRequestIds(clinicId: UUID): Promise<Set<UUID>> {
+      const supabase = getSupabase();
+      if (!supabase || !navigator.onLine) return new Set();
+      const { data, error } = await supabase.rpc('list_google_review_eligible_requests', {
+        p_clinic_id: clinicId,
+      });
+      if (error) return new Set();
+      return new Set((data as UUID[] | null) ?? []);
+    },
   };
 }

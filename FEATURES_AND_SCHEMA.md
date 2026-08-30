@@ -608,14 +608,23 @@ not yet built.
     page just shows the button if the return value is non-null.
   - **Staff-facing**: an "⭐ Google review" nudge on the visit row, next to
     the "★ Responded" marker — a pure share action (`shareTextViaWhatsApp`,
-    no DB write, no `message_log` entry), gated the same way. Needs the
-    rating on `VisitCardData.feedbackRequest.rating`, joined in by each
-    builder (`LedgerPage.tsx`/`WorkspacePage.tsx`) from a bulk
-    `feedback_responses` fetch keyed by `requestId` — same RLS-filters-it-
-    to-nothing-for-non-admins reasoning as the "★ Responded" marker above,
-    so no separate admin/front-desk code path was needed despite the
-    spec's send-table listing front desk as eligible to send: the rating
-    genuinely isn't in their local Dexie to check against.
+    no DB write, no `message_log` entry), gated the same way.
+    `VisitCardData.feedbackRequest.googleReviewEligible` is a bare boolean
+    (not the rating itself), populated two different ways depending on
+    role: an admin caller derives it from the synced, RLS-filtered
+    `feedback_responses.rating` (`>= 4`), the same bulk fetch the
+    "★ Responded" marker already uses. A front_desk caller has no rating
+    available at all — `feedback_responses_select` is
+    `is_clinic_admin()`-only, so the row never reaches their Dexie, not
+    even filtered client-side — so they instead call
+    `list_google_review_eligible_requests(clinic_id)`, a `security
+    definer` RPC that answers "which request_ids currently qualify"
+    without ever returning a rating or a comment. This closes the gap the
+    Phase 3 slice originally shipped with (spec's send-table lists front
+    desk as eligible to send; the first cut only worked for admins).
+    `useGoogleReviewEligibleRequestIds` (`requestsSignals.ts`) is the
+    front_desk-only fetch — a one-shot RPC call on mount/clinic-change,
+    re-run on window focus, skipped entirely for admin.
 - **Re-engagement reminders (Phase 4)** — "No new detection" per the
   handoff doc: both surfaces reuse existing dashboard queries rather than
   adding a new signal. Pure `shareTextViaWhatsApp` actions, no DB write, no
@@ -1312,6 +1321,17 @@ clinic's `google_review_url` when `p_rating >= 4` and one is configured,
 review" on this return value instead of a second round trip. Return-type
 changes require dropping the function first (grants don't survive a drop,
 so the migration re-states them).
+
+`list_google_review_eligible_requests(p_clinic_id uuid) returns setof uuid`
+— `security definer` (unlike `rotate_feedback_request_token` above, this
+one must bypass RLS on purpose), EXECUTE revoked from `public`/`anon` and
+granted only to `authenticated`. Lets a front_desk caller — who has zero
+RLS visibility into `feedback_responses` at all, not just a filtered view
+of it — ask "which requests currently qualify for a Google review nudge"
+without the function ever returning a rating or a comment, just bare
+`request_id`s where `rating >= 4`. The function body re-implements its own
+narrower check (`is_clinic_member`) rather than relying on RLS, since RLS
+itself is what's being deliberately bypassed here.
 
 #### `audit_log`
 ```sql

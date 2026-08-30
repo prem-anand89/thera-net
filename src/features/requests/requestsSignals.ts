@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos } from '@/services';
+import { repos, feedbackService } from '@/services';
 import { db } from '@/lib/db';
+import type { UUID } from '@/domain/types';
 
 /**
  * Split out of `RequestsPage.tsx` so `WorkspacePage.tsx` — eagerly bundled,
@@ -35,4 +36,37 @@ export function useNewFeedbackResponseCount(clinicId: string, enabled: boolean):
     if (!since) return responses.length;
     return responses.filter((r) => r.createdAt > since).length;
   }, [enabled, responses, lastViewed]);
+}
+
+/**
+ * Google-review-nudge eligibility for callers who can't get it from the
+ * synced `feedback_responses.rating` column — i.e. front_desk, since that
+ * table's RLS is `is_clinic_admin()`-only and the row never reaches their
+ * Dexie at all (see `feedbackService.listGoogleReviewEligibleRequestIds`'s
+ * own comment). Admin callers don't need this; only fetch when `enabled`.
+ * Not reactive like this file's other hooks — a plain one-shot RPC fetch,
+ * re-run on window focus so a response that just came in shows up without
+ * a full page reload.
+ */
+export function useGoogleReviewEligibleRequestIds(clinicId: UUID, enabled: boolean): Set<UUID> {
+  const [ids, setIds] = useState<Set<UUID>>(new Set());
+  useEffect(() => {
+    if (!enabled) {
+      setIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      void feedbackService.listGoogleReviewEligibleRequestIds(clinicId).then((result) => {
+        if (!cancelled) setIds(result);
+      });
+    };
+    load();
+    window.addEventListener('focus', load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', load);
+    };
+  }, [clinicId, enabled]);
+  return ids;
 }

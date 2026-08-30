@@ -213,11 +213,17 @@ export interface VisitCardData {
     status: FeedbackRequestStatus;
     token?: string;
     updatedAt: string;
-    /** Set only once `status` is `'responded'` — the patient's 1-5 rating,
-     *  joined in from `feedback_responses` by the caller. Drives the
-     *  "Ask for a Google review" nudge (Slice 3): 4-5* only, and only when
-     *  `googleReviewUrl` is also set below. */
-    rating?: number | null;
+    /** Set only once `status` is `'responded'` — whether this response
+     *  qualifies for the "Ask for a Google review" nudge (Slice 3: 4-5*
+     *  only). Deliberately a bare boolean, not the rating itself: an admin
+     *  caller derives it from the synced `feedback_responses.rating` (which
+     *  only ever reaches their Dexie, per RLS), while a front_desk caller
+     *  has no rating available at all and instead derives it from
+     *  `list_google_review_eligible_requests()` — a role-blind RPC that
+     *  answers "does this qualify" without ever exposing the rating value
+     *  itself (see that migration's own comment). Either way the nudge
+     *  still also needs `googleReviewUrl` set below. */
+    googleReviewEligible?: boolean;
   } | null;
   /** Clinic's Google review link (Slice 3) — unset means the nudge never
    *  shows, even for a 4-5* response. Plain passthrough of
@@ -527,15 +533,14 @@ export function VisitFeedbackLink({
   if (!data.canAskForFeedback) return null;
   const request = data.feedbackRequest;
 
-  // A patient's actual rating/comment is admin-only at the RLS layer
-  // (`feedback_responses` SELECT is `is_clinic_admin()`-only) — `rating`
-  // itself is simply never populated for a non-admin viewer (RLS filters
-  // the row out at the sync-pull level, not a client-side check), so the
-  // Google-review nudge below naturally never appears for them either.
-  // Everyone else gets the same plain "it happened" marker.
+  // A patient's actual rating/comment stays admin-only at the RLS layer
+  // (`feedback_responses` SELECT is `is_clinic_admin()`-only) — but the
+  // *eligibility* signal below is role-blind by design (see
+  // `googleReviewEligible`'s own doc comment), so every role that can act
+  // on a visit gets the same "it happened" marker here.
   if (request?.status === 'responded') {
     const eligibleForGoogleReview =
-      (request.rating ?? 0) >= 4 && !!data.googleReviewUrl && !!onAskForGoogleReview;
+      !!request.googleReviewEligible && !!data.googleReviewUrl && !!onAskForGoogleReview;
     return (
       <div className="flex flex-col items-start gap-0.5">
         <span

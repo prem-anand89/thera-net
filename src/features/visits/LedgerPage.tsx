@@ -7,6 +7,7 @@ import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { useGoogleReviewEligibleRequestIds } from '@/features/requests/requestsSignals';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY, formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
@@ -84,6 +85,7 @@ function visitToCardData(
   enablePatientComms: boolean,
   feedbackRequestByVisitId: Map<UUID, FeedbackRequest>,
   responseByRequestId: Map<UUID, FeedbackResponse>,
+  googleReviewEligibleIds: Set<UUID>,
   googleReviewUrl: string | null
 ): VisitCardData {
   const p = patientById.get(v.patientId);
@@ -151,7 +153,12 @@ function visitToCardData(
           status: feedbackRequest.status,
           token: feedbackRequest.token,
           updatedAt: feedbackRequest.updatedAt,
-          rating: responseByRequestId.get(feedbackRequest.id)?.rating ?? null,
+          // Admin gets it for free off the synced rating; front_desk (no
+          // rating available at all, see feedbackRequest field's own doc
+          // comment) falls back to the role-blind eligibility RPC result.
+          googleReviewEligible: isAdmin
+            ? (responseByRequestId.get(feedbackRequest.id)?.rating ?? 0) >= 4
+            : googleReviewEligibleIds.has(feedbackRequest.id),
         }
       : null,
     googleReviewUrl,
@@ -322,6 +329,12 @@ export function LedgerPage() {
     () => new Map((feedbackResponses ?? []).map((r) => [r.requestId, r])),
     [feedbackResponses]
   );
+  // Front-desk-only fallback for the Google review nudge (see
+  // WorkspacePage's own comment on this hook for why admin skips it).
+  const googleReviewEligibleIds = useGoogleReviewEligibleRequestIds(
+    clinic.id,
+    !isAdmin && (clinic.enablePatientComms ?? false)
+  );
 
   // Payment state needs both facts a bare `invoiceId` check misses: whether
   // the invoice itself was ever marked paid (statusByInvoiceId), and
@@ -439,6 +452,7 @@ export function LedgerPage() {
           clinic.enablePatientComms ?? false,
           feedbackRequestByVisitId,
           responseByRequestId,
+          googleReviewEligibleIds,
           clinic.googleReviewUrl ?? null
         )
       ),
@@ -463,6 +477,7 @@ export function LedgerPage() {
       clinic.enablePatientComms,
       feedbackRequestByVisitId,
       responseByRequestId,
+      googleReviewEligibleIds,
       clinic.googleReviewUrl,
     ]
   );

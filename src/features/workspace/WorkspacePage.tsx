@@ -29,7 +29,10 @@ import {
   tdNum,
 } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
-import { useNewFeedbackResponseCount } from '@/features/requests/requestsSignals';
+import {
+  useNewFeedbackResponseCount,
+  useGoogleReviewEligibleRequestIds,
+} from '@/features/requests/requestsSignals';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { SplitModal } from '@/components/SplitModal';
@@ -55,6 +58,7 @@ function todayRowToCardData(
   enablePatientComms: boolean,
   feedbackRequestByVisitId: Map<string, FeedbackRequest>,
   responseByRequestId: Map<string, FeedbackResponse>,
+  googleReviewEligibleIds: Set<string>,
   googleReviewUrl: string | null
 ): VisitCardData {
   const canModify = isAdmin || row.therapistId === myTherapistId;
@@ -107,7 +111,12 @@ function todayRowToCardData(
           status: feedbackRequest.status,
           token: feedbackRequest.token,
           updatedAt: feedbackRequest.updatedAt,
-          rating: responseByRequestId.get(feedbackRequest.id)?.rating ?? null,
+          // Admin gets it for free off the synced rating; front_desk (no
+          // rating available at all, see feedbackRequest field's own doc
+          // comment) falls back to the role-blind eligibility RPC result.
+          googleReviewEligible: isAdmin
+            ? (responseByRequestId.get(feedbackRequest.id)?.rating ?? 0) >= 4
+            : googleReviewEligibleIds.has(feedbackRequest.id),
         }
       : null,
     googleReviewUrl,
@@ -132,6 +141,13 @@ export function WorkspacePage() {
   const newFeedbackCount = useNewFeedbackResponseCount(
     clinic.id,
     canEditSettings && (clinic.enablePatientComms ?? false)
+  );
+  // Front-desk-only fallback for the Google review nudge — admin doesn't
+  // need this (derives eligibility from the synced rating instead), so
+  // skip the RPC call entirely for them.
+  const googleReviewEligibleIds = useGoogleReviewEligibleRequestIds(
+    clinic.id,
+    !canEditSettings && (clinic.enablePatientComms ?? false)
   );
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
@@ -354,6 +370,7 @@ export function WorkspacePage() {
                 clinic.enablePatientComms ?? false,
                 feedbackRequestByVisitId,
                 responseByRequestId,
+                googleReviewEligibleIds,
                 clinic.googleReviewUrl ?? null
               )
             )}
