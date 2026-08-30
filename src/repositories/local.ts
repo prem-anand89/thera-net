@@ -32,7 +32,7 @@ import type {
   SettlementRepo,
   ConsultationNoteRepo,
   PatientModuleEnrollmentRepo,
-  ExpectedVisitRepo,
+  PatientAdvanceRepo,
   Repos,
 } from './types';
 
@@ -95,7 +95,9 @@ const catalog: CatalogRepo = {
 const noReturnReasonCatalog: NoReturnReasonCatalogRepo = {
   async list(clinicId, includeInactive = false) {
     const all = await db.no_return_reason_catalog.where('clinicId').equals(clinicId).toArray();
-    return all.filter((r) => includeInactive || r.active).sort((a, b) => a.name.localeCompare(b.name));
+    return all
+      .filter((r) => includeInactive || r.active)
+      .sort((a, b) => a.name.localeCompare(b.name));
   },
   get: (id) => db.no_return_reason_catalog.get(id),
   put: (item) => putWithOutbox('no_return_reason_catalog', item),
@@ -104,7 +106,9 @@ const noReturnReasonCatalog: NoReturnReasonCatalogRepo = {
 const referringSourceCatalog: ReferringSourceCatalogRepo = {
   async list(clinicId, includeInactive = false) {
     const all = await db.referring_source_catalog.where('clinicId').equals(clinicId).toArray();
-    return all.filter((r) => includeInactive || r.active).sort((a, b) => a.name.localeCompare(b.name));
+    return all
+      .filter((r) => includeInactive || r.active)
+      .sort((a, b) => a.name.localeCompare(b.name));
   },
   get: (id) => db.referring_source_catalog.get(id),
   put: (item) => putWithOutbox('referring_source_catalog', item),
@@ -113,7 +117,9 @@ const referringSourceCatalog: ReferringSourceCatalogRepo = {
 const treatmentCatalog: TreatmentCatalogRepo = {
   async list(clinicId, includeInactive = false) {
     const all = await db.treatment_catalog.where('clinicId').equals(clinicId).toArray();
-    return all.filter((r) => includeInactive || r.active).sort((a, b) => a.name.localeCompare(b.name));
+    return all
+      .filter((r) => includeInactive || r.active)
+      .sort((a, b) => a.name.localeCompare(b.name));
   },
   get: (id) => db.treatment_catalog.get(id),
   put: (item) => putWithOutbox('treatment_catalog', item),
@@ -177,7 +183,9 @@ const visits: VisitRepo = {
     rows = rows.filter((v) => !v.deleted);
     if (filter.therapistId) rows = rows.filter((v) => v.therapistId === filter.therapistId);
     if (filter.patientId) rows = rows.filter((v) => v.patientId === filter.patientId);
-    return rows.sort((a, b) => b.visitDate.localeCompare(a.visitDate) || b.updatedAt.localeCompare(a.updatedAt));
+    return rows.sort(
+      (a, b) => b.visitDate.localeCompare(a.visitDate) || b.updatedAt.localeCompare(a.updatedAt)
+    );
   },
   async listByIds(ids) {
     const rows = await db.visits.bulkGet(ids);
@@ -191,7 +199,8 @@ const visits: VisitRepo = {
   async softDelete(id) {
     const visit = await db.visits.get(id);
     if (!visit) return;
-    if (visit.invoiceId) throw new Error('This visit is on an issued invoice and cannot be deleted.');
+    if (visit.invoiceId)
+      throw new Error('This visit is on an issued invoice and cannot be deleted.');
     await putWithOutbox('visits', { ...visit, deleted: true });
   },
   async markInvoiced(ids: UUID[], invoiceId: UUID) {
@@ -251,10 +260,7 @@ const payments: PaymentRepo = {
 const consultationNotes: ConsultationNoteRepo = {
   get: (id) => db.consultation_notes.get(id),
   async listByPatient(clinicId, patientId) {
-    const all = await db.consultation_notes
-      .where('patientId')
-      .equals(patientId)
-      .toArray();
+    const all = await db.consultation_notes.where('patientId').equals(patientId).toArray();
     return all
       .filter((n) => n.clinicId === clinicId)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -263,13 +269,26 @@ const consultationNotes: ConsultationNoteRepo = {
     const all = await db.consultation_notes.where('clinicId').equals(clinicId).toArray();
     return all.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
-  async getOpenDraft(clinicId, patientId) {
+  async getOpenDraft(clinicId, patientId, modes, visitId) {
     const all = await this.listByPatient(clinicId, patientId);
-    return all.find((n) => n.status === 'draft');
+    return all.find(
+      (n) =>
+        n.status === 'draft' &&
+        modes.includes(n.noteMode ?? 'initial') &&
+        (visitId == null || n.visitId === visitId)
+    );
   },
   async listByEnrollment(enrollmentId) {
     const all = await db.consultation_notes.where('enrollmentId').equals(enrollmentId).toArray();
     return all.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+  },
+  async getByVisitId(visitId) {
+    const all = await db.consultation_notes.where('visitId').equals(visitId).toArray();
+    if (all.length === 0) return undefined;
+    return (
+      all.find((n) => n.status === 'completed') ??
+      all.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+    );
   },
   put: (note) => putWithOutbox('consultation_notes', note),
 };
@@ -277,10 +296,7 @@ const consultationNotes: ConsultationNoteRepo = {
 const patientModuleEnrollments: PatientModuleEnrollmentRepo = {
   get: (id) => db.patient_module_enrollments.get(id),
   async listByPatient(clinicId, patientId, moduleType) {
-    const all = await db.patient_module_enrollments
-      .where('patientId')
-      .equals(patientId)
-      .toArray();
+    const all = await db.patient_module_enrollments.where('patientId').equals(patientId).toArray();
     return all
       .filter((e) => e.clinicId === clinicId && e.moduleType === moduleType)
       .sort((a, b) => a.enrolledAt.localeCompare(b.enrolledAt));
@@ -289,15 +305,22 @@ const patientModuleEnrollments: PatientModuleEnrollmentRepo = {
     const all = await this.listByPatient(clinicId, patientId, moduleType);
     return all.find((e) => e.status === 'active');
   },
+  async listByClinic(clinicId, moduleType) {
+    const all = await db.patient_module_enrollments.where('clinicId').equals(clinicId).toArray();
+    return all.filter((e) => e.moduleType === moduleType);
+  },
   put: (enrollment) => putWithOutbox('patient_module_enrollments', enrollment),
 };
 
-const expectedVisits: ExpectedVisitRepo = {
-  async listForDate(clinicId, visitDate) {
-    const all = await db.expected_visits.where('clinicId').equals(clinicId).toArray();
-    return all.filter((e) => e.visitDate === visitDate).sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+const patientAdvances: PatientAdvanceRepo = {
+  get: (id) => db.patient_advances.get(id),
+  async listByPatient(clinicId, patientId) {
+    const all = await db.patient_advances.where('patientId').equals(patientId).toArray();
+    return all
+      .filter((a) => a.clinicId === clinicId && !a.deleted)
+      .sort((a, b) => b.receivedDate.localeCompare(a.receivedDate));
   },
-  put: (entry) => putWithOutbox('expected_visits', entry),
+  put: (advance) => putWithOutbox('patient_advances', advance),
 };
 
 export const repos: Repos = {
@@ -315,7 +338,7 @@ export const repos: Repos = {
   settlements,
   consultationNotes,
   patientModuleEnrollments,
-  expectedVisits,
+  patientAdvances,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers

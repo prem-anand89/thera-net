@@ -101,6 +101,96 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Patient profile integration** — "Clinical notes" section drilling into note editor
 - **Contraindication banner** for clinical safety flags
 
+#### Light Session Notes (SOAP) — per-visit documentation, distinct from Core Assessment
+Two editors share the `consultation_notes` table, distinguished by `noteMode`
+(`src/domain/types.ts`): **heavy** (`'initial' | 'followup'`, the Core
+Assessment accordion above, `NoteEditorPage.tsx`) for initial evaluation and
+periodic full re-assessment, and **light** (`'session'`,
+`SessionNoteEditorPage.tsx`) for routine per-visit documentation — a small
+single-screen SOAP form (`src/domain/sessionNote.ts`'s `SessionNotePayload`):
+Subjective (pain 0–10 via the shared `ScaleWidget`, optional one-liner),
+Objective (free text), Intervention (multi-select from
+`src/domain/treatmentOptions.ts`'s combined manual-therapy/exercise/modality
+vocabulary — the same list the heavy editor's Treatment section uses, kept
+in one place so `dashboardService.ts`'s Modality-usage report recognizes
+picks from either note kind), Assessment and Plan (single-choice chip
+groups). No PSFS, no red-flag screening — `psfsMean`/`redFlagCount` are
+written `null`/`0` for a session note by design.
+
+**No heavy-first gate.** A light session note can be written for any visit
+at any time — there is no requirement for a completed heavy (initial/
+follow-up) assessment to exist first. (Billing & Notes Rebuild Phase 2
+originally shipped this as a hard gate, "C8"; Phase 3 removed it — session
+logs are meant to stand on their own, unpaired from the Core Assessment
+episode.) A visit row's "+ Note" link (`VisitNoteLink` in
+`src/components/VisitCard.tsx`) always routes to the light editor once the
+visit `needsNote`. Patient Profile's own "New assessment" button always
+opens the heavy editor (C5) — the two entry points are simply independent,
+not one gating the other.
+
+**Standalone entry point + batch editing (Phase 3).** Patient Profile's
+main column has a "Session notes" section (above Visit History) showing
+how many visits still need a note and a **"Write session notes"** button
+that opens all of them back-to-back — `SessionNoteBatchPage.tsx`
+(`/patients/$patientId/notes/session-batch`, `visitIds` search param).
+Each visit gets its own mount of the shared `SessionNoteEditorBody.tsx`
+(the form/autosave logic extracted out of `SessionNoteEditorPage.tsx` into
+`useSessionNoteEditor.ts` so the two flows share one implementation),
+keyed on visit id so switching visits gets a clean hook instance rather
+than carrying over the previous visit's state. "Save & Next"/"Save draft &
+Next" advance the queue (labeled "…& Finish" on the last visit); "Skip"
+advances without saving; "Prev" revisits an earlier note in the queue
+(read-only once completed). Nothing about the queue is durable session
+state — every note that reaches draft or completed is saved immediately
+via the same path the single editor uses, so leaving mid-queue just means
+the remaining visits are still `needsNote` and reappear next time the
+queue is recomputed. If another tab/device completes a queued visit's note
+concurrently, the batch page auto-skips it with an inline notice rather
+than erroring. "View session log"/"Insurer packet" links live in the same
+section, resolved against the patient's active enrollment
+(`patientModuleEnrollments.getActive`) rather than "whichever episode's
+note was most recently touched" — the latter could point at a stale,
+non-active episode for a patient with more than one enrollment over time.
+
+**`/notes/$noteId` is mode-dispatched**, the first route in this app whose
+rendered component depends on loaded data rather than the URL shape alone
+(`NoteEditorDispatch.tsx`) — renders the heavy or light editor based on the
+note's own `noteMode`, defaulting a legacy `null` value to heavy (never to
+session — the reverse default would run a real Core Assessment through the
+light editor's shallow-merge upcast and let autosave overwrite it with a
+blank session payload). `/notes/$noteId/print` similarly guards against
+rendering a session note as a blank Core Assessment: session notes print
+only from the session log below, never individually.
+
+**Multi-visit session log** (`SessionLogPrintPage.tsx`,
+`/patients/$patientId/session-log/$enrollmentId`) — one enrollment's
+completed session notes as a compact trend grid (date/therapist/pain/
+assessment/plan/treatments, one row per session), narrative blocks for
+sessions with a one-liner, and a single certifying attestation (clinic
+signature + every treating therapist deduped by id — there is no
+per-therapist signature field in the data model, only a clinic-level one).
+
+**Insurer packet** (`InsurerPacketPage.tsx`,
+`/patients/$patientId/insurer-packet/$enrollmentId`) — composes the most
+recent completed heavy note, the session log, and whichever invoice(s)
+already cover the episode's visits (read exactly as issued via the existing
+`visitId → visits.invoiceId → invoice` join, no schema/RPC change) in one
+print job, generated fresh, never stored. A visit with no invoice yet is
+called out rather than silently omitted. Writing *new* clinical fields
+(diagnosis, referring physician) onto an invoice would need schema/RPC
+changes and stays out of scope here — deferred to whenever the billing
+rebuild touches `issue_invoice()` for other reasons.
+
+**Migration:** `consultation_notes.note_mode`'s CHECK constraint was widened
+to allow `'session'` (`20260827000001_allow_session_note_mode.sql`) — a
+**deploy-ordering requirement, not just a schema change**: a CHECK
+violation is a permanent sync failure (`src/sync/status.ts`), and
+`src/sync/engine.ts`'s handling for a permanent failure on an unsynced row
+is to delete it locally (`revertToServerTruth`). The migration must be live
+in Supabase before any deployed client can write `noteMode: 'session'`, or
+the first session note a therapist writes is silently destroyed rather than
+queued with a visible error.
+
 ---
 
 ### 3. Revenue & Invoicing
@@ -119,6 +209,59 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   (generally GST-exempt) healthcare services and doesn't match how insurers/TPAs
   expect these documents to be labeled
 - **Online-only** — gap-free numbers require the server counter
+- **TPA-facing print layout**: dates-of-service get their own column,
+  "Catalog price" becomes "Rate" (per-session, `/session`), a treatment
+  period line ("Treatment period: 1 Jan – 15 Jan") sits above the
+  itemization, and the old "Show visit dates" checkbox is gone — dates are
+  always shown now, for legacy invoices too. See "Invoice line items (v2)"
+  and "Clinical context on the bill" under the `invoices` schema entry
+  above for what actually changed underneath.
+
+#### Payment Status Badge & Collect Action
+- **4-state display collapse** (`src/domain/paymentState.ts`'s
+  `paymentBadge()`) over the raw 6-state `VisitPaymentState`: Paid /
+  Partial / Due / Overdue / (no badge for `zero_session`). A visit reads
+  **Overdue** once its bill has sat unpaid past `OVERDUE_AFTER_DAYS` (30) —
+  the clock anchors on `visitDate` for an uninvoiced visit, or
+  `max(visitDate, issuedAt)` once an invoice exists, so a package invoiced
+  weeks after the visit gets a fresh 30-day window instead of reading
+  Overdue the instant it's issued. A `partially_collected` balance past the
+  threshold gets Overdue's urgent tone while keeping its "₹X of ₹Y" label —
+  losing the partial-payment detail on an already-informative row would be
+  a regression, not a simplification.
+- **Collect promotion**: wherever money can still be taken (`take_payment`
+  available), the passive status pill is replaced by a filled `Collect ₹X`
+  button rather than shown alongside it; `Issue invoice` moved out of the
+  visible row entirely into the row's kebab menu, so there's exactly one
+  primary action per row. Two independent implementations both carry this
+  (the desktop table's `PaymentStatusDisplay` and the mobile
+  `SharedVisitCard` — confirmed they were never actually sharing markup
+  despite an old doc comment implying otherwise) plus New Visit's "Last
+  visit" summary tile, a third, easy-to-miss `PAYMENT_CHIP` consumer.
+
+#### Needs-Receipt Queue
+- **Ledger → Invoices tab**: a "Needs receipt (N)" section lists every
+  visit that's `collected_no_receipt` (money taken, no invoice ever
+  issued) clinic-wide, oldest first, each with a one-click "Issue invoice"
+  into the existing dialog. `dashboardService.needsReceipt()` is the single
+  source of truth for both this section and the tab's own count badge, so
+  the two can never disagree — deliberately unbounded (no date filter),
+  matching the sibling `outstandingInvoices()`'s own precedent, since a
+  backlog like this is by definition old and shouldn't vanish behind a
+  Ledger date preset.
+
+#### Issue Invoice Right After Logging a Visit
+- **`NewVisitPage.tsx`'s post-save screen** ("Visit logged") gained an
+  "Issue invoice" button, gated on `canBill` (same entitlement/role check
+  every other invoicing entry point uses), alongside the existing "Add
+  clinical note"/"Another visit"/"Done" actions — billing staff no longer
+  have to leave the page and find the visit again on Ledger/Workspace to
+  invoice it immediately. Opens the same `IssueInvoiceDialog` those two
+  pages use (`returnTo="/visits/new"`, added to `INVOICE_PRINT_BACK_TARGETS`
+  in `router.tsx`), built from fields already computed at save time
+  (`serviceLabel`, `isPackage`, `alreadyCollected`) rather than a second
+  query — no new invoicing logic, just a third call site into the existing
+  dialog/service.
 
 #### Payment Status & HV Settlement
 - **Three-fact payment model**: Billed / Collected / Receipted
@@ -154,6 +297,24 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   is bounded by that invoice's real total rather than assuming one visit
   is the whole bill).
 - **Monthly report** shows HV settlement card for variance tracking
+
+#### Advance Payments
+- **Record ahead of treatment**: Patient Profile's "Record advance" button
+  logs money received with no visit attached yet — amount, method, date,
+  optional note — and prints its own small receipt (`ADVANCE RECEIPT`,
+  A5, no dates-of-service block, "Adjustable against future treatment").
+- **Draws down against real visits**, not a separate ledger: applying an
+  advance writes ordinary `payments` rows (stamped `advance_id`), so every
+  existing payment-state computation, badge, and report already handles it
+  correctly with zero special-casing. `TakePaymentDialog` surfaces "₹X
+  advance available — apply" whenever the patient has an open balance,
+  applying oldest-advance-first and capping at what's actually still owed.
+  An advance flips to `exhausted` automatically once its balance reaches
+  zero.
+- **Not visible anywhere payment-state is read** until drawn down — an
+  unapplied advance balance shows only in the two places above (the
+  Patient Profile pill, `TakePaymentDialog`'s nudge), never in the
+  needs-receipt queue, dashboard KPIs, or a visit's own badge.
 
 #### Billing Access Control
 - **Clinic-level toggle** restricts who is allowed to issue invoices
@@ -226,6 +387,26 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Therapist invites** from Settings → Team create login *and* service-roster entry in one step
 - **Admin/front_desk invites** only need login
 - **Deactivation** (keeps history intact) or **permanent deletion** (zero visits/notes/invoices only)
+- **Invite email → password setup**: `invite-therapist` calls
+  `auth.admin.inviteUserByEmail()` with `redirectTo` set to the inviting
+  browser's own origin + `/reset-password` (sent as `redirectOrigin` in the
+  request body from `SettingsPage.tsx`). Without this, the link falls back
+  to whatever the Supabase project's Site URL is configured to — the
+  invite token still signs the invitee in, but they land on the app fully
+  authenticated with no password ever set and no UI prompting them to set
+  one. `ResetPasswordPage.tsx` (`/reset-password`) is deliberately
+  invite/recovery-agnostic: it just checks for an active session (however
+  it got established) and lets the visitor choose a password, so no
+  separate "accept invite" page was needed.
+- **Invite email content**: the invite also seeds `user_metadata` with
+  `clinicName`/`invitedByName`/`role` (looked up server-side from
+  `clinics.name` and the caller's `clinic_members.display_name`), but the
+  stock Supabase "Invite user" email template doesn't reference these —
+  the email stays generic (no clinic name, no "invited by") until that
+  template is edited in the Supabase dashboard (Authentication → Email
+  Templates → Invite user) to include e.g. `{{ .Data.clinicName }}` /
+  `{{ .Data.invitedByName }}`. This repo has no way to edit that template
+  from code — it's hosted-project configuration, not migration-tracked.
 
 #### Clinic-Level Toggles (Settings → Features/Billing)
 - **Billing access** — who's allowed to issue invoices
@@ -351,7 +532,7 @@ src/sync/                Outbox push / delta pull engine
 
 src/services/            Orchestration layer (no React imports)
                          Visit, invoice, report, patient, dashboard,
-                         consultation-note, therapist services
+                         consultation-note, therapist, advance services
 
 src/features/            UI pages and components (React + TanStack Router)
   ├── workspace/         WorkspacePage (Today, Recent, Open Packages, Pending)
@@ -432,7 +613,6 @@ own_share_label, partner_share_label  text (NULLABLE) — default "BM"/"HV"
 billing_enabled              boolean NOT NULL
 invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 clinical_docs_enabled       boolean NOT NULL
-enable_expected_today       boolean NOT NULL
 show_therapist_comparison   boolean NOT NULL
 walk_in_mrno_prefix         text (NULLABLE, default 'W')
 visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
@@ -545,22 +725,141 @@ INDEXES: clinic+date, patient, clinic+updated
 
 #### `invoices`
 ```sql
-id               uuid PRIMARY KEY
-clinic_id        uuid NOT NULL (FOREIGN KEY → clinics.id)
-invoice_no       text NOT NULL — `PREFIX/FY-LABEL/NNNN`
-fy_label         text NOT NULL (e.g., "26-27")
-seq              int NOT NULL
-issued_at        timestamptz NOT NULL
-patient_snapshot jsonb NOT NULL — patient details at issue time
-line_items       jsonb NOT NULL
-total_paise      bigint NOT NULL
-payment_mode     text NOT NULL — 'Cash' | 'Card' | 'UPI' | 'Insurance'
-therapist_id     uuid (FOREIGN KEY → therapists.id, NULLABLE)
+id                  uuid PRIMARY KEY
+clinic_id           uuid NOT NULL (FOREIGN KEY → clinics.id)
+invoice_no          text NOT NULL — `PREFIX/FY-LABEL/NNNN`
+fy_label            text NOT NULL (e.g., "26-27")
+seq                 int NOT NULL
+issued_at           timestamptz NOT NULL
+patient_snapshot    jsonb NOT NULL — patient details at issue time
+line_items          jsonb NOT NULL — see "Invoice line items (v2)" below
+total_paise         bigint NOT NULL
+payment_mode        text NOT NULL — 'Cash' | 'Card' | 'UPI' | 'Insurance'
+therapist_id        uuid (FOREIGN KEY → therapists.id, NULLABLE)
+supersedes_invoice_id uuid (FOREIGN KEY → invoices.id, NULLABLE) — set on an amendment
+clinical_snapshot   jsonb (NULLABLE) — see "Clinical context on the bill" below
 created_by, updated_by  uuid (NULLABLE)
 updated_at       timestamptz NOT NULL
 ```
-Immutable once issued (DB trigger). Payment status is **not** a column here —
-see `invoice_payments` below.
+Immutable once issued (DB trigger) — with one narrow exception:
+`clinical_snapshot` alone can be corrected in place afterward, see "Editing
+clinical details after issuance" below and §3d. Payment status is **not** a
+column here — see `invoice_payments` below.
+
+**Invoice line items (v2).** `line_items` is opaque jsonb — a legacy invoice's
+entries have only the original 6 fields (`serviceName`, `sessionCount`,
+`sessionDates`, `catalogPricePaise`, `adjustmentPaise`, `adjustmentReason`,
+`totalPaise`); every invoice issued or amended since the Billing & Notes
+Rebuild Phase 1 gets a v2 entry, marked by `lineItemVersion: 2`, adding
+`billedSessionCount`, `authorizedSessionCount` (null = not a package),
+`ratePerSessionPaise` (snapshotted, never re-derived from live catalog
+prices), `rateBasis`, `adjustmentReasons` (a merged group can span more than
+one), and `therapistIds` (ditto). `sessionCount`'s meaning is unchanged
+(`authorizedSessionCount ?? billedSessionCount`) so old readers of the raw
+field still work. All build- and print-side code goes through
+`src/domain/invoiceLine.ts` (`isV2Line`, `lineRatePerSessionPaise`,
+`sessionCountLabel`, `lineReconciles`, `normalizeAuthorizedCount`,
+`invoicePeriod`) rather than reading either shape directly, so the two
+sides can't drift the way the invoice-print page and the insurer-packet
+summary once did.
+
+**Bill by service, not just by package.** Invoice line grouping
+(`invoiceService.ts` → `invoiceLine.ts`'s `groupVisitsForInvoicing`) keys on
+`packageGroupId` when present, otherwise on `service + catalog price` — so
+several independently-logged (non-package) visits of the same service at
+the same price collapse into one line reading "10 sessions," not ten
+separate ₹0-context rows. A merged line's `catalogPricePaise` is always the
+**sum** of every visit's own snapshot in the group (not one visit's), which
+is what keeps `catalogPricePaise + adjustmentPaise = totalPaise` holding
+exactly for every line, by construction.
+
+**Long-running packages (e.g. post-op TKR/THR rehab, 20-30+ sessions).**
+Nothing in the schema or invoicing logic caps a package's session count —
+a 24-session package invoices through the exact same line-item build as a
+3-session one. The one place volume affects the printed layout: a line's
+"Dates of service" column would otherwise list every individual date,
+wrapping into an unreadably dense cell past a handful of sessions.
+`sessionDatesDisplay()` (`src/domain/invoiceLine.ts`) condenses to a
+"from – to (N sessions)" range once a line has more than 8 session dates;
+at or under that it still lists every date. Used by both
+`InvoicePrintPage.tsx` table variants (legacy and v2); the Insurer Packet's
+invoice summary and the issue-invoice preview step never showed the date
+list in the first place — they already use the compact `sessionCountLabel`
+— so neither needed a change. `SessionLogPrintPage`'s trend grid is
+unaffected by volume in a different way: it's one row per session with no
+condensing, since a clinical trend genuinely needs every date as its own
+row; print pagination (not this page) is what splits a long table across
+pages.
+
+**Partial-package printing.** A package billed in full but only partly
+delivered prints its real total (not a fabricated partial amount), with a
+caption under the service name whenever the row's own arithmetic doesn't
+reconcile (`lineReconciles()` — checks `billedSessionCount ×
+ratePerSessionPaise + adjustmentPaise = totalPaise` exactly, catching both
+a genuine partial delivery and a plain rounding mismatch on a fully-billed
+package). The Sessions column itself reads "N delivered of M authorised" on
+a non-reconciling row so the printed numbers don't invite the reader to
+multiply Rate × the smaller number and land on the wrong answer.
+
+**Clinical context on the bill.** `clinical_snapshot` (nullable jsonb, old
+invoices predate it) holds `diagnosis`, `diagnosisIcdCode`,
+`referringPhysician`, `physicianRegistrationNo`, `placeOfService`
+('clinic' | 'home'), `treatmentPerformed`, `sourceNoteId` (provenance), and
+`editedByBiller`. Pre-filled in `IssueInvoiceDialog` from the visit's own
+completed note, falling back to the patient's most recent completed heavy
+(initial/follow-up) note — a light session note (see Light Session Notes
+below) has no referral field to pull from. Editable before issuing, then
+frozen with the rest of the invoice (never re-read from the note
+afterward). **Known gap, by design**: Patient Profile's bulk-issue path
+(select several visits → issue one invoice) bypasses this dialog entirely
+and always issues with `clinical_snapshot: null` — giving it the same
+pre-fill would need either a second clinical form or a reshaped multi-visit
+dialog, deferred as real follow-up work rather than folded into this pass.
+
+**Preview before issuing.** `IssueInvoiceDialog` is a two-step flow: "Review
+invoice" moves from the fields form to a review screen built from
+`invoiceService.previewLineItems()` — the same line-item build
+`issueForVisits` itself calls (via the shared `buildLineItems` closure in
+`invoiceService.ts`), so the preview can never drift from what actually
+gets issued. No RPC call happens until "Confirm & issue" on the review
+screen; "← Back to edit" returns to the form with every field intact.
+
+**Editing clinical details after issuance.** Once issued, `clinical_snapshot`
+alone can still be corrected — a typo'd diagnosis, a missed physician
+registration number — without reopening the financial record. "Edit
+details" on `InvoicePrintPage` opens `EditInvoiceDetailsDialog`
+(`src/components/EditInvoiceDetailsDialog.tsx`), pre-filled from the
+invoice's existing snapshot, calling the `update_invoice_clinical_details()`
+RPC (§3d). This is deliberately narrower than an amendment: the amount,
+line items, and invoice number are untouched and no new invoice number is
+minted — for those, "Amend this invoice" (§3b) is still the only path. The
+clinical-fields form itself (`InvoiceClinicalFieldsForm`,
+`src/components/InvoiceClinicalFields.tsx`) is shared between this dialog
+and `IssueInvoiceDialog` rather than duplicated.
+
+**Share via WhatsApp.** "Share via WhatsApp" on `InvoicePrintPage` renders
+the same DOM node "Print / Save PDF" shows into an actual PDF, entirely
+on-device (`renderElementToPdf` in `src/lib/pdfShare.ts`, via `html2canvas`
++ `jsPDF` — no server round trip, matching this app's offline-first
+design), then hands that file to the Web Share API so WhatsApp — or any
+other installed app — shows up in the OS share sheet with the real PDF
+attached (`shareFileToWhatsApp`). Both libraries are dynamically imported
+only when the button is clicked (a ~180KB-gzip chunk that every invoice
+view would otherwise pay for, whether or not Share is ever used). Web
+Share API's `files` support is mobile-browser-only (recent Chrome/Android,
+Safari/iOS); on a browser without it (desktop, mainly), this falls back to
+a `wa.me` click-to-chat link carrying just a text summary — WhatsApp's own
+link scheme has no way to carry a file, so the fallback is deliberately
+text-only rather than silently doing nothing.
+
+**UPI listed and defaulted first.** `PAYMENT_MODES` in `IssueInvoiceDialog`/
+`AmendInvoiceDialog` and `PAYMENT_METHODS` in `NewVisitPage`'s direct-
+payment collector all list UPI before Cash, and `IssueInvoiceDialog`/
+`NewVisitPage` default their selection to UPI — the most common collection
+method at an Indian clinic front desk. `AmendInvoiceDialog` is the one
+exception: its default still carries over the original invoice's own
+`paymentMode` rather than defaulting to UPI, since it's correcting an
+already-issued bill's record, not starting a fresh collection.
 
 #### `invoice_counters`
 ```sql
@@ -601,6 +900,7 @@ amount_paise    bigint NOT NULL
 method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque'
 received_date   date NOT NULL
 notes           text (NULLABLE)
+advance_id      uuid (FOREIGN KEY → patient_advances.id, NULLABLE — see below)
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 ```
@@ -611,7 +911,53 @@ the visit's bill). No `invoice_id` column: this same table is also how a
 invoice itself has no amount-paid field — see `invoice_payments` above),
 so a payment stays keyed to the visit it was collected for either way. For
 an invoice spanning several visits, one entered amount is allocated across
-those visits' `payments` rows in date order.
+those visits' `payments` rows in date order — the shared
+`allocateAcrossVisits()` helper in `src/services/advanceService.ts` (both
+`paymentService.recordInvoicePayment` and advance draw-down use it, so the
+two paths can't allocate differently). `advance_id` is set only when this
+payment was drawn down from a patient's advance balance rather than
+collected fresh; `visit_id` still stays required either way, so
+`computeVisitPaymentState` needs no special-casing for advance-funded
+payments.
+
+#### `patient_advances`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
+amount_paise    bigint NOT NULL (> 0)
+method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque'
+received_date   date NOT NULL
+receipt_no      text (NULLABLE) — no numbered series yet, see below
+notes           text (NULLABLE)
+status          text NOT NULL default 'open' — 'open' | 'exhausted' | 'refunded' | 'void'
+deleted         boolean NOT NULL default false
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+UNIQUE (id, clinic_id) — backs the composite FK on payments.advance_id below
+```
+Money received ahead of treatment. **Not a `payments` row until drawn
+down** — `computeVisitPaymentState` and everything derived from it (badges,
+the needs-receipt queue, dashboard KPIs) stays untouched by an advance
+until a real `payments` row is written against a real visit
+(`advanceService.applyAdvance`), which stamps that row's `advance_id` and
+flips this row's `status` to `'exhausted'` once the balance reaches zero.
+Remaining balance is computed, not stored:
+`amount_paise − Σ payments.amount_paise where advance_id = this.id`.
+`payments.advance_id` is a **composite** FK to `(id, clinic_id)` rather
+than a plain `references patient_advances(id)`, so a payment can never
+reference a different clinic's advance even by a client bug — RLS already
+scopes reads correctly, but this closes the write-side gap outright.
+`method` uses the `PaymentMethod` vocabulary (`'cash'|'upi'|…`), not the
+older `PaymentMode` (`'Cash'|'Card'|'UPI'|'Insurance'`) that belongs only
+to `Invoice.paymentMode` — easy to confuse. **No gap-free numbered receipt
+series yet** — `receipt_no` exists but is unused; the printed
+`AdvanceReceiptPrintPage` identifies a receipt by date + a short slice of
+its id instead. A real counter can be added later with no data migration
+if it turns out to matter. Entry point: Patient Profile's "Record advance"
+button; `TakePaymentDialog` also surfaces "₹X advance available — apply"
+and draws down (oldest advance first) when a patient with an open balance
+is being collected from elsewhere.
 
 #### `settlements`
 ```sql
@@ -627,22 +973,6 @@ updated_at             timestamptz (NULLABLE)
 Per-month partner-hospital (HV) settlement record, for the Monthly Report's
 variance tracking.
 
-#### `expected_visits`
-```sql
-id            uuid PRIMARY KEY
-clinic_id     uuid NOT NULL (FOREIGN KEY → clinics.id)
-patient_id    uuid (FOREIGN KEY → patients.id, NULLABLE) — NULL for a
-              not-yet-a-patient expected arrival
-patient_name  text (NULLABLE)
-time_note     text NOT NULL — free text, e.g. "4pm" or "after lunch"
-visit_date    date NOT NULL
-status        text NOT NULL
-created_by, updated_by  uuid (NULLABLE)
-updated_at    timestamptz NOT NULL
-```
-Backs Workspace's "Expected today" list — manually added or matched patients
-expected in that day, independent of any actual visit record.
-
 ---
 
 ### Clinical Documentation Tables
@@ -655,12 +985,17 @@ patient_id                uuid NOT NULL (FOREIGN KEY → patients.id)
 therapist_id              uuid NOT NULL (FOREIGN KEY → therapists.id)
 visit_id                  uuid (FOREIGN KEY → visits.id, NULLABLE)
 enrollment_id             uuid (FOREIGN KEY → patient_module_enrollments.id, NULLABLE)
-note_mode                 text (NULLABLE) — 'initial' | 'followup'
+note_mode                 text (NULLABLE) — 'initial' | 'followup' | 'session'
+                           ('session' = light SOAP note, everything else is
+                           the heavy Core Assessment editor; null = legacy
+                           row predating this field, treated as heavy)
 status                    text NOT NULL — 'draft' | 'completed' | 'archived'
-assessment_payload        jsonb (NULLABLE) — the whole Core Assessment form
-                           (history, pain, PSFS, body chart, objective exam,
-                           treatment/HEP) as one versioned/upcastable blob,
-                           not separate columns per section
+assessment_payload        jsonb (NULLABLE) — either the whole Core Assessment
+                           form (history, pain, PSFS, body chart, objective
+                           exam, treatment/HEP) or, when note_mode='session',
+                           domain/sessionNote.ts's small SOAP payload — one
+                           versioned/upcastable blob either way, shape keyed
+                           off note_mode, not separate columns per section
 authorized_session_count  int (NULLABLE)
 notes_text                text (NULLABLE)
 nrs_score                 int (NULLABLE) — derived, for outcome tracking
@@ -898,7 +1233,8 @@ Not dead — `can_use_module(clinic_id, module_key)` (defined in
 `20260718000001_module_registry.sql`, revised in
 `20260721000001_entitlements_audit_log.sql`) checks `clinic_entitlements`
 (fail-open: no row = entitled) then `clinic_module_settings` (fail-closed
-otherwise), and is called from the insert/update RLS policies on
+otherwise, further gated by the caller's `clinic_members.role` against
+`allowed_roles`), and is called from the insert/update RLS policies on
 `consultation_notes`, `face_scale_responses`, and `facial_palsy_assessments`.
 Every write to those three tables runs through it today.
 
@@ -906,7 +1242,65 @@ What's genuinely missing is the **client side**: no Dexie table, no repo,
 no sync, no UI anywhere in `src/` reads or writes either table — so nothing
 in the app currently sets a narrower entitlement or surfaces a "this module
 is off" state. In practice every clinic reads as fully entitled, because
-nothing has ever populated `clinic_entitlements` with a restrictive row.
+nothing has ever populated `clinic_entitlements` with a restrictive row,
+and every clinic gets a `clinic_module_settings` row for `'consultation_notes'`
+seeded `enabled = true` (both the one-time backfill and the
+`seed_default_module_settings()` AFTER INSERT trigger, in
+`20260721000001_entitlements_audit_log.sql`). This is `can_use_module()`'s
+**real, always-on gate for whether a note can be written at all** — but
+there's no Settings toggle for it, so it stays on for every clinic by
+construction, indefinitely, until someone writes SQL by hand.
+
+**This is easy to conflate with `clinics.clinical_docs_enabled` (client-side,
+has a Settings toggle) — but they act at different layers and never
+conflict.** `can_use_module()` decides whether a note *can be written*
+(server-side, RLS, always on). `clinical_docs_enabled` is a client-side
+*visibility* flag deciding which clinical-documentation surfaces render.
+Four read it:
+
+| Surface | What `clinical_docs_enabled` gates |
+| --- | --- |
+| `visitService.ts` | auto-flags a new visit `clinicalStatus: 'pending'` |
+| `NewVisitPage.tsx` | the "Add clinical note" CTA on the post-save screen |
+| `LedgerPage.tsx` | the "Not documented" filter checkbox |
+| `ReportsOverviewPage.tsx` | the modality-usage chart (query, nav entry, section) |
+
+**One surface differs from those four, deliberately.**
+`PatientProfilePage`'s `ConsultationNotePanel` — "New note" / "Continue
+draft" — is gated on role (`canViewClinicalNotes`, i.e. every therapist,
+never front desk) and *not* on `clinical_docs_enabled`. **Confirmed
+intentional, not an inconsistency to fix:** notes access is role-based only
+— every therapist always has it, full stop. The `clinical_docs_enabled`
+surfaces above are a separate, opt-in layer on top of that baseline: does
+*this clinic* want the per-visit reminder, the "Not documented" filter, and
+the modality report — a workflow/reporting preference, not an access gate.
+A clinic with the flag off still has every therapist able to write notes
+from Patient Profile at any time; it just isn't nudged to do so on every
+visit or tracked for completeness.
+
+**Rule for any new consultation-notes entry point:** gate on
+`canViewClinicalNotes` for access (matches Patient Profile). Gate on
+`clinical_docs_enabled` only if the new surface is itself a reminder/filter/
+report in the same spirit as the four above — not if it's a place to
+actually write a note, which should behave like Patient Profile's baseline
+and stay available regardless of the flag.
+
+**Confirmed not tier-gated either** — no `PlanFeature` in `src/domain/plans.ts`
+covers clinical notes today, by design (its own docstring excludes
+"anything clinical-note- or advanced-module-content-shaped ... still open
+design work"). **One tier restriction is planned but not yet built:** Lite
+should not be able to print/export a note as PDF (`NotePrintPage.tsx` is
+currently unrestricted by tier for every clinic). This needs a new
+`PlanFeature` (e.g. `notePrinting`) wired into `TIER_FEATURES`,
+`useEntitlements()`, and a gate on `NotePrintPage.tsx`'s print action —
+not yet scoped or built; captured here so it isn't lost before the Phase 2
+notes work lands.
+
+Note also that no admin-facing control exists for the *real* gate: turning
+consultation notes genuinely off for a clinic means flipping
+`clinic_module_settings.enabled` for `'consultation_notes'` by hand in SQL.
+The Settings toggle does not do this, despite reading like it might.
+
 The `modules` reference table these two originally pointed to was dropped
 (`20260820000001_drop_unused_modules_table.sql`), taking its FK on
 `module_key` with it via CASCADE. Restored as a plain `CHECK` constraint
@@ -1011,12 +1405,18 @@ No UI reads this yet — Phase 1 only builds the read path. Enforcement
 
 Deliberately **not** touched: `can_use_module()` / `consultation_notes` /
 the five assessment-module keys. `clinics.clinical_docs_enabled` and
-`clinic_module_settings('consultation_notes')` are two separate gates for
-the same live, actively-used feature (see the dead-infrastructure section
-above) — adding a third (plan-tier) gate on top without reconciling those
-first risks breaking real clinical documentation. The five module keys have
-zero client code today regardless, so gating them has no practical effect
-yet. Deferred to the still-open "advanced modules content" planning pass.
+`clinic_module_settings('consultation_notes')` were previously suspected of
+being two conflicting gates on the same feature; traced precisely, they act
+at different layers — server-side write permission vs. client-side surface
+visibility — and never conflict. See the dead-infrastructure section above
+for the full mechanism, including a real inconsistency it surfaced (Patient
+Profile's notes entry point isn't gated by `clinical_docs_enabled` while
+three comparable surfaces are) that is still undecided. Adding a third
+(plan-tier) gate would need to go through `can_use_module()` specifically,
+since that's the one that actually governs whether a note can be written.
+The five module keys have zero client code today regardless, so gating them
+has no practical effect yet. Deferred to the still-open "advanced modules
+content" planning pass.
 
 **Bug fixed during Phase 2 testing:** `clinic_plans_updated` (Phase 0) used
 the generic `set_updated_at()` trigger function, which unconditionally sets
@@ -1060,18 +1460,118 @@ Team's Invite form locks (with the same informational-only copy) once
 `clinic_members.length >= maxMembers` — a client-side hint only, since
 `invite-therapist`'s own seat-cap check (Phase 2) is the real boundary.
 
-`FirstWeekChecklist.tsx` was rewritten into an actual 8-step setup
-sequence (clinic profile → services → invite team → link therapists → log
-a visit → wait for Synced → clinical notes decision → backup), replacing
-the old flat list of gotcha tips with no ordering logic. Two steps get
-plan-aware copy (`invite-team`, `wait-synced`). Completion is now tracked
-per-step (`db.meta` key `firstWeekChecklistCompletedSteps`, a JSON array of
-stable step ids — not indices, so reordering the list later can't corrupt
-someone's in-progress state) rather than the old single dismiss flag; the
-card collapses to a "Setup complete" summary once all 8 are checked. The
-original single dismiss flag (`firstWeekChecklistDismissed`) still exists
-unchanged for the explicit "Hide" button, which fully removes the card
-regardless of completion.
+`FirstWeekChecklist.tsx` is an 8-step setup sequence (clinic profile →
+services → invite team → link therapists → log a visit → wait for Synced →
+clinical notes decision → backup), replacing what was once a flat list of
+gotcha tips with no ordering logic. Two steps get plan-aware copy
+(`invite-team`, `wait-synced`).
+
+**Auto-detected steps, not self-reported.** Six of the eight steps derive
+their own done state from real data instead of asking the admin to
+remember to tick a box — `useFirstWeekSignals(clinicId)` reads
+`clinic.address` (clinic profile), `service_catalog.length` (services),
+`useEntitlements().seatsUsed > 1` (team invited — `clinic_members` gets a
+row the moment an invite is issued, not only once accepted), therapists
+with no unlinked roster row (therapist linking), any visit existing
+(logged a visit), and a new `db.meta` key `lastBackupExportedAt` —
+written by `DataBackup`'s export handler on a successful download — for
+the backup step. Each auto step's "Continue" link goes straight to that
+step's own screen (a specific Settings tab, or `+ New visit`), typed as a
+small closed union (`StepLink`) rather than a generic `{ to, search }`
+shape, since TanStack Router types each route's `search` against that
+route's own schema. Only two steps stay genuinely self-reported, because
+neither is a fact any query can confirm: "Wait for Synced" is a behavioral
+reminder with no completion state at all, and "Decide on clinical notes"
+is a decision where On and Off are both valid, so a boolean toggle's value
+can't distinguish "decided" from "never looked at it" — these two alone
+still use the original per-step completion flag (`db.meta` key
+`` `firstWeekChecklistCompletedSteps:${clinicId}` ``, a JSON array of
+stable step ids, not indices, so reordering the list later can't corrupt
+in-progress state). The card collapses to a "Setup complete" summary once
+all 8 read done. The single dismiss flag (`db.meta` key
+`` `firstWeekChecklistDismissed:${clinicId}` ``) still exists unchanged
+for the explicit "Hide" button, which fully removes the card regardless of
+completion. Both keys are clinic-scoped (not bare constants) for the same
+reason `lastBackupMetaKey` is below — `db.meta` is one global table shared
+by every clinic on a multi-clinic device (see "Multi-clinic accounts"),
+so an unscoped key would let dismissing/completing the checklist for one
+clinic silently do the same for every other clinic on the device.
+
+**Account menu** (`AccountMenu` in `src/app/Shell.tsx`) — one dropdown,
+same markup at every breakpoint (the name/role label collapses to just the
+initials-avatar trigger below `sm:`), replacing what used to be two
+separate, independently-built account areas: a flat always-visible
+name+Sign-out pair on desktop, and an ad-hoc hamburger-icon dropdown on
+mobile with its own copy of the same `NameEditor`. Panel contents: the
+existing click-to-edit name/role (`NameEditor`, unchanged), a First Week
+nudge for an admin who hasn't finished or dismissed the checklist above
+(`useFirstWeekChecklistSummary(clinicId)` — shares `useFirstWeekSignals`
+with the full card so both read the exact same derived state, and also
+returns `nextStep`: the first not-done step's own title and link, so the
+nudge's "Continue →" opens exactly where setup was left off — a Settings
+tab or `+ New visit` — instead of always bouncing to Settings' own default
+tab), a clinic switcher and "Add another clinic" action (only relevant to
+multi-clinic accounts — see "Multi-clinic accounts" below), a "Change
+password" action (`ChangePasswordDialog`,
+`src/components/ChangePasswordDialog.tsx` — calls
+`supabase.auth.updateUser({ password })` directly, since the account menu
+only exists post-login, unlike `ResetPasswordPage.tsx`'s invite/recovery-
+link flow which first has to establish a session from the email link's
+token), and Sign out.
+
+**Multi-clinic accounts** — one admin can create and switch between
+multiple clinics under a single login; the schema/RLS/billing/sync layers
+were already built for this (every policy is keyed off a row's own
+`clinic_id`, `clinic_members`' PK is the composite `(clinic_id, user_id)`,
+`clinic_plans`' PK is `clinic_id` so each clinic gets its own independent
+plan/seat-count) — the gap was entirely client-side UI, closed as follows:
+
+- **Switching clinics**: `AccountMenu` lists every clinic in `db.clinics`
+  (alphabetically) whenever an account has 2+, and clicking one writes
+  `db.meta.put({ key: 'activeClinicId', value: clinic.id })` and navigates
+  to `/workspace` — landing anywhere on a per-record route (e.g.
+  `/patients/$patientId`) would point at an id belonging to the clinic
+  just left. `Shell.tsx`'s `clinic` resolution (`clinics.find(c => c.id
+  === activeClinicId)`) and the `useClinicRole`/`useEntitlements` hooks
+  that key their own `db.meta` caches off `clinicId` do the rest — nothing
+  else needed to change for the switch to ripple through the whole app.
+- **Adding a second clinic**: `CreateClinicForm` (`create_clinic_with_admin`
+  RPC — no DB-level limit on clinics-per-admin) takes a `variant: 'page' |
+  'dialog'` prop. `'page'` is the original zero-clinic-account screen
+  (`Shell.tsx` renders it once sync confirms the account truly has no
+  clinics). `'dialog'` is the same fields/logic, bare, wrapped by
+  `AddClinicDialog` and opened from `AccountMenu`'s "Add another clinic"
+  item — gated to `role === 'admin'` of the currently active clinic, same
+  as the Settings-tab gate. Creating a clinic from either entry point
+  makes it the new active clinic immediately.
+- **Stale `activeClinicId` self-repair**: `Shell.tsx`'s auto-pick effect
+  now also fires when `activeClinicId` no longer matches any locally
+  known clinic (not just when it was never set) — a removed membership or
+  leftover device state resolves back to `clinics[0]` instead of leaving
+  the app stuck showing "Preparing…" or, worse, misreading a real
+  multi-clinic account as having zero clinics and offering to create a
+  duplicate.
+- **Sync cursor reconciliation** (`SyncEngine.reconcileClinicMembership`,
+  `src/sync/engine.ts`) — every table's pull cursor (`db.meta` key
+  `` `cursor:${table}` ``) only moves forward against `updated_at`, so a
+  clinic that becomes newly visible on this device (a fresh invite, or
+  this same account creating/joining a second, pre-existing clinic) can
+  have rows — including its own `clinics` row — older than a cursor this
+  device already advanced while syncing its first clinic; those rows
+  would never come back from an incremental `.gt(cursor)` pull. Before
+  every `push()`/`pull()` cycle, a cheap uncursored
+  `clinic_members` query for the signed-in user's own membership rows is
+  compared against a `db.meta`-cached `knownClinicIds` set; if it grew,
+  every `cursor:*` entry is deleted, forcing one full EPOCH-based re-pull
+  (safe, since RLS still scopes exactly what returns) — a general "always
+  re-verify membership before trusting a cursor" pattern worth applying
+  anywhere else a cursor's validity depends on which rows a user can even
+  see. **Known limitation**: a membership being *removed* is not handled
+  symmetrically — pull only adds/updates, so a clinic's already-synced
+  rows linger in local Dexie after the membership granting access to them
+  is revoked, until that table is cleared for some other reason (e.g.
+  sign-out). Not addressed here; would need explicit tombstone/reconcile
+  logic if it becomes a real problem.
 
 **Pilot kill switch (Phase 4)** — pilot clinics need to run with zero tier
 limits until payments are integrated, without hand-editing every clinic's
@@ -1328,6 +1828,69 @@ check the full package group via `repos.visits.listByPackageGroup()`
 (their loaded visit list is date/day-scoped and would miss an
 out-of-window sibling), while Patient Profile scans its already-loaded,
 unbounded per-patient visit history directly.
+
+### 3c. Adding a Parameter to an Existing RPC Function (Postgres identity gotcha)
+
+Postgres identifies a function by **name + argument types**, not name
+alone. `create or replace function` with a **changed argument list does
+not replace the existing function** — it silently creates a second,
+distinct one alongside it. `issue_invoice()`/`amend_invoice()` needed a new
+optional trailing `p_clinical_snapshot jsonb default null` parameter for
+Billing & Notes Rebuild Phase 1's clinical-context feature; the naive
+`create or replace` approach would have left the old N-arg function live
+next to a new N+1-arg one, and the moment both matched a call (any
+unrefreshed client still sending the old arg set), PostgREST/Postgres can
+no longer tell which one to call — **invoice issuance hard-fails clinic-
+wide for the deploy window**, on the one operation in this app that can't
+be retried offline.
+
+**Correct pattern, used by the migration that added this field**: an
+explicit `drop function <exact old signature>` followed by
+`create function <new signature>`, in the same migration transaction, so
+exactly one candidate function ever exists. PostgREST's own
+missing-key-resolves-to-SQL-default behavior then means an old client
+sending only the original argument set still succeeds against the new
+function (the omitted parameter resolves to its `default`), while a
+refreshed client sending the new key succeeds too. Any signature-scoped
+grant/revoke (e.g. `revoke execute … from anon`, see RLS Hardening in
+Phase-0-era migrations) must be **re-issued against the new signature** —
+it does not carry over from the old one, since as far as Postgres is
+concerned this is a different function, not an edit to the old one.
+
+### 3d. Invoice Clinical-Details Editing
+Amendment (§3b) is the right tool for a correction that changes what's
+being billed — added visits, a different total. Most real-world "fix this
+invoice" requests are narrower than that: a diagnosis was mistyped, a
+physician's registration number was missing. Minting a whole new invoice
+number for a metadata typo is disproportionate, so `clinical_snapshot` gets
+its own narrow in-place edit path instead.
+
+- **`reject_invoice_mutation()` trigger, narrowed**: previously rejected
+  every update unconditionally. Now allows an update through IFF (a) it
+  runs inside `update_invoice_clinical_details()`'s transaction-local
+  `set_config('app.allow_invoice_clinical_edit', 'true', true)` bypass —
+  the same pattern §3b's amendment flag uses — AND (b) no column outside
+  `clinical_snapshot` actually changed, checked column-by-column in the
+  trigger itself as a second line of defense against a bug in the RPC.
+  Every other financial field (amount, line items, invoice number, payment
+  mode, `supersedes_invoice_id`, …) stays genuinely immutable.
+- **`update_invoice_clinical_details()` RPC** — same membership +
+  `invoicing_access` permission check as `issue_invoice()`/`amend_invoice()`
+  (any clinic member when `all_staff`, admin/front_desk only when
+  `billing_staff`), `security definer` so it can bypass invoices' select-
+  only RLS policy the same way the other two invoice RPCs do.
+- **`invoices` now carries the generic `audit_log` trigger** (see §M0's
+  `audit_row_change()`), added in the same migration. It was deliberately
+  excluded when `audit_log` first shipped, on the reasoning that a fully
+  immutable table could never produce a meaningful before/after row — that
+  reasoning no longer holds now that one field can change, so every
+  clinical-details edit gets a genuine before/after audit row like any
+  other editable table.
+- **UI**: `EditInvoiceDetailsDialog` (see "Editing clinical details after
+  issuance" in §3) — reachable from `InvoicePrintPage`'s "Edit details"
+  button, hidden once an invoice is superseded (same guard as "Amend this
+  invoice").
+- Migration: `20260827000004_invoice_clinical_edit.sql`.
 
 ### 4. Walk-In MRNO Auto-Generation
 - **Sequential per clinic per year**: `PREFIXYY-NNNN` (W26-0001, W26-0002)

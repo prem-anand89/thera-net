@@ -11,8 +11,8 @@ import { createDashboardService } from './dashboardService';
 import { createPatientActivityService } from './patientActivityService';
 import { createBackupService } from './backupService';
 import { createConsultationNoteService } from './consultationNoteService';
-import { createExpectedVisitsService } from './expectedVisitsService';
 import { createTherapistService } from './therapistService';
+import { createAdvanceService } from './advanceService';
 
 export const patientService = createPatientService(repos);
 export const visitService = createVisitService(repos);
@@ -27,6 +27,6 @@ export const dashboardService = createDashboardService(repos);
 export const patientActivityService = createPatientActivityService(repos);
 export const backupService = createBackupService(repos);
 export const consultationNoteService = createConsultationNoteService(repos);
-export const expectedVisitsService = createExpectedVisitsService(repos);
 export const therapistService = createTherapistService(repos);
+export const advanceService = createAdvanceService(repos);
 export { repos };

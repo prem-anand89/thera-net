@@ -9,7 +9,11 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
 import type { InvoicePrintBackTarget } from '@/app/router';
 
-const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
+// UPI first — matches IssueInvoiceDialog's ordering (the most common
+// collection method at an Indian clinic front desk). The field itself
+// still defaults to the original invoice's own payment mode, not UPI —
+// see the useState initializer below.
+const PAYMENT_MODES: PaymentMode[] = ['UPI', 'Cash', 'Card', 'Insurance'];
 
 /**
  * Reissues a corrected bill-cum-receipt for an already-issued invoice (e.g.

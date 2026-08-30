@@ -536,37 +536,39 @@ function AllPatientsSection() {
             <span className="text-xs text-[var(--muted)]">{showHidden ? 'Collapse' : 'Show'}</span>
           </button>
           {showHidden && (
-            <table className="min-w-full divide-y divide-[var(--border)] border-t border-[var(--border)]">
-              <tbody className="divide-y divide-[var(--border)]">
-                {hidden.map((p) => (
-                  <tr key={p.id} className="hover:bg-[var(--paper)]">
-                    <td className={td}>
-                      <span className="font-display">{p.name}</span>{' '}
-                      <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                    </td>
-                    <td className={td}>
-                      <Pill tone="slate">Hidden {p.deletedAt && formatDateDM(p.deletedAt)}</Pill>
-                    </td>
-                    <td className={`${td} whitespace-nowrap text-right`}>
-                      <button
-                        type="button"
-                        className="text-xs text-[var(--teal)] hover:underline"
-                        onClick={() => void restore(p)}
-                      >
-                        Restore
-                      </button>
-                      <button
-                        type="button"
-                        className="ml-3 text-xs text-[var(--muted)] hover:text-[var(--rust)]"
-                        onClick={() => void hardDelete(p)}
-                      >
-                        Delete permanently
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-[var(--border)] border-t border-[var(--border)]">
+                <tbody className="divide-y divide-[var(--border)]">
+                  {hidden.map((p) => (
+                    <tr key={p.id} className="hover:bg-[var(--paper)]">
+                      <td className={td}>
+                        <span className="font-display">{p.name}</span>{' '}
+                        <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                      </td>
+                      <td className={td}>
+                        <Pill tone="slate">Hidden {p.deletedAt && formatDateDM(p.deletedAt)}</Pill>
+                      </td>
+                      <td className={`${td} whitespace-nowrap text-right`}>
+                        <button
+                          type="button"
+                          className="text-xs text-[var(--teal)] hover:underline"
+                          onClick={() => void restore(p)}
+                        >
+                          Restore
+                        </button>
+                        <button
+                          type="button"
+                          className="ml-3 text-xs text-[var(--muted)] hover:text-[var(--rust)]"
+                          onClick={() => void hardDelete(p)}
+                        >
+                          Delete permanently
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

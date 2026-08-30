@@ -1,35 +1,58 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { VISIT_COLUMN_LABELS, VISIT_OPTIONAL_COLUMN_ORDER, type ConsultationNoteStatus, type UUID, type VisitColumnKey } from '@/domain/types';
+import {
+  VISIT_COLUMN_LABELS,
+  VISIT_OPTIONAL_COLUMN_ORDER,
+  type ConsultationNoteStatus,
+  type UUID,
+  type VisitColumnKey,
+} from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
-import type { VisitPaymentState } from '@/domain/paymentState';
-import { isPackageContinuation, paymentActions, paymentStatusPhrase, paymentStatusShortPhrase } from '@/domain/paymentState';
-import { Pill, PackageThread, KebabMenu, menuItem, menuItemDestructive, th, thNum, td, tdNum, TherapistPill } from '@/components/ui';
+import type { PaymentBadgeKind, VisitPaymentState } from '@/domain/paymentState';
+import { isPackageContinuation, paymentActions, paymentBadge } from '@/domain/paymentState';
+import {
+  Pill,
+  PackageThread,
+  KebabMenu,
+  menuItem,
+  menuItemDestructive,
+  th,
+  thNum,
+  td,
+  tdNum,
+  TherapistPill,
+} from '@/components/ui';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 import type { PatientProfileBackTarget } from '@/app/router';
 
 /**
- * Pill color per payment state. Label is deliberately not stored here —
- * `zero_session` reads differently depending on whether it's a package
- * continuation or a standalone complimentary visit, a distinction this
- * map has no per-row context for; every caller computes its label fresh
- * via `paymentStatusPhrase`/`paymentStatusShortPhrase` instead.
+ * Pill/button color per `paymentBadge()` kind (Billing & Notes Rebuild
+ * Phase 1, D2) — re-keyed from the raw 6-state `VisitPaymentState` to the
+ * 4-state display collapse, since "Due" and "Overdue" need visually
+ * distinct tones and the raw state alone can't tell them apart (that's
+ * `paymentBadge`'s job, using visitDate/issuedAt age). Label is computed
+ * by `paymentBadge` itself, not stored here.
  */
-export const PAYMENT_CHIP: Record<VisitPaymentState, { tone: 'green' | 'amber' | 'slate' }> = {
+export const PAYMENT_CHIP: Record<
+  PaymentBadgeKind,
+  { tone: 'green' | 'amber' | 'rust' | 'slate' }
+> = {
   paid: { tone: 'green' },
-  collected_no_receipt: { tone: 'green' },
-  partially_collected: { tone: 'amber' },
-  outstanding: { tone: 'amber' },
-  uninvoiced: { tone: 'amber' },
-  zero_session: { tone: 'slate' },
+  partial: { tone: 'amber' },
+  due: { tone: 'amber' },
+  overdue: { tone: 'rust' },
+  none: { tone: 'slate' },
 };
 
 /** Combines catalog treatment picks with the free-text add-on into one
  *  display string for the single "Treatments" column/cell — e.g. "Manual
  *  Therapy, Exercise Therapy — FM An/Re S,S". Either half can be absent. */
-export function treatmentsDisplayText(treatmentNames: string[], treatmentNotes: string | null): string {
+export function treatmentsDisplayText(
+  treatmentNames: string[],
+  treatmentNotes: string | null
+): string {
   const parts = [];
   if (treatmentNames.length) parts.push(treatmentNames.join(', '));
   if (treatmentNotes) parts.push(treatmentNotes);
@@ -84,7 +107,9 @@ function PatientNameBlock({
           </button>
         )}
       </div>
-      <div className="text-xs text-[var(--muted)]">{patientIdentityLine(data.mrno, data.age, data.sex)}</div>
+      <div className="text-xs text-[var(--muted)]">
+        {patientIdentityLine(data.mrno, data.age, data.sex)}
+      </div>
     </div>
   );
 }
@@ -114,6 +139,15 @@ export interface VisitCardData {
   billPaise: Paise;
   paymentState: VisitPaymentState;
   invoiceId: UUID | null;
+  /** Sum of direct `payments` rows against this visit — required (not
+   *  optional) so every builder is forced to assign it; only meaningfully
+   *  read for the `partially_collected` "of" form and the Collect button's
+   *  outstanding-amount calculation. */
+  collectedPaise: Paise;
+  /** This visit's invoice's `issuedAt`, or null if uninvoiced — required so
+   *  every builder assigns it; feeds `paymentBadge()`'s D2
+   *  `max(visitDate, issuedAt)` Overdue anchor. */
+  issuedAt: string | null;
   /** Set when someone other than the original author last touched this row. */
   editedBy?: string | null;
   syncError?: string | null;
@@ -157,21 +191,33 @@ export interface VisitCardData {
   packageInvoicePending?: boolean;
 }
 
-/** Row actions kebab — Repeat / Edit visit / Split / Delete. Note lives on
- *  the status cell as + Note so it is not listed twice. */
+/** Row actions kebab — Repeat / Issue invoice / Edit visit / Split /
+ *  Delete. Note lives on the status cell as + Note so it is not listed
+ *  twice. Issue invoice moved in here (Billing & Notes Rebuild Phase 1,
+ *  1.2) so the status cell/card can promote its one primary action
+ *  (Collect) without a second competing button in the row. */
 function RowActionsMenu({
   data,
   onEdit,
   onSplit,
   onDelete,
+  onInvoice,
+  canInvoice,
 }: {
   data: VisitCardData;
   onEdit?: () => void;
   onSplit?: () => void;
   onDelete: () => void;
+  onInvoice?: () => void;
+  canInvoice?: boolean;
 }) {
+  const canIssueInvoice =
+    Boolean(canInvoice) &&
+    Boolean(onInvoice) &&
+    paymentActions(data.paymentState).includes('issue_invoice');
   const hasMenu =
     data.canRepeat ||
+    canIssueInvoice ||
     (data.canEdit && onEdit) ||
     (data.canSplit && onSplit) ||
     data.canDelete;
@@ -190,6 +236,18 @@ function RowActionsMenu({
             >
               Repeat
             </Link>
+          )}
+          {canIssueInvoice && (
+            <button
+              type="button"
+              className={menuItem}
+              onClick={() => {
+                close();
+                onInvoice!();
+              }}
+            >
+              Issue invoice
+            </button>
           )}
           {data.canEdit && onEdit && (
             <button
@@ -233,33 +291,40 @@ function RowActionsMenu({
   );
 }
 
-/** Bill amount + payment-status chip/action + invoiced link + note nudge —
- *  shared between the card's vertical stack and the table's status cell. */
+/**
+ * Payment-status chip/action + invoiced lock marker — the table's status
+ * cell (Bill is already its own column, so no amount here). Was also
+ * nominally "shared" with the card's vertical stack per its old doc
+ * comment, but confirmed that never actually happened — `SharedVisitCard`
+ * has always had its own independent inline block; this function has
+ * exactly one caller, `VisitTable`'s status cell.
+ *
+ * Billing & Notes Rebuild Phase 1, 1.1/1.2: the passive status Pill is
+ * *replaced* by a filled `Collect ₹X` button whenever `take_payment` is
+ * available — not shown alongside it. `issue_invoice` moved entirely into
+ * `RowActionsMenu`'s kebab (see that component), so this no longer takes
+ * an `onInvoice` prop; the non-`compact` rendering (dead — no caller ever
+ * passed `compact={false}`) is gone along with the prop itself.
+ */
 function PaymentStatusDisplay({
   data,
-  onInvoice,
   onTakePayment,
   canInvoice,
-  showAmount = true,
-  compact = false,
 }: {
   data: VisitCardData;
-  onInvoice: () => void;
   onTakePayment?: () => void;
   canInvoice: boolean;
-  /** False in the table, where Bill is already its own column. */
-  showAmount?: boolean;
-  /** Table cells: short label, horizontal layout — avoids tall rows on iPad portrait. */
-  compact?: boolean;
 }) {
-  const chip = PAYMENT_CHIP[data.paymentState];
-  const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
-  const isPackage = isPackageContinuation(data.sessionIndex, data.packageTotal);
-  const statusLabel = compact
-    ? paymentStatusShortPhrase(data.paymentState, isPackage)
-    : paymentStatusPhrase(data.paymentState, isPackage);
-  const statusTitle = compact ? paymentStatusPhrase(data.paymentState, isPackage) : undefined;
+  const badge = paymentBadge({
+    state: data.paymentState,
+    billPaise: data.billPaise,
+    collectedPaise: data.collectedPaise,
+    visitDate: data.visitDate,
+    issuedAt: data.issuedAt,
+    isPackageSession: isPackageContinuation(data.sessionIndex, data.packageTotal),
+  });
+  const showCollect = canInvoice && actions.includes('take_payment');
 
   // Billing fields freeze the moment a visit is invoiced (see
   // EditVisitModal's `frozen` check), independent of whether it's since
@@ -268,122 +333,82 @@ function PaymentStatusDisplay({
   // being locked). 'paid' already says "Invoiced" in its own label.
   const billingLocked = Boolean(data.invoiceId) && data.paymentState !== 'paid';
 
-  if (compact) {
-    const hasSecondaryRow =
-      (canInvoice && (actions.includes('take_payment') || actions.includes('issue_invoice'))) ||
-      (!canInvoice && paymentActions(data.paymentState).length > 0) ||
-      data.packageInvoicePending;
-    return (
-      <div className="flex flex-col items-start gap-1">
-        <div className="flex items-center gap-1">
-          {billingLocked && (
-            <span className="text-[10px]" title="Billing locked — this visit is invoiced">
-              🔒
-            </span>
-          )}
-          <Pill tone={chip.tone}>
-            <span className="whitespace-nowrap" title={statusTitle}>
-              {statusLabel}
-            </span>
-          </Pill>
-        </div>
-        {hasSecondaryRow && (
-          <div className="flex flex-wrap items-center gap-1">
-            {canInvoice && actions.includes('take_payment') && (
-              <button
-                type="button"
-                className="whitespace-nowrap rounded-full bg-[var(--rust-light)] px-2 py-0.5 text-[10px] font-medium text-[var(--rust)] hover:opacity-80"
-                onClick={onTakePayment}
-              >
-                Pay
-              </button>
-            )}
-            {canInvoice && actions.includes('issue_invoice') && (
-              <button
-                type="button"
-                className="whitespace-nowrap rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10px] font-medium text-[var(--teal)] hover:opacity-80"
-                onClick={onInvoice}
-              >
-                Invoice
-              </button>
-            )}
-            {!canInvoice && paymentActions(data.paymentState).length > 0 && (
-              <Pill tone="slate">Ask billing</Pill>
-            )}
-            {data.packageInvoicePending && (
-              <Pill tone="amber">
-                <span
-                  className="whitespace-nowrap"
-                  title="This session isn't on the package's invoice yet — amend the invoice to include it."
-                >
-                  Not invoiced
-                </span>
-              </Pill>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
+  const hasSecondaryRow =
+    (!canInvoice && paymentActions(data.paymentState).length > 0) || data.packageInvoicePending;
 
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1">
-      {showAmount && data.paymentState !== 'zero_session' && (
-        <div className="font-num text-sm text-[var(--ink)]">{bill}</div>
-      )}
+    <div className="flex flex-col items-start gap-1">
       <div className="flex items-center gap-1">
         {billingLocked && (
-          <span className="text-xs" title="Billing locked — this visit is invoiced">
+          <span className="text-[10px]" title="Billing locked — this visit is invoiced">
             🔒
           </span>
         )}
-        <Pill tone={chip.tone}>{statusLabel}</Pill>
+        {showCollect ? (
+          <button
+            type="button"
+            className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium text-white hover:opacity-90 ${
+              badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'
+            }`}
+            onClick={onTakePayment}
+            title={badge.title}
+          >
+            Collect {formatINR(data.billPaise - data.collectedPaise)}
+          </button>
+        ) : (
+          <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+            <span className="whitespace-nowrap" title={badge.title}>
+              {badge.label}
+            </span>
+          </Pill>
+        )}
       </div>
-      {canInvoice && actions.length > 0 && (
-        <div className="flex flex-wrap justify-end gap-1">
-          {actions.includes('take_payment') && (
-            <button
-              type="button"
-              className="rounded-full bg-[var(--rust-light)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:opacity-80"
-              onClick={onTakePayment}
-            >
-              Take payment
-            </button>
+      {hasSecondaryRow && (
+        <div className="flex flex-wrap items-center gap-1">
+          {!canInvoice && paymentActions(data.paymentState).length > 0 && (
+            <Pill tone="slate">Ask billing</Pill>
           )}
-          {actions.includes('issue_invoice') && (
-            <button
-              type="button"
-              className="rounded-full bg-[var(--teal-light)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:opacity-80"
-              onClick={onInvoice}
-            >
-              Issue invoice
-            </button>
+          {data.packageInvoicePending && (
+            <Pill tone="amber">
+              <span
+                className="whitespace-nowrap"
+                title="This session isn't on the package's invoice yet — amend the invoice to include it."
+              >
+                Not invoiced
+              </span>
+            </Pill>
           )}
         </div>
-      )}
-      {!canInvoice && paymentActions(data.paymentState).length > 0 && (
-        <Pill tone="slate">Ask billing</Pill>
-      )}
-      {data.packageInvoicePending && (
-        <Pill tone="amber">
-          <span title="This session isn't on the package's invoice yet — amend the invoice to include it.">
-            Not invoiced
-          </span>
-        </Pill>
       )}
     </div>
   );
 }
 
-const NOTE_STATUS_CELL: Record<'draft' | 'completed' | 'archived', { tone: 'green' | 'amber' | 'slate'; label: string; action: string }> = {
+const NOTE_STATUS_CELL: Record<
+  'draft' | 'completed' | 'archived',
+  { tone: 'green' | 'amber' | 'slate'; label: string; action: string }
+> = {
   draft: { tone: 'amber', label: 'Draft', action: 'Edit' },
   completed: { tone: 'green', label: 'Completed', action: 'View' },
   archived: { tone: 'slate', label: 'Archived', action: 'View' },
 };
 
 /** Clinical-note entry point for a visit row — shared by the table Note
- *  column and mobile cards so draft/continue/view routing stays consistent. */
-export function VisitNoteLink({ data, inline }: { data: VisitCardData; inline?: boolean }) {
+ *  column and mobile cards so draft/continue/view routing stays consistent.
+ *  `backTo` carries the same "which list did this come from" context as
+ *  PatientNameBlock's, one hop further: the note editor's own "← {patient}"
+ *  link forwards it back to the patient profile, whose "← Back" link then
+ *  has somewhere real to return to instead of falling back to the bare
+ *  patient list. */
+export function VisitNoteLink({
+  data,
+  inline,
+  backTo,
+}: {
+  data: VisitCardData;
+  inline?: boolean;
+  backTo?: PatientProfileBackTarget;
+}) {
   if (!data.canViewNotes) return null;
   if (data.consultationNoteId && data.noteStatus) {
     const { tone, label, action } = NOTE_STATUS_CELL[data.noteStatus];
@@ -392,6 +417,7 @@ export function VisitNoteLink({ data, inline }: { data: VisitCardData; inline?: 
         <Link
           to="/patients/$patientId/notes/$noteId"
           params={{ patientId: data.patientId, noteId: data.consultationNoteId }}
+          search={backTo ? { from: backTo } : undefined}
           className="text-xs font-medium text-[var(--teal)] hover:underline"
         >
           {action} note
@@ -404,6 +430,7 @@ export function VisitNoteLink({ data, inline }: { data: VisitCardData; inline?: 
         <Link
           to="/patients/$patientId/notes/$noteId"
           params={{ patientId: data.patientId, noteId: data.consultationNoteId }}
+          search={backTo ? { from: backTo } : undefined}
           className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
         >
           {action}
@@ -414,9 +441,9 @@ export function VisitNoteLink({ data, inline }: { data: VisitCardData; inline?: 
   if (!data.needsNote) return null;
   return (
     <Link
-      to="/patients/$patientId/notes/new"
+      to="/patients/$patientId/notes/new-session"
       params={{ patientId: data.patientId }}
-      search={{ visitId: data.visitId }}
+      search={{ visitId: data.visitId, from: backTo }}
       className="whitespace-nowrap text-xs font-medium text-[var(--amber)] hover:underline"
       title="Clinical note not started for this visit"
     >
@@ -425,8 +452,8 @@ export function VisitNoteLink({ data, inline }: { data: VisitCardData; inline?: 
   );
 }
 
-function NoteCell({ data }: { data: VisitCardData }) {
-  return <VisitNoteLink data={data} />;
+function NoteCell({ data, backTo }: { data: VisitCardData; backTo?: PatientProfileBackTarget }) {
+  return <VisitNoteLink data={data} backTo={backTo} />;
 }
 
 /** Label + value rows for mobile cards — same field order as the optional table columns. */
@@ -442,7 +469,9 @@ export function CardDetailRow({
   return (
     <div className="flex gap-2 text-xs leading-snug">
       <span className="w-[4.75rem] shrink-0 font-medium text-[var(--muted)]">{label}</span>
-      <span className={`min-w-0 flex-1 text-[var(--ink)] ${clamp ? 'line-clamp-2' : ''}`}>{children}</span>
+      <span className={`min-w-0 flex-1 text-[var(--ink)] ${clamp ? 'line-clamp-2' : ''}`}>
+        {children}
+      </span>
     </div>
   );
 }
@@ -524,13 +553,21 @@ export function SharedVisitCard({
         .join('')
     : '';
 
-  const chip = PAYMENT_CHIP[data.paymentState];
   const bill = formatINR(data.billPaise);
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
-  const statusLabel = paymentStatusPhrase(
-    data.paymentState,
-    isPackageContinuation(data.sessionIndex, data.packageTotal)
-  );
+  const badge = paymentBadge({
+    state: data.paymentState,
+    billPaise: data.billPaise,
+    collectedPaise: data.collectedPaise,
+    visitDate: data.visitDate,
+    issuedAt: data.issuedAt,
+    isPackageSession: isPackageContinuation(data.sessionIndex, data.packageTotal),
+  });
+  const showCollect = canInvoice && actions.includes('take_payment');
+  // Same freeze-on-invoice signal PaymentStatusDisplay's table cell shows —
+  // added here for parity: this hand-rolled card block never carried it,
+  // which was a pre-existing gap between the two, not a deliberate choice.
+  const billingLocked = Boolean(data.invoiceId) && data.paymentState !== 'paid';
 
   const content = (
     <>
@@ -542,7 +579,9 @@ export function SharedVisitCard({
             </div>
           )}
           <div className="min-w-0 flex-1">
-            {showPatient && <PatientNameBlock data={data} onEditPatient={onEditPatient} backTo={backTo} />}
+            {showPatient && (
+              <PatientNameBlock data={data} onEditPatient={onEditPatient} backTo={backTo} />
+            )}
             {showDate && (
               <div className={`text-xs text-[var(--muted)] ${showPatient ? 'mt-0.5' : ''}`}>
                 {formatDateDM(data.visitDate)}
@@ -562,44 +601,68 @@ export function SharedVisitCard({
         </div>
         <div className="flex shrink-0 items-start gap-0.5">
           {data.paymentState !== 'zero_session' && (
-            <span className="font-num text-sm font-semibold tabular-nums text-[var(--ink)]">{bill}</span>
+            <span className="font-num text-sm font-semibold tabular-nums text-[var(--ink)]">
+              {bill}
+            </span>
           )}
-          <RowActionsMenu data={data} onEdit={onEdit} onSplit={onSplit} onDelete={onDelete} />
+          <RowActionsMenu
+            data={data}
+            onEdit={onEdit}
+            onSplit={onSplit}
+            onDelete={onDelete}
+            onInvoice={onInvoice}
+            canInvoice={canInvoice}
+          />
         </div>
       </div>
 
       <VisitCardDetails data={data} />
 
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
-        <Pill tone={chip.tone}>{statusLabel}</Pill>
+        {showCollect ? (
+          <button
+            type="button"
+            className={`rounded-full px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 ${
+              badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'
+            }`}
+            onClick={onTakePayment}
+            title={badge.title}
+          >
+            Collect {formatINR(data.billPaise - data.collectedPaise)}
+          </button>
+        ) : (
+          <div className="flex items-center gap-1">
+            {billingLocked && (
+              <span className="text-xs" title="Billing locked — this visit is invoiced">
+                🔒
+              </span>
+            )}
+            <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+              <span title={badge.title}>{badge.label}</span>
+            </Pill>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          {actions.includes('take_payment') && (
-            <button
-              type="button"
-              className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
-              onClick={onTakePayment}
-            >
-              Take payment
-            </button>
+          {!canInvoice && paymentActions(data.paymentState).length > 0 && (
+            <Pill tone="slate">Ask billing</Pill>
           )}
-          {actions.includes('issue_invoice') && (
-            <button
-              type="button"
-              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
-              onClick={onInvoice}
-            >
-              Issue invoice
-            </button>
+          {data.packageInvoicePending && (
+            <Pill tone="amber">
+              <span title="This session isn't on the package's invoice yet — amend the invoice to include it.">
+                Not invoiced
+              </span>
+            </Pill>
           )}
-          {!canInvoice && paymentActions(data.paymentState).length > 0 && <Pill tone="slate">Ask billing</Pill>}
-          <VisitNoteLink data={data} inline />
+          <VisitNoteLink data={data} inline backTo={backTo} />
         </div>
       </div>
     </>
   );
 
   return boxed ? (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-sm">{content}</div>
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-sm">
+      {content}
+    </div>
   ) : (
     <div className="py-3">{content}</div>
   );
@@ -667,7 +730,10 @@ function VisitTable({
               <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
               <div className="absolute right-0 top-full z-20 mt-1 min-w-40 rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 shadow-lg">
                 {VISIT_OPTIONAL_COLUMN_ORDER.map((key) => (
-                  <label key={key} className="flex items-center gap-2 px-1 py-1 text-xs text-[var(--ink)]">
+                  <label
+                    key={key}
+                    className="flex items-center gap-2 px-1 py-1 text-xs text-[var(--ink)]"
+                  >
                     <input
                       type="checkbox"
                       checked={columnPrefs[key]}
@@ -696,7 +762,12 @@ function VisitTable({
               {showDate && <th className={th}>Date</th>}
               {showPatient && <th className={th}>Patient</th>}
               {VISIT_OPTIONAL_COLUMN_ORDER.map(
-                (key) => columnPrefs[key] && <th key={key} className={th}>{VISIT_COLUMN_LABELS[key]}</th>
+                (key) =>
+                  columnPrefs[key] && (
+                    <th key={key} className={th}>
+                      {VISIT_COLUMN_LABELS[key]}
+                    </th>
+                  )
               )}
               <th className={thNum}>Bill</th>
               <th className={th}>Status</th>
@@ -727,12 +798,18 @@ function VisitTable({
                   <td className={td}>
                     {formatDateDM(row.visitDate)}
                     {row.editedBy && (
-                      <span className="ml-1 text-[var(--muted)]" title={`Edited by ${row.editedBy}`}>
+                      <span
+                        className="ml-1 text-[var(--muted)]"
+                        title={`Edited by ${row.editedBy}`}
+                      >
                         ✎
                       </span>
                     )}
                     {row.syncError && (
-                      <span className="ml-1 text-[var(--rust)]" title={`Sync issue: ${row.syncError}`}>
+                      <span
+                        className="ml-1 text-[var(--rust)]"
+                        title={`Sync issue: ${row.syncError}`}
+                      >
                         ⚠
                       </span>
                     )}
@@ -756,7 +833,10 @@ function VisitTable({
                           <div>{row.serviceName}</div>
                           {row.sessionIndex && row.packageTotal && (
                             <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                              <PackageThread sessionIndex={row.sessionIndex} packageTotal={row.packageTotal} />
+                              <PackageThread
+                                sessionIndex={row.sessionIndex}
+                                packageTotal={row.packageTotal}
+                              />
                               <span className="font-num">
                                 {row.sessionIndex}/{row.packageTotal}
                               </span>
@@ -788,15 +868,12 @@ function VisitTable({
                 <td className={td}>
                   <PaymentStatusDisplay
                     data={row}
-                    onInvoice={() => onInvoice(row)}
                     onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
                     canInvoice={canInvoice}
-                    showAmount={false}
-                    compact
                   />
                 </td>
                 <td className={td}>
-                  <NoteCell data={row} />
+                  <NoteCell data={row} backTo={backTo} />
                 </td>
                 <td className={td}>
                   <RowActionsMenu
@@ -804,6 +881,8 @@ function VisitTable({
                     onEdit={onEdit ? () => onEdit(row) : undefined}
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
+                    onInvoice={() => onInvoice(row)}
+                    canInvoice={canInvoice}
                   />
                 </td>
               </tr>
@@ -815,7 +894,7 @@ function VisitTable({
                     (selection ? 1 : 0) +
                     (showDate ? 1 : 0) +
                     (showPatient ? 1 : 0) +
-                    (VISIT_OPTIONAL_COLUMN_ORDER.filter((key) => columnPrefs[key]).length) +
+                    VISIT_OPTIONAL_COLUMN_ORDER.filter((key) => columnPrefs[key]).length +
                     4
                   }
                   className="px-3 py-8 text-center text-sm text-[var(--muted)]"
@@ -860,9 +939,12 @@ function groupRowsByDate(rows: VisitCardData[], today: Date): DateGroupedRows[] 
   };
   for (const row of rows) {
     if (row.visitDate === todayStr) buckets.today.push(row);
-    else if (row.visitDate >= startOfWeekStr && row.visitDate < todayStr) buckets['this-week'].push(row);
-    else if (row.visitDate >= startOfMonthStr && row.visitDate < startOfWeekStr) buckets['this-month'].push(row);
-    else if (row.visitDate >= startOfLastMonthStr && row.visitDate <= endOfLastMonthStr) buckets['last-month'].push(row);
+    else if (row.visitDate >= startOfWeekStr && row.visitDate < todayStr)
+      buckets['this-week'].push(row);
+    else if (row.visitDate >= startOfMonthStr && row.visitDate < startOfWeekStr)
+      buckets['this-month'].push(row);
+    else if (row.visitDate >= startOfLastMonthStr && row.visitDate <= endOfLastMonthStr)
+      buckets['last-month'].push(row);
     else buckets.earlier.push(row);
   }
 
@@ -937,7 +1019,9 @@ export function ResponsiveVisitList({
             >
               <div className="border-b border-[var(--border)] px-4 py-3 text-sm font-semibold text-[var(--ink)]">
                 {group.label} ({group.rows.length} visit{group.rows.length === 1 ? '' : 's'})
-                <span className="ml-4 text-xs font-normal text-[var(--muted)]">{formatINR(group.totalBillPaise)}</span>
+                <span className="ml-4 text-xs font-normal text-[var(--muted)]">
+                  {formatINR(group.totalBillPaise)}
+                </span>
               </div>
               <div className="divide-y divide-[var(--border)] px-4">
                 {group.rows.map((row) => (
@@ -993,7 +1077,9 @@ export function ResponsiveVisitList({
             ))}
           </div>
         )}
-        {rows.length === 0 && <p className="py-8 text-center text-sm text-[var(--muted)]">No visits to show.</p>}
+        {rows.length === 0 && (
+          <p className="py-8 text-center text-sm text-[var(--muted)]">No visits to show.</p>
+        )}
       </div>
 
       <div className="hidden tab:block">

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, backupService, therapistService, visitService } from '@/services';
@@ -42,7 +42,11 @@ import {
   StatTile,
 } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
-import { FirstWeekChecklist, useFirstWeekChecklistVisible } from './FirstWeekChecklist';
+import {
+  FirstWeekChecklist,
+  useFirstWeekChecklistVisible,
+  lastBackupMetaKey,
+} from './FirstWeekChecklist';
 import { isValidUpiVpa } from '@/domain/upiPay';
 
 type SectionKey =
@@ -291,6 +295,7 @@ export function SettingsPage() {
   const search = useSearch({ from: '/settings' });
   const navigate = useNavigate({ from: '/settings' });
   const [activeKey, setActiveKeyState] = useState<SectionKey>(search.tab ?? 'profile');
+  const [, startTransition] = useTransition();
   const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
   const [pendingSectionKey, setPendingSectionKey] = useState<SectionKey | null>(null);
   const mobileNavRef = useRef<HTMLDivElement>(null);
@@ -309,8 +314,19 @@ export function SettingsPage() {
 
   // `replace` so switching tabs doesn't spam browser history — a `?tab=`
   // link is meant to be bookmarkable/shareable, not a Back-button stepper.
+  //
+  // The state update itself is wrapped in startTransition: swapping section
+  // renders a whole new heavy tab (Team's roster + member cards, Services'
+  // catalog table, ...) in one synchronous commit, which is exactly the
+  // "Event handlers ... blocked UI updates" INP warning Chrome flags on the
+  // rail nav button's click — the click handler is trivial, but the browser
+  // still attributes the render it triggers to that same input. Marking the
+  // update as a transition lets React deprioritize/interrupt that render
+  // instead of blocking the next paint on it.
   function setActiveKey(key: SectionKey) {
-    setActiveKeyState(key);
+    startTransition(() => {
+      setActiveKeyState(key);
+    });
     void navigate({ search: (prev) => ({ ...prev, tab: key }), replace: true });
   }
 
@@ -348,7 +364,7 @@ export function SettingsPage() {
   // the card auto-hides instead of sitting there until someone notices the
   // Hide button. Held back while either query is still loading so it
   // doesn't flash visible-then-hidden on a fast setup.
-  const firstWeekNotDismissed = useFirstWeekChecklistVisible();
+  const firstWeekNotDismissed = useFirstWeekChecklistVisible(clinic.id);
   const setupIncomplete =
     therapists === undefined || catalog === undefined
       ? undefined
@@ -772,7 +788,6 @@ type ProfileFields = Pick<
   | 'walkInMrnoPrefix'
   | 'logoPath'
   | 'clinicType'
-  | 'enableExpectedToday'
   | 'clinicalDocsEnabled'
   | 'showTherapistComparison'
 >;
@@ -788,7 +803,6 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         walkInMrnoPrefix: c.walkInMrnoPrefix,
         logoPath: c.logoPath,
         clinicType: c.clinicType,
-        enableExpectedToday: c.enableExpectedToday ?? false,
         clinicalDocsEnabled: c.clinicalDocsEnabled ?? false,
         showTherapistComparison: c.showTherapistComparison ?? false,
       }),
@@ -925,7 +939,7 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
           label={
             <>
               Clinical notes
-              <InfoTip text="When on, new visits are flagged for a clinical note until one is completed — filterable via Ledger's 'Not documented' checkbox. Off by default; turn on for clinics that track a note per visit." />
+              <InfoTip text="Turn on for clinics that keep a clinical note per visit. New visits get flagged until a note is completed, the 'Add clinical note' shortcut appears after logging a visit, and Ledger's 'Not documented' filter and the Reports modality chart become available. Note: staff can still write notes from a patient's profile even with this off — this controls the per-visit prompts and reporting, not access." />
             </>
           }
         >
@@ -1488,6 +1502,7 @@ function DataBackup() {
     setBusy(true);
     try {
       await backupService.downloadBackup(clinic.id, clinic.name);
+      await db.meta.put({ key: lastBackupMetaKey(clinic.id), value: new Date().toISOString() });
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
@@ -2463,6 +2478,7 @@ function Therapists() {
           email: inviteEmail.trim(),
           role: inviteRole,
           name: inviteName.trim(),
+          redirectOrigin: window.location.origin,
         }),
       });
 

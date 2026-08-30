@@ -80,8 +80,16 @@ function makeFakeRepos() {
       get: async (id) => catalog.find((c) => c.id === id),
       put: async () => {},
     },
-    noReturnReasonCatalog: { list: async () => [], get: async () => undefined, put: async () => {} },
-    referringSourceCatalog: { list: async () => [], get: async () => undefined, put: async () => {} },
+    noReturnReasonCatalog: {
+      list: async () => [],
+      get: async () => undefined,
+      put: async () => {},
+    },
+    referringSourceCatalog: {
+      list: async () => [],
+      get: async () => undefined,
+      put: async () => {},
+    },
     treatmentCatalog: { list: async () => [], get: async () => undefined, put: async () => {} },
     patients: {
       get: async (id) => patients.get(id),
@@ -134,23 +142,28 @@ function makeFakeRepos() {
       listByClinic: async () => [],
       getOpenDraft: async () => undefined,
       listByEnrollment: async () => [],
+      getByVisitId: async () => undefined,
       put: async () => {},
     },
     patientModuleEnrollments: {
       get: async () => undefined,
       listByPatient: async () => [],
       getActive: async () => undefined,
+      listByClinic: async () => [],
       put: async () => {},
     },
-    expectedVisits: {
-      listForDate: async () => [],
+    patientAdvances: {
+      get: async () => undefined,
+      listByPatient: async () => [],
       put: async () => {},
     },
   };
   return { repos, patients, visits };
 }
 
-function makeRow(overrides: Partial<RawImportRow> & { sheet: string; sheetRowIndex: number }): RawImportRow {
+function makeRow(
+  overrides: Partial<RawImportRow> & { sheet: string; sheetRowIndex: number }
+): RawImportRow {
   return {
     dateRaw: new Date(2026, 3, 1),
     patientName: 'Test Patient',
@@ -238,7 +251,14 @@ describe('importVisitsService.preview', () => {
   it('surfaces the real "Advanced Therapy 2/2" mislabel as unmatched, not a new package size', async () => {
     const svc = createImportVisitsService(fake.repos);
     const preview = await svc.preview(
-      [makeRow({ sheet: 'May', sheetRowIndex: 0, serviceNameRaw: 'Advanced Therapy 2/2', billAmountRupees: 3600 })],
+      [
+        makeRow({
+          sheet: 'May',
+          sheetRowIndex: 0,
+          serviceNameRaw: 'Advanced Therapy 2/2',
+          billAmountRupees: 3600,
+        }),
+      ],
       'clinic-1'
     );
     expect(preview.rows[0].blockingIssues).toContain('unmatched-service');
@@ -371,7 +391,14 @@ describe('importVisitsService.commit', () => {
   it('honors a manual catalog reassignment for an unmatched service', async () => {
     const svc = createImportVisitsService(fake.repos);
     const preview = await svc.preview(
-      [makeRow({ sheet: 'April', sheetRowIndex: 0, serviceNameRaw: 'Advanced Therapy 2/2', billAmountRupees: 3600 })],
+      [
+        makeRow({
+          sheet: 'April',
+          sheetRowIndex: 0,
+          serviceNameRaw: 'Advanced Therapy 2/2',
+          billAmountRupees: 3600,
+        }),
+      ],
       'clinic-1'
     );
     const key = preview.rows[0].key;

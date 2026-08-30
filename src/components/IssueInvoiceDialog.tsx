@@ -1,15 +1,36 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { PaymentMode } from '@/domain/types';
+import { useLiveQuery } from 'dexie-react-hooks';
+import type {
+  ConsultationNote,
+  InvoiceClinicalSnapshot,
+  InvoiceLineItem,
+  PaymentMode,
+} from '@/domain/types';
+import type { CoreAssessmentPayload } from '@/domain/coreAssessment';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
-import { invoiceService, paymentService } from '@/services';
+import { invoiceService, paymentService, repos } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
+import { treatmentsDisplayText } from '@/components/VisitCard';
 import type { InvoicePrintBackTarget } from '@/app/router';
+import { formatINR } from '@/domain/money';
+import { sessionCountLabel } from '@/domain/invoiceLine';
+import {
+  EMPTY_CLINICAL_FIELDS,
+  InvoiceClinicalFieldsForm,
+  type ClinicalFields,
+} from '@/components/InvoiceClinicalFields';
 
-const PAYMENT_MODES: PaymentMode[] = ['Cash', 'Card', 'UPI', 'Insurance'];
+// UPI first — the most common collection method at an Indian clinic front
+// desk, so it's both the default selection below and the top option here
+// rather than making staff scroll past Cash on every single bill.
+const PAYMENT_MODES: PaymentMode[] = ['UPI', 'Cash', 'Card', 'Insurance'];
 
 export interface IssueInvoiceTarget {
   visitId: string;
+  /** Added for the clinical-snapshot pre-fill (Billing & Notes Rebuild
+   *  Phase 1, 1.4) — both call sites already have it on the row. */
+  patientId: string;
   patientLabel: string;
   serviceLabel: string;
   isPackage: boolean;
@@ -18,6 +39,17 @@ export interface IssueInvoiceTarget {
    *  asked a question that's already been answered. Issuing the invoice
    *  itself never touches the existing direct payment either way. */
   alreadyCollected?: boolean;
+}
+
+/** Extracts the referral block from a note's payload, but only for a heavy
+ *  (initial/followup) note — a light session note (Phase 2) has no
+ *  `referral` field at all. */
+function noteReferral(
+  note: ConsultationNote | undefined
+): CoreAssessmentPayload['referral'] | undefined {
+  if (!note || note.noteMode === 'session') return undefined;
+  const payload = note.assessmentPayload as CoreAssessmentPayload | null;
+  return payload?.referral;
 }
 
 export function IssueInvoiceDialog({
@@ -33,17 +65,139 @@ export function IssueInvoiceDialog({
    *  opens from both Ledger and Workspace. */
   returnTo: InvoicePrintBackTarget;
 }) {
-  const [paymentMode, setPaymentMode] = useState<PaymentMode>('Cash');
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>('UPI');
   const [collectedNow, setCollectedNow] = useState(target.alreadyCollected ?? true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<{ invoiceId: string; invoiceNo: string } | null>(null);
 
+  // 'form' -> fill in payment mode/clinical details; 'review' -> a preview
+  // of exactly what will be issued, computed via the same line-item build
+  // issueForVisits itself uses (invoiceService.previewLineItems), so this
+  // never drifts from what actually gets issued. No server write happens
+  // until "Confirm & issue" from the review step.
+  const [step, setStep] = useState<'form' | 'review'>('form');
+  const [preview, setPreview] = useState<{
+    lineItems: InvoiceLineItem[];
+    totalPaise: number;
+  } | null>(null);
+
+  // Clinical pre-fill (1.4) — degrades silently to empty fields whenever
+  // the source data isn't cached locally (e.g. an offline device that
+  // never synced this patient's notes); it never blocks issuance either
+  // way, since every field here stays editable and is entirely optional
+  // server-side (`p_clinical_snapshot` defaults to null).
+  const visit = useLiveQuery(() => repos.visits.get(target.visitId), [target.visitId]);
+  const visitNote = useLiveQuery(
+    () => repos.consultationNotes.getByVisitId(target.visitId),
+    [target.visitId]
+  );
+  const patientNotes = useLiveQuery(
+    () => repos.consultationNotes.listByPatient(clinicId, target.patientId),
+    [clinicId, target.patientId]
+  );
+  const treatmentCatalog = useLiveQuery(
+    () => repos.treatmentCatalog.list(clinicId, true),
+    [clinicId]
+  );
+
+  const sourceNote = useMemo((): ConsultationNote | undefined => {
+    if (noteReferral(visitNote)) return visitNote;
+    // Fall back to the most recently updated completed heavy note in the
+    // patient's history — the visit's own note may be a light session note
+    // (Phase 2), or simply not carry a referral block yet.
+    return (patientNotes ?? [])
+      .filter(
+        (n) => n.status === 'completed' && (n.noteMode === 'initial' || n.noteMode === 'followup')
+      )
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .find((n) => noteReferral(n));
+  }, [visitNote, patientNotes]);
+
+  const referral = noteReferral(sourceNote);
+
+  const prefill: ClinicalFields = useMemo(() => {
+    if (!visit) return EMPTY_CLINICAL_FIELDS;
+    const treatmentNames = (visit.treatmentIds ?? [])
+      .map((id) => treatmentCatalog?.find((t) => t.id === id)?.name)
+      .filter((n): n is string => !!n);
+    return {
+      diagnosis: referral?.diagnosis ?? '',
+      referringPhysician: referral?.referringPhysician ?? '',
+      physicianRegistrationNo: referral?.physicianRegistrationNo ?? '',
+      placeOfService: visit.location ?? 'clinic',
+      treatmentPerformed: treatmentsDisplayText(treatmentNames, visit.treatmentNotes),
+    };
+  }, [visit, referral, treatmentCatalog]);
+
+  const [fields, setFields] = useState<ClinicalFields>(EMPTY_CLINICAL_FIELDS);
+  const [touched, setTouched] = useState(false);
+
+  // Keep syncing from the (async, live-queried) pre-fill until the biller
+  // actually edits a field — not just once `visit` resolves. `visit`,
+  // `visitNote`/`patientNotes`, and `treatmentCatalog` are four independent
+  // live queries with no ordering guarantee between them; syncing only on
+  // `visit`'s own resolution risked locking in a blank prefill if the
+  // others were still loading at that moment. Re-running on every `prefill`
+  // change instead means whichever query resolves last still lands
+  // correctly, and `touched` is what stops a later resolution from
+  // clobbering something the biller already typed.
+  useEffect(() => {
+    if (!touched) setFields(prefill);
+  }, [prefill, touched]);
+
+  function updateField<K extends keyof ClinicalFields>(key: K, value: ClinicalFields[K]) {
+    setTouched(true);
+    setFields((f) => ({ ...f, [key]: value }));
+  }
+
+  function clinicalSnapshotFromFields(): InvoiceClinicalSnapshot | null {
+    const hasAnyClinicalField =
+      fields.diagnosis.trim() ||
+      fields.referringPhysician.trim() ||
+      fields.physicianRegistrationNo.trim() ||
+      fields.treatmentPerformed.trim();
+    if (!hasAnyClinicalField) return null;
+    return {
+      diagnosis: fields.diagnosis.trim() || null,
+      diagnosisIcdCode: referral?.diagnosisIcdCode ?? null,
+      referringPhysician: fields.referringPhysician.trim() || null,
+      physicianRegistrationNo: fields.physicianRegistrationNo.trim() || null,
+      placeOfService: fields.placeOfService,
+      treatmentPerformed: fields.treatmentPerformed.trim() || null,
+      sourceNoteId: sourceNote?.id ?? null,
+      editedByBiller:
+        fields.diagnosis !== prefill.diagnosis ||
+        fields.referringPhysician !== prefill.referringPhysician ||
+        fields.physicianRegistrationNo !== prefill.physicianRegistrationNo ||
+        fields.placeOfService !== prefill.placeOfService ||
+        fields.treatmentPerformed !== prefill.treatmentPerformed,
+    };
+  }
+
+  async function goToReview() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { lineItems, totalPaise } = await invoiceService.previewLineItems([target.visitId]);
+      setPreview({ lineItems, totalPaise });
+      setStep('review');
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function issue() {
     setBusy(true);
     setError(null);
     try {
-      const invoice = await invoiceService.issueForVisit(target.visitId, paymentMode);
+      const invoice = await invoiceService.issueForVisit(
+        target.visitId,
+        paymentMode,
+        clinicalSnapshotFromFields()
+      );
       try {
         await paymentService.setStatus(invoice.id, clinicId, collectedNow ? 'paid' : 'outstanding');
       } catch (statusError) {
@@ -67,7 +221,9 @@ export function IssueInvoiceDialog({
       >
         {issued ? (
           <>
-            <h2 id="issue-invoice-title" className="text-sm font-semibold text-[var(--ink)]">Invoice issued</h2>
+            <h2 id="issue-invoice-title" className="text-sm font-semibold text-[var(--ink)]">
+              Invoice issued
+            </h2>
             <p className="text-sm text-[var(--ink)]">
               Invoice {issued.invoiceNo} issued for {target.patientLabel}.
             </p>
@@ -85,9 +241,97 @@ export function IssueInvoiceDialog({
               </button>
             </div>
           </>
+        ) : step === 'review' ? (
+          <>
+            <h2 id="issue-invoice-title" className="text-sm font-semibold text-[var(--ink)]">
+              Review before issuing
+            </h2>
+            <p className="text-sm text-[var(--muted)]">{target.patientLabel}</p>
+
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--muted)]">
+                  <th className="py-1.5">Service</th>
+                  <th className="py-1.5">Sessions</th>
+                  <th className="py-1.5 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(preview?.lineItems ?? []).map((li, i) => (
+                  <tr key={i} className="border-b border-[var(--border)] align-top">
+                    <td className="py-1.5 font-medium text-[var(--ink)]">{li.serviceName}</td>
+                    <td className="py-1.5 text-[var(--muted)]">{sessionCountLabel(li)}</td>
+                    <td className="font-num py-1.5 text-right">{formatINR(li.totalPaise)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={2} className="py-2 text-right font-semibold text-[var(--ink)]">
+                    Total
+                  </td>
+                  <td className="font-num py-2 text-right text-base font-bold text-[var(--ink)]">
+                    {formatINR(preview?.totalPaise ?? 0)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <div className="space-y-1 rounded-md border border-[var(--border)] bg-[var(--paper)] p-3 text-sm text-[var(--ink)]">
+              <p>
+                Payment mode: <span className="font-medium">{paymentMode}</span> —{' '}
+                {collectedNow ? 'collected now' : 'not collected, pay later'}
+              </p>
+              {(fields.diagnosis ||
+                fields.referringPhysician ||
+                fields.treatmentPerformed ||
+                fields.placeOfService === 'home') && (
+                <div className="mt-1.5 border-t border-[var(--border)] pt-1.5 text-xs text-[var(--muted)]">
+                  {fields.diagnosis && <p>Diagnosis: {fields.diagnosis}</p>}
+                  {fields.referringPhysician && (
+                    <p>
+                      Referring physician: {fields.referringPhysician}
+                      {fields.physicianRegistrationNo &&
+                        ` (Reg. No. ${fields.physicianRegistrationNo})`}
+                    </p>
+                  )}
+                  <p>Place of service: {fields.placeOfService === 'home' ? 'Home' : 'Clinic'}</p>
+                  {fields.treatmentPerformed && (
+                    <p>Treatment performed: {fields.treatmentPerformed}</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <ErrorNote message={error} />
+            <p className="text-xs text-[var(--muted)]">
+              The invoice number is issued by the server and the bill becomes immutable — this needs
+              a connection and cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className={btnSecondary}
+                disabled={busy}
+                onClick={() => setStep('form')}
+              >
+                ← Back to edit
+              </button>
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={busy}
+                onClick={() => void issue()}
+              >
+                {busy ? 'Issuing…' : 'Confirm & issue'}
+              </button>
+            </div>
+          </>
         ) : (
           <>
-            <h2 id="issue-invoice-title" className="text-sm font-semibold text-[var(--ink)]">Issue invoice</h2>
+            <h2 id="issue-invoice-title" className="text-sm font-semibold text-[var(--ink)]">
+              Issue invoice
+            </h2>
             <p className="text-sm text-[var(--muted)]">
               {target.patientLabel} — {target.serviceLabel}
               {target.isPackage && ', all sessions of this package'}
@@ -114,21 +358,48 @@ export function IssueInvoiceDialog({
                 Collected now
               </label>
               <label className="flex items-center gap-2">
-                <input type="radio" checked={!collectedNow} onChange={() => setCollectedNow(false)} />
+                <input
+                  type="radio"
+                  checked={!collectedNow}
+                  onChange={() => setCollectedNow(false)}
+                />
                 Not collected — pay later
               </label>
             </div>
+
+            <div className="space-y-3 border-t border-[var(--border)] pt-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+                Clinical details (for TPA/insurance bills)
+              </p>
+              <InvoiceClinicalFieldsForm
+                fields={fields}
+                onChange={updateField}
+                hints={{
+                  diagnosis: referral?.diagnosis
+                    ? "From patient's note — edit if needed"
+                    : undefined,
+                  referringPhysician: referral?.referringPhysician
+                    ? "From patient's note — edit if needed"
+                    : undefined,
+                  treatmentPerformed: prefill.treatmentPerformed
+                    ? "From this visit's record — edit if needed"
+                    : undefined,
+                }}
+              />
+            </div>
+
             <ErrorNote message={error} />
-            <p className="text-xs text-[var(--muted)]">
-              The invoice number is issued by the server and the bill becomes immutable — this
-              needs a connection and cannot be undone.
-            </p>
             <div className="flex justify-end gap-2">
               <button type="button" className={btnSecondary} onClick={onClose}>
                 Cancel
               </button>
-              <button type="button" className={btnPrimary} disabled={busy} onClick={() => void issue()}>
-                {busy ? 'Issuing…' : 'Issue invoice'}
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={busy}
+                onClick={() => void goToReview()}
+              >
+                {busy ? 'Loading…' : 'Review invoice'}
               </button>
             </div>
           </>

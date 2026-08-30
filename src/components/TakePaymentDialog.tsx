@@ -4,7 +4,7 @@ import type { PaymentMethod } from '@/domain/types';
 import { formatINR, paiseToRupees, rupeesToPaise } from '@/domain/money';
 import type { Paise } from '@/domain/money';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
-import { directPaymentService, paymentService, repos } from '@/services';
+import { advanceService, directPaymentService, paymentService, repos } from '@/services';
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
 
 const METHODS: { value: PaymentMethod; label: string }[] = [
@@ -23,6 +23,7 @@ export function TakePaymentDialog({
   visitDate,
   patientLabel,
   mrno,
+  patientId,
   onClose,
 }: {
   clinicId: string;
@@ -36,11 +37,20 @@ export function TakePaymentDialog({
   visitDate: string;
   patientLabel: string;
   mrno: string;
+  /** Optional — when given, offers "apply advance" if the patient has an
+   *  open balance (Billing & Notes Rebuild Phase 1, 1.6). Omitted call
+   *  sites just don't get the nudge, same as before this existed. */
+  patientId?: string;
   onClose: () => void;
 }) {
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const openAdvances = useLiveQuery(
+    () => (patientId ? advanceService.openAdvancesWithBalance(clinicId, patientId) : undefined),
+    [clinicId, patientId]
+  );
+  const advanceBalancePaise = (openAdvances ?? []).reduce((sum, a) => sum + a.remainingPaise, 0);
 
   const invoice = useLiveQuery(
     () => (invoiceId ? repos.invoices.get(invoiceId) : undefined),
@@ -118,6 +128,37 @@ export function TakePaymentDialog({
     }
   }
 
+  async function applyAdvance() {
+    if (!openAdvances || openAdvances.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const visits = invoiceId
+        ? (await repos.visits.list({ clinicId })).filter(
+            (v) => v.invoiceId === invoiceId && !v.deleted
+          )
+        : await repos.visits.get(visitId).then((v) => (v ? [v] : []));
+      if (visits.length === 0) throw new Error('Visit not found');
+
+      // Oldest advance first (FIFO), each capped at what's actually owed.
+      const ordered = [...openAdvances].sort((a, b) =>
+        a.advance.receivedDate.localeCompare(b.advance.receivedDate)
+      );
+      let toApply = Math.min(remainingDuePaise, advanceBalancePaise);
+      for (const { advance, remainingPaise } of ordered) {
+        if (toApply <= 0) break;
+        const slice = Math.min(remainingPaise, toApply);
+        await advanceService.applyAdvance(clinicId, advance, visits, slice, visitDate);
+        toApply -= slice;
+      }
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not apply the advance');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">
       <div
@@ -130,6 +171,19 @@ export function TakePaymentDialog({
           {patientLabel} · {formatINR(ceilingPaise)} billed
           {alreadyPaidPaise ? ` · ${formatINR(alreadyPaidPaise)} already collected` : ''}
         </p>
+        {advanceBalancePaise > 0 && remainingDuePaise > 0 && (
+          <div className="flex items-center justify-between rounded-md bg-[var(--teal-light)] px-3 py-2 text-xs text-[var(--teal-strong)]">
+            <span>{formatINR(advanceBalancePaise)} advance available</span>
+            <button
+              type="button"
+              className="font-medium underline disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={busy}
+              onClick={() => void applyAdvance()}
+            >
+              Apply
+            </button>
+          </div>
+        )}
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-[var(--muted)]">
             Amount received

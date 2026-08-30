@@ -15,7 +15,7 @@ const TABLE_PHRASE: Record<SyncedTable, { one: string; many: string }> = {
   settlements: { one: 'settlement', many: 'settlements' },
   consultation_notes: { one: 'clinical note', many: 'clinical notes' },
   patient_module_enrollments: { one: 'patient setup change', many: 'patient setup changes' },
-  expected_visits: { one: 'expected-visit change', many: 'expected-visit changes' },
+  patient_advances: { one: 'advance payment', many: 'advance payments' },
 };
 
 export function syncFailureHeadline(tables: string[]): string {

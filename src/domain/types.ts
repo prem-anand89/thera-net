@@ -46,7 +46,29 @@ export interface Clinic {
    * Kept on the type for older cached/server rows; no UI reads or writes it.
    */
   visitColumnPrefs?: Partial<Record<VisitColumnKey, boolean>> | null;
-  /** Whether the clinical documentation module (consultation notes, screening, consent) is on. */
+  /**
+   * Client-side "this clinic uses clinical documentation" feature flag.
+   * Purely a display/visibility switch — it is NOT what permits a note to
+   * be written. That's a separate, always-on server-side gate:
+   * `can_use_module(clinic_id, 'consultation_notes')` on
+   * `consultation_notes`' insert/update RLS policies, seeded enabled for
+   * every clinic with no UI to turn it off (see FEATURES_AND_SCHEMA.md).
+   * The two never conflict — they act at different layers.
+   *
+   * Four surfaces read this flag:
+   *  - `visitService.ts` — auto-flags a new visit `clinicalStatus:'pending'`
+   *  - `NewVisitPage.tsx` — the "Add clinical note" CTA after saving a visit
+   *  - `LedgerPage.tsx` — the "Not documented" filter checkbox
+   *  - `ReportsOverviewPage.tsx` — the modality-usage chart
+   *
+   * One surface deliberately does NOT: Patient Profile's
+   * `ConsultationNotePanel` is gated on role (`canViewClinicalNotes`) only,
+   * so "New note" there stays available even with this off. Confirmed
+   * intentional (not an oversight) — every therapist always has notes
+   * access, full stop; this flag is an opt-in reminder/reporting layer on
+   * top of that baseline, not an access gate. See FEATURES_AND_SCHEMA.md
+   * for the full rule before adding a new notes entry point.
+   */
   clinicalDocsEnabled?: boolean;
   /** Whether this clinic uses the invoice module at all. Optional so older cached rows default to true (original behavior). */
   billingEnabled?: boolean;
@@ -68,8 +90,6 @@ export interface Clinic {
    * Optional so older cached rows default to 'W' (original behavior).
    */
   walkInMrnoPrefix?: string | null;
-  /** Opt-in, off by default — the "Expected today" section on Workspace. */
-  enableExpectedToday?: boolean;
   /**
    * Clinic UPI ID (VPA) used to generate a per-visit QR. Optional so older
    * cached rows stay valid; unset means no dynamic QR.
@@ -419,15 +439,63 @@ export interface InvoicePatientSnapshot {
   sex: string | null;
 }
 
+/**
+ * `sessionCount`'s meaning is unchanged from before v2 —
+ * `authorizedSessionCount ?? billedSessionCount` — because it's still read
+ * raw with no fraction handling by legacy invoices and by
+ * `InsurerPacketPage.tsx`'s older reads. All v2 fields are optional, so an
+ * old jsonb-snapshotted invoice (immutable, never migrated/backfilled)
+ * still satisfies this type with zero data changes — presence of
+ * `lineItemVersion: 2` is what marks the new shape; see `invoiceLine.ts`'s
+ * `isV2Line`/`lineRatePerSessionPaise`/`sessionCountLabel`/`lineReconciles`
+ * for how build- and print-side code reads either shape without drifting.
+ */
 export interface InvoiceLineItem {
   serviceName: string;
   sessionCount: number;
   /** Every session date in the package, including ₹0 continuations */
   sessionDates: string[];
+  /** v2: SUM of every visit's own snapshot in the merged group (not one
+   *  visit's) — see `invoiceLine.ts`'s `buildLineItems` for why. */
   catalogPricePaise: Paise;
   adjustmentPaise: Paise;
+  /** v2: joined from `adjustmentReasons` when a merged group spans more
+   *  than one original adjustment reason. */
   adjustmentReason: string | null;
   totalPaise: Paise;
+  /** Presence (not truthiness) of this field is the v2 marker. */
+  lineItemVersion?: 2;
+  billedSessionCount?: number;
+  /** null = not a package (`normalizeAuthorizedCount` in `invoiceLine.ts`
+   *  is the only correct way to derive this from a raw `packageTotal`,
+   *  since `packageTotal: 0` is storable and is not "no package"). */
+  authorizedSessionCount?: number | null;
+  /** Snapshotted at issue time — never re-derived from live catalog
+   *  prices on read. */
+  ratePerSessionPaise?: Paise;
+  rateBasis?: 'package_upfront' | 'per_session';
+  adjustmentReasons?: string[];
+  therapistIds?: UUID[];
+}
+
+/**
+ * Pre-fills onto the bill from the patient's most recent completed note at
+ * issue time, editable by the biller before issuing — not re-read from the
+ * note afterward (H3: invoices are immutable snapshots). `sourceNoteId` is
+ * provenance only, not a live reference.
+ */
+export interface InvoiceClinicalSnapshot {
+  diagnosis: string | null;
+  diagnosisIcdCode?: string | null;
+  referringPhysician: string | null;
+  physicianRegistrationNo: string | null;
+  placeOfService: 'clinic' | 'home' | null;
+  treatmentPerformed: string | null;
+  sourceNoteId?: UUID | null;
+  /** True when the biller changed a value away from its pre-filled
+   *  default before issuing — lets the print/audit trail distinguish
+   *  "matches the note" from "corrected at billing time". */
+  editedByBiller?: boolean;
 }
 
 export interface Invoice {
@@ -447,6 +515,9 @@ export interface Invoice {
    *  One-directional: the original invoice is never updated to point
    *  forward, since issued invoices are immutable. */
   supersedesInvoiceId: UUID | null;
+  /** Optional — old invoices predate this field. Present only when set at
+   *  issue/amend time via `IssueInvoiceDialog`'s clinical pre-fill. */
+  clinicalSnapshot?: InvoiceClinicalSnapshot | null;
   updatedAt: string;
 }
 
@@ -488,6 +559,34 @@ export interface Payment {
   /** ISO date YYYY-MM-DD when payment was received */
   receivedDate: string;
   notes: string | null;
+  /** Set when this payment was drawn down from a patient's advance balance
+   *  (Billing & Notes Rebuild Phase 1, 1.6) rather than collected fresh —
+   *  see `advanceService.applyAdvance`. Optional: pre-existing payments and
+   *  every non-advance payment lack it. */
+  advanceId?: UUID | null;
+  updatedAt: string;
+}
+
+export type PatientAdvanceStatus = 'open' | 'exhausted' | 'refunded' | 'void';
+
+/**
+ * Money received ahead of treatment, not yet tied to any visit — draws
+ * down via `Payment.advanceId`-linked rows rather than a separate
+ * allocation table (see `advanceService.ts`). `method` uses the
+ * `PaymentMethod` vocabulary (`'cash'|'upi'|…`), not the older
+ * `PaymentMode` used by `Invoice.paymentMode` — easy to confuse.
+ */
+export interface PatientAdvance {
+  id: UUID;
+  clinicId: UUID;
+  patientId: UUID;
+  amountPaise: Paise;
+  method: PaymentMethod;
+  receivedDate: string;
+  receiptNo: string | null;
+  notes: string | null;
+  status: PatientAdvanceStatus;
+  deleted: boolean;
   updatedAt: string;
 }
 
@@ -554,7 +653,19 @@ export interface ClinicPlan {
 }
 
 export type ConsultationNoteStatus = 'draft' | 'completed' | 'archived';
-export type NoteMode = 'initial' | 'followup';
+/**
+ * 'initial'/'followup' are the heavy Core Assessment editor's two episode
+ * stages (see domain/coreAssessment.ts); 'session' is the light per-visit
+ * SOAP note (domain/sessionNote.ts). This field does double duty — episode
+ * stage AND payload shape collapse onto one column. That's lossless today
+ * (each value maps to exactly one shape and one stage), but would stop
+ * being lossless if a future light-note variant needed a different stage
+ * semantic. Anywhere this is read off a stored row, treat `null` (legacy
+ * rows predate this field) as
+ * 'initial'/'followup' territory, never as 'session' — see
+ * NoteEditorPage.tsx's `?? 'initial'` default.
+ */
+export type NoteMode = 'initial' | 'followup' | 'session';
 
 /**
  * Structured clinical note, distinct from a visit's free-text treatment
@@ -587,28 +698,6 @@ export interface ConsultationNote {
   status: ConsultationNoteStatus;
   updatedAt: string;
   /** Auth user who created/last touched this row. Optional: older cached rows lack the key. */
-  createdBy?: UUID | null;
-  updatedBy?: UUID | null;
-}
-
-export type ExpectedVisitStatus = 'expected' | 'arrived' | 'no-show';
-
-/**
- * "Who's coming in today" — deliberately not a booking system (no calendar,
- * no per-therapist availability). `timeNote` is free text, not a real time
- * slot, so a future booking module can populate it with a real timestamp
- * later without a migration. `patientId` is null for a visitor who isn't a
- * registered patient yet — `patientName` free text carries the name instead.
- */
-export interface ExpectedVisit {
-  id: UUID;
-  clinicId: UUID;
-  patientId: UUID | null;
-  patientName: string | null;
-  timeNote: string;
-  visitDate: string;
-  status: ExpectedVisitStatus;
-  updatedAt: string;
   createdBy?: UUID | null;
   updatedBy?: UUID | null;
 }

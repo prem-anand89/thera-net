@@ -65,6 +65,14 @@ function validateNormalizedRow(table: SyncedTable, row: Record<string, unknown>)
   return true;
 }
 
+/** True if `nowIds` contains a clinic id not present in `knownIds` —
+ *  pulled out of `reconcileClinicMembership` so this one comparison
+ *  (the whole reason the reconciliation step exists) is directly testable
+ *  without mocking Supabase or Dexie. */
+export function clinicMembershipGrew(nowIds: string[], knownIds: string[]): boolean {
+  return nowIds.some((id) => !knownIds.includes(id));
+}
+
 export class SyncEngine {
   private supabase = getSupabase();
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -122,6 +130,7 @@ export class SyncEngine {
     this.running = true;
     syncStatus.set({ syncing: true });
     try {
+      await this.reconcileClinicMembership(session.user.id);
       await this.push();
       await this.pull();
       syncStatus.set({ lastSyncAt: Date.now(), error: null });
@@ -143,13 +152,50 @@ export class SyncEngine {
   }
 
   /**
+   * Every per-table pull cursor below only ever moves forward against
+   * `updated_at`, so a clinic that becomes newly visible (a fresh invite,
+   * or this device's own account creating a second clinic elsewhere) can
+   * have rows — including its own `clinics` row — older than a cursor
+   * this device already advanced while syncing its first clinic. Those
+   * rows would then never come back from an incremental `.gt(cursor)`
+   * pull. Detecting membership growth via this cheap, uncursored query
+   * and resetting every cursor when it grows forces one full re-pull,
+   * which is always safe since RLS still scopes exactly what returns.
+   */
+  private async reconcileClinicMembership(userId: string) {
+    const supabase = this.supabase!;
+    const { data, error } = await supabase
+      .from('clinic_members')
+      .select('clinic_id')
+      .eq('user_id', userId);
+    if (error) return; // best-effort — next sync cycle gets another chance
+    const nowIds = (data ?? []).map((r) => r.clinic_id as string).sort();
+    const knownRaw = (await db.meta.get('knownClinicIds'))?.value ?? '[]';
+    let knownIds: string[];
+    try {
+      knownIds = JSON.parse(knownRaw);
+    } catch {
+      knownIds = [];
+    }
+    const grew = clinicMembershipGrew(nowIds, knownIds);
+    if (grew) {
+      await db.meta.where('key').startsWith('cursor:').delete();
+    }
+    await db.meta.put({ key: 'knownClinicIds', value: JSON.stringify(nowIds) });
+  }
+
+  /**
    * Stop retrying a permanently-failed local change (e.g. it keeps getting
    * rejected by a server-side rule). The local row is untouched — only the
    * queued sync attempt is dropped, so this device's copy will keep
    * differing from the server for that row until it's edited again.
    */
   async discard(table: SyncedTable, rowId: string): Promise<void> {
-    await db.outbox.where('table').equals(table).and((e) => e.rowId === rowId).delete();
+    await db.outbox
+      .where('table')
+      .equals(table)
+      .and((e) => e.rowId === rowId)
+      .delete();
     await this.updatePending();
   }
 
@@ -167,13 +213,19 @@ export class SyncEngine {
       seen.add(key);
 
       if (!(CLIENT_WRITABLE_TABLES as readonly string[]).includes(entry.table)) {
-        await db.outbox.where('seq').belowOrEqual(entry.seq!).and((e) => e.table === entry.table && e.rowId === entry.rowId).delete();
+        await db.outbox
+          .where('seq')
+          .belowOrEqual(entry.seq!)
+          .and((e) => e.table === entry.table && e.rowId === entry.rowId)
+          .delete();
         continue;
       }
 
       const row = await db.table(entry.table).get(entry.rowId);
       const maxSeq = Math.max(
-        ...entries.filter((e) => e.table === entry.table && e.rowId === entry.rowId).map((e) => e.seq!)
+        ...entries
+          .filter((e) => e.table === entry.table && e.rowId === entry.rowId)
+          .map((e) => e.seq!)
       );
       if (!row) {
         await this.clearOutbox(entry.table, entry.rowId, maxSeq);
@@ -264,7 +316,7 @@ export class SyncEngine {
         const incoming = data
           .map((row) => normalize(table, rowToDomain<Record<string, unknown>>(row)))
           .filter((obj) => !pendingIds.has(obj.id as string));
-        
+
         // Validate rows before bulk insert to catch schema mismatches early
         for (const row of incoming) {
           if (!validateNormalizedRow(table, row)) {
@@ -272,7 +324,7 @@ export class SyncEngine {
             incoming.splice(incoming.indexOf(row), 1);
           }
         }
-        
+
         if (incoming.length > 0) {
           await db.table(table).bulkPut(incoming);
         }

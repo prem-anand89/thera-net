@@ -36,11 +36,12 @@ import {
 } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
+import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { PAYMENT_CHIP } from '@/components/VisitCard';
 import {
   computeVisitPaymentState,
   isPackageContinuation,
-  paymentStatusPhrase,
+  paymentBadge,
 } from '@/domain/paymentState';
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
 
@@ -58,9 +59,12 @@ interface OpenPackage {
   startedOn: string;
 }
 
+// UPI first — the most common collection method at an Indian clinic front
+// desk, so it's both the default (see paymentMethod's useState below) and
+// the top option here instead of making staff scroll past Cash every time.
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: 'cash', label: 'Cash' },
   { value: 'upi', label: 'UPI' },
+  { value: 'cash', label: 'Cash' },
   { value: 'card', label: 'Card' },
   { value: 'bank_transfer', label: 'Bank transfer' },
   { value: 'cheque', label: 'Cheque' },
@@ -170,7 +174,7 @@ export function NewVisitPage() {
   const [notes, setNotes] = useState('');
   const [treatmentIds, setTreatmentIds] = useState<string[]>([]);
   const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending'>('paid');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi');
   const [pendingNote, setPendingNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -183,7 +187,11 @@ export function NewVisitPage() {
     visitId: UUID;
     patientId: UUID;
     patientName: string;
+    serviceLabel: string;
+    isPackage: boolean;
+    alreadyCollected: boolean;
   } | null>(null);
+  const [invoicing, setInvoicing] = useState(false);
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
   const myTherapistId = useMemo(
@@ -358,6 +366,14 @@ export function NewVisitPage() {
     (sum, p) => sum + p.amountPaise,
     0
   );
+  // D2's Overdue anchor (max(visitDate, issuedAt)) — this page only ever
+  // needs one visit's invoice, so a direct get() rather than a clinic-wide
+  // map (statusByInvoiceId above answers a different question — status,
+  // not issue date).
+  const lastVisitInvoice = useLiveQuery(
+    () => (lastVisit?.invoiceId ? repos.invoices.get(lastVisit.invoiceId) : undefined),
+    [lastVisit?.invoiceId]
+  );
   const catalogNameById = useMemo(
     () => new Map((catalog ?? []).map((c) => [c.id, c.name])),
     [catalog]
@@ -518,7 +534,17 @@ export function NewVisitPage() {
         );
       }
 
-      setJustSaved({ visitId: visit.id, patientId: patient.id, patientName: patient.name });
+      setJustSaved({
+        visitId: visit.id,
+        patientId: patient.id,
+        patientName: patient.name,
+        serviceLabel:
+          mode === 'continuation'
+            ? selectedPackage!.serviceName
+            : (selectedService?.name ?? 'Visit'),
+        isPackage: mode === 'continuation',
+        alreadyCollected: billPaise > 0 && canBill && paymentChoice === 'paid',
+      });
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
@@ -527,11 +553,25 @@ export function NewVisitPage() {
   }
 
   if (justSaved) {
+    const otherPrimaryShown = clinic.clinicalDocsEnabled || canBill;
+    const invoiceTarget: IssueInvoiceTarget = {
+      visitId: justSaved.visitId,
+      patientId: justSaved.patientId,
+      patientLabel: justSaved.patientName,
+      serviceLabel: justSaved.serviceLabel,
+      isPackage: justSaved.isPackage,
+      alreadyCollected: justSaved.alreadyCollected,
+    };
     return (
       <div className="mx-auto max-w-2xl space-y-4">
         <SectionCard title="Visit logged">
           <p className="text-sm text-[var(--ink)]">Visit saved for {justSaved.patientName}.</p>
           <div className="mt-4 flex flex-wrap gap-2">
+            {canBill && (
+              <button type="button" className={btnPrimary} onClick={() => setInvoicing(true)}>
+                Issue invoice
+              </button>
+            )}
             {clinic.clinicalDocsEnabled && (
               <Link
                 to="/patients/$patientId/notes/new"
@@ -544,7 +584,7 @@ export function NewVisitPage() {
             )}
             <button
               type="button"
-              className={clinic.clinicalDocsEnabled ? btnSecondary : btnPrimary}
+              className={otherPrimaryShown ? btnSecondary : btnPrimary}
               onClick={() => {
                 setJustSaved(null);
                 void navigate({ to: '/visits/new', search: { patientId: justSaved.patientId } });
@@ -557,6 +597,14 @@ export function NewVisitPage() {
             </button>
           </div>
         </SectionCard>
+        {invoicing && (
+          <IssueInvoiceDialog
+            clinicId={clinic.id}
+            target={invoiceTarget}
+            onClose={() => setInvoicing(false)}
+            returnTo="/visits/new"
+          />
+        )}
       </div>
     );
   }
@@ -602,18 +650,26 @@ export function NewVisitPage() {
                     lastVisitDirectPaymentPaise,
                     lastVisit.invoiceId ? statusByInvoiceId.get(lastVisit.invoiceId) : undefined
                   );
-                  const chip = PAYMENT_CHIP[state];
-                  const statusLabel = paymentStatusPhrase(
+                  const badge = paymentBadge({
                     state,
-                    isPackageContinuation(lastVisit.sessionIndex, lastVisit.packageTotal)
-                  );
+                    billPaise: lastVisit.actualBillPaise,
+                    collectedPaise: lastVisitDirectPaymentPaise,
+                    visitDate: lastVisit.visitDate,
+                    issuedAt: lastVisitInvoice?.issuedAt,
+                    isPackageSession: isPackageContinuation(
+                      lastVisit.sessionIndex,
+                      lastVisit.packageTotal
+                    ),
+                  });
                   return (
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span>
                         {formatDateDMY(lastVisit.visitDate)} —{' '}
                         {catalogNameById.get(lastVisit.serviceCatalogId) ?? 'service'}
                       </span>
-                      <Pill tone={chip.tone}>{statusLabel}</Pill>
+                      <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+                        <span title={badge.title}>{badge.label}</span>
+                      </Pill>
                     </div>
                   );
                 })()
@@ -666,7 +722,12 @@ export function NewVisitPage() {
         // Single column, not sm:grid-cols-2 -- this always renders in the
         // fixed-width side panel now, and sm: is a viewport breakpoint,
         // not a container one, so it would force two columns into a
-        // panel too narrow for them on any normal-width screen.
+        // panel too narrow for them on any normal-width screen. None of
+        // the fields below may carry col-span-2 either, even though the
+        // grid is single-column already -- a spanning child still forces
+        // CSS Grid to open a second implicit column and auto-place every
+        // other field two-per-row into it, silently reintroducing the
+        // exact squeeze this comment says was ruled out.
         <div className="space-y-3">
           <div className="grid grid-cols-1 gap-3">
             <Field label="Name *">
@@ -687,7 +748,7 @@ export function NewVisitPage() {
               />
             </Field>
             {duplicateMatch && (
-              <p className="col-span-2 rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-xs text-[var(--rust)]">
+              <p className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-xs text-[var(--rust)]">
                 ⚠{' '}
                 {duplicateMatch.matchedBy === 'phone'
                   ? `A patient with this phone number — "${duplicateMatch.name}" (ID ${duplicateMatch.mrno}) — already exists.`
@@ -696,7 +757,7 @@ export function NewVisitPage() {
               </p>
             )}
             {!newPatient.phone.trim() && (
-              <p className="col-span-2 text-xs text-[var(--muted)]">
+              <p className="text-xs text-[var(--muted)]">
                 No phone on file — fine for a walk-in with none, but it limits later search and
                 duplicate checks.
               </p>

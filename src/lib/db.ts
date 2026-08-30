@@ -14,7 +14,7 @@ import type {
   Settlement,
   ConsultationNote,
   PatientModuleEnrollment,
-  ExpectedVisit,
+  PatientAdvance,
 } from '@/domain/types';
 
 /**
@@ -59,7 +59,7 @@ export type SyncedTable =
   | 'settlements'
   | 'consultation_notes'
   | 'patient_module_enrollments'
-  | 'expected_visits';
+  | 'patient_advances';
 
 /**
  * Every table the sync engine pushes/pulls — the single source of truth
@@ -85,9 +85,11 @@ export const ALL_SYNCED_TABLES = [
   'settlements',
   'consultation_notes',
   'patient_module_enrollments',
-  'expected_visits',
+  'patient_advances',
 ] as const satisfies readonly SyncedTable[];
-type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number] ? true : never;
+type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number]
+  ? true
+  : never;
 const _exhaustiveCheck: _AssertAllSyncedTablesCovered = true;
 void _exhaustiveCheck;
 
@@ -108,7 +110,7 @@ export const CLIENT_WRITABLE_TABLES = [
   'settlements',
   'consultation_notes',
   'patient_module_enrollments',
-  'expected_visits',
+  'patient_advances',
 ] as const satisfies readonly SyncedTable[];
 
 export class ClinicDB extends Dexie {
@@ -126,7 +128,7 @@ export class ClinicDB extends Dexie {
   settlements!: Table<Settlement, string>;
   consultation_notes!: Table<ConsultationNote, string>;
   patient_module_enrollments!: Table<PatientModuleEnrollment, string>;
-  expected_visits!: Table<ExpectedVisit, string>;
+  patient_advances!: Table<PatientAdvance, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 
@@ -172,13 +174,34 @@ export class ClinicDB extends Dexie {
       // Ledger's date presets, dashboard aggregations) can jump straight to
       // the matching rows instead of loading every visit the clinic has
       // ever logged and filtering in memory.
-      visits: 'id, clinicId, visitDate, patientId, therapistId, packageGroupId, invoiceId, [clinicId+visitDate]',
+      visits:
+        'id, clinicId, visitDate, patientId, therapistId, packageGroupId, invoiceId, [clinicId+visitDate]',
     });
     this.version(11).stores({
       referring_source_catalog: 'id, clinicId',
     });
     this.version(12).stores({
       treatment_catalog: 'id, clinicId',
+    });
+    this.version(13).stores({
+      patient_advances: 'id, clinicId, patientId, status',
+    });
+    // Expected-today shipped, got a Workspace section, then that section
+    // was removed during a redesign without anyone dropping this table —
+    // `null` is Dexie's way to delete an object store; the earlier
+    // version(8) call that created it is left untouched (rewriting a past
+    // version's .stores() breaks the upgrade path for anyone whose IndexedDB
+    // is still on an older version).
+    this.version(14).stores({
+      expected_visits: null,
+    });
+    // my_memberships (declared at version(5) above) was scaffolded for a
+    // clinic switcher but never wired to a reader or writer — the switcher
+    // built later reads db.clinics.toArray() directly instead, which
+    // already carries every clinic this account belongs to. Same "delete
+    // unused scaffolding" precedent as expected_visits above.
+    this.version(15).stores({
+      my_memberships: null,
     });
   }
 }
