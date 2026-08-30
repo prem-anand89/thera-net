@@ -27,8 +27,9 @@ Four CareConnect *workflows* sharing plumbing (tokenized/public links, WhatsApp 
 
 ### Module gate
 
-- One clinic boolean, same pattern as `enableExpectedToday` / `clinicalDocsEnabled` (name suggestion: `enablePatientComms`).
+- One clinic boolean, same pattern as `clinicalDocsEnabled` (name: `enablePatientComms`), **default `false`**.
 - Off = no Requests nav, no visit “Ask for feedback”, no public booking form advertised in Settings. Public token routes should still 404/disabled if the clinic flag is off.
+- Turning the module **off** after appointments/requests already exist does not delete data — it just hides the nav/public routes. Pending tokens/requests are frozen (inaccessible, not auto-cancelled) until re-enabled.
 - Do **not** split into separately gated sub-modules in v1.
 
 ### Sending messages
@@ -37,6 +38,7 @@ Four CareConnect *workflows* sharing plumbing (tokenized/public links, WhatsApp 
 - **Optional later:** WhatsApp Business Cloud API one-click send if credentials exist.
 - Both can coexist; never make Business API required for v1.
 - Honor a patient **do-not-message** flag on every send path once that field exists.
+- **Opt-out mechanism (v1):** a manual staff-settable toggle on the patient profile. No automated "reply STOP" detection — sends go through `wa.me`/share, not a webhook-backed API, so there's no inbound channel to parse a reply from in v1.
 
 ### Automation
 
@@ -55,9 +57,14 @@ Four CareConnect *workflows* sharing plumbing (tokenized/public links, WhatsApp 
 
 Public/anonymous writes need a **narrow SECURITY DEFINER RPC** (or token-scoped RLS), separate from `is_clinic_member`. Print-style: those routes render **without Shell** (no login, no bottom nav).
 
+**Offline reads:** data already synced to Dexie (confirmed appointments, feedback responses, etc.) renders offline like any other clinic data. Only the online-only *actions* in the table above (confirm, reschedule, send) are disabled/greyed while offline — viewing is not gated on a connection.
+
+**Message delivery status:** real delivery/read tracking is only possible for clinics on the Phase 9 WhatsApp Business Cloud API path (Meta's webhooks report it). The default `wa.me`/copy-link path used everywhere else has no delivery signal to track — Thera.Net never sees whether staff actually hit send. Don't build a `message_status` field expecting live data outside the Business API path.
+
 ### Tokens vs public booking URL
 
-- **Feedback:** unguessable random token, **one-time consume** on submit, expiry unused (suggest 21 days). One **pending request per visit**; resend rotates/replaces token, does not stack rows.
+- **Feedback:** 256-bit random token, URL-safe base64 (crypto-secure RNG — not `Math.random`), **one-time consume** on submit, expiry 21 days. One **pending request per visit**; resend rotates/replaces token, does not stack rows.
+- **Rate limiting:** the public token-validation RPC must throttle by IP on invalid/failed-lookup attempts (e.g. a short-window cap on wrong-token guesses) — 256-bit entropy makes brute force infeasible at scale, but the endpoint shouldn't be free to hammer regardless.
 - **Public booking:** stable clinic **slug** (`/book/$clinicSlug`), not a secret token. It will live on Google/website.
 
 ### Feedback UX (v1)
@@ -90,10 +97,10 @@ appointment
 ```
 
 **Arrived is an explicit status, reachable two ways — not inferred from `visitId` alone:**
-1. **Via New visit from the appointment list**: staff open the appointment and hit "create visit" (same patient search-or-create typeahead as any walk-in New visit). This resolves `patient_id`, creates the `visits` row, sets `appointment.visitId`, and flips status to `arrived` — one action, one step.
+1. **Via New visit from the appointment list**: staff open the appointment and hit "create visit" (same patient search-or-create typeahead as any walk-in New visit, **pre-filled with the appointment's submitted name/phone as the starting query** — candidates surface, but staff must still explicitly pick or create; never auto-selected). This resolves `patient_id`, creates the `visits` row, sets `appointment.visitId`, and flips status to `arrived` — one action, one step.
 2. **Manual toggle**: staff can mark an appointment `arrived` on its own (patient is physically present/waiting) without creating the visit yet — the visit gets logged afterward, same as any walk-in today. `patient_id` stays null until whichever path resolves it.
 
-- **Expected today** must show **confirmed appointments** for that date (this is the grown-up version of today’s optional Expected today list). Do **not** create a second “Appointments” strip on Workspace.
+- **Expected today, once `enablePatientComms` is on, is powered by `appointments` — full stop.** No dual system, no "extend the old list" option: `appointments` *is* the day list for comms-enabled clinics. Do **not** create a second “Appointments” strip on Workspace alongside it.
 - **Do not auto-create a `visits` row on confirm.** Front desk logs the visit when the patient is seen (identity resolution happens then, not at confirm).
 - **No-show** does not create a visit or a bill.
 - **Decline** = request never became an appointment. **Cancel** = appointment existed, then called off. **No-show** = they didn’t come.
@@ -158,7 +165,7 @@ Avoid “CareConnect”, “reputation module”, “CareConnect”.
 | `/book/$clinicSlug` | RPC → `appointment_requests` |
 | `/f/$token` | RPC → consume token, write response |
 
-Brand with clinic name/logo only. Mobile-first.
+Brand with clinic name/logo only. Mobile-first. Meet WCAG 2.1 AA basics (labels, contrast, tap-target size) — this is the one surface an unauthenticated, possibly older or less tech-comfortable patient interacts with directly. Skip i18n/localization hooks: the rest of the app has no localization infrastructure today, so scaffolding it for just this module would be inconsistent, not forward-thinking.
 
 ### Staff
 
@@ -215,7 +222,7 @@ Not an implementation. Align names with existing `snake_case` + RLS clinic isola
 
 - clinic, `patient_id` **nullable** (null from confirm until arrival — see "Appointments vs visits vs Expected today"), `patient_name`/`patient_phone` (raw submitted values, kept even after `patient_id` resolves, for display before resolution), therapist_id null, `scheduled_at`, status (`confirmed|rescheduled|no_show|cancelled|arrived`), `request_id` null, `visit_id` null, `reschedule_count`, `previous_scheduled_at` null  
 
-Do **not** introduce a parallel table that duplicates `expected_visits` for the same day list. Either **extend `expected_visits`** to be this appointment, or **replace Expected today data source** with `appointments` and migrate/drop the manual expected list. Pick one in the first booking migration — dual lists are not acceptable.
+**`appointments` is the single day-list concept — decided, not left open.** For clinics with `enablePatientComms` on, `appointments` fully replaces the old manual expected-visits list as Expected Today's data source; that legacy feature is retired for those clinics in the first booking migration, not kept alongside `appointments` as a second option. Clinics that never turn the module on keep their existing simple manual list unaffected — this decision only applies once a clinic opts into the module.
 
 **`feedback_requests`**
 
@@ -226,6 +233,10 @@ Do **not** introduce a parallel table that duplicates `expected_visits` for the 
 - request_id, rating 1–5, comment text null, created_at  
 
 Triage fields (status `new|in_progress|resolved`, admin note) can live on the response or request — one place only.
+
+**`message_log`** (shared audit trail — every send action across all four workflows writes here)
+
+- clinic, kind (`feedback_request|booking_confirmation|therapist_notify|google_review|reminder_stale_package|reminder_single_visit`), recipient (patient_id or raw phone), channel (`wa_share|wa_business_api`), sent_by (staff user), sent_at
 
 RLS: member-gated for staff tables. Public RPCs validate slug/token server-side.
 
@@ -257,13 +268,14 @@ Each slice: migration in `supabase/migrations/`, Dexie table if staff-synced, RL
 - Nav: `src/app/Shell.tsx` — `NAV` array; Reports hidden from therapists; Settings admin-only. Requests visibility: module on + (admin or front_desk).  
 - Permissions: `src/app/usePermissions.ts` — add explicit flags (`canTriageFeedback` = admin, `canManageBookingRequests` = admin \| front_desk). RLS is source of truth.  
 - Workspace queues: `PendingWorkKind` in `src/services/dashboardService.ts` — add kinds, don’t invent a second home widget.  
-- Expected today: `clinic.enableExpectedToday` + `expectedVisitsService` — booking should **feed this UI**, not sit beside it unused.  
+- Expected today: for comms-enabled clinics, this UI is re-sourced from `appointments`, retiring the legacy `clinic.enableExpectedToday` / `expectedVisitsService` path for those clinics — booking **feeds this UI** directly, not a second thing sitting beside it.  
 - Visit actions: `src/components/VisitCard.tsx` — follow **Ask for feedback** / note-link pattern (table + mobile).  
 - New visit offer: `NewVisitPage` already offers add-note after save — same beat for feedback.  
 - Settings chips: `SetupPage` / settings sections — new **Patient communications** chip.  
 - Public routes: like `/reset-password` and `*/print`, **no Shell chrome**.  
 - Online-only precedent: `issue_invoice()`, `create_clinic_with_admin()`.  
 - Stale packages: Workspace / dashboard `stale`; single-visit: `dashboardService` single-visit patients — **reuse queries**.
+- Edge Functions: mirror the existing single-purpose pattern (`invite-therapist`), not a monolith — e.g. one function for anonymous public writes (token/slug validation), a separate one for outbound sends (WhatsApp Business API, when built in slice 9).
 
 ---
 
@@ -286,10 +298,11 @@ Each slice: migration in `supabase/migrations/`, Dexie table if staff-synced, RL
 
 Already locked above; only reopen if implementation forces a fork:
 
-- Dual `expected_visits` vs `appointments` — **must pick one source for Expected today** in slice 5.  
-- Exact token entropy/expiry: **resolved — 21 days is fine.**
+- (Nothing currently open — see resolved list below.)
 
 Resolved, no longer open:
+- ~~Dual `expected_visits` vs `appointments`~~ — **`appointments` is the single source, decided.** For comms-enabled clinics, `appointments` fully replaces the legacy manual expected-visits list as Expected Today's data source in the first booking migration; no "extend the old list" option remains on the table. Clinics that never enable the module are unaffected.
+- ~~Exact token entropy/expiry~~ — **256-bit random, URL-safe base64, 21-day expiry, rate-limited by IP on the validation RPC.**
 - ~~Whether front_desk sees a Needs-attention chip for 1–3★ without comment~~ — **No.** Front desk gets zero visibility into feedback ratings/comments, anywhere, full stop. They can still trigger "Ask for feedback" from a visit; they just never see what comes back.
 - ~~`arrived` vs inferring arrival only from `visitId` set~~ — **`arrived` is an explicit status**, set either automatically (staff create the visit from the appointment list, which resolves patient identity via the New visit typeahead in the same step) or manually (patient is present, visit logged afterward). `patient_id` on `appointments` is null from confirm through to whichever of those two paths resolves it — confirm itself never touches patient identity.
 
