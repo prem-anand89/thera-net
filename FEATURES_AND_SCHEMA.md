@@ -539,6 +539,14 @@ requests, and reminders are later phases, not yet built.
     correctly, so no elevated privileges are needed. One click both rotates
     the token and opens the WhatsApp share sheet with the new link
     (`feedbackService.resend`).
+  - **Resend has a 3-day cooldown, client-side, no override.** Both create
+    and resend stamp `feedback_requests.updated_at` to the moment the link
+    went out, so the UI (`VisitFeedbackLink` in `VisitCard.tsx`) reads that
+    as "last sent at" with no extra field: within 3 days it shows a plain
+    "Feedback request sent" (no button at all), and only past that does
+    "Resend feedback link" appear. Deliberate — an easily-clickable resend
+    invites back-to-back messages to a patient who just hasn't answered
+    yet, so this is a hard floor rather than a confirm-to-override.
   - **Sharing** reuses the Web Share API + `wa.me` fallback pattern from
     `pdfShare.ts` (`shareTextViaWhatsApp`, the plain-text sibling of
     `shareFileToWhatsApp`) — no WhatsApp Business API required for v1. The

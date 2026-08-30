@@ -204,8 +204,16 @@ export interface VisitCardData {
   /** The visit's `feedback_requests` row, if any has ever been created —
    *  `token` is optional because a just-created row hasn't synced its
    *  server-generated token back down yet (see `FeedbackRequest`'s own
-   *  doc comment). `null`/unset means no request exists yet. */
-  feedbackRequest?: { id: UUID; status: FeedbackRequestStatus; token?: string } | null;
+   *  doc comment). `updatedAt` doubles as "last sent at" — both the
+   *  create and resend paths stamp it to the moment the link went out, so
+   *  it's what `VisitFeedbackLink` uses to enforce the resend cooldown,
+   *  not a separate field. `null`/unset means no request exists yet. */
+  feedbackRequest?: {
+    id: UUID;
+    status: FeedbackRequestStatus;
+    token?: string;
+    updatedAt: string;
+  } | null;
 }
 
 /** Row actions kebab — Repeat / Issue invoice / Edit visit / Split /
@@ -469,6 +477,13 @@ export function VisitNoteLink({
   );
 }
 
+/** Minimum time since a feedback link was last sent (create or resend)
+ *  before Resend becomes available again — a patient who hasn't responded
+ *  yet shouldn't get a second message within the same day or two just
+ *  because staff happened to click twice. No admin override; this is a
+ *  hard floor, not a suggestion. */
+const RESEND_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
+
 /** "Ask for feedback" / "Resend" entry point for a visit row — mirrors
  *  `VisitNoteLink`'s gate-then-branch shape (hidden entirely when the
  *  viewer can't act on this row), but unlike Note this isn't a route link:
@@ -505,6 +520,16 @@ export function VisitFeedbackLink({
   // a brief window with nothing to share.
   if (!request.token) {
     return <span className="whitespace-nowrap text-xs text-[var(--muted)]">Preparing link…</span>;
+  }
+
+  // Cooldown since the link was last sent (create and resend both stamp
+  // updatedAt to that moment) — resend exists for a patient who's gone
+  // quiet, not as a repeatable nudge, so it stays hidden for a few days
+  // rather than being one click away from back-to-back messages.
+  if (Date.now() - new Date(request.updatedAt).getTime() < RESEND_COOLDOWN_MS) {
+    return (
+      <span className="whitespace-nowrap text-xs text-[var(--muted)]">Feedback request sent</span>
+    );
   }
 
   if (!onResendFeedback) return null;

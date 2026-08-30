@@ -143,7 +143,12 @@ function visitToCardData(
     noteStatus: linkedNote?.status ?? null,
     canAskForFeedback: enablePatientComms && canModify,
     feedbackRequest: feedbackRequest
-      ? { id: feedbackRequest.id, status: feedbackRequest.status, token: feedbackRequest.token }
+      ? {
+          id: feedbackRequest.id,
+          status: feedbackRequest.status,
+          token: feedbackRequest.token,
+          updatedAt: feedbackRequest.updatedAt,
+        }
       : null,
     packageInvoicePending:
       v.actualBillPaise === 0 &&
