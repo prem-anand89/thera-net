@@ -418,6 +418,17 @@ const NOTE_STATUS_CELL: Record<
   archived: { tone: 'slate', label: 'Archived', action: 'View' },
 };
 
+// Plain flush-left text, not `Pill` — this status sits stacked above a
+// plain-text action link (and, in the table's Actions column, a plain-text
+// feedback link below that). `Pill`'s own px-2 padding shifted "Draft"'s
+// text a few pixels right of everything flush-left beneath it, reading as
+// misaligned once there were 2-3 stacked lines instead of 1.
+const NOTE_STATUS_TEXT_COLOR: Record<'green' | 'amber' | 'slate', string> = {
+  green: 'text-[var(--moss)]',
+  amber: 'text-[var(--amber)]',
+  slate: 'text-[var(--muted)]',
+};
+
 /** Clinical-note entry point for a visit row — shared by the table Note
  *  column and mobile cards so draft/continue/view routing stays consistent.
  *  `backTo` carries the same "which list did this come from" context as
@@ -451,7 +462,9 @@ export function VisitNoteLink({
     }
     return (
       <div className="flex flex-col items-start gap-0.5">
-        <Pill tone={tone}>{label}</Pill>
+        <span className={`whitespace-nowrap text-xs font-medium ${NOTE_STATUS_TEXT_COLOR[tone]}`}>
+          {label}
+        </span>
         <Link
           to="/patients/$patientId/notes/$noteId"
           params={{ patientId: data.patientId, noteId: data.consultationNoteId }}
@@ -906,7 +919,7 @@ function VisitTable({
               )}
               <th className={thNum}>Bill</th>
               <th className={th}>Status</th>
-              <th className={th}>Note</th>
+              <th className={th}>Actions</th>
               <th className={th}></th>
             </tr>
           </thead>
