@@ -553,9 +553,18 @@ requests, and reminders are later phases, not yet built.
     message template is a hardcoded string for now; per-clinic template
     editing is a later phase.
   - **One pending request per visit** — the foundation's own unique index
-    enforces this. A visit whose last request is `responded`/`expired`
-    offers "+ Ask for feedback" again (a fresh row); a `pending` request
-    offers "Resend" instead of creating a duplicate.
+    enforces this. A visit whose last request is `expired` offers
+    "+ Feedback" again (a fresh row); a `pending` request offers "Resend"
+    instead of creating a duplicate; a `responded` request shows a plain
+    "★ Responded" marker instead of either — the same marker for every
+    role, since the actual rating/comment stays admin-only (see below) and
+    there's no client view of it yet to link out to.
+  - **No client-side view of `feedback_responses` yet.** The rating/comment
+    a patient submits is only visible via direct Supabase access today
+    (table editor / SQL) — an admin-only triage inbox to view it in-app is
+    a later slice per the handoff doc's own phase table, not part of this
+    one. The visit row's "★ Responded" marker only says a response
+    exists, not what it says.
 
 ---
 

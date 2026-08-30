@@ -516,7 +516,23 @@ export function VisitFeedbackLink({
   if (!data.canAskForFeedback) return null;
   const request = data.feedbackRequest;
 
-  if (!request || request.status !== 'pending') {
+  // A patient's actual rating/comment is admin-only at the RLS layer
+  // (`feedback_responses` SELECT is `is_clinic_admin()`-only) and has no
+  // client-side view yet — the triage inbox that would show it is a later
+  // slice. So every viewer gets the same plain "it happened" marker here,
+  // not a role-split rich/plain version.
+  if (request?.status === 'responded') {
+    return (
+      <span
+        className="whitespace-nowrap text-xs text-[var(--moss)]"
+        title="Patient responded to the feedback request"
+      >
+        ★ Responded
+      </span>
+    );
+  }
+
+  if (!request || request.status === 'expired') {
     if (!onAskForFeedback) return null;
     return (
       <button
