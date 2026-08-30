@@ -540,9 +540,9 @@ export function VisitFeedbackLink({
     return (
       <span
         className="whitespace-nowrap text-xs text-[var(--muted)]"
-        title="Preparing feedback link"
+        title="Preparing the feedback link"
       >
-        ⏳ Preparing
+        ⏳ Feedback
       </span>
     );
   }
