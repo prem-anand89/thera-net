@@ -1483,7 +1483,7 @@ function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
       <Field
         label={
           <>
-            Ask for feedback
+            Feedback
             <InfoTip text="Turn on to let staff ask a patient for feedback after a visit. Each request creates a one-time link to a public feedback form, shared via WhatsApp — no patient login or Business API needed." />
           </>
         }

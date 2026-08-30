@@ -610,8 +610,9 @@ export function NewVisitPage() {
                       setError(toFriendlyMessage(e));
                     });
                 }}
+                title="Ask this patient for feedback"
               >
-                {feedbackRequested ? 'Feedback requested ✓' : 'Ask for feedback'}
+                {feedbackRequested ? 'Sent ✓' : 'Feedback'}
               </button>
             )}
             <button

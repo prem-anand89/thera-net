@@ -509,8 +509,9 @@ export function VisitFeedbackLink({
         type="button"
         className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
         onClick={onAskForFeedback}
+        title="Ask this patient for feedback"
       >
-        + Ask for feedback
+        + Feedback
       </button>
     );
   }
@@ -519,7 +520,14 @@ export function VisitFeedbackLink({
   // down yet — column defaults only fire server-side on insert, so there's
   // a brief window with nothing to share.
   if (!request.token) {
-    return <span className="whitespace-nowrap text-xs text-[var(--muted)]">Preparing link…</span>;
+    return (
+      <span
+        className="whitespace-nowrap text-xs text-[var(--muted)]"
+        title="Preparing feedback link"
+      >
+        Preparing…
+      </span>
+    );
   }
 
   // Cooldown since the link was last sent (create and resend both stamp
@@ -528,7 +536,9 @@ export function VisitFeedbackLink({
   // rather than being one click away from back-to-back messages.
   if (Date.now() - new Date(request.updatedAt).getTime() < RESEND_COOLDOWN_MS) {
     return (
-      <span className="whitespace-nowrap text-xs text-[var(--muted)]">Feedback request sent</span>
+      <span className="whitespace-nowrap text-xs text-[var(--muted)]" title="Feedback request sent">
+        Sent
+      </span>
     );
   }
 
@@ -538,8 +548,9 @@ export function VisitFeedbackLink({
       type="button"
       className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
       onClick={onResendFeedback}
+      title="Resend the feedback link"
     >
-      Resend feedback link
+      Resend
     </button>
   );
 }
