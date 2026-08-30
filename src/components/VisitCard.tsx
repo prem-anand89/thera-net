@@ -531,14 +531,14 @@ export function VisitFeedbackLink({
 
   // Row exists locally but its server-generated token hasn't synced back
   // down yet — column defaults only fire server-side on insert, so there's
-  // a brief window with nothing to share.
+  // a brief window with nothing to share. Icon-only, `title` for the full
+  // meaning — same convention as the billing-locked 🔒 and edited-by ✎
+  // markers elsewhere in this file, so status reads as a glance, not a
+  // sentence, in a column that's already stacking Note + Feedback lines.
   if (!request.token) {
     return (
-      <span
-        className="whitespace-nowrap text-xs text-[var(--muted)]"
-        title="Preparing feedback link"
-      >
-        Preparing…
+      <span className="text-xs text-[var(--muted)]" title="Preparing feedback link">
+        ⏳
       </span>
     );
   }
@@ -549,8 +549,8 @@ export function VisitFeedbackLink({
   // rather than being one click away from back-to-back messages.
   if (Date.now() - new Date(request.updatedAt).getTime() < RESEND_COOLDOWN_MS) {
     return (
-      <span className="whitespace-nowrap text-xs text-[var(--muted)]" title="Feedback request sent">
-        Sent
+      <span className="text-xs text-[var(--moss)]" title="Feedback request sent">
+        ✓
       </span>
     );
   }
@@ -559,11 +559,12 @@ export function VisitFeedbackLink({
   return (
     <button
       type="button"
-      className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+      className="text-xs text-[var(--teal)] hover:opacity-70"
       onClick={onResendFeedback}
+      aria-label="Resend the feedback link"
       title="Resend the feedback link"
     >
-      Resend
+      ↻
     </button>
   );
 }
