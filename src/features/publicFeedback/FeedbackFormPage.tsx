@@ -25,6 +25,7 @@ export function FeedbackFormPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -54,7 +55,7 @@ export function FeedbackFormPage() {
     }
     setBusy(true);
     setError(null);
-    const { error: rpcError } = await getSupabase()!.rpc('submit_feedback_response', {
+    const { data, error: rpcError } = await getSupabase()!.rpc('submit_feedback_response', {
       p_token: token,
       p_rating: rating,
       p_comment: comment.trim() || null,
@@ -67,6 +68,10 @@ export function FeedbackFormPage() {
       setError(rpcError.message);
       return;
     }
+    // The RPC itself decides whether this qualifies (rating >= 4 AND the
+    // clinic has one configured) — returns null for anything else, so no
+    // client-side rating/URL logic needed here, just "show it if present".
+    setGoogleReviewUrl((data as string | null) ?? null);
     setDone(true);
   }
 
@@ -88,7 +93,19 @@ export function FeedbackFormPage() {
   if (done) {
     return (
       <Centered>
-        <p className="text-sm text-[var(--ink)]">Thank you for your feedback!</p>
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--ink)]">Thank you for your feedback!</p>
+          {googleReviewUrl && (
+            <a
+              href={googleReviewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${btnPrimary} inline-block`}
+            >
+              Leave a Google review
+            </a>
+          )}
+        </div>
       </Centered>
     );
   }
@@ -99,7 +116,10 @@ export function FeedbackFormPage() {
         <h1 className="font-display text-lg font-semibold text-[var(--ink)]">{clinicName}</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">How was your visit?</p>
       </div>
-      <form onSubmit={onSubmit} className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
+      <form
+        onSubmit={onSubmit}
+        className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6"
+      >
         <div className="flex justify-center gap-2">
           {[1, 2, 3, 4, 5].map((n) => (
             <button
@@ -135,8 +155,6 @@ export function FeedbackFormPage() {
 
 function Centered({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-[60vh] items-center justify-center px-6 text-center">
-      {children}
-    </div>
+    <div className="flex min-h-[60vh] items-center justify-center px-6 text-center">{children}</div>
   );
 }

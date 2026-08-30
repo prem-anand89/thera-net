@@ -11,6 +11,7 @@ import {
   clinicBillingConfig,
   type ConsultationNote,
   type FeedbackRequest,
+  type FeedbackResponse,
   type Visit,
 } from '@/domain/types';
 import { noteForVisit } from '@/domain/noteLinks';
@@ -52,7 +53,9 @@ function todayRowToCardData(
   invoicedSiblingGroupIds: Set<string>,
   consultationNotes: ConsultationNote[] | undefined,
   enablePatientComms: boolean,
-  feedbackRequestByVisitId: Map<string, FeedbackRequest>
+  feedbackRequestByVisitId: Map<string, FeedbackRequest>,
+  responseByRequestId: Map<string, FeedbackResponse>,
+  googleReviewUrl: string | null
 ): VisitCardData {
   const canModify = isAdmin || row.therapistId === myTherapistId;
   const linkedNote = noteForVisit(
@@ -104,8 +107,10 @@ function todayRowToCardData(
           status: feedbackRequest.status,
           token: feedbackRequest.token,
           updatedAt: feedbackRequest.updatedAt,
+          rating: responseByRequestId.get(feedbackRequest.id)?.rating ?? null,
         }
       : null,
+    googleReviewUrl,
     packageInvoicePending:
       row.billPaise === 0 &&
       !!row.sessionIndex &&
@@ -220,6 +225,16 @@ export function WorkspacePage() {
     }
     return map;
   }, [feedbackRequests]);
+  // Slice 3 — same reasoning as the identical fetch in LedgerPage.tsx: the
+  // Google-review nudge needs the rating, which lives in feedback_responses.
+  const feedbackResponses = useLiveQuery(
+    () => (clinic.enablePatientComms ? repos.feedbackResponses.listByClinic(clinic.id) : undefined),
+    [clinic.id, clinic.enablePatientComms]
+  );
+  const responseByRequestId = useMemo(
+    () => new Map((feedbackResponses ?? []).map((r) => [r.requestId, r])),
+    [feedbackResponses]
+  );
   // A ₹0 package continuation logged today whose OWN invoiceId is null —
   // check the full package group (unbounded by "today") for an invoiced
   // sibling, so a session trailing an already-issued invoice gets flagged
@@ -337,7 +352,9 @@ export function WorkspacePage() {
                 invoicedSiblingGroupIds ?? new Set(),
                 consultationNotes,
                 clinic.enablePatientComms ?? false,
-                feedbackRequestByVisitId
+                feedbackRequestByVisitId,
+                responseByRequestId,
+                clinic.googleReviewUrl ?? null
               )
             )}
             showDate={false}
@@ -371,6 +388,12 @@ export function WorkspacePage() {
               if (!request?.token) return;
               void feedbackService
                 .resend(request, row.patientName, clinic.name)
+                .catch((e) => alert(toFriendlyMessage(e)));
+            }}
+            onAskForGoogleReview={(row) => {
+              if (!row.googleReviewUrl) return;
+              void feedbackService
+                .askForGoogleReview(row.patientName, clinic.name, row.googleReviewUrl)
                 .catch((e) => alert(toFriendlyMessage(e)));
             }}
             canInvoice={canBill}

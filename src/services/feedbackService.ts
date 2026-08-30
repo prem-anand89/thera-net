@@ -98,5 +98,23 @@ export function createFeedbackService(repos: Repos) {
       );
       return updated;
     },
+
+    /**
+     * Slice 3: staff nudging a 4-5* respondent toward a Google review — a
+     * pure share action, no DB write. Callers gate this on rating >= 4 and
+     * a configured `clinic.googleReviewUrl` themselves (see
+     * `VisitFeedbackLink`); this function trusts that gating rather than
+     * re-checking it, since it has no rating of its own to check against.
+     */
+    async askForGoogleReview(
+      patientName: string,
+      clinicName: string,
+      googleReviewUrl: string
+    ): Promise<void> {
+      await shareTextViaWhatsApp(
+        `Hi ${patientName}, so glad you had a great experience at ${clinicName}! Would you mind leaving us a quick Google review? ${googleReviewUrl}`,
+        'Ask for a Google review'
+      );
+    },
   };
 }

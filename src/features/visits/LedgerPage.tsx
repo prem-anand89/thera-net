@@ -17,6 +17,7 @@ import {
   clinicShareLabels,
   type ConsultationNote,
   type FeedbackRequest,
+  type FeedbackResponse,
   type Patient,
   type PaymentStatus,
   type UUID,
@@ -81,7 +82,9 @@ function visitToCardData(
   invoicedSiblingGroupIds: Set<UUID>,
   consultationNotes: ConsultationNote[] | undefined,
   enablePatientComms: boolean,
-  feedbackRequestByVisitId: Map<UUID, FeedbackRequest>
+  feedbackRequestByVisitId: Map<UUID, FeedbackRequest>,
+  responseByRequestId: Map<UUID, FeedbackResponse>,
+  googleReviewUrl: string | null
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy =
@@ -148,8 +151,10 @@ function visitToCardData(
           status: feedbackRequest.status,
           token: feedbackRequest.token,
           updatedAt: feedbackRequest.updatedAt,
+          rating: responseByRequestId.get(feedbackRequest.id)?.rating ?? null,
         }
       : null,
+    googleReviewUrl,
     packageInvoicePending:
       v.actualBillPaise === 0 &&
       !!v.sessionIndex &&
@@ -304,6 +309,20 @@ export function LedgerPage() {
     return map;
   }, [feedbackRequests]);
 
+  // Slice 3 — the visit row's Google-review nudge needs the rating,
+  // which lives in feedback_responses, not feedback_requests. Same
+  // module-off skip as the request fetch above; RLS filters this to
+  // nothing for a non-admin viewer regardless (see FeedbackResponseRepo's
+  // own doc comment), so no extra role check needed here.
+  const feedbackResponses = useLiveQuery(
+    () => (clinic.enablePatientComms ? repos.feedbackResponses.listByClinic(clinic.id) : undefined),
+    [clinic.id, clinic.enablePatientComms]
+  );
+  const responseByRequestId = useMemo(
+    () => new Map((feedbackResponses ?? []).map((r) => [r.requestId, r])),
+    [feedbackResponses]
+  );
+
   // Payment state needs both facts a bare `invoiceId` check misses: whether
   // the invoice itself was ever marked paid (statusByInvoiceId), and
   // whether money was collected directly with no invoice at all
@@ -418,7 +437,9 @@ export function LedgerPage() {
           invoicedSiblingGroupIds ?? new Set(),
           consultationNotes,
           clinic.enablePatientComms ?? false,
-          feedbackRequestByVisitId
+          feedbackRequestByVisitId,
+          responseByRequestId,
+          clinic.googleReviewUrl ?? null
         )
       ),
     [
@@ -441,6 +462,8 @@ export function LedgerPage() {
       consultationNotes,
       clinic.enablePatientComms,
       feedbackRequestByVisitId,
+      responseByRequestId,
+      clinic.googleReviewUrl,
     ]
   );
 
@@ -855,6 +878,13 @@ export function LedgerPage() {
                   setError(null);
                   void feedbackService
                     .resend(request, row.patientName, clinic.name)
+                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                }}
+                onAskForGoogleReview={(row) => {
+                  if (!row.googleReviewUrl) return;
+                  setError(null);
+                  void feedbackService
+                    .askForGoogleReview(row.patientName, clinic.name, row.googleReviewUrl)
                     .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 canInvoice={canBill}

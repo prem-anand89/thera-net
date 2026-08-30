@@ -213,7 +213,16 @@ export interface VisitCardData {
     status: FeedbackRequestStatus;
     token?: string;
     updatedAt: string;
+    /** Set only once `status` is `'responded'` — the patient's 1-5 rating,
+     *  joined in from `feedback_responses` by the caller. Drives the
+     *  "Ask for a Google review" nudge (Slice 3): 4-5* only, and only when
+     *  `googleReviewUrl` is also set below. */
+    rating?: number | null;
   } | null;
+  /** Clinic's Google review link (Slice 3) — unset means the nudge never
+   *  shows, even for a 4-5* response. Plain passthrough of
+   *  `clinic.googleReviewUrl`, not derived. */
+  googleReviewUrl?: string | null;
 }
 
 /** Row actions kebab — Repeat / Issue invoice / Edit visit / Split /
@@ -508,27 +517,44 @@ export function VisitFeedbackLink({
   data,
   onAskForFeedback,
   onResendFeedback,
+  onAskForGoogleReview,
 }: {
   data: VisitCardData;
   onAskForFeedback?: () => void;
   onResendFeedback?: () => void;
+  onAskForGoogleReview?: () => void;
 }) {
   if (!data.canAskForFeedback) return null;
   const request = data.feedbackRequest;
 
   // A patient's actual rating/comment is admin-only at the RLS layer
-  // (`feedback_responses` SELECT is `is_clinic_admin()`-only) and has no
-  // client-side view yet — the triage inbox that would show it is a later
-  // slice. So every viewer gets the same plain "it happened" marker here,
-  // not a role-split rich/plain version.
+  // (`feedback_responses` SELECT is `is_clinic_admin()`-only) — `rating`
+  // itself is simply never populated for a non-admin viewer (RLS filters
+  // the row out at the sync-pull level, not a client-side check), so the
+  // Google-review nudge below naturally never appears for them either.
+  // Everyone else gets the same plain "it happened" marker.
   if (request?.status === 'responded') {
+    const eligibleForGoogleReview =
+      (request.rating ?? 0) >= 4 && !!data.googleReviewUrl && !!onAskForGoogleReview;
     return (
-      <span
-        className="whitespace-nowrap text-xs text-[var(--moss)]"
-        title="Patient responded to the feedback request"
-      >
-        ★ Responded
-      </span>
+      <div className="flex flex-col items-start gap-0.5">
+        <span
+          className="whitespace-nowrap text-xs text-[var(--moss)]"
+          title="Patient responded to the feedback request"
+        >
+          ★ Responded
+        </span>
+        {eligibleForGoogleReview && (
+          <button
+            type="button"
+            className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+            onClick={onAskForGoogleReview}
+            title="Ask this patient to leave a Google review"
+          >
+            ⭐ Google review
+          </button>
+        )}
+      </div>
     );
   }
 
@@ -593,11 +619,13 @@ function NoteCell({
   backTo,
   onAskForFeedback,
   onResendFeedback,
+  onAskForGoogleReview,
 }: {
   data: VisitCardData;
   backTo?: PatientProfileBackTarget;
   onAskForFeedback?: () => void;
   onResendFeedback?: () => void;
+  onAskForGoogleReview?: () => void;
 }) {
   return (
     <div className="flex flex-col items-start gap-1">
@@ -606,6 +634,7 @@ function NoteCell({
         data={data}
         onAskForFeedback={onAskForFeedback}
         onResendFeedback={onResendFeedback}
+        onAskForGoogleReview={onAskForGoogleReview}
       />
     </div>
   );
@@ -683,6 +712,7 @@ export function SharedVisitCard({
   onDelete,
   onAskForFeedback,
   onResendFeedback,
+  onAskForGoogleReview,
   canInvoice = true,
   backTo,
 }: {
@@ -701,6 +731,7 @@ export function SharedVisitCard({
   onDelete: () => void;
   onAskForFeedback?: () => void;
   onResendFeedback?: () => void;
+  onAskForGoogleReview?: () => void;
   canInvoice?: boolean;
   backTo?: PatientProfileBackTarget;
 }) {
@@ -817,6 +848,7 @@ export function SharedVisitCard({
             data={data}
             onAskForFeedback={onAskForFeedback}
             onResendFeedback={onResendFeedback}
+            onAskForGoogleReview={onAskForGoogleReview}
           />
         </div>
       </div>
@@ -859,6 +891,7 @@ function VisitTable({
   onDelete,
   onAskForFeedback,
   onResendFeedback,
+  onAskForGoogleReview,
   canInvoice,
   selection,
   backTo,
@@ -876,6 +909,7 @@ function VisitTable({
   onDelete: (row: VisitCardData) => void;
   onAskForFeedback?: (row: VisitCardData) => void;
   onResendFeedback?: (row: VisitCardData) => void;
+  onAskForGoogleReview?: (row: VisitCardData) => void;
   canInvoice: boolean;
   selection?: VisitSelectionProps;
   backTo?: PatientProfileBackTarget;
@@ -1046,6 +1080,9 @@ function VisitTable({
                     backTo={backTo}
                     onAskForFeedback={onAskForFeedback ? () => onAskForFeedback(row) : undefined}
                     onResendFeedback={onResendFeedback ? () => onResendFeedback(row) : undefined}
+                    onAskForGoogleReview={
+                      onAskForGoogleReview ? () => onAskForGoogleReview(row) : undefined
+                    }
                   />
                 </td>
                 <td className={td}>
@@ -1158,6 +1195,7 @@ export function ResponsiveVisitList({
   onDelete,
   onAskForFeedback,
   onResendFeedback,
+  onAskForGoogleReview,
   canInvoice = true,
   selection,
   backTo,
@@ -1174,6 +1212,7 @@ export function ResponsiveVisitList({
   onDelete: (row: VisitCardData) => void;
   onAskForFeedback?: (row: VisitCardData) => void;
   onResendFeedback?: (row: VisitCardData) => void;
+  onAskForGoogleReview?: (row: VisitCardData) => void;
   canInvoice?: boolean;
   /** Row checkboxes for bulk actions (e.g. Patient Profile's "select
    *  visits, issue one invoice"). Only wired up in the flat (non-grouped)
@@ -1215,6 +1254,9 @@ export function ResponsiveVisitList({
                     onDelete={() => onDelete(row)}
                     onAskForFeedback={onAskForFeedback ? () => onAskForFeedback(row) : undefined}
                     onResendFeedback={onResendFeedback ? () => onResendFeedback(row) : undefined}
+                    onAskForGoogleReview={
+                      onAskForGoogleReview ? () => onAskForGoogleReview(row) : undefined
+                    }
                     canInvoice={canInvoice}
                     backTo={backTo}
                   />
@@ -1250,6 +1292,9 @@ export function ResponsiveVisitList({
                     onDelete={() => onDelete(row)}
                     onAskForFeedback={onAskForFeedback ? () => onAskForFeedback(row) : undefined}
                     onResendFeedback={onResendFeedback ? () => onResendFeedback(row) : undefined}
+                    onAskForGoogleReview={
+                      onAskForGoogleReview ? () => onAskForGoogleReview(row) : undefined
+                    }
                     canInvoice={canInvoice}
                     backTo={backTo}
                   />
@@ -1278,6 +1323,7 @@ export function ResponsiveVisitList({
           onDelete={onDelete}
           onAskForFeedback={onAskForFeedback}
           onResendFeedback={onResendFeedback}
+          onAskForGoogleReview={onAskForGoogleReview}
           canInvoice={canInvoice}
           selection={selection}
           backTo={backTo}

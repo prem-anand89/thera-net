@@ -486,12 +486,12 @@ queued with a visible error.
 - Therapist comparison chart (off by default)
 - Billing staff restriction (on by default)
 
-### 9. Patient Communications (Phase 0–2)
+### 9. Patient Communications (Phase 0–3)
 
 Full spec/roadmap: `docs/HANDOFF-patient-comms.md`. Phase 0 (foundation),
-Phase 1 (visit "Ask for feedback"), and Phase 2 (Requests → Feedback page)
-have shipped; booking requests, Google review nudges, and reminders are
-later phases, not yet built.
+Phase 1 (visit "Ask for feedback"), Phase 2 (Requests → Feedback page), and
+Phase 3 (Google review nudge) have shipped; booking requests and
+re-engagement reminders are later phases, not yet built.
 
 - **`clinics.enable_patient_comms`** — module gate, off by default, same
   pattern as `clinicalDocsEnabled`/`enableExpectedToday`. Public token routes
@@ -558,8 +558,10 @@ later phases, not yet built.
     "+ Feedback" again (a fresh row); a `pending` request offers "Resend"
     instead of creating a duplicate; a `responded` request shows a plain
     "★ Responded" marker instead of either — the same marker for every
-    role, since the actual rating/comment stays admin-only (see below) and
-    there's no client view of it yet to link out to.
+    role, since the actual rating/comment stays admin-only at the RLS
+    layer (rating is simply never populated client-side for a non-admin
+    viewer — RLS filters the row out at the sync-pull level, not a
+    client-side check).
   - The visit row's "★ Responded" marker only says a response exists, not
     what it says — see the **Requests → Feedback** page below for that.
 - **Requests → Feedback page (Phase 2)** — `/requests?tab=feedback`, admin-
@@ -591,6 +593,28 @@ later phases, not yet built.
     `requestsSignals.ts` module rather than `RequestsPage.tsx` itself so
     that reading it from the eagerly-bundled `WorkspacePage.tsx` doesn't
     pull the route-code-split Requests page into that eager bundle.
+- **Google review nudge (Phase 3)** — `clinics.google_review_url` (nullable
+  text; unset means the nudge never shows, even for a 4-5★ response). Two
+  surfaces, both gated on rating ≥ 4 **and** the URL being set — 1-3★ never
+  gets a Google button, anywhere, per the spec:
+  - **Patient-facing**: the `/f/$token` thank-you screen shows "Leave a
+    Google review" (a plain external link) when eligible.
+    `submit_feedback_response()` itself decides eligibility and returns
+    the URL (or `null`) as its result — the RPC's return type changed from
+    `void` to `text`, so the migration drops and recreates it (grants
+    don't survive a drop, re-stated explicitly same as the original). No
+    second round trip or extra client-side rating logic needed; the public
+    page just shows the button if the return value is non-null.
+  - **Staff-facing**: an "⭐ Google review" nudge on the visit row, next to
+    the "★ Responded" marker — a pure share action (`shareTextViaWhatsApp`,
+    no DB write, no `message_log` entry), gated the same way. Needs the
+    rating on `VisitCardData.feedbackRequest.rating`, joined in by each
+    builder (`LedgerPage.tsx`/`WorkspacePage.tsx`) from a bulk
+    `feedback_responses` fetch keyed by `requestId` — same RLS-filters-it-
+    to-nothing-for-non-admins reasoning as the "★ Responded" marker above,
+    so no separate admin/front-desk code path was needed despite the
+    spec's send-table listing front desk as eligible to send: the rating
+    genuinely isn't in their local Dexie to check against.
 
 ---
 
@@ -1179,7 +1203,7 @@ latest, still-in-force consent per subject (`is_in_force boolean`).
 
 ### Additional Tables
 
-#### `feedback_requests` / `feedback_responses` / `message_log` (Patient Communications, Phase 0–2)
+#### `feedback_requests` / `feedback_responses` / `message_log` (Patient Communications, Phase 0–3)
 ```sql
 -- feedback_requests: one row per "ask this patient for feedback" action
 id              uuid PRIMARY KEY
@@ -1202,6 +1226,10 @@ clinic_id    uuid NOT NULL (FOREIGN KEY → clinics.id) — denormalized so admi
 rating       smallint NOT NULL (1-5)
 comment      text (NULLABLE)
 created_at   timestamptz NOT NULL
+updated_at   timestamptz NOT NULL (default now()) — always == created_at;
+             the row is immutable, this column exists only because the
+             sync engine hardcodes updated_at as every table's delta
+             column (Phase 2 migration)
 
 -- message_log: shared audit trail for every send action across all four
 -- patient-comms workflows (only feedback_request is wired up so far)
@@ -1246,6 +1274,17 @@ column defaults never fire, so "resend" needs this small RPC rather than
 the outbox; the existing `feedback_requests_update` RLS policy is the real
 authorization boundary, same as any other invoker-security RPC in this
 schema.
+
+**`clinics.google_review_url`** (Phase 3) — nullable text; unset means the
+Google review nudge never shows, on either the public thank-you page or
+the staff visit-row action, regardless of rating.
+`submit_feedback_response(p_token text, p_rating int, p_comment text)
+returns text` (was `returns void` through Phase 0-2) — now returns the
+clinic's `google_review_url` when `p_rating >= 4` and one is configured,
+`null` otherwise; the public thank-you page conditions "Leave a Google
+review" on this return value instead of a second round trip. Return-type
+changes require dropping the function first (grants don't survive a drop,
+so the migration re-states them).
 
 #### `audit_log`
 ```sql

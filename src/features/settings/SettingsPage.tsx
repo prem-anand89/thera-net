@@ -1461,38 +1461,61 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   );
 }
 
-type PatientCommsFields = Pick<Clinic, 'enablePatientComms'>;
+type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl'>;
 
 /**
- * Patient Communications, Slice 1 — just the module on/off switch for now.
- * Per HANDOFF-patient-comms.md's "one chip, not scattered" instruction this
- * is its own section rather than a checkbox bolted onto Clinic profile's
- * "Optional modules" grid; the slug/Google-review-URL/message-template/
+ * Patient Communications, Slice 1-3 — module on/off, plus (Slice 3) the
+ * Google review URL that gates both the patient's post-feedback "Leave a
+ * Google review" CTA and staff's "Ask for a Google review" visit-row
+ * action. Per HANDOFF-patient-comms.md's "one chip, not scattered"
+ * instruction this is its own section rather than a checkbox bolted onto
+ * Clinic profile's "Optional modules" grid; the slug/message-template/
  * WhatsApp-number fields the full spec describes arrive with later slices,
  * not here.
  */
 function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { form, set, save, cancel, dirty, saved, busy, error } =
     useClinicSectionForm<PatientCommsFields>(
-      (c) => ({ enablePatientComms: c.enablePatientComms ?? false }),
+      (c) => ({
+        enablePatientComms: c.enablePatientComms ?? false,
+        googleReviewUrl: c.googleReviewUrl ?? null,
+      }),
       onDirtyChange
     );
 
   return (
     <SectionCard title="Patient communications">
-      <Field
-        label={
-          <>
-            Feedback
-            <InfoTip text="Turn on to let staff ask a patient for feedback after a visit. Each request creates a one-time link to a public feedback form, shared via WhatsApp — no patient login or Business API needed." />
-          </>
-        }
-      >
-        <BoolToggle
-          value={form.enablePatientComms ?? false}
-          onChange={(v) => set({ enablePatientComms: v })}
-        />
-      </Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field
+          label={
+            <>
+              Feedback
+              <InfoTip text="Turn on to let staff ask a patient for feedback after a visit. Each request creates a one-time link to a public feedback form, shared via WhatsApp — no patient login or Business API needed." />
+            </>
+          }
+        >
+          <BoolToggle
+            value={form.enablePatientComms ?? false}
+            onChange={(v) => set({ enablePatientComms: v })}
+          />
+        </Field>
+        <Field
+          label={
+            <>
+              Google review link
+              <InfoTip text="Your clinic's Google review page. Set it to unlock a 'Leave a Google review' prompt for patients who rate 4-5 stars, plus an 'Ask for a Google review' action for staff on those same responses. Leave blank to skip Google review nudges entirely." />
+            </>
+          }
+        >
+          <input
+            type="url"
+            className={inputCls}
+            placeholder="https://g.page/r/…/review"
+            value={form.googleReviewUrl ?? ''}
+            onChange={(e) => set({ googleReviewUrl: e.target.value.trim() || null })}
+          />
+        </Field>
+      </div>
       <SectionSaveBar
         dirty={dirty}
         saved={saved}
