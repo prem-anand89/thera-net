@@ -147,7 +147,14 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* Single column, not sm:grid-cols-2 — this dialog is capped at
+              max-w-sm (384px) regardless of viewport, and sm: is a
+              viewport breakpoint, not a container one, so any window
+              ≥640px wide (a tablet, a landscape phone, even a modest
+              desktop) would force two input columns into that fixed
+              384px shell. Same fix already applied to NewVisitPage's
+              own patient-creation form for the identical reason. */}
+          <div className="grid grid-cols-1 gap-3">
             <div className="field-block">
               <label className="field-label">Age</label>
               <input

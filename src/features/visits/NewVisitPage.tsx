@@ -722,7 +722,12 @@ export function NewVisitPage() {
         // Single column, not sm:grid-cols-2 -- this always renders in the
         // fixed-width side panel now, and sm: is a viewport breakpoint,
         // not a container one, so it would force two columns into a
-        // panel too narrow for them on any normal-width screen.
+        // panel too narrow for them on any normal-width screen. None of
+        // the fields below may carry col-span-2 either, even though the
+        // grid is single-column already -- a spanning child still forces
+        // CSS Grid to open a second implicit column and auto-place every
+        // other field two-per-row into it, silently reintroducing the
+        // exact squeeze this comment says was ruled out.
         <div className="space-y-3">
           <div className="grid grid-cols-1 gap-3">
             <Field label="Name *">
@@ -743,7 +748,7 @@ export function NewVisitPage() {
               />
             </Field>
             {duplicateMatch && (
-              <p className="col-span-2 rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-xs text-[var(--rust)]">
+              <p className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-xs text-[var(--rust)]">
                 ⚠{' '}
                 {duplicateMatch.matchedBy === 'phone'
                   ? `A patient with this phone number — "${duplicateMatch.name}" (ID ${duplicateMatch.mrno}) — already exists.`
@@ -752,7 +757,7 @@ export function NewVisitPage() {
               </p>
             )}
             {!newPatient.phone.trim() && (
-              <p className="col-span-2 text-xs text-[var(--muted)]">
+              <p className="text-xs text-[var(--muted)]">
                 No phone on file — fine for a walk-in with none, but it limits later search and
                 duplicate checks.
               </p>
