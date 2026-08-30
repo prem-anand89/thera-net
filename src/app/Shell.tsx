@@ -253,6 +253,17 @@ export function Shell() {
     );
   }
 
+  // Public patient feedback link — genuinely unauthenticated (no session at
+  // all, not even a recovery one). Must render before the `!session` check
+  // below would otherwise bounce an anonymous patient to LoginPage.
+  if (pathname.startsWith('/f/')) {
+    return (
+      <Suspense fallback={<Centered>Loading…</Centered>}>
+        <Outlet />
+      </Suspense>
+    );
+  }
+
   if (loading) return <Centered>Loading…</Centered>;
   if (!session) return <LoginPage />;
 

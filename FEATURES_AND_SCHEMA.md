@@ -305,6 +305,33 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - Therapist comparison chart (off by default)
 - Billing staff restriction (on by default)
 
+### 9. Patient Communications (Phase 0 — foundation only)
+
+Full spec/roadmap: `docs/HANDOFF-patient-comms.md`. Only the foundation has
+shipped so far — a staff-facing "Ask for feedback" trigger, triage inbox,
+booking requests, and reminders are later phases, not yet built.
+
+- **`clinics.enable_patient_comms`** — module gate, off by default, same
+  pattern as `clinicalDocsEnabled`/`enableExpectedToday`. Public token routes
+  refuse to resolve when a clinic hasn't turned this on.
+- **`patients.do_not_message`** — opt-out flag, honored by every send path
+  once those paths exist (Phase 1+); staff-settable toggle, no automated
+  detection.
+- **Public feedback link (`/f/$token`)** — the app's first and only
+  anonymous write path. A therapist/front-desk/admin action (Phase 1, not
+  yet built) will create a `feedback_requests` row with a server-generated
+  256-bit token; a patient opens `/f/$token` with no login, submits a 1–5
+  star rating and optional comment via `submit_feedback_response()`, and
+  that's the entire interaction. Both public RPCs are rate-limited per IP
+  and return an identical generic error for every failure case (invalid,
+  expired, already responded, module off) — deliberately not distinguishable,
+  so the endpoint can't be used to enumerate which tokens exist.
+- **Feedback visibility is admin-only, at the RLS layer, not just the UI.**
+  Front desk and therapists can see that a request exists/its status (no
+  rating or comment content), but `feedback_responses` SELECT is restricted
+  to `is_clinic_admin()` — this is a real access boundary, not a hidden menu
+  item.
+
 ---
 
 ## Application Architecture
@@ -372,6 +399,7 @@ supabase/                SQL migrations, RLS policies, RPCs, realtime
 | `/settings/import-visits` | Historical Excel visit import | Admins only |
 | `/more` | Mobile-only overflow nav (Settings/Reports on narrow screens) | All roles |
 | `/reset-password` | Password reset | Unauthenticated |
+| `/f/$token` | Public patient feedback form (Patient Communications, Phase 0) | Unauthenticated — token-scoped, no clinic membership |
 | `/archive`, `/setup`, `/setup/import-visits`, `/invoices`, `/reports`, `/reports/print` | Legacy redirects for old bookmarks | All roles |
 
 ---
@@ -729,6 +757,54 @@ latest, still-in-force consent per subject (`is_in_force boolean`).
 ---
 
 ### Additional Tables
+
+#### `feedback_requests` / `feedback_responses` / `message_log` (Patient Communications, Phase 0)
+```sql
+-- feedback_requests: one row per "ask this patient for feedback" action
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+visit_id        uuid NOT NULL (FOREIGN KEY → visits.id)
+patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
+therapist_id    uuid NOT NULL (FOREIGN KEY → therapists.id) — denormalized from the visit for RLS
+token           text NOT NULL UNIQUE — 256-bit, base64url, server-generated default
+status          text NOT NULL — 'pending' | 'responded' | 'expired'
+expires_at      timestamptz NOT NULL (default now() + 21 days)
+created_by, updated_by  uuid (NULLABLE)
+created_at, updated_at  timestamptz NOT NULL
+-- one pending request per visit — unique partial index on visit_id where status = 'pending'
+
+-- feedback_responses: the patient's submission (only written by
+-- submit_feedback_response(), a SECURITY DEFINER function — no client INSERT policy exists)
+id           uuid PRIMARY KEY
+request_id   uuid NOT NULL UNIQUE (FOREIGN KEY → feedback_requests.id)
+clinic_id    uuid NOT NULL (FOREIGN KEY → clinics.id) — denormalized so admin-only RLS needs no join
+rating       smallint NOT NULL (1-5)
+comment      text (NULLABLE)
+created_at   timestamptz NOT NULL
+
+-- message_log: shared audit trail for every send action across all four
+-- patient-comms workflows (only feedback_request is wired up so far)
+id                    uuid PRIMARY KEY
+clinic_id             uuid NOT NULL (FOREIGN KEY → clinics.id)
+kind                  text NOT NULL — 'feedback_request' | 'booking_confirmation' | 'therapist_notify' |
+                        'google_review' | 'reminder_stale_package' | 'reminder_single_visit'
+recipient_patient_id  uuid (NULLABLE, FOREIGN KEY → patients.id)
+recipient_phone       text (NULLABLE)
+channel               text NOT NULL — 'wa_share' | 'wa_business_api'
+sent_by               uuid (NULLABLE, FOREIGN KEY → auth.users.id)
+sent_at               timestamptz NOT NULL
+```
+RLS: `feedback_requests` is member-visible (status carries no rating/comment
+content) but only admin/front_desk/own-therapist can insert or update it —
+same shape as the visits table's own admin-or-own-therapist policies.
+`feedback_responses` SELECT is `is_clinic_admin()` only — front desk and
+therapists get zero visibility into ratings/comments, at the database layer,
+not just hidden in the UI. Two SECURITY DEFINER RPCs — `get_feedback_request_by_token()`
+and `submit_feedback_response()` — are explicitly granted EXECUTE to `anon`;
+every other function in this schema either relies on `is_clinic_member()`
+failing for an anonymous caller or explicitly revokes that default. A
+`public_rpc_rate_limit` table (self-pruning, no cron dependency) throttles
+both by client IP.
 
 #### `audit_log`
 ```sql

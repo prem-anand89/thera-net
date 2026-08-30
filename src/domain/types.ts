@@ -87,6 +87,13 @@ export interface Clinic {
    * "Authorised signature" line. Not a cryptographic e-signature.
    */
   signaturePath?: string | null;
+  /**
+   * Patient communications module (booking requests, feedback capture,
+   * Google review nudges, re-engagement reminders). Off by default — see
+   * docs/HANDOFF-patient-comms.md. Optional so older cached rows default
+   * to false (module doesn't exist for them yet).
+   */
+  enablePatientComms?: boolean;
   updatedAt: string;
 }
 
@@ -324,6 +331,10 @@ export interface Patient {
   noReturnReasonId?: UUID | null;
   /** Set = hidden from search/pickers; visits keep resolving. Optional: older cached rows lack the key. */
   deletedAt?: string | null;
+  /** Patient comms opt-out — honored on every send path (feedback links,
+   *  booking confirmations, reminders). Optional: older cached rows lack the
+   *  key and default to false (messaging allowed). */
+  doNotMessage?: boolean;
   updatedAt: string;
 }
 

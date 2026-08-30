@@ -48,6 +48,9 @@ const MorePage = lazy(() =>
 const ResetPasswordPage = lazy(() =>
   import('@/features/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage }))
 );
+const FeedbackFormPage = lazy(() =>
+  import('@/features/publicFeedback/FeedbackFormPage').then((m) => ({ default: m.FeedbackFormPage }))
+);
 
 const rootRoute = createRootRoute({ component: Shell });
 
@@ -297,6 +300,14 @@ const resetPasswordRoute = createRoute({
   component: ResetPasswordPage,
 });
 
+// Public, unauthenticated patient feedback link — see Shell.tsx's early
+// bypass for this path (renders before the session/clinic gating below).
+const feedbackFormRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/f/$token',
+  component: FeedbackFormPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   workspaceRoute,
@@ -320,6 +331,7 @@ const routeTree = rootRoute.addChildren([
   insightsRoute,
   moreRoute,
   resetPasswordRoute,
+  feedbackFormRoute,
 ]);
 
 export const router = createRouter({ routeTree });
