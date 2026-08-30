@@ -16,6 +16,8 @@ import type {
   PatientAdvance,
   FeedbackRequest,
   FeedbackResponse,
+  AppointmentRequest,
+  Appointment,
   NoteMode,
   UUID,
 } from '@/domain/types';
@@ -215,6 +217,17 @@ export interface FeedbackResponseRepo {
   listByClinic(clinicId: UUID): Promise<FeedbackResponse[]>;
 }
 
+/** Read-only, same reasoning as `FeedbackResponseRepo` — every write on
+ *  either booking table (Slice 5) is an online-only RPC, never a Dexie
+ *  put; see `src/services/bookingService.ts`. */
+export interface AppointmentRequestRepo {
+  listByClinic(clinicId: UUID): Promise<AppointmentRequest[]>;
+}
+
+export interface AppointmentRepo {
+  listByClinic(clinicId: UUID): Promise<Appointment[]>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -233,4 +246,6 @@ export interface Repos {
   patientAdvances: PatientAdvanceRepo;
   feedbackRequests: FeedbackRequestRepo;
   feedbackResponses: FeedbackResponseRepo;
+  appointmentRequests: AppointmentRequestRepo;
+  appointments: AppointmentRepo;
 }

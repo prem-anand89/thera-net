@@ -166,6 +166,12 @@ function makeFakeRepos() {
     feedbackResponses: {
       listByClinic: async () => [],
     },
+    appointmentRequests: {
+      listByClinic: async () => [],
+    },
+    appointments: {
+      listByClinic: async () => [],
+    },
   };
   return { repos, patients, visits };
 }

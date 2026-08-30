@@ -14,6 +14,7 @@ import { createConsultationNoteService } from './consultationNoteService';
 import { createTherapistService } from './therapistService';
 import { createAdvanceService } from './advanceService';
 import { createFeedbackService } from './feedbackService';
+import { bookingService } from './bookingService';
 
 export const patientService = createPatientService(repos);
 export const visitService = createVisitService(repos);
@@ -31,4 +32,5 @@ export const consultationNoteService = createConsultationNoteService(repos);
 export const therapistService = createTherapistService(repos);
 export const advanceService = createAdvanceService(repos);
 export const feedbackService = createFeedbackService(repos);
+export { bookingService };
 export { repos };

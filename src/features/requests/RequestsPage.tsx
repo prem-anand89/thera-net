@@ -1,13 +1,16 @@
-import { useEffect, useMemo } from 'react';
-import { Link, useSearch } from '@tanstack/react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos } from '@/services';
+import { repos, bookingService } from '@/services';
 import { db } from '@/lib/db';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { formatDateDMY } from '@/domain/fiscalYear';
-import { SectionCard, th, td } from '@/components/ui';
+import { toFriendlyMessage } from '@/lib/errors';
+import { SectionCard, Pill, th, td } from '@/components/ui';
 import { requestsLastViewedKey } from './requestsSignals';
+import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
+import type { UUID } from '@/domain/types';
 
 /** Filled/empty star string for a 1–5 rating — same glance-first spirit as
  *  the icon+word markers on the visit row (`VisitCard.tsx`'s
@@ -17,22 +20,44 @@ function ratingStars(rating: number): string {
   return '★'.repeat(rating) + '☆'.repeat(5 - rating);
 }
 
+/** `<input type="datetime-local">` needs local-time-no-offset, unlike the
+ *  ISO strings everywhere else in this app — a plain slice off
+ *  toISOString() would silently shift by the browser's UTC offset. */
+function toDatetimeLocalValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function defaultScheduledAt(): string {
+  const d = new Date(Date.now() + 60 * 60 * 1000);
+  return toDatetimeLocalValue(d.toISOString());
+}
+
 /**
- * Patient Communications, Slice 2: admin-only list of every feedback
- * response with its rating and comment — the page HANDOFF-patient-comms.md
- * calls "Requests → Feedback", the only place any of that content is
- * visible anywhere in the app (front desk/therapists see a request's
- * status on the visit row, never the response itself — RLS enforces the
- * same boundary server-side). "Bookings" is a later slice; this page
- * carries the tab shape now so it has somewhere to land without another
- * page/route rework, same "coming later, not hidden" precedent as
- * MorePage's placeholder before this replaced it.
+ * Patient Communications, Slice 2+5: admin-only Feedback (every response
+ * with its rating and comment) and admin+front_desk Bookings (pending
+ * booking requests → confirm into a scheduled appointment; reschedule/
+ * no-show/cancel from there). "Bookings" is front_desk's primary reason
+ * to be on this page at all (HANDOFF-patient-comms.md's role table) — the
+ * doc's own resolved note says a front_desk viewer on `?tab=feedback`
+ * gets redirected to Bookings, not shown a disabled tab.
  */
 export function RequestsPage() {
   const clinic = useClinic();
-  const { isAdmin } = usePermissions();
+  const navigate = useNavigate();
+  const { isAdmin, role } = usePermissions();
+  const canSeeBookings = isAdmin || role === 'front_desk';
   const search = useSearch({ from: '/requests' });
-  const tab = search.tab ?? 'feedback';
+  const tab = search.tab ?? (isAdmin ? 'feedback' : 'bookings');
+
+  // Per the doc's own resolved note: front_desk hitting ?tab=feedback
+  // lands on Bookings instead, not a disabled/hidden state.
+  useEffect(() => {
+    if (!isAdmin && tab === 'feedback') {
+      void navigate({ to: '/requests', search: { tab: 'bookings' }, replace: true });
+    }
+  }, [isAdmin, tab, navigate]);
 
   const responses = useLiveQuery(
     () => (isAdmin ? repos.feedbackResponses.listByClinic(clinic.id) : undefined),
@@ -67,8 +92,8 @@ export function RequestsPage() {
   const patientById = useMemo(() => new Map((patients ?? []).map((p) => [p.id, p])), [patients]);
 
   const therapists = useLiveQuery(
-    () => (isAdmin ? repos.therapists.list(clinic.id, true) : undefined),
-    [clinic.id, isAdmin]
+    () => (isAdmin || canSeeBookings ? repos.therapists.list(clinic.id, true) : undefined),
+    [clinic.id, isAdmin, canSeeBookings]
   );
   const therapistNameById = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
@@ -88,6 +113,85 @@ export function RequestsPage() {
     [responses, requestById, visitById, patientById]
   );
 
+  // Bookings tab data
+  const appointmentRequests = useLiveQuery(
+    () => (canSeeBookings ? repos.appointmentRequests.listByClinic(clinic.id) : undefined),
+    [clinic.id, canSeeBookings]
+  );
+  const pendingRequests = useMemo(
+    () =>
+      (appointmentRequests ?? [])
+        .filter((r) => r.status === 'pending')
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [appointmentRequests]
+  );
+  const appointments = useLiveQuery(
+    () => (canSeeBookings ? repos.appointments.listByClinic(clinic.id) : undefined),
+    [clinic.id, canSeeBookings]
+  );
+  const appointmentRows = useMemo(
+    () => [...(appointments ?? [])].sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt)),
+    [appointments]
+  );
+
+  // Confirm mini-form (one open at a time)
+  const [confirmingId, setConfirmingId] = useState<UUID | null>(null);
+  const [confirmScheduledAt, setConfirmScheduledAt] = useState(defaultScheduledAt());
+  const [confirmTherapistId, setConfirmTherapistId] = useState('');
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [justConfirmed, setJustConfirmed] = useState<{
+    appointmentId: UUID;
+    patientName: string;
+    scheduledAt: string;
+    therapistId: UUID | null;
+  } | null>(null);
+
+  // Reschedule mini-form (one open at a time)
+  const [reschedulingId, setReschedulingId] = useState<UUID | null>(null);
+  const [rescheduleValue, setRescheduleValue] = useState('');
+  const [rescheduleBusy, setRescheduleBusy] = useState(false);
+
+  function startConfirm(requestId: UUID, preferredTherapistId: UUID | null) {
+    setConfirmingId(requestId);
+    setConfirmScheduledAt(defaultScheduledAt());
+    setConfirmTherapistId(preferredTherapistId ?? '');
+    setConfirmError(null);
+    setJustConfirmed(null);
+  }
+
+  async function submitConfirm(request: { id: UUID; name: string }) {
+    setConfirmBusy(true);
+    setConfirmError(null);
+    try {
+      const scheduledIso = new Date(confirmScheduledAt).toISOString();
+      const appointmentId = await bookingService.confirmAppointmentRequest(
+        request.id,
+        scheduledIso,
+        confirmTherapistId || null
+      );
+      setJustConfirmed({
+        appointmentId,
+        patientName: request.name,
+        scheduledAt: scheduledIso,
+        therapistId: confirmTherapistId || null,
+      });
+      setConfirmingId(null);
+    } catch (e) {
+      setConfirmError(toFriendlyMessage(e));
+    }
+    setConfirmBusy(false);
+  }
+
+  async function decline(requestId: UUID) {
+    if (!confirm('Decline this booking request?')) return;
+    try {
+      await bookingService.declineAppointmentRequest(requestId);
+    } catch (e) {
+      alert(toFriendlyMessage(e));
+    }
+  }
+
   // Marks every response caught up as of this visit — Workspace's "new
   // response" count reads this same key, so opening this page is what
   // clears it, not a separate per-row acknowledgement (there's no
@@ -97,7 +201,7 @@ export function RequestsPage() {
     void db.meta.put({ key: requestsLastViewedKey(clinic.id), value: new Date().toISOString() });
   }, [clinic.id, isAdmin]);
 
-  if (!isAdmin) {
+  if (!isAdmin && !canSeeBookings) {
     return (
       <div className="space-y-4">
         <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Requests</h1>
@@ -111,18 +215,38 @@ export function RequestsPage() {
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Requests</h1>
 
       <div className="flex gap-2 border-b border-[var(--border)]">
-        <span className="border-b-2 border-[var(--teal)] px-1 pb-2 text-sm font-medium text-[var(--teal)]">
-          Feedback
-        </span>
-        <span
-          className="px-1 pb-2 text-sm text-[var(--muted)]"
-          title="Patient booking requests — a later phase of this module"
+        {isAdmin ? (
+          <Link
+            to="/requests"
+            search={{ tab: 'feedback' }}
+            className={
+              tab === 'feedback'
+                ? 'border-b-2 border-[var(--teal)] px-1 pb-2 text-sm font-medium text-[var(--teal)]'
+                : 'px-1 pb-2 text-sm text-[var(--muted)] hover:text-[var(--ink)]'
+            }
+          >
+            Feedback
+          </Link>
+        ) : (
+          <span className="px-1 pb-2 text-sm text-[var(--muted)]" title="Admin only">
+            Feedback
+          </span>
+        )}
+        <Link
+          to="/requests"
+          search={{ tab: 'bookings' }}
+          className={
+            tab === 'bookings'
+              ? 'border-b-2 border-[var(--teal)] px-1 pb-2 text-sm font-medium text-[var(--teal)]'
+              : 'px-1 pb-2 text-sm text-[var(--muted)] hover:text-[var(--ink)]'
+          }
         >
-          Bookings <span className="text-xs">(coming later)</span>
-        </span>
+          Bookings
+        </Link>
       </div>
 
       {tab === 'feedback' &&
+        isAdmin &&
         (!clinic.enablePatientComms ? (
           <p className="text-sm text-[var(--muted)]">
             Patient communications is off — turn it on in Settings to start collecting feedback.
@@ -187,6 +311,302 @@ export function RequestsPage() {
               </div>
             )}
           </SectionCard>
+        ))}
+
+      {tab === 'bookings' &&
+        (!clinic.enablePatientComms ? (
+          <p className="text-sm text-[var(--muted)]">
+            Patient communications is off — turn it on in Settings to accept booking requests.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <SectionCard title={`Pending requests (${pendingRequests.length})`}>
+              {pendingRequests.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--muted)]">
+                  No pending booking requests.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {pendingRequests.map((r) => (
+                    <div
+                      key={r.id}
+                      className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <div className="font-display text-sm font-medium text-[var(--ink)]">
+                            {r.name}
+                          </div>
+                          <div className="text-xs text-[var(--muted)]">{r.phone}</div>
+                          {r.preferredTherapistId && (
+                            <div className="text-xs text-[var(--muted)]">
+                              Preferred: {therapistNameById.get(r.preferredTherapistId) ?? '—'}
+                            </div>
+                          )}
+                          {r.preferredTimeText && (
+                            <div className="text-xs text-[var(--muted)]">
+                              &ldquo;{r.preferredTimeText}&rdquo;
+                            </div>
+                          )}
+                        </div>
+                        {confirmingId !== r.id && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                              onClick={() => startConfirm(r.id, r.preferredTherapistId)}
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
+                              onClick={() => void decline(r.id)}
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {confirmingId === r.id && (
+                        <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-[var(--border)] pt-3">
+                          <label className="block">
+                            <span className="mb-1 block text-xs text-[var(--muted)]">
+                              Scheduled for
+                            </span>
+                            <input
+                              type="datetime-local"
+                              className="rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-1.5 text-sm text-[var(--ink)]"
+                              value={confirmScheduledAt}
+                              onChange={(e) => setConfirmScheduledAt(e.target.value)}
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-xs text-[var(--muted)]">
+                              Therapist
+                            </span>
+                            <select
+                              className="rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-1.5 text-sm text-[var(--ink)]"
+                              value={confirmTherapistId}
+                              onChange={(e) => setConfirmTherapistId(e.target.value)}
+                            >
+                              <option value="">No preference</option>
+                              {(therapists ?? []).map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            disabled={confirmBusy}
+                            className="rounded-full bg-[var(--teal)] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                            onClick={() => void submitConfirm(r)}
+                          >
+                            {confirmBusy ? 'Confirming…' : 'Confirm appointment'}
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-full border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
+                            onClick={() => setConfirmingId(null)}
+                          >
+                            Cancel
+                          </button>
+                          {confirmError && (
+                            <p className="w-full text-xs text-[var(--rust)]">{confirmError}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+
+            {justConfirmed && (
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--teal)] bg-[var(--teal-light)] px-4 py-3">
+                <p className="text-sm text-[var(--ink)]">
+                  Appointment confirmed for {justConfirmed.patientName}.
+                </p>
+                <button
+                  type="button"
+                  className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white"
+                  onClick={() =>
+                    void bookingService
+                      .shareBookingConfirmation(
+                        justConfirmed.patientName,
+                        clinic.name,
+                        justConfirmed.scheduledAt
+                      )
+                      .catch((e) => alert(toFriendlyMessage(e)))
+                  }
+                >
+                  Send confirmation
+                </button>
+                {justConfirmed.therapistId && (
+                  <button
+                    type="button"
+                    className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white"
+                    onClick={() =>
+                      void bookingService
+                        .shareTherapistNotify(
+                          therapistNameById.get(justConfirmed.therapistId!) ?? 'the therapist',
+                          justConfirmed.patientName,
+                          justConfirmed.scheduledAt
+                        )
+                        .catch((e) => alert(toFriendlyMessage(e)))
+                    }
+                  >
+                    Notify therapist
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="ml-auto text-xs text-[var(--muted)] hover:underline"
+                  onClick={() => setJustConfirmed(null)}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            <SectionCard title={`Appointments (${appointmentRows.length})`}>
+              {appointmentRows.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--muted)]">No appointments yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-[var(--border)] text-sm">
+                    <thead>
+                      <tr>
+                        <th className={th}>When</th>
+                        <th className={th}>Patient</th>
+                        <th className={th}>Therapist</th>
+                        <th className={th}>Status</th>
+                        <th className={th}></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border)]">
+                      {appointmentRows.map((a) => (
+                        <tr key={a.id}>
+                          <td className={td}>
+                            {formatDateDMY(a.scheduledAt)}{' '}
+                            <span className="text-[var(--muted)]">
+                              {new Date(a.scheduledAt).toLocaleTimeString('en-IN', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                          </td>
+                          <td className={td}>
+                            {a.patientId ? (
+                              <Link
+                                to="/patients/$patientId"
+                                params={{ patientId: a.patientId }}
+                                className="font-medium text-[var(--teal)] hover:underline"
+                              >
+                                {a.patientName}
+                              </Link>
+                            ) : (
+                              a.patientName
+                            )}
+                          </td>
+                          <td className={td}>
+                            {a.therapistId ? (therapistNameById.get(a.therapistId) ?? '—') : '—'}
+                          </td>
+                          <td className={td}>
+                            <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>
+                              {APPOINTMENT_STATUS_LABEL[a.status]}
+                            </Pill>
+                          </td>
+                          <td className={td}>
+                            {reschedulingId === a.id ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <input
+                                  type="datetime-local"
+                                  className="rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-1 text-xs text-[var(--ink)]"
+                                  value={rescheduleValue}
+                                  onChange={(e) => setRescheduleValue(e.target.value)}
+                                />
+                                <button
+                                  type="button"
+                                  disabled={rescheduleBusy}
+                                  className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                                  onClick={() => {
+                                    setRescheduleBusy(true);
+                                    void bookingService
+                                      .rescheduleAppointment(
+                                        a.id,
+                                        new Date(rescheduleValue).toISOString()
+                                      )
+                                      .catch((e) => alert(toFriendlyMessage(e)))
+                                      .finally(() => {
+                                        setRescheduleBusy(false);
+                                        setReschedulingId(null);
+                                      });
+                                  }}
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  className="whitespace-nowrap text-xs text-[var(--muted)] hover:underline"
+                                  onClick={() => setReschedulingId(null)}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                {(a.status === 'confirmed' || a.status === 'rescheduled') && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                                      onClick={() => {
+                                        setReschedulingId(a.id);
+                                        setRescheduleValue(toDatetimeLocalValue(a.scheduledAt));
+                                      }}
+                                    >
+                                      Reschedule
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="whitespace-nowrap text-xs font-medium text-[var(--muted)] hover:underline"
+                                      onClick={() =>
+                                        void bookingService
+                                          .markAppointmentNoShow(a.id)
+                                          .catch((e) => alert(toFriendlyMessage(e)))
+                                      }
+                                    >
+                                      No-show
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="whitespace-nowrap text-xs font-medium text-[var(--rust)] hover:underline"
+                                      onClick={() => {
+                                        if (!confirm('Cancel this appointment?')) return;
+                                        void bookingService
+                                          .cancelAppointment(a.id)
+                                          .catch((e) => alert(toFriendlyMessage(e)));
+                                      }}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SectionCard>
+          </div>
         ))}
     </div>
   );

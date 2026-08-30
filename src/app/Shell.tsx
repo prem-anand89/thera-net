@@ -238,7 +238,10 @@ export function Shell() {
       NAV.filter(
         (item) =>
           (item.to !== '/settings' || role === 'admin') &&
-          (item.to !== '/requests' || role === 'admin') &&
+          // Requests → Feedback is admin-only, but Bookings (Slice 5) is
+          // front_desk's primary surface too — matching /insights' gate
+          // just below, and the doc's "front desk + admin" nav rule.
+          (item.to !== '/requests' || role === 'admin' || role === 'front_desk') &&
           (item.to !== '/insights' || role === 'admin' || role === 'front_desk')
       ),
     [role]
@@ -286,10 +289,11 @@ export function Shell() {
     );
   }
 
-  // Public patient feedback link — genuinely unauthenticated (no session at
-  // all, not even a recovery one). Must render before the `!session` check
-  // below would otherwise bounce an anonymous patient to LoginPage.
-  if (pathname.startsWith('/f/')) {
+  // Public patient feedback link / public booking form — genuinely
+  // unauthenticated (no session at all, not even a recovery one). Must
+  // render before the `!session` check below would otherwise bounce an
+  // anonymous patient to LoginPage.
+  if (pathname.startsWith('/f/') || pathname.startsWith('/book/')) {
     return (
       <Suspense fallback={<Centered>Loading…</Centered>}>
         <Outlet />

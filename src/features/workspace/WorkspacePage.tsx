@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService, feedbackService } from '@/services';
+import { repos, dashboardService, feedbackService, bookingService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
@@ -17,6 +17,7 @@ import {
 import { noteForVisit } from '@/domain/noteLinks';
 import { toFriendlyMessage } from '@/lib/errors';
 import type { TodayVisitRow } from '@/services/dashboardService';
+import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import {
   btnPrimary,
   SectionCard,
@@ -148,6 +149,26 @@ export function WorkspacePage() {
   const googleReviewEligibleIds = useGoogleReviewEligibleRequestIds(
     clinic.id,
     !canEditSettings && (clinic.enablePatientComms ?? false)
+  );
+  // Patient Communications, Slice 5 — "Expected today" (appointments) and
+  // the pending-booking-requests banner. Scoped the same way "Seen today"
+  // already is: clinic-wide for admin/front_desk, own-therapist otherwise
+  // (scope.scopeTherapistId already resolves to undefined for the
+  // clinic-wide roles — see useWorkspaceScope's own doc comment).
+  const todayAppointmentsList = useLiveQuery(
+    () =>
+      clinic.enablePatientComms
+        ? dashboardService.todayAppointments(clinic.id, new Date(), scope.scopeTherapistId)
+        : undefined,
+    [clinic.id, clinic.enablePatientComms, scope.scopeTherapistId]
+  );
+  const canManageBookings = scope.isClinicWideView;
+  const pendingRequestCount = useLiveQuery(
+    () =>
+      canManageBookings && clinic.enablePatientComms
+        ? dashboardService.pendingAppointmentRequestCount(clinic.id)
+        : undefined,
+    [clinic.id, clinic.enablePatientComms, canManageBookings]
   );
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
@@ -336,6 +357,21 @@ export function WorkspacePage() {
         </div>
       )}
 
+      {!!pendingRequestCount && pendingRequestCount > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--teal)] bg-[var(--teal-light)] px-4 py-3">
+          <p className="text-sm text-[var(--ink)]">
+            {pendingRequestCount} new booking request{pendingRequestCount === 1 ? '' : 's'}.
+          </p>
+          <Link
+            to="/requests"
+            search={{ tab: 'bookings' }}
+            className="whitespace-nowrap text-sm font-medium text-[var(--teal)] hover:underline"
+          >
+            See all →
+          </Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-2">
         <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
         <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
@@ -348,6 +384,129 @@ export function WorkspacePage() {
           <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
         )}
       </div>
+
+      {clinic.enablePatientComms && (
+        <SectionCard
+          title={
+            todayAppointmentsList && todayAppointmentsList.length === 1
+              ? 'Expected today (1)'
+              : `Expected today (${todayAppointmentsList?.length ?? 0})`
+          }
+        >
+          {!todayAppointmentsList || todayAppointmentsList.length === 0 ? (
+            <p className="text-sm text-[var(--muted)]">No appointments confirmed for today.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-[var(--border)]">
+                <thead className="bg-[var(--paper)]">
+                  <tr>
+                    <th className={th}>Time</th>
+                    <th className={th}>Patient</th>
+                    <th className={th}>Therapist</th>
+                    <th className={th}>Status</th>
+                    <th className={th}></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {todayAppointmentsList.map((a) => (
+                    <tr key={a.id}>
+                      <td className={td}>
+                        {new Date(a.scheduledAt).toLocaleTimeString('en-IN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                      <td className={td}>
+                        {a.patientId ? (
+                          <Link
+                            to="/patients/$patientId"
+                            params={{ patientId: a.patientId }}
+                            search={{ from: '/workspace' }}
+                            className="font-medium text-[var(--teal)] hover:underline"
+                          >
+                            {a.patientName}
+                          </Link>
+                        ) : (
+                          a.patientName
+                        )}
+                      </td>
+                      <td className={td}>{a.therapistName ?? '—'}</td>
+                      <td className={td}>
+                        <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>
+                          {APPOINTMENT_STATUS_LABEL[a.status]}
+                        </Pill>
+                      </td>
+                      <td className={td}>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {(a.status === 'confirmed' || a.status === 'rescheduled') && (
+                            <button
+                              type="button"
+                              className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                              onClick={() =>
+                                void bookingService
+                                  .markAppointmentArrived(a.id)
+                                  .catch((e) => alert(toFriendlyMessage(e)))
+                              }
+                            >
+                              Mark arrived
+                            </button>
+                          )}
+                          {canManageBookings &&
+                            (a.status === 'confirmed' || a.status === 'rescheduled') && (
+                              <button
+                                type="button"
+                                className="whitespace-nowrap text-xs font-medium text-[var(--muted)] hover:underline"
+                                onClick={() =>
+                                  void bookingService
+                                    .markAppointmentNoShow(a.id)
+                                    .catch((e) => alert(toFriendlyMessage(e)))
+                                }
+                              >
+                                No-show
+                              </button>
+                            )}
+                          {canManageBookings &&
+                            (a.status === 'confirmed' || a.status === 'rescheduled') && (
+                              <button
+                                type="button"
+                                className="whitespace-nowrap text-xs font-medium text-[var(--rust)] hover:underline"
+                                onClick={() => {
+                                  if (!confirm('Cancel this appointment?')) return;
+                                  void bookingService
+                                    .cancelAppointment(a.id)
+                                    .catch((e) => alert(toFriendlyMessage(e)));
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            )}
+                          {/* patientId is only ever set alongside visitId
+                              (link_appointment_visit sets both together),
+                              so !a.visitId here always means identity is
+                              still unresolved — nothing to pre-select. */}
+                          {!a.visitId && a.status !== 'cancelled' && a.status !== 'no_show' && (
+                            <Link
+                              to="/visits/new"
+                              search={{
+                                appointmentId: a.id,
+                                prefillName: a.patientName,
+                                prefillPhone: a.patientPhone,
+                              }}
+                              className="whitespace-nowrap rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                            >
+                              Create visit
+                            </Link>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+      )}
 
       <SectionCard title={today && today.visits.length === 1 ? "Today's visit" : "Today's visits"}>
         {!today || today.visits.length === 0 ? (

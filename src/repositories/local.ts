@@ -35,6 +35,8 @@ import type {
   PatientAdvanceRepo,
   FeedbackRequestRepo,
   FeedbackResponseRepo,
+  AppointmentRequestRepo,
+  AppointmentRepo,
   Repos,
 } from './types';
 
@@ -343,6 +345,14 @@ const feedbackResponses: FeedbackResponseRepo = {
   listByClinic: (clinicId) => db.feedback_responses.where('clinicId').equals(clinicId).toArray(),
 };
 
+const appointmentRequests: AppointmentRequestRepo = {
+  listByClinic: (clinicId) => db.appointment_requests.where('clinicId').equals(clinicId).toArray(),
+};
+
+const appointments: AppointmentRepo = {
+  listByClinic: (clinicId) => db.appointments.where('clinicId').equals(clinicId).toArray(),
+};
+
 export const repos: Repos = {
   clinics,
   therapists,
@@ -361,6 +371,8 @@ export const repos: Repos = {
   patientAdvances,
   feedbackRequests,
   feedbackResponses,
+  appointmentRequests,
+  appointments,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers

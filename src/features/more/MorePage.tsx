@@ -4,6 +4,10 @@ import { usePermissions } from '@/app/usePermissions';
 export function MorePage() {
   const { canEditSettings, isAdmin, role } = usePermissions();
   const showReports = isAdmin || role === 'front_desk';
+  // Requests → Feedback is admin-only, but Bookings (Slice 5) is
+  // front_desk's primary surface too — same gate as the desktop nav's
+  // /requests item in Shell.tsx.
+  const showRequests = isAdmin || role === 'front_desk';
 
   return (
     <div className="space-y-4">
@@ -29,7 +33,7 @@ export function MorePage() {
             </Link>
           </li>
         )}
-        {isAdmin && (
+        {showRequests && (
           <li>
             <Link
               to="/requests"

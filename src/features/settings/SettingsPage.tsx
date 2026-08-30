@@ -1461,17 +1461,20 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   );
 }
 
-type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl'>;
+type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' | 'bookingSlug'>;
+
+// Lowercase alphanumeric + hyphens, no leading/trailing/doubled hyphen —
+// the DB only enforces uniqueness, so this is the one place the "clean
+// URL segment" shape is actually checked.
+const BOOKING_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 /**
- * Patient Communications, Slice 1-3 — module on/off, plus (Slice 3) the
- * Google review URL that gates both the patient's post-feedback "Leave a
- * Google review" CTA and staff's "Ask for a Google review" visit-row
- * action. Per HANDOFF-patient-comms.md's "one chip, not scattered"
- * instruction this is its own section rather than a checkbox bolted onto
- * Clinic profile's "Optional modules" grid; the slug/message-template/
- * WhatsApp-number fields the full spec describes arrive with later slices,
- * not here.
+ * Patient Communications, Slice 1-5 — module on/off, the Google review
+ * URL (Slice 3), and the public booking slug (Slice 5). Per
+ * HANDOFF-patient-comms.md's "one chip, not scattered" instruction this
+ * is its own section rather than a checkbox bolted onto Clinic profile's
+ * "Optional modules" grid; the message-template/WhatsApp-number fields
+ * the full spec describes arrive with later slices, not here.
  */
 function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { form, set, save, cancel, dirty, saved, busy, error } =
@@ -1479,9 +1482,24 @@ function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
       (c) => ({
         enablePatientComms: c.enablePatientComms ?? false,
         googleReviewUrl: c.googleReviewUrl ?? null,
+        bookingSlug: c.bookingSlug ?? null,
       }),
       onDirtyChange
     );
+  const [slugCopied, setSlugCopied] = useState(false);
+  const bookingUrl = form.bookingSlug ? `${window.location.origin}/book/${form.bookingSlug}` : '';
+  const slugInvalid = !!form.bookingSlug && !BOOKING_SLUG_PATTERN.test(form.bookingSlug);
+
+  async function copyBookingUrl() {
+    if (!bookingUrl) return;
+    try {
+      await navigator.clipboard.writeText(bookingUrl);
+      setSlugCopied(true);
+      setTimeout(() => setSlugCopied(false), 1500);
+    } catch {
+      setSlugCopied(false);
+    }
+  }
 
   return (
     <SectionCard title="Patient communications">
@@ -1515,6 +1533,41 @@ function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
             onChange={(e) => set({ googleReviewUrl: e.target.value.trim() || null })}
           />
         </Field>
+        <Field
+          label={
+            <>
+              Booking link
+              <InfoTip text="A short web address patients use to request an appointment — safe to put on Google, your website, or social media. Front desk confirms each request into a scheduled appointment; there's no live slot picker yet. Leave blank to keep public booking off." />
+            </>
+          }
+        >
+          <input
+            type="text"
+            className={inputCls}
+            placeholder="my-clinic-name"
+            value={form.bookingSlug ?? ''}
+            onChange={(e) => set({ bookingSlug: e.target.value.toLowerCase().trim() || null })}
+          />
+          {slugInvalid && (
+            <p className="mt-1 text-xs text-[var(--rust)]">
+              Lowercase letters, numbers, and hyphens only — no spaces.
+            </p>
+          )}
+        </Field>
+        {bookingUrl && !slugInvalid && (
+          <Field label="">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-xs text-[var(--muted)]">{bookingUrl}</span>
+              <button
+                type="button"
+                className="whitespace-nowrap rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                onClick={() => void copyBookingUrl()}
+              >
+                {slugCopied ? 'Copied!' : 'Copy link'}
+              </button>
+            </div>
+          </Field>
+        )}
       </div>
       <SectionSaveBar
         dirty={dirty}
@@ -1522,7 +1575,7 @@ function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
         busy={busy}
         onSave={() => void save()}
         onCancel={cancel}
-        error={error}
+        error={slugInvalid ? 'Fix the booking link before saving.' : error}
       />
     </SectionCard>
   );

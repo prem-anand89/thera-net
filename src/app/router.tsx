@@ -81,6 +81,11 @@ const FeedbackFormPage = lazy(() =>
     default: m.FeedbackFormPage,
   }))
 );
+const BookingFormPage = lazy(() =>
+  import('@/features/publicBooking/BookingFormPage').then((m) => ({
+    default: m.BookingFormPage,
+  }))
+);
 const RequestsPage = lazy(() =>
   import('@/features/requests/RequestsPage').then((m) => ({ default: m.RequestsPage }))
 );
@@ -134,11 +139,20 @@ const newVisitRoute = createRoute({
   path: '/visits/new',
   validateSearch: (
     search: Record<string, unknown>
-  ): { repeatVisitId?: string; newPatient?: string; patientId?: string; prefillName?: string } => ({
+  ): {
+    repeatVisitId?: string;
+    newPatient?: string;
+    patientId?: string;
+    prefillName?: string;
+    prefillPhone?: string;
+    appointmentId?: string;
+  } => ({
     ...(typeof search.repeatVisitId === 'string' ? { repeatVisitId: search.repeatVisitId } : {}),
     ...(typeof search.newPatient === 'string' ? { newPatient: search.newPatient } : {}),
     ...(typeof search.patientId === 'string' ? { patientId: search.patientId } : {}),
     ...(typeof search.prefillName === 'string' ? { prefillName: search.prefillName } : {}),
+    ...(typeof search.prefillPhone === 'string' ? { prefillPhone: search.prefillPhone } : {}),
+    ...(typeof search.appointmentId === 'string' ? { appointmentId: search.appointmentId } : {}),
   }),
   component: NewVisitPage,
 });
@@ -444,6 +458,14 @@ const feedbackFormRoute = createRoute({
   component: FeedbackFormPage,
 });
 
+// Public, unauthenticated booking request link — see Shell.tsx's early
+// bypass, shared with /f/$token.
+const bookingFormRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/book/$clinicSlug',
+  component: BookingFormPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   workspaceRoute,
@@ -474,6 +496,7 @@ const routeTree = rootRoute.addChildren([
   moreRoute,
   resetPasswordRoute,
   feedbackFormRoute,
+  bookingFormRoute,
 ]);
 
 export const router = createRouter({ routeTree });

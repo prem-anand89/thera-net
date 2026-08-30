@@ -486,13 +486,16 @@ queued with a visible error.
 - Therapist comparison chart (off by default)
 - Billing staff restriction (on by default)
 
-### 9. Patient Communications (Phase 0–4)
+### 9. Patient Communications (Phase 0–5)
 
 Full spec/roadmap: `docs/HANDOFF-patient-comms.md`. Phase 0 (foundation),
 Phase 1 (visit "Ask for feedback"), Phase 2 (Requests → Feedback page),
-Phase 3 (Google review nudge), and Phase 4 (stale-package/single-visit
-reminders) have shipped; booking requests are the remaining later phase,
-not yet built.
+Phase 3 (Google review nudge), Phase 4 (stale-package/single-visit
+reminders), and Phase 5 (public booking → confirmed appointments →
+Workspace "Expected today", folding in the doc's own Phase 6
+reschedule/no-show/cancel actions since they share the same schema/RPC
+surface) have shipped. Weekly availability/slot picker and analytics
+remain later, un-started phases.
 
 - **`clinics.enable_patient_comms`** — module gate, off by default, same
   pattern as `clinicalDocsEnabled`/`enableExpectedToday`. Public token routes
@@ -570,9 +573,9 @@ not yet built.
   rating (★★★★☆) and comment, joined locally against the already-synced
   `feedback_requests`/`patients`/`therapists`/`visits` tables for context
   (patient, visit date, therapist) rather than duplicating that data. A
-  `Bookings` tab sits alongside it, disabled with a "coming later" label —
-  matches the doc's own "Requests" naming/IA decision (one page for both
-  workflows) without needing another route added once bookings ship.
+  `Bookings` tab sits alongside it — a stub through Phase 4, real as of
+  Phase 5 (see below) — matching the doc's own "Requests" naming/IA
+  decision (one page for both workflows).
   - **`feedback_responses` is a synced-but-read-only Dexie table**, same
     shape as `invoices` (`ALL_SYNCED_TABLES` but not
     `CLIENT_WRITABLE_TABLES`) — a response is only ever written by the
@@ -582,11 +585,17 @@ not yet built.
     as the delta column for every synced table, so a migration added one
     (`updated_at = created_at` always, a permanent alias for the sync
     engine's benefit, not a real "last modified" signal).
-  - **Nav**: desktop gets a 6th top-nav item, **Requests**, admin-only —
-    the mobile bottom tab bar is a separate hand-built 5-item row
+  - **Nav**: desktop gets a 6th top-nav item, **Requests**, originally
+    admin-only (Feedback was the only tab that existed) and widened at
+    Phase 5 to admin + front_desk — front_desk's whole reason to be on
+    this page is Bookings, its primary surface per the handoff doc's role
+    table. The mobile bottom tab bar is a separate hand-built 5-item row
     (Workspace/Patients/+New/Ledger/More), not driven by the same array,
     so this doesn't add a 6th phone tab; mobile reaches it via **More**
-    instead, per the handoff doc's own "no sixth phone tab" decision.
+    instead (also widened to the same admin + front_desk gate), per the
+    handoff doc's own "no sixth phone tab" decision. A front_desk viewer
+    who lands on `?tab=feedback` directly is redirected to `?tab=bookings`
+    rather than shown a disabled tab, per the doc's own resolved note.
   - **Workspace "new response" banner** — admin + module-on only, reading
     a `db.meta` "last viewed Requests" timestamp (clinic-scoped key, same
     pattern as `lastBackupMetaKey`) that gets stamped the moment
@@ -651,6 +660,118 @@ not yet built.
     fallback (`shareTextViaWhatsApp`) and lets staff pick the recipient
     themselves, consistent behavior across the whole feature rather than
     a special-cased, riskier path for reminders alone.
+- **Public booking, no slots (Phase 5, folding in the doc's own Phase 6)**
+  — a public form collects name/phone/optional-therapist/preferred-
+  day-time-as-text; front desk or admin confirms it by hand into a real
+  scheduled appointment, which becomes Workspace's "Expected today". No
+  slot picker/availability matrix — that's a later, separate phase the
+  doc explicitly says not to start here.
+  - **There was no legacy "Expected Today" to retire.** An earlier
+    session fully dropped `expected_visits`/`clinics.
+    enable_expected_today` (table, column, service, UI — zero
+    consumers). The doc's "retire the legacy path" framing was moot by
+    the time this phase shipped; Workspace's "Expected today" section is
+    new, not a replacement.
+  - **`clinics.booking_slug`** — nullable unique text, the public
+    `/book/$slug` segment. Not a secret (meant to live on Google/the
+    clinic's own website), unlike a feedback token — `get_booking_clinic_
+    name`/`list_booking_therapists` just need the slug to exist and the
+    module to be on, no rate-limited-oracle concern beyond the same
+    generic-error/IP-throttle discipline every public RPC in this module
+    uses.
+  - **`appointment_requests`** — one row per public submission: `name`,
+    `phone` (raw, unresolved against any patient), `preferred_
+    therapist_id` (nullable), `preferred_time_text`, `status`
+    (`pending|confirmed|declined`), `appointment_id` (set on confirm).
+  - **`appointments`** — one row per confirmed expected attendance, **not**
+    a billed visit. `patient_id` is **null from confirm until arrival** —
+    identity is resolved exactly once, at arrival, reusing the existing
+    New Visit typeahead rather than a confirm-time judgment call on a raw
+    public submission. `patient_name`/`patient_phone` (the request's raw
+    values) are kept on the row throughout, so it always has something to
+    display before/without a resolved identity. `status`:
+    `confirmed|rescheduled|no_show|cancelled|arrived`. `visit_id` is set
+    only once arrival creates the real `visits` row.
+  - **Both tables are synced-but-read-only Dexie tables** — same
+    `ALL_SYNCED_TABLES`-without-`CLIENT_WRITABLE_TABLES` shape as
+    `feedback_responses`/`invoices`, for the same reason: every write is
+    an online-only RPC (public submit; confirm/decline; reschedule/
+    no-show/cancel; mark-arrived/link-visit), never a client Dexie write.
+    Both carry `updated_at` from creation (unlike `feedback_responses`,
+    which needed one added after the fact) so the sync engine's
+    hardcoded delta-pull column works from day one.
+  - **RLS is SELECT-only for staff; every mutation is a `security
+    definer` RPC with its own in-body role check**, not a matching RLS
+    write policy — confirm/decline/reschedule/no-show/cancel need *admin
+    or front_desk* (a new `is_front_desk(p_clinic)` helper, mirroring
+    `is_own_therapist`'s shape), but marking an appointment arrived or
+    linking it to a freshly-created visit needs the same broad membership
+    check `visits_insert` already uses (`is_clinic_member`) — two
+    different rules that don't map to one clean RLS policy, the same
+    reasoning `list_google_review_eligible_requests` (Phase 3's
+    front-desk-parity fix) already established. `appointment_requests`
+    SELECT is admin/front_desk-only (matches who can reach the Bookings
+    tab at all); `appointments` SELECT is clinic-member-wide, since it's
+    the day list every role needs to see.
+  - **Ten RPCs**: three public (`get_booking_clinic_name`,
+    `list_booking_therapists`, `submit_appointment_request` — anon +
+    authenticated grants, rate-limited); seven staff-only
+    (`confirm_appointment_request` returns the new appointment id,
+    `decline_appointment_request`, `reschedule_appointment`,
+    `mark_appointment_no_show`, `cancel_appointment`,
+    `mark_appointment_arrived`, `link_appointment_visit` — authenticated-
+    only, explicit `revoke ... from public, anon` same grant-hygiene
+    discipline as every RPC in this module). `link_appointment_visit` is
+    the one `NewVisitPage.tsx` calls right after a visit saves, when that
+    visit was started via `?appointmentId=...` — sets `patient_id`,
+    `visit_id`, and flips `status` to `arrived` in one call.
+  - **`NewVisitPage.tsx`'s existing `?prefillName=...` mechanism grew a
+    `?prefillPhone=...` sibling** (feeds `newPatient.phone` the same way
+    `prefillName` feeds `newPatient.name`) plus a new `?appointmentId=...`
+    — "Create visit" links from an appointment row pass all three, so the
+    same existing search-or-create typeahead this mechanism already
+    drives surfaces likely-existing-patient candidates for free; staff
+    still explicitly pick or create, never auto-selected (no silent
+    find-or-create by phone, per the doc's explicit-scope list).
+  - **Requests → Bookings tab** (`RequestsPage.tsx`) — a pending-requests
+    list (Confirm opens an inline scheduled-datetime + therapist mini-form;
+    Decline is a plain confirm-then-RPC) and an appointments list
+    (Reschedule/No-show/Cancel inline, status shown via a shared
+    `Pill`-tone map in `src/domain/appointmentStatus.ts` — kept in its own
+    tiny module, not defined in either page, because importing one
+    route-code-split page's export from the other would leak that page's
+    whole bundle into the importer's chunk, the same reason
+    `requestsSignals.ts` exists). Confirming shows two independent
+    "Send confirmation"/"Notify therapist" share buttons afterward — two
+    explicit clicks, not one auto-fired double share-sheet — matching the
+    rest of the module's per-action-button convention rather than the
+    doc's plainer "sends a confirmation" phrasing.
+  - **Workspace "Expected today"** — a new section (not a replacement of
+    anything, per the point above), sourced from
+    `dashboardService.todayAppointments`, scoped the same way "Seen
+    today" already is (clinic-wide for admin/front_desk, own-therapist
+    otherwise). Row actions: "Mark arrived" (any clinic member, matching
+    the RPC's own membership check), "No-show"/"Cancel"
+    (admin/front_desk only), "Create visit" (once `visit_id` is still
+    unset). Reschedule is deliberately Requests-only, not offered inline
+    on Workspace — a more deliberate action than a single click, better
+    suited to the dedicated management surface. A second banner (same
+    shape as Phase 2's "new feedback response" one) surfaces the pending-
+    booking-request count for admin/front_desk, linking to
+    `/requests?tab=bookings`.
+  - **Settings** gained a booking-link field in the same Patient
+    communications section (client-validated lowercase-alphanumeric-plus-
+    hyphens pattern; the DB only enforces uniqueness) with a "Copy link"
+    button, alongside the existing module toggle and Google review URL.
+  - **`message_log` stays unwired, same as every other Phase 1-4 send
+    action.** Despite `message_log_insert` RLS being ready since Phase 0,
+    no send action in this module — not the five from Phases 1-4, not
+    this phase's confirmation/therapist-notify sends — actually writes a
+    row; there's no Dexie table or repo for it yet. Wiring it for just
+    this phase's two new sends while five existing ones still skip it
+    would be inconsistent rather than forward-thinking; this is a
+    pre-existing, module-wide gap better closed in one pass across all
+    seven send actions than piecemeal.
 
 ---
 
@@ -683,12 +804,14 @@ src/features/            UI pages and components (React + TanStack Router)
   ├── invoices/          InvoicePrintPage
   ├── import/            Historical Excel visit import (preview + commit)
   ├── auth/              Login, reset-password
-  ├── requests/          RequestsPage at /requests (Feedback tab; Bookings
-                         disabled, later phase); requestsSignals.ts (the
-                         "new response" count, kept out of RequestsPage
-                         itself so Workspace's eager bundle can read it
+  ├── requests/          RequestsPage at /requests (Feedback tab, admin;
+                         Bookings tab, admin + front_desk); requestsSignals.ts
+                         (the "new response" count + the front-desk Google-
+                         review-eligibility hook, kept out of RequestsPage
+                         itself so Workspace's eager bundle can read them
                          without pulling in the route-code-split page)
   ├── publicFeedback/    FeedbackFormPage at /f/$token (anonymous, no Shell)
+  ├── publicBooking/     BookingFormPage at /book/$clinicSlug (anonymous, no Shell)
   └── more/              Mobile-only overflow nav page
 
 src/components/          Shared UI components — VisitCard (shared card/table
@@ -724,9 +847,10 @@ supabase/                SQL migrations, RLS policies, RPCs, realtime
 | `/settings` | Clinic configuration, MRNO settings, billing mode, rate setup, feature toggles | Admins only |
 | `/settings/import-visits` | Historical Excel visit import | Admins only |
 | `/more` | Mobile-only overflow nav (Settings/Reports/Requests on narrow screens) | All roles |
-| `/requests` (`?tab=feedback\|bookings`) | Requests → Feedback: every response with rating + comment (Patient Communications, Phase 2). Bookings tab is a later phase, shown disabled | Admins only |
+| `/requests` (`?tab=feedback\|bookings`) | Feedback: every response with rating + comment (Phase 2). Bookings: pending requests → confirm/decline, appointments → reschedule/no-show/cancel (Phase 5) | Feedback tab: admins only. Bookings tab: admins + front_desk |
 | `/reset-password` | Password reset | Unauthenticated |
 | `/f/$token` | Public patient feedback form (Patient Communications, Phase 0) | Unauthenticated — token-scoped, no clinic membership |
+| `/book/$clinicSlug` | Public booking request form (Patient Communications, Phase 5) | Unauthenticated — slug-scoped, no clinic membership |
 | `/archive`, `/setup`, `/setup/import-visits`, `/invoices`, `/reports`, `/reports/print` | Legacy redirects for old bookmarks | All roles |
 
 ---

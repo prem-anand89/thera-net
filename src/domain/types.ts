@@ -119,6 +119,11 @@ export interface Clinic {
    *  the same doc). Plain URL, not validated beyond what the Settings
    *  input itself enforces. */
   googleReviewUrl?: string | null;
+  /** Public `/book/$bookingSlug` URL segment (Patient Communications,
+   *  Slice 5) — unique, nullable; unset means the public booking form was
+   *  never advertised for this clinic. Lowercase alphanumeric + hyphens,
+   *  validated client-side in Settings; the DB only enforces uniqueness. */
+  bookingSlug?: string | null;
   updatedAt: string;
 }
 
@@ -649,6 +654,64 @@ export interface FeedbackResponse {
   clinicId: UUID;
   rating: number;
   comment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AppointmentRequestStatus = 'pending' | 'confirmed' | 'declined';
+
+/**
+ * A patient's raw public booking submission (Patient Communications,
+ * Slice 5) — written only by `submit_appointment_request()`, an anonymous
+ * SECURITY DEFINER RPC; no client INSERT policy exists. `name`/`phone` are
+ * the patient's own typed values, not resolved against any existing
+ * `patients` row — identity resolution only ever happens later, at
+ * arrival (see `Appointment`'s own doc comment), never here. Read-only
+ * sync, same shape as `FeedbackResponse` — nothing client-side writes
+ * this table directly, every mutation (confirm/decline) goes through an
+ * RPC.
+ */
+export interface AppointmentRequest {
+  id: UUID;
+  clinicId: UUID;
+  name: string;
+  phone: string;
+  preferredTherapistId: UUID | null;
+  preferredTimeText: string | null;
+  status: AppointmentRequestStatus;
+  appointmentId: UUID | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AppointmentStatus = 'confirmed' | 'rescheduled' | 'no_show' | 'cancelled' | 'arrived';
+
+/**
+ * A confirmed expected attendance (Patient Communications, Slice 5) — not
+ * a billed visit, and not the same thing as one. `patientId` is null from
+ * the moment staff confirm the originating `AppointmentRequest` until
+ * whichever of the two "arrived" paths resolves it (New Visit's typeahead
+ * from this row, or the standalone manual toggle) — `patientName`/
+ * `patientPhone` carry the raw submitted values throughout, even after
+ * `patientId` resolves, so the row always has something to display.
+ * `visitId` is set only once arrival creates the actual `visits` row.
+ * Read-only sync, same reasoning as `AppointmentRequest` — every mutation
+ * (confirm/decline/reschedule/no-show/cancel/mark-arrived/link-visit) is
+ * an online-only RPC, never a direct client write.
+ */
+export interface Appointment {
+  id: UUID;
+  clinicId: UUID;
+  patientId: UUID | null;
+  patientName: string;
+  patientPhone: string;
+  therapistId: UUID | null;
+  scheduledAt: string;
+  status: AppointmentStatus;
+  requestId: UUID | null;
+  visitId: UUID | null;
+  rescheduleCount: number;
+  previousScheduledAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

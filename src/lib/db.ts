@@ -17,6 +17,8 @@ import type {
   PatientAdvance,
   FeedbackRequest,
   FeedbackResponse,
+  AppointmentRequest,
+  Appointment,
 } from '@/domain/types';
 
 /**
@@ -63,7 +65,9 @@ export type SyncedTable =
   | 'patient_module_enrollments'
   | 'patient_advances'
   | 'feedback_requests'
-  | 'feedback_responses';
+  | 'feedback_responses'
+  | 'appointment_requests'
+  | 'appointments';
 
 /**
  * Every table the sync engine pushes/pulls — the single source of truth
@@ -92,6 +96,8 @@ export const ALL_SYNCED_TABLES = [
   'patient_advances',
   'feedback_requests',
   'feedback_responses',
+  'appointment_requests',
+  'appointments',
 ] as const satisfies readonly SyncedTable[];
 type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number]
   ? true
@@ -104,6 +110,12 @@ void _exhaustiveCheck;
  * `feedback_responses` is the same shape (pulled, never pushed) — a
  * response is only ever written by the anonymous patient's own
  * SECURITY DEFINER RPC call, never by a signed-in staff member.
+ * `appointment_requests`/`appointments` (Slice 5) are the same shape too,
+ * for a different reason: every mutation on either — public submit,
+ * confirm/decline, reschedule/no-show/cancel, mark-arrived/link-visit —
+ * needs either anonymous-write or role-checked-online-only semantics the
+ * Dexie/outbox model can't express, so all of it goes through RPCs; see
+ * `src/services/bookingService.ts`.
  */
 export const CLIENT_WRITABLE_TABLES = [
   'clinics',
@@ -141,6 +153,8 @@ export class ClinicDB extends Dexie {
   patient_advances!: Table<PatientAdvance, string>;
   feedback_requests!: Table<FeedbackRequest, string>;
   feedback_responses!: Table<FeedbackResponse, string>;
+  appointment_requests!: Table<AppointmentRequest, string>;
+  appointments!: Table<Appointment, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 
@@ -225,6 +239,13 @@ export class ClinicDB extends Dexie {
       // requestId is the join key back to feedback_requests (Requests →
       // Feedback page); no status/rating index needed at this scale.
       feedback_responses: 'id, clinicId, requestId',
+    });
+    this.version(18).stores({
+      // status indexed for the Requests → Bookings pending-queue filter.
+      appointment_requests: 'id, clinicId, status',
+      // scheduledAt is the hot lookup path — Workspace's "Expected today"
+      // filters to the current calendar day on every render.
+      appointments: 'id, clinicId, scheduledAt, status',
     });
   }
 }
