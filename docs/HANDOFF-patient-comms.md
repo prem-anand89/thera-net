@@ -28,7 +28,7 @@ Four CareConnect *workflows* sharing plumbing (tokenized/public links, WhatsApp 
 ### Module gate
 
 - One clinic boolean, same pattern as `enableExpectedToday` / `clinicalDocsEnabled` (name suggestion: `enablePatientComms`).
-- Off = no Inbox nav, no visit “Ask for feedback”, no public booking form advertised in Settings. Public token routes should still 404/disabled if the clinic flag is off.
+- Off = no Requests nav, no visit “Ask for feedback”, no public booking form advertised in Settings. Public token routes should still 404/disabled if the clinic flag is off.
 - Do **not** split into separately gated sub-modules in v1.
 
 ### Sending messages
@@ -70,27 +70,31 @@ Public/anonymous writes need a **narrow SECURITY DEFINER RPC** (or token-scoped 
 
 - Public form: name, phone, optional therapist, **preferred day/time as text**.
 - Submit → `appointment_requests` `pending`.
-- Staff confirm: **search existing patient or create** (same typeahead as New visit). **No silent match-by-phone.**
-- Confirm creates an **appointment** (not a visit) and marks the request confirmed.
-- Patient WhatsApp confirmation via share sheet; if a therapist was chosen, that therapist should be notified in-app (Workspace) — not a new notification product in v1.
+- **Confirm does NOT resolve patient identity and does NOT create a visit or a patient.** Confirming just creates an `appointments` row carrying the raw submitted name/phone/preferred_therapist_id/scheduled time — `patient_id` stays **null** at this point. There is no confirm-time typeahead/search-or-create step.
+- Confirm sends a **WhatsApp confirmation to the patient**, and **if a therapist was chosen, that therapist also gets a confirmation/reminder** (not just an in-app Workspace note — an actual message, same send path as everything else).
+- Patient identity is resolved exactly once, later, at arrival (see below) — reusing the existing New visit typeahead. This avoids a confirm-time "does this name/phone match an existing patient" judgment call staff would otherwise have to make from a raw public submission.
 
 ### Appointments vs visits vs Expected today
 
-**Appointment = confirmed expected attendance.** It is not a billed visit.
+**Appointment = confirmed expected attendance.** It is not a billed visit, and it does not need a resolved patient identity until arrival.
 
 ```
 request (pending)
   → declined
-  → confirmed → appointment
+  → confirmed → appointment (patient_id still null)
 appointment
   → rescheduled (same row; bump scheduled datetime; keep previous on the row or audit fields)
   → no-show
   → cancelled (clinic/patient cancelled before the slot)
-  → arrived → staff logs a visit via existing New visit; set appointment.visitId
+  → arrived (patient_id resolved here)
 ```
 
+**Arrived is an explicit status, reachable two ways — not inferred from `visitId` alone:**
+1. **Via New visit from the appointment list**: staff open the appointment and hit "create visit" (same patient search-or-create typeahead as any walk-in New visit). This resolves `patient_id`, creates the `visits` row, sets `appointment.visitId`, and flips status to `arrived` — one action, one step.
+2. **Manual toggle**: staff can mark an appointment `arrived` on its own (patient is physically present/waiting) without creating the visit yet — the visit gets logged afterward, same as any walk-in today. `patient_id` stays null until whichever path resolves it.
+
 - **Expected today** must show **confirmed appointments** for that date (this is the grown-up version of today’s optional Expected today list). Do **not** create a second “Appointments” strip on Workspace.
-- **Do not auto-create a `visits` row on confirm.** Front desk logs the visit when the patient is seen.
+- **Do not auto-create a `visits` row on confirm.** Front desk logs the visit when the patient is seen (identity resolution happens then, not at confirm).
 - **No-show** does not create a visit or a bill.
 - **Decline** = request never became an appointment. **Cancel** = appointment existed, then called off. **No-show** = they didn’t come.
 
@@ -100,19 +104,19 @@ appointment
 
 | Question | Answer |
 |----------|--------|
-| Where is **all** feedback? | **Inbox → Feedback** (admin only) |
-| Daily “something arrived”? | Workspace **Needs attention** (pending request, new rating) + **See all** → Inbox |
+| Where is **all** feedback? | **Requests → Feedback** (admin only) |
+| Daily “something arrived”? | Workspace **Needs attention** (pending request, new rating) + **See all** → Requests |
 | This patient / this visit? | Patient profile block + visit-row action |
-| Trends / Reports (`/insights`)? | **No triage list.** Later: optional **summary card** on Reports; charts live on Inbox → Analytics |
+| Trends / Reports (`/insights`)? | **No triage list.** Later: optional **summary card** on Reports; charts live on Requests → Analytics |
 
 ### Navigation (do not add a sixth phone tab in v1)
 
 Today’s primary nav (Workspace, Ledger, Patients, Reports, Settings) stays five items on the **phone bottom bar**.
 
-- **Route exists from day one:** `/inbox?tab=requests|feedback` (later `|analytics`).
-- **Desktop header:** when module on, show **Inbox** for roles who can open it (front desk + admin).
-- **Phone:** Inbox is **not** a 6th tab. Entry: Workspace Needs attention → See all. (Promote to a tab only when analytics is a real daily destination.)
-- **Do not** bury Inbox under Ledger (`?tab=` on money).
+- **Route exists from day one:** `/requests?tab=bookings|feedback` (later `|analytics`).
+- **Desktop header:** when module on, show **Requests** for roles who can open it (front desk + admin).
+- **Phone:** Requests is **not** a 6th tab. Entry: Workspace Needs attention → See all. (Promote to a tab only when analytics is a real daily destination.)
+- **Do not** bury Requests under Ledger (`?tab=` on money).
 - **Do not** put the feedback queue inside `/insights`.
 
 ### Roles
@@ -120,16 +124,16 @@ Today’s primary nav (Workspace, Ledger, Patients, Reports, Settings) stays fiv
 | | Admin | Front desk | Therapist |
 |--|--------|------------|-----------|
 | Settings (flag, slug, Google URL, templates, WA, automation) | Yes | No | No |
-| Inbox → **Requests** (confirm, reschedule, no-show, decline/cancel) | Yes | **Primary** | Own day’s appointments on Workspace only; **no** full request queue in v1 |
-| Inbox → **Feedback** (list, comments, in progress/resolved, internal notes) | **Yes only** | **No** | **No** |
+| Requests → **Bookings** (confirm, reschedule, no-show, decline/cancel) | Yes | **Primary** | Own day’s appointments on Workspace only; **no** full request queue in v1 |
+| Requests → **Feedback** (list, comments, in progress/resolved, internal notes) | **Yes only** | **No** | **No** |
 | Ask for feedback / copy / WhatsApp from a **visit** | Yes | Yes | **Own visits** |
 | Google review send (4–5★) on visit/response | Yes | Yes | Optional; not required in v1 |
-| Needs attention: new 1–3★ | Yes (full) | Optional: “New rating — admin” **without comment body** | Own visit: “Patient rated this visit” **without comment** |
+| Needs attention: new 1–3★ | Yes (full) | **No — front desk gets nothing about feedback ratings or comments (resolved)** | Own visit: “Patient rated this visit” **without comment** |
 | Stale package / single-visit **Send reminder** | Yes | Yes | Only if those lists are already in their Workspace scope |
 
 **Triage (read comments, change status, internal notes) is admin-only.** Front desk still sends links and Google nudges from the **visit**. Therapists do not moderate their own reviews. Later analytics may show a therapist **aggregate** NPS (same idea as therapist comparison), not individual complaint text.
 
-If `front_desk` hits `/inbox?tab=feedback`, hide the tab and land on Requests.
+If `front_desk` hits `/requests?tab=feedback`, hide the tab and land on Bookings.
 
 ### Copy (staff-facing)
 
@@ -138,9 +142,9 @@ Avoid “CareConnect”, “reputation module”, “CareConnect”.
 | Internal | UI |
 |----------|-----|
 | Module | Settings chip: **Patient communications** |
-| Requests | **Booking requests** |
+| Bookings (tab) | **Bookings** |
 | Feedback action | **Ask for feedback** |
-| Page | **Inbox** |
+| Page (nav item / route) | **Requests** — renamed from "Inbox" per user decision, since it holds both booking requests and feedback awaiting action |
 | Google | **Ask for a Google review** |
 
 ---
@@ -162,7 +166,7 @@ Brand with clinic name/logo only. Mobile-first.
 Workspace
   Needs attention  → pending requests, new ratings (role-appropriate)
   Expected today   → confirmed appointments for today
-  See all          → /inbox
+  See all          → /requests
 
 Visit row / New visit success
   Ask for feedback | Resend | View rating | Ask for Google review (4–5)
@@ -170,9 +174,9 @@ Visit row / New visit success
 Patient profile
   Small communications block: last rating, open request, send reminder if segment matches
 
-/inbox?tab=requests     front_desk + admin
-/inbox?tab=feedback     admin
-/inbox?tab=analytics    later, admin
+/requests?tab=bookings     front_desk + admin
+/requests?tab=feedback     admin
+/requests?tab=analytics    later, admin
 
 Settings → Patient communications   admin
 ```
@@ -209,7 +213,7 @@ Not an implementation. Align names with existing `snake_case` + RLS clinic isola
 
 **`appointments`**
 
-- clinic, patient_id, therapist_id null, `scheduled_at`, status (`confirmed|rescheduled|no_show|cancelled|arrived`), `request_id` null, `visit_id` null, `reschedule_count`, `previous_scheduled_at` null  
+- clinic, `patient_id` **nullable** (null from confirm until arrival — see "Appointments vs visits vs Expected today"), `patient_name`/`patient_phone` (raw submitted values, kept even after `patient_id` resolves, for display before resolution), therapist_id null, `scheduled_at`, status (`confirmed|rescheduled|no_show|cancelled|arrived`), `request_id` null, `visit_id` null, `reschedule_count`, `previous_scheduled_at` null  
 
 Do **not** introduce a parallel table that duplicates `expected_visits` for the same day list. Either **extend `expected_visits`** to be this appointment, or **replace Expected today data source** with `appointments` and migrate/drop the manual expected list. Pick one in the first booking migration — dual lists are not acceptable.
 
@@ -235,13 +239,13 @@ Do **not** start with availability/slots.
 |-------|------|--------|
 | **0** | Flag + public `/f/$token` + RPC | Hardest security; clinic flag off → disabled |
 | **1** | Visit **Ask for feedback** + share sheet | Habit; like `+ Note` |
-| **2** | `/inbox?tab=feedback` admin + Workspace “new rating” | Close the loop |
+| **2** | `/requests?tab=feedback` admin + Workspace “new rating” | Close the loop |
 | **3** | Google review on 4–5★ + thank-you CTA | Cheap |
 | **4** | Send reminder on existing stale package + single-visit rows | No new detection |
-| **5** | `/book/$slug`, Requests inbox, confirm → appointment → Expected today | No slots |
+| **5** | `/book/$slug`, Requests page, confirm → appointment → Expected today | No slots |
 | **6** | Decline / reschedule / no-show / cancel RPCs + UI | Can land with slice 5 if small |
 | **7** | Weekly availability + slot picker | **Later, separate effort** |
-| **8** | Inbox Analytics + optional Reports summary card | After lists are trusted |
+| **8** | Requests Analytics + optional Reports summary card | After lists are trusted |
 | **9** | Cron automation + optional WA Business API | After manual paths work |
 
 Each slice: migration in `supabase/migrations/`, Dexie table if staff-synced, RLS/RPC, update **FEATURES_AND_SCHEMA.md** (and README if user-visible) in the **same PR**.
@@ -250,7 +254,7 @@ Each slice: migration in `supabase/migrations/`, Dexie table if staff-synced, RL
 
 ## Codebase pointers (do not fight existing patterns)
 
-- Nav: `src/app/Shell.tsx` — `NAV` array; Reports hidden from therapists; Settings admin-only. Inbox visibility: module on + (admin or front_desk).  
+- Nav: `src/app/Shell.tsx` — `NAV` array; Reports hidden from therapists; Settings admin-only. Requests visibility: module on + (admin or front_desk).  
 - Permissions: `src/app/usePermissions.ts` — add explicit flags (`canTriageFeedback` = admin, `canManageBookingRequests` = admin \| front_desk). RLS is source of truth.  
 - Workspace queues: `PendingWorkKind` in `src/services/dashboardService.ts` — add kinds, don’t invent a second home widget.  
 - Expected today: `clinic.enableExpectedToday` + `expectedVisitsService` — booking should **feed this UI**, not sit beside it unused.  
@@ -283,16 +287,18 @@ Each slice: migration in `supabase/migrations/`, Dexie table if staff-synced, RL
 Already locked above; only reopen if implementation forces a fork:
 
 - Dual `expected_visits` vs `appointments` — **must pick one source for Expected today** in slice 5.  
-- Exact token entropy/expiry.  
-- Whether front_desk sees a Needs-attention chip for 1–3★ without comment (recommended: yes, no body).  
-- `arrived` vs inferring arrival only from `visitId` set.
+- Exact token entropy/expiry: **resolved — 21 days is fine.**
+
+Resolved, no longer open:
+- ~~Whether front_desk sees a Needs-attention chip for 1–3★ without comment~~ — **No.** Front desk gets zero visibility into feedback ratings/comments, anywhere, full stop. They can still trigger "Ask for feedback" from a visit; they just never see what comes back.
+- ~~`arrived` vs inferring arrival only from `visitId` set~~ — **`arrived` is an explicit status**, set either automatically (staff create the visit from the appointment list, which resolves patient identity via the New visit typeahead in the same step) or manually (patient is present, visit logged afterward). `patient_id` on `appointments` is null from confirm through to whichever of those two paths resolves it — confirm itself never touches patient identity.
 
 ---
 
 ## Success criteria (v1 without slots)
 
 - Clinic can turn the module on in Settings.  
-- Staff share a feedback link from a visit; patient submits without an account; admin sees it under Inbox → Feedback and can resolve.  
+- Staff share a feedback link from a visit; patient submits without an account; admin sees it under Requests → Feedback and can resolve.  
 - 4–5★ can be nudged to Google.  
 - Stale / single-visit rows can send a templated WhatsApp share.  
 - Public booking creates a pending request; front desk confirms to an appointment on Expected today; they can reschedule, mark no-show, or decline; logging a visit remains New visit.  
