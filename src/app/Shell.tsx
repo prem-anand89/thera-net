@@ -155,6 +155,25 @@ function IconSettings({ className }: { className?: string }) {
     </svg>
   );
 }
+function IconRequests({ className }: { className?: string }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M3 5.5h14v9a1 1 0 01-1 1H4a1 1 0 01-1-1v-9zM3 5.5l3.5 4.2h7L17 5.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 function IconMore({ className }: { className?: string }) {
   return (
     <svg
@@ -177,6 +196,11 @@ const NAV = [
   { to: '/ledger', label: 'Ledger', Icon: IconLedger },
   { to: '/patients', label: 'Patients', Icon: IconPatients },
   { to: '/insights', label: 'Reports', Icon: IconReports },
+  // Desktop-only — the mobile bottom tab bar is its own hand-built 5-item
+  // row (Workspace/Patients/+New/Ledger/More), not driven by this array,
+  // so adding a 6th entry here never adds a 6th phone tab (per the locked
+  // spec's "no sixth phone tab" decision). Mobile reaches it via More.
+  { to: '/requests', label: 'Requests', Icon: IconRequests },
   { to: '/settings', label: 'Settings', Icon: IconSettings },
 ] as const;
 
@@ -214,6 +238,7 @@ export function Shell() {
       NAV.filter(
         (item) =>
           (item.to !== '/settings' || role === 'admin') &&
+          (item.to !== '/requests' || role === 'admin') &&
           (item.to !== '/insights' || role === 'admin' || role === 'front_desk')
       ),
     [role]
@@ -438,7 +463,8 @@ export function Shell() {
             active={
               pathname.startsWith('/more') ||
               pathname.startsWith('/settings') ||
-              pathname.startsWith('/insights')
+              pathname.startsWith('/insights') ||
+              pathname.startsWith('/requests')
             }
           />
         </nav>

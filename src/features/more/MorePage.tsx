@@ -11,24 +11,34 @@ export function MorePage() {
       <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
         {showReports && (
           <li>
-            <Link to="/insights" className="block min-h-11 px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]">
+            <Link
+              to="/insights"
+              className="block min-h-11 px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+            >
               Reports
             </Link>
           </li>
         )}
         {canEditSettings && (
           <li>
-            <Link to="/settings" className="block min-h-11 px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]">
+            <Link
+              to="/settings"
+              className="block min-h-11 px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+            >
               Settings
             </Link>
           </li>
         )}
-        <li>
-          <div className="px-4 py-3">
-            <div className="text-sm font-medium text-[var(--muted)]">Bookings</div>
-            <p className="mt-0.5 text-xs text-[var(--muted)]">Coming later — expected visits will live here, not on Workspace.</p>
-          </div>
-        </li>
+        {isAdmin && (
+          <li>
+            <Link
+              to="/requests"
+              className="block min-h-11 px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+            >
+              Requests
+            </Link>
+          </li>
+        )}
       </ul>
     </div>
   );

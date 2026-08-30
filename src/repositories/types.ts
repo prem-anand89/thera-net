@@ -15,6 +15,7 @@ import type {
   PatientModuleEnrollment,
   PatientAdvance,
   FeedbackRequest,
+  FeedbackResponse,
   NoteMode,
   UUID,
 } from '@/domain/types';
@@ -206,6 +207,14 @@ export interface FeedbackRequestRepo {
   putLocal(request: FeedbackRequest): Promise<void>;
 }
 
+/** Read-only: a response is only ever written by the anonymous patient's
+ *  own SECURITY DEFINER RPC call, never by the client — same shape as
+ *  `InvoiceRepo` minus `putLocal`, since nothing here ever needs to cache
+ *  a just-created row ahead of the next sync pull. */
+export interface FeedbackResponseRepo {
+  listByClinic(clinicId: UUID): Promise<FeedbackResponse[]>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -223,4 +232,5 @@ export interface Repos {
   patientModuleEnrollments: PatientModuleEnrollmentRepo;
   patientAdvances: PatientAdvanceRepo;
   feedbackRequests: FeedbackRequestRepo;
+  feedbackResponses: FeedbackResponseRepo;
 }

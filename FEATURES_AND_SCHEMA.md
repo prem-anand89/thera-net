@@ -486,11 +486,12 @@ queued with a visible error.
 - Therapist comparison chart (off by default)
 - Billing staff restriction (on by default)
 
-### 9. Patient Communications (Phase 0–1)
+### 9. Patient Communications (Phase 0–2)
 
-Full spec/roadmap: `docs/HANDOFF-patient-comms.md`. Phase 0 (foundation) and
-Phase 1 (visit "Ask for feedback") have shipped; a triage inbox, booking
-requests, and reminders are later phases, not yet built.
+Full spec/roadmap: `docs/HANDOFF-patient-comms.md`. Phase 0 (foundation),
+Phase 1 (visit "Ask for feedback"), and Phase 2 (Requests → Feedback page)
+have shipped; booking requests, Google review nudges, and reminders are
+later phases, not yet built.
 
 - **`clinics.enable_patient_comms`** — module gate, off by default, same
   pattern as `clinicalDocsEnabled`/`enableExpectedToday`. Public token routes
@@ -543,10 +544,10 @@ requests, and reminders are later phases, not yet built.
     and resend stamp `feedback_requests.updated_at` to the moment the link
     went out, so the UI (`VisitFeedbackLink` in `VisitCard.tsx`) reads that
     as "last sent at" with no extra field: within 3 days it shows a plain
-    "Feedback request sent" (no button at all), and only past that does
-    "Resend feedback link" appear. Deliberate — an easily-clickable resend
-    invites back-to-back messages to a patient who just hasn't answered
-    yet, so this is a hard floor rather than a confirm-to-override.
+    "✓ Feedback" (no button at all), and only past that does "↻ Resend"
+    appear. Deliberate — an easily-clickable resend invites back-to-back
+    messages to a patient who just hasn't answered yet, so this is a hard
+    floor rather than a confirm-to-override.
   - **Sharing** reuses the Web Share API + `wa.me` fallback pattern from
     `pdfShare.ts` (`shareTextViaWhatsApp`, the plain-text sibling of
     `shareFileToWhatsApp`) — no WhatsApp Business API required for v1. The
@@ -559,12 +560,37 @@ requests, and reminders are later phases, not yet built.
     "★ Responded" marker instead of either — the same marker for every
     role, since the actual rating/comment stays admin-only (see below) and
     there's no client view of it yet to link out to.
-  - **No client-side view of `feedback_responses` yet.** The rating/comment
-    a patient submits is only visible via direct Supabase access today
-    (table editor / SQL) — an admin-only triage inbox to view it in-app is
-    a later slice per the handoff doc's own phase table, not part of this
-    one. The visit row's "★ Responded" marker only says a response
-    exists, not what it says.
+  - The visit row's "★ Responded" marker only says a response exists, not
+    what it says — see the **Requests → Feedback** page below for that.
+- **Requests → Feedback page (Phase 2)** — `/requests?tab=feedback`, admin-
+  only (`RequestsPage.tsx`), lists every `feedback_responses` row with its
+  rating (★★★★☆) and comment, joined locally against the already-synced
+  `feedback_requests`/`patients`/`therapists`/`visits` tables for context
+  (patient, visit date, therapist) rather than duplicating that data. A
+  `Bookings` tab sits alongside it, disabled with a "coming later" label —
+  matches the doc's own "Requests" naming/IA decision (one page for both
+  workflows) without needing another route added once bookings ship.
+  - **`feedback_responses` is a synced-but-read-only Dexie table**, same
+    shape as `invoices` (`ALL_SYNCED_TABLES` but not
+    `CLIENT_WRITABLE_TABLES`) — a response is only ever written by the
+    anonymous patient's own SECURITY DEFINER RPC call, never the client.
+    The table originally had no `updated_at` column (responses are
+    immutable, never updated) but the sync engine hardcodes `updated_at`
+    as the delta column for every synced table, so a migration added one
+    (`updated_at = created_at` always, a permanent alias for the sync
+    engine's benefit, not a real "last modified" signal).
+  - **Nav**: desktop gets a 6th top-nav item, **Requests**, admin-only —
+    the mobile bottom tab bar is a separate hand-built 5-item row
+    (Workspace/Patients/+New/Ledger/More), not driven by the same array,
+    so this doesn't add a 6th phone tab; mobile reaches it via **More**
+    instead, per the handoff doc's own "no sixth phone tab" decision.
+  - **Workspace "new response" banner** — admin + module-on only, reading
+    a `db.meta` "last viewed Requests" timestamp (clinic-scoped key, same
+    pattern as `lastBackupMetaKey`) that gets stamped the moment
+    `RequestsPage` mounts; the count is exported from a small
+    `requestsSignals.ts` module rather than `RequestsPage.tsx` itself so
+    that reading it from the eagerly-bundled `WorkspacePage.tsx` doesn't
+    pull the route-code-split Requests page into that eager bundle.
 
 ---
 
@@ -597,6 +623,12 @@ src/features/            UI pages and components (React + TanStack Router)
   ├── invoices/          InvoicePrintPage
   ├── import/            Historical Excel visit import (preview + commit)
   ├── auth/              Login, reset-password
+  ├── requests/          RequestsPage at /requests (Feedback tab; Bookings
+                         disabled, later phase); requestsSignals.ts (the
+                         "new response" count, kept out of RequestsPage
+                         itself so Workspace's eager bundle can read it
+                         without pulling in the route-code-split page)
+  ├── publicFeedback/    FeedbackFormPage at /f/$token (anonymous, no Shell)
   └── more/              Mobile-only overflow nav page
 
 src/components/          Shared UI components — VisitCard (shared card/table
@@ -631,7 +663,8 @@ supabase/                SQL migrations, RLS policies, RPCs, realtime
 | `/invoices/$invoiceId/print` | Printable Bill/Bill Cum Receipt (A4/A5) | Anyone who can reach the invoice |
 | `/settings` | Clinic configuration, MRNO settings, billing mode, rate setup, feature toggles | Admins only |
 | `/settings/import-visits` | Historical Excel visit import | Admins only |
-| `/more` | Mobile-only overflow nav (Settings/Reports on narrow screens) | All roles |
+| `/more` | Mobile-only overflow nav (Settings/Reports/Requests on narrow screens) | All roles |
+| `/requests` (`?tab=feedback\|bookings`) | Requests → Feedback: every response with rating + comment (Patient Communications, Phase 2). Bookings tab is a later phase, shown disabled | Admins only |
 | `/reset-password` | Password reset | Unauthenticated |
 | `/f/$token` | Public patient feedback form (Patient Communications, Phase 0) | Unauthenticated — token-scoped, no clinic membership |
 | `/archive`, `/setup`, `/setup/import-visits`, `/invoices`, `/reports`, `/reports/print` | Legacy redirects for old bookmarks | All roles |
@@ -1146,7 +1179,7 @@ latest, still-in-force consent per subject (`is_in_force boolean`).
 
 ### Additional Tables
 
-#### `feedback_requests` / `feedback_responses` / `message_log` (Patient Communications, Phase 0–1)
+#### `feedback_requests` / `feedback_responses` / `message_log` (Patient Communications, Phase 0–2)
 ```sql
 -- feedback_requests: one row per "ask this patient for feedback" action
 id              uuid PRIMARY KEY
@@ -1197,10 +1230,14 @@ both by client IP.
 `feedback_requests` is a synced Dexie table (`CLIENT_WRITABLE_TABLES`) —
 staff creation goes through the normal outbox, same as any other clinic
 CRUD, with `token` left unset so the column default fires server-side (the
-client never generates its own token). `feedback_responses` and
-`message_log` have no Dexie table or repo — the app never reads or writes
-them directly; the only client touchpoints are the two public RPCs above
-and staff-side visibility of `feedback_requests.status`.
+client never generates its own token). `feedback_responses` (Phase 2) is
+also synced, but read-only client-side — `ALL_SYNCED_TABLES` without
+`CLIENT_WRITABLE_TABLES`, same shape as `invoices` — since a response is
+only ever written by the anonymous patient's own SECURITY DEFINER RPC
+call; it needed an `updated_at` column added (a permanent alias for
+`created_at`, purely so the sync engine's hardcoded delta-column
+assumption holds) since the row is otherwise immutable. `message_log` has
+no Dexie table or repo at all — the app never reads or writes it directly.
 
 `rotate_feedback_request_token(p_request_id uuid) returns text` (Phase 1) —
 `security invoker`, EXECUTE revoked from `public`/`anon` and granted only

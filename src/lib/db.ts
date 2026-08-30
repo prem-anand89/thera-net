@@ -16,6 +16,7 @@ import type {
   PatientModuleEnrollment,
   PatientAdvance,
   FeedbackRequest,
+  FeedbackResponse,
 } from '@/domain/types';
 
 /**
@@ -61,7 +62,8 @@ export type SyncedTable =
   | 'consultation_notes'
   | 'patient_module_enrollments'
   | 'patient_advances'
-  | 'feedback_requests';
+  | 'feedback_requests'
+  | 'feedback_responses';
 
 /**
  * Every table the sync engine pushes/pulls — the single source of truth
@@ -89,6 +91,7 @@ export const ALL_SYNCED_TABLES = [
   'patient_module_enrollments',
   'patient_advances',
   'feedback_requests',
+  'feedback_responses',
 ] as const satisfies readonly SyncedTable[];
 type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number]
   ? true
@@ -97,7 +100,10 @@ const _exhaustiveCheck: _AssertAllSyncedTablesCovered = true;
 void _exhaustiveCheck;
 
 /**
- * Tables the client is allowed to write. Invoices are server-issued only.
+ * Tables the client is allowed to write. Invoices are server-issued only;
+ * `feedback_responses` is the same shape (pulled, never pushed) — a
+ * response is only ever written by the anonymous patient's own
+ * SECURITY DEFINER RPC call, never by a signed-in staff member.
  */
 export const CLIENT_WRITABLE_TABLES = [
   'clinics',
@@ -134,6 +140,7 @@ export class ClinicDB extends Dexie {
   patient_module_enrollments!: Table<PatientModuleEnrollment, string>;
   patient_advances!: Table<PatientAdvance, string>;
   feedback_requests!: Table<FeedbackRequest, string>;
+  feedback_responses!: Table<FeedbackResponse, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 
@@ -213,6 +220,11 @@ export class ClinicDB extends Dexie {
       // hot lookup path (one card row checks "does this visit already
       // have a request" per render).
       feedback_requests: 'id, clinicId, visitId, patientId, therapistId, status',
+    });
+    this.version(17).stores({
+      // requestId is the join key back to feedback_requests (Requests →
+      // Feedback page); no status/rating index needed at this scale.
+      feedback_responses: 'id, clinicId, requestId',
     });
   }
 }

@@ -628,6 +628,26 @@ export interface FeedbackRequest {
   updatedBy?: UUID | null;
 }
 
+/**
+ * A patient's submission against one `FeedbackRequest` (Patient
+ * Communications, Slice 2) — written only by `submit_feedback_response()`,
+ * a SECURITY DEFINER RPC with no client INSERT policy; the client never
+ * creates or edits these, only reads them (admin-only, per
+ * `feedback_responses`' own RLS). `updatedAt` is a permanent alias for
+ * `createdAt` — the row is immutable, but the sync engine hardcodes
+ * `updated_at` as the delta column for every synced table, so the column
+ * exists purely for that, not because responses are ever modified.
+ */
+export interface FeedbackResponse {
+  id: UUID;
+  requestId: UUID;
+  clinicId: UUID;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** What Health Valley actually paid Beyond Mechanics for one fiscal month. */
 export interface Settlement {
   id: UUID;

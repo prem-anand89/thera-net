@@ -34,6 +34,7 @@ import type {
   PatientModuleEnrollmentRepo,
   PatientAdvanceRepo,
   FeedbackRequestRepo,
+  FeedbackResponseRepo,
   Repos,
 } from './types';
 
@@ -338,6 +339,10 @@ const feedbackRequests: FeedbackRequestRepo = {
   },
 };
 
+const feedbackResponses: FeedbackResponseRepo = {
+  listByClinic: (clinicId) => db.feedback_responses.where('clinicId').equals(clinicId).toArray(),
+};
+
 export const repos: Repos = {
   clinics,
   therapists,
@@ -355,6 +360,7 @@ export const repos: Repos = {
   patientModuleEnrollments,
   patientAdvances,
   feedbackRequests,
+  feedbackResponses,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers

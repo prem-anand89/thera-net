@@ -81,6 +81,9 @@ const FeedbackFormPage = lazy(() =>
     default: m.FeedbackFormPage,
   }))
 );
+const RequestsPage = lazy(() =>
+  import('@/features/requests/RequestsPage').then((m) => ({ default: m.RequestsPage }))
+);
 
 const rootRoute = createRootRoute({ component: Shell });
 
@@ -352,6 +355,22 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 });
 
+// 'bookings' isn't built yet (later slice) but is accepted here so the tab
+// shape doesn't need another route change to add it — RequestsPage just
+// doesn't render anything for it today, same as the Bookings tab itself
+// showing "coming later" rather than being absent.
+const REQUESTS_TABS = ['feedback', 'bookings'] as const;
+
+const requestsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/requests',
+  validateSearch: (search: Record<string, unknown>): { tab?: (typeof REQUESTS_TABS)[number] } =>
+    typeof search.tab === 'string' && (REQUESTS_TABS as readonly string[]).includes(search.tab)
+      ? { tab: search.tab as (typeof REQUESTS_TABS)[number] }
+      : {},
+  component: RequestsPage,
+});
+
 const setupRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/setup',
@@ -447,6 +466,7 @@ const routeTree = rootRoute.addChildren([
   invoicePrintRoute,
   invoicesRedirectRoute,
   settingsRoute,
+  requestsRoute,
   setupRedirectRoute,
   importVisitsRoute,
   importVisitsRedirectRoute,

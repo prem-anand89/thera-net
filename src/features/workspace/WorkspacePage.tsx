@@ -28,6 +28,7 @@ import {
   tdNum,
 } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
+import { useNewFeedbackResponseCount } from '@/features/requests/requestsSignals';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { SplitModal } from '@/components/SplitModal';
@@ -120,6 +121,13 @@ export function WorkspacePage() {
   const scope = useWorkspaceScope();
   const { canBill, canViewClinicalNotes, canEditSettings } = usePermissions();
   const { therapistSplit } = clinicBillingConfig(clinic);
+  // Patient Communications, Slice 2 — "something arrived" surface per the
+  // handoff doc's own question table: admin-only (feedback content is
+  // admin-only at RLS too), gated on the module being on.
+  const newFeedbackCount = useNewFeedbackResponseCount(
+    clinic.id,
+    canEditSettings && (clinic.enablePatientComms ?? false)
+  );
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
@@ -280,6 +288,21 @@ export function WorkspacePage() {
             therapist record yet. Ask your admin to set it from Settings → Team → Linked login.
           </p>
         </section>
+      )}
+
+      {newFeedbackCount > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--teal)] bg-[var(--teal-light)] px-4 py-3">
+          <p className="text-sm text-[var(--ink)]">
+            {newFeedbackCount} new feedback response{newFeedbackCount === 1 ? '' : 's'}.
+          </p>
+          <Link
+            to="/requests"
+            search={{ tab: 'feedback' }}
+            className="whitespace-nowrap text-sm font-medium text-[var(--teal)] hover:underline"
+          >
+            See all →
+          </Link>
+        </div>
       )}
 
       <div className="grid grid-cols-3 gap-2">
