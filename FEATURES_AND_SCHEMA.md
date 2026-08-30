@@ -250,6 +250,19 @@ queued with a visible error.
   backlog like this is by definition old and shouldn't vanish behind a
   Ledger date preset.
 
+#### Issue Invoice Right After Logging a Visit
+- **`NewVisitPage.tsx`'s post-save screen** ("Visit logged") gained an
+  "Issue invoice" button, gated on `canBill` (same entitlement/role check
+  every other invoicing entry point uses), alongside the existing "Add
+  clinical note"/"Another visit"/"Done" actions — billing staff no longer
+  have to leave the page and find the visit again on Ledger/Workspace to
+  invoice it immediately. Opens the same `IssueInvoiceDialog` those two
+  pages use (`returnTo="/visits/new"`, added to `INVOICE_PRINT_BACK_TARGETS`
+  in `router.tsx`), built from fields already computed at save time
+  (`serviceLabel`, `isPackage`, `alreadyCollected`) rather than a second
+  query — no new invoicing logic, just a third call site into the existing
+  dialog/service.
+
 #### Payment Status & HV Settlement
 - **Three-fact payment model**: Billed / Collected / Receipted
   - Distinguishes cash collected without receipt from issued-but-unpaid invoice

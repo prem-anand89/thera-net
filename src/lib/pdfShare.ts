@@ -29,6 +29,15 @@ export async function renderElementToPdf(
     scale: 2,
     useCORS: true,
     backgroundColor: '#ffffff',
+    // Without this, html2canvas lays the cloned document out at whatever
+    // width the *viewer's* screen happens to be — on a phone that's the
+    // same narrow layout the on-screen page uses (line-item tables
+    // scrolling horizontally, etc.), so the shared PDF would inherit
+    // whatever's actually visible in that narrow viewport rather than the
+    // full, properly-laid-out document. Forcing a desktop-width window
+    // here means the shared file always renders the same way regardless
+    // of which device issued it.
+    windowWidth: 900,
   });
 
   const pageWidthMm = paper === 'A4' ? 210 : 148;

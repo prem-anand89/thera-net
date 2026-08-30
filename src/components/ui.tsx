@@ -100,7 +100,7 @@ export function StatTile({ label, value }: { label: string; value: ReactNode }) 
       <div className="truncate text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
         {label}
       </div>
-      <div className="font-num mt-0.5 text-xl font-semibold text-[var(--ink)] sm:text-2xl">
+      <div className="font-num mt-0.5 whitespace-nowrap text-lg font-semibold text-[var(--ink)] sm:text-2xl">
         {value}
       </div>
     </div>

@@ -36,6 +36,7 @@ import {
 } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
+import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { PAYMENT_CHIP } from '@/components/VisitCard';
 import {
   computeVisitPaymentState,
@@ -186,7 +187,11 @@ export function NewVisitPage() {
     visitId: UUID;
     patientId: UUID;
     patientName: string;
+    serviceLabel: string;
+    isPackage: boolean;
+    alreadyCollected: boolean;
   } | null>(null);
+  const [invoicing, setInvoicing] = useState(false);
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
   const myTherapistId = useMemo(
@@ -529,7 +534,17 @@ export function NewVisitPage() {
         );
       }
 
-      setJustSaved({ visitId: visit.id, patientId: patient.id, patientName: patient.name });
+      setJustSaved({
+        visitId: visit.id,
+        patientId: patient.id,
+        patientName: patient.name,
+        serviceLabel:
+          mode === 'continuation'
+            ? selectedPackage!.serviceName
+            : (selectedService?.name ?? 'Visit'),
+        isPackage: mode === 'continuation',
+        alreadyCollected: billPaise > 0 && canBill && paymentChoice === 'paid',
+      });
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
@@ -538,11 +553,25 @@ export function NewVisitPage() {
   }
 
   if (justSaved) {
+    const otherPrimaryShown = clinic.clinicalDocsEnabled || canBill;
+    const invoiceTarget: IssueInvoiceTarget = {
+      visitId: justSaved.visitId,
+      patientId: justSaved.patientId,
+      patientLabel: justSaved.patientName,
+      serviceLabel: justSaved.serviceLabel,
+      isPackage: justSaved.isPackage,
+      alreadyCollected: justSaved.alreadyCollected,
+    };
     return (
       <div className="mx-auto max-w-2xl space-y-4">
         <SectionCard title="Visit logged">
           <p className="text-sm text-[var(--ink)]">Visit saved for {justSaved.patientName}.</p>
           <div className="mt-4 flex flex-wrap gap-2">
+            {canBill && (
+              <button type="button" className={btnPrimary} onClick={() => setInvoicing(true)}>
+                Issue invoice
+              </button>
+            )}
             {clinic.clinicalDocsEnabled && (
               <Link
                 to="/patients/$patientId/notes/new"
@@ -555,7 +584,7 @@ export function NewVisitPage() {
             )}
             <button
               type="button"
-              className={clinic.clinicalDocsEnabled ? btnSecondary : btnPrimary}
+              className={otherPrimaryShown ? btnSecondary : btnPrimary}
               onClick={() => {
                 setJustSaved(null);
                 void navigate({ to: '/visits/new', search: { patientId: justSaved.patientId } });
@@ -568,6 +597,14 @@ export function NewVisitPage() {
             </button>
           </div>
         </SectionCard>
+        {invoicing && (
+          <IssueInvoiceDialog
+            clinicId={clinic.id}
+            target={invoiceTarget}
+            onClose={() => setInvoicing(false)}
+            returnTo="/visits/new"
+          />
+        )}
       </div>
     );
   }
