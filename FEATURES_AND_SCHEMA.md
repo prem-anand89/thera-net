@@ -486,32 +486,68 @@ queued with a visible error.
 - Therapist comparison chart (off by default)
 - Billing staff restriction (on by default)
 
-### 9. Patient Communications (Phase 0 — foundation only)
+### 9. Patient Communications (Phase 0–1)
 
-Full spec/roadmap: `docs/HANDOFF-patient-comms.md`. Only the foundation has
-shipped so far — a staff-facing "Ask for feedback" trigger, triage inbox,
-booking requests, and reminders are later phases, not yet built.
+Full spec/roadmap: `docs/HANDOFF-patient-comms.md`. Phase 0 (foundation) and
+Phase 1 (visit "Ask for feedback") have shipped; a triage inbox, booking
+requests, and reminders are later phases, not yet built.
 
 - **`clinics.enable_patient_comms`** — module gate, off by default, same
   pattern as `clinicalDocsEnabled`/`enableExpectedToday`. Public token routes
-  refuse to resolve when a clinic hasn't turned this on.
+  refuse to resolve when a clinic hasn't turned this on. Toggled from
+  Settings → **Patient communications** (its own section/chip, admin-only —
+  just the on/off switch for now; slug, Google review URL, message
+  templates, and WhatsApp Business fields arrive with later phases).
 - **`patients.do_not_message`** — opt-out flag, honored by every send path
-  once those paths exist (Phase 1+); staff-settable toggle, no automated
+  once those paths exist (Phase 2+); staff-settable toggle, no automated
   detection.
 - **Public feedback link (`/f/$token`)** — the app's first and only
-  anonymous write path. A therapist/front-desk/admin action (Phase 1, not
-  yet built) will create a `feedback_requests` row with a server-generated
-  256-bit token; a patient opens `/f/$token` with no login, submits a 1–5
-  star rating and optional comment via `submit_feedback_response()`, and
-  that's the entire interaction. Both public RPCs are rate-limited per IP
-  and return an identical generic error for every failure case (invalid,
-  expired, already responded, module off) — deliberately not distinguishable,
-  so the endpoint can't be used to enumerate which tokens exist.
+  anonymous write path. A therapist/front-desk/admin action creates a
+  `feedback_requests` row with a server-generated 256-bit token; a patient
+  opens `/f/$token` with no login, submits a 1–5 star rating and optional
+  comment via `submit_feedback_response()`, and that's the entire
+  interaction. Both public RPCs are rate-limited per IP and return an
+  identical generic error for every failure case (invalid, expired, already
+  responded, module off) — deliberately not distinguishable, so the endpoint
+  can't be used to enumerate which tokens exist.
 - **Feedback visibility is admin-only, at the RLS layer, not just the UI.**
   Front desk and therapists can see that a request exists/its status (no
   rating or comment content), but `feedback_responses` SELECT is restricted
   to `is_clinic_admin()` — this is a real access boundary, not a hidden menu
   item.
+- **"Ask for feedback" trigger (Phase 1)** — an inline action on a visit
+  row, next to the existing "+ Note" link (`VisitFeedbackLink` in
+  `VisitCard.tsx`, kept inline rather than in the row's kebab menu, same
+  convention as Note). Visible only when `enablePatientComms` is on and the
+  viewer may act on that visit (`is_clinic_admin() OR is_own_therapist()`
+  mirrored client-side, same shape as `canEdit`/`canSplit` — a per-row
+  computed boolean, not a flat `Permissions` field, since the underlying
+  RLS check is row-scoped). Also offered as a one-click button on
+  `NewVisitPage`'s post-save screen, right after logging a visit.
+  - **Creating a request is Dexie + outbox**, identical to any other clinic
+    CRUD — *not* an RPC. The client leaves `token` unset on insert so the
+    column default (`generate_url_safe_token()`) fires server-side; the real
+    token round-trips back on the next sync pull. Until then the UI shows
+    "Preparing link…" rather than assuming the token exists immediately.
+  - **Resending rotates the token via a dedicated RPC,
+    `rotate_feedback_request_token(p_request_id uuid) returns text`** —
+    column defaults never fire on UPDATE, so extending the 21-day expiry and
+    generating fresh entropy needs a small online-only RPC instead of the
+    outbox, the same reasoning `issue_invoice()` is an RPC rather than
+    outbox-synced. `security invoker` (not definer): the existing
+    `feedback_requests_update` RLS policy already gates who may call it
+    correctly, so no elevated privileges are needed. One click both rotates
+    the token and opens the WhatsApp share sheet with the new link
+    (`feedbackService.resend`).
+  - **Sharing** reuses the Web Share API + `wa.me` fallback pattern from
+    `pdfShare.ts` (`shareTextViaWhatsApp`, the plain-text sibling of
+    `shareFileToWhatsApp`) — no WhatsApp Business API required for v1. The
+    message template is a hardcoded string for now; per-clinic template
+    editing is a later phase.
+  - **One pending request per visit** — the foundation's own unique index
+    enforces this. A visit whose last request is `responded`/`expired`
+    offers "+ Ask for feedback" again (a fresh row); a `pending` request
+    offers "Resend" instead of creating a duplicate.
 
 ---
 
@@ -1093,7 +1129,7 @@ latest, still-in-force consent per subject (`is_in_force boolean`).
 
 ### Additional Tables
 
-#### `feedback_requests` / `feedback_responses` / `message_log` (Patient Communications, Phase 0)
+#### `feedback_requests` / `feedback_responses` / `message_log` (Patient Communications, Phase 0–1)
 ```sql
 -- feedback_requests: one row per "ask this patient for feedback" action
 id              uuid PRIMARY KEY
@@ -1140,6 +1176,22 @@ every other function in this schema either relies on `is_clinic_member()`
 failing for an anonymous caller or explicitly revokes that default. A
 `public_rpc_rate_limit` table (self-pruning, no cron dependency) throttles
 both by client IP.
+
+`feedback_requests` is a synced Dexie table (`CLIENT_WRITABLE_TABLES`) —
+staff creation goes through the normal outbox, same as any other clinic
+CRUD, with `token` left unset so the column default fires server-side (the
+client never generates its own token). `feedback_responses` and
+`message_log` have no Dexie table or repo — the app never reads or writes
+them directly; the only client touchpoints are the two public RPCs above
+and staff-side visibility of `feedback_requests.status`.
+
+`rotate_feedback_request_token(p_request_id uuid) returns text` (Phase 1) —
+`security invoker`, EXECUTE revoked from `public`/`anon` and granted only
+to `authenticated`. Rotating an existing row's token is an UPDATE, where
+column defaults never fire, so "resend" needs this small RPC rather than
+the outbox; the existing `feedback_requests_update` RLS policy is the real
+authorization boundary, same as any other invoker-security RPC in this
+schema.
 
 #### `audit_log`
 ```sql

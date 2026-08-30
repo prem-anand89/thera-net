@@ -4,6 +4,7 @@ import {
   VISIT_COLUMN_LABELS,
   VISIT_OPTIONAL_COLUMN_ORDER,
   type ConsultationNoteStatus,
+  type FeedbackRequestStatus,
   type UUID,
   type VisitColumnKey,
 } from '@/domain/types';
@@ -189,6 +190,22 @@ export interface VisitCardData {
    * (one 🔒, one not) with nothing explaining why.
    */
   packageInvoicePending?: boolean;
+  /** The visit's own therapist (Patient Communications, Slice 1) — needed
+   *  alongside `canAskForFeedback` because the underlying RLS policy
+   *  (admin/front_desk/own-therapist) is row-scoped, not a flat
+   *  Permissions boolean; mirrors the same `therapistId` every builder
+   *  already has when computing `canModify`-style flags. */
+  therapistId?: UUID;
+  /** Whether this viewer may ask this visit's patient for feedback —
+   *  `isAdmin || therapistId === myTherapistId`, further gated on
+   *  `clinic.enablePatientComms`. Computed per-row by the caller, same as
+   *  `canEdit`/`canSplit`, not read off a flat Permissions object. */
+  canAskForFeedback?: boolean;
+  /** The visit's `feedback_requests` row, if any has ever been created —
+   *  `token` is optional because a just-created row hasn't synced its
+   *  server-generated token back down yet (see `FeedbackRequest`'s own
+   *  doc comment). `null`/unset means no request exists yet. */
+  feedbackRequest?: { id: UUID; status: FeedbackRequestStatus; token?: string } | null;
 }
 
 /** Row actions kebab — Repeat / Issue invoice / Edit visit / Split /
@@ -452,8 +469,77 @@ export function VisitNoteLink({
   );
 }
 
-function NoteCell({ data, backTo }: { data: VisitCardData; backTo?: PatientProfileBackTarget }) {
-  return <VisitNoteLink data={data} backTo={backTo} />;
+/** "Ask for feedback" / "Resend" entry point for a visit row — mirrors
+ *  `VisitNoteLink`'s gate-then-branch shape (hidden entirely when the
+ *  viewer can't act on this row), but unlike Note this isn't a route link:
+ *  it needs an `onClick` callback threaded down, same shape as `onInvoice`.
+ *  Kept inline next to Note per this file's own convention (see
+ *  `RowActionsMenu`'s doc comment) rather than buried in the kebab menu. */
+export function VisitFeedbackLink({
+  data,
+  onAskForFeedback,
+  onResendFeedback,
+}: {
+  data: VisitCardData;
+  onAskForFeedback?: () => void;
+  onResendFeedback?: () => void;
+}) {
+  if (!data.canAskForFeedback) return null;
+  const request = data.feedbackRequest;
+
+  if (!request || request.status !== 'pending') {
+    if (!onAskForFeedback) return null;
+    return (
+      <button
+        type="button"
+        className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+        onClick={onAskForFeedback}
+      >
+        + Ask for feedback
+      </button>
+    );
+  }
+
+  // Row exists locally but its server-generated token hasn't synced back
+  // down yet — column defaults only fire server-side on insert, so there's
+  // a brief window with nothing to share.
+  if (!request.token) {
+    return <span className="whitespace-nowrap text-xs text-[var(--muted)]">Preparing link…</span>;
+  }
+
+  if (!onResendFeedback) return null;
+  return (
+    <button
+      type="button"
+      className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+      onClick={onResendFeedback}
+    >
+      Resend feedback link
+    </button>
+  );
+}
+
+function NoteCell({
+  data,
+  backTo,
+  onAskForFeedback,
+  onResendFeedback,
+}: {
+  data: VisitCardData;
+  backTo?: PatientProfileBackTarget;
+  onAskForFeedback?: () => void;
+  onResendFeedback?: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <VisitNoteLink data={data} backTo={backTo} />
+      <VisitFeedbackLink
+        data={data}
+        onAskForFeedback={onAskForFeedback}
+        onResendFeedback={onResendFeedback}
+      />
+    </div>
+  );
 }
 
 /** Label + value rows for mobile cards — same field order as the optional table columns. */
@@ -526,6 +612,8 @@ export function SharedVisitCard({
   onEdit,
   onSplit,
   onDelete,
+  onAskForFeedback,
+  onResendFeedback,
   canInvoice = true,
   backTo,
 }: {
@@ -542,6 +630,8 @@ export function SharedVisitCard({
   onEdit?: () => void;
   onSplit?: () => void;
   onDelete: () => void;
+  onAskForFeedback?: () => void;
+  onResendFeedback?: () => void;
   canInvoice?: boolean;
   backTo?: PatientProfileBackTarget;
 }) {
@@ -654,6 +744,11 @@ export function SharedVisitCard({
             </Pill>
           )}
           <VisitNoteLink data={data} inline backTo={backTo} />
+          <VisitFeedbackLink
+            data={data}
+            onAskForFeedback={onAskForFeedback}
+            onResendFeedback={onResendFeedback}
+          />
         </div>
       </div>
     </>
@@ -693,6 +788,8 @@ function VisitTable({
   onEdit,
   onSplit,
   onDelete,
+  onAskForFeedback,
+  onResendFeedback,
   canInvoice,
   selection,
   backTo,
@@ -708,6 +805,8 @@ function VisitTable({
   onEdit?: (row: VisitCardData) => void;
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
+  onAskForFeedback?: (row: VisitCardData) => void;
+  onResendFeedback?: (row: VisitCardData) => void;
   canInvoice: boolean;
   selection?: VisitSelectionProps;
   backTo?: PatientProfileBackTarget;
@@ -873,7 +972,12 @@ function VisitTable({
                   />
                 </td>
                 <td className={td}>
-                  <NoteCell data={row} backTo={backTo} />
+                  <NoteCell
+                    data={row}
+                    backTo={backTo}
+                    onAskForFeedback={onAskForFeedback ? () => onAskForFeedback(row) : undefined}
+                    onResendFeedback={onResendFeedback ? () => onResendFeedback(row) : undefined}
+                  />
                 </td>
                 <td className={td}>
                   <RowActionsMenu
@@ -983,6 +1087,8 @@ export function ResponsiveVisitList({
   onEdit,
   onSplit,
   onDelete,
+  onAskForFeedback,
+  onResendFeedback,
   canInvoice = true,
   selection,
   backTo,
@@ -997,6 +1103,8 @@ export function ResponsiveVisitList({
   onEdit?: (row: VisitCardData) => void;
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
+  onAskForFeedback?: (row: VisitCardData) => void;
+  onResendFeedback?: (row: VisitCardData) => void;
   canInvoice?: boolean;
   /** Row checkboxes for bulk actions (e.g. Patient Profile's "select
    *  visits, issue one invoice"). Only wired up in the flat (non-grouped)
@@ -1036,6 +1144,8 @@ export function ResponsiveVisitList({
                     onEdit={onEdit ? () => onEdit(row) : undefined}
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
+                    onAskForFeedback={onAskForFeedback ? () => onAskForFeedback(row) : undefined}
+                    onResendFeedback={onResendFeedback ? () => onResendFeedback(row) : undefined}
                     canInvoice={canInvoice}
                     backTo={backTo}
                   />
@@ -1069,6 +1179,8 @@ export function ResponsiveVisitList({
                     onEdit={onEdit ? () => onEdit(row) : undefined}
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
+                    onAskForFeedback={onAskForFeedback ? () => onAskForFeedback(row) : undefined}
+                    onResendFeedback={onResendFeedback ? () => onResendFeedback(row) : undefined}
                     canInvoice={canInvoice}
                     backTo={backTo}
                   />
@@ -1095,6 +1207,8 @@ export function ResponsiveVisitList({
           onEdit={onEdit}
           onSplit={onSplit}
           onDelete={onDelete}
+          onAskForFeedback={onAskForFeedback}
+          onResendFeedback={onResendFeedback}
           canInvoice={canInvoice}
           selection={selection}
           backTo={backTo}

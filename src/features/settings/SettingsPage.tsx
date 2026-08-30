@@ -54,6 +54,7 @@ type SectionKey =
   | 'profile'
   | 'billing'
   | 'partner'
+  | 'patientComms'
   | 'team'
   | 'services'
   | 'treatments'
@@ -71,7 +72,7 @@ type SectionKey =
  */
 const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
   { label: 'Account', keys: ['plan'] },
-  { label: 'Clinic', keys: ['profile', 'billing', 'partner'] },
+  { label: 'Clinic', keys: ['profile', 'billing', 'partner', 'patientComms'] },
   { label: 'People & services', keys: ['team', 'services', 'treatments', 'referrals'] },
   { label: 'System', keys: ['data'] },
 ];
@@ -105,6 +106,12 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
     label: 'Partner & split',
     description: 'Revenue share with a partner hospital, therapist splits, TDS.',
     accent: 'rust',
+  },
+  {
+    key: 'patientComms',
+    label: 'Patient communications',
+    description: 'Ask patients for feedback after a visit, with a link to a public feedback form.',
+    accent: 'teal',
   },
   {
     key: 'team',
@@ -157,6 +164,7 @@ const SECTION_ICON_PATHS: Record<SectionKey, string> = {
   profile: 'M2.5 3h11v10h-11zM5.5 6h5M5.5 8.3h5M5.5 10.6h3',
   billing: 'M2.5 6.5L8 2.8l5.5 3.7M3.7 5.8V12a1 1 0 001 1h6.6a1 1 0 001-1V5.8',
   partner: 'M8 2.5l1.4 3.1 3.4.4-2.5 2.3.7 3.4L8 10l-3 1.7.7-3.4-2.5-2.3 3.4-.4L8 2.5z',
+  patientComms: 'M2.5 4.5h11v6.5h-6.2L4.5 13.5V11h-2zM5 7h6M5 9h4',
   team: 'M2.3 13c.4-2.5 2-3.9 3.9-3.9s3.5 1.4 3.9 3.9M9.9 9.5c1.6.2 2.8 1.4 3.1 3.5',
   services: 'M3 4h10M3 8h10M3 12h6',
   treatments: 'M5 3l6 10M11 3l-6 10M3 8h10',
@@ -392,6 +400,10 @@ export function SettingsPage() {
     (d: boolean) => setDirtyKeys((s) => toggleSet(s, 'partner', d)),
     []
   );
+  const setPatientCommsDirty = useCallback(
+    (d: boolean) => setDirtyKeys((s) => toggleSet(s, 'patientComms', d)),
+    []
+  );
 
   function selectSection(key: SectionKey) {
     if (key === activeKey) return;
@@ -505,6 +517,9 @@ export function SettingsPage() {
             ))}
           {activeKey === 'partner' && canSeePartner && (
             <PartnerSection onDirtyChange={setPartnerDirty} />
+          )}
+          {activeKey === 'patientComms' && (
+            <PatientCommsSection onDirtyChange={setPatientCommsDirty} />
           )}
           {activeKey === 'team' && (
             <>
@@ -1439,6 +1454,50 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         saved={saved}
         busy={busy}
         onSave={() => void savePartner()}
+        onCancel={cancel}
+        error={error}
+      />
+    </SectionCard>
+  );
+}
+
+type PatientCommsFields = Pick<Clinic, 'enablePatientComms'>;
+
+/**
+ * Patient Communications, Slice 1 — just the module on/off switch for now.
+ * Per HANDOFF-patient-comms.md's "one chip, not scattered" instruction this
+ * is its own section rather than a checkbox bolted onto Clinic profile's
+ * "Optional modules" grid; the slug/Google-review-URL/message-template/
+ * WhatsApp-number fields the full spec describes arrive with later slices,
+ * not here.
+ */
+function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const { form, set, save, cancel, dirty, saved, busy, error } =
+    useClinicSectionForm<PatientCommsFields>(
+      (c) => ({ enablePatientComms: c.enablePatientComms ?? false }),
+      onDirtyChange
+    );
+
+  return (
+    <SectionCard title="Patient communications">
+      <Field
+        label={
+          <>
+            Ask for feedback
+            <InfoTip text="Turn on to let staff ask a patient for feedback after a visit. Each request creates a one-time link to a public feedback form, shared via WhatsApp — no patient login or Business API needed." />
+          </>
+        }
+      >
+        <BoolToggle
+          value={form.enablePatientComms ?? false}
+          onChange={(v) => set({ enablePatientComms: v })}
+        />
+      </Field>
+      <SectionSaveBar
+        dirty={dirty}
+        saved={saved}
+        busy={busy}
+        onSave={() => void save()}
         onCancel={cancel}
         error={error}
       />

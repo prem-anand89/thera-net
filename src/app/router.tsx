@@ -77,7 +77,9 @@ const ResetPasswordPage = lazy(() =>
   import('@/features/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage }))
 );
 const FeedbackFormPage = lazy(() =>
-  import('@/features/publicFeedback/FeedbackFormPage').then((m) => ({ default: m.FeedbackFormPage }))
+  import('@/features/publicFeedback/FeedbackFormPage').then((m) => ({
+    default: m.FeedbackFormPage,
+  }))
 );
 
 const rootRoute = createRootRoute({ component: Shell });
@@ -332,6 +334,7 @@ const SETTINGS_TABS = [
   'profile',
   'billing',
   'partner',
+  'patientComms',
   'team',
   'services',
   'treatments',

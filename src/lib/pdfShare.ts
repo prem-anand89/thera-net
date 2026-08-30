@@ -102,3 +102,24 @@ export async function shareFileToWhatsApp(
   );
   return 'fallback';
 }
+
+/**
+ * Same Web-Share-API-with-`wa.me`-fallback shape as `shareFileToWhatsApp`,
+ * for a plain link/text payload with no file involved (e.g. a patient
+ * feedback link) — most of the app's "share this" actions have nothing to
+ * attach, so this is the common case, not `shareFileToWhatsApp`'s.
+ */
+export async function shareTextViaWhatsApp(text: string, title: string): Promise<void> {
+  const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+  if (nav.share) {
+    try {
+      await nav.share({ text, title });
+      return;
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return;
+      // Fall through to the wa.me link for any other Web Share failure —
+      // same reasoning shareFileToWhatsApp falls back rather than erroring.
+    }
+  }
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+}

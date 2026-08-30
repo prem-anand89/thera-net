@@ -33,6 +33,7 @@ import type {
   ConsultationNoteRepo,
   PatientModuleEnrollmentRepo,
   PatientAdvanceRepo,
+  FeedbackRequestRepo,
   Repos,
 } from './types';
 
@@ -323,6 +324,20 @@ const patientAdvances: PatientAdvanceRepo = {
   put: (advance) => putWithOutbox('patient_advances', advance),
 };
 
+const feedbackRequests: FeedbackRequestRepo = {
+  async getByVisitId(clinicId, visitId) {
+    const all = await db.feedback_requests.where('visitId').equals(visitId).toArray();
+    return all
+      .filter((r) => r.clinicId === clinicId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  },
+  listByClinic: (clinicId) => db.feedback_requests.where('clinicId').equals(clinicId).toArray(),
+  put: (request) => putWithOutbox('feedback_requests', request),
+  putLocal: async (request) => {
+    await db.feedback_requests.put(request);
+  },
+};
+
 export const repos: Repos = {
   clinics,
   therapists,
@@ -339,6 +354,7 @@ export const repos: Repos = {
   consultationNotes,
   patientModuleEnrollments,
   patientAdvances,
+  feedbackRequests,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers

@@ -14,6 +14,7 @@ import type {
   ConsultationNote,
   PatientModuleEnrollment,
   PatientAdvance,
+  FeedbackRequest,
   NoteMode,
   UUID,
 } from '@/domain/types';
@@ -189,6 +190,22 @@ export interface PatientAdvanceRepo {
   put(advance: PatientAdvance): Promise<void>;
 }
 
+export interface FeedbackRequestRepo {
+  /** At most one row can be relevant to a card at a time — the schema's
+   *  own unique-pending-per-visit index means the interesting question is
+   *  always "the" request for this visit, not a list of them. Returns the
+   *  most recently updated row if a visit somehow has more than one
+   *  (e.g. an old responded/expired row plus today's pending one). */
+  getByVisitId(clinicId: UUID, visitId: UUID): Promise<FeedbackRequest | undefined>;
+  /** Every request for a clinic, for building a visitId-keyed lookup map
+   *  in bulk (VisitCardData builders) instead of one query per row. */
+  listByClinic(clinicId: UUID): Promise<FeedbackRequest[]>;
+  put(request: FeedbackRequest): Promise<void>;
+  /** Caches a server-confirmed row (e.g. the RPC-based token rotation
+   *  below) without re-queuing an outbox push of our own. */
+  putLocal(request: FeedbackRequest): Promise<void>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -205,4 +222,5 @@ export interface Repos {
   consultationNotes: ConsultationNoteRepo;
   patientModuleEnrollments: PatientModuleEnrollmentRepo;
   patientAdvances: PatientAdvanceRepo;
+  feedbackRequests: FeedbackRequestRepo;
 }

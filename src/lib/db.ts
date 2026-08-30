@@ -15,6 +15,7 @@ import type {
   ConsultationNote,
   PatientModuleEnrollment,
   PatientAdvance,
+  FeedbackRequest,
 } from '@/domain/types';
 
 /**
@@ -59,7 +60,8 @@ export type SyncedTable =
   | 'settlements'
   | 'consultation_notes'
   | 'patient_module_enrollments'
-  | 'patient_advances';
+  | 'patient_advances'
+  | 'feedback_requests';
 
 /**
  * Every table the sync engine pushes/pulls — the single source of truth
@@ -86,6 +88,7 @@ export const ALL_SYNCED_TABLES = [
   'consultation_notes',
   'patient_module_enrollments',
   'patient_advances',
+  'feedback_requests',
 ] as const satisfies readonly SyncedTable[];
 type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number]
   ? true
@@ -111,6 +114,7 @@ export const CLIENT_WRITABLE_TABLES = [
   'consultation_notes',
   'patient_module_enrollments',
   'patient_advances',
+  'feedback_requests',
 ] as const satisfies readonly SyncedTable[];
 
 export class ClinicDB extends Dexie {
@@ -129,6 +133,7 @@ export class ClinicDB extends Dexie {
   consultation_notes!: Table<ConsultationNote, string>;
   patient_module_enrollments!: Table<PatientModuleEnrollment, string>;
   patient_advances!: Table<PatientAdvance, string>;
+  feedback_requests!: Table<FeedbackRequest, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 
@@ -202,6 +207,12 @@ export class ClinicDB extends Dexie {
     // unused scaffolding" precedent as expected_visits above.
     this.version(15).stores({
       my_memberships: null,
+    });
+    this.version(16).stores({
+      // status indexed for a future "pending" filter; visitId is the
+      // hot lookup path (one card row checks "does this visit already
+      // have a request" per render).
+      feedback_requests: 'id, clinicId, visitId, patientId, therapistId, status',
     });
   }
 }

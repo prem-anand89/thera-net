@@ -590,6 +590,44 @@ export interface PatientAdvance {
   updatedAt: string;
 }
 
+export type FeedbackRequestStatus = 'pending' | 'responded' | 'expired';
+
+/**
+ * Staff-triggered "ask this patient for feedback" action (Patient
+ * Communications, Slice 1) — one row per visit that's been asked, feeding
+ * the public `/f/$token` form. `therapistId` is denormalized from the
+ * visit (not just reachable via a join) so client-side display gating can
+ * mirror the `feedback_requests_insert`/`_update` RLS policy
+ * (admin/front_desk/own-therapist) without an extra query, the same
+ * reasoning the RLS policy itself is built on server-side.
+ *
+ * `token` is deliberately optional and never set by the client — the
+ * Postgres column default (`generate_url_safe_token()`) only fires when a
+ * column is omitted from an INSERT, and creating this row goes through
+ * the normal Dexie/outbox path (same as any other clinic CRUD), not an
+ * RPC. Leaving `token` unset here means the outbox's upsert payload omits
+ * it, the server fills it in, and the real value round-trips back on the
+ * next pull — so a freshly-created row reads `token: undefined` in the UI
+ * for a moment, not a placeholder. Resending (rotating the token on an
+ * existing row) can't go through this same path — column defaults don't
+ * fire on UPDATE — so that's a small dedicated online-only RPC instead
+ * (`rotate_feedback_request_token`), same reasoning `issue_invoice()` is
+ * an RPC rather than outbox-synced.
+ */
+export interface FeedbackRequest {
+  id: UUID;
+  clinicId: UUID;
+  visitId: UUID;
+  patientId: UUID;
+  therapistId: UUID;
+  token?: string;
+  status: FeedbackRequestStatus;
+  expiresAt: string;
+  updatedAt: string;
+  createdBy?: UUID | null;
+  updatedBy?: UUID | null;
+}
+
 /** What Health Valley actually paid Beyond Mechanics for one fiscal month. */
 export interface Settlement {
   id: UUID;

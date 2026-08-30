@@ -7,6 +7,7 @@ import {
   patientService,
   directPaymentService,
   dashboardService,
+  feedbackService,
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
@@ -190,8 +191,14 @@ export function NewVisitPage() {
     serviceLabel: string;
     isPackage: boolean;
     alreadyCollected: boolean;
+    therapistId: UUID;
   } | null>(null);
   const [invoicing, setInvoicing] = useState(false);
+  // Patient Communications, Slice 1 — tracks whether the post-save "Ask
+  // for feedback" button has already been clicked for this visit, so it
+  // can't be double-fired (the RLS unique-pending-request-per-visit index
+  // would just reject the second insert, but disabling reads clearer).
+  const [feedbackRequested, setFeedbackRequested] = useState(false);
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
   const myTherapistId = useMemo(
@@ -544,7 +551,9 @@ export function NewVisitPage() {
             : (selectedService?.name ?? 'Visit'),
         isPackage: mode === 'continuation',
         alreadyCollected: billPaise > 0 && canBill && paymentChoice === 'paid',
+        therapistId,
       });
+      setFeedbackRequested(false);
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
@@ -581,6 +590,29 @@ export function NewVisitPage() {
               >
                 Add clinical note
               </Link>
+            )}
+            {clinic.enablePatientComms && (
+              <button
+                type="button"
+                className={btnSecondary}
+                disabled={feedbackRequested}
+                onClick={() => {
+                  setFeedbackRequested(true);
+                  void feedbackService
+                    .askForFeedback(
+                      clinic.id,
+                      justSaved.visitId,
+                      justSaved.patientId,
+                      justSaved.therapistId
+                    )
+                    .catch((e) => {
+                      setFeedbackRequested(false);
+                      setError(toFriendlyMessage(e));
+                    });
+                }}
+              >
+                {feedbackRequested ? 'Feedback requested ✓' : 'Ask for feedback'}
+              </button>
             )}
             <button
               type="button"

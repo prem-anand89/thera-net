@@ -1,13 +1,18 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService } from '@/services';
+import { repos, dashboardService, feedbackService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
-import { clinicBillingConfig, type ConsultationNote, type Visit } from '@/domain/types';
+import {
+  clinicBillingConfig,
+  type ConsultationNote,
+  type FeedbackRequest,
+  type Visit,
+} from '@/domain/types';
 import { noteForVisit } from '@/domain/noteLinks';
 import type { TodayVisitRow } from '@/services/dashboardService';
 import {
@@ -43,7 +48,9 @@ function todayRowToCardData(
   therapistSplit: boolean,
   treatmentName: Map<string, string>,
   invoicedSiblingGroupIds: Set<string>,
-  consultationNotes: ConsultationNote[] | undefined
+  consultationNotes: ConsultationNote[] | undefined,
+  enablePatientComms: boolean,
+  feedbackRequestByVisitId: Map<string, FeedbackRequest>
 ): VisitCardData {
   const canModify = isAdmin || row.therapistId === myTherapistId;
   const linkedNote = noteForVisit(
@@ -52,8 +59,10 @@ function todayRowToCardData(
     row.patientId,
     row.needsNote
   );
+  const feedbackRequest = feedbackRequestByVisitId.get(row.visitId);
   return {
     visitId: row.visitId,
+    therapistId: row.therapistId,
     visitDate: new Date().toISOString().slice(0, 10),
     patientId: row.patientId,
     patientName: row.patientName,
@@ -86,6 +95,10 @@ function todayRowToCardData(
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: linkedNote?.id ?? null,
     noteStatus: linkedNote?.status ?? null,
+    canAskForFeedback: enablePatientComms && canModify,
+    feedbackRequest: feedbackRequest
+      ? { id: feedbackRequest.id, status: feedbackRequest.status, token: feedbackRequest.token }
+      : null,
     packageInvoicePending:
       row.billPaise === 0 &&
       !!row.sessionIndex &&
@@ -174,6 +187,16 @@ export function WorkspacePage() {
   const consultationNotes = useLiveQuery(
     () => (canViewClinicalNotes ? repos.consultationNotes.listByClinic(clinic.id) : undefined),
     [clinic.id, canViewClinicalNotes]
+  );
+  // Patient Communications, Slice 1 — same bulk-fetch-and-map shape as
+  // consultationNotes above, see the identical note in LedgerPage.tsx.
+  const feedbackRequests = useLiveQuery(
+    () => (clinic.enablePatientComms ? repos.feedbackRequests.listByClinic(clinic.id) : undefined),
+    [clinic.id, clinic.enablePatientComms]
+  );
+  const feedbackRequestByVisitId = useMemo(
+    () => new Map((feedbackRequests ?? []).map((r) => [r.visitId, r])),
+    [feedbackRequests]
   );
   // A ₹0 package continuation logged today whose OWN invoiceId is null —
   // check the full package group (unbounded by "today") for an invoiced
@@ -275,7 +298,9 @@ export function WorkspacePage() {
                 therapistSplit,
                 treatmentName,
                 invoicedSiblingGroupIds ?? new Set(),
-                consultationNotes
+                consultationNotes,
+                clinic.enablePatientComms ?? false,
+                feedbackRequestByVisitId
               )
             )}
             showDate={false}
@@ -298,6 +323,19 @@ export function WorkspacePage() {
             }
             onDelete={(row) => {
               if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+            }}
+            onAskForFeedback={(row) => {
+              void feedbackService.askForFeedback(
+                clinic.id,
+                row.visitId,
+                row.patientId,
+                row.therapistId!
+              );
+            }}
+            onResendFeedback={(row) => {
+              const request = feedbackRequestByVisitId.get(row.visitId);
+              if (!request?.token) return;
+              void feedbackService.resend(request, row.patientName, clinic.name);
             }}
             canInvoice={canBill}
             backTo="/workspace"
