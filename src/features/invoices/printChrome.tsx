@@ -18,7 +18,11 @@ export function PrintLetterhead({
   partnerLogoUrl: string | null;
 }) {
   return (
-    <header className="flex items-start justify-between border-b border-[var(--border)] pb-4">
+    // flex-wrap so the (non-shrinking) partner-hospital block below drops to
+    // its own line on a narrow phone screen instead of colliding with the
+    // clinic name/address — there's no room for both side-by-side under
+    // roughly tablet width once a logo is involved.
+    <header className="flex flex-wrap items-start justify-between gap-y-2 border-b border-[var(--border)] pb-4">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         {logoUrl && <img src={logoUrl} alt="" className="h-14 w-auto shrink-0 object-contain" />}
         <div className="min-w-0">

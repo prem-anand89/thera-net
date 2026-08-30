@@ -300,7 +300,7 @@ const reportsPrintRedirectRoute = createRoute({
   },
 });
 
-const INVOICE_PRINT_BACK_TARGETS = ['/ledger', '/workspace'] as const;
+const INVOICE_PRINT_BACK_TARGETS = ['/ledger', '/workspace', '/visits/new'] as const;
 export type InvoicePrintBackTarget = (typeof INVOICE_PRINT_BACK_TARGETS)[number];
 
 const invoicePrintRoute = createRoute({

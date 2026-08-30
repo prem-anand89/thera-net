@@ -74,68 +74,74 @@ function LegacyLineItemsTable({
   totalPaise: number;
 }) {
   return (
-    <table className="mt-6 w-full text-sm">
-      <thead>
-        <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--muted)]">
-          <th className="py-2">Service</th>
-          <th className="py-2">Sessions</th>
-          <th className="py-2 text-right">Catalog price</th>
-          {hasAdjustments && <th className="py-2 text-right">Adjustment</th>}
-          <th className="py-2 text-right">Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        {lineItems.map((li, i) => {
-          // A fully-billed package ("3 of 3") reads as meaningless on a
-          // finalized bill — just say "3 sessions". The fraction still
-          // communicates something true for the genuinely rare partial
-          // package invoice (fewer session dates than the package size).
-          const isPartial = li.sessionDates.length < li.sessionCount;
-          return (
-            <tr key={i} className="border-b border-[var(--border)] align-top">
-              <td className="py-2 font-medium text-[var(--ink)]">{li.serviceName}</td>
-              <td className="py-2 text-[var(--muted)]">
-                {li.sessionCount > 1
-                  ? isPartial
-                    ? `${li.sessionDates.length} of ${li.sessionCount}`
-                    : `${li.sessionCount} sessions`
-                  : '1'}
-                <div className="text-xs text-[var(--muted)]">{sessionDatesCellText(li)}</div>
-              </td>
-              <td className="font-num py-2 text-right">{formatINR(li.catalogPricePaise)}</td>
-              {hasAdjustments && (
-                <td className="font-num py-2 text-right">
-                  {li.adjustmentPaise !== 0 ? (
-                    <>
-                      {formatINR(li.adjustmentPaise)}
-                      {li.adjustmentReason && (
-                        <div className="text-xs text-[var(--muted)]">{li.adjustmentReason}</div>
-                      )}
-                    </>
-                  ) : (
-                    '—'
-                  )}
+    // Fixed columns squeeze/wrap unpredictably below their natural width —
+    // scrolling the table on its own axis on a narrow phone keeps every
+    // column readable instead of letting service names and rupee figures
+    // fight each other for space.
+    <div className="mt-6 overflow-x-auto">
+      <table className="w-full min-w-[560px] text-sm">
+        <thead>
+          <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--muted)]">
+            <th className="py-2">Service</th>
+            <th className="py-2">Sessions</th>
+            <th className="py-2 text-right">Catalog price</th>
+            {hasAdjustments && <th className="py-2 text-right">Adjustment</th>}
+            <th className="py-2 text-right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lineItems.map((li, i) => {
+            // A fully-billed package ("3 of 3") reads as meaningless on a
+            // finalized bill — just say "3 sessions". The fraction still
+            // communicates something true for the genuinely rare partial
+            // package invoice (fewer session dates than the package size).
+            const isPartial = li.sessionDates.length < li.sessionCount;
+            return (
+              <tr key={i} className="border-b border-[var(--border)] align-top">
+                <td className="py-2 font-medium text-[var(--ink)]">{li.serviceName}</td>
+                <td className="py-2 text-[var(--muted)]">
+                  {li.sessionCount > 1
+                    ? isPartial
+                      ? `${li.sessionDates.length} of ${li.sessionCount}`
+                      : `${li.sessionCount} sessions`
+                    : '1'}
+                  <div className="text-xs text-[var(--muted)]">{sessionDatesCellText(li)}</div>
                 </td>
-              )}
-              <td className="font-num py-2 text-right font-medium">{formatINR(li.totalPaise)}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td
-            colSpan={hasAdjustments ? 4 : 3}
-            className="py-3 text-right font-semibold text-[var(--ink)]"
-          >
-            Total
-          </td>
-          <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)]">
-            {formatINR(totalPaise)}
-          </td>
-        </tr>
-      </tfoot>
-    </table>
+                <td className="font-num py-2 text-right">{formatINR(li.catalogPricePaise)}</td>
+                {hasAdjustments && (
+                  <td className="font-num py-2 text-right">
+                    {li.adjustmentPaise !== 0 ? (
+                      <>
+                        {formatINR(li.adjustmentPaise)}
+                        {li.adjustmentReason && (
+                          <div className="text-xs text-[var(--muted)]">{li.adjustmentReason}</div>
+                        )}
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                )}
+                <td className="font-num py-2 text-right font-medium">{formatINR(li.totalPaise)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td
+              colSpan={hasAdjustments ? 4 : 3}
+              className="py-3 text-right font-semibold text-[var(--ink)]"
+            >
+              Total
+            </td>
+            <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)]">
+              {formatINR(totalPaise)}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
   );
 }
 
@@ -149,69 +155,71 @@ function LineItemsTable({
   totalPaise: number;
 }) {
   return (
-    <table className="mt-6 w-full text-sm">
-      <thead>
-        <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--muted)]">
-          <th className="py-2">Service</th>
-          <th className="py-2">Dates of service</th>
-          <th className="py-2">Sessions</th>
-          <th className="py-2 text-right">Rate</th>
-          {hasAdjustments && <th className="py-2 text-right">Adjustment</th>}
-          <th className="py-2 text-right">Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        {lineItems.map((li, i) => {
-          const caption = lineCaption(li);
-          const reasons =
-            li.adjustmentReasons ?? (li.adjustmentReason ? [li.adjustmentReason] : []);
-          return (
-            <tr key={i} className="border-b border-[var(--border)] align-top">
-              <td className="py-2 font-medium text-[var(--ink)]">
-                {li.serviceName}
-                {caption && (
-                  <div className="mt-0.5 text-xs font-normal text-[var(--muted)]">{caption}</div>
-                )}
-              </td>
-              <td className="py-2 text-xs text-[var(--muted)]">{sessionDatesCellText(li)}</td>
-              <td className="py-2 text-[var(--muted)]">{sessionsCellText(li)}</td>
-              <td className="font-num py-2 text-right">
-                {formatINR(lineRatePerSessionPaise(li))}
-                <span className="text-xs text-[var(--muted)]">/session</span>
-              </td>
-              {hasAdjustments && (
-                <td className="font-num py-2 text-right">
-                  {li.adjustmentPaise !== 0 ? (
-                    <>
-                      {formatINR(li.adjustmentPaise)}
-                      {reasons.length > 0 && (
-                        <div className="text-xs text-[var(--muted)]">{reasons.join(', ')}</div>
-                      )}
-                    </>
-                  ) : (
-                    '—'
+    <div className="mt-6 overflow-x-auto">
+      <table className="w-full min-w-[680px] text-sm">
+        <thead>
+          <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--muted)]">
+            <th className="py-2">Service</th>
+            <th className="py-2">Dates of service</th>
+            <th className="py-2">Sessions</th>
+            <th className="py-2 text-right">Rate</th>
+            {hasAdjustments && <th className="py-2 text-right">Adjustment</th>}
+            <th className="py-2 text-right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lineItems.map((li, i) => {
+            const caption = lineCaption(li);
+            const reasons =
+              li.adjustmentReasons ?? (li.adjustmentReason ? [li.adjustmentReason] : []);
+            return (
+              <tr key={i} className="border-b border-[var(--border)] align-top">
+                <td className="py-2 font-medium text-[var(--ink)]">
+                  {li.serviceName}
+                  {caption && (
+                    <div className="mt-0.5 text-xs font-normal text-[var(--muted)]">{caption}</div>
                   )}
                 </td>
-              )}
-              <td className="font-num py-2 text-right font-medium">{formatINR(li.totalPaise)}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td
-            colSpan={hasAdjustments ? 5 : 4}
-            className="py-3 text-right font-semibold text-[var(--ink)]"
-          >
-            Total
-          </td>
-          <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)]">
-            {formatINR(totalPaise)}
-          </td>
-        </tr>
-      </tfoot>
-    </table>
+                <td className="py-2 text-xs text-[var(--muted)]">{sessionDatesCellText(li)}</td>
+                <td className="py-2 text-[var(--muted)]">{sessionsCellText(li)}</td>
+                <td className="font-num py-2 text-right">
+                  {formatINR(lineRatePerSessionPaise(li))}
+                  <span className="text-xs text-[var(--muted)]">/session</span>
+                </td>
+                {hasAdjustments && (
+                  <td className="font-num py-2 text-right">
+                    {li.adjustmentPaise !== 0 ? (
+                      <>
+                        {formatINR(li.adjustmentPaise)}
+                        {reasons.length > 0 && (
+                          <div className="text-xs text-[var(--muted)]">{reasons.join(', ')}</div>
+                        )}
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                )}
+                <td className="font-num py-2 text-right font-medium">{formatINR(li.totalPaise)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td
+              colSpan={hasAdjustments ? 5 : 4}
+              className="py-3 text-right font-semibold text-[var(--ink)]"
+            >
+              Total
+            </td>
+            <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)]">
+              {formatINR(totalPaise)}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
   );
 }
 
@@ -322,7 +330,7 @@ export function InvoicePrintPage() {
     <div className="min-h-screen bg-[var(--paper)] print:bg-[var(--surface)]">
       <style>{`@page { size: ${paper}; margin: ${paper === 'A5' ? '10mm' : '16mm'}; }`}</style>
 
-      <div className="no-print mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
+      <div className="no-print mx-auto flex max-w-3xl flex-wrap items-center gap-2 px-4 py-3">
         <Link
           to={backTo ?? '/ledger'}
           search={backTab ? { tab: backTab } : undefined}
@@ -330,7 +338,7 @@ export function InvoicePrintPage() {
         >
           ← Back
         </Link>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex flex-wrap items-center gap-2 sm:gap-3">
           <select
             className={inputCls}
             value={paper}
@@ -421,12 +429,12 @@ export function InvoicePrintPage() {
 
       <div
         ref={contentRef}
-        className={`mx-auto max-w-3xl bg-[var(--surface)] p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm]' : 'print:max-w-[178mm]'}`}
+        className={`mx-auto max-w-3xl bg-[var(--surface)] p-4 sm:p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm]' : 'print:max-w-[178mm]'}`}
       >
         <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} />
 
         {/* Invoice meta + patient */}
-        <section className="mt-4 flex justify-between text-sm">
+        <section className="mt-4 flex flex-wrap justify-between gap-x-4 gap-y-2 text-sm">
           <div>
             <p className="font-display font-semibold text-[var(--ink)]">
               {invoice.patientSnapshot.name}
@@ -470,9 +478,9 @@ export function InvoicePrintPage() {
             <p className="mb-1.5 font-semibold uppercase tracking-wide text-[var(--muted)]">
               Clinical details
             </p>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
               {invoice.clinicalSnapshot.diagnosis && (
-                <p className="col-span-2">
+                <p className="sm:col-span-2">
                   <span className="text-[var(--muted)]">Diagnosis: </span>
                   {invoice.clinicalSnapshot.diagnosis}
                   {invoice.clinicalSnapshot.diagnosisIcdCode &&
@@ -496,7 +504,7 @@ export function InvoicePrintPage() {
                 </p>
               )}
               {invoice.clinicalSnapshot.treatmentPerformed && (
-                <p className="col-span-2">
+                <p className="sm:col-span-2">
                   <span className="text-[var(--muted)]">Treatment performed: </span>
                   {invoice.clinicalSnapshot.treatmentPerformed}
                 </p>
