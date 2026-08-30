@@ -461,10 +461,11 @@ export function VisitNoteLink({
       );
     }
     return (
-      <div className="flex flex-col items-start gap-0.5">
+      <div className="flex flex-wrap items-center gap-1">
         <span className={`whitespace-nowrap text-xs font-medium ${NOTE_STATUS_TEXT_COLOR[tone]}`}>
           {label}
         </span>
+        <span className="text-xs text-[var(--muted)]">·</span>
         <Link
           to="/patients/$patientId/notes/$noteId"
           params={{ patientId: data.patientId, noteId: data.consultationNoteId }}
@@ -553,7 +554,7 @@ export function VisitFeedbackLink({
   if (Date.now() - new Date(request.updatedAt).getTime() < RESEND_COOLDOWN_MS) {
     return (
       <span className="whitespace-nowrap text-xs text-[var(--moss)]" title="Feedback request sent">
-        ✓ Sent
+        ✓ Feedback
       </span>
     );
   }
