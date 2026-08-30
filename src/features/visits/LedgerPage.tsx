@@ -766,13 +766,30 @@ export function LedgerPage() {
                     <td className={td}>{formatDateDMY(p.lastVisitOn)}</td>
                     <td className={tdNum}>{p.daysSinceLastVisit}</td>
                     <td className={td}>
-                      <Link
-                        to="/ledger"
-                        search={{ patientId: p.patientId }}
-                        className="font-medium text-[var(--teal)] hover:underline"
-                      >
-                        View
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        {clinic.enablePatientComms && (
+                          <button
+                            type="button"
+                            className="whitespace-nowrap font-medium text-[var(--teal)] hover:underline"
+                            onClick={() =>
+                              void feedbackService.sendStalePackageReminder(
+                                p.patientName,
+                                clinic.name,
+                                p.serviceName
+                              )
+                            }
+                          >
+                            Send reminder
+                          </button>
+                        )}
+                        <Link
+                          to="/ledger"
+                          search={{ patientId: p.patientId }}
+                          className="font-medium text-[var(--teal)] hover:underline"
+                        >
+                          View
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -486,12 +486,13 @@ queued with a visible error.
 - Therapist comparison chart (off by default)
 - Billing staff restriction (on by default)
 
-### 9. Patient Communications (Phase 0–3)
+### 9. Patient Communications (Phase 0–4)
 
 Full spec/roadmap: `docs/HANDOFF-patient-comms.md`. Phase 0 (foundation),
-Phase 1 (visit "Ask for feedback"), Phase 2 (Requests → Feedback page), and
-Phase 3 (Google review nudge) have shipped; booking requests and
-re-engagement reminders are later phases, not yet built.
+Phase 1 (visit "Ask for feedback"), Phase 2 (Requests → Feedback page),
+Phase 3 (Google review nudge), and Phase 4 (stale-package/single-visit
+reminders) have shipped; booking requests are the remaining later phase,
+not yet built.
 
 - **`clinics.enable_patient_comms`** — module gate, off by default, same
   pattern as `clinicalDocsEnabled`/`enableExpectedToday`. Public token routes
@@ -615,6 +616,32 @@ re-engagement reminders are later phases, not yet built.
     so no separate admin/front-desk code path was needed despite the
     spec's send-table listing front desk as eligible to send: the rating
     genuinely isn't in their local Dexie to check against.
+- **Re-engagement reminders (Phase 4)** — "No new detection" per the
+  handoff doc: both surfaces reuse existing dashboard queries rather than
+  adding a new signal. Pure `shareTextViaWhatsApp` actions, no DB write, no
+  `message_log` entry, no booking link (public booking is a later phase,
+  nothing to link to yet) — same shape as the Google review nudge.
+  - **Stale packages** — a "Send reminder" button on `OpenPackageRow`s
+    where `stale` is already `true`, on both of that data's existing
+    homes: Workspace's Packages section (mobile card + desktop table) and
+    Ledger's "Due for follow-up" list (which is already stale-only, so no
+    extra `stale` check needed there). Gated on `clinic.enablePatientComms`.
+  - **Single-visit patients** — a "Send reminder" button next to the
+    existing `tel:` call link on Reports' single-visit-patients list
+    (`dashboardService.singleVisitPatients`), gated the same way plus
+    `p.phone` present — mirroring the existing call link's own gating,
+    even though the share itself doesn't target that number directly (see
+    below).
+  - **Deliberately not phone-targeted.** `SingleVisitPatientRow.phone` and
+    the `tel:` link already on that row could in principle build a
+    number-specific `wa.me/<digits>` deep link, but patient phone numbers
+    aren't stored in a guaranteed international format (no confirmed
+    country-code convention) — a malformed number there fails silently.
+    Every WhatsApp share in this module (feedback link, resend, Google
+    review, reminders) instead uses the same generic Web-Share-sheet
+    fallback (`shareTextViaWhatsApp`) and lets staff pick the recipient
+    themselves, consistent behavior across the whole feature rather than
+    a special-cased, riskier path for reminders alone.
 
 ---
 

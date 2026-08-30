@@ -116,5 +116,34 @@ export function createFeedbackService(repos: Repos) {
         'Ask for a Google review'
       );
     },
+
+    /**
+     * Slice 4: re-engagement nudge for a package that's gone quiet mid-way
+     * through. No new detection — reuses the existing `stale` flag on
+     * `OpenPackageRow` (Workspace/Ledger's own "Due for follow-up" lists)
+     * per the doc's own instruction. Pure share action, same as the Google
+     * review nudge — no DB write, no booking link (public booking is a
+     * later slice, so there's nothing to link to yet).
+     */
+    async sendStalePackageReminder(
+      patientName: string,
+      clinicName: string,
+      serviceName: string
+    ): Promise<void> {
+      await shareTextViaWhatsApp(
+        `Hi ${patientName}, we noticed it's been a while since your last ${serviceName} session at ${clinicName}. We'd love to see you again — reach out whenever you're ready to continue!`,
+        'Send reminder'
+      );
+    },
+
+    /** Slice 4: re-engagement nudge for a patient with exactly one visit,
+     *  no follow-up booked — reuses `dashboardService.singleVisitPatients`,
+     *  same "no new detection" reasoning as the stale-package reminder. */
+    async sendSingleVisitReminder(patientName: string, clinicName: string): Promise<void> {
+      await shareTextViaWhatsApp(
+        `Hi ${patientName}, thanks for visiting ${clinicName}! We hope you're doing well — let us know if you'd like to schedule a follow-up visit.`,
+        'Send reminder'
+      );
+    },
   };
 }

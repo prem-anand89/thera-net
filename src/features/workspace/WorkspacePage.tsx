@@ -490,13 +490,30 @@ export function WorkspacePage() {
                         {p.daysSinceLastVisit}d ago)
                       </span>
                     </div>
-                    <Link
-                      to="/visits/new"
-                      search={{ repeatVisitId: p.lastVisitId }}
-                      className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
-                    >
-                      Log visit
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      {p.stale && clinic.enablePatientComms && (
+                        <button
+                          type="button"
+                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                          onClick={() =>
+                            void feedbackService.sendStalePackageReminder(
+                              p.patientName,
+                              clinic.name,
+                              p.serviceName
+                            )
+                          }
+                        >
+                          Send reminder
+                        </button>
+                      )}
+                      <Link
+                        to="/visits/new"
+                        search={{ repeatVisitId: p.lastVisitId }}
+                        className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                      >
+                        Log visit
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -544,13 +561,30 @@ export function WorkspacePage() {
                         <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
                       </td>
                       <td className={td}>
-                        <Link
-                          to="/visits/new"
-                          search={{ repeatVisitId: p.lastVisitId }}
-                          className="text-xs font-medium text-[var(--teal)] hover:underline"
-                        >
-                          Log visit
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          {p.stale && clinic.enablePatientComms && (
+                            <button
+                              type="button"
+                              className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                              onClick={() =>
+                                void feedbackService.sendStalePackageReminder(
+                                  p.patientName,
+                                  clinic.name,
+                                  p.serviceName
+                                )
+                              }
+                            >
+                              Send reminder
+                            </button>
+                          )}
+                          <Link
+                            to="/visits/new"
+                            search={{ repeatVisitId: p.lastVisitId }}
+                            className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                          >
+                            Log visit
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
