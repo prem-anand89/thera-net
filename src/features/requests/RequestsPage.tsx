@@ -633,6 +633,27 @@ export function RequestsPage() {
                                     </button>
                                   </>
                                 )}
+                                {/* Same condition as Workspace's "Expected
+                                    today" — an appointment marked arrived
+                                    manually (no visit yet) still needs a
+                                    way to reach New Visit once it's no
+                                    longer "today" and has dropped off that
+                                    list; without this it was unreachable. */}
+                                {!a.visitId &&
+                                  a.status !== 'cancelled' &&
+                                  a.status !== 'no_show' && (
+                                    <Link
+                                      to="/visits/new"
+                                      search={{
+                                        appointmentId: a.id,
+                                        prefillName: a.patientName,
+                                        prefillPhone: a.patientPhone,
+                                      }}
+                                      className="whitespace-nowrap rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                                    >
+                                      Create visit
+                                    </Link>
+                                  )}
                               </div>
                             )}
                           </td>

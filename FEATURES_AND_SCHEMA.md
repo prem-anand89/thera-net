@@ -755,6 +755,18 @@ shipped ahead of anyone actually calling it — see its own bullet below.
     the one `NewVisitPage.tsx` calls right after a visit saves, when that
     visit was started via `?appointmentId=...` — sets `patient_id`,
     `visit_id`, and flips `status` to `arrived` in one call.
+  - **All five appointment-mutating RPCs (reschedule/no-show/cancel/
+    mark-arrived/link-visit) row-lock and check the appointment's current
+    status before acting**, same discipline as
+    `confirm_appointment_request`/`decline_appointment_request` already
+    had — found missing during a post-ship workflow review, not shipped
+    this way originally. Without it, two staff acting on one appointment
+    at once, a stale browser tab, or a double-click could flip an
+    already-arrived appointment (with a real linked visit) back to
+    `no_show`, resurrect a cancelled one via reschedule, or double-link a
+    second visit onto one appointment row, silently overwriting the first
+    `visit_id`. The UI already only offers each action from the right
+    states; this closes the gap server-side too.
   - **`NewVisitPage.tsx`'s existing `?prefillName=...` mechanism grew a
     `?prefillPhone=...` sibling** (feeds `newPatient.phone` the same way
     `prefillName` feeds `newPatient.name`) plus a new `?appointmentId=...`
@@ -785,7 +797,12 @@ shipped ahead of anyone actually calling it — see its own bullet below.
     (admin/front_desk only), "Create visit" (once `visit_id` is still
     unset). Reschedule is deliberately Requests-only, not offered inline
     on Workspace — a more deliberate action than a single click, better
-    suited to the dedicated management surface. A second banner (same
+    suited to the dedicated management surface. Requests → Bookings'
+    Appointments table carries the same "Create visit" condition (found
+    missing in review — an appointment manually marked arrived without a
+    visit yet had no way back to New Visit once it wasn't "today" anymore
+    and had dropped off Workspace's list; Requests' table has no
+    date-scoping, so it's the recovery path for that case). A second banner (same
     shape as Phase 2's "new feedback response" one) surfaces the pending-
     booking-request count for admin/front_desk, linking to
     `/requests?tab=bookings`.
