@@ -680,9 +680,22 @@ remain later, un-started phases.
     generic-error/IP-throttle discipline every public RPC in this module
     uses.
   - **`appointment_requests`** — one row per public submission: `name`,
-    `phone` (raw, unresolved against any patient), `preferred_
-    therapist_id` (nullable), `preferred_time_text`, `status`
+    `phone`, `email` (raw, unresolved against any patient), `preferred_
+    therapist_id` (nullable), `service_catalog_id` (nullable — which
+    service they think they want, informational only, never validated
+    against real capacity), `preferred_date` + `preferred_time_text`
+    (both plain preferences — **no availability checking against either**,
+    per the doc's "do not start here" on slots; front desk still picks
+    the real `scheduled_at` by hand at confirm), `status`
     (`pending|confirmed|declined`), `appointment_id` (set on confirm).
+    The form itself was redesigned mid-phase after reviewing a fuller
+    reference design (richer than the locked spec's plain "name, phone,
+    optional therapist, preferred day/time as text") — added email and
+    service as genuinely useful optional fields, and gave the date/time
+    preference a real date input plus a "flexible" quick-toggle, but
+    deliberately did not adopt that reference's "pick a date to see
+    available times" behavior, which implies real per-therapist slot
+    availability the doc reserves for a later, separate phase.
   - **`appointments`** — one row per confirmed expected attendance, **not**
     a billed visit. `patient_id` is **null from confirm until arrival** —
     identity is resolved exactly once, at arrival, reusing the existing
@@ -713,9 +726,20 @@ remain later, un-started phases.
     SELECT is admin/front_desk-only (matches who can reach the Bookings
     tab at all); `appointments` SELECT is clinic-member-wide, since it's
     the day list every role needs to see.
-  - **Ten RPCs**: three public (`get_booking_clinic_name`,
-    `list_booking_therapists`, `submit_appointment_request` — anon +
-    authenticated grants, rate-limited); seven staff-only
+  - **Both tables also needed `created_by`/`updated_by`, added in a
+    follow-up migration** (bug found live, not caught in review): the
+    shared `set_updated_at()` trigger was redefined by an earlier,
+    unrelated migration to unconditionally stamp `updated_by`/`created_by`
+    on every row it fires for — it never checks whether the table
+    actually has those columns. Every other synced staff table already
+    carried them; these two were the first to attach the trigger without
+    them, so any UPDATE (confirm, decline, reschedule, ...) failed with
+    `record "new" has no field "updated_by"` until the columns were
+    added, matching `feedback_requests`' own shape.
+  - **Eleven RPCs**: four public (`get_booking_clinic_name`,
+    `list_booking_therapists`, `list_booking_services`,
+    `submit_appointment_request` — anon + authenticated grants,
+    rate-limited); seven staff-only
     (`confirm_appointment_request` returns the new appointment id,
     `decline_appointment_request`, `reschedule_appointment`,
     `mark_appointment_no_show`, `cancel_appointment`,

@@ -29,7 +29,13 @@ function toDatetimeLocalValue(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function defaultScheduledAt(): string {
+/** Defaults the confirm form's datetime to the patient's own preferred
+ *  date (at a plain default hour) when they gave one — still entirely
+ *  editable, never auto-submitted; front desk always confirms a real
+ *  time by hand. Falls back to "an hour from now" when no preference
+ *  was given, same as before this had a preferredDate to work with. */
+function defaultScheduledAt(preferredDate: string | null): string {
+  if (preferredDate) return `${preferredDate}T10:00`;
   const d = new Date(Date.now() + 60 * 60 * 1000);
   return toDatetimeLocalValue(d.toISOString());
 }
@@ -99,6 +105,14 @@ export function RequestsPage() {
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
     [therapists]
   );
+  const catalog = useLiveQuery(
+    () => (canSeeBookings ? repos.catalog.list(clinic.id, true) : undefined),
+    [clinic.id, canSeeBookings]
+  );
+  const serviceNameById = useMemo(
+    () => new Map((catalog ?? []).map((s) => [s.id, s.name])),
+    [catalog]
+  );
 
   const rows = useMemo(
     () =>
@@ -136,7 +150,7 @@ export function RequestsPage() {
 
   // Confirm mini-form (one open at a time)
   const [confirmingId, setConfirmingId] = useState<UUID | null>(null);
-  const [confirmScheduledAt, setConfirmScheduledAt] = useState(defaultScheduledAt());
+  const [confirmScheduledAt, setConfirmScheduledAt] = useState(defaultScheduledAt(null));
   const [confirmTherapistId, setConfirmTherapistId] = useState('');
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -152,9 +166,13 @@ export function RequestsPage() {
   const [rescheduleValue, setRescheduleValue] = useState('');
   const [rescheduleBusy, setRescheduleBusy] = useState(false);
 
-  function startConfirm(requestId: UUID, preferredTherapistId: UUID | null) {
+  function startConfirm(
+    requestId: UUID,
+    preferredTherapistId: UUID | null,
+    preferredDate: string | null
+  ) {
     setConfirmingId(requestId);
-    setConfirmScheduledAt(defaultScheduledAt());
+    setConfirmScheduledAt(defaultScheduledAt(preferredDate));
     setConfirmTherapistId(preferredTherapistId ?? '');
     setConfirmError(null);
     setJustConfirmed(null);
@@ -337,13 +355,27 @@ export function RequestsPage() {
                           <div className="font-display text-sm font-medium text-[var(--ink)]">
                             {r.name}
                           </div>
-                          <div className="text-xs text-[var(--muted)]">{r.phone}</div>
+                          <div className="text-xs text-[var(--muted)]">
+                            {r.phone}
+                            {r.email && <> · {r.email}</>}
+                          </div>
+                          {r.serviceCatalogId && (
+                            <div className="text-xs text-[var(--muted)]">
+                              {serviceNameById.get(r.serviceCatalogId) ?? '—'}
+                            </div>
+                          )}
                           {r.preferredTherapistId && (
                             <div className="text-xs text-[var(--muted)]">
                               Preferred: {therapistNameById.get(r.preferredTherapistId) ?? '—'}
                             </div>
                           )}
-                          {r.preferredTimeText && (
+                          {r.preferredDate && (
+                            <div className="text-xs text-[var(--muted)]">
+                              Wants: {formatDateDMY(r.preferredDate)}
+                              {r.preferredTimeText && <> · {r.preferredTimeText}</>}
+                            </div>
+                          )}
+                          {!r.preferredDate && r.preferredTimeText && (
                             <div className="text-xs text-[var(--muted)]">
                               &ldquo;{r.preferredTimeText}&rdquo;
                             </div>
@@ -354,7 +386,9 @@ export function RequestsPage() {
                             <button
                               type="button"
                               className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
-                              onClick={() => startConfirm(r.id, r.preferredTherapistId)}
+                              onClick={() =>
+                                startConfirm(r.id, r.preferredTherapistId, r.preferredDate)
+                              }
                             >
                               Confirm
                             </button>
