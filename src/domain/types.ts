@@ -682,6 +682,8 @@ export interface AppointmentRequest {
   appointmentId: UUID | null;
   createdAt: string;
   updatedAt: string;
+  createdBy?: UUID | null;
+  updatedBy?: UUID | null;
 }
 
 export type AppointmentStatus = 'confirmed' | 'rescheduled' | 'no_show' | 'cancelled' | 'arrived';
@@ -714,6 +716,8 @@ export interface Appointment {
   previousScheduledAt: string | null;
   createdAt: string;
   updatedAt: string;
+  createdBy?: UUID | null;
+  updatedBy?: UUID | null;
 }
 
 /** What Health Valley actually paid Beyond Mechanics for one fiscal month. */
