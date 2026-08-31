@@ -678,7 +678,6 @@ export interface AppointmentRequest {
   phone: string;
   email: string | null;
   preferredTherapistId: UUID | null;
-  serviceCatalogId: UUID | null;
   /** Free text — reason for visit, symptoms, anything else the patient
    *  wants front desk to know. Distinct from `preferredTimeText`, which
    *  is purely about scheduling. */

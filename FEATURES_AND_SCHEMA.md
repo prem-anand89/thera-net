@@ -683,9 +683,7 @@ shipped ahead of anyone actually calling it — see its own bullet below.
     uses.
   - **`appointment_requests`** — one row per public submission: `name`,
     `phone`, `email` (raw, unresolved against any patient), `preferred_
-    therapist_id` (nullable), `service_catalog_id` (nullable — which
-    service they think they want, informational only, never validated
-    against real capacity), `notes` (free text — reason for visit,
+    therapist_id` (nullable), `notes` (free text — reason for visit,
     symptoms, anything else; deliberately its own column, not folded
     into the time preference — an earlier version of the form did that
     and silently dropped it whenever the patient didn't also tick
@@ -696,12 +694,18 @@ shipped ahead of anyone actually calling it — see its own bullet below.
     (`pending|confirmed|declined`), `appointment_id` (set on confirm).
     The form itself was redesigned mid-phase after reviewing a fuller
     reference design (richer than the locked spec's plain "name, phone,
-    optional therapist, preferred day/time as text") — added email and
-    service as genuinely useful optional fields, and gave the date/time
-    preference a real date input plus a "flexible" quick-toggle, but
-    deliberately did not adopt that reference's "pick a date to see
-    available times" behavior, which implies real per-therapist slot
-    availability the doc reserves for a later, separate phase.
+    optional therapist, preferred day/time as text") — added email as a
+    genuinely useful optional field, and gave the date/time preference a
+    real date input plus a "flexible" quick-toggle, but deliberately did
+    not adopt that reference's "pick a date to see available times"
+    behavior, which implies real per-therapist slot availability the doc
+    reserves for a later, separate phase. A `service_catalog_id` field
+    and its `list_booking_services` RPC were added in that same redesign
+    pass and then removed shortly after (dropped, not hidden — matching
+    this repo's convention of not leaving unused scaffolding behind):
+    the service picker didn't earn its place on a form patients fill out
+    unauthenticated, and front desk already asks reason-for-visit via the
+    `notes` field.
   - **`appointments`** — one row per confirmed expected attendance, **not**
     a billed visit. `patient_id` is **null from confirm until arrival** —
     identity is resolved exactly once, at arrival, reusing the existing
@@ -742,8 +746,8 @@ shipped ahead of anyone actually calling it — see its own bullet below.
     them, so any UPDATE (confirm, decline, reschedule, ...) failed with
     `record "new" has no field "updated_by"` until the columns were
     added, matching `feedback_requests`' own shape.
-  - **Eleven RPCs**: four public (`get_booking_clinic_name`,
-    `list_booking_therapists`, `list_booking_services`,
+  - **Ten RPCs**: three public (`get_booking_clinic_name`,
+    `list_booking_therapists`,
     `submit_appointment_request` — anon + authenticated grants,
     rate-limited); seven staff-only
     (`confirm_appointment_request` returns the new appointment id,

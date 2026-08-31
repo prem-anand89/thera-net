@@ -23,7 +23,7 @@ function tomorrowDate(): string {
  * shared with `/f/`).
  *
  * Visually modeled on a fuller reference design (name/phone/email,
- * preferred clinician, service, notes, date, time) — but deliberately
+ * preferred clinician, notes, date, time) — but deliberately
  * stops short of that reference's "pick a date to see available times"
  * behavior. Per the handoff doc, v1 has no slot picker / weekly
  * availability / conflict checking: "Do not start here." `preferredDate`
@@ -35,7 +35,6 @@ export function BookingFormPage() {
   const { clinicSlug } = useParams({ strict: false }) as { clinicSlug: string };
   const [clinicName, setClinicName] = useState<string | null>(null);
   const [therapists, setTherapists] = useState<{ id: UUID; name: string }[]>([]);
-  const [services, setServices] = useState<{ id: UUID; name: string; category: string }[]>([]);
   const [checking, setChecking] = useState(true);
   const [invalid, setInvalid] = useState(false);
 
@@ -43,7 +42,6 @@ export function BookingFormPage() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [preferredTherapistId, setPreferredTherapistId] = useState('');
-  const [serviceCatalogId, setServiceCatalogId] = useState('');
   const [notes, setNotes] = useState('');
   const [preferredDate, setPreferredDate] = useState('');
   const [flexible, setFlexible] = useState(false);
@@ -61,14 +59,12 @@ export function BookingFormPage() {
     }
     (async () => {
       try {
-        const [clinic, therapistList, serviceList] = await Promise.all([
+        const [clinic, therapistList] = await Promise.all([
           bookingService.getBookingClinicName(clinicSlug),
           bookingService.listBookingTherapists(clinicSlug),
-          bookingService.listBookingServices(clinicSlug),
         ]);
         setClinicName(clinic);
         setTherapists(therapistList);
-        setServices(serviceList);
       } catch {
         setInvalid(true);
       }
@@ -91,7 +87,6 @@ export function BookingFormPage() {
         phone.trim(),
         email.trim() || null,
         preferredTherapistId || null,
-        serviceCatalogId || null,
         notes.trim() || null,
         preferredDate || null,
         flexible ? 'Flexible' : preferredTimeText.trim() || null
@@ -129,13 +124,6 @@ export function BookingFormPage() {
       </Centered>
     );
   }
-
-  const servicesByCategory = services.reduce<Map<string, typeof services>>((map, s) => {
-    const list = map.get(s.category) ?? [];
-    list.push(s);
-    map.set(s.category, list);
-    return map;
-  }, new Map());
 
   return (
     <div className="mx-auto mt-10 max-w-md px-4 pb-10">
@@ -198,28 +186,6 @@ export function BookingFormPage() {
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
-              ))}
-            </select>
-          </label>
-        )}
-
-        {services.length > 0 && (
-          <label className="block">
-            <span className={labelCls}>Service · optional</span>
-            <select
-              className={inputCls}
-              value={serviceCatalogId}
-              onChange={(e) => setServiceCatalogId(e.target.value)}
-            >
-              <option value="">Choose a service…</option>
-              {[...servicesByCategory.entries()].map(([category, items]) => (
-                <optgroup key={category} label={category}>
-                  {items.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </optgroup>
               ))}
             </select>
           </label>

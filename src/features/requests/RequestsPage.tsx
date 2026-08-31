@@ -105,15 +105,6 @@ export function RequestsPage() {
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
     [therapists]
   );
-  const catalog = useLiveQuery(
-    () => (canSeeBookings ? repos.catalog.list(clinic.id, true) : undefined),
-    [clinic.id, canSeeBookings]
-  );
-  const serviceNameById = useMemo(
-    () => new Map((catalog ?? []).map((s) => [s.id, s.name])),
-    [catalog]
-  );
-
   const rows = useMemo(
     () =>
       (responses ?? [])
@@ -359,11 +350,6 @@ export function RequestsPage() {
                             {r.phone}
                             {r.email && <> · {r.email}</>}
                           </div>
-                          {r.serviceCatalogId && (
-                            <div className="text-xs text-[var(--muted)]">
-                              {serviceNameById.get(r.serviceCatalogId) ?? '—'}
-                            </div>
-                          )}
                           {r.notes && (
                             <div className="mt-0.5 text-xs text-[var(--ink)]">{r.notes}</div>
                           )}

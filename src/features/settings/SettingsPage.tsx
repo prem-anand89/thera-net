@@ -1563,18 +1563,21 @@ function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
           )}
         </Field>
         {bookingUrl && !slugInvalid && (
-          <Field label="">
-            <div className="flex items-center gap-2">
-              <span className="truncate text-xs text-[var(--muted)]">{bookingUrl}</span>
+          <div className="sm:col-span-2">
+            <span className="mb-1 block text-xs font-medium text-[var(--muted)]">
+              Your booking link
+            </span>
+            <div className="flex items-center justify-between gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5">
+              <span className="truncate font-mono text-xs text-[var(--ink)]">{bookingUrl}</span>
               <button
                 type="button"
-                className="whitespace-nowrap rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                className="whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
                 onClick={() => void copyBookingUrl()}
               >
                 {slugCopied ? 'Copied!' : 'Copy link'}
               </button>
             </div>
-          </Field>
+          </div>
         )}
       </div>
       <SectionSaveBar

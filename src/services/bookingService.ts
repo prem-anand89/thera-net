@@ -43,21 +43,12 @@ export const bookingService = {
     return (data as { id: UUID; name: string }[] | null) ?? [];
   },
 
-  async listBookingServices(slug: string): Promise<{ id: UUID; name: string; category: string }[]> {
-    const supabase = getSupabase();
-    if (!supabase) throw new Error('Supabase is not configured');
-    const { data, error } = await supabase.rpc('list_booking_services', { p_slug: slug });
-    if (error) throw new Error(error.message);
-    return (data as { id: UUID; name: string; category: string }[] | null) ?? [];
-  },
-
   async submitAppointmentRequest(
     slug: string,
     name: string,
     phone: string,
     email: string | null,
     preferredTherapistId: UUID | null,
-    serviceCatalogId: UUID | null,
     notes: string | null,
     preferredDate: string | null,
     preferredTimeText: string | null
@@ -70,7 +61,6 @@ export const bookingService = {
       p_phone: phone,
       p_email: email,
       p_preferred_therapist_id: preferredTherapistId,
-      p_service_catalog_id: serviceCatalogId,
       p_notes: notes,
       p_preferred_date: preferredDate,
       p_preferred_time_text: preferredTimeText,
