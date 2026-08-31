@@ -58,6 +58,7 @@ export const bookingService = {
     email: string | null,
     preferredTherapistId: UUID | null,
     serviceCatalogId: UUID | null,
+    notes: string | null,
     preferredDate: string | null,
     preferredTimeText: string | null
   ): Promise<void> {
@@ -70,6 +71,7 @@ export const bookingService = {
       p_email: email,
       p_preferred_therapist_id: preferredTherapistId,
       p_service_catalog_id: serviceCatalogId,
+      p_notes: notes,
       p_preferred_date: preferredDate,
       p_preferred_time_text: preferredTimeText,
     });

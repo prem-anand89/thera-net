@@ -92,12 +92,9 @@ export function BookingFormPage() {
         email.trim() || null,
         preferredTherapistId || null,
         serviceCatalogId || null,
+        notes.trim() || null,
         preferredDate || null,
-        flexible
-          ? notes.trim()
-            ? `Flexible — ${notes.trim()}`
-            : 'Flexible'
-          : preferredTimeText.trim() || null
+        flexible ? 'Flexible' : preferredTimeText.trim() || null
       );
       setDone(true);
     } catch (e) {
@@ -229,10 +226,10 @@ export function BookingFormPage() {
         )}
 
         <label className="block">
-          <span className={labelCls}>Notes · optional</span>
+          <span className={labelCls}>Reason for visit · optional</span>
           <textarea
             rows={2}
-            placeholder="Anything else we should know?"
+            placeholder="Briefly describe what's bothering you or why you're coming in"
             className={inputCls}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}

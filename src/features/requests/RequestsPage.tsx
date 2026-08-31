@@ -364,6 +364,9 @@ export function RequestsPage() {
                               {serviceNameById.get(r.serviceCatalogId) ?? '—'}
                             </div>
                           )}
+                          {r.notes && (
+                            <div className="mt-0.5 text-xs text-[var(--ink)]">{r.notes}</div>
+                          )}
                           {r.preferredTherapistId && (
                             <div className="text-xs text-[var(--muted)]">
                               Preferred: {therapistNameById.get(r.preferredTherapistId) ?? '—'}

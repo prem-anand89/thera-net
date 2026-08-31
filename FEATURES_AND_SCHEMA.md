@@ -683,7 +683,11 @@ remain later, un-started phases.
     `phone`, `email` (raw, unresolved against any patient), `preferred_
     therapist_id` (nullable), `service_catalog_id` (nullable — which
     service they think they want, informational only, never validated
-    against real capacity), `preferred_date` + `preferred_time_text`
+    against real capacity), `notes` (free text — reason for visit,
+    symptoms, anything else; deliberately its own column, not folded
+    into the time preference — an earlier version of the form did that
+    and silently dropped it whenever the patient didn't also tick
+    "flexible"), `preferred_date` + `preferred_time_text`
     (both plain preferences — **no availability checking against either**,
     per the doc's "do not start here" on slots; front desk still picks
     the real `scheduled_at` by hand at confirm), `status`

@@ -679,6 +679,10 @@ export interface AppointmentRequest {
   email: string | null;
   preferredTherapistId: UUID | null;
   serviceCatalogId: UUID | null;
+  /** Free text — reason for visit, symptoms, anything else the patient
+   *  wants front desk to know. Distinct from `preferredTimeText`, which
+   *  is purely about scheduling. */
+  notes: string | null;
   /** Real calendar date, informational only — not checked against any
    *  therapist's actual availability. See this file's own note on why
    *  there's no slot-checking logic anywhere in this module yet. */
