@@ -1,7 +1,13 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, backupService, therapistService, visitService } from '@/services';
+import {
+  repos,
+  backupService,
+  therapistService,
+  visitService,
+  whatsappBusinessService,
+} from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -22,6 +28,7 @@ import {
   type ReferringSourceItem,
   type Therapist,
   type TreatmentItem,
+  type UUID,
 } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
 import {
@@ -1477,6 +1484,7 @@ const BOOKING_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
  * the full spec describes arrive with later slices, not here.
  */
 function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const clinic = useClinic();
   const { form, set, save, cancel, dirty, saved, busy, error } =
     useClinicSectionForm<PatientCommsFields>(
       (c) => ({
@@ -1577,7 +1585,138 @@ function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
         onCancel={cancel}
         error={slugInvalid ? 'Fix the booking link before saving.' : error}
       />
+      <WhatsAppBusinessSubsection clinicId={clinic.id} />
     </SectionCard>
+  );
+}
+
+/**
+ * Patient Communications, Phase 9 (scaffold) — credential storage for a
+ * later, real WhatsApp Business Cloud API send path. Every send action in
+ * this module still opens the staff member's own WhatsApp via a share
+ * sheet today; nothing in the app calls the new `send-whatsapp-template`
+ * Edge Function yet (see that function's own doc comment). This just lets
+ * an admin park real Meta credentials here ahead of that wiring, so
+ * turning sending on later is a config step, not a code change.
+ *
+ * A standalone mini-form, not part of `PatientCommsFields`/
+ * `useClinicSectionForm` — `clinic_whatsapp_config` is a separate table
+ * with write-only semantics (the access token never round-trips back to
+ * the client), so it doesn't fit the "read the clinic row, diff, save"
+ * shape that hook is built for.
+ */
+function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
+  const [expanded, setExpanded] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [enabled, setEnabled] = useState(false);
+  const [phoneNumberId, setPhoneNumberId] = useState('');
+  const [hasToken, setHasToken] = useState(false);
+  const [accessTokenInput, setAccessTokenInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!expanded || loaded) return;
+    void whatsappBusinessService
+      .getConfigStatus(clinicId)
+      .then((status) => {
+        if (status) {
+          setEnabled(status.enabled);
+          setPhoneNumberId(status.phoneNumberId ?? '');
+          setHasToken(status.hasToken);
+        }
+        setLoaded(true);
+      })
+      .catch((e) => setError(toFriendlyMessage(e)));
+  }, [expanded, loaded, clinicId]);
+
+  async function onSave() {
+    setBusy(true);
+    setError(null);
+    try {
+      await whatsappBusinessService.setConfig(
+        clinicId,
+        phoneNumberId.trim() || null,
+        accessTokenInput.trim() || null,
+        enabled
+      );
+      if (accessTokenInput.trim()) setHasToken(true);
+      setAccessTokenInput('');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="mt-4 border-t border-[var(--border)] pt-4">
+      <button
+        type="button"
+        className="text-sm font-medium text-[var(--muted)] hover:text-[var(--ink)]"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {expanded ? '▾' : '▸'} WhatsApp Business API (advanced)
+      </button>
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-[var(--muted)]">
+            Sends every message from this clinic&rsquo;s own WhatsApp number instead of a staff
+            member&rsquo;s phone — needs a Meta Business App, a verified phone number, and
+            Meta-approved message templates set up outside this app first.
+          </p>
+          {!loaded ? (
+            <p className="text-xs text-[var(--muted)]">Loading…</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Enable">
+                  <BoolToggle value={enabled} onChange={setEnabled} />
+                </Field>
+                <Field label="Status">
+                  <span className="text-xs text-[var(--muted)]">
+                    {hasToken ? 'Connected ✓' : 'Not connected'}
+                  </span>
+                </Field>
+                <Field label="Phone number ID">
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="Meta phone_number_id"
+                    value={phoneNumberId}
+                    onChange={(e) => setPhoneNumberId(e.target.value)}
+                  />
+                </Field>
+                <Field label="Access token">
+                  <input
+                    type="password"
+                    className={inputCls}
+                    placeholder={
+                      hasToken ? '•••• (leave blank to keep the current one)' : 'Meta access token'
+                    }
+                    value={accessTokenInput}
+                    onChange={(e) => setAccessTokenInput(e.target.value)}
+                  />
+                </Field>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="rounded-full bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                  onClick={() => void onSave()}
+                >
+                  {busy ? 'Saving…' : saved ? 'Saved!' : 'Save'}
+                </button>
+                {error && <p className="text-xs text-[var(--rust)]">{error}</p>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

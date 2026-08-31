@@ -486,7 +486,7 @@ queued with a visible error.
 - Therapist comparison chart (off by default)
 - Billing staff restriction (on by default)
 
-### 9. Patient Communications (Phase 0–5)
+### 9. Patient Communications (Phase 0–5, plus a Phase 9 scaffold)
 
 Full spec/roadmap: `docs/HANDOFF-patient-comms.md`. Phase 0 (foundation),
 Phase 1 (visit "Ask for feedback"), Phase 2 (Requests → Feedback page),
@@ -494,8 +494,10 @@ Phase 3 (Google review nudge), Phase 4 (stale-package/single-visit
 reminders), and Phase 5 (public booking → confirmed appointments →
 Workspace "Expected today", folding in the doc's own Phase 6
 reschedule/no-show/cancel actions since they share the same schema/RPC
-surface) have shipped. Weekly availability/slot picker and analytics
-remain later, un-started phases.
+surface) have shipped. Weekly availability/slot picker (Phase 7) and
+analytics (Phase 8) remain later, un-started phases. Phase 9's WhatsApp
+Business Cloud API has a **credential-storage + Edge Function scaffold**
+shipped ahead of anyone actually calling it — see its own bullet below.
 
 - **`clinics.enable_patient_comms`** — module gate, off by default, same
   pattern as `clinicalDocsEnabled`/`enableExpectedToday`. Public token routes
@@ -791,15 +793,67 @@ remain later, un-started phases.
     communications section (client-validated lowercase-alphanumeric-plus-
     hyphens pattern; the DB only enforces uniqueness) with a "Copy link"
     button, alongside the existing module toggle and Google review URL.
-  - **`message_log` stays unwired, same as every other Phase 1-4 send
-    action.** Despite `message_log_insert` RLS being ready since Phase 0,
-    no send action in this module — not the five from Phases 1-4, not
-    this phase's confirmation/therapist-notify sends — actually writes a
-    row; there's no Dexie table or repo for it yet. Wiring it for just
-    this phase's two new sends while five existing ones still skip it
-    would be inconsistent rather than forward-thinking; this is a
-    pre-existing, module-wide gap better closed in one pass across all
-    seven send actions than piecemeal.
+  - **`message_log` stays unwired on the client, same as every other
+    Phase 1-4 send action.** Despite `message_log_insert` RLS being ready
+    since Phase 0, no *client-triggered* send action in this module — not
+    the five from Phases 1-4, not this phase's confirmation/
+    therapist-notify sends — actually writes a row; there's no Dexie
+    table or repo for it. Wiring it for just this phase's two new sends
+    while five existing ones still skip it would be inconsistent rather
+    than forward-thinking; this is a pre-existing, module-wide gap better
+    closed in one pass across all seven send actions than piecemeal. (The
+    Phase 9 scaffold below finally gives `message_log` its first real
+    writer — but only for sends that go through it, server-side; the
+    share-sheet path's gap is unchanged.)
+- **WhatsApp Business Cloud API — scaffold only (Phase 9, partial)** —
+  built ahead of the clinic actually having Meta credentials, so that
+  turning real sending on later is a config step, not a code change.
+  **Nothing in the app calls this yet** — every existing send action
+  (all seven, feedback link through booking confirmation/notify) still
+  opens the staff member's own WhatsApp via a share sheet, unchanged.
+  - **`clinic_whatsapp_config`** — `phone_number_id`, `access_token`
+    (a real Meta secret), `enabled`. Carries **no SELECT policy for any
+    client role at all** (RLS enabled, zero policies) — only
+    `service_role`, used exclusively inside the new Edge Function below,
+    can ever read it. Two RPCs give the client everything it legitimately
+    needs without exposing the token: `set_whatsapp_config(...)`
+    (admin-only write; a `null` access token argument leaves the stored
+    one untouched, so re-saving the phone number ID or flipping `enabled`
+    doesn't force re-entering the secret) and
+    `get_whatsapp_config_status(...)` (admin-only read of `enabled` /
+    `phone_number_id` / `has_token: boolean` — never the token itself).
+  - **`supabase/functions/send-whatsapp-template/index.ts`** — the one
+    place in the app that would ever call Meta's Graph API
+    (`https://graph.facebook.com/v20.0/{phone_number_id}/messages`),
+    structurally mirroring `invite-therapist/index.ts` (JWT-verified
+    caller, a `clinic_members` membership check, a service-role client
+    for the privileged read). Template-shaped from the start — the
+    caller supplies `templateName`/`languageCode`/`bodyParams`, never
+    freeform text — because Meta requires an approved template for any
+    business-initiated message outside a 24h customer-service window;
+    this function has no opinion on what a given clinic's approved
+    template actually says. Returns `{ configured: false }` (not an
+    error) when the clinic has no config row or hasn't enabled it — the
+    signal a future client-side wrapper would use to fall back to the
+    share sheet. On a successful send, writes a `message_log` row
+    (`channel: 'wa_business_api'`) — see the note above.
+  - **Settings** gained a collapsed-by-default "WhatsApp Business API
+    (advanced)" sub-block in the Patient communications section
+    (`WhatsAppBusinessSubsection` in `SettingsPage.tsx`) — enable toggle,
+    phone number ID, and a password-type access-token field that's never
+    re-populated with the real value, only a "Connected ✓" / "Not
+    connected" status line. Its own small save/status state, not part of
+    the section's shared `useClinicSectionForm` dirty-tracking — this is
+    a separate table with write-only semantics, not a few more `Clinic`
+    columns.
+  - **Explicitly not done in this pass**: nothing in `feedbackService.ts`
+    or `bookingService.ts` calls `send-whatsapp-template`. Wiring the
+    six existing send call sites to try it (falling back to the share
+    sheet when `configured: false`) is a later, small follow-up — once
+    the user has a real Meta phone number ID, access token, and at least
+    one approved template name to test each send kind against. Guessing
+    at a template's variable shape now would be unverifiable,
+    silently-breakable configuration the moment the toggle is flipped on.
 
 ---
 
