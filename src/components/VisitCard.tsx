@@ -155,6 +155,12 @@ export interface VisitCardData {
   canEdit?: boolean;
   canSplit?: boolean;
   hasSplit?: boolean;
+  /** The assisting therapist's share, set together with `hasSplit` — the
+   *  row previously only showed *whether* a split existed (via the kebab
+   *  menu's "Edit split" vs "Split revenue" label), with no indication of
+   *  the percentage or who it went to short of opening that dialog. */
+  sharedPct?: number | null;
+  sharedTherapistName?: string | null;
   canDelete: boolean;
   /** True when this visit is flagged for a clinical note that hasn't been completed yet. */
   needsNote?: boolean;
@@ -491,7 +497,14 @@ function VisitCardDetails({ data }: { data: VisitCardData }) {
     <div className="mt-1.5 space-y-1">
       {data.therapistName && (
         <CardDetailRow label="Therapist">
-          <TherapistPill>{data.therapistName}</TherapistPill>
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <TherapistPill>{data.therapistName}</TherapistPill>
+            {data.hasSplit && data.sharedPct != null && (
+              <Pill tone="slate">
+                {data.sharedPct}% → {data.sharedTherapistName ?? 'colleague'}
+              </Pill>
+            )}
+          </span>
         </CardDetailRow>
       )}
       {data.condition && <CardDetailRow label="Condition">{data.condition}</CardDetailRow>}
@@ -847,7 +860,14 @@ function VisitTable({
                     case 'therapist':
                       return (
                         <td key={key} className={td}>
-                          <TherapistPill>{row.therapistName}</TherapistPill>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <TherapistPill>{row.therapistName}</TherapistPill>
+                            {row.hasSplit && row.sharedPct != null && (
+                              <Pill tone="slate">
+                                {row.sharedPct}% → {row.sharedTherapistName ?? 'colleague'}
+                              </Pill>
+                            )}
+                          </div>
                         </td>
                       );
                     case 'condition':
