@@ -59,26 +59,16 @@ export function treatmentsDisplayText(
   return parts.join(' — ') || '—';
 }
 
-/** Fork glyph for the shared-split line under a therapist's name — same
- *  minimal stroke-icon language as Shell.tsx's nav icons (currentColor,
- *  ~1.4px stroke, round caps, no fill). */
+/** Two-tone pie-split glyph for the shared-split line under a therapist's
+ *  name — teal (the primary therapist, same hue as TherapistPill) meeting
+ *  amber (the colleague getting the rest) across a diameter, reading as
+ *  "this bill's split into two" at a glance rather than needing the
+ *  fraction spelled out to register. */
 function IconSplit({ className }: { className?: string }) {
   return (
-    <svg
-      width="11"
-      height="11"
-      viewBox="0 0 12 12"
-      fill="none"
-      aria-hidden="true"
-      className={className}
-    >
-      <path
-        d="M6 10V7M6 7L2.5 3M6 7L9.5 3"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true" className={className}>
+      <path d="M6 1A5 5 0 006 11Z" fill="var(--teal)" />
+      <path d="M6 1A5 5 0 016 11Z" fill="var(--amber)" />
     </svg>
   );
 }
@@ -86,10 +76,12 @@ function IconSplit({ className }: { className?: string }) {
 /** Compact "N% → colleague" line shown under a therapist's name when a
  *  visit's revenue is split — stacked below rather than beside the name
  *  pill so a long colleague name can't widen the row/column; wraps within
- *  its own line if it must instead. */
+ *  its own line if it must instead. Amber to match the icon's "shared"
+ *  half, distinguishing it at a glance from the plain grey metadata
+ *  (dates, session counts) elsewhere in the same card. */
 function SharedSplitLine({ pct, name }: { pct: number; name: string }) {
   return (
-    <span className="inline-flex max-w-[9rem] items-center gap-1 text-[11px] leading-tight text-[var(--muted)]">
+    <span className="inline-flex max-w-[9rem] items-center gap-1 text-[11px] leading-tight text-[var(--amber)]">
       <IconSplit className="shrink-0" />
       <span className="truncate" title={`${pct}% → ${name}`}>
         {pct}% → {name}
