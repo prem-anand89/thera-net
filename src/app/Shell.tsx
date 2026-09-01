@@ -9,10 +9,11 @@ import {
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, ALL_SYNCED_TABLES } from '@/lib/db';
-import { getSupabase, publicLogoUrl } from '@/lib/supabase';
+import { publicLogoUrl } from '@/lib/supabase';
 import { syncEngine } from '@/sync/engine';
 import { syncStatus } from '@/sync/status';
 import { useSession } from './useSession';
+import { signOutSafely } from './signOut';
 import { useClinicRole, CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
 import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
@@ -245,6 +246,14 @@ export function Shell() {
       for (const table of ALL_SYNCED_TABLES) void db.table(table).clear();
       void db.outbox.clear();
       void db.meta.clear();
+      // syncStatus is a module-lifetime singleton, not scoped to this
+      // session — without resetting it, a second account signing in on the
+      // same device (no full page reload) would still see the PREVIOUS
+      // account's lastSyncAt, which the zero-clinics gate below reads as
+      // "this account's sync has already settled," possibly showing
+      // CreateClinicForm before the new account's real clinics have
+      // actually pulled.
+      syncStatus.reset();
     }
   }, [session, loading]);
 
@@ -625,7 +634,9 @@ function AccountMenu({
           {initialsFor(name)}
         </span>
         <span className="hidden min-w-0 flex-col items-start sm:flex">
-          <span className="max-w-[9rem] truncate text-xs font-medium text-[var(--ink)]">{name}</span>
+          <span className="max-w-[9rem] truncate text-xs font-medium text-[var(--ink)]">
+            {name}
+          </span>
           {currentClinic && (
             <span className="max-w-[9rem] truncate text-[10px] text-[var(--muted)]">
               {currentClinic.name}
@@ -748,7 +759,7 @@ function AccountMenu({
               <button
                 type="button"
                 className="flex w-full rounded-lg px-2.5 py-2 text-left text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
-                onClick={() => getSupabase()?.auth.signOut()}
+                onClick={() => void signOutSafely()}
               >
                 Sign out
               </button>
