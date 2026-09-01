@@ -221,6 +221,15 @@ export function Shell() {
   );
 
   useEffect(() => {
+    // `loading` is true (and `session` is still its `null` initializer) for
+    // one render on every mount, before the async getSession() call has
+    // actually resolved — that's a placeholder, not a confirmed sign-out.
+    // Without this guard, that transient null fired the clear branch below
+    // on every single app launch/reload, wiping the outbox (any local
+    // writes — e.g. a newly added patient — not yet pushed to the server)
+    // before the real session even had a chance to load, silently and
+    // permanently discarding unsynced work.
+    if (loading) return;
     if (session) {
       syncEngine.start();
       syncEngine.schedule(0);
@@ -237,7 +246,7 @@ export function Shell() {
       void db.outbox.clear();
       void db.meta.clear();
     }
-  }, [session]);
+  }, [session, loading]);
 
   // Default the active clinic to the first membership once data arrives,
   // and repair a stale pointer — `activeClinicId` can be set to an id that
