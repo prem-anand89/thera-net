@@ -10,7 +10,6 @@ import { CLINIC_ROLE_LABELS, type ClinicRole } from '@/app/useClinicRole';
 import { PLAN_TIER_LABELS, minimumTierFor, type PlanFeature } from '@/domain/plans';
 import { getSupabase, publicTherapistPhotoUrl, publicLogoUrl } from '@/lib/supabase';
 import { resizeImageToBlob } from '@/lib/resizeImage';
-import { SUPABASE_URL } from '@/lib/env';
 import { db } from '@/lib/db';
 import { formatINR } from '@/domain/money';
 import { MONTH_NAMES } from '@/domain/fiscalYear';
@@ -2467,34 +2466,39 @@ function Therapists() {
         throw new Error('Not authenticated');
       }
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/invite-therapist`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.data.session.access_token}`,
-        },
-        body: JSON.stringify({
-          clinicId: clinic.id,
-          email: inviteEmail.trim(),
-          role: inviteRole,
-          name: inviteName.trim(),
-          redirectOrigin: window.location.origin,
-        }),
-      });
+      // supabase.functions.invoke attaches apikey + Authorization correctly;
+      // a hand-rolled fetch to /functions/v1/... often omits apikey and can
+      // fail at the gateway before invite-therapist ever runs.
+      const { data: result, error: invokeError } = await supabase.functions.invoke(
+        'invite-therapist',
+        {
+          body: {
+            clinicId: clinic.id,
+            email: inviteEmail.trim(),
+            role: inviteRole,
+            name: inviteName.trim(),
+            redirectOrigin: window.location.origin,
+          },
+        }
+      );
 
-      const result = (await response.json()) as {
+      if (invokeError) {
+        throw new Error(invokeError.message);
+      }
+
+      const payload = result as {
         success?: boolean;
         message?: string;
         warning?: string;
         error?: string;
-      };
+      } | null;
 
-      if (!response.ok || result.error) {
-        throw new Error(result.error || `Request failed with status ${response.status}`);
+      if (payload?.error) {
+        throw new Error(payload.error);
       }
 
-      const baseMessage = result.message || `Invitation sent to ${inviteEmail}`;
-      setInviteSuccess(result.warning ? `${baseMessage}. ${result.warning}` : baseMessage);
+      const baseMessage = payload?.message || `Invitation sent to ${inviteEmail}`;
+      setInviteSuccess(payload?.warning ? `${baseMessage}. ${payload.warning}` : baseMessage);
       setInviteEmail('');
       setInviteName('');
       setInviteRole('therapist');

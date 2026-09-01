@@ -10,3 +10,11 @@ schemas = ["public", "storage"]
 
 [auth]
 site_url = "http://localhost:5173"
+
+# invite-therapist validates the caller's JWT inside the handler (admin check).
+# verify_jwt must be off so the browser's CORS OPTIONS preflight — which never
+# carries Authorization — reaches the handler; without this, deploys default
+# verify_jwt=true and every invite from the browser fails before the function
+# runs (stuck "Sending…" or a CORS error, no invite email).
+[functions.invite-therapist]
+verify_jwt = false
