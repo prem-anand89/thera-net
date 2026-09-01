@@ -555,7 +555,7 @@ function VisitCardDetails({ data }: { data: VisitCardData }) {
     <div className="mt-1.5 space-y-1">
       {data.therapistName && (
         <CardDetailRow label="Therapist">
-          <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
             <TherapistPill>{data.therapistName}</TherapistPill>
             {data.hasSplit && data.sharedPct != null && (
               <SharedSplitLine
