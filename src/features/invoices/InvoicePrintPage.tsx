@@ -4,6 +4,7 @@ import type { InvoicePrintBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
+import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { amountInWords } from '@/domain/amountInWords';
 import { formatDateDMY } from '@/domain/fiscalYear';
@@ -225,6 +226,7 @@ function LineItemsTable({
 
 export function InvoicePrintPage() {
   const clinic = useClinic();
+  const { canBill } = usePermissions();
   const { invoiceId } = useParams({ strict: false }) as { invoiceId: string };
   const { from: backTo, tab: backTab } = useSearch({ strict: false }) as {
     from?: InvoicePrintBackTarget;
@@ -358,12 +360,17 @@ export function InvoicePrintPage() {
           >
             {sharing ? 'Preparing…' : 'Share via WhatsApp'}
           </button>
-          {!supersededBy && (
+          {/* update_invoice_clinical_details()/amend_invoice() both reject a
+              plain therapist when invoicingAccess is 'billing_staff' — canBill
+              mirrors that exact rule (see usePermissions.ts). Without this
+              gate, the buttons rendered fully clickable for every role and
+              only failed with an opaque RPC error once submitted. */}
+          {!supersededBy && canBill && (
             <button type="button" className={btnSecondary} onClick={() => setEditingDetails(true)}>
               Edit details
             </button>
           )}
-          {!supersededBy && (
+          {!supersededBy && canBill && (
             <button type="button" className={btnSecondary} onClick={() => setAmending(true)}>
               Amend this invoice
             </button>
