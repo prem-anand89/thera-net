@@ -2,10 +2,19 @@ import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, visitService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
-import { paiseToRupees, rupeesToPaise } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import type { UUID } from '@/domain/types';
 import { Field, inputCls, btnPrimary, btnSecondary, MultiToggle } from '@/components/ui';
+import {
+  BillAdjustmentFields,
+  billAdjustmentFromFields,
+} from '@/components/BillAdjustmentFields';
+import {
+  inferBillAdjustment,
+  computeAdjustedBillPaise,
+  type BillAdjustmentMode,
+  type BillAdjustmentValueType,
+} from '@/domain/billAdjustment';
 
 /** Edits a visit's billing, therapist assignment, and clinical notes.
  *  If the visit is invoiced, only clinical fields (condition, treatmentNotes)
@@ -46,7 +55,9 @@ export function EditVisitModal({
   const [condition, setCondition] = useState('');
   const [treatmentNotes, setTreatmentNotes] = useState('');
   const [treatmentIds, setTreatmentIds] = useState<string[]>([]);
-  const [billRupees, setBillRupees] = useState('');
+  const [adjustmentMode, setAdjustmentMode] = useState<BillAdjustmentMode>('none');
+  const [adjustmentValueType, setAdjustmentValueType] = useState<BillAdjustmentValueType>('amount');
+  const [adjustmentValue, setAdjustmentValue] = useState('');
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -58,7 +69,10 @@ export function EditVisitModal({
     setCondition(visit.condition ?? '');
     setTreatmentNotes(visit.treatmentNotes ?? '');
     setTreatmentIds(visit.treatmentIds ?? []);
-    setBillRupees(paiseToRupees(visit.actualBillPaise).toString());
+    const inferred = inferBillAdjustment(visit.catalogPricePaise, visit.actualBillPaise);
+    setAdjustmentMode(inferred.mode);
+    setAdjustmentValueType(inferred.valueType);
+    setAdjustmentValue(inferred.value > 0 ? String(inferred.value) : '');
     setAdjustmentReason(visit.adjustmentReason ?? '');
     setLoaded(true);
   }, [visit, loaded]);
@@ -66,10 +80,18 @@ export function EditVisitModal({
   if (!visit) return null;
 
   const frozen = visit.invoiceId !== null;
+  const billPaise = computeAdjustedBillPaise(
+    visit.catalogPricePaise,
+    billAdjustmentFromFields(adjustmentMode, adjustmentValueType, adjustmentValue)
+  );
+  const adjustmentPaise = billPaise - visit.catalogPricePaise;
 
   async function submit() {
     setBusy(true);
     try {
+      if (!frozen && adjustmentPaise !== 0 && !adjustmentReason.trim()) {
+        throw new Error('Enter a reason for the bill adjustment');
+      }
       await visitService.updateBilling(
         visitId,
         frozen
@@ -79,8 +101,8 @@ export function EditVisitModal({
               treatmentIds,
             }
           : {
-              actualBillPaise: rupeesToPaise(Number(billRupees)),
-              adjustmentReason: adjustmentReason.trim() || null,
+              actualBillPaise: billPaise,
+              adjustmentReason: adjustmentPaise !== 0 ? adjustmentReason.trim() : null,
               therapistId,
               visitDate,
               condition: condition.trim() || null,
@@ -152,25 +174,19 @@ export function EditVisitModal({
 
           {!frozen && (
             <>
-              <Field label="Bill amount (₹)">
-                <input
-                  type="number"
-                  className={inputCls}
-                  value={billRupees}
-                  onChange={(e) => setBillRupees(e.target.value)}
-                  step="0.01"
-                  min="0"
-                />
-              </Field>
-
-              <Field label="Adjustment reason">
-                <input
-                  className={inputCls}
-                  value={adjustmentReason}
-                  onChange={(e) => setAdjustmentReason(e.target.value)}
-                  placeholder="Required if bill differs from catalog price"
-                />
-              </Field>
+              <BillAdjustmentFields
+                catalogPricePaise={visit.catalogPricePaise}
+                catalogLabel={catalogItem ? `Catalog — ${catalogItem.name}` : 'Catalog price'}
+                mode={adjustmentMode}
+                valueType={adjustmentValueType}
+                value={adjustmentValue}
+                reason={adjustmentReason}
+                onModeChange={setAdjustmentMode}
+                onValueTypeChange={setAdjustmentValueType}
+                onValueChange={setAdjustmentValue}
+                onReasonChange={setAdjustmentReason}
+                continuationSession={visit.catalogPricePaise === 0}
+              />
 
               <Field label="Therapist">
                 <select

@@ -20,7 +20,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - Fully offline-supported via collision retry loop
   - Prefix configurable per clinic in Settings (defaults to 'W')
 - **Visit entry** with catalog price autofill
-- **Price override** with mandatory adjustment reason
+- **Discount or extra** on new visits — by fixed amount or percent, with mandatory adjustment reason (stored as `adjustment_paise` on the visit)
 - **Package session tracking** (1/3, 2/3, etc.) with ₹0 continuations for subsequent sessions
 - **Reference panel** showing patient's last visit and open-package progress
 
