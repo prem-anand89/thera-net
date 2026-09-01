@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, backupService, therapistService, visitService } from '@/services';
@@ -11,16 +11,11 @@ import { PLAN_TIER_LABELS, minimumTierFor, type PlanFeature } from '@/domain/pla
 import { getSupabase, publicTherapistPhotoUrl, publicLogoUrl } from '@/lib/supabase';
 import { resizeImageToBlob } from '@/lib/resizeImage';
 import { db } from '@/lib/db';
-import { formatINR } from '@/domain/money';
 import { MONTH_NAMES } from '@/domain/fiscalYear';
 import {
   clinicShareLabels,
-  effectivePricePerSession,
-  type CatalogItem,
   type Clinic,
-  type ReferringSourceItem,
   type Therapist,
-  type TreatmentItem,
 } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
 import {
@@ -29,17 +24,13 @@ import {
   btnPrimary,
   btnSecondary,
   ErrorNote,
-  RupeeInput,
   SectionCard,
   ConfirmDialog,
-  th,
-  thNum,
-  td,
-  tdNum,
   InfoTip,
   Pill,
   StatTile,
 } from '@/components/ui';
+import { CatalogSection, type CatalogView } from './CatalogSection';
 import { toFriendlyMessage } from '@/lib/errors';
 import {
   FirstWeekChecklist,
@@ -54,9 +45,7 @@ type SectionKey =
   | 'billing'
   | 'partner'
   | 'team'
-  | 'services'
-  | 'treatments'
-  | 'referrals'
+  | 'catalog'
   | 'data';
 
 /**
@@ -71,7 +60,7 @@ type SectionKey =
 const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
   { label: 'Account', keys: ['plan'] },
   { label: 'Clinic', keys: ['profile', 'billing', 'partner'] },
-  { label: 'People & services', keys: ['team', 'services', 'treatments', 'referrals'] },
+  { label: 'People & services', keys: ['team', 'catalog'] },
   { label: 'System', keys: ['data'] },
 ];
 
@@ -112,22 +101,10 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
     accent: 'moss',
   },
   {
-    key: 'services',
-    label: 'Services',
-    description: 'Catalog of billable services and package prices.',
+    key: 'catalog',
+    label: 'Catalog',
+    description: 'Billing packages, treatments performed, and patient referral sources.',
     accent: 'teal',
-  },
-  {
-    key: 'treatments',
-    label: 'Treatments',
-    description: 'Treatment types tracked per visit, independent of billing.',
-    accent: 'moss',
-  },
-  {
-    key: 'referrals',
-    label: 'Referral sources',
-    description: 'Channels shown when adding or editing a patient.',
-    accent: 'rust',
   },
   {
     key: 'data',
@@ -157,9 +134,7 @@ const SECTION_ICON_PATHS: Record<SectionKey, string> = {
   billing: 'M2.5 6.5L8 2.8l5.5 3.7M3.7 5.8V12a1 1 0 001 1h6.6a1 1 0 001-1V5.8',
   partner: 'M8 2.5l1.4 3.1 3.4.4-2.5 2.3.7 3.4L8 10l-3 1.7.7-3.4-2.5-2.3 3.4-.4L8 2.5z',
   team: 'M2.3 13c.4-2.5 2-3.9 3.9-3.9s3.5 1.4 3.9 3.9M9.9 9.5c1.6.2 2.8 1.4 3.1 3.5',
-  services: 'M3 4h10M3 8h10M3 12h6',
-  treatments: 'M5 3l6 10M11 3l-6 10M3 8h10',
-  referrals: 'M4 13V3l4 2.5L12 3v10M4 8h8',
+  catalog: 'M3 4h10M3 8h10M3 12h6',
   data: 'M3 5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2zM3 5v6c0 1.1 2.2 2 5 2s5-.9 5-2V5M3 8c0 1.1 2.2 2 5 2s5-.9 5-2',
 };
 
@@ -294,6 +269,7 @@ export function SettingsPage() {
   const search = useSearch({ from: '/settings' });
   const navigate = useNavigate({ from: '/settings' });
   const [activeKey, setActiveKeyState] = useState<SectionKey>(search.tab ?? 'profile');
+  const catalogView: CatalogView = search.catalogView ?? 'packages';
   const [, startTransition] = useTransition();
   const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
   const [pendingSectionKey, setPendingSectionKey] = useState<SectionKey | null>(null);
@@ -322,6 +298,10 @@ export function SettingsPage() {
   // still attributes the render it triggers to that same input. Marking the
   // update as a transition lets React deprioritize/interrupt that render
   // instead of blocking the next paint on it.
+  function setCatalogView(view: CatalogView) {
+    void navigate({ search: (prev) => ({ ...prev, tab: 'catalog', catalogView: view }), replace: true });
+  }
+
   function setActiveKey(key: SectionKey) {
     startTransition(() => {
       setActiveKeyState(key);
@@ -336,7 +316,7 @@ export function SettingsPage() {
   const [landedOnDefault, setLandedOnDefault] = useState(!!search.tab);
   useEffect(() => {
     if (landedOnDefault || therapists === undefined || catalog === undefined) return;
-    setActiveKey(unlinkedCount > 0 ? 'team' : catalogEmpty ? 'services' : 'profile');
+    setActiveKey(unlinkedCount > 0 ? 'team' : catalogEmpty ? 'catalog' : 'profile');
     setLandedOnDefault(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landedOnDefault, therapists, catalog, unlinkedCount, catalogEmpty]);
@@ -516,9 +496,9 @@ export function SettingsPage() {
               <Therapists />
             </>
           )}
-          {activeKey === 'services' && <Catalog />}
-          {activeKey === 'treatments' && <TreatmentCatalog />}
-          {activeKey === 'referrals' && <ReferringSources />}
+          {activeKey === 'catalog' && (
+            <CatalogSection view={catalogView} onViewChange={setCatalogView} />
+          )}
           {activeKey === 'data' && (
             <>
               <HistoricalData />
@@ -1798,532 +1778,6 @@ function DangerZone() {
   );
 }
 
-function Catalog() {
-  const clinic = useClinic();
-  const items = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
-  // repos.catalog.list already sorts by category then name, so grouping is
-  // just a pass over that order — no re-sort needed here.
-  const groups = useMemo(() => {
-    const map = new Map<string, CatalogItem[]>();
-    for (const item of items ?? []) {
-      const key = item.category.trim() || 'Uncategorized';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(item);
-    }
-    return [...map.entries()];
-  }, [items]);
-  const [draft, setDraft] = useState({ category: '', name: '', sessionCount: '1' });
-  const [draftPrice, setDraftPrice] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // Price edits save instantly on blur with no Save bar — without this, a
-  // changed price looked identical to an unsaved one, and the section's own
-  // "Price changes affect FUTURE visits only" note reads as broken if
-  // nothing on screen confirms the edit actually took.
-  const [savedItemId, setSavedItemId] = useState<string | null>(null);
-  const savedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  async function addItem() {
-    setError(null);
-    if (!draft.category.trim() || !draft.name.trim() || draftPrice == null) {
-      setError('Category, name, and price are required');
-      return;
-    }
-    const item: CatalogItem = {
-      id: crypto.randomUUID(),
-      clinicId: clinic.id,
-      category: draft.category.trim(),
-      name: draft.name.trim(),
-      sessionCount: Math.max(1, Number(draft.sessionCount) || 1),
-      basePricePaise: draftPrice,
-      active: true,
-      updatedAt: new Date().toISOString(),
-    };
-    await repos.catalog.put(item);
-    setDraft({ category: draft.category, name: '', sessionCount: '1' });
-    setDraftPrice(null);
-  }
-
-  async function toggleActive(item: CatalogItem) {
-    await repos.catalog.put({ ...item, active: !item.active, updatedAt: new Date().toISOString() });
-  }
-
-  async function updatePrice(item: CatalogItem, pricePaise: number | null) {
-    if (pricePaise == null || pricePaise === item.basePricePaise) return;
-    await repos.catalog.put({
-      ...item,
-      basePricePaise: pricePaise,
-      updatedAt: new Date().toISOString(),
-    });
-    if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current);
-    setSavedItemId(item.id);
-    savedTimeoutRef.current = setTimeout(() => setSavedItemId(null), 1500);
-  }
-
-  return (
-    <SectionCard title="Service catalog">
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        Price changes affect FUTURE visits only — logged visits keep their price snapshot.
-        Deactivate instead of deleting so history keeps resolving; per-session price is always
-        derived (price ÷ sessions), never stored.
-      </p>
-      <datalist id="catalog-categories">
-        {[...new Set((items ?? []).map((i) => i.category))].map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
-
-      {/* Below tab: — same boxed-card treatment Today's visits, Patients,
-          Packages, and Invoices use, instead of forcing this 6-column table
-          (with an inline add-row) to scroll sideways on a phone. The add
-          form moves to its own block below the list, since a form doesn't
-          fit a table-row shape once it's not a table. */}
-      <div className="tab:hidden space-y-2">
-        {groups.map(([category, catItems]) => (
-          <div key={category}>
-            <p className="mb-1.5 px-0.5 text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]/80">
-              {category}
-            </p>
-            <div className="space-y-2">
-              {catItems.map((item) => (
-                <div
-                  key={item.id}
-                  className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm ${item.active ? '' : 'opacity-50'}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="font-display text-sm font-medium text-[var(--ink)]">
-                        {item.name}
-                      </div>
-                      <div className="text-xs text-[var(--muted)]">
-                        {item.sessionCount} session{item.sessionCount === 1 ? '' : 's'}
-                      </div>
-                    </div>
-                    <span
-                      className="shrink-0 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-                      style={
-                        item.active
-                          ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
-                          : { background: 'var(--paper)', color: 'var(--muted)' }
-                      }
-                    >
-                      {item.active ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <RupeeInput
-                        valuePaise={item.basePricePaise}
-                        onChange={(p) => void updatePrice(item, p)}
-                      />
-                      {savedItemId === item.id && (
-                        <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">
-                          Saved
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      className="text-xs text-[var(--teal)] hover:underline"
-                      onClick={() => void toggleActive(item)}
-                    >
-                      {item.active ? 'Deactivate' : 'Reactivate'}
-                    </button>
-                  </div>
-                  <div className="mt-1 text-xs text-[var(--muted)]">
-                    Per session: {formatINR(effectivePricePerSession(item))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-
-        <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-3.5">
-          <p className="mb-2 text-xs font-medium text-[var(--muted)]">Add a package</p>
-          <div className="space-y-2">
-            <Field label="Category">
-              <input
-                className={inputCls}
-                placeholder="Category"
-                list="catalog-categories"
-                value={draft.category}
-                onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-              />
-            </Field>
-            <Field label="Package name">
-              <input
-                className={inputCls}
-                placeholder="Package name"
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              />
-            </Field>
-            <div className="flex gap-2">
-              <Field label="Sessions">
-                <input
-                  type="number"
-                  min={1}
-                  className={inputCls}
-                  value={draft.sessionCount}
-                  onChange={(e) => setDraft({ ...draft, sessionCount: e.target.value })}
-                />
-              </Field>
-              <Field label="Price">
-                <RupeeInput valuePaise={draftPrice} onChange={setDraftPrice} />
-              </Field>
-            </div>
-            <button
-              type="button"
-              className={`${btnSecondary} w-full`}
-              onClick={() => void addItem()}
-            >
-              + Add
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="hidden tab:block overflow-x-auto">
-        <table className="min-w-full divide-y divide-[var(--border)]">
-          <thead className="bg-[var(--paper)]">
-            <tr>
-              <th className={th}>Package</th>
-              <th className={thNum}>Sessions</th>
-              <th className={thNum}>Price</th>
-              <th className={thNum}>Per session</th>
-              <th className={th}>Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border)]">
-            {groups.map(([category, catItems]) => (
-              <Fragment key={category}>
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="bg-[var(--paper)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]/80"
-                  >
-                    {category}
-                  </td>
-                </tr>
-                {catItems.map((item) => (
-                  <tr key={item.id} className={item.active ? '' : 'opacity-50'}>
-                    <td className={td}>{item.name}</td>
-                    <td className={tdNum}>{item.sessionCount}</td>
-                    <td className={`${tdNum} w-32`}>
-                      <div className="flex items-center justify-end gap-1.5">
-                        <RupeeInput
-                          valuePaise={item.basePricePaise}
-                          onChange={(p) => void updatePrice(item, p)}
-                        />
-                        {savedItemId === item.id && (
-                          <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">
-                            Saved
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className={tdNum}>{formatINR(effectivePricePerSession(item))}</td>
-                    <td className={td}>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-                          style={
-                            item.active
-                              ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
-                              : { background: 'var(--paper)', color: 'var(--muted)' }
-                          }
-                        >
-                          {item.active ? 'Active' : 'Inactive'}
-                        </span>
-                        <button
-                          type="button"
-                          className="text-xs text-[var(--teal)] hover:underline"
-                          onClick={() => void toggleActive(item)}
-                        >
-                          {item.active ? 'Deactivate' : 'Reactivate'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </Fragment>
-            ))}
-            <tr className="bg-[var(--paper)]/50">
-              <td className={td}>
-                <div className="space-y-1">
-                  <input
-                    className={inputCls}
-                    placeholder="Category"
-                    list="catalog-categories"
-                    value={draft.category}
-                    onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-                  />
-                  <input
-                    className={inputCls}
-                    placeholder="Package name"
-                    value={draft.name}
-                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                  />
-                </div>
-              </td>
-              <td className={`${td} w-24`}>
-                <input
-                  type="number"
-                  min={1}
-                  className={inputCls}
-                  value={draft.sessionCount}
-                  onChange={(e) => setDraft({ ...draft, sessionCount: e.target.value })}
-                />
-              </td>
-              <td className={`${td} w-32`}>
-                <RupeeInput valuePaise={draftPrice} onChange={setDraftPrice} />
-              </td>
-              <td className={td} colSpan={2}>
-                <button type="button" className={btnSecondary} onClick={() => void addItem()}>
-                  + Add
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div className="mt-2">
-        <ErrorNote message={error} />
-      </div>
-    </SectionCard>
-  );
-}
-
-/**
- * Clinic-editable list of treatment types (Exercise, Manual Therapy, Kinesio
- * Taping, ...) — same add / deactivate-not-delete / rename shape as the
- * other catalogs on this tab. Independent of the billing-side service
- * catalog above: a visit can be billed under one package while recording
- * several treatment types performed, via the "Treatments performed" picker
- * on the visit-logging and edit-visit forms.
- */
-function TreatmentCatalog() {
-  const clinic = useClinic();
-  const items = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]) ?? [];
-  const [draftName, setDraftName] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  async function addItem() {
-    setError(null);
-    const name = draftName.trim();
-    if (!name) {
-      setError('Name is required');
-      return;
-    }
-    const item: TreatmentItem = {
-      id: crypto.randomUUID(),
-      clinicId: clinic.id,
-      name,
-      active: true,
-      updatedAt: new Date().toISOString(),
-    };
-    await repos.treatmentCatalog.put(item);
-    setDraftName('');
-  }
-
-  async function toggleActive(item: TreatmentItem) {
-    await repos.treatmentCatalog.put({
-      ...item,
-      active: !item.active,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  async function rename(item: TreatmentItem, name: string) {
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === item.name) return;
-    await repos.treatmentCatalog.put({
-      ...item,
-      name: trimmed,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  return (
-    <SectionCard title="Treatments">
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        Tracked per visit as a "Treatments performed" checklist, independent of billing. Deactivate
-        instead of deleting so past visits keep displaying correctly.
-      </p>
-      <div className="space-y-2">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className={`flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 ${item.active ? '' : 'opacity-50'}`}
-          >
-            <input
-              className={`${inputCls} min-w-0 flex-1`}
-              defaultValue={item.name}
-              onBlur={(e) => void rename(item, e.target.value)}
-              aria-label="Treatment name"
-            />
-            <button
-              type="button"
-              className="shrink-0 text-xs text-[var(--teal)] hover:underline"
-              onClick={() => void toggleActive(item)}
-            >
-              {item.active ? 'Deactivate' : 'Reactivate'}
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {error && <ErrorNote message={error} />}
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <input
-          type="text"
-          value={draftName}
-          onChange={(e) => setDraftName(e.target.value)}
-          placeholder="Add a treatment…"
-          className={`${inputCls} min-w-0 flex-1`}
-        />
-        <button type="button" className={btnSecondary} onClick={() => void addItem()}>
-          + Add
-        </button>
-      </div>
-    </SectionCard>
-  );
-}
-
-/**
- * Clinic-editable list of referral channels — same add / deactivate-not-
- * delete / rename shape as the no-return-reason catalog managed inline on
- * Reports. Seeded with the app's original six labels as defaults; a clinic
- * can rename, add, or deactivate any of them without losing how existing
- * patients display (see referringSourceDetailLabel/REFERRING_SOURCE_LABELS
- * fallback in dashboardService for patients tagged before this catalog
- * existed).
- */
-function ReferringSources() {
-  const clinic = useClinic();
-  const items =
-    useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id, true), [clinic.id]) ?? [];
-  const [draftName, setDraftName] = useState('');
-  const [draftDetailLabel, setDraftDetailLabel] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  async function addItem() {
-    setError(null);
-    const name = draftName.trim();
-    if (!name) {
-      setError('Name is required');
-      return;
-    }
-    const item: ReferringSourceItem = {
-      id: crypto.randomUUID(),
-      clinicId: clinic.id,
-      name,
-      detailLabel: draftDetailLabel.trim() || null,
-      active: true,
-      updatedAt: new Date().toISOString(),
-    };
-    await repos.referringSourceCatalog.put(item);
-    setDraftName('');
-    setDraftDetailLabel('');
-  }
-
-  async function toggleActive(item: ReferringSourceItem) {
-    await repos.referringSourceCatalog.put({
-      ...item,
-      active: !item.active,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  async function rename(item: ReferringSourceItem, name: string) {
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === item.name) return;
-    await repos.referringSourceCatalog.put({
-      ...item,
-      name: trimmed,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  async function updateDetailLabel(item: ReferringSourceItem, detailLabel: string) {
-    const trimmed = detailLabel.trim() || null;
-    if (trimmed === item.detailLabel) return;
-    await repos.referringSourceCatalog.put({
-      ...item,
-      detailLabel: trimmed,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  return (
-    <SectionCard title="Referral sources">
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        Shown when adding or editing a patient. Deactivate instead of deleting so existing patients
-        keep displaying correctly. The optional detail label adds a follow-up field (e.g. "Referring
-        doctor") when that source is picked.
-      </p>
-      <div className="space-y-2">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 ${item.active ? '' : 'opacity-50'}`}
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className={`${inputCls} min-w-0 flex-1`}
-                defaultValue={item.name}
-                onBlur={(e) => void rename(item, e.target.value)}
-                aria-label="Source name"
-              />
-              <button
-                type="button"
-                className="shrink-0 text-xs text-[var(--teal)] hover:underline"
-                onClick={() => void toggleActive(item)}
-              >
-                {item.active ? 'Deactivate' : 'Reactivate'}
-              </button>
-            </div>
-            <input
-              className={`${inputCls} mt-2 text-xs`}
-              placeholder="Detail field label (optional), e.g. Referring doctor"
-              defaultValue={item.detailLabel ?? ''}
-              onBlur={(e) => void updateDetailLabel(item, e.target.value)}
-              aria-label="Detail field label"
-            />
-          </div>
-        ))}
-      </div>
-
-      {error && <ErrorNote message={error} />}
-
-      <div className="mt-3 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-3.5">
-        <p className="mb-2 text-xs font-medium text-[var(--muted)]">Add a source</p>
-        <div className="space-y-2">
-          <Field label="Name">
-            <input
-              className={inputCls}
-              placeholder="e.g. Instagram ad"
-              value={draftName}
-              onChange={(e) => setDraftName(e.target.value)}
-            />
-          </Field>
-          <Field label="Detail field label (optional)">
-            <input
-              className={inputCls}
-              placeholder="e.g. Referring doctor"
-              value={draftDetailLabel}
-              onChange={(e) => setDraftDetailLabel(e.target.value)}
-            />
-          </Field>
-          <button type="button" className={`${btnSecondary} w-full`} onClick={() => void addItem()}>
-            + Add
-          </button>
-        </div>
-      </div>
-    </SectionCard>
-  );
-}
 
 interface ClinicMember {
   userId: string;

@@ -56,7 +56,7 @@ export interface FirstWeekSignals {
  *  variant's `search` stays typed against that route's own schema instead
  *  of widened to `Record<string, string>`. */
 type StepLink =
-  { kind: 'settings'; tab: 'profile' | 'team' | 'services' | 'data' } | { kind: 'new-visit' };
+  { kind: 'settings'; tab: 'profile' | 'team' | 'catalog' | 'data' } | { kind: 'new-visit' };
 
 /**
  * Real setup sequence, an admin's actual order of operations — not the
@@ -98,7 +98,7 @@ function buildSteps(seatLimited: boolean, canInvoice: boolean): Step[] {
       id: 'price-services',
       title: 'Price your services',
       body: 'Set the catalog before logging visits; a visit billed against an unpriced service can’t invoice cleanly later.',
-      link: { kind: 'settings', tab: 'services' },
+      link: { kind: 'settings', tab: 'catalog' },
       linkLabel: 'Go to Services',
       auto: (s) => s.servicesPriced,
     },
