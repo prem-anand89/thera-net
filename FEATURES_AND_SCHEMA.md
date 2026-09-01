@@ -390,14 +390,20 @@ queued with a visible error.
 - **Invite email → password setup**: `invite-therapist` calls
   `auth.admin.inviteUserByEmail()` with `redirectTo` set to the inviting
   browser's own origin + `/reset-password` (sent as `redirectOrigin` in the
-  request body from `SettingsPage.tsx`). Without this, the link falls back
-  to whatever the Supabase project's Site URL is configured to — the
-  invite token still signs the invitee in, but they land on the app fully
-  authenticated with no password ever set and no UI prompting them to set
-  one. `ResetPasswordPage.tsx` (`/reset-password`) is deliberately
-  invite/recovery-agnostic: it just checks for an active session (however
-  it got established) and lets the visitor choose a password, so no
-  separate "accept invite" page was needed.
+  request body from `SettingsPage.tsx`). New invites also set
+  `user_metadata.require_password_setup = true`; `Shell.tsx` redirects any
+  signed-in user with that flag to `/reset-password` before they reach
+  Workspace. `ResetPasswordPage.tsx` clears the flag when a password is chosen.
+- **Member status in Team → Logins**: `list_clinic_members_with_email()` joins
+  `auth.users.last_sign_in_at` — **Pending** (never signed in) vs **Active**.
+  Pending cards get a **Resend email** action (`invite-therapist` with
+  `action: 'resend'`, recovery mailer → `/reset-password`).
+- **Revoke** unlinks any `therapists.user_id` pointing at the removed login.
+- **Delete clinic** (Settings → Data → Danger zone): `admin_delete_clinic()`
+  RPC — admin-only, disables invoice/visit immutability triggers, deletes the
+  `clinics` row (ON DELETE CASCADE to all child tables). Distinct from
+  `admin_wipe_clinic_data()` which keeps the clinic shell. Client clears
+  local Dexie and reloads afterward.
 - **Invite email content**: the invite also seeds `user_metadata` with
   `clinicName`/`invitedByName`/`role` (looked up server-side from
   `clinics.name` and the caller's `clinic_members.display_name`), but the
