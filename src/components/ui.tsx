@@ -224,7 +224,7 @@ export function KebabMenu({
         ref={buttonRef}
         type="button"
         aria-label={ariaLabel}
-        className="rounded-md p-1 text-[var(--muted)] hover:bg-[var(--paper)]"
+        className="flex h-10 w-10 items-center justify-center rounded-md text-[var(--muted)] hover:bg-[var(--paper)]"
         onClick={toggle}
       >
         ⋮

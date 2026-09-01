@@ -536,38 +536,44 @@ function AllPatientsSection() {
             <span className="text-xs text-[var(--muted)]">{showHidden ? 'Collapse' : 'Show'}</span>
           </button>
           {showHidden && (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-[var(--border)] border-t border-[var(--border)]">
-                <tbody className="divide-y divide-[var(--border)]">
-                  {hidden.map((p) => (
-                    <tr key={p.id} className="hover:bg-[var(--paper)]">
-                      <td className={td}>
-                        <span className="font-display">{p.name}</span>{' '}
-                        <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                      </td>
-                      <td className={td}>
-                        <Pill tone="slate">Hidden {p.deletedAt && formatDateDM(p.deletedAt)}</Pill>
-                      </td>
-                      <td className={`${td} whitespace-nowrap text-right`}>
-                        <button
-                          type="button"
-                          className="text-xs text-[var(--teal)] hover:underline"
-                          onClick={() => void restore(p)}
-                        >
-                          Restore
-                        </button>
-                        <button
-                          type="button"
-                          className="ml-3 text-xs text-[var(--muted)] hover:text-[var(--rust)]"
-                          onClick={() => void hardDelete(p)}
-                        >
-                          Delete permanently
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            // A plain wrapping flex list, not a table — three simple pieces
+            // of content per row (name, status pill, two actions) that flow
+            // fine at any width, rather than a 3-column table forcing
+            // horizontal scroll on a phone. Actions get real padding (not
+            // bare text with a small ml-3 gap) so Restore and the
+            // destructive Delete permanently aren't easy to mis-tap into
+            // each other.
+            <div className="divide-y divide-[var(--border)] border-t border-[var(--border)]">
+              {hidden.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2.5 hover:bg-[var(--paper)]"
+                >
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="text-sm">
+                      <span className="font-display">{p.name}</span>{' '}
+                      <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                    </span>
+                    <Pill tone="slate">Hidden {p.deletedAt && formatDateDM(p.deletedAt)}</Pill>
+                  </div>
+                  <div className="flex shrink-0 items-center">
+                    <button
+                      type="button"
+                      className="rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--teal-light)]"
+                      onClick={() => void restore(p)}
+                    >
+                      Restore
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md px-2.5 py-1.5 text-xs text-[var(--muted)] hover:bg-[var(--rust-light)] hover:text-[var(--rust)]"
+                      onClick={() => void hardDelete(p)}
+                    >
+                      Delete permanently
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
