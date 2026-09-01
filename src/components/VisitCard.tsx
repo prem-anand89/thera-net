@@ -59,18 +59,38 @@ export function treatmentsDisplayText(
   return parts.join(' — ') || '—';
 }
 
-/** Two-tone pie-split glyph for the shared-split line under a therapist's
- *  name — teal (the primary therapist, same hue as TherapistPill) meeting
- *  rust (the colleague getting the rest) across a diameter. Rust rather
- *  than amber: teal sits in the blue-green family, and rust's hue is much
- *  closer to teal's true color-wheel complement than amber's more yellow
- *  cast, so the two halves read as genuinely opposing rather than two
- *  similar warm tones next to each other. */
-function IconSplit({ className }: { className?: string }) {
+/** Brighter, higher-chroma variants of the app's --teal/--rust tokens,
+ *  used only by the split-percentage ring below. At the ring's 12px size
+ *  the standard tokens (tuned for larger fills — buttons, pills) read as
+ *  murky and blended into each other and into the paper background;
+ *  every other teal/rust use in the app keeps the standard, darker
+ *  tokens unchanged. */
+const RING_TEAL = '#1f9aa0';
+const RING_RUST = '#e2711d';
+
+/** Percentage ring for the shared-split line under a therapist's name —
+ *  the rust arc's length is the visit's actual split share (not just a
+ *  two-color hint), traced over a teal track standing for the rest, so
+ *  the icon itself carries real information rather than only decorating
+ *  the "N% → colleague" text next to it. */
+function IconSplit({ pct, className }: { pct: number; className?: string }) {
+  const r = 4.5;
+  const circumference = 2 * Math.PI * r;
+  const shared = (Math.min(Math.max(pct, 0), 100) / 100) * circumference;
   return (
-    <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true" className={className}>
-      <path d="M6 1A5 5 0 006 11Z" fill="var(--teal)" />
-      <path d="M6 1A5 5 0 016 11Z" fill="var(--rust)" />
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className={className}>
+      <circle cx="6" cy="6" r={r} fill="none" stroke={RING_TEAL} strokeWidth="2.4" />
+      <circle
+        cx="6"
+        cy="6"
+        r={r}
+        fill="none"
+        stroke={RING_RUST}
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeDasharray={`${shared} ${circumference - shared}`}
+        transform="rotate(-90 6 6)"
+      />
     </svg>
   );
 }
@@ -78,13 +98,16 @@ function IconSplit({ className }: { className?: string }) {
 /** Compact "N% → colleague" line shown under a therapist's name when a
  *  visit's revenue is split — stacked below rather than beside the name
  *  pill so a long colleague name can't widen the row/column; wraps within
- *  its own line if it must instead. Rust to match the icon's "shared"
- *  half, distinguishing it at a glance from the plain grey metadata
- *  (dates, session counts) elsewhere in the same card. */
+ *  its own line if it must instead. Matches the ring's rust arc,
+ *  distinguishing it at a glance from the plain grey metadata (dates,
+ *  session counts) elsewhere in the same card. */
 function SharedSplitLine({ pct, name }: { pct: number; name: string }) {
   return (
-    <span className="inline-flex max-w-[9rem] items-center gap-1 text-[11px] leading-tight text-[var(--rust)]">
-      <IconSplit className="shrink-0" />
+    <span
+      className="inline-flex max-w-[9rem] items-center gap-1 text-[11px] leading-tight"
+      style={{ color: RING_RUST }}
+    >
+      <IconSplit pct={pct} className="shrink-0" />
       <span className="truncate" title={`${pct}% → ${name}`}>
         {pct}% → {name}
       </span>
