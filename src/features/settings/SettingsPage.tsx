@@ -2810,139 +2810,88 @@ function Therapists() {
 
       {teamView === 'roster' && (
         <div>
-          <div className="mb-3 flex items-baseline justify-between gap-2">
-            <h3 className="text-sm font-semibold text-[var(--ink)]">Service roster</h3>
-            <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2 py-0.5 font-mono text-[11px] text-[var(--muted)]">
-              {(therapists ?? []).filter((t) => t.active).length} active
-            </span>
-          </div>
-          <p className="mb-3 text-xs text-[var(--muted)]">
-            Who patients get billed against and assigned to on a visit — every Member above with the
-            "Therapist" role gets a roster entry automatically; add one manually here for a
-            therapist who doesn't need a login of their own.
-          </p>
-          <div className="mb-3 divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-            {(therapists ?? []).map((t) => (
-              <div key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
-                <label
-                  className="block h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-full border border-[var(--border)] bg-[var(--paper)]"
-                  title="Change photo"
-                >
-                  {t.photoPath ? (
-                    <img
-                      src={publicTherapistPhotoUrl(t.photoPath) ?? ''}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-[var(--muted)]">
-                      {therapistInitials(t.name)}
-                    </span>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) =>
-                      e.target.files?.[0] && void uploadTherapistPhoto(t, e.target.files[0])
-                    }
-                  />
-                </label>
-                <span className="min-w-32 text-[var(--ink)]">{t.name}</span>
-                <input
-                  key={t.id}
-                  className={`${inputCls} w-36 text-xs`}
-                  placeholder="Reg. no."
-                  title="Registration/license number — printed on invoices"
-                  defaultValue={t.registrationNo ?? ''}
-                  onBlur={(e) => {
-                    const value = e.target.value.trim() || null;
-                    if (value === (t.registrationNo ?? null)) return;
-                    void repos.therapists.put({
-                      ...t,
-                      registrationNo: value,
-                      updatedAt: new Date().toISOString(),
-                    });
-                  }}
-                />
-                <span
-                  className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-                  style={
-                    t.active
-                      ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
-                      : { background: 'var(--paper)', color: 'var(--muted)' }
-                  }
-                >
-                  {t.active ? 'Active' : 'Inactive'}
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--ink)]">Service roster</h3>
+              <p className="mt-1 max-w-xl text-xs text-[var(--muted)]">
+                Who patients are assigned to and billed against. Therapist logins are added
+                automatically when you invite from Logins — add here only for someone without their
+                own login.
+              </p>
+            </div>
+            {therapists && (
+              <div className="flex flex-wrap gap-1.5">
+                <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2.5 py-0.5 font-mono text-[11px] text-[var(--muted)]">
+                  {therapists.length} total
                 </span>
-                <button
-                  type="button"
-                  className="text-xs text-[var(--teal)] hover:underline"
-                  onClick={() =>
-                    void repos.therapists.put({
-                      ...t,
-                      active: !t.active,
-                      updatedAt: new Date().toISOString(),
-                    })
-                  }
-                >
-                  {t.active ? 'Deactivate' : 'Reactivate'}
-                </button>
-                <button
-                  type="button"
-                  className="text-xs text-[var(--rust)] hover:underline"
-                  onClick={() => void startDeleteTherapist(t)}
-                >
-                  Delete
-                </button>
-                {members && members.length > 0 && (
-                  <label className="ml-auto flex items-center gap-2 text-xs text-[var(--muted)]">
-                    Linked login
-                    <select
-                      className={inputCls}
-                      value={t.userId ?? ''}
-                      onChange={(e) =>
-                        void repos.therapists.put({
-                          ...t,
-                          userId: e.target.value || null,
-                          updatedAt: new Date().toISOString(),
-                        })
-                      }
-                    >
-                      <option value="">— None —</option>
-                      {members.map((m) => (
-                        <option key={m.userId} value={m.userId}>
-                          {m.email}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2.5 py-0.5 font-mono text-[11px] text-[var(--muted)]">
+                  {therapists.filter((t) => t.active).length} active
+                </span>
+                {unlinkedCount > 0 && (
+                  <span className="rounded-full border border-[var(--amber)] bg-[var(--amber-light)] px-2.5 py-0.5 font-mono text-[11px] text-[var(--amber-strong)]">
+                    {unlinkedCount} need login link
+                  </span>
                 )}
               </div>
-            ))}
-          </div>
-          <div className="flex max-w-sm gap-2">
-            <input
-              className={inputCls}
-              placeholder="New therapist name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <button type="button" className={btnSecondary} onClick={() => void add()}>
-              + Add
-            </button>
-          </div>
-          <p className="mt-2 text-xs text-[var(--muted)]">
-            Deactivating keeps history intact — past visits still show the therapist. Delete only
-            works for someone with zero visits, notes, or invoices on record (added by mistake, or
-            left before seeing a patient) — anyone with real history can only be deactivated.
-            {members && members.length > 0 && (
-              <>
-                {' '}
-                Inviting a therapist above links their login automatically; the login dropdown here
-                is for linking one after the fact, or for a roster entry added manually.
-              </>
             )}
+          </div>
+
+          {therapists && therapists.length > 0 ? (
+            <div className="mb-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              {[...therapists]
+                .sort((a, b) => {
+                  if (a.active !== b.active) return a.active ? -1 : 1;
+                  return a.name.localeCompare(b.name);
+                })
+                .map((t) => (
+                  <RosterCard
+                    key={t.id}
+                    therapist={t}
+                    members={members}
+                    linkedEmail={
+                      t.userId ? (members?.find((m) => m.userId === t.userId)?.email ?? null) : null
+                    }
+                    onPhotoUpload={(file) => void uploadTherapistPhoto(t, file)}
+                    onToggleActive={() =>
+                      void repos.therapists.put({
+                        ...t,
+                        active: !t.active,
+                        updatedAt: new Date().toISOString(),
+                      })
+                    }
+                    onDelete={() => void startDeleteTherapist(t)}
+                  />
+                ))}
+            </div>
+          ) : (
+            <p className="mb-6 text-xs text-[var(--muted)]">No therapists on the roster yet.</p>
+          )}
+
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4">
+            <h4 className="mb-2 text-sm font-semibold text-[var(--ink)]">Add manually</h4>
+            <p className="mb-3 text-xs text-[var(--muted)]">
+              For a therapist who does not need their own login — e.g. a locum billed under the
+              clinic account.
+            </p>
+            <div className="flex max-w-md gap-2">
+              <input
+                className={inputCls}
+                placeholder="Therapist name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void add();
+                }}
+              />
+              <button type="button" className={btnSecondary} onClick={() => void add()}>
+                + Add
+              </button>
+            </div>
+          </div>
+
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            Deactivate to keep history without assigning new visits. Delete only works when someone
+            has zero visits, notes, or invoices.
           </p>
           <div className="mt-2">
             <ErrorNote message={rosterError} />
@@ -2978,6 +2927,202 @@ function Therapists() {
         onConfirm={() => void confirmRevokeMember()}
       />
     </SectionCard>
+  );
+}
+
+/** One service-roster card — view state shows photo, name, reg no, login link,
+ *  and status; edit state exposes all editable fields in one place. */
+function RosterCard({
+  therapist,
+  members,
+  linkedEmail,
+  onPhotoUpload,
+  onToggleActive,
+  onDelete,
+}: {
+  therapist: Therapist;
+  members: ClinicMember[] | null;
+  linkedEmail: string | null;
+  onPhotoUpload: (file: File) => void;
+  onToggleActive: () => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState(therapist.name);
+  const [regDraft, setRegDraft] = useState(therapist.registrationNo ?? '');
+  const [loginDraft, setLoginDraft] = useState(therapist.userId ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!editing) {
+      setNameDraft(therapist.name);
+      setRegDraft(therapist.registrationNo ?? '');
+      setLoginDraft(therapist.userId ?? '');
+    }
+  }, [therapist, editing]);
+
+  async function save() {
+    if (!nameDraft.trim()) {
+      setError('Name is required');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await repos.therapists.put({
+        ...therapist,
+        name: nameDraft.trim(),
+        registrationNo: regDraft.trim() || null,
+        userId: loginDraft || null,
+        updatedAt: new Date().toISOString(),
+      });
+      setEditing(false);
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const photo = (
+    <label
+      className="block h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded-full border border-[var(--border)] bg-[var(--paper)]"
+      title="Change photo"
+    >
+      {therapist.photoPath ? (
+        <img
+          src={publicTherapistPhotoUrl(therapist.photoPath) ?? ''}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-[var(--muted)]">
+          {therapistInitials(therapist.name)}
+        </span>
+      )}
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onPhotoUpload(file);
+          e.target.value = '';
+        }}
+      />
+    </label>
+  );
+
+  if (editing) {
+    return (
+      <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+        <div className="flex items-center gap-2.5">
+          {photo}
+          <p className="text-sm font-semibold text-[var(--ink)]">Edit therapist</p>
+        </div>
+        <Field label="Name">
+          <input
+            className={inputCls}
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            autoFocus
+          />
+        </Field>
+        <Field label="Registration no.">
+          <input
+            className={inputCls}
+            placeholder="Printed on invoices"
+            value={regDraft}
+            onChange={(e) => setRegDraft(e.target.value)}
+          />
+        </Field>
+        {members && members.length > 0 && (
+          <Field label="Linked login">
+            <select
+              className={inputCls}
+              value={loginDraft}
+              onChange={(e) => setLoginDraft(e.target.value)}
+            >
+              <option value="">— None —</option>
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.displayName ? `${m.displayName} (${m.email})` : m.email}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        <div className="flex gap-2">
+          <button type="button" className={btnPrimary} disabled={saving} onClick={() => void save()}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            className={btnSecondary}
+            disabled={saving}
+            onClick={() => setEditing(false)}
+          >
+            Cancel
+          </button>
+        </div>
+        <ErrorNote message={error} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+      <div className="flex items-center gap-2.5">
+        {photo}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-[var(--ink)]">{therapist.name}</p>
+          <p className="truncate text-[11.5px] text-[var(--muted)]">
+            {therapist.registrationNo ? `Reg. ${therapist.registrationNo}` : 'No registration no.'}
+          </p>
+        </div>
+      </div>
+      <span
+        className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+        style={
+          therapist.active
+            ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
+            : { background: 'var(--paper)', color: 'var(--muted)' }
+        }
+      >
+        {therapist.active ? 'Active' : 'Inactive'}
+      </span>
+      {linkedEmail ? (
+        <p className="truncate text-[11.5px] text-[var(--muted)]">
+          Login: <span className="text-[var(--ink)]">{linkedEmail}</span>
+        </p>
+      ) : (
+        <p className="text-[11.5px] text-[var(--amber-strong)]">No login linked</p>
+      )}
+      <div className="mt-auto flex flex-wrap gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
+        <button
+          type="button"
+          className="text-[var(--teal)] hover:underline"
+          onClick={() => setEditing(true)}
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          className="text-[var(--teal)] hover:underline"
+          onClick={onToggleActive}
+        >
+          {therapist.active ? 'Deactivate' : 'Reactivate'}
+        </button>
+        <button
+          type="button"
+          className="ml-auto text-[var(--rust)] hover:underline"
+          onClick={onDelete}
+        >
+          Delete
+        </button>
+      </div>
+    </div>
   );
 }
 
