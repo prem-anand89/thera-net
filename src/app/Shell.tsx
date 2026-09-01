@@ -587,12 +587,17 @@ function AccountMenu({
   const setup = useFirstWeekChecklistSummary(clinicId);
   const showSetupNudge = role === 'admin' && setup?.visible === true;
   const sortedClinics = [...clinics].sort((a, b) => a.name.localeCompare(b.name));
+  const currentClinic = clinics.find((c) => c.id === clinicId);
 
   function switchClinic(id: string) {
     setOpen(false);
     if (id === clinicId) return;
     void db.meta.put({ key: 'activeClinicId', value: id });
     void navigate({ to: '/workspace' });
+  }
+
+  function closeMenu() {
+    setOpen(false);
   }
 
   return (
@@ -610,11 +615,11 @@ function AccountMenu({
         >
           {initialsFor(name)}
         </span>
-        <span className="hidden flex-col items-start sm:flex">
-          <span className="text-xs font-medium text-[var(--ink)]">{name}</span>
-          {roleLabel && (
-            <span className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
-              {roleLabel}
+        <span className="hidden min-w-0 flex-col items-start sm:flex">
+          <span className="max-w-[9rem] truncate text-xs font-medium text-[var(--ink)]">{name}</span>
+          {currentClinic && (
+            <span className="max-w-[9rem] truncate text-[10px] text-[var(--muted)]">
+              {currentClinic.name}
             </span>
           )}
         </span>
@@ -622,71 +627,118 @@ function AccountMenu({
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 shadow-lg">
-            <NameEditor
-              variant="mobile"
-              displayName={displayName}
-              fallbackName={fallbackName}
-              role={role}
-              setDisplayName={setDisplayName}
-            />
-
-            {showSetupNudge && setup && (
-              <SetupNudgeLink setup={setup} onNavigate={() => setOpen(false)} />
-            )}
-
-            {sortedClinics.length > 1 && (
-              <div className="border-t border-[var(--border)] py-1.5">
-                <div className="px-2 pb-1 text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
-                  Clinics
+          <div className="fixed inset-0 z-10" onClick={closeMenu} />
+          <div className="absolute right-0 top-full z-20 mt-2 w-72 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-lg">
+            <div className="bg-[var(--paper)] px-3 py-3">
+              <div className="flex items-start gap-2.5">
+                <span
+                  aria-hidden="true"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--teal)] text-sm font-semibold text-white"
+                >
+                  {initialsFor(name)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <NameEditor
+                    variant="mobile"
+                    displayName={displayName}
+                    fallbackName={fallbackName}
+                    role={role}
+                    setDisplayName={setDisplayName}
+                    showRole={false}
+                  />
+                  {roleLabel && (
+                    <span className="mt-0.5 inline-block rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--teal-strong)]">
+                      {roleLabel}
+                    </span>
+                  )}
                 </div>
-                {sortedClinics.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
-                    onClick={() => switchClinic(c.id)}
-                  >
-                    <span
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${c.id === clinicId ? 'bg-[var(--teal)]' : 'bg-transparent'}`}
-                      aria-hidden="true"
-                    />
-                    <span className="truncate">{c.name}</span>
-                  </button>
-                ))}
               </div>
-            )}
+              {showSetupNudge && setup && (
+                <div className="mt-2.5">
+                  <SetupNudgeLink setup={setup} onNavigate={closeMenu} />
+                </div>
+              )}
+            </div>
 
-            {role === 'admin' && (
-              <div className="border-t border-[var(--border)] pt-1.5">
+            <div className="border-t border-[var(--border)] px-2 py-2">
+              <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                {sortedClinics.length > 1 ? 'Switch clinic' : 'Clinic'}
+              </p>
+              {sortedClinics.length > 1 ? (
+                <div className="space-y-0.5">
+                  {sortedClinics.map((c) => {
+                    const active = c.id === clinicId;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
+                          active
+                            ? 'bg-[var(--teal-light)] font-medium text-[var(--teal-strong)]'
+                            : 'text-[var(--ink)] hover:bg-[var(--paper)]'
+                        }`}
+                        onClick={() => switchClinic(c.id)}
+                      >
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                          {active ? (
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                              <path
+                                d="M3.5 8.5l3 3 6-7"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          ) : null}
+                        </span>
+                        <span className="truncate">{c.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mx-2 rounded-lg bg-[var(--teal-light)] px-2.5 py-2 text-sm font-medium text-[var(--teal-strong)]">
+                  {currentClinic?.name ?? 'Current clinic'}
+                </div>
+              )}
+              {role === 'admin' && (
                 <button
                   type="button"
-                  className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
+                  className="mt-1.5 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
                   onClick={() => {
-                    setOpen(false);
+                    closeMenu();
                     setAddingClinic(true);
                   }}
                 >
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center text-[var(--teal)]">
+                    +
+                  </span>
                   Add another clinic
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
-            <div className="border-t border-[var(--border)] pt-1.5">
+            <div className="border-t border-[var(--border)] px-2 py-2">
+              <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Account
+              </p>
               <button
                 type="button"
-                className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
+                className="flex w-full rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
                 onClick={() => {
-                  setOpen(false);
+                  closeMenu();
                   setChangingPassword(true);
                 }}
               >
                 Change password
               </button>
+            </div>
+
+            <div className="border-t border-[var(--border)] bg-[var(--paper)] px-2 py-2">
               <button
                 type="button"
-                className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--rust)] hover:bg-[var(--rust-light)]"
+                className="flex w-full rounded-lg px-2.5 py-2 text-left text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
                 onClick={() => getSupabase()?.auth.signOut()}
               >
                 Sign out
@@ -724,12 +776,14 @@ function NameEditor({
   fallbackName,
   role,
   setDisplayName,
+  showRole = true,
 }: {
   variant: 'desktop' | 'mobile';
   displayName: string | null;
   fallbackName: string;
   role: ClinicRole;
   setDisplayName: (name: string) => Promise<void>;
+  showRole?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -803,7 +857,7 @@ function NameEditor({
       >
         {displayName ?? fallbackName}
       </button>
-      {roleLabel && (
+      {showRole && roleLabel && (
         <div
           className={
             variant === 'desktop'
