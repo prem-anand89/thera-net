@@ -9,10 +9,11 @@ import {
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, ALL_SYNCED_TABLES } from '@/lib/db';
-import { getSupabase, publicLogoUrl } from '@/lib/supabase';
+import { publicLogoUrl } from '@/lib/supabase';
 import { syncEngine } from '@/sync/engine';
 import { syncStatus } from '@/sync/status';
 import { useSession } from './useSession';
+import { signOutSafely } from './signOut';
 import { useClinicRole, CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
 import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
@@ -221,6 +222,15 @@ export function Shell() {
   );
 
   useEffect(() => {
+    // `loading` is true (and `session` is still its `null` initializer) for
+    // one render on every mount, before the async getSession() call has
+    // actually resolved — that's a placeholder, not a confirmed sign-out.
+    // Without this guard, that transient null fired the clear branch below
+    // on every single app launch/reload, wiping the outbox (any local
+    // writes — e.g. a newly added patient — not yet pushed to the server)
+    // before the real session even had a chance to load, silently and
+    // permanently discarding unsynced work.
+    if (loading) return;
     if (session) {
       syncEngine.start();
       syncEngine.schedule(0);
@@ -236,8 +246,16 @@ export function Shell() {
       for (const table of ALL_SYNCED_TABLES) void db.table(table).clear();
       void db.outbox.clear();
       void db.meta.clear();
+      // syncStatus is a module-lifetime singleton, not scoped to this
+      // session — without resetting it, a second account signing in on the
+      // same device (no full page reload) would still see the PREVIOUS
+      // account's lastSyncAt, which the zero-clinics gate below reads as
+      // "this account's sync has already settled," possibly showing
+      // CreateClinicForm before the new account's real clinics have
+      // actually pulled.
+      syncStatus.reset();
     }
-  }, [session]);
+  }, [session, loading]);
 
   // Default the active clinic to the first membership once data arrives,
   // and repair a stale pointer — `activeClinicId` can be set to an id that
@@ -616,7 +634,9 @@ function AccountMenu({
           {initialsFor(name)}
         </span>
         <span className="hidden min-w-0 flex-col items-start sm:flex">
-          <span className="max-w-[9rem] truncate text-xs font-medium text-[var(--ink)]">{name}</span>
+          <span className="max-w-[9rem] truncate text-xs font-medium text-[var(--ink)]">
+            {name}
+          </span>
           {currentClinic && (
             <span className="max-w-[9rem] truncate text-[10px] text-[var(--muted)]">
               {currentClinic.name}
@@ -739,7 +759,7 @@ function AccountMenu({
               <button
                 type="button"
                 className="flex w-full rounded-lg px-2.5 py-2 text-left text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
-                onClick={() => getSupabase()?.auth.signOut()}
+                onClick={() => void signOutSafely()}
               >
                 Sign out
               </button>

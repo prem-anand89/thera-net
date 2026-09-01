@@ -1571,6 +1571,17 @@ re-blocks the same clinic with no other change.
 - **Outbox table** (in Supabase) for tracking changes made offline
 - **Sync engine** pushes to Supabase when online, pulls deltas to stay in sync
 - **Collision handling** — visit/patient/invoice conflicts resolved server-side
+- **Sign-out clear must gate on `loading`, not just `!session`** —
+  `Shell.tsx` wipes every synced Dexie table plus the outbox on sign-out
+  (privacy: prevents one account's cached data leaking to the next login
+  on a shared device). `useSession()`'s state starts as `{loading: true,
+  session: null}` for one render before the real `getSession()` call
+  resolves — that transient `null` is not a confirmed sign-out. The
+  clearing effect must check `loading === false` before treating `session
+  === null` as "actually signed out"; keying it off `session` alone fires
+  the wipe on every app launch/reload, discarding any outbox entry not
+  yet pushed to the server (e.g. a patient added while offline, then the
+  tab closed before sync ran) with no warning and no way to recover it.
 
 ### 2. Revenue Split Snapshot at Billing
 - **Rates stored with each visit** (bm_split_pct, tax_pct, tds_basis)

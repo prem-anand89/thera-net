@@ -1,6 +1,6 @@
 /**
  * Sync status store and error classification.
- * 
+ *
  * Determines which server errors are permanent (won't retry) vs temporary (retryable).
  */
 
@@ -12,8 +12,18 @@ export interface SyncStatus {
   error?: string | null;
 }
 
-// Simple in-memory store without external dependencies
-let currentStatus: SyncStatus = { online: true, pending: 0 };
+// Simple in-memory store without external dependencies. Module-lifetime, not
+// per-session — on a shared device where a second account signs in without a
+// full page reload, an unreset `lastSyncAt` from the PREVIOUS account would
+// still read as "this account's sync has settled," since Shell.tsx uses it
+// as exactly that signal (see the zero-clinics gate) to decide whether it's
+// safe to show CreateClinicForm instead of the new account's real clinics
+// still being pulled — reintroducing the duplicate-clinic race a prior fix
+// was meant to close. `reset()` (called from Shell.tsx's sign-out cleanup,
+// alongside the Dexie clears) puts it back to first-launch state so the next
+// account starts from "not yet synced," not the last account's stale answer.
+const INITIAL_STATUS: SyncStatus = { online: true, pending: 0 };
+let currentStatus: SyncStatus = { ...INITIAL_STATUS };
 const subscribers = new Set<(status: SyncStatus) => void>();
 
 export const syncStatus = {
@@ -28,6 +38,10 @@ export const syncStatus = {
   },
   get() {
     return currentStatus;
+  },
+  reset() {
+    currentStatus = { ...INITIAL_STATUS, online: navigator.onLine };
+    subscribers.forEach((cb) => cb(currentStatus));
   },
 };
 

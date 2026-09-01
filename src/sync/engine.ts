@@ -313,17 +313,20 @@ export class SyncEngine {
         const pendingIds = new Set(
           (await db.outbox.where('table').equals(table).toArray()).map((e) => e.rowId)
         );
+        // Validate rows before bulk insert to catch schema mismatches early.
+        // A single .filter() pass, not a for-loop splicing invalid rows out
+        // of `incoming` while iterating it — splicing mid-iteration shifts
+        // the next element down into the index the iterator has already
+        // passed, so two or more consecutive invalid rows in one page let
+        // the second one skip validation entirely and reach bulkPut below.
         const incoming = data
           .map((row) => normalize(table, rowToDomain<Record<string, unknown>>(row)))
-          .filter((obj) => !pendingIds.has(obj.id as string));
-
-        // Validate rows before bulk insert to catch schema mismatches early
-        for (const row of incoming) {
-          if (!validateNormalizedRow(table, row)) {
-            console.error(`[Sync] Skipping invalid row from ${table}:`, row);
-            incoming.splice(incoming.indexOf(row), 1);
-          }
-        }
+          .filter((obj) => !pendingIds.has(obj.id as string))
+          .filter((row) => {
+            const valid = validateNormalizedRow(table, row);
+            if (!valid) console.error(`[Sync] Skipping invalid row from ${table}:`, row);
+            return valid;
+          });
 
         if (incoming.length > 0) {
           await db.table(table).bulkPut(incoming);
