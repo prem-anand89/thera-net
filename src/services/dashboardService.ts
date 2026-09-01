@@ -195,6 +195,11 @@ export interface TodayVisitRow {
   paymentState: TodayPaymentState;
   /** Set when this visit's revenue is already shared with another therapist. */
   sharedTherapistId: UUID | null;
+  /** The assisting therapist's share (0-100) and resolved name, set
+   *  together with `sharedTherapistId` — see `VisitCardData.sharedPct` in
+   *  `VisitCard.tsx`. */
+  sharedPct: number | null;
+  sharedTherapistName: string | null;
   /** True when this visit is flagged for a clinical note that hasn't been completed yet. */
   needsNote: boolean;
   /** Set once this visit's note is completed. */
@@ -881,6 +886,10 @@ export function createDashboardService(repos: Repos) {
             invoiceId: v.invoiceId,
             paymentState,
             sharedTherapistId: v.sharedTherapistId ?? null,
+            sharedPct: v.sharedPct ?? null,
+            sharedTherapistName: v.sharedTherapistId
+              ? (therapistNameById.get(v.sharedTherapistId) ?? null)
+              : null,
             needsNote: v.clinicalStatus === 'pending',
             consultationNoteId: v.consultationNoteId ?? null,
             collectedPaise: directPaymentAmount,

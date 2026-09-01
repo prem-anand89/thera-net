@@ -131,6 +131,10 @@ function visitToCardData(
     canEdit: canModify,
     canSplit: therapistSplit && v.actualBillPaise > 0 && canModify,
     hasSplit: v.sharedTherapistId ? true : false,
+    sharedPct: v.sharedPct ?? null,
+    sharedTherapistName: v.sharedTherapistId
+      ? (therapistName.get(v.sharedTherapistId) ?? null)
+      : null,
     canDelete: !v.invoiceId && canModify,
     needsNote,
     canViewNotes: canViewClinicalNotes,
