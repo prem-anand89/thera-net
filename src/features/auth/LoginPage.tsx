@@ -53,8 +53,8 @@ export function LoginPage() {
       setError('Passwords do not match');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
       return;
     }
     setBusy(true);
@@ -79,17 +79,14 @@ export function LoginPage() {
     });
     setBusy(false);
     if (error) {
-      let message = error.message;
       if (error.message.includes('rate limit')) {
-        message = 'Too many password reset requests. Please wait a few minutes and try again.';
-      } else if (error.message.includes('no user found')) {
-        message = 'No account found with this email address.';
+        setError('Too many password reset requests. Please wait a few minutes and try again.');
+        return;
       }
       console.error('Password reset error:', error);
-      setError(message);
-    } else {
-      setResetSent(true);
     }
+    // Always show the same success message — avoids revealing whether the email exists.
+    setResetSent(true);
   }
 
   if (mode === 'signup') {

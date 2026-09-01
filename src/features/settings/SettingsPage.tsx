@@ -1702,8 +1702,8 @@ function DangerZone() {
       <p className="mb-3 text-xs text-[var(--muted)]">
         For test-data cleanup and troubleshooting. Wiping is admin-only and enforced by the server.
       </p>
-      {wipeResult ? (
-        <div className="rounded-md border border-[var(--moss)] bg-[var(--moss-light)] px-3 py-2.5 text-sm text-[var(--moss-strong)]">
+      {wipeResult && (
+        <div className="mb-3 rounded-md border border-[var(--moss)] bg-[var(--moss-light)] px-3 py-2.5 text-sm text-[var(--moss-strong)]">
           <p>
             Wiped {wipeResult.patients} patients, {wipeResult.visits} visits, and{' '}
             {wipeResult.invoices} invoices. The app needs to reload to show a clean slate.
@@ -1719,34 +1719,33 @@ function DangerZone() {
             Reload now
           </button>
         </div>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={btnSecondary}
-            disabled={busy}
-            onClick={() => setConfirmingReset(true)}
-          >
-            {busy ? 'Working…' : 'Reset local cache on this device'}
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-[var(--rust)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)] disabled:opacity-50"
-            disabled={busy}
-            onClick={wipeAll}
-          >
-            {busy ? 'Wiping…' : 'Wipe ALL clinic data…'}
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--surface)] disabled:opacity-50"
-            disabled={busy}
-            onClick={deleteClinic}
-          >
-            {busy ? 'Working…' : 'Delete clinic entirely…'}
-          </button>
-        </div>
       )}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={btnSecondary}
+          disabled={busy}
+          onClick={() => setConfirmingReset(true)}
+        >
+          {busy ? 'Working…' : 'Reset local cache on this device'}
+        </button>
+        <button
+          type="button"
+          className="rounded-md border border-[var(--rust)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)] disabled:opacity-50"
+          disabled={busy}
+          onClick={wipeAll}
+        >
+          {busy ? 'Wiping…' : 'Wipe ALL clinic data…'}
+        </button>
+        <button
+          type="button"
+          className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--surface)] disabled:opacity-50"
+          disabled={busy}
+          onClick={deleteClinic}
+        >
+          {busy ? 'Working…' : 'Delete clinic entirely…'}
+        </button>
+      </div>
       <p className="mt-2 text-xs text-[var(--muted)]">
         <strong>Wipe</strong> removes patients, visits, and invoices but keeps this clinic, its
         catalog, therapists, and team logins. <strong>Delete clinic</strong> removes the whole
@@ -2330,7 +2329,7 @@ interface ClinicMember {
   email: string;
   role: string;
   displayName: string | null;
-  /** Never signed in — invite still pending. */
+  /** Invite not finished — never signed in, or opened link without choosing a password. */
   pending: boolean;
   invitedAt: string | null;
 }
@@ -2397,6 +2396,7 @@ function Therapists() {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [resendInProgress, setResendInProgress] = useState<string | null>(null);
   // Client-side hint only — invite-therapist itself is the real boundary
   // (Phase 2 of the tier plan). Held off while entitlements/members are
   // still loading so a fresh page load doesn't flash "locked" for a real
@@ -2426,13 +2426,14 @@ function Therapists() {
           display_name: string | null;
           invited_at: string | null;
           last_sign_in_at: string | null;
+          require_password_setup: boolean | null;
         }[]
       ).map((m) => ({
         userId: m.user_id,
         email: m.email,
         role: m.role,
         displayName: m.display_name,
-        pending: m.last_sign_in_at == null,
+        pending: m.last_sign_in_at == null || m.require_password_setup === true,
         invitedAt: m.invited_at,
       }))
     );
@@ -2635,6 +2636,7 @@ function Therapists() {
 
   async function resendInvite(userId: string, setErr: (msg: string | null) => void) {
     setErr(null);
+    setResendInProgress(userId);
     try {
       const supabase = getSupabase();
       if (!supabase) throw new Error('No Supabase connection');
@@ -2655,6 +2657,8 @@ function Therapists() {
       setInviteSuccess(payload?.message ?? 'Sign-in email resent.');
     } catch (e) {
       setErr(toFriendlyMessage(e));
+    } finally {
+      setResendInProgress(null);
     }
   }
 
@@ -2711,6 +2715,7 @@ function Therapists() {
                       member={m}
                       clinicId={clinic.id}
                       revoking={revokeInProgress === m.userId}
+                      resending={resendInProgress === m.userId}
                       isLastAdmin={isLastAdmin}
                       onRevoke={() => revokeMember(m.userId, m.email)}
                       onSaved={() => void refetchMembers()}
@@ -2802,7 +2807,6 @@ function Therapists() {
                 </p>
               </div>
             )}
-            {inviteSuccess && <p className="mt-2 text-sm text-[var(--moss)]">{inviteSuccess}</p>}
             {inviteError && <ErrorNote message={inviteError} />}
           </div>
         </>
@@ -2991,6 +2995,7 @@ function MemberCard({
   member,
   clinicId,
   revoking,
+  resending,
   isLastAdmin,
   onRevoke,
   onSaved,
@@ -2999,6 +3004,7 @@ function MemberCard({
   member: ClinicMember;
   clinicId: string;
   revoking: boolean;
+  resending: boolean;
   /** True when this member is the clinic's only admin — demoting or
    *  revoking them would leave nobody able to reach Settings again. The DB
    *  rejects it either way (see guard_clinic_members_last_admin), but
@@ -3107,7 +3113,7 @@ function MemberCard({
           className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
           style={{ background: 'var(--amber-light)', color: 'var(--amber-strong)' }}
         >
-          Pending — hasn't signed in yet
+          Pending — hasn't finished signing in
         </span>
       ) : (
         <span
@@ -3129,8 +3135,13 @@ function MemberCard({
           Edit
         </button>
         {onResend && (
-          <button type="button" className="text-[var(--teal)] hover:underline" onClick={onResend}>
-            Resend email
+          <button
+            type="button"
+            className="text-[var(--teal)] hover:underline disabled:opacity-50"
+            disabled={resending}
+            onClick={onResend}
+          >
+            {resending ? 'Sending…' : 'Resend email'}
           </button>
         )}
         <button
