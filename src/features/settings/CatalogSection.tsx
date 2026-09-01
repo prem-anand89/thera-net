@@ -599,7 +599,9 @@ function ReferringSourcesCatalog() {
     <SectionCard title="Referral sources">
       <p className="mb-3 text-xs text-[var(--muted)]">
         Shown when adding or editing a patient. Deactivate instead of deleting so existing patients
-        keep displaying correctly.
+        keep displaying correctly. Optionally add a <strong>detail field label</strong> — when staff pick
+        that source, the patient form shows an extra text field with that label (e.g. source &quot;Doctor
+        referral&quot; with detail &quot;Referring doctor&quot;).
       </p>
       <CatalogStats
         items={[
@@ -618,7 +620,7 @@ function ReferringSourcesCatalog() {
         </label>
       )}
       {visible.length > 0 ? (
-        <div className="mb-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <div className="mb-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((item) => (
             <ReferralSourceCard key={item.id} item={item} />
           ))}
@@ -701,8 +703,10 @@ function ReferralSourceCard({ item }: { item: ReferringSourceItem }) {
             value={detailDraft}
             onChange={(e) => setDetailDraft(e.target.value)}
           />
+          <p className="mt-1 text-[11px] text-[var(--muted)]">
+            Leave blank if patients only need to pick the source name — no follow-up field.
+          </p>
         </Field>
-        <ReferralSourcePreview name={nameDraft} detailLabel={detailDraft} />
         <ErrorNote message={error} />
       </CatalogCardShell>
     );
@@ -726,44 +730,10 @@ function ReferralSourceCard({ item }: { item: ReferringSourceItem }) {
       <ActivePill active={item.active} />
       {item.detailLabel ? (
         <p className="text-[11.5px] text-[var(--muted)]">
-          Extra field: <span className="text-[var(--ink)]">{item.detailLabel}</span>
+          Detail field: <span className="text-[var(--ink)]">{item.detailLabel}</span>
         </p>
-      ) : (
-        <p className="text-[11.5px] text-[var(--muted)]">No extra detail field</p>
-      )}
-      <ReferralSourcePreview name={item.name} detailLabel={item.detailLabel ?? ''} compact />
+      ) : null}
     </CatalogCardShell>
-  );
-}
-
-function ReferralSourcePreview({
-  name,
-  detailLabel,
-  compact,
-}: {
-  name: string;
-  detailLabel: string;
-  compact?: boolean;
-}) {
-  const label = name.trim() || 'Source name';
-  const detail = detailLabel.trim();
-  return (
-    <div
-      className={`rounded-lg border border-[var(--border)] bg-[var(--paper)] ${compact ? 'p-2' : 'p-2.5'}`}
-    >
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-        Patient form preview
-      </p>
-      <div className="space-y-1.5">
-        <div className={`${inputCls} bg-[var(--surface)] text-xs text-[var(--ink)]`}>{label}</div>
-        {detail && (
-          <div>
-            <p className="mb-0.5 text-[10px] text-[var(--muted)]">{detail}</p>
-            <div className={`${inputCls} bg-[var(--surface)] text-xs text-[var(--muted)]`}>…</div>
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -795,28 +765,29 @@ function ReferralSourceAddForm() {
   return (
     <CatalogAddCard
       title="Add a referral source"
-      hint='Use the detail label when staff should capture extra info — e.g. source "Doctor referral" with detail "Referring doctor".'
+      hint='e.g. "Instagram ad" or "Doctor referral" with detail "Referring doctor".'
     >
       <div className="space-y-2">
-        <Field label="Name">
-          <input
-            className={inputCls}
-            placeholder="e.g. Instagram ad"
-            value={draftName}
-            onChange={(e) => setDraftName(e.target.value)}
-          />
-        </Field>
-        <Field label="Detail field label (optional)">
-          <input
-            className={inputCls}
-            placeholder="e.g. Referring doctor"
-            value={draftDetailLabel}
-            onChange={(e) => setDraftDetailLabel(e.target.value)}
-          />
-        </Field>
-        <ReferralSourcePreview name={draftName} detailLabel={draftDetailLabel} />
+        <input
+          className={inputCls}
+          placeholder="Source name"
+          value={draftName}
+          onChange={(e) => setDraftName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void addItem();
+          }}
+        />
+        <input
+          className={inputCls}
+          placeholder="Detail field label (optional)"
+          value={draftDetailLabel}
+          onChange={(e) => setDraftDetailLabel(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void addItem();
+          }}
+        />
         <button type="button" className={`${btnSecondary} w-full`} onClick={() => void addItem()}>
-          + Add source
+          + Add
         </button>
         <ErrorNote message={error} />
       </div>
