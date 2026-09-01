@@ -1599,10 +1599,12 @@ function DataBackup() {
 
 function DangerZone() {
   const clinic = useClinic();
+  const clinics = useLiveQuery(() => db.clinics.toArray(), []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [confirmingWipe, setConfirmingWipe] = useState(false);
+  const [confirmingDeleteClinic, setConfirmingDeleteClinic] = useState(false);
   const [wipeResult, setWipeResult] = useState<{
     patients: number;
     visits: number;
@@ -1665,6 +1667,36 @@ function DangerZone() {
     location.reload();
   }
 
+  function deleteClinic() {
+    setError(null);
+    const supabase = getSupabase();
+    if (!supabase || !navigator.onLine) {
+      setError('Deleting a clinic needs a connection — try again when online.');
+      return;
+    }
+    setConfirmingDeleteClinic(true);
+  }
+
+  async function doDeleteClinic() {
+    setConfirmingDeleteClinic(false);
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setBusy(true);
+    try {
+      const { error: rpcError } = await supabase.rpc('admin_delete_clinic', {
+        p_clinic_id: clinic.id,
+      });
+      if (rpcError) throw new Error(rpcError.message);
+      await db.delete();
+      location.reload();
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+      setBusy(false);
+    }
+  }
+
+  const otherClinicCount = (clinics ?? []).filter((c) => c.id !== clinic.id).length;
+
   return (
     <SectionCard title="Danger zone">
       <p className="mb-3 text-xs text-[var(--muted)]">
@@ -1705,8 +1737,25 @@ function DangerZone() {
           >
             {busy ? 'Wiping…' : 'Wipe ALL clinic data…'}
           </button>
+          <button
+            type="button"
+            className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--surface)] disabled:opacity-50"
+            disabled={busy}
+            onClick={deleteClinic}
+          >
+            {busy ? 'Working…' : 'Delete clinic entirely…'}
+          </button>
         </div>
       )}
+      <p className="mt-2 text-xs text-[var(--muted)]">
+        <strong>Wipe</strong> removes patients, visits, and invoices but keeps this clinic, its
+        catalog, therapists, and team logins. <strong>Delete clinic</strong> removes the whole
+        clinic permanently — including team access, catalog, and all data. Logo files in storage
+        may need manual cleanup.
+        {otherClinicCount > 0
+          ? ` You have ${otherClinicCount} other clinic${otherClinicCount === 1 ? '' : 's'} — after delete you'll switch to another.`
+          : " This is your only clinic — you'll set up a new one afterward."}
+      </p>
       <div className="mt-2">
         <ErrorNote message={error} />
       </div>
@@ -1731,6 +1780,19 @@ function DangerZone() {
         }}
         onCancel={() => setConfirmingWipe(false)}
         onConfirm={() => void doWipeAll()}
+      />
+      <ConfirmDialog
+        open={confirmingDeleteClinic}
+        title="Delete this clinic permanently?"
+        message={`This deletes "${clinic.name}" and everything in it — all patients, visits, invoices, catalog, therapists, and team logins. This cannot be undone.`}
+        confirmLabel="Delete clinic"
+        destructive
+        typeToConfirm={{
+          placeholder: `Type "${clinic.name}" to confirm`,
+          isMatch: (typed) => typed.trim() === clinic.name,
+        }}
+        onCancel={() => setConfirmingDeleteClinic(false)}
+        onConfirm={() => void doDeleteClinic()}
       />
     </SectionCard>
   );
@@ -2268,6 +2330,9 @@ interface ClinicMember {
   email: string;
   role: string;
   displayName: string | null;
+  /** Never signed in — invite still pending. */
+  pending: boolean;
+  invitedAt: string | null;
 }
 
 /** Same accent per role everywhere a role shows up as a colored pill or
@@ -2353,14 +2418,23 @@ function Therapists() {
       return;
     }
     setMembers(
-      (data as { user_id: string; email: string; role: string; display_name: string | null }[]).map(
-        (m) => ({
-          userId: m.user_id,
-          email: m.email,
-          role: m.role,
-          displayName: m.display_name,
-        })
-      )
+      (
+        data as {
+          user_id: string;
+          email: string;
+          role: string;
+          display_name: string | null;
+          invited_at: string | null;
+          last_sign_in_at: string | null;
+        }[]
+      ).map((m) => ({
+        userId: m.user_id,
+        email: m.email,
+        role: m.role,
+        displayName: m.display_name,
+        pending: m.last_sign_in_at == null,
+        invitedAt: m.invited_at,
+      }))
     );
   }, [clinic.id]);
 
@@ -2502,6 +2576,7 @@ function Therapists() {
       setInviteEmail('');
       setInviteName('');
       setInviteRole('therapist');
+      void refetchMembers();
     } catch (e) {
       setInviteError(toFriendlyMessage(e));
     } finally {
@@ -2540,11 +2615,46 @@ function Therapists() {
 
       if (error) throw error;
 
+      // Unlink any service-roster row still pointing at this login.
+      const linked = (therapists ?? []).filter((t) => t.userId === userId);
+      for (const t of linked) {
+        await repos.therapists.put({
+          ...t,
+          userId: null,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
       setMembers((prev) => prev?.filter((m) => m.userId !== userId) ?? null);
     } catch (e) {
       setMembersError(toFriendlyMessage(e));
     } finally {
       setRevokeInProgress(null);
+    }
+  }
+
+  async function resendInvite(userId: string, setErr: (msg: string | null) => void) {
+    setErr(null);
+    try {
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('No Supabase connection');
+      const { data: result, error: invokeError } = await supabase.functions.invoke(
+        'invite-therapist',
+        {
+          body: {
+            action: 'resend',
+            clinicId: clinic.id,
+            userId,
+            redirectOrigin: window.location.origin,
+          },
+        }
+      );
+      if (invokeError) throw new Error(invokeError.message);
+      const payload = result as { error?: string; message?: string } | null;
+      if (payload?.error) throw new Error(payload.error);
+      setInviteSuccess(payload?.message ?? 'Sign-in email resent.');
+    } catch (e) {
+      setErr(toFriendlyMessage(e));
     }
   }
 
@@ -2604,6 +2714,11 @@ function Therapists() {
                       isLastAdmin={isLastAdmin}
                       onRevoke={() => revokeMember(m.userId, m.email)}
                       onSaved={() => void refetchMembers()}
+                      onResend={
+                        m.pending
+                          ? () => void resendInvite(m.userId, setMembersError)
+                          : undefined
+                      }
                     />
                   );
                 })}
@@ -2611,6 +2726,7 @@ function Therapists() {
             ) : (
               <p className="text-xs text-[var(--muted)]">No team members yet.</p>
             )}
+            {inviteSuccess && <p className="mt-2 text-sm text-[var(--moss)]">{inviteSuccess}</p>}
             <ErrorNote message={membersError} />
           </div>
 
@@ -2878,6 +2994,7 @@ function MemberCard({
   isLastAdmin,
   onRevoke,
   onSaved,
+  onResend,
 }: {
   member: ClinicMember;
   clinicId: string;
@@ -2889,6 +3006,7 @@ function MemberCard({
   isLastAdmin: boolean;
   onRevoke: () => void;
   onSaved: () => void;
+  onResend?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(member.displayName ?? '');
@@ -2984,10 +3102,25 @@ function MemberCard({
         </div>
       </div>
       <RolePill role={role} />
+      {member.pending ? (
+        <span
+          className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+          style={{ background: 'var(--amber-light)', color: 'var(--amber-strong)' }}
+        >
+          Pending — hasn't signed in yet
+        </span>
+      ) : (
+        <span
+          className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+          style={{ background: 'var(--moss-light)', color: 'var(--moss-strong)' }}
+        >
+          Active
+        </span>
+      )}
       {isLastAdmin && (
         <p className="text-[11px] text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
       )}
-      <div className="mt-auto flex gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
+      <div className="mt-auto flex flex-wrap gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
         <button
           type="button"
           className="text-[var(--teal)] hover:underline"
@@ -2995,6 +3128,11 @@ function MemberCard({
         >
           Edit
         </button>
+        {onResend && (
+          <button type="button" className="text-[var(--teal)] hover:underline" onClick={onResend}>
+            Resend email
+          </button>
+        )}
         <button
           type="button"
           className="ml-auto text-[var(--rust)] hover:underline disabled:opacity-50"

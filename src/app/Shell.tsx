@@ -182,6 +182,7 @@ const NAV = [
 
 export function Shell() {
   const { loading, session } = useSession();
+  const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [syncKicked, setSyncKicked] = useState(false);
   const sync = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
@@ -249,6 +250,15 @@ export function Shell() {
       void db.meta.put({ key: 'activeClinicId', value: clinics[0].id });
     }
   }, [clinics, activeClinicKnown]);
+
+  // Invited members who haven't chosen a password yet — Shell would otherwise
+  // drop them straight into Workspace with a session but no password set.
+  useEffect(() => {
+    if (!session?.user || pathname === '/reset-password') return;
+    if (session.user.user_metadata?.require_password_setup === true) {
+      void navigate({ to: '/reset-password' });
+    }
+  }, [session, pathname, navigate]);
 
   // The recovery link's own auth flow doesn't need session/clinic gating —
   // it may be opened by someone whose local session has expired, and it
