@@ -475,13 +475,18 @@ queued with a visible error.
 - Fiscal year start month (default April → FY 26-27)
 - **Walk-in MRNO prefix** (configurable, defaults to 'W')
 
-#### Service Catalog
+#### Catalog (Settings → Catalog)
+Single settings section with three sub-tabs — **Billing packages**, **Treatments
+performed**, and **Referral sources** — each using the same card + **Edit**
+(Save/Cancel) pattern as Team → Logins. Legacy `?tab=services|treatments|referrals`
+URLs redirect to `?tab=catalog&catalogView=…`.
+
+#### Service Catalog (Billing packages tab)
 - Category and name per item — category is free text (autocompleted from
-  existing categories via a datalist), and the Settings list/table groups
-  items under a category heading rather than repeating it per row
-- Session count (1, 3, 5, etc. for package pricing)
-- Base price (in paise)
-- Active toggle
+  existing categories via a datalist), grouped under category headings
+- Session count (1, 3, 5, etc. for package pricing) — editable after create
+- Base price (in paise) — price changes affect future visits only
+- Active toggle (deactivate, not delete)
 - Unique constraint per clinic
 
 #### No-Return Reason Catalog
@@ -1114,7 +1119,7 @@ updated_at      timestamptz NOT NULL
 UNIQUE (clinic_id, name)
 ```
 Clinic-editable list of referral channels shown when adding/editing a
-patient (Settings → Referral sources, its own tab), same add / deactivate-not-delete / rename
+patient (Settings → Catalog → Referral sources), same add / deactivate-not-delete / edit
 pattern as `no_return_reason_catalog`. Seeded with the app's original six
 labels (Hospital referral, Doctor referral, Walk-in, Word of mouth, Online,
 Other) for every clinic — new via `create_clinic_with_admin()`, existing via
