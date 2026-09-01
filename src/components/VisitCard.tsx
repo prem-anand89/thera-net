@@ -59,14 +59,14 @@ export function treatmentsDisplayText(
   return parts.join(' — ') || '—';
 }
 
-/** Brighter, higher-chroma variants of the app's --teal/--rust tokens,
- *  used only by the split-percentage ring below. At the ring's 12px size
- *  the standard tokens (tuned for larger fills — buttons, pills) read as
- *  murky and blended into each other and into the paper background;
- *  every other teal/rust use in the app keeps the standard, darker
- *  tokens unchanged. */
-const RING_TEAL = '#1f9aa0';
-const RING_RUST = '#e2711d';
+/** Lighter, brighter variants of the app's --teal/--rust tokens, same
+ *  hues (184°/19°) just raised in lightness/saturation, used only by the
+ *  split-percentage ring below. At the ring's 12px size the standard
+ *  tokens (tuned for larger fills — buttons, pills) read as murky and
+ *  blended into each other and into the paper background; every other
+ *  teal/rust use in the app keeps the standard, darker tokens unchanged. */
+const RING_TEAL = '#3dafb8';
+const RING_RUST = '#d77142';
 
 /** Percentage ring for the shared-split line under a therapist's name —
  *  the rust arc's length is the visit's actual split share (not just a
