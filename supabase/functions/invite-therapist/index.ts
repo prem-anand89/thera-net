@@ -70,6 +70,63 @@ async function findUserIdByEmail(
   return null;
 }
 
+function notifyMessageForRelink(email: string, emailed: boolean): string {
+  return emailed
+    ? `Added ${email} to this clinic — a sign-in email was sent`
+    : `${email} was added to this clinic`;
+}
+
+/** Link a therapist login to an existing unlinked roster row when possible,
+ *  otherwise insert a new row. Avoids duplicate roster entries after revoke
+ *  + re-invite. */
+async function linkTherapistRosterRow(
+  serviceClient: ReturnType<typeof createClient>,
+  clinicId: string,
+  userId: string,
+  displayName: string
+): Promise<string | null> {
+  const { data: alreadyLinked } = await serviceClient
+    .from('therapists')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (alreadyLinked) return null;
+
+  const { data: unlinkedRows } = await serviceClient
+    .from('therapists')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .is('user_id', null)
+    .ilike('name', displayName)
+    .limit(1);
+  const unlinked = unlinkedRows?.[0] ?? null;
+
+  if (unlinked) {
+    const { error } = await serviceClient
+      .from('therapists')
+      .update({ user_id: userId, name: displayName, active: true })
+      .eq('id', unlinked.id);
+    if (error) {
+      console.error(`Failed to re-link therapist roster row for user ${userId}:`, error);
+      return `Could not link them to the service roster automatically: ${error.message}. Link them from Settings → Team → Service roster.`;
+    }
+    return null;
+  }
+
+  const { error: therapistError } = await serviceClient.from('therapists').insert({
+    clinic_id: clinicId,
+    name: displayName,
+    user_id: userId,
+    active: true,
+  });
+  if (therapistError) {
+    console.error(`Failed to create therapist roster row for user ${userId}:`, therapistError);
+    return `Could not add them to the service roster automatically: ${therapistError.message}. Add them from Settings → Team → Service roster.`;
+  }
+  return null;
+}
+
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -183,7 +240,9 @@ export default async function handler(req: Request): Promise<Response> {
       if (userError || !userData.user?.email) {
         return json({ error: 'Could not look up that login.' }, 400);
       }
-      if (userData.user.last_sign_in_at) {
+      const needsPasswordSetup =
+        userData.user.user_metadata?.require_password_setup === true;
+      if (userData.user.last_sign_in_at && !needsPasswordSetup) {
         return json({ error: 'This member has already signed in — no resend needed.' }, 409);
       }
       if (!redirectTo) {
@@ -388,27 +447,49 @@ export default async function handler(req: Request): Promise<Response> {
     // above, so a failure here is reported but doesn't undo either --  the
     // existing manual roster path still works as a fallback.
     if (role === 'therapist') {
-      const { error: therapistError } = await serviceClient.from('therapists').insert({
-        clinic_id: clinicId,
-        name: name!.trim(),
-        user_id: newUserId,
-        active: true,
-      });
-      if (therapistError) {
-        console.error(
-          `Failed to create therapist roster row for user ${newUserId}:`,
-          therapistError
-        );
+      const therapistWarning = await linkTherapistRosterRow(
+        serviceClient,
+        clinicId,
+        newUserId,
+        name!.trim()
+      );
+      if (therapistWarning) {
         return json(
           {
             success: true,
             message: reLinkedExisting
               ? `${email} was added to this clinic`
               : `Invitation sent to ${email}`,
-            warning: `Could not add them to the service roster automatically: ${therapistError.message}. Add them from Settings → Team → Service roster.`,
+            warning: therapistWarning,
           },
           200
         );
+      }
+    }
+
+    // Re-linking an existing auth account doesn't trigger inviteUserByEmail —
+    // send a sign-in email so they know they were added to this clinic.
+    let relinkEmailed = false;
+    if (reLinkedExisting && redirectTo) {
+      const { data: existingUserData } =
+        await serviceClient.auth.admin.getUserById(newUserId);
+      const { error: notifyError } = await serviceClient.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      });
+      if (notifyError) {
+        console.error(`Could not notify re-linked user ${newUserId}:`, notifyError);
+      } else {
+        relinkEmailed = true;
+        const neverSignedIn = !existingUserData?.user?.last_sign_in_at;
+        await serviceClient.auth.admin.updateUserById(newUserId, {
+          user_metadata: {
+            ...(existingUserData?.user?.user_metadata ?? {}),
+            clinicName: clinicData?.name ?? null,
+            invitedByName: memberData?.display_name ?? null,
+            role,
+            ...(neverSignedIn ? { require_password_setup: true } : {}),
+          },
+        });
       }
     }
 
@@ -416,7 +497,7 @@ export default async function handler(req: Request): Promise<Response> {
       {
         success: true,
         message: reLinkedExisting
-          ? `${email} was added to this clinic`
+          ? notifyMessageForRelink(email, relinkEmailed)
           : `Invitation sent to ${email}`,
       },
       200

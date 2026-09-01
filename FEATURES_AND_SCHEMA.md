@@ -395,9 +395,12 @@ queued with a visible error.
   signed-in user with that flag to `/reset-password` before they reach
   Workspace. `ResetPasswordPage.tsx` clears the flag when a password is chosen.
 - **Member status in Team → Logins**: `list_clinic_members_with_email()` joins
-  `auth.users.last_sign_in_at` — **Pending** (never signed in) vs **Active**.
+  `auth.users.last_sign_in_at` and `raw_user_meta_data.require_password_setup` —
+  **Pending** (never signed in, or still needs a password) vs **Active**.
   Pending cards get a **Resend email** action (`invite-therapist` with
-  `action: 'resend'`, recovery mailer → `/reset-password`).
+  `action: 'resend'`, recovery mailer → `/reset-password`). Resend stays
+  available while `require_password_setup` is true even if the invite link was
+  opened (which sets `last_sign_in_at`).
 - **Revoke** unlinks any `therapists.user_id` pointing at the removed login.
 - **Delete clinic** (Settings → Data → Danger zone): `admin_delete_clinic()`
   RPC — admin-only, disables invoice/visit immutability triggers, deletes the
