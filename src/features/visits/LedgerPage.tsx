@@ -684,7 +684,42 @@ export function LedgerPage() {
           <p className="mb-3 text-xs text-[var(--muted)]">
             Mid-package and not seen in over 14 days - your actionable retention list.
           </p>
-          <div className="overflow-x-auto">
+          {/* Below tab: — boxed cards instead of forcing this 6-column
+              table to scroll sideways on a phone. */}
+          <div className="tab:hidden space-y-2">
+            {followUps.map((p) => (
+              <div
+                key={p.packageGroupId}
+                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-display text-sm font-medium text-[var(--ink)]">
+                      {p.patientName}{' '}
+                      <span className="text-xs font-normal text-[var(--muted)]">{p.mrno}</span>
+                    </div>
+                    <div className="text-xs text-[var(--muted)]">{p.serviceName}</div>
+                  </div>
+                  <Link
+                    to="/ledger"
+                    search={{ patientId: p.patientId }}
+                    className="shrink-0 text-xs font-medium text-[var(--teal)] hover:underline"
+                  >
+                    View
+                  </Link>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
+                  <span className="font-num">
+                    {p.sessionsLogged} of {p.packageTotal} sessions
+                  </span>
+                  <span>Last visit {formatDateDMY(p.lastVisitOn)}</span>
+                  <span className="font-num">{p.daysSinceLastVisit} days since</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden tab:block overflow-x-auto">
             <table className="min-w-full divide-y divide-[var(--border)] text-sm">
               <thead>
                 <tr>
@@ -732,7 +767,38 @@ export function LedgerPage() {
             <StatTile label="Total outstanding" value={formatINR(outstanding.totalPaise)} />
             <StatTile label="Invoices" value={outstanding.count} />
           </div>
-          <div className="overflow-x-auto">
+          {/* Below tab: — boxed cards instead of forcing this 5-column
+              table to scroll sideways on a phone. */}
+          <div className="tab:hidden space-y-2">
+            {outstanding.rows.map((r) => (
+              <Link
+                key={r.invoiceId}
+                to="/invoices/$invoiceId/print"
+                params={{ invoiceId: r.invoiceId }}
+                search={{ from: '/ledger' }}
+                className="block rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-display text-sm font-medium text-[var(--ink)]">
+                      {r.patientName}{' '}
+                      <span className="text-xs font-normal text-[var(--muted)]">{r.mrno}</span>
+                    </div>
+                    <div className="text-xs text-[var(--teal)]">{r.invoiceNo}</div>
+                  </div>
+                  <span className="font-num shrink-0 text-sm font-medium text-[var(--ink)]">
+                    {formatINR(r.totalPaise)}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
+                  <span>Issued {formatDateDM(r.issuedAt)}</span>
+                  <span className="font-num">{r.daysOutstanding} days outstanding</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          <div className="hidden tab:block overflow-x-auto">
             <table className="min-w-full divide-y divide-[var(--border)] text-sm">
               <thead>
                 <tr>
