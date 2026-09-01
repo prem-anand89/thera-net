@@ -38,9 +38,11 @@ export function PrintLetterhead({
               {clinic.address}
             </p>
           )}
-          <p className="text-xs text-[var(--muted)]">
-            {[clinic.phone, clinic.email].filter(Boolean).join(' · ')}
-          </p>
+          {(clinic.phone || clinic.email) && (
+            <p className="text-xs text-[var(--muted)]">
+              {[clinic.phone, clinic.email].filter(Boolean).join(' · ')}
+            </p>
+          )}
           {clinic.gstNo && <p className="text-xs text-[var(--muted)]">GSTIN: {clinic.gstNo}</p>}
         </div>
       </div>
