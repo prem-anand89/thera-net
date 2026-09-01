@@ -59,6 +59,45 @@ export function treatmentsDisplayText(
   return parts.join(' — ') || '—';
 }
 
+/** Fork glyph for the shared-split line under a therapist's name — same
+ *  minimal stroke-icon language as Shell.tsx's nav icons (currentColor,
+ *  ~1.4px stroke, round caps, no fill). */
+function IconSplit({ className }: { className?: string }) {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 12 12"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M6 10V7M6 7L2.5 3M6 7L9.5 3"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Compact "N% → colleague" line shown under a therapist's name when a
+ *  visit's revenue is split — stacked below rather than beside the name
+ *  pill so a long colleague name can't widen the row/column; wraps within
+ *  its own line if it must instead. */
+function SharedSplitLine({ pct, name }: { pct: number; name: string }) {
+  return (
+    <span className="inline-flex max-w-[9rem] items-center gap-1 text-[11px] leading-tight text-[var(--muted)]">
+      <IconSplit className="shrink-0" />
+      <span className="truncate" title={`${pct}% → ${name}`}>
+        {pct}% → {name}
+      </span>
+    </span>
+  );
+}
+
 /** ID · age · sex under the name, matching New visit's Patient panel. */
 export function patientIdentityLine(
   mrno: string,
@@ -497,12 +536,13 @@ function VisitCardDetails({ data }: { data: VisitCardData }) {
     <div className="mt-1.5 space-y-1">
       {data.therapistName && (
         <CardDetailRow label="Therapist">
-          <span className="inline-flex flex-wrap items-center gap-1.5">
+          <span className="flex min-w-0 flex-col gap-0.5">
             <TherapistPill>{data.therapistName}</TherapistPill>
             {data.hasSplit && data.sharedPct != null && (
-              <Pill tone="slate">
-                {data.sharedPct}% → {data.sharedTherapistName ?? 'colleague'}
-              </Pill>
+              <SharedSplitLine
+                pct={data.sharedPct}
+                name={data.sharedTherapistName ?? 'colleague'}
+              />
             )}
           </span>
         </CardDetailRow>
@@ -860,12 +900,13 @@ function VisitTable({
                     case 'therapist':
                       return (
                         <td key={key} className={td}>
-                          <div className="flex flex-wrap items-center gap-1.5">
+                          <div className="flex min-w-0 flex-col gap-0.5">
                             <TherapistPill>{row.therapistName}</TherapistPill>
                             {row.hasSplit && row.sharedPct != null && (
-                              <Pill tone="slate">
-                                {row.sharedPct}% → {row.sharedTherapistName ?? 'colleague'}
-                              </Pill>
+                              <SharedSplitLine
+                                pct={row.sharedPct}
+                                name={row.sharedTherapistName ?? 'colleague'}
+                              />
                             )}
                           </div>
                         </td>
