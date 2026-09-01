@@ -1905,7 +1905,16 @@ its own narrow in-place edit path instead.
    / grant further clinic access via `supabase/setup_members.sql`
 5. Deploy the `invite-therapist` edge function (`supabase/functions/`) —
    used by Settings → Team to invite a new login without exposing a
-   service-role key to the client
+   service-role key to the browser. `supabase/config.toml` pins
+   `[functions.invite-therapist] verify_jwt = false` so browser CORS
+   preflights reach the handler (the function still checks the caller's
+   JWT + admin role inside). Redeploy after changing the function or
+   config: `supabase functions deploy invite-therapist`. Ensure
+   Authentication → URL configuration lists every production/staging
+   origin in **Redirect URLs** (the invite link uses
+   `{origin}/reset-password`) and that **SMTP** or Supabase's built-in
+   mailer is configured under Authentication → Email — without it,
+   `inviteUserByEmail()` creates the user but no message is delivered.
 6. `cp .env.example .env` and fill in project URL + anon key
 7. `npm install && npm run dev`
 
