@@ -1,7 +1,7 @@
 import type { FeedbackRequest, FeedbackRequestStatus, UUID } from '@/domain/types';
 import type { Repos } from '@/repositories/types';
 import { getSupabase } from '@/lib/supabase';
-import { shareTextViaWhatsApp } from '@/lib/pdfShare';
+import { sendWhatsAppMessage } from '@/lib/whatsappSend';
 
 /** Public `/f/$token` URL for a feedback request's token. */
 export function feedbackLinkUrl(token: string): string {
@@ -40,6 +40,7 @@ export function createFeedbackService(repos: Repos) {
     async askForFeedback(
       visitId: UUID,
       patientName: string,
+      patientPhone: string | null,
       clinicName: string
     ): Promise<FeedbackRequest> {
       const supabase = getSupabase();
@@ -85,10 +86,14 @@ export function createFeedbackService(repos: Repos) {
         updatedBy: row.updated_by ?? undefined,
       };
       await repos.feedbackRequests.putLocal(request);
-      await shareTextViaWhatsApp(
-        feedbackShareMessage(patientName, clinicName, row.token),
-        'Ask for feedback'
-      );
+      await sendWhatsAppMessage({
+        clinicId: row.clinic_id,
+        kind: 'feedback_request',
+        toPhone: patientPhone,
+        bodyParams: [patientName, clinicName, feedbackLinkUrl(row.token)],
+        shareText: feedbackShareMessage(patientName, clinicName, row.token),
+        shareTitle: 'Ask for feedback',
+      });
       return request;
     },
 
@@ -101,6 +106,7 @@ export function createFeedbackService(repos: Repos) {
     async resend(
       request: FeedbackRequest,
       patientName: string,
+      patientPhone: string | null,
       clinicName: string
     ): Promise<FeedbackRequest> {
       const supabase = getSupabase();
@@ -121,10 +127,14 @@ export function createFeedbackService(repos: Repos) {
         updatedAt: new Date().toISOString(),
       };
       await repos.feedbackRequests.putLocal(updated);
-      await shareTextViaWhatsApp(
-        feedbackShareMessage(patientName, clinicName, token),
-        'Ask for feedback'
-      );
+      await sendWhatsAppMessage({
+        clinicId: request.clinicId,
+        kind: 'feedback_request',
+        toPhone: patientPhone,
+        bodyParams: [patientName, clinicName, feedbackLinkUrl(token)],
+        shareText: feedbackShareMessage(patientName, clinicName, token),
+        shareTitle: 'Ask for feedback',
+      });
       return updated;
     },
 
@@ -136,14 +146,21 @@ export function createFeedbackService(repos: Repos) {
      * re-checking it, since it has no rating of its own to check against.
      */
     async askForGoogleReview(
+      clinicId: UUID,
       patientName: string,
+      patientPhone: string | null,
       clinicName: string,
       googleReviewUrl: string
     ): Promise<void> {
-      await shareTextViaWhatsApp(
-        `Hi ${patientName}, so glad you had a great experience at ${clinicName}! Would you mind leaving us a quick Google review? ${googleReviewUrl}`,
-        'Ask for a Google review'
-      );
+      const text = `Hi ${patientName}, so glad you had a great experience at ${clinicName}! Would you mind leaving us a quick Google review? ${googleReviewUrl}`;
+      await sendWhatsAppMessage({
+        clinicId,
+        kind: 'google_review',
+        toPhone: patientPhone,
+        bodyParams: [patientName, clinicName, googleReviewUrl],
+        shareText: text,
+        shareTitle: 'Ask for a Google review',
+      });
     },
 
     /**
@@ -155,24 +172,41 @@ export function createFeedbackService(repos: Repos) {
      * later slice, so there's nothing to link to yet).
      */
     async sendStalePackageReminder(
+      clinicId: UUID,
       patientName: string,
+      patientPhone: string | null,
       clinicName: string,
       serviceName: string
     ): Promise<void> {
-      await shareTextViaWhatsApp(
-        `Hi ${patientName}, we noticed it's been a while since your last ${serviceName} session at ${clinicName}. We'd love to see you again — reach out whenever you're ready to continue!`,
-        'Send reminder'
-      );
+      const text = `Hi ${patientName}, we noticed it's been a while since your last ${serviceName} session at ${clinicName}. We'd love to see you again — reach out whenever you're ready to continue!`;
+      await sendWhatsAppMessage({
+        clinicId,
+        kind: 'reminder_stale_package',
+        toPhone: patientPhone,
+        bodyParams: [patientName, serviceName, clinicName],
+        shareText: text,
+        shareTitle: 'Send reminder',
+      });
     },
 
     /** Slice 4: re-engagement nudge for a patient with exactly one visit,
      *  no follow-up booked — reuses `dashboardService.singleVisitPatients`,
      *  same "no new detection" reasoning as the stale-package reminder. */
-    async sendSingleVisitReminder(patientName: string, clinicName: string): Promise<void> {
-      await shareTextViaWhatsApp(
-        `Hi ${patientName}, thanks for visiting ${clinicName}! We hope you're doing well — let us know if you'd like to schedule a follow-up visit.`,
-        'Send reminder'
-      );
+    async sendSingleVisitReminder(
+      clinicId: UUID,
+      patientName: string,
+      patientPhone: string | null,
+      clinicName: string
+    ): Promise<void> {
+      const text = `Hi ${patientName}, thanks for visiting ${clinicName}! We hope you're doing well — let us know if you'd like to schedule a follow-up visit.`;
+      await sendWhatsAppMessage({
+        clinicId,
+        kind: 'reminder_single_visit',
+        toPhone: patientPhone,
+        bodyParams: [patientName, clinicName],
+        shareText: text,
+        shareTitle: 'Send reminder',
+      });
     },
 
     /**

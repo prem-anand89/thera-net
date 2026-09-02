@@ -25,6 +25,7 @@ export interface OpenPackageRow {
   packageGroupId: UUID;
   patientId: UUID;
   patientName: string;
+  phone: string | null;
   mrno: string;
   serviceName: string;
   sessionsLogged: number;
@@ -311,6 +312,7 @@ export function createDashboardService(repos: Repos) {
             packageGroupId: g.packageGroupId,
             patientId: g.patientId,
             patientName: patient?.name ?? 'Unknown',
+            phone: patient?.phone ?? null,
             mrno: patient?.mrno ?? '—',
             serviceName: serviceName.get(g.serviceCatalogId) ?? 'Unknown',
             sessionsLogged: g.sessionsLogged,

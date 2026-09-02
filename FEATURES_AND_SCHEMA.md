@@ -500,7 +500,7 @@ URLs redirect to `?tab=catalog&catalogView=…`.
 - Therapist comparison chart (off by default)
 - Billing staff restriction (on by default)
 
-### 9. Patient Communications (Phase 0–5, plus a Phase 9 scaffold)
+### 9. Patient Communications (Phase 0–5, plus Phase 9's Business API)
 
 Full spec/roadmap: `docs/HANDOFF-patient-comms.md`. Phase 0 (foundation),
 Phase 1 (visit "Ask for feedback"), Phase 2 (Requests → Feedback page),
@@ -510,8 +510,11 @@ Workspace "Expected today", folding in the doc's own Phase 6
 reschedule/no-show/cancel actions since they share the same schema/RPC
 surface) have shipped. Weekly availability/slot picker (Phase 7) and
 analytics (Phase 8) remain later, un-started phases. Phase 9's WhatsApp
-Business Cloud API has a **credential-storage + Edge Function scaffold**
-shipped ahead of anyone actually calling it — see its own bullet below.
+Business Cloud API is wired into all six patient-facing send actions —
+see its own bullet below — but sends nothing for real until a clinic
+configures it in Settings with a genuine Meta phone number ID, access
+token, and at least one approved template name; until then every send
+still falls through to the existing share sheet, unchanged.
 
 - **`clinics.enable_patient_comms`** — module gate, off by default, same
   pattern as `clinicalDocsEnabled`/`enableExpectedToday`. Public token routes
@@ -519,9 +522,13 @@ shipped ahead of anyone actually calling it — see its own bullet below.
   Settings → **Patient communications** (its own section/chip, admin-only —
   just the on/off switch for now; slug, Google review URL, message
   templates, and WhatsApp Business fields arrive with later phases).
-- **`patients.do_not_message`** — opt-out flag, honored by every send path
-  once those paths exist (Phase 2+); staff-settable toggle, no automated
-  detection.
+- **`patients.do_not_message`** — opt-out flag, staff-settable, no automated
+  detection. **Not actually checked anywhere client-side** — every send
+  action (share-sheet and the Phase 9 Business API path alike) fires
+  regardless of this flag; `doNotMessage` exists on `Patient` but nothing
+  reads it. Pre-existing gap, not introduced by Phase 9's Business API
+  wiring — flagged here rather than silently left implied-done by the
+  field's own existence.
 - **Public feedback link (`/f/$token`)** — the app's first and only
   anonymous write path. A therapist/front-desk/admin action creates a
   `feedback_requests` row with a server-generated 256-bit token; a patient
@@ -838,28 +845,20 @@ shipped ahead of anyone actually calling it — see its own bullet below.
     communications section (client-validated lowercase-alphanumeric-plus-
     hyphens pattern; the DB only enforces uniqueness) with a "Copy link"
     button, alongside the existing module toggle and Google review URL.
-  - **`message_log` stays unwired on the client, same as every other
-    Phase 1-4 send action.** Despite `message_log_insert` RLS being ready
-    since Phase 0, no *client-triggered* send action in this module — not
-    the five from Phases 1-4, not this phase's confirmation/
-    therapist-notify sends — actually writes a row; there's no Dexie
-    table or repo for it. Wiring it for just this phase's two new sends
-    while five existing ones still skip it would be inconsistent rather
-    than forward-thinking; this is a pre-existing, module-wide gap better
-    closed in one pass across all seven send actions than piecemeal. (The
-    Phase 9 scaffold below finally gives `message_log` its first real
-    writer — but only for sends that go through it, server-side; the
-    share-sheet path's gap is unchanged.)
-- **WhatsApp Business Cloud API — scaffold only (Phase 9, partial)** —
-  built ahead of the clinic actually having Meta credentials, so that
-  turning real sending on later is a config step, not a code change.
-  **Nothing in the app calls this yet** — every existing send action
-  (all seven, feedback link through booking confirmation/notify) still
-  opens the staff member's own WhatsApp via a share sheet, unchanged.
+  - **`message_log` gets its first writer via the Phase 9 wiring below** —
+    every send action except `shareTherapistNotify` now goes through the
+    Business API path first (when the clinic has a phone number to send
+    to), and a successful send there writes a `message_log` row
+    server-side. Until a clinic actually configures the Business API and
+    has an approved template, every send still falls through to the share
+    sheet — which still doesn't log anything, same gap as before.
+- **WhatsApp Business Cloud API — wired, pending real templates (Phase 9)**
+  — built ahead of the clinic actually having Meta credentials, so that
+  turning real sending on is a config step, not a code change.
   - **`clinic_whatsapp_config`** — `phone_number_id`, `access_token`
     (a real Meta secret), `enabled`. Carries **no SELECT policy for any
     client role at all** (RLS enabled, zero policies) — only
-    `service_role`, used exclusively inside the new Edge Function below,
+    `service_role`, used exclusively inside the Edge Function below,
     can ever read it. Two RPCs give the client everything it legitimately
     needs without exposing the token: `set_whatsapp_config(...)`
     (admin-only write; a `null` access token argument leaves the stored
@@ -878,10 +877,9 @@ shipped ahead of anyone actually calling it — see its own bullet below.
     business-initiated message outside a 24h customer-service window;
     this function has no opinion on what a given clinic's approved
     template actually says. Returns `{ configured: false }` (not an
-    error) when the clinic has no config row or hasn't enabled it — the
-    signal a future client-side wrapper would use to fall back to the
-    share sheet. On a successful send, writes a `message_log` row
-    (`channel: 'wa_business_api'`) — see the note above.
+    error) when the clinic has no config row or hasn't enabled it. On a
+    successful send, writes a `message_log` row (`channel:
+    'wa_business_api'`) — see the note above.
   - **Settings** gained a collapsed-by-default "WhatsApp Business API
     (advanced)" sub-block in the Patient communications section
     (`WhatsAppBusinessSubsection` in `SettingsPage.tsx`) — enable toggle,
@@ -891,14 +889,42 @@ shipped ahead of anyone actually calling it — see its own bullet below.
     the section's shared `useClinicSectionForm` dirty-tracking — this is
     a separate table with write-only semantics, not a few more `Clinic`
     columns.
-  - **Explicitly not done in this pass**: nothing in `feedbackService.ts`
-    or `bookingService.ts` calls `send-whatsapp-template`. Wiring the
-    six existing send call sites to try it (falling back to the share
-    sheet when `configured: false`) is a later, small follow-up — once
-    the user has a real Meta phone number ID, access token, and at least
-    one approved template name to test each send kind against. Guessing
-    at a template's variable shape now would be unverifiable,
-    silently-breakable configuration the moment the toggle is flipped on.
+  - **`src/lib/whatsappSend.ts`'s `sendWhatsAppMessage()`** is now the one
+    place any send action decides *how* to send: try
+    `whatsappBusinessService.sendViaBusinessApi()` first when a recipient
+    phone number is known, and fall back to the existing
+    `shareTextViaWhatsApp` share sheet whenever the clinic hasn't
+    configured it, there's no phone number, Meta rejects the send (e.g. an
+    unrecognized template name), or the request fails outright — so
+    turning this on for real is purely a Settings config change plus a
+    template-name/param swap in `WHATSAPP_TEMPLATES`, not a code change.
+    All six patient-facing send actions (`askForFeedback`, `resend`,
+    `askForGoogleReview`, `sendStalePackageReminder`,
+    `sendSingleVisitReminder`, `shareBookingConfirmation`) go through it,
+    reading the patient's phone off `Patient.phone` (added to
+    `VisitCardData` as `patientPhone`, `OpenPackageRow` as `phone`, and
+    threaded through `NewVisitPage`'s post-save state and
+    `RequestsPage`'s `justConfirmed` state to reach the call sites).
+    `shareTherapistNotify` is the one exception — `Therapist` has no phone
+    field in the schema, so it stays share-sheet-only until one exists.
+  - **Template names are hardcoded placeholders** (`WHATSAPP_TEMPLATES` in
+    `whatsappSend.ts`, e.g. `'feedback_request_v1'`) — Meta assigns the
+    real name when a clinic's own template is approved, and it has no
+    relationship to this string; an unrecognized name is exactly what
+    makes Meta return `{ configured: true, success: false }`, which this
+    wrapper treats the same as "not configured" and falls back to the
+    share sheet. Swap these for the clinic's actual approved template
+    names (and adjust `bodyParams` ordering to match that template's own
+    `{{1}}`, `{{2}}`, ... variables) once real ones exist — there's no way
+    to know a template's variable shape in advance, so `bodyParams` here
+    is a best-effort guess at "the same information the share-sheet text
+    already sends," in the same order.
+  - **Phone numbers are normalized, not validated** —
+    `normalizePhoneForWhatsApp()` in `whatsappSend.ts` strips non-digits
+    and prepends `91` to a bare 10-digit number (this app's phone fields
+    are free text with no format enforced, and a 10-digit local number is
+    what staff overwhelmingly type); anything else passes through as-is
+    and Meta's own validation is the real backstop.
 
 ---
 

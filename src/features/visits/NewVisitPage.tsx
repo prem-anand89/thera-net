@@ -199,6 +199,7 @@ export function NewVisitPage() {
     visitId: UUID;
     patientId: UUID;
     patientName: string;
+    patientPhone: string | null;
     serviceLabel: string;
     isPackage: boolean;
     alreadyCollected: boolean;
@@ -596,6 +597,7 @@ export function NewVisitPage() {
         visitId: visit.id,
         patientId: patient.id,
         patientName: patient.name,
+        patientPhone: patient.phone,
         serviceLabel:
           mode === 'continuation'
             ? selectedPackage!.serviceName
@@ -650,7 +652,12 @@ export function NewVisitPage() {
                 onClick={() => {
                   setFeedbackRequested(true);
                   void feedbackService
-                    .askForFeedback(justSaved.visitId, justSaved.patientName, clinic.name)
+                    .askForFeedback(
+                      justSaved.visitId,
+                      justSaved.patientName,
+                      justSaved.patientPhone,
+                      clinic.name
+                    )
                     .catch((e) => {
                       setFeedbackRequested(false);
                       setError(toFriendlyMessage(e));
