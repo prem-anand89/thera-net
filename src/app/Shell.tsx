@@ -203,7 +203,7 @@ const NAV = [
   // "no sixth phone tab" decision). Mobile reaches it via More.
   { to: '/requests', label: 'Requests', Icon: IconRequests },
   // Settings deliberately isn't in this array — it sits in the account
-  // menu's Clinic section instead, under the same `role === 'admin'` gate
+  // menu's Account section instead, under the same `role === 'admin'` gate
   // this array's filter used to apply. Five labelled items is what the
   // header row can actually carry (see the layout comment on <header>);
   // Settings was the sixth, and the least-often-visited of them. Mobile is
@@ -791,22 +791,6 @@ function AccountMenu({
                   {currentClinic?.name ?? 'Current clinic'}
                 </div>
               )}
-              {/* Settings' only desktop entry point, since it left the
-                  header nav (see NAV) — same `role === 'admin'` gate the
-                  nav filter applied, so who can reach it is unchanged.
-                  Sits in the Clinic section rather than Account below
-                  because that's what it configures: the clinic's catalog,
-                  team, billing and toggles, not this login. */}
-              {role === 'admin' && (
-                <Link
-                  to="/settings"
-                  onClick={closeMenu}
-                  className="mt-1.5 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
-                >
-                  <IconSettings className="h-4 w-4 shrink-0 text-[var(--muted)]" />
-                  Clinic settings
-                </Link>
-              )}
               {role === 'admin' && (
                 <button
                   type="button"
@@ -828,6 +812,19 @@ function AccountMenu({
               <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
                 Account
               </p>
+              {/* Settings' only desktop entry point, since it left the
+                  header nav (see NAV) — same `role === 'admin'` gate the
+                  nav filter applied, so who can reach it is unchanged. */}
+              {role === 'admin' && (
+                <Link
+                  to="/settings"
+                  onClick={closeMenu}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
+                >
+                  <IconSettings className="h-4 w-4 shrink-0 text-[var(--muted)]" />
+                  Settings
+                </Link>
+              )}
               <button
                 type="button"
                 className="flex w-full rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
