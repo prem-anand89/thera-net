@@ -422,20 +422,29 @@ export function Shell() {
               </div>
             </div>
             {/* Desktop nav — the same items reappear as the bottom tab bar
-                below sm:, so this one only needs to render at sm: and up. */}
-            <nav className="hidden gap-1 sm:flex">
+                below sm:, so this one only needs to render at sm: and up.
+                min-w-0 + overflow-x-auto: without min-w-0, a flex item's
+                default min-width is its own content size, so the six
+                items here (plenty wide at desktop widths) couldn't shrink
+                below that — forcing the whole header row to overflow the
+                viewport instead of just this nav scrolling internally.
+                That overflow was pushing the account menu's trigger (and
+                so its `right-0` dropdown, anchored to it) partly or fully
+                off-screen at iPad-portrait widths, where all six items
+                plus the logo and account cluster genuinely don't fit. */}
+            <nav className="hidden min-w-0 gap-1 overflow-x-auto sm:flex">
               {nav.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--paper)] [&.active]:bg-[var(--teal-light)] [&.active]:font-medium [&.active]:text-[var(--teal)]"
+                  className="flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--paper)] [&.active]:bg-[var(--teal-light)] [&.active]:font-medium [&.active]:text-[var(--teal)]"
                 >
                   <item.Icon className="shrink-0" />
                   {item.label}
                 </Link>
               ))}
             </nav>
-            <div className="ml-auto flex items-center gap-4">
+            <div className="ml-auto flex shrink-0 items-center gap-4">
               <SyncBadge />
               <AccountMenu
                 displayName={displayName}
