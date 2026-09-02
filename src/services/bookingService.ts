@@ -1,16 +1,29 @@
 import type { UUID } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
 import { sendWhatsAppMessage } from '@/lib/whatsappSend';
+import { syncEngine } from '@/sync/engine';
 
 /**
  * Patient Communications, Slice 5: public booking requests → confirmed
  * appointments. Every function here is a thin RPC wrapper — nothing in
- * this module writes Dexie/outbox, matching the "every write is
+ * this module writes Dexie/outbox directly, matching the "every write is
  * online-only" rule the handoff doc states for the whole booking
  * workflow (see `src/lib/db.ts`'s comment on why `appointment_requests`/
  * `appointments` are read-only-synced tables). Public (anonymous) calls
  * and staff calls share this one file rather than being split, mirroring
  * `feedbackService.ts`'s single-file-per-workflow shape.
+ *
+ * Because these two tables carry no outbox, nothing nudges `syncEngine`
+ * the way a normal Dexie write does — without an explicit kick, the
+ * Requests → Bookings lists (and Workspace's "Expected today") would sit
+ * stale on whatever the *last* periodic pull saw (up to 5 minutes old)
+ * after every staff mutation below, even though the action itself
+ * succeeded. `feedbackService.ts` solves the equivalent problem for
+ * `feedback_requests` by writing the RPC's returned row straight into
+ * Dexie; most of these RPCs return only void or a bare id, not a full
+ * row, so the simpler fix here is `syncEngine.schedule(0)` — the same
+ * near-immediate pull the manual "Sync now" button and post-clinic-create
+ * refresh already use — right after each successful staff mutation.
  */
 
 function supabaseOrThrow() {
@@ -83,6 +96,7 @@ export const bookingService = {
       p_therapist_id: therapistId,
     });
     if (error) throw new Error(`Could not confirm: ${error.message}`);
+    syncEngine.schedule(0);
     return data as UUID;
   },
 
@@ -108,6 +122,7 @@ export const bookingService = {
       p_scheduled_at: scheduledAt,
     });
     if (error) throw new Error(`Could not create booking: ${error.message}`);
+    syncEngine.schedule(0);
     return data as UUID;
   },
 
@@ -117,6 +132,7 @@ export const bookingService = {
       p_request_id: requestId,
     });
     if (error) throw new Error(`Could not decline: ${error.message}`);
+    syncEngine.schedule(0);
   },
 
   async rescheduleAppointment(appointmentId: UUID, newScheduledAt: string): Promise<void> {
@@ -126,6 +142,7 @@ export const bookingService = {
       p_new_scheduled_at: newScheduledAt,
     });
     if (error) throw new Error(`Could not reschedule: ${error.message}`);
+    syncEngine.schedule(0);
   },
 
   async markAppointmentNoShow(appointmentId: UUID): Promise<void> {
@@ -134,6 +151,7 @@ export const bookingService = {
       p_appointment_id: appointmentId,
     });
     if (error) throw new Error(`Could not update: ${error.message}`);
+    syncEngine.schedule(0);
   },
 
   async cancelAppointment(appointmentId: UUID): Promise<void> {
@@ -142,6 +160,7 @@ export const bookingService = {
       p_appointment_id: appointmentId,
     });
     if (error) throw new Error(`Could not cancel: ${error.message}`);
+    syncEngine.schedule(0);
   },
 
   async markAppointmentArrived(appointmentId: UUID): Promise<void> {
@@ -150,6 +169,7 @@ export const bookingService = {
       p_appointment_id: appointmentId,
     });
     if (error) throw new Error(`Could not update: ${error.message}`);
+    syncEngine.schedule(0);
   },
 
   /** Called right after New Visit saves, when the visit was started from
@@ -162,6 +182,7 @@ export const bookingService = {
       p_patient_id: patientId,
     });
     if (error) throw new Error(`Could not link visit: ${error.message}`);
+    syncEngine.schedule(0);
   },
 
   /** Explicit, separate share action from `shareTherapistNotify` — see

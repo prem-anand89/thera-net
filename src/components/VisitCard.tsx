@@ -1055,7 +1055,20 @@ function VisitTable({
                   )
               )}
               <th className={thNum}>Bill</th>
-              <th className={th}>Status</th>
+              {/* Sticky, not just another scrolling column — with 4 optional
+                  columns on by default this table routinely runs wider than
+                  the viewport (min-width: full at every breakpoint down to
+                  `tab:`), and Status is the one thing worth seeing without
+                  scrolling all the way over: whether a visit still needs
+                  collecting. Its own background (matching the row's
+                  alternating/hover state below) is required, not
+                  decorative — a sticky cell with no opaque bg lets the
+                  columns scrolling underneath show through. */}
+              <th
+                className={`sticky right-0 z-[1] border-l border-[var(--border)] bg-[var(--paper)] ${th}`}
+              >
+                Status
+              </th>
               <th className={th}>Actions</th>
               <th className={th}></th>
             </tr>
@@ -1064,7 +1077,7 @@ function VisitTable({
             {rows.map((row, i) => (
               <tr
                 key={row.visitId}
-                className={`align-top hover:bg-[var(--teal-light)] ${i % 2 === 1 ? 'bg-[var(--paper)]' : ''}`}
+                className={`group align-top hover:bg-[var(--teal-light)] ${i % 2 === 1 ? 'bg-[var(--paper)]' : ''}`}
               >
                 {selection && (
                   <td className={td}>
@@ -1158,7 +1171,9 @@ function VisitTable({
                   }
                 })}
                 <td className={tdNum}>{formatINR(row.billPaise)}</td>
-                <td className={td}>
+                <td
+                  className={`sticky right-0 z-[1] border-l border-[var(--border)] group-hover:bg-[var(--teal-light)] ${td} ${i % 2 === 1 ? 'bg-[var(--paper)]' : 'bg-[var(--surface)]'}`}
+                >
                   <PaymentStatusDisplay
                     data={row}
                     onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}

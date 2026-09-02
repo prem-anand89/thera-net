@@ -802,6 +802,26 @@ still falls through to the existing share sheet, unchanged.
     stays null): a staff member entering a booking by hand already knows
     the confirmed date/time/therapist, so there's no "pending" state to
     pass through first.
+  - **`bookingService.ts`'s eight staff-mutation wrappers all call
+    `syncEngine.schedule(0)` right after their RPC succeeds** — found
+    missing in the same post-ship workflow review, not present originally.
+    `appointment_requests`/`appointments` carry no outbox (see
+    `src/lib/db.ts`'s comment on why), so nothing tells the sync engine to
+    pull after one of these RPCs the way a normal Dexie write does;
+    without an explicit kick, confirming/declining/rescheduling/marking
+    no-show or cancelled or arrived/linking a visit/creating a manual
+    booking would all succeed server-side while the Bookings tab's
+    `useLiveQuery`-driven lists (and Workspace's "Expected today") kept
+    showing the pre-mutation state for up to 5 minutes — e.g. a just-
+    confirmed request still listed under "Pending requests" with its own
+    Confirm/Decline buttons, inviting a double-click. `schedule(0)` is the
+    same near-immediate debounced pull the manual "Sync now" button and
+    `CreateClinicForm`'s post-create refresh already use.
+    `feedbackService.ts` didn't need this fix — it already writes the
+    RPC's returned row straight into Dexie via `putLocal()` (see its own
+    file comment) rather than waiting on a pull, but most of the booking
+    RPCs return only void or a bare id, not a full row, so a pull kick was
+    the simpler fix here than adding `putLocal` to both booking repos.
   - **All five appointment-mutating RPCs (reschedule/no-show/cancel/
     mark-arrived/link-visit) row-lock and check the appointment's current
     status before acting**, same discipline as
