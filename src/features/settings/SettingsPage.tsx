@@ -661,6 +661,7 @@ function SectionSaveBar({
   onSave,
   onCancel,
   error,
+  saveDisabled,
 }: {
   dirty: boolean;
   saved: boolean;
@@ -668,11 +669,17 @@ function SectionSaveBar({
   onSave: () => void;
   onCancel: () => void;
   error: string | null;
+  saveDisabled?: boolean;
 }) {
   return (
     <>
       <div className="mt-4 flex items-center gap-3">
-        <button type="button" className={btnPrimary} disabled={busy || !dirty} onClick={onSave}>
+        <button
+          type="button"
+          className={btnPrimary}
+          disabled={busy || !dirty || saveDisabled}
+          onClick={onSave}
+        >
           {busy ? 'Saving…' : 'Save'}
         </button>
         <button type="button" className={btnSecondary} disabled={!dirty} onClick={onCancel}>
@@ -1587,6 +1594,7 @@ function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
         onSave={() => void save()}
         onCancel={cancel}
         error={slugInvalid ? 'Fix the booking link before saving.' : error}
+        saveDisabled={slugInvalid}
       />
       <WhatsAppBusinessSubsection clinicId={clinic.id} />
     </SectionCard>

@@ -23,18 +23,29 @@ create function public.submit_appointment_request(
 language plpgsql security definer set search_path = public as $$
 declare
   v_clinic_id uuid;
+  v_enabled boolean;
 begin
-  select id into v_clinic_id from clinics where booking_slug = p_slug;
-  if v_clinic_id is null then
-    raise exception 'Booking page not found.';
+  perform public.check_public_rpc_rate_limit('submit_appointment_request', 10, 60);
+
+  if coalesce(trim(p_name), '') = '' or coalesce(trim(p_phone), '') = '' then
+    raise exception 'Name and phone are required.';
+  end if;
+
+  select c.id, c.enable_patient_comms into v_clinic_id, v_enabled
+    from clinics c where c.booking_slug = p_slug;
+
+  if not found or v_enabled is not true then
+    raise exception 'This booking page is not available.';
   end if;
 
   insert into appointment_requests (
     clinic_id, name, phone, email, preferred_therapist_id,
     notes, preferred_date, preferred_time_text
   ) values (
-    v_clinic_id, p_name, p_phone, p_email, p_preferred_therapist_id,
-    p_notes, p_preferred_date, p_preferred_time_text
+    v_clinic_id, trim(p_name), trim(p_phone), nullif(trim(p_email), ''),
+    p_preferred_therapist_id,
+    nullif(trim(both from p_notes), ''), p_preferred_date,
+    nullif(trim(both from p_preferred_time_text), '')
   );
 end $$;
 
