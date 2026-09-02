@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { dashboardService, repos } from '@/services';
+import { dashboardService, repos, feedbackService } from '@/services';
 import { CONDITION_TOP_N } from '@/services/dashboardService';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -686,6 +686,20 @@ export function ReportsOverviewPage() {
                           >
                             📞 {p.phone}
                           </a>
+                        )}
+                        {clinic.enablePatientComms && p.phone && (
+                          <button
+                            type="button"
+                            className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                            onClick={() =>
+                              void feedbackService.sendSingleVisitReminder(
+                                p.patientName,
+                                clinic.name
+                              )
+                            }
+                          >
+                            Send reminder
+                          </button>
                         )}
                       </div>
                     </div>

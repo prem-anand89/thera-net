@@ -76,6 +76,19 @@ const MorePage = lazy(() =>
 const ResetPasswordPage = lazy(() =>
   import('@/features/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage }))
 );
+const FeedbackFormPage = lazy(() =>
+  import('@/features/publicFeedback/FeedbackFormPage').then((m) => ({
+    default: m.FeedbackFormPage,
+  }))
+);
+const BookingFormPage = lazy(() =>
+  import('@/features/publicBooking/BookingFormPage').then((m) => ({
+    default: m.BookingFormPage,
+  }))
+);
+const RequestsPage = lazy(() =>
+  import('@/features/requests/RequestsPage').then((m) => ({ default: m.RequestsPage }))
+);
 
 const rootRoute = createRootRoute({ component: Shell });
 
@@ -126,11 +139,20 @@ const newVisitRoute = createRoute({
   path: '/visits/new',
   validateSearch: (
     search: Record<string, unknown>
-  ): { repeatVisitId?: string; newPatient?: string; patientId?: string; prefillName?: string } => ({
+  ): {
+    repeatVisitId?: string;
+    newPatient?: string;
+    patientId?: string;
+    prefillName?: string;
+    prefillPhone?: string;
+    appointmentId?: string;
+  } => ({
     ...(typeof search.repeatVisitId === 'string' ? { repeatVisitId: search.repeatVisitId } : {}),
     ...(typeof search.newPatient === 'string' ? { newPatient: search.newPatient } : {}),
     ...(typeof search.patientId === 'string' ? { patientId: search.patientId } : {}),
     ...(typeof search.prefillName === 'string' ? { prefillName: search.prefillName } : {}),
+    ...(typeof search.prefillPhone === 'string' ? { prefillPhone: search.prefillPhone } : {}),
+    ...(typeof search.appointmentId === 'string' ? { appointmentId: search.appointmentId } : {}),
   }),
   component: NewVisitPage,
 });
@@ -329,6 +351,7 @@ const SETTINGS_TABS = [
   'profile',
   'billing',
   'partner',
+  'patientComms',
   'team',
   'catalog',
   'data',
@@ -366,6 +389,22 @@ const settingsRoute = createRoute({
     return {};
   },
   component: SettingsPage,
+});
+
+// 'bookings' isn't built yet (later slice) but is accepted here so the tab
+// shape doesn't need another route change to add it — RequestsPage just
+// doesn't render anything for it today, same as the Bookings tab itself
+// showing "coming later" rather than being absent.
+const REQUESTS_TABS = ['feedback', 'bookings'] as const;
+
+const requestsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/requests',
+  validateSearch: (search: Record<string, unknown>): { tab?: (typeof REQUESTS_TABS)[number] } =>
+    typeof search.tab === 'string' && (REQUESTS_TABS as readonly string[]).includes(search.tab)
+      ? { tab: search.tab as (typeof REQUESTS_TABS)[number] }
+      : {},
+  component: RequestsPage,
 });
 
 const setupRedirectRoute = createRoute({
@@ -433,6 +472,22 @@ const resetPasswordRoute = createRoute({
   component: ResetPasswordPage,
 });
 
+// Public, unauthenticated patient feedback link — see Shell.tsx's early
+// bypass for this path (renders before the session/clinic gating below).
+const feedbackFormRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/f/$token',
+  component: FeedbackFormPage,
+});
+
+// Public, unauthenticated booking request link — see Shell.tsx's early
+// bypass, shared with /f/$token.
+const bookingFormRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/book/$clinicSlug',
+  component: BookingFormPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   workspaceRoute,
@@ -455,12 +510,15 @@ const routeTree = rootRoute.addChildren([
   invoicePrintRoute,
   invoicesRedirectRoute,
   settingsRoute,
+  requestsRoute,
   setupRedirectRoute,
   importVisitsRoute,
   importVisitsRedirectRoute,
   insightsRoute,
   moreRoute,
   resetPasswordRoute,
+  feedbackFormRoute,
+  bookingFormRoute,
 ]);
 
 export const router = createRouter({ routeTree });

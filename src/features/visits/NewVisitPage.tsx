@@ -7,6 +7,8 @@ import {
   patientService,
   directPaymentService,
   dashboardService,
+  feedbackService,
+  bookingService,
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
@@ -132,6 +134,8 @@ export function NewVisitPage() {
     repeatVisitId?: string;
     patientId?: string;
     prefillName?: string;
+    prefillPhone?: string;
+    appointmentId?: string;
   };
 
   // "Done"/"Cancel" used to always land on Workspace, even when this page
@@ -159,7 +163,7 @@ export function NewVisitPage() {
     mrno: '',
     age: '',
     sex: '',
-    phone: '',
+    phone: search.prefillPhone ?? '',
     primaryCondition: '',
     referringSourceId: '',
     referringSourceDetail: '',
@@ -198,8 +202,14 @@ export function NewVisitPage() {
     serviceLabel: string;
     isPackage: boolean;
     alreadyCollected: boolean;
+    therapistId: UUID;
   } | null>(null);
   const [invoicing, setInvoicing] = useState(false);
+  // Patient Communications, Slice 1 — tracks whether the post-save "Ask
+  // for feedback" button has already been clicked for this visit, so it
+  // can't be double-fired (the RLS unique-pending-request-per-visit index
+  // would just reject the second insert, but disabling reads clearer).
+  const [feedbackRequested, setFeedbackRequested] = useState(false);
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id), [clinic.id]);
   const myTherapistId = useMemo(
@@ -314,17 +324,26 @@ export function NewVisitPage() {
     if (prefillPatient.primaryCondition) setCondition(prefillPatient.primaryCondition);
   }, [prefillPatient, patient]);
 
-  // An Expected-today entry with no linked patient yet arrives with
-  // ?prefillName=… instead — open the create-patient form directly with the
-  // name already filled in, rather than dropping it into the search box and
-  // making the receptionist take a second step to get to the same form.
+  // An appointment with no linked patient yet (Patient Communications,
+  // Slice 5 — "Create visit" from Requests → Bookings or Workspace's
+  // "Expected today") arrives with ?prefillName=&prefillPhone=… instead —
+  // open the create-patient form directly with both fields already
+  // filled in, rather than dropping just the name into the search box.
+  // The same existing name/phone-match typeahead this effect feeds
+  // surfaces likely-existing-patient candidates for free; staff still
+  // pick or create explicitly, never auto-selected (see
+  // HANDOFF-patient-comms.md's "no silent find-or-create" rule).
   useEffect(() => {
     if (search.prefillName && !patient && !search.patientId && !creatingPatient) {
       setCreatingPatient(true);
-      setNewPatient((p) => (p.name ? p : { ...p, name: search.prefillName! }));
+      setNewPatient((p) => ({
+        ...p,
+        name: p.name || search.prefillName!,
+        phone: p.phone || search.prefillPhone || '',
+      }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search.prefillName]);
+  }, [search.prefillName, search.prefillPhone]);
 
   useEffect(() => {
     if (!repeatVisit || patient) return;
@@ -562,6 +581,17 @@ export function NewVisitPage() {
         );
       }
 
+      // Slice 5: this visit is arrival for the appointment it was started
+      // from ("Create visit" on Requests → Bookings / Workspace's
+      // "Expected today") — resolve patient_id/visit_id and flip the
+      // appointment to arrived. Doesn't block the save-succeeded screen
+      // below on this secondary link; the visit itself already saved.
+      if (search.appointmentId) {
+        void bookingService
+          .linkAppointmentVisit(search.appointmentId, visit.id, patient.id)
+          .catch((e) => console.error('Could not link this visit to its appointment', e));
+      }
+
       setJustSaved({
         visitId: visit.id,
         patientId: patient.id,
@@ -572,7 +602,9 @@ export function NewVisitPage() {
             : (selectedService?.name ?? 'Visit'),
         isPackage: mode === 'continuation',
         alreadyCollected: billPaise > 0 && canBill && paymentChoice === 'paid',
+        therapistId,
       });
+      setFeedbackRequested(false);
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
@@ -609,6 +641,30 @@ export function NewVisitPage() {
               >
                 Add clinical note
               </Link>
+            )}
+            {clinic.enablePatientComms && (
+              <button
+                type="button"
+                className={btnSecondary}
+                disabled={feedbackRequested}
+                onClick={() => {
+                  setFeedbackRequested(true);
+                  void feedbackService
+                    .askForFeedback(
+                      clinic.id,
+                      justSaved.visitId,
+                      justSaved.patientId,
+                      justSaved.therapistId
+                    )
+                    .catch((e) => {
+                      setFeedbackRequested(false);
+                      setError(toFriendlyMessage(e));
+                    });
+                }}
+                title="Ask this patient for feedback"
+              >
+                {feedbackRequested ? 'Sent ✓' : 'Feedback'}
+              </button>
             )}
             <button
               type="button"

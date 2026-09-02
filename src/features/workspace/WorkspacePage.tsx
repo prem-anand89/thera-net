@@ -1,15 +1,23 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService } from '@/services';
+import { repos, dashboardService, feedbackService, bookingService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
-import { clinicBillingConfig, type ConsultationNote, type Visit } from '@/domain/types';
+import {
+  clinicBillingConfig,
+  type ConsultationNote,
+  type FeedbackRequest,
+  type FeedbackResponse,
+  type Visit,
+} from '@/domain/types';
 import { noteForVisit } from '@/domain/noteLinks';
+import { toFriendlyMessage } from '@/lib/errors';
 import type { TodayVisitRow } from '@/services/dashboardService';
+import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import {
   btnPrimary,
   SectionCard,
@@ -22,6 +30,10 @@ import {
   tdNum,
 } from '@/components/ui';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
+import {
+  useNewFeedbackResponseCount,
+  useGoogleReviewEligibleRequestIds,
+} from '@/features/requests/requestsSignals';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { SplitModal } from '@/components/SplitModal';
@@ -43,7 +55,12 @@ function todayRowToCardData(
   therapistSplit: boolean,
   treatmentName: Map<string, string>,
   invoicedSiblingGroupIds: Set<string>,
-  consultationNotes: ConsultationNote[] | undefined
+  consultationNotes: ConsultationNote[] | undefined,
+  enablePatientComms: boolean,
+  feedbackRequestByVisitId: Map<string, FeedbackRequest>,
+  responseByRequestId: Map<string, FeedbackResponse>,
+  googleReviewEligibleIds: Set<string>,
+  googleReviewUrl: string | null
 ): VisitCardData {
   const canModify = isAdmin || row.therapistId === myTherapistId;
   const linkedNote = noteForVisit(
@@ -52,8 +69,10 @@ function todayRowToCardData(
     row.patientId,
     row.needsNote
   );
+  const feedbackRequest = feedbackRequestByVisitId.get(row.visitId);
   return {
     visitId: row.visitId,
+    therapistId: row.therapistId,
     visitDate: new Date().toISOString().slice(0, 10),
     patientId: row.patientId,
     patientName: row.patientName,
@@ -88,6 +107,22 @@ function todayRowToCardData(
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: linkedNote?.id ?? null,
     noteStatus: linkedNote?.status ?? null,
+    canAskForFeedback: enablePatientComms && canModify,
+    feedbackRequest: feedbackRequest
+      ? {
+          id: feedbackRequest.id,
+          status: feedbackRequest.status,
+          token: feedbackRequest.token,
+          updatedAt: feedbackRequest.updatedAt,
+          // Admin gets it for free off the synced rating; front_desk (no
+          // rating available at all, see feedbackRequest field's own doc
+          // comment) falls back to the role-blind eligibility RPC result.
+          googleReviewEligible: isAdmin
+            ? (responseByRequestId.get(feedbackRequest.id)?.rating ?? 0) >= 4
+            : googleReviewEligibleIds.has(feedbackRequest.id),
+        }
+      : null,
+    googleReviewUrl,
     packageInvoicePending:
       row.billPaise === 0 &&
       !!row.sessionIndex &&
@@ -103,6 +138,40 @@ export function WorkspacePage() {
   const scope = useWorkspaceScope();
   const { canBill, canViewClinicalNotes, canEditSettings } = usePermissions();
   const { therapistSplit } = clinicBillingConfig(clinic);
+  // Patient Communications, Slice 2 — "something arrived" surface per the
+  // handoff doc's own question table: admin-only (feedback content is
+  // admin-only at RLS too), gated on the module being on.
+  const newFeedbackCount = useNewFeedbackResponseCount(
+    clinic.id,
+    canEditSettings && (clinic.enablePatientComms ?? false)
+  );
+  // Front-desk-only fallback for the Google review nudge — admin doesn't
+  // need this (derives eligibility from the synced rating instead), so
+  // skip the RPC call entirely for them.
+  const googleReviewEligibleIds = useGoogleReviewEligibleRequestIds(
+    clinic.id,
+    !canEditSettings && (clinic.enablePatientComms ?? false)
+  );
+  // Patient Communications, Slice 5 — "Expected today" (appointments) and
+  // the pending-booking-requests banner. Scoped the same way "Seen today"
+  // already is: clinic-wide for admin/front_desk, own-therapist otherwise
+  // (scope.scopeTherapistId already resolves to undefined for the
+  // clinic-wide roles — see useWorkspaceScope's own doc comment).
+  const todayAppointmentsList = useLiveQuery(
+    () =>
+      clinic.enablePatientComms
+        ? dashboardService.todayAppointments(clinic.id, new Date(), scope.scopeTherapistId)
+        : undefined,
+    [clinic.id, clinic.enablePatientComms, scope.scopeTherapistId]
+  );
+  const canManageBookings = scope.isClinicWideView;
+  const pendingRequestCount = useLiveQuery(
+    () =>
+      canManageBookings && clinic.enablePatientComms
+        ? dashboardService.pendingAppointmentRequestCount(clinic.id)
+        : undefined,
+    [clinic.id, clinic.enablePatientComms, canManageBookings]
+  );
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
@@ -177,6 +246,34 @@ export function WorkspacePage() {
     () => (canViewClinicalNotes ? repos.consultationNotes.listByClinic(clinic.id) : undefined),
     [clinic.id, canViewClinicalNotes]
   );
+  // Patient Communications, Slice 1 — same bulk-fetch-and-map shape as
+  // consultationNotes above, see the identical note in LedgerPage.tsx.
+  const feedbackRequests = useLiveQuery(
+    () => (clinic.enablePatientComms ? repos.feedbackRequests.listByClinic(clinic.id) : undefined),
+    [clinic.id, clinic.enablePatientComms]
+  );
+  const feedbackRequestByVisitId = useMemo(() => {
+    const map = new Map<string, FeedbackRequest>();
+    for (const r of feedbackRequests ?? []) {
+      // Same "most recently updated wins" tie-break as the repo's own
+      // getByVisitId — a visit can have more than one row over time (an
+      // old expired/responded one plus a fresh pending one after
+      // re-asking).
+      const existing = map.get(r.visitId);
+      if (!existing || r.updatedAt > existing.updatedAt) map.set(r.visitId, r);
+    }
+    return map;
+  }, [feedbackRequests]);
+  // Slice 3 — same reasoning as the identical fetch in LedgerPage.tsx: the
+  // Google-review nudge needs the rating, which lives in feedback_responses.
+  const feedbackResponses = useLiveQuery(
+    () => (clinic.enablePatientComms ? repos.feedbackResponses.listByClinic(clinic.id) : undefined),
+    [clinic.id, clinic.enablePatientComms]
+  );
+  const responseByRequestId = useMemo(
+    () => new Map((feedbackResponses ?? []).map((r) => [r.requestId, r])),
+    [feedbackResponses]
+  );
   // A ₹0 package continuation logged today whose OWN invoiceId is null —
   // check the full package group (unbounded by "today") for an invoiced
   // sibling, so a session trailing an already-issued invoice gets flagged
@@ -247,6 +344,36 @@ export function WorkspacePage() {
         </section>
       )}
 
+      {newFeedbackCount > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--teal)] bg-[var(--teal-light)] px-4 py-3">
+          <p className="text-sm text-[var(--ink)]">
+            {newFeedbackCount} new feedback response{newFeedbackCount === 1 ? '' : 's'}.
+          </p>
+          <Link
+            to="/requests"
+            search={{ tab: 'feedback' }}
+            className="whitespace-nowrap text-sm font-medium text-[var(--teal)] hover:underline"
+          >
+            See all →
+          </Link>
+        </div>
+      )}
+
+      {!!pendingRequestCount && pendingRequestCount > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--teal)] bg-[var(--teal-light)] px-4 py-3">
+          <p className="text-sm text-[var(--ink)]">
+            {pendingRequestCount} new booking request{pendingRequestCount === 1 ? '' : 's'}.
+          </p>
+          <Link
+            to="/requests"
+            search={{ tab: 'bookings' }}
+            className="whitespace-nowrap text-sm font-medium text-[var(--teal)] hover:underline"
+          >
+            See all →
+          </Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-2">
         <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
         <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
@@ -259,6 +386,129 @@ export function WorkspacePage() {
           <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
         )}
       </div>
+
+      {clinic.enablePatientComms && (
+        <SectionCard
+          title={
+            todayAppointmentsList && todayAppointmentsList.length === 1
+              ? 'Expected today (1)'
+              : `Expected today (${todayAppointmentsList?.length ?? 0})`
+          }
+        >
+          {!todayAppointmentsList || todayAppointmentsList.length === 0 ? (
+            <p className="text-sm text-[var(--muted)]">No appointments confirmed for today.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-[var(--border)]">
+                <thead className="bg-[var(--paper)]">
+                  <tr>
+                    <th className={th}>Time</th>
+                    <th className={th}>Patient</th>
+                    <th className={th}>Therapist</th>
+                    <th className={th}>Status</th>
+                    <th className={th}></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {todayAppointmentsList.map((a) => (
+                    <tr key={a.id}>
+                      <td className={td}>
+                        {new Date(a.scheduledAt).toLocaleTimeString('en-IN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                      <td className={td}>
+                        {a.patientId ? (
+                          <Link
+                            to="/patients/$patientId"
+                            params={{ patientId: a.patientId }}
+                            search={{ from: '/workspace' }}
+                            className="font-medium text-[var(--teal)] hover:underline"
+                          >
+                            {a.patientName}
+                          </Link>
+                        ) : (
+                          a.patientName
+                        )}
+                      </td>
+                      <td className={td}>{a.therapistName ?? '—'}</td>
+                      <td className={td}>
+                        <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>
+                          {APPOINTMENT_STATUS_LABEL[a.status]}
+                        </Pill>
+                      </td>
+                      <td className={td}>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {(a.status === 'confirmed' || a.status === 'rescheduled') && (
+                            <button
+                              type="button"
+                              className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                              onClick={() =>
+                                void bookingService
+                                  .markAppointmentArrived(a.id)
+                                  .catch((e) => alert(toFriendlyMessage(e)))
+                              }
+                            >
+                              Mark arrived
+                            </button>
+                          )}
+                          {canManageBookings &&
+                            (a.status === 'confirmed' || a.status === 'rescheduled') && (
+                              <button
+                                type="button"
+                                className="whitespace-nowrap text-xs font-medium text-[var(--muted)] hover:underline"
+                                onClick={() =>
+                                  void bookingService
+                                    .markAppointmentNoShow(a.id)
+                                    .catch((e) => alert(toFriendlyMessage(e)))
+                                }
+                              >
+                                No-show
+                              </button>
+                            )}
+                          {canManageBookings &&
+                            (a.status === 'confirmed' || a.status === 'rescheduled') && (
+                              <button
+                                type="button"
+                                className="whitespace-nowrap text-xs font-medium text-[var(--rust)] hover:underline"
+                                onClick={() => {
+                                  if (!confirm('Cancel this appointment?')) return;
+                                  void bookingService
+                                    .cancelAppointment(a.id)
+                                    .catch((e) => alert(toFriendlyMessage(e)));
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            )}
+                          {/* patientId is only ever set alongside visitId
+                              (link_appointment_visit sets both together),
+                              so !a.visitId here always means identity is
+                              still unresolved — nothing to pre-select. */}
+                          {!a.visitId && a.status !== 'cancelled' && a.status !== 'no_show' && (
+                            <Link
+                              to="/visits/new"
+                              search={{
+                                appointmentId: a.id,
+                                prefillName: a.patientName,
+                                prefillPhone: a.patientPhone,
+                              }}
+                              className="whitespace-nowrap rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                            >
+                              Create visit
+                            </Link>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+      )}
 
       <SectionCard title={today && today.visits.length === 1 ? "Today's visit" : "Today's visits"}>
         {!today || today.visits.length === 0 ? (
@@ -277,7 +527,12 @@ export function WorkspacePage() {
                 therapistSplit,
                 treatmentName,
                 invoicedSiblingGroupIds ?? new Set(),
-                consultationNotes
+                consultationNotes,
+                clinic.enablePatientComms ?? false,
+                feedbackRequestByVisitId,
+                responseByRequestId,
+                googleReviewEligibleIds,
+                clinic.googleReviewUrl ?? null
               )
             )}
             showDate={false}
@@ -300,6 +555,24 @@ export function WorkspacePage() {
             }
             onDelete={(row) => {
               if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+            }}
+            onAskForFeedback={(row) => {
+              void feedbackService
+                .askForFeedback(clinic.id, row.visitId, row.patientId, row.therapistId!)
+                .catch((e) => alert(toFriendlyMessage(e)));
+            }}
+            onResendFeedback={(row) => {
+              const request = feedbackRequestByVisitId.get(row.visitId);
+              if (!request?.token) return;
+              void feedbackService
+                .resend(request, row.patientName, clinic.name)
+                .catch((e) => alert(toFriendlyMessage(e)));
+            }}
+            onAskForGoogleReview={(row) => {
+              if (!row.googleReviewUrl) return;
+              void feedbackService
+                .askForGoogleReview(row.patientName, clinic.name, row.googleReviewUrl)
+                .catch((e) => alert(toFriendlyMessage(e)));
             }}
             canInvoice={canBill}
             backTo="/workspace"
@@ -395,13 +668,30 @@ export function WorkspacePage() {
                         {p.daysSinceLastVisit}d ago)
                       </span>
                     </div>
-                    <Link
-                      to="/visits/new"
-                      search={{ repeatVisitId: p.lastVisitId }}
-                      className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
-                    >
-                      Log visit
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      {p.stale && clinic.enablePatientComms && (
+                        <button
+                          type="button"
+                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                          onClick={() =>
+                            void feedbackService.sendStalePackageReminder(
+                              p.patientName,
+                              clinic.name,
+                              p.serviceName
+                            )
+                          }
+                        >
+                          Send reminder
+                        </button>
+                      )}
+                      <Link
+                        to="/visits/new"
+                        search={{ repeatVisitId: p.lastVisitId }}
+                        className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                      >
+                        Log visit
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -449,13 +739,30 @@ export function WorkspacePage() {
                         <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
                       </td>
                       <td className={td}>
-                        <Link
-                          to="/visits/new"
-                          search={{ repeatVisitId: p.lastVisitId }}
-                          className="text-xs font-medium text-[var(--teal)] hover:underline"
-                        >
-                          Log visit
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          {p.stale && clinic.enablePatientComms && (
+                            <button
+                              type="button"
+                              className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                              onClick={() =>
+                                void feedbackService.sendStalePackageReminder(
+                                  p.patientName,
+                                  clinic.name,
+                                  p.serviceName
+                                )
+                              }
+                            >
+                              Send reminder
+                            </button>
+                          )}
+                          <Link
+                            to="/visits/new"
+                            search={{ repeatVisitId: p.lastVisitId }}
+                            className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                          >
+                            Log visit
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -1,0 +1,18 @@
+-- ---------------------------------------------------------------------------
+-- check_public_rpc_rate_limit() is an internal helper — called only from
+-- inside get_feedback_request_by_token() and submit_feedback_response(),
+-- never meant to be invoked directly. The foundation migration
+-- (20260830120000_patient_comms_foundation.sql) never revoked its default
+-- PUBLIC execute grant, so it was directly callable via
+-- /rest/v1/rpc/check_public_rpc_rate_limit by anon/authenticated (flagged by
+-- Supabase's security advisor after the migration was applied live).
+--
+-- Practical impact was low even before this fix — the function only records
+-- a rate-limit row keyed by the caller's own IP, and the two real public
+-- RPCs hardcode their own p_max_calls/p_window_seconds rather than trusting
+-- a caller-supplied value, so direct access couldn't weaken the limit for
+-- anyone else or bypass it elsewhere. Revoking anyway: this function should
+-- never have been anon-callable in the first place, same reasoning
+-- rls_hardening.sql already applied to issue_invoice() and friends.
+-- ---------------------------------------------------------------------------
+revoke execute on function public.check_public_rpc_rate_limit(text, int, int) from anon, authenticated;

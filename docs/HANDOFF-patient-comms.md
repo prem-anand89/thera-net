@@ -250,7 +250,7 @@ Do **not** start with availability/slots.
 |-------|------|--------|
 | **0** | Flag + public `/f/$token` + RPC | Hardest security; clinic flag off → disabled |
 | **1** | Visit **Ask for feedback** + share sheet | Habit; like `+ Note` |
-| **2** | `/requests?tab=feedback` admin + Workspace “new rating” | Close the loop |
+| **2** | `/requests?tab=feedback` admin + Workspace “new rating” | Close the loop — admin-only page listing every response with its rating + comment, its own tab/section (not bolted onto an existing page); Workspace surfaces "new rating" per the Needs-attention table above |
 | **3** | Google review on 4–5★ + thank-you CTA | Cheap |
 | **4** | Send reminder on existing stale package + single-visit rows | No new detection |
 | **5** | `/book/$slug`, Requests page, confirm → appointment → Expected today | No slots |

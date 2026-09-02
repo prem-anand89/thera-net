@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, backupService, therapistService, visitService } from '@/services';
+import {
+  repos,
+  backupService,
+  therapistService,
+  visitService,
+  whatsappBusinessService,
+} from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -12,11 +18,7 @@ import { getSupabase, publicTherapistPhotoUrl, publicLogoUrl } from '@/lib/supab
 import { resizeImageToBlob } from '@/lib/resizeImage';
 import { db } from '@/lib/db';
 import { MONTH_NAMES } from '@/domain/fiscalYear';
-import {
-  clinicShareLabels,
-  type Clinic,
-  type Therapist,
-} from '@/domain/types';
+import { clinicShareLabels, type Clinic, type Therapist, type UUID } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
 import {
   Field,
@@ -40,13 +42,7 @@ import {
 import { isValidUpiVpa } from '@/domain/upiPay';
 
 type SectionKey =
-  | 'plan'
-  | 'profile'
-  | 'billing'
-  | 'partner'
-  | 'team'
-  | 'catalog'
-  | 'data';
+  'plan' | 'profile' | 'billing' | 'partner' | 'patientComms' | 'team' | 'catalog' | 'data';
 
 /**
  * Grouped into the three jobs an admin actually comes here to do, rather
@@ -59,7 +55,7 @@ type SectionKey =
  */
 const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
   { label: 'Account', keys: ['plan'] },
-  { label: 'Clinic', keys: ['profile', 'billing', 'partner'] },
+  { label: 'Clinic', keys: ['profile', 'billing', 'partner', 'patientComms'] },
   { label: 'People & services', keys: ['team', 'catalog'] },
   { label: 'System', keys: ['data'] },
 ];
@@ -93,6 +89,12 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
     label: 'Partner & split',
     description: 'Revenue share with a partner hospital, therapist splits, TDS.',
     accent: 'rust',
+  },
+  {
+    key: 'patientComms',
+    label: 'Patient communications',
+    description: 'Ask patients for feedback after a visit, with a link to a public feedback form.',
+    accent: 'teal',
   },
   {
     key: 'team',
@@ -133,6 +135,7 @@ const SECTION_ICON_PATHS: Record<SectionKey, string> = {
   profile: 'M2.5 3h11v10h-11zM5.5 6h5M5.5 8.3h5M5.5 10.6h3',
   billing: 'M2.5 6.5L8 2.8l5.5 3.7M3.7 5.8V12a1 1 0 001 1h6.6a1 1 0 001-1V5.8',
   partner: 'M8 2.5l1.4 3.1 3.4.4-2.5 2.3.7 3.4L8 10l-3 1.7.7-3.4-2.5-2.3 3.4-.4L8 2.5z',
+  patientComms: 'M2.5 4.5h11v6.5h-6.2L4.5 13.5V11h-2zM5 7h6M5 9h4',
   team: 'M2.3 13c.4-2.5 2-3.9 3.9-3.9s3.5 1.4 3.9 3.9M9.9 9.5c1.6.2 2.8 1.4 3.1 3.5',
   catalog: 'M3 4h10M3 8h10M3 12h6',
   data: 'M3 5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2zM3 5v6c0 1.1 2.2 2 5 2s5-.9 5-2V5M3 8c0 1.1 2.2 2 5 2s5-.9 5-2',
@@ -299,7 +302,10 @@ export function SettingsPage() {
   // update as a transition lets React deprioritize/interrupt that render
   // instead of blocking the next paint on it.
   function setCatalogView(view: CatalogView) {
-    void navigate({ search: (prev) => ({ ...prev, tab: 'catalog', catalogView: view }), replace: true });
+    void navigate({
+      search: (prev) => ({ ...prev, tab: 'catalog', catalogView: view }),
+      replace: true,
+    });
   }
 
   function setActiveKey(key: SectionKey) {
@@ -369,6 +375,10 @@ export function SettingsPage() {
   );
   const setPartnerDirty = useCallback(
     (d: boolean) => setDirtyKeys((s) => toggleSet(s, 'partner', d)),
+    []
+  );
+  const setPatientCommsDirty = useCallback(
+    (d: boolean) => setDirtyKeys((s) => toggleSet(s, 'patientComms', d)),
     []
   );
 
@@ -484,6 +494,9 @@ export function SettingsPage() {
             ))}
           {activeKey === 'partner' && canSeePartner && (
             <PartnerSection onDirtyChange={setPartnerDirty} />
+          )}
+          {activeKey === 'patientComms' && (
+            <PatientCommsSection onDirtyChange={setPatientCommsDirty} />
           )}
           {activeKey === 'team' && (
             <>
@@ -618,6 +631,7 @@ function SectionSaveBar({
   onSave,
   onCancel,
   error,
+  saveDisabled,
 }: {
   dirty: boolean;
   saved: boolean;
@@ -625,11 +639,17 @@ function SectionSaveBar({
   onSave: () => void;
   onCancel: () => void;
   error: string | null;
+  saveDisabled?: boolean;
 }) {
   return (
     <>
       <div className="mt-4 flex items-center gap-3">
-        <button type="button" className={btnPrimary} disabled={busy || !dirty} onClick={onSave}>
+        <button
+          type="button"
+          className={btnPrimary}
+          disabled={busy || !dirty || saveDisabled}
+          onClick={onSave}
+        >
           {busy ? 'Saving…' : 'Save'}
         </button>
         <button type="button" className={btnSecondary} disabled={!dirty} onClick={onCancel}>
@@ -1425,6 +1445,262 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   );
 }
 
+type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' | 'bookingSlug'>;
+
+// Lowercase alphanumeric + hyphens, no leading/trailing/doubled hyphen —
+// the DB only enforces uniqueness, so this is the one place the "clean
+// URL segment" shape is actually checked.
+const BOOKING_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/**
+ * Patient Communications, Slice 1-5 — module on/off, the Google review
+ * URL (Slice 3), and the public booking slug (Slice 5). Per
+ * HANDOFF-patient-comms.md's "one chip, not scattered" instruction this
+ * is its own section rather than a checkbox bolted onto Clinic profile's
+ * "Optional modules" grid; the message-template/WhatsApp-number fields
+ * the full spec describes arrive with later slices, not here.
+ */
+function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const clinic = useClinic();
+  const { form, set, save, cancel, dirty, saved, busy, error } =
+    useClinicSectionForm<PatientCommsFields>(
+      (c) => ({
+        enablePatientComms: c.enablePatientComms ?? false,
+        googleReviewUrl: c.googleReviewUrl ?? null,
+        bookingSlug: c.bookingSlug ?? null,
+      }),
+      onDirtyChange
+    );
+  const [slugCopied, setSlugCopied] = useState(false);
+  const bookingUrl = form.bookingSlug ? `${window.location.origin}/book/${form.bookingSlug}` : '';
+  const slugInvalid = !!form.bookingSlug && !BOOKING_SLUG_PATTERN.test(form.bookingSlug);
+
+  async function copyBookingUrl() {
+    if (!bookingUrl) return;
+    try {
+      await navigator.clipboard.writeText(bookingUrl);
+      setSlugCopied(true);
+      setTimeout(() => setSlugCopied(false), 1500);
+    } catch {
+      setSlugCopied(false);
+    }
+  }
+
+  return (
+    <SectionCard title="Patient communications">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field
+          label={
+            <>
+              Feedback
+              <InfoTip text="Turn on to let staff ask a patient for feedback after a visit. Each request creates a one-time link to a public feedback form, shared via WhatsApp — no patient login or Business API needed." />
+            </>
+          }
+        >
+          <BoolToggle
+            value={form.enablePatientComms ?? false}
+            onChange={(v) => set({ enablePatientComms: v })}
+          />
+        </Field>
+        <Field
+          label={
+            <>
+              Google review link
+              <InfoTip text="Your clinic's Google review page. Set it to unlock a 'Leave a Google review' prompt for patients who rate 4-5 stars, plus an 'Ask for a Google review' action for staff on those same responses. Leave blank to skip Google review nudges entirely." />
+            </>
+          }
+        >
+          <input
+            type="url"
+            className={inputCls}
+            placeholder="https://g.page/r/…/review"
+            value={form.googleReviewUrl ?? ''}
+            onChange={(e) => set({ googleReviewUrl: e.target.value.trim() || null })}
+          />
+        </Field>
+        <Field
+          label={
+            <>
+              Booking link
+              <InfoTip text="A short web address patients use to request an appointment — safe to put on Google, your website, or social media. Front desk confirms each request into a scheduled appointment; there's no live slot picker yet. Leave blank to keep public booking off." />
+            </>
+          }
+        >
+          <input
+            type="text"
+            className={inputCls}
+            placeholder="my-clinic-name"
+            value={form.bookingSlug ?? ''}
+            onChange={(e) => set({ bookingSlug: e.target.value.toLowerCase().trim() || null })}
+          />
+          {slugInvalid && (
+            <p className="mt-1 text-xs text-[var(--rust)]">
+              Lowercase letters, numbers, and hyphens only — no spaces.
+            </p>
+          )}
+        </Field>
+        {bookingUrl && !slugInvalid && (
+          <div className="sm:col-span-2">
+            <span className="mb-1 block text-xs font-medium text-[var(--muted)]">
+              Your booking link
+            </span>
+            <div className="flex items-center justify-between gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5">
+              <span className="truncate font-mono text-xs text-[var(--ink)]">{bookingUrl}</span>
+              <button
+                type="button"
+                className="whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                onClick={() => void copyBookingUrl()}
+              >
+                {slugCopied ? 'Copied!' : 'Copy link'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+      <SectionSaveBar
+        dirty={dirty}
+        saved={saved}
+        busy={busy}
+        onSave={() => void save()}
+        onCancel={cancel}
+        error={slugInvalid ? 'Fix the booking link before saving.' : error}
+        saveDisabled={slugInvalid}
+      />
+      <WhatsAppBusinessSubsection clinicId={clinic.id} />
+    </SectionCard>
+  );
+}
+
+/**
+ * Patient Communications, Phase 9 (scaffold) — credential storage for a
+ * later, real WhatsApp Business Cloud API send path. Every send action in
+ * this module still opens the staff member's own WhatsApp via a share
+ * sheet today; nothing in the app calls the new `send-whatsapp-template`
+ * Edge Function yet (see that function's own doc comment). This just lets
+ * an admin park real Meta credentials here ahead of that wiring, so
+ * turning sending on later is a config step, not a code change.
+ *
+ * A standalone mini-form, not part of `PatientCommsFields`/
+ * `useClinicSectionForm` — `clinic_whatsapp_config` is a separate table
+ * with write-only semantics (the access token never round-trips back to
+ * the client), so it doesn't fit the "read the clinic row, diff, save"
+ * shape that hook is built for.
+ */
+function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
+  const [expanded, setExpanded] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [enabled, setEnabled] = useState(false);
+  const [phoneNumberId, setPhoneNumberId] = useState('');
+  const [hasToken, setHasToken] = useState(false);
+  const [accessTokenInput, setAccessTokenInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!expanded || loaded) return;
+    void whatsappBusinessService
+      .getConfigStatus(clinicId)
+      .then((status) => {
+        if (status) {
+          setEnabled(status.enabled);
+          setPhoneNumberId(status.phoneNumberId ?? '');
+          setHasToken(status.hasToken);
+        }
+        setLoaded(true);
+      })
+      .catch((e) => setError(toFriendlyMessage(e)));
+  }, [expanded, loaded, clinicId]);
+
+  async function onSave() {
+    setBusy(true);
+    setError(null);
+    try {
+      await whatsappBusinessService.setConfig(
+        clinicId,
+        phoneNumberId.trim() || null,
+        accessTokenInput.trim() || null,
+        enabled
+      );
+      if (accessTokenInput.trim()) setHasToken(true);
+      setAccessTokenInput('');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="mt-4 border-t border-[var(--border)] pt-4">
+      <button
+        type="button"
+        className="text-sm font-medium text-[var(--muted)] hover:text-[var(--ink)]"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {expanded ? '▾' : '▸'} WhatsApp Business API (advanced)
+      </button>
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-[var(--muted)]">
+            Sends every message from this clinic&rsquo;s own WhatsApp number instead of a staff
+            member&rsquo;s phone — needs a Meta Business App, a verified phone number, and
+            Meta-approved message templates set up outside this app first.
+          </p>
+          {!loaded ? (
+            <p className="text-xs text-[var(--muted)]">Loading…</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Enable">
+                  <BoolToggle value={enabled} onChange={setEnabled} />
+                </Field>
+                <Field label="Status">
+                  <span className="text-xs text-[var(--muted)]">
+                    {hasToken ? 'Connected ✓' : 'Not connected'}
+                  </span>
+                </Field>
+                <Field label="Phone number ID">
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="Meta phone_number_id"
+                    value={phoneNumberId}
+                    onChange={(e) => setPhoneNumberId(e.target.value)}
+                  />
+                </Field>
+                <Field label="Access token">
+                  <input
+                    type="password"
+                    className={inputCls}
+                    placeholder={
+                      hasToken ? '•••• (leave blank to keep the current one)' : 'Meta access token'
+                    }
+                    value={accessTokenInput}
+                    onChange={(e) => setAccessTokenInput(e.target.value)}
+                  />
+                </Field>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="rounded-full bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                  onClick={() => void onSave()}
+                >
+                  {busy ? 'Saving…' : saved ? 'Saved!' : 'Save'}
+                </button>
+                {error && <p className="text-xs text-[var(--rust)]">{error}</p>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Two-option pill toggle — same selected/unselected visual language as
  *  Team's invite-role picker (border/background/color keyed off a boolean
  *  instead of a 3-way role), so a feature flag reads the same way a role
@@ -1729,8 +2005,8 @@ function DangerZone() {
       <p className="mt-2 text-xs text-[var(--muted)]">
         <strong>Wipe</strong> removes patients, visits, and invoices but keeps this clinic, its
         catalog, therapists, and team logins. <strong>Delete clinic</strong> removes the whole
-        clinic permanently — including team access, catalog, and all data. Logo files in storage
-        may need manual cleanup.
+        clinic permanently — including team access, catalog, and all data. Logo files in storage may
+        need manual cleanup.
         {otherClinicCount > 0
           ? ` You have ${otherClinicCount} other clinic${otherClinicCount === 1 ? '' : 's'} — after delete you'll switch to another.`
           : " This is your only clinic — you'll set up a new one afterward."}
@@ -1776,7 +2052,6 @@ function DangerZone() {
     </SectionCard>
   );
 }
-
 
 interface ClinicMember {
   userId: string;
@@ -2174,9 +2449,7 @@ function Therapists() {
                       onRevoke={() => revokeMember(m.userId, m.email)}
                       onSaved={() => void refetchMembers()}
                       onResend={
-                        m.pending
-                          ? () => void resendInvite(m.userId, setMembersError)
-                          : undefined
+                        m.pending ? () => void resendInvite(m.userId, setMembersError) : undefined
                       }
                     />
                   );
@@ -2512,7 +2785,12 @@ function RosterCard({
           </Field>
         )}
         <div className="flex gap-2">
-          <button type="button" className={btnPrimary} disabled={saving} onClick={() => void save()}>
+          <button
+            type="button"
+            className={btnPrimary}
+            disabled={saving}
+            onClick={() => void save()}
+          >
             {saving ? 'Saving…' : 'Save'}
           </button>
           <button

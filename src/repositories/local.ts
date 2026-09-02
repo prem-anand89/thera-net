@@ -33,6 +33,10 @@ import type {
   ConsultationNoteRepo,
   PatientModuleEnrollmentRepo,
   PatientAdvanceRepo,
+  FeedbackRequestRepo,
+  FeedbackResponseRepo,
+  AppointmentRequestRepo,
+  AppointmentRepo,
   Repos,
 } from './types';
 
@@ -323,6 +327,32 @@ const patientAdvances: PatientAdvanceRepo = {
   put: (advance) => putWithOutbox('patient_advances', advance),
 };
 
+const feedbackRequests: FeedbackRequestRepo = {
+  async getByVisitId(clinicId, visitId) {
+    const all = await db.feedback_requests.where('visitId').equals(visitId).toArray();
+    return all
+      .filter((r) => r.clinicId === clinicId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  },
+  listByClinic: (clinicId) => db.feedback_requests.where('clinicId').equals(clinicId).toArray(),
+  put: (request) => putWithOutbox('feedback_requests', request),
+  putLocal: async (request) => {
+    await db.feedback_requests.put(request);
+  },
+};
+
+const feedbackResponses: FeedbackResponseRepo = {
+  listByClinic: (clinicId) => db.feedback_responses.where('clinicId').equals(clinicId).toArray(),
+};
+
+const appointmentRequests: AppointmentRequestRepo = {
+  listByClinic: (clinicId) => db.appointment_requests.where('clinicId').equals(clinicId).toArray(),
+};
+
+const appointments: AppointmentRepo = {
+  listByClinic: (clinicId) => db.appointments.where('clinicId').equals(clinicId).toArray(),
+};
+
 export const repos: Repos = {
   clinics,
   therapists,
@@ -339,6 +369,10 @@ export const repos: Repos = {
   consultationNotes,
   patientModuleEnrollments,
   patientAdvances,
+  feedbackRequests,
+  feedbackResponses,
+  appointmentRequests,
+  appointments,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers

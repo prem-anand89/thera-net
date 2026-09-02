@@ -14,6 +14,10 @@ import type {
   ConsultationNote,
   PatientModuleEnrollment,
   PatientAdvance,
+  FeedbackRequest,
+  FeedbackResponse,
+  AppointmentRequest,
+  Appointment,
   NoteMode,
   UUID,
 } from '@/domain/types';
@@ -189,6 +193,41 @@ export interface PatientAdvanceRepo {
   put(advance: PatientAdvance): Promise<void>;
 }
 
+export interface FeedbackRequestRepo {
+  /** At most one row can be relevant to a card at a time — the schema's
+   *  own unique-pending-per-visit index means the interesting question is
+   *  always "the" request for this visit, not a list of them. Returns the
+   *  most recently updated row if a visit somehow has more than one
+   *  (e.g. an old responded/expired row plus today's pending one). */
+  getByVisitId(clinicId: UUID, visitId: UUID): Promise<FeedbackRequest | undefined>;
+  /** Every request for a clinic, for building a visitId-keyed lookup map
+   *  in bulk (VisitCardData builders) instead of one query per row. */
+  listByClinic(clinicId: UUID): Promise<FeedbackRequest[]>;
+  put(request: FeedbackRequest): Promise<void>;
+  /** Caches a server-confirmed row (e.g. the RPC-based token rotation
+   *  below) without re-queuing an outbox push of our own. */
+  putLocal(request: FeedbackRequest): Promise<void>;
+}
+
+/** Read-only: a response is only ever written by the anonymous patient's
+ *  own SECURITY DEFINER RPC call, never by the client — same shape as
+ *  `InvoiceRepo` minus `putLocal`, since nothing here ever needs to cache
+ *  a just-created row ahead of the next sync pull. */
+export interface FeedbackResponseRepo {
+  listByClinic(clinicId: UUID): Promise<FeedbackResponse[]>;
+}
+
+/** Read-only, same reasoning as `FeedbackResponseRepo` — every write on
+ *  either booking table (Slice 5) is an online-only RPC, never a Dexie
+ *  put; see `src/services/bookingService.ts`. */
+export interface AppointmentRequestRepo {
+  listByClinic(clinicId: UUID): Promise<AppointmentRequest[]>;
+}
+
+export interface AppointmentRepo {
+  listByClinic(clinicId: UUID): Promise<Appointment[]>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -205,4 +244,8 @@ export interface Repos {
   consultationNotes: ConsultationNoteRepo;
   patientModuleEnrollments: PatientModuleEnrollmentRepo;
   patientAdvances: PatientAdvanceRepo;
+  feedbackRequests: FeedbackRequestRepo;
+  feedbackResponses: FeedbackResponseRepo;
+  appointmentRequests: AppointmentRequestRepo;
+  appointments: AppointmentRepo;
 }

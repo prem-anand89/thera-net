@@ -3,6 +3,7 @@ import {
   referringSourceDetailLabel,
   type UUID,
   type Visit,
+  type AppointmentStatus,
 } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { currentWeekRange, monthDateRange, type FyMonth } from '@/domain/fiscalYear';
@@ -210,6 +211,21 @@ export interface TodayVisitRow {
   /** This visit's invoice's `issuedAt`, or null — see
    *  `VisitCardData.issuedAt` in `VisitCard.tsx`. */
   issuedAt: string | null;
+}
+
+/** Row shape for `todayAppointments` — see that function's own doc
+ *  comment. `patientId`/`visitId` null means identity hasn't resolved /
+ *  no visit has been logged from this appointment yet. */
+export interface TodayAppointmentRow {
+  id: UUID;
+  patientId: UUID | null;
+  patientName: string;
+  patientPhone: string;
+  therapistId: UUID | null;
+  therapistName: string | null;
+  scheduledAt: string;
+  status: AppointmentStatus;
+  visitId: UUID | null;
 }
 
 export interface TodayWorklist {
@@ -907,6 +923,54 @@ export function createDashboardService(repos: Repos) {
         .reduce((sum, r) => sum + r.billPaise, 0);
 
       return { visits: rows, visitCount: rows.length, collectedPaise, outstandingPaise };
+    },
+
+    /**
+     * Patient Communications, Slice 5: today's `appointments` rows —
+     * Workspace's "Expected today", the day list once the module is on.
+     * Matched to `scheduledAt`'s calendar date via the same UTC-slice
+     * convention `formatDateDMY`/`formatDateDM` already use everywhere
+     * else in this app for a `timestamptz` field (see those functions'
+     * own doc comments) — not a new IST-aware rule invented for this one
+     * query. `therapistId` narrows the same way `todayWorklist`'s does:
+     * omitted for admin/front_desk's clinic-wide view, passed for a
+     * therapist's own scoped one.
+     */
+    async todayAppointments(
+      clinicId: UUID,
+      asOf = new Date(),
+      therapistId?: UUID
+    ): Promise<TodayAppointmentRow[]> {
+      const todayStr = asOf.toISOString().slice(0, 10);
+      const [appointments, therapists] = await Promise.all([
+        repos.appointments.listByClinic(clinicId),
+        repos.therapists.list(clinicId, true),
+      ]);
+      const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
+
+      return appointments
+        .filter((a) => a.scheduledAt.slice(0, 10) === todayStr)
+        .filter((a) => !therapistId || a.therapistId === therapistId)
+        .map((a) => ({
+          id: a.id,
+          patientId: a.patientId,
+          patientName: a.patientName,
+          patientPhone: a.patientPhone,
+          therapistId: a.therapistId,
+          therapistName: a.therapistId ? (therapistNameById.get(a.therapistId) ?? '—') : null,
+          scheduledAt: a.scheduledAt,
+          status: a.status,
+          visitId: a.visitId,
+        }))
+        .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+    },
+
+    /** Pending-booking-requests count for Workspace's "Needs attention"
+     *  banner (admin/front_desk only — see Shell.tsx's nav gate for the
+     *  same role pair). */
+    async pendingAppointmentRequestCount(clinicId: UUID): Promise<number> {
+      const requests = await repos.appointmentRequests.listByClinic(clinicId);
+      return requests.filter((r) => r.status === 'pending').length;
     },
 
     /**

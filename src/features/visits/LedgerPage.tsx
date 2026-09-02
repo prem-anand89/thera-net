@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService } from '@/services';
+import { repos, dashboardService, feedbackService } from '@/services';
 import { db } from '@/lib/db';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
+import { useGoogleReviewEligibleRequestIds } from '@/features/requests/requestsSignals';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY, formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
@@ -16,6 +17,8 @@ import {
   clinicBillingConfig,
   clinicShareLabels,
   type ConsultationNote,
+  type FeedbackRequest,
+  type FeedbackResponse,
   type Patient,
   type PaymentStatus,
   type UUID,
@@ -78,7 +81,12 @@ function visitToCardData(
   myTherapistId: UUID | undefined,
   canViewClinicalNotes: boolean,
   invoicedSiblingGroupIds: Set<UUID>,
-  consultationNotes: ConsultationNote[] | undefined
+  consultationNotes: ConsultationNote[] | undefined,
+  enablePatientComms: boolean,
+  feedbackRequestByVisitId: Map<UUID, FeedbackRequest>,
+  responseByRequestId: Map<UUID, FeedbackResponse>,
+  googleReviewEligibleIds: Set<UUID>,
+  googleReviewUrl: string | null
 ): VisitCardData {
   const p = patientById.get(v.patientId);
   const editedBy =
@@ -98,9 +106,11 @@ function visitToCardData(
   const canModify = isAdmin || v.therapistId === myTherapistId;
   const needsNote = v.clinicalStatus === 'pending';
   const linkedNote = noteForVisit(consultationNotes ?? [], v.id, v.patientId, needsNote);
+  const feedbackRequest = feedbackRequestByVisitId.get(v.id);
 
   return {
     visitId: v.id,
+    therapistId: v.therapistId,
     visitDate: v.visitDate,
     patientId: v.patientId,
     patientName: p?.name ?? '-',
@@ -140,6 +150,22 @@ function visitToCardData(
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: linkedNote?.id ?? null,
     noteStatus: linkedNote?.status ?? null,
+    canAskForFeedback: enablePatientComms && canModify,
+    feedbackRequest: feedbackRequest
+      ? {
+          id: feedbackRequest.id,
+          status: feedbackRequest.status,
+          token: feedbackRequest.token,
+          updatedAt: feedbackRequest.updatedAt,
+          // Admin gets it for free off the synced rating; front_desk (no
+          // rating available at all, see feedbackRequest field's own doc
+          // comment) falls back to the role-blind eligibility RPC result.
+          googleReviewEligible: isAdmin
+            ? (responseByRequestId.get(feedbackRequest.id)?.rating ?? 0) >= 4
+            : googleReviewEligibleIds.has(feedbackRequest.id),
+        }
+      : null,
+    googleReviewUrl,
     packageInvoicePending:
       v.actualBillPaise === 0 &&
       !!v.sessionIndex &&
@@ -275,6 +301,45 @@ export function LedgerPage() {
     [clinic.id, canViewClinicalNotes]
   );
 
+  // Patient Communications, Slice 1 — same bulk-fetch-and-map shape as
+  // consultationNotes above, skipped entirely when the module is off.
+  const feedbackRequests = useLiveQuery(
+    () => (clinic.enablePatientComms ? repos.feedbackRequests.listByClinic(clinic.id) : undefined),
+    [clinic.id, clinic.enablePatientComms]
+  );
+  const feedbackRequestByVisitId = useMemo(() => {
+    const map = new Map<UUID, FeedbackRequest>();
+    for (const r of feedbackRequests ?? []) {
+      // A visit can have more than one row over time (an old expired/
+      // responded one plus a fresh pending one after re-asking) — keep
+      // whichever was updated most recently, same tie-break as the repo's
+      // own getByVisitId.
+      const existing = map.get(r.visitId);
+      if (!existing || r.updatedAt > existing.updatedAt) map.set(r.visitId, r);
+    }
+    return map;
+  }, [feedbackRequests]);
+
+  // Slice 3 — the visit row's Google-review nudge needs the rating,
+  // which lives in feedback_responses, not feedback_requests. Same
+  // module-off skip as the request fetch above; RLS filters this to
+  // nothing for a non-admin viewer regardless (see FeedbackResponseRepo's
+  // own doc comment), so no extra role check needed here.
+  const feedbackResponses = useLiveQuery(
+    () => (clinic.enablePatientComms ? repos.feedbackResponses.listByClinic(clinic.id) : undefined),
+    [clinic.id, clinic.enablePatientComms]
+  );
+  const responseByRequestId = useMemo(
+    () => new Map((feedbackResponses ?? []).map((r) => [r.requestId, r])),
+    [feedbackResponses]
+  );
+  // Front-desk-only fallback for the Google review nudge (see
+  // WorkspacePage's own comment on this hook for why admin skips it).
+  const googleReviewEligibleIds = useGoogleReviewEligibleRequestIds(
+    clinic.id,
+    !isAdmin && (clinic.enablePatientComms ?? false)
+  );
+
   // Payment state needs both facts a bare `invoiceId` check misses: whether
   // the invoice itself was ever marked paid (statusByInvoiceId), and
   // whether money was collected directly with no invoice at all
@@ -387,7 +452,12 @@ export function LedgerPage() {
           myTherapistId,
           canViewClinicalNotes,
           invoicedSiblingGroupIds ?? new Set(),
-          consultationNotes
+          consultationNotes,
+          clinic.enablePatientComms ?? false,
+          feedbackRequestByVisitId,
+          responseByRequestId,
+          googleReviewEligibleIds,
+          clinic.googleReviewUrl ?? null
         )
       ),
     [
@@ -408,6 +478,11 @@ export function LedgerPage() {
       canViewClinicalNotes,
       invoicedSiblingGroupIds,
       consultationNotes,
+      clinic.enablePatientComms,
+      feedbackRequestByVisitId,
+      responseByRequestId,
+      googleReviewEligibleIds,
+      clinic.googleReviewUrl,
     ]
   );
 
@@ -745,13 +820,30 @@ export function LedgerPage() {
                     <td className={td}>{formatDateDMY(p.lastVisitOn)}</td>
                     <td className={tdNum}>{p.daysSinceLastVisit}</td>
                     <td className={td}>
-                      <Link
-                        to="/ledger"
-                        search={{ patientId: p.patientId }}
-                        className="font-medium text-[var(--teal)] hover:underline"
-                      >
-                        View
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        {clinic.enablePatientComms && (
+                          <button
+                            type="button"
+                            className="whitespace-nowrap font-medium text-[var(--teal)] hover:underline"
+                            onClick={() =>
+                              void feedbackService.sendStalePackageReminder(
+                                p.patientName,
+                                clinic.name,
+                                p.serviceName
+                              )
+                            }
+                          >
+                            Send reminder
+                          </button>
+                        )}
+                        <Link
+                          to="/ledger"
+                          search={{ patientId: p.patientId }}
+                          className="font-medium text-[var(--teal)] hover:underline"
+                        >
+                          View
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -875,6 +967,27 @@ export function LedgerPage() {
                 }
                 onDelete={(row) => {
                   if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+                }}
+                onAskForFeedback={(row) => {
+                  setError(null);
+                  void feedbackService
+                    .askForFeedback(clinic.id, row.visitId, row.patientId, row.therapistId!)
+                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                }}
+                onResendFeedback={(row) => {
+                  const request = feedbackRequestByVisitId.get(row.visitId);
+                  if (!request?.token) return;
+                  setError(null);
+                  void feedbackService
+                    .resend(request, row.patientName, clinic.name)
+                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                }}
+                onAskForGoogleReview={(row) => {
+                  if (!row.googleReviewUrl) return;
+                  setError(null);
+                  void feedbackService
+                    .askForGoogleReview(row.patientName, clinic.name, row.googleReviewUrl)
+                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 canInvoice={canBill}
                 backTo="/ledger"

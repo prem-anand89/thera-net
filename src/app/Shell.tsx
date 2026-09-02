@@ -156,6 +156,25 @@ function IconSettings({ className }: { className?: string }) {
     </svg>
   );
 }
+function IconRequests({ className }: { className?: string }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M3 5.5h14v9a1 1 0 01-1 1H4a1 1 0 01-1-1v-9zM3 5.5l3.5 4.2h7L17 5.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 function IconMore({ className }: { className?: string }) {
   return (
     <svg
@@ -178,6 +197,11 @@ const NAV = [
   { to: '/ledger', label: 'Ledger', Icon: IconLedger },
   { to: '/patients', label: 'Patients', Icon: IconPatients },
   { to: '/insights', label: 'Reports', Icon: IconReports },
+  // Desktop-only — the mobile bottom tab bar is its own hand-built 5-item
+  // row (Workspace/Patients/+New/Ledger/More), not driven by this array,
+  // so adding a 6th entry here never adds a 6th phone tab (per the locked
+  // spec's "no sixth phone tab" decision). Mobile reaches it via More.
+  { to: '/requests', label: 'Requests', Icon: IconRequests },
   { to: '/settings', label: 'Settings', Icon: IconSettings },
 ] as const;
 
@@ -216,6 +240,10 @@ export function Shell() {
       NAV.filter(
         (item) =>
           (item.to !== '/settings' || role === 'admin') &&
+          // Requests → Feedback is admin-only, but Bookings (Slice 5) is
+          // front_desk's primary surface too — matching /insights' gate
+          // just below, and the doc's "front desk + admin" nav rule.
+          (item.to !== '/requests' || role === 'admin' || role === 'front_desk') &&
           (item.to !== '/insights' || role === 'admin' || role === 'front_desk')
       ),
     [role]
@@ -282,6 +310,18 @@ export function Shell() {
   // it may be opened by someone whose local session has expired, and it
   // must render before those checks would otherwise redirect to login.
   if (pathname === '/reset-password') {
+    return (
+      <Suspense fallback={<Centered>Loading…</Centered>}>
+        <Outlet />
+      </Suspense>
+    );
+  }
+
+  // Public patient feedback link / public booking form — genuinely
+  // unauthenticated (no session at all, not even a recovery one). Must
+  // render before the `!session` check below would otherwise bounce an
+  // anonymous patient to LoginPage.
+  if (pathname.startsWith('/f/') || pathname.startsWith('/book/')) {
     return (
       <Suspense fallback={<Centered>Loading…</Centered>}>
         <Outlet />
@@ -455,7 +495,8 @@ export function Shell() {
             active={
               pathname.startsWith('/more') ||
               pathname.startsWith('/settings') ||
-              pathname.startsWith('/insights')
+              pathname.startsWith('/insights') ||
+              pathname.startsWith('/requests')
             }
           />
         </nav>

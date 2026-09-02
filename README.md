@@ -53,6 +53,12 @@ client-side implementation yet — no UI, no Dexie/sync integration. See
 - **Dashboard** — rolling last-6-months view: Post-Tax BM revenue trend, open packages sorted by days since last visit (flagged stale past 14 days), outstanding invoices summary. Charts are hand-built SVG (no charting dependency), colored from validated categorical palette.
 - **Therapist comparison** — opt-in chart (off by default; an admin enables it in Settings → Features) showing revenue and visit-count side-by-side per therapist. Visible to therapists too, not just admins — the deliberate exception to "financial aggregates are admin-only."
 
+### Patient Communications (optional module, off by default)
+- **Feedback** — staff ask a patient for feedback from a visit row; a one-time link takes them to a public, no-login star-rating + comment form. Admin sees every response with its rating and comment on Requests → Feedback; a 4-5★ response can be nudged toward a Google review.
+- **Re-engagement reminders** — one-click "Send reminder" on stale packages and single-visit patients, reusing the existing dashboard lists.
+- **Public booking, no slots** — a public form (`/book/$clinicSlug`) collects a patient's name, phone, optional preferred therapist, and preferred day/time as free text; front desk confirms it by hand into a scheduled appointment on Requests → Bookings, which becomes Workspace's "Expected today". Patient identity is resolved once, at arrival, via the existing New Visit search. No live availability/slot picker yet.
+- All sends go through the staff member's own WhatsApp (copy link / share sheet) — no WhatsApp Business API integration in v1.
+
 ## Architecture
 
 ```
@@ -65,7 +71,10 @@ src/features/          UI pages and components (React + TanStack Router)
   ├── visits/          LedgerPage at /ledger (Visits/Invoices sub-tabs); NewVisitPage
   ├── patients/        PatientsPage, PatientProfilePage, NoteEditorPage (Core Assessment)
   ├── reports/         ReportsPage at /insights (Trends + monthly statement; nav label is "Reports")
-  └── settings/        SettingsPage at /settings; CreateClinicForm for first-time clinic setup
+  ├── settings/        SettingsPage at /settings; CreateClinicForm for first-time clinic setup
+  ├── requests/        RequestsPage at /requests — Feedback (admin) and Bookings (admin + front_desk) tabs
+  ├── publicFeedback/  Public, no-login feedback form at /f/$token
+  └── publicBooking/   Public, no-login booking request form at /book/$clinicSlug
 src/components/        Shared UI components (BodyChart, ScaleWidget, TreatmentNote, ColumnsPicker, etc.)
 supabase/              SQL migrations (schema, RLS, RPCs, realtime publications), seed
 ```
@@ -77,6 +86,8 @@ supabase/              SQL migrations (schema, RLS, RPCs, realtime publications)
 - `/patients/$patientId/notes/$noteId` — Core Assessment note editor (Initial/Follow-up consultation notes)
 - `/insights` — Dashboard + monthly per-therapist statement (nav label: "Reports"; `?tab=monthly` for the statement). Hidden from plain therapists — a colleague's individual earnings stay admin/front_desk-only, same as the monthly statement always has been. The one exception, the therapist comparison chart, surfaces on `/workspace` instead so therapists can still reach it.
 - `/settings` — clinic configuration, MRNO settings, billing mode, rate setup, feature toggles (nav label: "Settings")
+- `/requests` (`?tab=feedback|bookings`) — Patient Communications module: Feedback (admin) and Bookings (admin + front_desk)
+- `/f/$token`, `/book/$clinicSlug` — public, no-login, no-Shell forms for patient feedback and booking requests
 - `/archive`, `/setup`, `/invoices`, `/reports` — legacy paths, kept as redirects to the routes above for old bookmarks
 
 Business logic never imports Supabase or Dexie — swapping the backend means

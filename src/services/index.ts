@@ -13,6 +13,9 @@ import { createBackupService } from './backupService';
 import { createConsultationNoteService } from './consultationNoteService';
 import { createTherapistService } from './therapistService';
 import { createAdvanceService } from './advanceService';
+import { createFeedbackService } from './feedbackService';
+import { bookingService } from './bookingService';
+import { whatsappBusinessService } from './whatsappBusinessService';
 
 export const patientService = createPatientService(repos);
 export const visitService = createVisitService(repos);
@@ -29,4 +32,7 @@ export const backupService = createBackupService(repos);
 export const consultationNoteService = createConsultationNoteService(repos);
 export const therapistService = createTherapistService(repos);
 export const advanceService = createAdvanceService(repos);
+export const feedbackService = createFeedbackService(repos);
+export { bookingService };
+export { whatsappBusinessService };
 export { repos };

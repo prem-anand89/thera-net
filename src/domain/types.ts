@@ -107,6 +107,23 @@ export interface Clinic {
    * "Authorised signature" line. Not a cryptographic e-signature.
    */
   signaturePath?: string | null;
+  /**
+   * Patient communications module (booking requests, feedback capture,
+   * Google review nudges, re-engagement reminders). Off by default — see
+   * docs/HANDOFF-patient-comms.md. Optional so older cached rows default
+   * to false (module doesn't exist for them yet).
+   */
+  enablePatientComms?: boolean;
+  /** Where "Leave a Google review" / "Ask for a Google review" point to —
+   *  unset means neither ever shows, even for a 4-5* response (Slice 3 of
+   *  the same doc). Plain URL, not validated beyond what the Settings
+   *  input itself enforces. */
+  googleReviewUrl?: string | null;
+  /** Public `/book/$bookingSlug` URL segment (Patient Communications,
+   *  Slice 5) — unique, nullable; unset means the public booking form was
+   *  never advertised for this clinic. Lowercase alphanumeric + hyphens,
+   *  validated client-side in Settings; the DB only enforces uniqueness. */
+  bookingSlug?: string | null;
   updatedAt: string;
 }
 
@@ -344,6 +361,10 @@ export interface Patient {
   noReturnReasonId?: UUID | null;
   /** Set = hidden from search/pickers; visits keep resolving. Optional: older cached rows lack the key. */
   deletedAt?: string | null;
+  /** Patient comms opt-out — honored on every send path (feedback links,
+   *  booking confirmations, reminders). Optional: older cached rows lack the
+   *  key and default to false (messaging allowed). */
+  doNotMessage?: boolean;
   updatedAt: string;
 }
 
@@ -577,6 +598,135 @@ export interface PatientAdvance {
   status: PatientAdvanceStatus;
   deleted: boolean;
   updatedAt: string;
+}
+
+export type FeedbackRequestStatus = 'pending' | 'responded' | 'expired';
+
+/**
+ * Staff-triggered "ask this patient for feedback" action (Patient
+ * Communications, Slice 1) — one row per visit that's been asked, feeding
+ * the public `/f/$token` form. `therapistId` is denormalized from the
+ * visit (not just reachable via a join) so client-side display gating can
+ * mirror the `feedback_requests_insert`/`_update` RLS policy
+ * (admin/front_desk/own-therapist) without an extra query, the same
+ * reasoning the RLS policy itself is built on server-side.
+ *
+ * `token` is deliberately optional and never set by the client — the
+ * Postgres column default (`generate_url_safe_token()`) only fires when a
+ * column is omitted from an INSERT, and creating this row goes through
+ * the normal Dexie/outbox path (same as any other clinic CRUD), not an
+ * RPC. Leaving `token` unset here means the outbox's upsert payload omits
+ * it, the server fills it in, and the real value round-trips back on the
+ * next pull — so a freshly-created row reads `token: undefined` in the UI
+ * for a moment, not a placeholder. Resending (rotating the token on an
+ * existing row) can't go through this same path — column defaults don't
+ * fire on UPDATE — so that's a small dedicated online-only RPC instead
+ * (`rotate_feedback_request_token`), same reasoning `issue_invoice()` is
+ * an RPC rather than outbox-synced.
+ */
+export interface FeedbackRequest {
+  id: UUID;
+  clinicId: UUID;
+  visitId: UUID;
+  patientId: UUID;
+  therapistId: UUID;
+  token?: string;
+  status: FeedbackRequestStatus;
+  expiresAt: string;
+  updatedAt: string;
+  createdBy?: UUID | null;
+  updatedBy?: UUID | null;
+}
+
+/**
+ * A patient's submission against one `FeedbackRequest` (Patient
+ * Communications, Slice 2) — written only by `submit_feedback_response()`,
+ * a SECURITY DEFINER RPC with no client INSERT policy; the client never
+ * creates or edits these, only reads them (admin-only, per
+ * `feedback_responses`' own RLS). `updatedAt` is a permanent alias for
+ * `createdAt` — the row is immutable, but the sync engine hardcodes
+ * `updated_at` as the delta column for every synced table, so the column
+ * exists purely for that, not because responses are ever modified.
+ */
+export interface FeedbackResponse {
+  id: UUID;
+  requestId: UUID;
+  clinicId: UUID;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AppointmentRequestStatus = 'pending' | 'confirmed' | 'declined';
+
+/**
+ * A patient's raw public booking submission (Patient Communications,
+ * Slice 5) — written only by `submit_appointment_request()`, an anonymous
+ * SECURITY DEFINER RPC; no client INSERT policy exists. `name`/`phone` are
+ * the patient's own typed values, not resolved against any existing
+ * `patients` row — identity resolution only ever happens later, at
+ * arrival (see `Appointment`'s own doc comment), never here. Read-only
+ * sync, same shape as `FeedbackResponse` — nothing client-side writes
+ * this table directly, every mutation (confirm/decline) goes through an
+ * RPC.
+ */
+export interface AppointmentRequest {
+  id: UUID;
+  clinicId: UUID;
+  name: string;
+  phone: string;
+  email: string | null;
+  preferredTherapistId: UUID | null;
+  /** Free text — reason for visit, symptoms, anything else the patient
+   *  wants front desk to know. Distinct from `preferredTimeText`, which
+   *  is purely about scheduling. */
+  notes: string | null;
+  /** Real calendar date, informational only — not checked against any
+   *  therapist's actual availability. See this file's own note on why
+   *  there's no slot-checking logic anywhere in this module yet. */
+  preferredDate: string | null;
+  preferredTimeText: string | null;
+  status: AppointmentRequestStatus;
+  appointmentId: UUID | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: UUID | null;
+  updatedBy?: UUID | null;
+}
+
+export type AppointmentStatus = 'confirmed' | 'rescheduled' | 'no_show' | 'cancelled' | 'arrived';
+
+/**
+ * A confirmed expected attendance (Patient Communications, Slice 5) — not
+ * a billed visit, and not the same thing as one. `patientId` is null from
+ * the moment staff confirm the originating `AppointmentRequest` until
+ * whichever of the two "arrived" paths resolves it (New Visit's typeahead
+ * from this row, or the standalone manual toggle) — `patientName`/
+ * `patientPhone` carry the raw submitted values throughout, even after
+ * `patientId` resolves, so the row always has something to display.
+ * `visitId` is set only once arrival creates the actual `visits` row.
+ * Read-only sync, same reasoning as `AppointmentRequest` — every mutation
+ * (confirm/decline/reschedule/no-show/cancel/mark-arrived/link-visit) is
+ * an online-only RPC, never a direct client write.
+ */
+export interface Appointment {
+  id: UUID;
+  clinicId: UUID;
+  patientId: UUID | null;
+  patientName: string;
+  patientPhone: string;
+  therapistId: UUID | null;
+  scheduledAt: string;
+  status: AppointmentStatus;
+  requestId: UUID | null;
+  visitId: UUID | null;
+  rescheduleCount: number;
+  previousScheduledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: UUID | null;
+  updatedBy?: UUID | null;
 }
 
 /** What Health Valley actually paid Beyond Mechanics for one fiscal month. */

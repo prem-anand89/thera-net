@@ -4,6 +4,7 @@ import {
   VISIT_COLUMN_LABELS,
   VISIT_OPTIONAL_COLUMN_ORDER,
   type ConsultationNoteStatus,
+  type FeedbackRequestStatus,
   type UUID,
   type VisitColumnKey,
 } from '@/domain/types';
@@ -253,6 +254,45 @@ export interface VisitCardData {
    * (one 🔒, one not) with nothing explaining why.
    */
   packageInvoicePending?: boolean;
+  /** The visit's own therapist (Patient Communications, Slice 1) — needed
+   *  alongside `canAskForFeedback` because the underlying RLS policy
+   *  (admin/front_desk/own-therapist) is row-scoped, not a flat
+   *  Permissions boolean; mirrors the same `therapistId` every builder
+   *  already has when computing `canModify`-style flags. */
+  therapistId?: UUID;
+  /** Whether this viewer may ask this visit's patient for feedback —
+   *  `isAdmin || therapistId === myTherapistId`, further gated on
+   *  `clinic.enablePatientComms`. Computed per-row by the caller, same as
+   *  `canEdit`/`canSplit`, not read off a flat Permissions object. */
+  canAskForFeedback?: boolean;
+  /** The visit's `feedback_requests` row, if any has ever been created —
+   *  `token` is optional because a just-created row hasn't synced its
+   *  server-generated token back down yet (see `FeedbackRequest`'s own
+   *  doc comment). `updatedAt` doubles as "last sent at" — both the
+   *  create and resend paths stamp it to the moment the link went out, so
+   *  it's what `VisitFeedbackLink` uses to enforce the resend cooldown,
+   *  not a separate field. `null`/unset means no request exists yet. */
+  feedbackRequest?: {
+    id: UUID;
+    status: FeedbackRequestStatus;
+    token?: string;
+    updatedAt: string;
+    /** Set only once `status` is `'responded'` — whether this response
+     *  qualifies for the "Ask for a Google review" nudge (Slice 3: 4-5*
+     *  only). Deliberately a bare boolean, not the rating itself: an admin
+     *  caller derives it from the synced `feedback_responses.rating` (which
+     *  only ever reaches their Dexie, per RLS), while a front_desk caller
+     *  has no rating available at all and instead derives it from
+     *  `list_google_review_eligible_requests()` — a role-blind RPC that
+     *  answers "does this qualify" without ever exposing the rating value
+     *  itself (see that migration's own comment). Either way the nudge
+     *  still also needs `googleReviewUrl` set below. */
+    googleReviewEligible?: boolean;
+  } | null;
+  /** Clinic's Google review link (Slice 3) — unset means the nudge never
+   *  shows, even for a 4-5* response. Plain passthrough of
+   *  `clinic.googleReviewUrl`, not derived. */
+  googleReviewUrl?: string | null;
 }
 
 /** Row actions kebab — Repeat / Issue invoice / Edit visit / Split /
@@ -457,6 +497,17 @@ const NOTE_STATUS_CELL: Record<
   archived: { tone: 'slate', label: 'Archived', action: 'View' },
 };
 
+// Plain flush-left text, not `Pill` — this status sits stacked above a
+// plain-text action link (and, in the table's Actions column, a plain-text
+// feedback link below that). `Pill`'s own px-2 padding shifted "Draft"'s
+// text a few pixels right of everything flush-left beneath it, reading as
+// misaligned once there were 2-3 stacked lines instead of 1.
+const NOTE_STATUS_TEXT_COLOR: Record<'green' | 'amber' | 'slate', string> = {
+  green: 'text-[var(--moss)]',
+  amber: 'text-[var(--amber)]',
+  slate: 'text-[var(--muted)]',
+};
+
 /** Clinical-note entry point for a visit row — shared by the table Note
  *  column and mobile cards so draft/continue/view routing stays consistent.
  *  `backTo` carries the same "which list did this come from" context as
@@ -489,8 +540,11 @@ export function VisitNoteLink({
       );
     }
     return (
-      <div className="flex flex-col items-start gap-0.5">
-        <Pill tone={tone}>{label}</Pill>
+      <div className="flex flex-wrap items-center gap-1">
+        <span className={`whitespace-nowrap text-xs font-medium ${NOTE_STATUS_TEXT_COLOR[tone]}`}>
+          {label}
+        </span>
+        <span className="text-xs text-[var(--muted)]">·</span>
         <Link
           to="/patients/$patientId/notes/$noteId"
           params={{ patientId: data.patientId, noteId: data.consultationNoteId }}
@@ -516,8 +570,143 @@ export function VisitNoteLink({
   );
 }
 
-function NoteCell({ data, backTo }: { data: VisitCardData; backTo?: PatientProfileBackTarget }) {
-  return <VisitNoteLink data={data} backTo={backTo} />;
+/** Minimum time since a feedback link was last sent (create or resend)
+ *  before Resend becomes available again — a patient who hasn't responded
+ *  yet shouldn't get a second message within the same day or two just
+ *  because staff happened to click twice. No admin override; this is a
+ *  hard floor, not a suggestion. */
+const RESEND_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** "Ask for feedback" / "Resend" entry point for a visit row — mirrors
+ *  `VisitNoteLink`'s gate-then-branch shape (hidden entirely when the
+ *  viewer can't act on this row), but unlike Note this isn't a route link:
+ *  it needs an `onClick` callback threaded down, same shape as `onInvoice`.
+ *  Kept inline next to Note per this file's own convention (see
+ *  `RowActionsMenu`'s doc comment) rather than buried in the kebab menu. */
+export function VisitFeedbackLink({
+  data,
+  onAskForFeedback,
+  onResendFeedback,
+  onAskForGoogleReview,
+}: {
+  data: VisitCardData;
+  onAskForFeedback?: () => void;
+  onResendFeedback?: () => void;
+  onAskForGoogleReview?: () => void;
+}) {
+  if (!data.canAskForFeedback) return null;
+  const request = data.feedbackRequest;
+
+  // A patient's actual rating/comment stays admin-only at the RLS layer
+  // (`feedback_responses` SELECT is `is_clinic_admin()`-only) — but the
+  // *eligibility* signal below is role-blind by design (see
+  // `googleReviewEligible`'s own doc comment), so every role that can act
+  // on a visit gets the same "it happened" marker here.
+  if (request?.status === 'responded') {
+    const eligibleForGoogleReview =
+      !!request.googleReviewEligible && !!data.googleReviewUrl && !!onAskForGoogleReview;
+    return (
+      <div className="flex flex-col items-start gap-0.5">
+        <span
+          className="whitespace-nowrap text-xs text-[var(--moss)]"
+          title="Patient responded to the feedback request"
+        >
+          ★ Responded
+        </span>
+        {eligibleForGoogleReview && (
+          <button
+            type="button"
+            className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+            onClick={onAskForGoogleReview}
+            title="Ask this patient to leave a Google review"
+          >
+            ⭐ Google review
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (!request || request.status === 'expired') {
+    if (!onAskForFeedback) return null;
+    return (
+      <button
+        type="button"
+        className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+        onClick={onAskForFeedback}
+        title="Ask this patient for feedback"
+      >
+        + Feedback
+      </button>
+    );
+  }
+
+  // Row exists locally but its server-generated token hasn't synced back
+  // down yet — column defaults only fire server-side on insert, so there's
+  // a brief window with nothing to share. Icon + word, not icon-only: this
+  // column also carries Note's actions, so a bare glyph here has no "this
+  // is about feedback" context the way 🔒/✎ do sitting right next to the
+  // billing/patient fields they describe.
+  if (!request.token) {
+    return (
+      <span
+        className="whitespace-nowrap text-xs text-[var(--muted)]"
+        title="Preparing the feedback link"
+      >
+        ⏳ Feedback
+      </span>
+    );
+  }
+
+  // Cooldown since the link was last sent (create and resend both stamp
+  // updatedAt to that moment) — resend exists for a patient who's gone
+  // quiet, not as a repeatable nudge, so it stays hidden for a few days
+  // rather than being one click away from back-to-back messages.
+  if (Date.now() - new Date(request.updatedAt).getTime() < RESEND_COOLDOWN_MS) {
+    return (
+      <span className="whitespace-nowrap text-xs text-[var(--moss)]" title="Feedback request sent">
+        ✓ Feedback
+      </span>
+    );
+  }
+
+  if (!onResendFeedback) return null;
+  return (
+    <button
+      type="button"
+      className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+      onClick={onResendFeedback}
+      title="Resend the feedback link"
+    >
+      ↻ Resend
+    </button>
+  );
+}
+
+function NoteCell({
+  data,
+  backTo,
+  onAskForFeedback,
+  onResendFeedback,
+  onAskForGoogleReview,
+}: {
+  data: VisitCardData;
+  backTo?: PatientProfileBackTarget;
+  onAskForFeedback?: () => void;
+  onResendFeedback?: () => void;
+  onAskForGoogleReview?: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <VisitNoteLink data={data} backTo={backTo} />
+      <VisitFeedbackLink
+        data={data}
+        onAskForFeedback={onAskForFeedback}
+        onResendFeedback={onResendFeedback}
+        onAskForGoogleReview={onAskForGoogleReview}
+      />
+    </div>
+  );
 }
 
 /** Label + value rows for mobile cards — same field order as the optional table columns. */
@@ -598,6 +787,9 @@ export function SharedVisitCard({
   onEdit,
   onSplit,
   onDelete,
+  onAskForFeedback,
+  onResendFeedback,
+  onAskForGoogleReview,
   canInvoice = true,
   backTo,
 }: {
@@ -614,6 +806,9 @@ export function SharedVisitCard({
   onEdit?: () => void;
   onSplit?: () => void;
   onDelete: () => void;
+  onAskForFeedback?: () => void;
+  onResendFeedback?: () => void;
+  onAskForGoogleReview?: () => void;
   canInvoice?: boolean;
   backTo?: PatientProfileBackTarget;
 }) {
@@ -726,6 +921,12 @@ export function SharedVisitCard({
             </Pill>
           )}
           <VisitNoteLink data={data} inline backTo={backTo} />
+          <VisitFeedbackLink
+            data={data}
+            onAskForFeedback={onAskForFeedback}
+            onResendFeedback={onResendFeedback}
+            onAskForGoogleReview={onAskForGoogleReview}
+          />
         </div>
       </div>
     </>
@@ -765,6 +966,9 @@ function VisitTable({
   onEdit,
   onSplit,
   onDelete,
+  onAskForFeedback,
+  onResendFeedback,
+  onAskForGoogleReview,
   canInvoice,
   selection,
   backTo,
@@ -780,6 +984,9 @@ function VisitTable({
   onEdit?: (row: VisitCardData) => void;
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
+  onAskForFeedback?: (row: VisitCardData) => void;
+  onResendFeedback?: (row: VisitCardData) => void;
+  onAskForGoogleReview?: (row: VisitCardData) => void;
   canInvoice: boolean;
   selection?: VisitSelectionProps;
   backTo?: PatientProfileBackTarget;
@@ -843,7 +1050,7 @@ function VisitTable({
               )}
               <th className={thNum}>Bill</th>
               <th className={th}>Status</th>
-              <th className={th}>Note</th>
+              <th className={th}>Actions</th>
               <th className={th}></th>
             </tr>
           </thead>
@@ -953,7 +1160,15 @@ function VisitTable({
                   />
                 </td>
                 <td className={td}>
-                  <NoteCell data={row} backTo={backTo} />
+                  <NoteCell
+                    data={row}
+                    backTo={backTo}
+                    onAskForFeedback={onAskForFeedback ? () => onAskForFeedback(row) : undefined}
+                    onResendFeedback={onResendFeedback ? () => onResendFeedback(row) : undefined}
+                    onAskForGoogleReview={
+                      onAskForGoogleReview ? () => onAskForGoogleReview(row) : undefined
+                    }
+                  />
                 </td>
                 <td className={td}>
                   <RowActionsMenu
@@ -1063,6 +1278,9 @@ export function ResponsiveVisitList({
   onEdit,
   onSplit,
   onDelete,
+  onAskForFeedback,
+  onResendFeedback,
+  onAskForGoogleReview,
   canInvoice = true,
   selection,
   backTo,
@@ -1077,6 +1295,9 @@ export function ResponsiveVisitList({
   onEdit?: (row: VisitCardData) => void;
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
+  onAskForFeedback?: (row: VisitCardData) => void;
+  onResendFeedback?: (row: VisitCardData) => void;
+  onAskForGoogleReview?: (row: VisitCardData) => void;
   canInvoice?: boolean;
   /** Row checkboxes for bulk actions (e.g. Patient Profile's "select
    *  visits, issue one invoice"). Only wired up in the flat (non-grouped)
@@ -1116,6 +1337,11 @@ export function ResponsiveVisitList({
                     onEdit={onEdit ? () => onEdit(row) : undefined}
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
+                    onAskForFeedback={onAskForFeedback ? () => onAskForFeedback(row) : undefined}
+                    onResendFeedback={onResendFeedback ? () => onResendFeedback(row) : undefined}
+                    onAskForGoogleReview={
+                      onAskForGoogleReview ? () => onAskForGoogleReview(row) : undefined
+                    }
                     canInvoice={canInvoice}
                     backTo={backTo}
                   />
@@ -1149,6 +1375,11 @@ export function ResponsiveVisitList({
                     onEdit={onEdit ? () => onEdit(row) : undefined}
                     onSplit={onSplit ? () => onSplit(row) : undefined}
                     onDelete={() => onDelete(row)}
+                    onAskForFeedback={onAskForFeedback ? () => onAskForFeedback(row) : undefined}
+                    onResendFeedback={onResendFeedback ? () => onResendFeedback(row) : undefined}
+                    onAskForGoogleReview={
+                      onAskForGoogleReview ? () => onAskForGoogleReview(row) : undefined
+                    }
                     canInvoice={canInvoice}
                     backTo={backTo}
                   />
@@ -1175,6 +1406,9 @@ export function ResponsiveVisitList({
           onEdit={onEdit}
           onSplit={onSplit}
           onDelete={onDelete}
+          onAskForFeedback={onAskForFeedback}
+          onResendFeedback={onResendFeedback}
+          onAskForGoogleReview={onAskForGoogleReview}
           canInvoice={canInvoice}
           selection={selection}
           backTo={backTo}

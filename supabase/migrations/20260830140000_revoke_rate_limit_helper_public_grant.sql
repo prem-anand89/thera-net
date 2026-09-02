@@ -1,0 +1,13 @@
+-- ---------------------------------------------------------------------------
+-- 20260830130000_revoke_rate_limit_helper_execute.sql revoked EXECUTE from
+-- anon/authenticated directly, but Postgres functions get EXECUTE granted
+-- to the PUBLIC pseudo-role by default at creation time, and every real
+-- role (anon/authenticated included) implicitly inherits PUBLIC's
+-- privileges regardless of what's revoked from the role itself. Confirmed
+-- live: after that migration, a direct anon curl call to
+-- /rest/v1/rpc/check_public_rpc_rate_limit still returned 204 (succeeded)
+-- rather than a permission error. Revoking from PUBLIC closes the actual
+-- hole; the anon/authenticated-specific revoke in the prior migration was
+-- redundant but harmless.
+-- ---------------------------------------------------------------------------
+revoke execute on function public.check_public_rpc_rate_limit(text, int, int) from public;

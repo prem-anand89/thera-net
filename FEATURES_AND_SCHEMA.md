@@ -500,6 +500,396 @@ URLs redirect to `?tab=catalog&catalogView=…`.
 - Therapist comparison chart (off by default)
 - Billing staff restriction (on by default)
 
+### 9. Patient Communications (Phase 0–5, plus a Phase 9 scaffold)
+
+Full spec/roadmap: `docs/HANDOFF-patient-comms.md`. Phase 0 (foundation),
+Phase 1 (visit "Ask for feedback"), Phase 2 (Requests → Feedback page),
+Phase 3 (Google review nudge), Phase 4 (stale-package/single-visit
+reminders), and Phase 5 (public booking → confirmed appointments →
+Workspace "Expected today", folding in the doc's own Phase 6
+reschedule/no-show/cancel actions since they share the same schema/RPC
+surface) have shipped. Weekly availability/slot picker (Phase 7) and
+analytics (Phase 8) remain later, un-started phases. Phase 9's WhatsApp
+Business Cloud API has a **credential-storage + Edge Function scaffold**
+shipped ahead of anyone actually calling it — see its own bullet below.
+
+- **`clinics.enable_patient_comms`** — module gate, off by default, same
+  pattern as `clinicalDocsEnabled`/`enableExpectedToday`. Public token routes
+  refuse to resolve when a clinic hasn't turned this on. Toggled from
+  Settings → **Patient communications** (its own section/chip, admin-only —
+  just the on/off switch for now; slug, Google review URL, message
+  templates, and WhatsApp Business fields arrive with later phases).
+- **`patients.do_not_message`** — opt-out flag, honored by every send path
+  once those paths exist (Phase 2+); staff-settable toggle, no automated
+  detection.
+- **Public feedback link (`/f/$token`)** — the app's first and only
+  anonymous write path. A therapist/front-desk/admin action creates a
+  `feedback_requests` row with a server-generated 256-bit token; a patient
+  opens `/f/$token` with no login, submits a 1–5 star rating and optional
+  comment via `submit_feedback_response()`, and that's the entire
+  interaction. Both public RPCs are rate-limited per IP and return an
+  identical generic error for every failure case (invalid, expired, already
+  responded, module off) — deliberately not distinguishable, so the endpoint
+  can't be used to enumerate which tokens exist.
+- **Feedback visibility is admin-only, at the RLS layer, not just the UI.**
+  Front desk and therapists can see that a request exists/its status (no
+  rating or comment content), but `feedback_responses` SELECT is restricted
+  to `is_clinic_admin()` — this is a real access boundary, not a hidden menu
+  item.
+- **"Ask for feedback" trigger (Phase 1)** — an inline action on a visit
+  row, next to the existing "+ Note" link (`VisitFeedbackLink` in
+  `VisitCard.tsx`, kept inline rather than in the row's kebab menu, same
+  convention as Note). Visible only when `enablePatientComms` is on and the
+  viewer may act on that visit (`is_clinic_admin() OR is_own_therapist()`
+  mirrored client-side, same shape as `canEdit`/`canSplit` — a per-row
+  computed boolean, not a flat `Permissions` field, since the underlying
+  RLS check is row-scoped). Also offered as a one-click button on
+  `NewVisitPage`'s post-save screen, right after logging a visit.
+  - **Creating a request is Dexie + outbox**, identical to any other clinic
+    CRUD — *not* an RPC. The client leaves `token` unset on insert so the
+    column default (`generate_url_safe_token()`) fires server-side; the real
+    token round-trips back on the next sync pull. Until then the UI shows
+    "Preparing link…" rather than assuming the token exists immediately.
+  - **Resending rotates the token via a dedicated RPC,
+    `rotate_feedback_request_token(p_request_id uuid) returns text`** —
+    column defaults never fire on UPDATE, so extending the 21-day expiry and
+    generating fresh entropy needs a small online-only RPC instead of the
+    outbox, the same reasoning `issue_invoice()` is an RPC rather than
+    outbox-synced. `security invoker` (not definer): the existing
+    `feedback_requests_update` RLS policy already gates who may call it
+    correctly, so no elevated privileges are needed. One click both rotates
+    the token and opens the WhatsApp share sheet with the new link
+    (`feedbackService.resend`).
+  - **Resend has a 3-day cooldown, client-side, no override.** Both create
+    and resend stamp `feedback_requests.updated_at` to the moment the link
+    went out, so the UI (`VisitFeedbackLink` in `VisitCard.tsx`) reads that
+    as "last sent at" with no extra field: within 3 days it shows a plain
+    "✓ Feedback" (no button at all), and only past that does "↻ Resend"
+    appear. Deliberate — an easily-clickable resend invites back-to-back
+    messages to a patient who just hasn't answered yet, so this is a hard
+    floor rather than a confirm-to-override.
+  - **Sharing** reuses the Web Share API + `wa.me` fallback pattern from
+    `pdfShare.ts` (`shareTextViaWhatsApp`, the plain-text sibling of
+    `shareFileToWhatsApp`) — no WhatsApp Business API required for v1. The
+    message template is a hardcoded string for now; per-clinic template
+    editing is a later phase.
+  - **One pending request per visit** — the foundation's own unique index
+    enforces this. A visit whose last request is `expired` offers
+    "+ Feedback" again (a fresh row); a `pending` request offers "Resend"
+    instead of creating a duplicate; a `responded` request shows a plain
+    "★ Responded" marker instead of either — the same marker for every
+    role, since the actual rating/comment stays admin-only at the RLS
+    layer (rating is simply never populated client-side for a non-admin
+    viewer — RLS filters the row out at the sync-pull level, not a
+    client-side check).
+  - The visit row's "★ Responded" marker only says a response exists, not
+    what it says — see the **Requests → Feedback** page below for that.
+- **Requests → Feedback page (Phase 2)** — `/requests?tab=feedback`, admin-
+  only (`RequestsPage.tsx`), lists every `feedback_responses` row with its
+  rating (★★★★☆) and comment, joined locally against the already-synced
+  `feedback_requests`/`patients`/`therapists`/`visits` tables for context
+  (patient, visit date, therapist) rather than duplicating that data. A
+  `Bookings` tab sits alongside it — a stub through Phase 4, real as of
+  Phase 5 (see below) — matching the doc's own "Requests" naming/IA
+  decision (one page for both workflows).
+  - **`feedback_responses` is a synced-but-read-only Dexie table**, same
+    shape as `invoices` (`ALL_SYNCED_TABLES` but not
+    `CLIENT_WRITABLE_TABLES`) — a response is only ever written by the
+    anonymous patient's own SECURITY DEFINER RPC call, never the client.
+    The table originally had no `updated_at` column (responses are
+    immutable, never updated) but the sync engine hardcodes `updated_at`
+    as the delta column for every synced table, so a migration added one
+    (`updated_at = created_at` always, a permanent alias for the sync
+    engine's benefit, not a real "last modified" signal).
+  - **Nav**: desktop gets a 6th top-nav item, **Requests**, originally
+    admin-only (Feedback was the only tab that existed) and widened at
+    Phase 5 to admin + front_desk — front_desk's whole reason to be on
+    this page is Bookings, its primary surface per the handoff doc's role
+    table. The mobile bottom tab bar is a separate hand-built 5-item row
+    (Workspace/Patients/+New/Ledger/More), not driven by the same array,
+    so this doesn't add a 6th phone tab; mobile reaches it via **More**
+    instead (also widened to the same admin + front_desk gate), per the
+    handoff doc's own "no sixth phone tab" decision. A front_desk viewer
+    who lands on `?tab=feedback` directly is redirected to `?tab=bookings`
+    rather than shown a disabled tab, per the doc's own resolved note.
+  - **Workspace "new response" banner** — admin + module-on only, reading
+    a `db.meta` "last viewed Requests" timestamp (clinic-scoped key, same
+    pattern as `lastBackupMetaKey`) that gets stamped the moment
+    `RequestsPage` mounts; the count is exported from a small
+    `requestsSignals.ts` module rather than `RequestsPage.tsx` itself so
+    that reading it from the eagerly-bundled `WorkspacePage.tsx` doesn't
+    pull the route-code-split Requests page into that eager bundle.
+- **Google review nudge (Phase 3)** — `clinics.google_review_url` (nullable
+  text; unset means the nudge never shows, even for a 4-5★ response). Two
+  surfaces, both gated on rating ≥ 4 **and** the URL being set — 1-3★ never
+  gets a Google button, anywhere, per the spec:
+  - **Patient-facing**: the `/f/$token` thank-you screen shows "Leave a
+    Google review" (a plain external link) when eligible.
+    `submit_feedback_response()` itself decides eligibility and returns
+    the URL (or `null`) as its result — the RPC's return type changed from
+    `void` to `text`, so the migration drops and recreates it (grants
+    don't survive a drop, re-stated explicitly same as the original). No
+    second round trip or extra client-side rating logic needed; the public
+    page just shows the button if the return value is non-null.
+  - **Staff-facing**: an "⭐ Google review" nudge on the visit row, next to
+    the "★ Responded" marker — a pure share action (`shareTextViaWhatsApp`,
+    no DB write, no `message_log` entry), gated the same way.
+    `VisitCardData.feedbackRequest.googleReviewEligible` is a bare boolean
+    (not the rating itself), populated two different ways depending on
+    role: an admin caller derives it from the synced, RLS-filtered
+    `feedback_responses.rating` (`>= 4`), the same bulk fetch the
+    "★ Responded" marker already uses. A front_desk caller has no rating
+    available at all — `feedback_responses_select` is
+    `is_clinic_admin()`-only, so the row never reaches their Dexie, not
+    even filtered client-side — so they instead call
+    `list_google_review_eligible_requests(clinic_id)`, a `security
+    definer` RPC that answers "which request_ids currently qualify"
+    without ever returning a rating or a comment. This closes the gap the
+    Phase 3 slice originally shipped with (spec's send-table lists front
+    desk as eligible to send; the first cut only worked for admins).
+    `useGoogleReviewEligibleRequestIds` (`requestsSignals.ts`) is the
+    front_desk-only fetch — a one-shot RPC call on mount/clinic-change,
+    re-run on window focus, skipped entirely for admin.
+- **Re-engagement reminders (Phase 4)** — "No new detection" per the
+  handoff doc: both surfaces reuse existing dashboard queries rather than
+  adding a new signal. Pure `shareTextViaWhatsApp` actions, no DB write, no
+  `message_log` entry, no booking link (public booking is a later phase,
+  nothing to link to yet) — same shape as the Google review nudge.
+  - **Stale packages** — a "Send reminder" button on `OpenPackageRow`s
+    where `stale` is already `true`, on both of that data's existing
+    homes: Workspace's Packages section (mobile card + desktop table) and
+    Ledger's "Due for follow-up" list (which is already stale-only, so no
+    extra `stale` check needed there). Gated on `clinic.enablePatientComms`.
+  - **Single-visit patients** — a "Send reminder" button next to the
+    existing `tel:` call link on Reports' single-visit-patients list
+    (`dashboardService.singleVisitPatients`), gated the same way plus
+    `p.phone` present — mirroring the existing call link's own gating,
+    even though the share itself doesn't target that number directly (see
+    below).
+  - **Deliberately not phone-targeted.** `SingleVisitPatientRow.phone` and
+    the `tel:` link already on that row could in principle build a
+    number-specific `wa.me/<digits>` deep link, but patient phone numbers
+    aren't stored in a guaranteed international format (no confirmed
+    country-code convention) — a malformed number there fails silently.
+    Every WhatsApp share in this module (feedback link, resend, Google
+    review, reminders) instead uses the same generic Web-Share-sheet
+    fallback (`shareTextViaWhatsApp`) and lets staff pick the recipient
+    themselves, consistent behavior across the whole feature rather than
+    a special-cased, riskier path for reminders alone.
+- **Public booking, no slots (Phase 5, folding in the doc's own Phase 6)**
+  — a public form collects name/phone/optional-therapist/preferred-
+  day-time-as-text; front desk or admin confirms it by hand into a real
+  scheduled appointment, which becomes Workspace's "Expected today". No
+  slot picker/availability matrix — that's a later, separate phase the
+  doc explicitly says not to start here.
+  - **There was no legacy "Expected Today" to retire.** An earlier
+    session fully dropped `expected_visits`/`clinics.
+    enable_expected_today` (table, column, service, UI — zero
+    consumers). The doc's "retire the legacy path" framing was moot by
+    the time this phase shipped; Workspace's "Expected today" section is
+    new, not a replacement.
+  - **`clinics.booking_slug`** — nullable unique text, the public
+    `/book/$slug` segment. Not a secret (meant to live on Google/the
+    clinic's own website), unlike a feedback token — `get_booking_clinic_
+    name`/`list_booking_therapists` just need the slug to exist and the
+    module to be on, no rate-limited-oracle concern beyond the same
+    generic-error/IP-throttle discipline every public RPC in this module
+    uses.
+  - **`appointment_requests`** — one row per public submission: `name`,
+    `phone`, `email` (raw, unresolved against any patient), `preferred_
+    therapist_id` (nullable), `notes` (free text — reason for visit,
+    symptoms, anything else; deliberately its own column, not folded
+    into the time preference — an earlier version of the form did that
+    and silently dropped it whenever the patient didn't also tick
+    "flexible"), `preferred_date` + `preferred_time_text`
+    (both plain preferences — **no availability checking against either**,
+    per the doc's "do not start here" on slots; front desk still picks
+    the real `scheduled_at` by hand at confirm), `status`
+    (`pending|confirmed|declined`), `appointment_id` (set on confirm).
+    The form itself was redesigned mid-phase after reviewing a fuller
+    reference design (richer than the locked spec's plain "name, phone,
+    optional therapist, preferred day/time as text") — added email as a
+    genuinely useful optional field, and gave the date/time preference a
+    real date input plus a "flexible" quick-toggle, but deliberately did
+    not adopt that reference's "pick a date to see available times"
+    behavior, which implies real per-therapist slot availability the doc
+    reserves for a later, separate phase. A `service_catalog_id` field
+    and its `list_booking_services` RPC were added in that same redesign
+    pass and then removed shortly after (dropped, not hidden — matching
+    this repo's convention of not leaving unused scaffolding behind):
+    the service picker didn't earn its place on a form patients fill out
+    unauthenticated, and front desk already asks reason-for-visit via the
+    `notes` field.
+  - **`appointments`** — one row per confirmed expected attendance, **not**
+    a billed visit. `patient_id` is **null from confirm until arrival** —
+    identity is resolved exactly once, at arrival, reusing the existing
+    New Visit typeahead rather than a confirm-time judgment call on a raw
+    public submission. `patient_name`/`patient_phone` (the request's raw
+    values) are kept on the row throughout, so it always has something to
+    display before/without a resolved identity. `status`:
+    `confirmed|rescheduled|no_show|cancelled|arrived`. `visit_id` is set
+    only once arrival creates the real `visits` row.
+  - **Both tables are synced-but-read-only Dexie tables** — same
+    `ALL_SYNCED_TABLES`-without-`CLIENT_WRITABLE_TABLES` shape as
+    `feedback_responses`/`invoices`, for the same reason: every write is
+    an online-only RPC (public submit; confirm/decline; reschedule/
+    no-show/cancel; mark-arrived/link-visit), never a client Dexie write.
+    Both carry `updated_at` from creation (unlike `feedback_responses`,
+    which needed one added after the fact) so the sync engine's
+    hardcoded delta-pull column works from day one.
+  - **RLS is SELECT-only for staff; every mutation is a `security
+    definer` RPC with its own in-body role check**, not a matching RLS
+    write policy — confirm/decline/reschedule/no-show/cancel need *admin
+    or front_desk* (a new `is_front_desk(p_clinic)` helper, mirroring
+    `is_own_therapist`'s shape), but marking an appointment arrived or
+    linking it to a freshly-created visit needs the same broad membership
+    check `visits_insert` already uses (`is_clinic_member`) — two
+    different rules that don't map to one clean RLS policy, the same
+    reasoning `list_google_review_eligible_requests` (Phase 3's
+    front-desk-parity fix) already established. `appointment_requests`
+    SELECT is admin/front_desk-only (matches who can reach the Bookings
+    tab at all); `appointments` SELECT is clinic-member-wide, since it's
+    the day list every role needs to see.
+  - **Both tables also needed `created_by`/`updated_by`, added in a
+    follow-up migration** (bug found live, not caught in review): the
+    shared `set_updated_at()` trigger was redefined by an earlier,
+    unrelated migration to unconditionally stamp `updated_by`/`created_by`
+    on every row it fires for — it never checks whether the table
+    actually has those columns. Every other synced staff table already
+    carried them; these two were the first to attach the trigger without
+    them, so any UPDATE (confirm, decline, reschedule, ...) failed with
+    `record "new" has no field "updated_by"` until the columns were
+    added, matching `feedback_requests`' own shape.
+  - **Ten RPCs**: three public (`get_booking_clinic_name`,
+    `list_booking_therapists`,
+    `submit_appointment_request` — anon + authenticated grants,
+    rate-limited); seven staff-only
+    (`confirm_appointment_request` returns the new appointment id,
+    `decline_appointment_request`, `reschedule_appointment`,
+    `mark_appointment_no_show`, `cancel_appointment`,
+    `mark_appointment_arrived`, `link_appointment_visit` — authenticated-
+    only, explicit `revoke ... from public, anon` same grant-hygiene
+    discipline as every RPC in this module). `link_appointment_visit` is
+    the one `NewVisitPage.tsx` calls right after a visit saves, when that
+    visit was started via `?appointmentId=...` — sets `patient_id`,
+    `visit_id`, and flips `status` to `arrived` in one call.
+  - **All five appointment-mutating RPCs (reschedule/no-show/cancel/
+    mark-arrived/link-visit) row-lock and check the appointment's current
+    status before acting**, same discipline as
+    `confirm_appointment_request`/`decline_appointment_request` already
+    had — found missing during a post-ship workflow review, not shipped
+    this way originally. Without it, two staff acting on one appointment
+    at once, a stale browser tab, or a double-click could flip an
+    already-arrived appointment (with a real linked visit) back to
+    `no_show`, resurrect a cancelled one via reschedule, or double-link a
+    second visit onto one appointment row, silently overwriting the first
+    `visit_id`. The UI already only offers each action from the right
+    states; this closes the gap server-side too.
+  - **`NewVisitPage.tsx`'s existing `?prefillName=...` mechanism grew a
+    `?prefillPhone=...` sibling** (feeds `newPatient.phone` the same way
+    `prefillName` feeds `newPatient.name`) plus a new `?appointmentId=...`
+    — "Create visit" links from an appointment row pass all three, so the
+    same existing search-or-create typeahead this mechanism already
+    drives surfaces likely-existing-patient candidates for free; staff
+    still explicitly pick or create, never auto-selected (no silent
+    find-or-create by phone, per the doc's explicit-scope list).
+  - **Requests → Bookings tab** (`RequestsPage.tsx`) — a pending-requests
+    list (Confirm opens an inline scheduled-datetime + therapist mini-form;
+    Decline is a plain confirm-then-RPC) and an appointments list
+    (Reschedule/No-show/Cancel inline, status shown via a shared
+    `Pill`-tone map in `src/domain/appointmentStatus.ts` — kept in its own
+    tiny module, not defined in either page, because importing one
+    route-code-split page's export from the other would leak that page's
+    whole bundle into the importer's chunk, the same reason
+    `requestsSignals.ts` exists). Confirming shows two independent
+    "Send confirmation"/"Notify therapist" share buttons afterward — two
+    explicit clicks, not one auto-fired double share-sheet — matching the
+    rest of the module's per-action-button convention rather than the
+    doc's plainer "sends a confirmation" phrasing.
+  - **Workspace "Expected today"** — a new section (not a replacement of
+    anything, per the point above), sourced from
+    `dashboardService.todayAppointments`, scoped the same way "Seen
+    today" already is (clinic-wide for admin/front_desk, own-therapist
+    otherwise). Row actions: "Mark arrived" (any clinic member, matching
+    the RPC's own membership check), "No-show"/"Cancel"
+    (admin/front_desk only), "Create visit" (once `visit_id` is still
+    unset). Reschedule is deliberately Requests-only, not offered inline
+    on Workspace — a more deliberate action than a single click, better
+    suited to the dedicated management surface. Requests → Bookings'
+    Appointments table carries the same "Create visit" condition (found
+    missing in review — an appointment manually marked arrived without a
+    visit yet had no way back to New Visit once it wasn't "today" anymore
+    and had dropped off Workspace's list; Requests' table has no
+    date-scoping, so it's the recovery path for that case). A second banner (same
+    shape as Phase 2's "new feedback response" one) surfaces the pending-
+    booking-request count for admin/front_desk, linking to
+    `/requests?tab=bookings`.
+  - **Settings** gained a booking-link field in the same Patient
+    communications section (client-validated lowercase-alphanumeric-plus-
+    hyphens pattern; the DB only enforces uniqueness) with a "Copy link"
+    button, alongside the existing module toggle and Google review URL.
+  - **`message_log` stays unwired on the client, same as every other
+    Phase 1-4 send action.** Despite `message_log_insert` RLS being ready
+    since Phase 0, no *client-triggered* send action in this module — not
+    the five from Phases 1-4, not this phase's confirmation/
+    therapist-notify sends — actually writes a row; there's no Dexie
+    table or repo for it. Wiring it for just this phase's two new sends
+    while five existing ones still skip it would be inconsistent rather
+    than forward-thinking; this is a pre-existing, module-wide gap better
+    closed in one pass across all seven send actions than piecemeal. (The
+    Phase 9 scaffold below finally gives `message_log` its first real
+    writer — but only for sends that go through it, server-side; the
+    share-sheet path's gap is unchanged.)
+- **WhatsApp Business Cloud API — scaffold only (Phase 9, partial)** —
+  built ahead of the clinic actually having Meta credentials, so that
+  turning real sending on later is a config step, not a code change.
+  **Nothing in the app calls this yet** — every existing send action
+  (all seven, feedback link through booking confirmation/notify) still
+  opens the staff member's own WhatsApp via a share sheet, unchanged.
+  - **`clinic_whatsapp_config`** — `phone_number_id`, `access_token`
+    (a real Meta secret), `enabled`. Carries **no SELECT policy for any
+    client role at all** (RLS enabled, zero policies) — only
+    `service_role`, used exclusively inside the new Edge Function below,
+    can ever read it. Two RPCs give the client everything it legitimately
+    needs without exposing the token: `set_whatsapp_config(...)`
+    (admin-only write; a `null` access token argument leaves the stored
+    one untouched, so re-saving the phone number ID or flipping `enabled`
+    doesn't force re-entering the secret) and
+    `get_whatsapp_config_status(...)` (admin-only read of `enabled` /
+    `phone_number_id` / `has_token: boolean` — never the token itself).
+  - **`supabase/functions/send-whatsapp-template/index.ts`** — the one
+    place in the app that would ever call Meta's Graph API
+    (`https://graph.facebook.com/v20.0/{phone_number_id}/messages`),
+    structurally mirroring `invite-therapist/index.ts` (JWT-verified
+    caller, a `clinic_members` membership check, a service-role client
+    for the privileged read). Template-shaped from the start — the
+    caller supplies `templateName`/`languageCode`/`bodyParams`, never
+    freeform text — because Meta requires an approved template for any
+    business-initiated message outside a 24h customer-service window;
+    this function has no opinion on what a given clinic's approved
+    template actually says. Returns `{ configured: false }` (not an
+    error) when the clinic has no config row or hasn't enabled it — the
+    signal a future client-side wrapper would use to fall back to the
+    share sheet. On a successful send, writes a `message_log` row
+    (`channel: 'wa_business_api'`) — see the note above.
+  - **Settings** gained a collapsed-by-default "WhatsApp Business API
+    (advanced)" sub-block in the Patient communications section
+    (`WhatsAppBusinessSubsection` in `SettingsPage.tsx`) — enable toggle,
+    phone number ID, and a password-type access-token field that's never
+    re-populated with the real value, only a "Connected ✓" / "Not
+    connected" status line. Its own small save/status state, not part of
+    the section's shared `useClinicSectionForm` dirty-tracking — this is
+    a separate table with write-only semantics, not a few more `Clinic`
+    columns.
+  - **Explicitly not done in this pass**: nothing in `feedbackService.ts`
+    or `bookingService.ts` calls `send-whatsapp-template`. Wiring the
+    six existing send call sites to try it (falling back to the share
+    sheet when `configured: false`) is a later, small follow-up — once
+    the user has a real Meta phone number ID, access token, and at least
+    one approved template name to test each send kind against. Guessing
+    at a template's variable shape now would be unverifiable,
+    silently-breakable configuration the moment the toggle is flipped on.
+
 ---
 
 ## Application Architecture
@@ -531,6 +921,14 @@ src/features/            UI pages and components (React + TanStack Router)
   ├── invoices/          InvoicePrintPage
   ├── import/            Historical Excel visit import (preview + commit)
   ├── auth/              Login, reset-password
+  ├── requests/          RequestsPage at /requests (Feedback tab, admin;
+                         Bookings tab, admin + front_desk); requestsSignals.ts
+                         (the "new response" count + the front-desk Google-
+                         review-eligibility hook, kept out of RequestsPage
+                         itself so Workspace's eager bundle can read them
+                         without pulling in the route-code-split page)
+  ├── publicFeedback/    FeedbackFormPage at /f/$token (anonymous, no Shell)
+  ├── publicBooking/     BookingFormPage at /book/$clinicSlug (anonymous, no Shell)
   └── more/              Mobile-only overflow nav page
 
 src/components/          Shared UI components — VisitCard (shared card/table
@@ -565,8 +963,11 @@ supabase/                SQL migrations, RLS policies, RPCs, realtime
 | `/invoices/$invoiceId/print` | Printable Bill/Bill Cum Receipt (A4/A5) | Anyone who can reach the invoice |
 | `/settings` | Clinic configuration, MRNO settings, billing mode, rate setup, feature toggles | Admins only |
 | `/settings/import-visits` | Historical Excel visit import | Admins only |
-| `/more` | Mobile-only overflow nav (Settings/Reports on narrow screens) | All roles |
+| `/more` | Mobile-only overflow nav (Settings/Reports/Requests on narrow screens) | All roles |
+| `/requests` (`?tab=feedback\|bookings`) | Feedback: every response with rating + comment (Phase 2). Bookings: pending requests → confirm/decline, appointments → reschedule/no-show/cancel (Phase 5) | Feedback tab: admins only. Bookings tab: admins + front_desk |
 | `/reset-password` | Password reset | Unauthenticated |
+| `/f/$token` | Public patient feedback form (Patient Communications, Phase 0) | Unauthenticated — token-scoped, no clinic membership |
+| `/book/$clinicSlug` | Public booking request form (Patient Communications, Phase 5) | Unauthenticated — slug-scoped, no clinic membership |
 | `/archive`, `/setup`, `/setup/import-visits`, `/invoices`, `/reports`, `/reports/print` | Legacy redirects for old bookmarks | All roles |
 
 ---
@@ -1078,6 +1479,100 @@ latest, still-in-force consent per subject (`is_in_force boolean`).
 ---
 
 ### Additional Tables
+
+#### `feedback_requests` / `feedback_responses` / `message_log` (Patient Communications, Phase 0–3)
+```sql
+-- feedback_requests: one row per "ask this patient for feedback" action
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+visit_id        uuid NOT NULL (FOREIGN KEY → visits.id)
+patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
+therapist_id    uuid NOT NULL (FOREIGN KEY → therapists.id) — denormalized from the visit for RLS
+token           text NOT NULL UNIQUE — 256-bit, base64url, server-generated default
+status          text NOT NULL — 'pending' | 'responded' | 'expired'
+expires_at      timestamptz NOT NULL (default now() + 21 days)
+created_by, updated_by  uuid (NULLABLE)
+created_at, updated_at  timestamptz NOT NULL
+-- one pending request per visit — unique partial index on visit_id where status = 'pending'
+
+-- feedback_responses: the patient's submission (only written by
+-- submit_feedback_response(), a SECURITY DEFINER function — no client INSERT policy exists)
+id           uuid PRIMARY KEY
+request_id   uuid NOT NULL UNIQUE (FOREIGN KEY → feedback_requests.id)
+clinic_id    uuid NOT NULL (FOREIGN KEY → clinics.id) — denormalized so admin-only RLS needs no join
+rating       smallint NOT NULL (1-5)
+comment      text (NULLABLE)
+created_at   timestamptz NOT NULL
+updated_at   timestamptz NOT NULL (default now()) — always == created_at;
+             the row is immutable, this column exists only because the
+             sync engine hardcodes updated_at as every table's delta
+             column (Phase 2 migration)
+
+-- message_log: shared audit trail for every send action across all four
+-- patient-comms workflows (only feedback_request is wired up so far)
+id                    uuid PRIMARY KEY
+clinic_id             uuid NOT NULL (FOREIGN KEY → clinics.id)
+kind                  text NOT NULL — 'feedback_request' | 'booking_confirmation' | 'therapist_notify' |
+                        'google_review' | 'reminder_stale_package' | 'reminder_single_visit'
+recipient_patient_id  uuid (NULLABLE, FOREIGN KEY → patients.id)
+recipient_phone       text (NULLABLE)
+channel               text NOT NULL — 'wa_share' | 'wa_business_api'
+sent_by               uuid (NULLABLE, FOREIGN KEY → auth.users.id)
+sent_at               timestamptz NOT NULL
+```
+RLS: `feedback_requests` is member-visible (status carries no rating/comment
+content) but only admin/front_desk/own-therapist can insert or update it —
+same shape as the visits table's own admin-or-own-therapist policies.
+`feedback_responses` SELECT is `is_clinic_admin()` only — front desk and
+therapists get zero visibility into ratings/comments, at the database layer,
+not just hidden in the UI. Two SECURITY DEFINER RPCs — `get_feedback_request_by_token()`
+and `submit_feedback_response()` — are explicitly granted EXECUTE to `anon`;
+every other function in this schema either relies on `is_clinic_member()`
+failing for an anonymous caller or explicitly revokes that default. A
+`public_rpc_rate_limit` table (self-pruning, no cron dependency) throttles
+both by client IP.
+
+`feedback_requests` is a synced Dexie table (`CLIENT_WRITABLE_TABLES`) —
+staff creation goes through the normal outbox, same as any other clinic
+CRUD, with `token` left unset so the column default fires server-side (the
+client never generates its own token). `feedback_responses` (Phase 2) is
+also synced, but read-only client-side — `ALL_SYNCED_TABLES` without
+`CLIENT_WRITABLE_TABLES`, same shape as `invoices` — since a response is
+only ever written by the anonymous patient's own SECURITY DEFINER RPC
+call; it needed an `updated_at` column added (a permanent alias for
+`created_at`, purely so the sync engine's hardcoded delta-column
+assumption holds) since the row is otherwise immutable. `message_log` has
+no Dexie table or repo at all — the app never reads or writes it directly.
+
+`rotate_feedback_request_token(p_request_id uuid) returns text` (Phase 1) —
+`security invoker`, EXECUTE revoked from `public`/`anon` and granted only
+to `authenticated`. Rotating an existing row's token is an UPDATE, where
+column defaults never fire, so "resend" needs this small RPC rather than
+the outbox; the existing `feedback_requests_update` RLS policy is the real
+authorization boundary, same as any other invoker-security RPC in this
+schema.
+
+**`clinics.google_review_url`** (Phase 3) — nullable text; unset means the
+Google review nudge never shows, on either the public thank-you page or
+the staff visit-row action, regardless of rating.
+`submit_feedback_response(p_token text, p_rating int, p_comment text)
+returns text` (was `returns void` through Phase 0-2) — now returns the
+clinic's `google_review_url` when `p_rating >= 4` and one is configured,
+`null` otherwise; the public thank-you page conditions "Leave a Google
+review" on this return value instead of a second round trip. Return-type
+changes require dropping the function first (grants don't survive a drop,
+so the migration re-states them).
+
+`list_google_review_eligible_requests(p_clinic_id uuid) returns setof uuid`
+— `security definer` (unlike `rotate_feedback_request_token` above, this
+one must bypass RLS on purpose), EXECUTE revoked from `public`/`anon` and
+granted only to `authenticated`. Lets a front_desk caller — who has zero
+RLS visibility into `feedback_responses` at all, not just a filtered view
+of it — ask "which requests currently qualify for a Google review nudge"
+without the function ever returning a rating or a comment, just bare
+`request_id`s where `rating >= 4`. The function body re-implements its own
+narrower check (`is_clinic_member`) rather than relying on RLS, since RLS
+itself is what's being deliberately bypassed here.
 
 #### `audit_log`
 ```sql
