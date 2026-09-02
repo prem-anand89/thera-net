@@ -618,17 +618,24 @@ still falls through to the existing share sheet, unchanged.
     as the delta column for every synced table, so a migration added one
     (`updated_at = created_at` always, a permanent alias for the sync
     engine's benefit, not a real "last modified" signal).
-  - **Nav**: desktop gets a 6th top-nav item, **Requests**, originally
+  - **Nav**: desktop gets a top-nav item, **Requests**, originally
     admin-only (Feedback was the only tab that existed) and widened at
     Phase 5 to admin + front_desk — front_desk's whole reason to be on
     this page is Bookings, its primary surface per the handoff doc's role
-    table. The mobile bottom tab bar is a separate hand-built 5-item row
+    table. (It was the sixth item when added; Settings has since moved to
+    the account menu to get the row back within its width budget — see
+    **Header layout budget** below — so it's the fifth now.)
+    The mobile bottom tab bar is a separate hand-built 5-item row
     (Workspace/Patients/+New/Ledger/More), not driven by the same array,
     so this doesn't add a 6th phone tab; mobile reaches it via **More**
     instead (also widened to the same admin + front_desk gate), per the
     handoff doc's own "no sixth phone tab" decision. A front_desk viewer
     who lands on `?tab=feedback` directly is redirected to `?tab=bookings`
     rather than shown a disabled tab, per the doc's own resolved note.
+    **Bookings is the first tab and the default landing tab for every
+    role** (including admin) — it's the busier, more actionable surface
+    day to day; the un-parameterized `/requests` URL defaults to
+    `?tab=bookings` rather than `?tab=feedback`.
   - **Workspace "new response" banner** — admin + module-on only, reading
     a `db.meta` "last viewed Requests" timestamp (clinic-scoped key, same
     pattern as `lastBackupMetaKey`) that gets stamped the moment
@@ -790,6 +797,34 @@ still falls through to the existing share sheet, unchanged.
     the one `NewVisitPage.tsx` calls right after a visit saves, when that
     visit was started via `?appointmentId=...` — sets `patient_id`,
     `visit_id`, and flips `status` to `arrived` in one call.
+    **`create_appointment_staff(clinic_id, name, phone, therapist_id,
+    scheduled_at)`** was added later, alongside the manual-booking form on
+    the Bookings tab — same admin-or-front_desk check and
+    `security definer` shape as the other six, but inserts straight into
+    `appointments` with no `appointment_requests` row at all (`request_id`
+    stays null): a staff member entering a booking by hand already knows
+    the confirmed date/time/therapist, so there's no "pending" state to
+    pass through first.
+  - **`bookingService.ts`'s eight staff-mutation wrappers all call
+    `syncEngine.schedule(0)` right after their RPC succeeds** — found
+    missing in the same post-ship workflow review, not present originally.
+    `appointment_requests`/`appointments` carry no outbox (see
+    `src/lib/db.ts`'s comment on why), so nothing tells the sync engine to
+    pull after one of these RPCs the way a normal Dexie write does;
+    without an explicit kick, confirming/declining/rescheduling/marking
+    no-show or cancelled or arrived/linking a visit/creating a manual
+    booking would all succeed server-side while the Bookings tab's
+    `useLiveQuery`-driven lists (and Workspace's "Expected today") kept
+    showing the pre-mutation state for up to 5 minutes — e.g. a just-
+    confirmed request still listed under "Pending requests" with its own
+    Confirm/Decline buttons, inviting a double-click. `schedule(0)` is the
+    same near-immediate debounced pull the manual "Sync now" button and
+    `CreateClinicForm`'s post-create refresh already use.
+    `feedbackService.ts` didn't need this fix — it already writes the
+    RPC's returned row straight into Dexie via `putLocal()` (see its own
+    file comment) rather than waiting on a pull, but most of the booking
+    RPCs return only void or a bare id, not a full row, so a pull kick was
+    the simpler fix here than adding `putLocal` to both booking repos.
   - **All five appointment-mutating RPCs (reschedule/no-show/cancel/
     mark-arrived/link-visit) row-lock and check the appointment's current
     status before acting**, same discipline as
@@ -810,9 +845,21 @@ still falls through to the existing share sheet, unchanged.
     drives surfaces likely-existing-patient candidates for free; staff
     still explicitly pick or create, never auto-selected (no silent
     find-or-create by phone, per the doc's explicit-scope list).
-  - **Requests → Bookings tab** (`RequestsPage.tsx`) — a pending-requests
-    list (Confirm opens an inline scheduled-datetime + therapist mini-form;
-    Decline is a plain confirm-then-RPC) and an appointments list
+  - **Requests → Bookings tab** (`RequestsPage.tsx`) — a "New booking" card
+    at the top (`create_appointment_staff(clinic_id, name, phone,
+    therapist_id, scheduled_at)`, security-definer, same admin-or-
+    front_desk check as every other staff booking RPC) lets staff enter a
+    booking taken by phone or walk-in directly, alongside the public
+    patient-facing `/book/$slug` link — it writes straight to a confirmed
+    `appointments` row with `request_id` left null rather than going
+    through the pending-request queue first, since staff already know the
+    date/time/therapist when entering one by hand. Reuses the same
+    post-confirm `justConfirmed` banner ("Send confirmation"/"Notify
+    therapist") as a request that was confirmed through the queue, since a
+    manually-created booking is functionally identical to a freshly-
+    confirmed one. Below that: a pending-requests list (Confirm opens an
+    inline scheduled-datetime + therapist mini-form; Decline is a plain
+    confirm-then-RPC) and an appointments list
     (Reschedule/No-show/Cancel inline, status shown via a shared
     `Pill`-tone map in `src/domain/appointmentStatus.ts` — kept in its own
     tiny module, not defined in either page, because importing one
@@ -846,12 +893,13 @@ still falls through to the existing share sheet, unchanged.
     hyphens pattern; the DB only enforces uniqueness) with a "Copy link"
     button, alongside the existing module toggle and Google review URL.
   - **`message_log` gets its first writer via the Phase 9 wiring below** —
-    every send action except `shareTherapistNotify` now goes through the
-    Business API path first (when the clinic has a phone number to send
-    to), and a successful send there writes a `message_log` row
-    server-side. Until a clinic actually configures the Business API and
-    has an approved template, every send still falls through to the share
-    sheet — which still doesn't log anything, same gap as before.
+    every send action, `shareTherapistNotify` included as of the
+    `therapists.phone` addition below, now goes through the Business API
+    path first (when a recipient phone number is known), and a successful
+    send there writes a `message_log` row server-side. Until a clinic
+    actually configures the Business API and has an approved template,
+    every send still falls through to the share sheet — which still
+    doesn't log anything, same gap as before.
 - **WhatsApp Business Cloud API — wired, pending real templates (Phase 9)**
   — built ahead of the clinic actually having Meta credentials, so that
   turning real sending on is a config step, not a code change.
@@ -898,15 +946,18 @@ still falls through to the existing share sheet, unchanged.
     unrecognized template name), or the request fails outright — so
     turning this on for real is purely a Settings config change plus a
     template-name/param swap in `WHATSAPP_TEMPLATES`, not a code change.
-    All six patient-facing send actions (`askForFeedback`, `resend`,
-    `askForGoogleReview`, `sendStalePackageReminder`,
-    `sendSingleVisitReminder`, `shareBookingConfirmation`) go through it,
-    reading the patient's phone off `Patient.phone` (added to
-    `VisitCardData` as `patientPhone`, `OpenPackageRow` as `phone`, and
-    threaded through `NewVisitPage`'s post-save state and
-    `RequestsPage`'s `justConfirmed` state to reach the call sites).
-    `shareTherapistNotify` is the one exception — `Therapist` has no phone
-    field in the schema, so it stays share-sheet-only until one exists.
+    All seven patient/staff-facing send actions (`askForFeedback`,
+    `resend`, `askForGoogleReview`, `sendStalePackageReminder`,
+    `sendSingleVisitReminder`, `shareBookingConfirmation`,
+    `shareTherapistNotify`) go through it, reading the recipient's phone
+    off `Patient.phone` (added to `VisitCardData` as `patientPhone`,
+    `OpenPackageRow` as `phone`, and threaded through `NewVisitPage`'s
+    post-save state and `RequestsPage`'s `justConfirmed` state to reach the
+    call sites) or, for `shareTherapistNotify`, off the new
+    `therapists.phone` column (nullable text; `RosterCard`'s edit form in
+    Settings, next to Registration no. — absent still means share-sheet-
+    only for that therapist, exactly like every other action falls back
+    when its recipient's phone is unknown).
   - **Template names are hardcoded placeholders** (`WHATSAPP_TEMPLATES` in
     `whatsappSend.ts`, e.g. `'feedback_request_v1'`) — Meta assigns the
     real name when a clinic's own template is approved, and it has no
@@ -1069,6 +1120,8 @@ active          boolean NOT NULL (default true)
 user_id         uuid (FOREIGN KEY → auth.users.id, NULLABLE) — linked login
 photo_path      text (NULLABLE)
 registration_no text (NULLABLE) — printed on invoices under the therapist's name
+phone           text (NULLABLE) — lets `shareTherapistNotify` use the WhatsApp
+                Business API instead of always falling back to the share sheet
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 ```
@@ -1985,6 +2038,34 @@ by every clinic on a multi-clinic device (see "Multi-clinic accounts"),
 so an unscoped key would let dismissing/completing the checklist for one
 clinic silently do the same for every other clinic on the device.
 
+**Header layout budget** (`Shell.tsx`'s `<header>`) — the desktop header
+row has a fixed width to spend (`max-w-6xl`, ~1120px usable) and four
+things wanting it: brand, nav, sync badge, account trigger. With a text
+label on all of them at once it doesn't fit — six labelled nav items plus
+the clinic name alone overran it by ~160px, which showed up first as the
+account dropdown rendering off-screen at iPad-portrait widths (the row
+overflowed, taking the `right-0`-anchored panel's anchor with it) and then,
+after a stopgap `overflow-x-auto`, as a squeezed horizontally-scrolling nav
+even on a full-width screen. Three rules keep it fitting, and a change to
+any element in this row has to keep them true:
+- **Only the brand name shrinks.** The nav and the sync/account cluster are
+  `shrink-0`; the clinic name truncates (`max-w-[11rem]`) and is hidden
+  outright below `desktop:`. It's the one genuinely redundant item in the
+  row — the account dropdown names the current clinic and switches between
+  them — so it yields first, and clicked targets never squeeze.
+- **Nav labels are `desktop:`-only** (1000px+). Between `sm:` and there,
+  the nav is icons carrying `aria-label` + `title` (the label span is
+  `display:none`, which screen readers skip, so the accessible name has to
+  come from the attribute). This is what makes the row fit an iPad in
+  portrait at all.
+- **Five nav items, not six** — Settings lives in the account menu's Clinic
+  section instead (see below), under the same `role === 'admin'` gate the
+  `NAV` filter used to apply. Mobile is unaffected: `/more` has always been
+  its route there, and the phone tab bar is hand-built, not `NAV`-driven.
+The sync badge deliberately keeps its text label (`Synced`/`3 pending`/
+`Offline`) rather than collapsing to a bare dot — sync state is the one
+thing in this row a user needs to read, not decode.
+
 **Account menu** (`AccountMenu` in `src/app/Shell.tsx`) — one dropdown,
 same markup at every breakpoint (the name/role label collapses to just the
 initials-avatar trigger below `sm:`), replacing what used to be two
@@ -1998,7 +2079,8 @@ with the full card so both read the exact same derived state, and also
 returns `nextStep`: the first not-done step's own title and link, so the
 nudge's "Continue →" opens exactly where setup was left off — a Settings
 tab or `+ New visit` — instead of always bouncing to Settings' own default
-tab), a clinic switcher and "Add another clinic" action (only relevant to
+tab), a clinic switcher, **"Clinic settings"** and "Add another clinic"
+actions (the switcher and "Add another clinic" only relevant to
 multi-clinic accounts — see "Multi-clinic accounts" below), a "Change
 password" action (`ChangePasswordDialog`,
 `src/components/ChangePasswordDialog.tsx` — calls

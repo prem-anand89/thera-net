@@ -55,7 +55,7 @@ export function RequestsPage() {
   const { isAdmin, role } = usePermissions();
   const canSeeBookings = isAdmin || role === 'front_desk';
   const search = useSearch({ from: '/requests' });
-  const tab = search.tab ?? (isAdmin ? 'feedback' : 'bookings');
+  const tab = search.tab ?? 'bookings';
 
   // Per the doc's own resolved note: front_desk hitting ?tab=feedback
   // lands on Bookings instead, not a disabled/hidden state.
@@ -103,6 +103,10 @@ export function RequestsPage() {
   );
   const therapistNameById = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
+    [therapists]
+  );
+  const therapistById = useMemo(
+    () => new Map((therapists ?? []).map((t) => [t.id, t])),
     [therapists]
   );
   const rows = useMemo(
@@ -157,6 +161,56 @@ export function RequestsPage() {
   const [reschedulingId, setReschedulingId] = useState<UUID | null>(null);
   const [rescheduleValue, setRescheduleValue] = useState('');
   const [rescheduleBusy, setRescheduleBusy] = useState(false);
+
+  // Manual booking form — staff entering a booking directly (phone call,
+  // walk-in), alongside the pending-request queue above.
+  const [addingBooking, setAddingBooking] = useState(false);
+  const [newBookingName, setNewBookingName] = useState('');
+  const [newBookingPhone, setNewBookingPhone] = useState('');
+  const [newBookingScheduledAt, setNewBookingScheduledAt] = useState(defaultScheduledAt(null));
+  const [newBookingTherapistId, setNewBookingTherapistId] = useState('');
+  const [newBookingBusy, setNewBookingBusy] = useState(false);
+  const [newBookingError, setNewBookingError] = useState<string | null>(null);
+
+  function startNewBooking() {
+    setAddingBooking(true);
+    setNewBookingName('');
+    setNewBookingPhone('');
+    setNewBookingScheduledAt(defaultScheduledAt(null));
+    setNewBookingTherapistId('');
+    setNewBookingError(null);
+    setJustConfirmed(null);
+  }
+
+  async function submitNewBooking() {
+    if (!newBookingName.trim() || !newBookingPhone.trim()) {
+      setNewBookingError('Name and phone are required.');
+      return;
+    }
+    setNewBookingBusy(true);
+    setNewBookingError(null);
+    try {
+      const scheduledIso = new Date(newBookingScheduledAt).toISOString();
+      const appointmentId = await bookingService.createAppointmentStaff(
+        clinic.id,
+        newBookingName.trim(),
+        newBookingPhone.trim(),
+        newBookingTherapistId || null,
+        scheduledIso
+      );
+      setJustConfirmed({
+        appointmentId,
+        patientName: newBookingName.trim(),
+        patientPhone: newBookingPhone.trim(),
+        scheduledAt: scheduledIso,
+        therapistId: newBookingTherapistId || null,
+      });
+      setAddingBooking(false);
+    } catch (e) {
+      setNewBookingError(toFriendlyMessage(e));
+    }
+    setNewBookingBusy(false);
+  }
 
   function startConfirm(
     requestId: UUID,
@@ -226,6 +280,17 @@ export function RequestsPage() {
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Requests</h1>
 
       <div className="flex gap-2 border-b border-[var(--border)]">
+        <Link
+          to="/requests"
+          search={{ tab: 'bookings' }}
+          className={
+            tab === 'bookings'
+              ? 'border-b-2 border-[var(--teal)] px-1 pb-2 text-sm font-medium text-[var(--teal)]'
+              : 'px-1 pb-2 text-sm text-[var(--muted)] hover:text-[var(--ink)]'
+          }
+        >
+          Bookings
+        </Link>
         {isAdmin ? (
           <Link
             to="/requests"
@@ -243,17 +308,6 @@ export function RequestsPage() {
             Feedback
           </span>
         )}
-        <Link
-          to="/requests"
-          search={{ tab: 'bookings' }}
-          className={
-            tab === 'bookings'
-              ? 'border-b-2 border-[var(--teal)] px-1 pb-2 text-sm font-medium text-[var(--teal)]'
-              : 'px-1 pb-2 text-sm text-[var(--muted)] hover:text-[var(--ink)]'
-          }
-        >
-          Bookings
-        </Link>
       </div>
 
       {tab === 'feedback' &&
@@ -331,6 +385,90 @@ export function RequestsPage() {
           </p>
         ) : (
           <div className="space-y-4">
+            <SectionCard
+              title="New booking"
+              action={
+                !addingBooking && (
+                  <button
+                    type="button"
+                    className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                    onClick={startNewBooking}
+                  >
+                    + New booking
+                  </button>
+                )
+              }
+            >
+              {addingBooking ? (
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-[var(--muted)]">Name</span>
+                    <input
+                      className="rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-1.5 text-sm text-[var(--ink)]"
+                      value={newBookingName}
+                      onChange={(e) => setNewBookingName(e.target.value)}
+                      autoFocus
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-[var(--muted)]">Phone</span>
+                    <input
+                      className="rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-1.5 text-sm text-[var(--ink)]"
+                      value={newBookingPhone}
+                      onChange={(e) => setNewBookingPhone(e.target.value)}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-[var(--muted)]">Scheduled for</span>
+                    <input
+                      type="datetime-local"
+                      className="rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-1.5 text-sm text-[var(--ink)]"
+                      value={newBookingScheduledAt}
+                      onChange={(e) => setNewBookingScheduledAt(e.target.value)}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-[var(--muted)]">Therapist</span>
+                    <select
+                      className="rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-1.5 text-sm text-[var(--ink)]"
+                      value={newBookingTherapistId}
+                      onChange={(e) => setNewBookingTherapistId(e.target.value)}
+                    >
+                      <option value="">No preference</option>
+                      {(therapists ?? []).map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={newBookingBusy}
+                    className="rounded-full bg-[var(--teal)] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                    onClick={() => void submitNewBooking()}
+                  >
+                    {newBookingBusy ? 'Booking…' : 'Create booking'}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
+                    onClick={() => setAddingBooking(false)}
+                  >
+                    Cancel
+                  </button>
+                  {newBookingError && (
+                    <p className="w-full text-xs text-[var(--rust)]">{newBookingError}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="py-2 text-sm text-[var(--muted)]">
+                  Enter a booking taken by phone or walk-in directly, without going through the
+                  patient-facing link.
+                </p>
+              )}
+            </SectionCard>
+
             <SectionCard title={`Pending requests (${pendingRequests.length})`}>
               {pendingRequests.length === 0 ? (
                 <p className="py-6 text-center text-sm text-[var(--muted)]">
@@ -479,7 +617,9 @@ export function RequestsPage() {
                     onClick={() =>
                       void bookingService
                         .shareTherapistNotify(
+                          clinic.id,
                           therapistNameById.get(justConfirmed.therapistId!) ?? 'the therapist',
+                          therapistById.get(justConfirmed.therapistId!)?.phone ?? null,
                           justConfirmed.patientName,
                           justConfirmed.scheduledAt
                         )
