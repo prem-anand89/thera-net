@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService } from '@/services';
 import { db } from '@/lib/db';
+import { preOpenWhatsAppTab } from '@/lib/pdfShare';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { formatDateDMY } from '@/domain/fiscalYear';
@@ -152,6 +153,12 @@ export function RequestsPage() {
     scheduledAt: string;
     therapistId: UUID | null;
   } | null>(null);
+  // "Send confirmation" / "Notify therapist" only ever appear once each,
+  // right after confirming a single booking — plain booleans, unlike the
+  // Set-keyed reminder buttons elsewhere, since there's never more than
+  // one of each visible at a time.
+  const [sendingConfirmation, setSendingConfirmation] = useState(false);
+  const [sendingTherapistNotify, setSendingTherapistNotify] = useState(false);
 
   // Reschedule mini-form (one open at a time)
   const [reschedulingId, setReschedulingId] = useState<UUID | null>(null);
@@ -457,36 +464,46 @@ export function RequestsPage() {
                 </p>
                 <button
                   type="button"
-                  className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white"
-                  onClick={() =>
+                  disabled={sendingConfirmation}
+                  className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white disabled:opacity-60"
+                  onClick={() => {
+                    const tab = preOpenWhatsAppTab();
+                    setSendingConfirmation(true);
                     void bookingService
                       .shareBookingConfirmation(
                         clinic.id,
                         justConfirmed.patientName,
                         justConfirmed.patientPhone,
                         clinic.name,
-                        justConfirmed.scheduledAt
+                        justConfirmed.scheduledAt,
+                        tab
                       )
                       .catch((e) => alert(toFriendlyMessage(e)))
-                  }
+                      .finally(() => setSendingConfirmation(false));
+                  }}
                 >
-                  Send confirmation
+                  {sendingConfirmation ? 'Sending…' : 'Send confirmation'}
                 </button>
                 {justConfirmed.therapistId && (
                   <button
                     type="button"
-                    className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white"
-                    onClick={() =>
+                    disabled={sendingTherapistNotify}
+                    className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white disabled:opacity-60"
+                    onClick={() => {
+                      const tab = preOpenWhatsAppTab();
+                      setSendingTherapistNotify(true);
                       void bookingService
                         .shareTherapistNotify(
                           therapistNameById.get(justConfirmed.therapistId!) ?? 'the therapist',
                           justConfirmed.patientName,
-                          justConfirmed.scheduledAt
+                          justConfirmed.scheduledAt,
+                          tab
                         )
                         .catch((e) => alert(toFriendlyMessage(e)))
-                    }
+                        .finally(() => setSendingTherapistNotify(false));
+                    }}
                   >
-                    Notify therapist
+                    {sendingTherapistNotify ? 'Sending…' : 'Notify therapist'}
                   </button>
                 )}
                 <button

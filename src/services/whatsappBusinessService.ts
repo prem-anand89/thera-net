@@ -13,6 +13,15 @@ export type WhatsAppMessageKind =
   | 'reminder_stale_package'
   | 'reminder_single_visit';
 
+/** No explicit timeout on the Edge Function invocation meant a hung Meta
+ *  call (or a hung Supabase hop before ever reaching Meta) could leave a
+ *  "+ Feedback"/"Send reminder" click waiting indefinitely, with nothing
+ *  bounding how long before the manual share-sheet fallback kicks in.
+ *  8s comfortably covers the normal case — two DB round trips plus a real
+ *  Meta API call, typically well under 2s combined — without leaving a
+ *  clearly-stuck request hanging. */
+const BUSINESS_API_TIMEOUT_MS = 8000;
+
 /**
  * Patient Communications, Phase 9: thin wrappers around
  * `set_whatsapp_config`/`get_whatsapp_config_status`, used only by
@@ -84,6 +93,7 @@ export const whatsappBusinessService = {
     try {
       const { data, error } = await supabase.functions.invoke('send-whatsapp-template', {
         body: params,
+        timeout: BUSINESS_API_TIMEOUT_MS,
       });
       if (error) return { sent: false };
       const result = data as { configured?: boolean; success?: boolean } | null;

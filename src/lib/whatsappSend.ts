@@ -63,6 +63,12 @@ export async function sendWhatsAppMessage(params: {
   bodyParams: string[];
   shareText: string;
   shareTitle: string;
+  /** From `preOpenWhatsAppTab()`, called synchronously in the triggering
+   *  `onClick` before this function's own `await`s — see that function's
+   *  doc comment for why. Passed straight through to
+   *  `shareTextViaWhatsApp`; closed automatically if the Business API send
+   *  succeeds and the tab turns out not to be needed. */
+  preOpenedTab?: Window | null;
 }): Promise<void> {
   if (params.toPhone) {
     const { sent } = await whatsappBusinessService.sendViaBusinessApi({
@@ -73,7 +79,10 @@ export async function sendWhatsAppMessage(params: {
       languageCode: 'en',
       bodyParams: params.bodyParams,
     });
-    if (sent) return;
+    if (sent) {
+      if (params.preOpenedTab && !params.preOpenedTab.closed) params.preOpenedTab.close();
+      return;
+    }
   }
-  await shareTextViaWhatsApp(params.shareText, params.shareTitle);
+  await shareTextViaWhatsApp(params.shareText, params.shareTitle, params.preOpenedTab);
 }
