@@ -1,8 +1,20 @@
 import type { UUID } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
 
+/** One of `message_log.kind`'s six existing values — kept here (not
+ *  domain/types.ts) since it's only meaningful to the Business API send
+ *  path; `send-whatsapp-template`'s own copy of this list is the real
+ *  validation, this one just keeps the client call sites honest. */
+export type WhatsAppMessageKind =
+  | 'feedback_request'
+  | 'booking_confirmation'
+  | 'therapist_notify'
+  | 'google_review'
+  | 'reminder_stale_package'
+  | 'reminder_single_visit';
+
 /**
- * Patient Communications, Phase 9 (scaffold): thin wrappers around
+ * Patient Communications, Phase 9: thin wrappers around
  * `set_whatsapp_config`/`get_whatsapp_config_status`, used only by
  * Settings' "WhatsApp Business API" sub-block. The access token itself
  * never round-trips back to the client — `getConfigStatus` returns
@@ -10,11 +22,10 @@ import { getSupabase } from '@/lib/supabase';
  * on why `clinic_whatsapp_config` carries no SELECT policy for any
  * client role at all.
  *
- * Deliberately does not include a `sendViaBusinessApi` — nothing in the
- * app calls the new `send-whatsapp-template` Edge Function yet. Wiring
- * the six existing share-sheet send sites to it is a later pass, once a
- * clinic actually has a real Meta phone number ID, access token, and at
- * least one approved template name to test against.
+ * `sendViaBusinessApi` is the one place any client code calls the
+ * `send-whatsapp-template` Edge Function — see `src/lib/whatsappSend.ts`
+ * for the shared "try Business API, fall back to the share sheet" wrapper
+ * every send action actually calls; nothing calls this directly.
  */
 export const whatsappBusinessService = {
   async getConfigStatus(
@@ -50,5 +61,35 @@ export const whatsappBusinessService = {
       p_enabled: enabled,
     });
     if (error) throw new Error(error.message);
+  },
+
+  /**
+   * Calls `send-whatsapp-template` and reports simply whether it actually
+   * sent — never throws, so callers (always `whatsappSend.ts`) can fall
+   * back to the manual share sheet uniformly on any failure: not
+   * configured, offline, an unapproved/mismatched template name Meta
+   * rejects, or an unexpected error. `configured: true, success: true` is
+   * the one case that counts as sent.
+   */
+  async sendViaBusinessApi(params: {
+    clinicId: UUID;
+    kind: WhatsAppMessageKind;
+    toPhone: string;
+    templateName: string;
+    languageCode: string;
+    bodyParams: string[];
+  }): Promise<{ sent: boolean }> {
+    const supabase = getSupabase();
+    if (!supabase || !navigator.onLine) return { sent: false };
+    try {
+      const { data, error } = await supabase.functions.invoke('send-whatsapp-template', {
+        body: params,
+      });
+      if (error) return { sent: false };
+      const result = data as { configured?: boolean; success?: boolean } | null;
+      return { sent: !!result?.configured && !!result?.success };
+    } catch {
+      return { sent: false };
+    }
   },
 };

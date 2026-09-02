@@ -148,6 +148,7 @@ export function RequestsPage() {
   const [justConfirmed, setJustConfirmed] = useState<{
     appointmentId: UUID;
     patientName: string;
+    patientPhone: string;
     scheduledAt: string;
     therapistId: UUID | null;
   } | null>(null);
@@ -169,7 +170,7 @@ export function RequestsPage() {
     setJustConfirmed(null);
   }
 
-  async function submitConfirm(request: { id: UUID; name: string }) {
+  async function submitConfirm(request: { id: UUID; name: string; phone: string }) {
     setConfirmBusy(true);
     setConfirmError(null);
     try {
@@ -182,6 +183,7 @@ export function RequestsPage() {
       setJustConfirmed({
         appointmentId,
         patientName: request.name,
+        patientPhone: request.phone,
         scheduledAt: scheduledIso,
         therapistId: confirmTherapistId || null,
       });
@@ -459,7 +461,9 @@ export function RequestsPage() {
                   onClick={() =>
                     void bookingService
                       .shareBookingConfirmation(
+                        clinic.id,
                         justConfirmed.patientName,
+                        justConfirmed.patientPhone,
                         clinic.name,
                         justConfirmed.scheduledAt
                       )

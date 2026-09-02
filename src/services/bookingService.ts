@@ -1,6 +1,7 @@
 import type { UUID } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
 import { shareTextViaWhatsApp } from '@/lib/pdfShare';
+import { sendWhatsAppMessage } from '@/lib/whatsappSend';
 
 /**
  * Patient Communications, Slice 5: public booking requests → confirmed
@@ -143,7 +144,9 @@ export const bookingService = {
    *  the plan's own "two independent share actions, not one combined
    *  message" note; a click sends one WhatsApp share sheet, not two. */
   async shareBookingConfirmation(
+    clinicId: UUID,
     patientName: string,
+    patientPhone: string | null,
     clinicName: string,
     scheduledAt: string
   ): Promise<void> {
@@ -151,12 +154,22 @@ export const bookingService = {
       dateStyle: 'medium',
       timeStyle: 'short',
     });
-    await shareTextViaWhatsApp(
-      `Hi ${patientName}, your appointment at ${clinicName} is confirmed for ${when}. See you then!`,
-      'Send confirmation'
-    );
+    const text = `Hi ${patientName}, your appointment at ${clinicName} is confirmed for ${when}. See you then!`;
+    await sendWhatsAppMessage({
+      clinicId,
+      kind: 'booking_confirmation',
+      toPhone: patientPhone,
+      bodyParams: [patientName, clinicName, when],
+      shareText: text,
+      shareTitle: 'Send confirmation',
+    });
   },
 
+  /** Stays share-sheet only, unlike every other send action here —
+   *  `Therapist` has no phone field in the schema, so there's no `toPhone`
+   *  to give the Business API. Adding one is a separate, deliberate
+   *  decision (a new column, a Team-settings field to capture it), not a
+   *  gap in this wiring pass. */
   async shareTherapistNotify(
     therapistName: string,
     patientName: string,

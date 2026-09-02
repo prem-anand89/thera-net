@@ -693,7 +693,9 @@ export function ReportsOverviewPage() {
                             className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
                             onClick={() =>
                               void feedbackService.sendSingleVisitReminder(
+                                clinic.id,
                                 p.patientName,
+                                p.phone,
                                 clinic.name
                               )
                             }

@@ -114,6 +114,7 @@ function visitToCardData(
     visitDate: v.visitDate,
     patientId: v.patientId,
     patientName: p?.name ?? '-',
+    patientPhone: p?.phone ?? null,
     mrno: p?.mrno ?? '-',
     age: p?.age ?? null,
     sex: p?.sex ?? null,
@@ -827,7 +828,9 @@ export function LedgerPage() {
                             className="whitespace-nowrap font-medium text-[var(--teal)] hover:underline"
                             onClick={() =>
                               void feedbackService.sendStalePackageReminder(
+                                clinic.id,
                                 p.patientName,
+                                p.phone,
                                 clinic.name,
                                 p.serviceName
                               )
@@ -971,7 +974,12 @@ export function LedgerPage() {
                 onAskForFeedback={(row) => {
                   setError(null);
                   void feedbackService
-                    .askForFeedback(row.visitId, row.patientName, clinic.name)
+                    .askForFeedback(
+                      row.visitId,
+                      row.patientName,
+                      row.patientPhone ?? null,
+                      clinic.name
+                    )
                     .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 onResendFeedback={(row) => {
@@ -979,14 +987,20 @@ export function LedgerPage() {
                   if (!request?.token) return;
                   setError(null);
                   void feedbackService
-                    .resend(request, row.patientName, clinic.name)
+                    .resend(request, row.patientName, row.patientPhone ?? null, clinic.name)
                     .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 onAskForGoogleReview={(row) => {
                   if (!row.googleReviewUrl) return;
                   setError(null);
                   void feedbackService
-                    .askForGoogleReview(row.patientName, clinic.name, row.googleReviewUrl)
+                    .askForGoogleReview(
+                      clinic.id,
+                      row.patientName,
+                      row.patientPhone ?? null,
+                      clinic.name,
+                      row.googleReviewUrl
+                    )
                     .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 canInvoice={canBill}

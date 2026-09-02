@@ -76,6 +76,7 @@ function todayRowToCardData(
     visitDate: new Date().toISOString().slice(0, 10),
     patientId: row.patientId,
     patientName: row.patientName,
+    patientPhone: row.phone,
     mrno: row.mrno,
     age: row.age,
     sex: row.sex,
@@ -558,20 +559,26 @@ export function WorkspacePage() {
             }}
             onAskForFeedback={(row) => {
               void feedbackService
-                .askForFeedback(row.visitId, row.patientName, clinic.name)
+                .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name)
                 .catch((e) => alert(toFriendlyMessage(e)));
             }}
             onResendFeedback={(row) => {
               const request = feedbackRequestByVisitId.get(row.visitId);
               if (!request?.token) return;
               void feedbackService
-                .resend(request, row.patientName, clinic.name)
+                .resend(request, row.patientName, row.patientPhone ?? null, clinic.name)
                 .catch((e) => alert(toFriendlyMessage(e)));
             }}
             onAskForGoogleReview={(row) => {
               if (!row.googleReviewUrl) return;
               void feedbackService
-                .askForGoogleReview(row.patientName, clinic.name, row.googleReviewUrl)
+                .askForGoogleReview(
+                  clinic.id,
+                  row.patientName,
+                  row.patientPhone ?? null,
+                  clinic.name,
+                  row.googleReviewUrl
+                )
                 .catch((e) => alert(toFriendlyMessage(e)));
             }}
             canInvoice={canBill}
@@ -675,7 +682,9 @@ export function WorkspacePage() {
                           className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
                           onClick={() =>
                             void feedbackService.sendStalePackageReminder(
+                              clinic.id,
                               p.patientName,
+                              p.phone,
                               clinic.name,
                               p.serviceName
                             )
@@ -746,7 +755,9 @@ export function WorkspacePage() {
                               className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
                               onClick={() =>
                                 void feedbackService.sendStalePackageReminder(
+                                  clinic.id,
                                   p.patientName,
+                                  p.phone,
                                   clinic.name,
                                   p.serviceName
                                 )

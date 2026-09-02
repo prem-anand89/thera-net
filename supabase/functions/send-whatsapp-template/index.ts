@@ -1,15 +1,17 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 
 /**
- * Patient Communications, Phase 9 (scaffold): the only place in this app
- * that ever calls Meta's WhatsApp Business Cloud API. Every existing send
+ * Patient Communications, Phase 9: the only place in this app that ever
+ * calls Meta's WhatsApp Business Cloud API. `src/lib/whatsappSend.ts`'s
+ * `sendWhatsAppMessage()` calls this first for every patient-facing send
  * action (feedback link, resend, Google review nudge, reminders, booking
- * confirmation/therapist-notify) still opens the staff member's own
- * WhatsApp via a share sheet — nothing calls this function yet. It exists
- * so that once a clinic has real Meta credentials and at least one
- * approved message template, turning Business API sending on is a config
- * step (Settings → Patient communications → WhatsApp Business API) and a
- * later, small client-side wrapper change, not new infrastructure.
+ * confirmation — not therapist-notify, since `Therapist` has no phone
+ * field), falling back to the existing share-sheet path whenever this
+ * returns `{ configured: false }`, a rejected send, or fails outright. So
+ * in practice this still sends nothing for real until a clinic has
+ * configured real Meta credentials (Settings → Patient communications →
+ * WhatsApp Business API) *and* the caller's `templateName` matches an
+ * approved template on Meta's side — until then every send falls through.
  *
  * Meta requires an approved template for any business-initiated message
  * outside a 24h customer-service window — this function is template-shaped
