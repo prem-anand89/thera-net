@@ -45,10 +45,21 @@ export function Field({
   );
 }
 
-export function SectionCard({ title, children }: { title: string; children: ReactNode }) {
+export function SectionCard({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-      <h2 className="font-display mb-3 text-base font-semibold text-[var(--ink)]">{title}</h2>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="font-display text-base font-semibold text-[var(--ink)]">{title}</h2>
+        {action}
+      </div>
       {children}
     </section>
   );

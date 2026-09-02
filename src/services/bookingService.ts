@@ -1,6 +1,5 @@
 import type { UUID } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
-import { shareTextViaWhatsApp } from '@/lib/pdfShare';
 import { sendWhatsAppMessage } from '@/lib/whatsappSend';
 
 /**
@@ -87,6 +86,31 @@ export const bookingService = {
     return data as UUID;
   },
 
+  /** Manual/staff-entered booking, alongside the public patient-facing
+   *  link — goes straight to a confirmed appointment (no pending request
+   *  row) since staff already know the date/time/therapist when entering
+   *  one by hand. Returns the new `appointments.id`, same as
+   *  `confirmAppointmentRequest`, so callers can reuse the same
+   *  post-confirm banner either way. */
+  async createAppointmentStaff(
+    clinicId: UUID,
+    name: string,
+    phone: string,
+    therapistId: UUID | null,
+    scheduledAt: string
+  ): Promise<UUID> {
+    const supabase = supabaseOrThrow();
+    const { data, error } = await supabase.rpc('create_appointment_staff', {
+      p_clinic_id: clinicId,
+      p_name: name,
+      p_phone: phone,
+      p_therapist_id: therapistId,
+      p_scheduled_at: scheduledAt,
+    });
+    if (error) throw new Error(`Could not create booking: ${error.message}`);
+    return data as UUID;
+  },
+
   async declineAppointmentRequest(requestId: UUID): Promise<void> {
     const supabase = supabaseOrThrow();
     const { error } = await supabase.rpc('decline_appointment_request', {
@@ -165,13 +189,14 @@ export const bookingService = {
     });
   },
 
-  /** Stays share-sheet only, unlike every other send action here —
-   *  `Therapist` has no phone field in the schema, so there's no `toPhone`
-   *  to give the Business API. Adding one is a separate, deliberate
-   *  decision (a new column, a Team-settings field to capture it), not a
-   *  gap in this wiring pass. */
+  /** Uses the Business API when the therapist has a phone on file and the
+   *  clinic has one configured; falls back to the share sheet otherwise —
+   *  same as every other send action in this file, now that `Therapist`
+   *  carries a `phone` field. */
   async shareTherapistNotify(
+    clinicId: UUID,
     therapistName: string,
+    therapistPhone: string | null,
     patientName: string,
     scheduledAt: string
   ): Promise<void> {
@@ -179,9 +204,14 @@ export const bookingService = {
       dateStyle: 'medium',
       timeStyle: 'short',
     });
-    await shareTextViaWhatsApp(
-      `Hi ${therapistName}, you have an appointment with ${patientName} confirmed for ${when}.`,
-      'Notify therapist'
-    );
+    const text = `Hi ${therapistName}, you have an appointment with ${patientName} confirmed for ${when}.`;
+    await sendWhatsAppMessage({
+      clinicId,
+      kind: 'therapist_notify',
+      toPhone: therapistPhone,
+      bodyParams: [therapistName, patientName, when],
+      shareText: text,
+      shareTitle: 'Notify therapist',
+    });
   },
 };

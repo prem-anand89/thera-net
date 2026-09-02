@@ -203,6 +203,10 @@ export interface Therapist {
    *  equivalent body. Printed on invoices — the field TPAs check to confirm
    *  the treating therapist is a registered practitioner. */
   registrationNo?: string | null;
+  /** Used to send therapist notifications/confirmations via the WhatsApp
+   *  Business API when configured; falls back to the share sheet when
+   *  absent (see bookingService.shareTherapistNotify). */
+  phone?: string | null;
   updatedAt: string;
 }
 

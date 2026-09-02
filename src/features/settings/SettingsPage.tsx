@@ -2681,6 +2681,7 @@ function RosterCard({
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(therapist.name);
   const [regDraft, setRegDraft] = useState(therapist.registrationNo ?? '');
+  const [phoneDraft, setPhoneDraft] = useState(therapist.phone ?? '');
   const [loginDraft, setLoginDraft] = useState(therapist.userId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2689,6 +2690,7 @@ function RosterCard({
     if (!editing) {
       setNameDraft(therapist.name);
       setRegDraft(therapist.registrationNo ?? '');
+      setPhoneDraft(therapist.phone ?? '');
       setLoginDraft(therapist.userId ?? '');
     }
   }, [therapist, editing]);
@@ -2705,6 +2707,7 @@ function RosterCard({
         ...therapist,
         name: nameDraft.trim(),
         registrationNo: regDraft.trim() || null,
+        phone: phoneDraft.trim() || null,
         userId: loginDraft || null,
         updatedAt: new Date().toISOString(),
       });
@@ -2766,6 +2769,14 @@ function RosterCard({
             placeholder="Printed on invoices"
             value={regDraft}
             onChange={(e) => setRegDraft(e.target.value)}
+          />
+        </Field>
+        <Field label="Phone">
+          <input
+            className={inputCls}
+            placeholder="For WhatsApp booking notifications"
+            value={phoneDraft}
+            onChange={(e) => setPhoneDraft(e.target.value)}
           />
         </Field>
         {members && members.length > 0 && (
