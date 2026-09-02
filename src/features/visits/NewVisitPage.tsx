@@ -24,6 +24,7 @@ import {
   type UUID,
 } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
+import { preOpenWhatsAppTab } from '@/lib/pdfShare';
 import {
   Field,
   inputCls,
@@ -651,12 +652,14 @@ export function NewVisitPage() {
                 disabled={feedbackRequested}
                 onClick={() => {
                   setFeedbackRequested(true);
+                  const tab = preOpenWhatsAppTab();
                   void feedbackService
                     .askForFeedback(
                       justSaved.visitId,
                       justSaved.patientName,
                       justSaved.patientPhone,
-                      clinic.name
+                      clinic.name,
+                      tab
                     )
                     .catch((e) => {
                       setFeedbackRequested(false);

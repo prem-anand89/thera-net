@@ -104,22 +104,65 @@ export async function shareFileToWhatsApp(
 }
 
 /**
+ * Call synchronously from the triggering `onClick`, before any `await` —
+ * opens a blank tab immediately, while the click's user-activation is still
+ * fresh, so `shareTextViaWhatsApp` can navigate it to the real `wa.me` URL
+ * once whatever async work builds that URL (an RPC round trip creating a
+ * feedback request, a Business API send attempt, etc.) finishes. Without
+ * this, a `window.open`/`navigator.share` call made only after such a
+ * round trip can silently fail with no visible error the moment
+ * user-activation has lapsed — most reliably reproducible on mobile
+ * browsers, where every WhatsApp-share action in this app (feedback link,
+ * reminders, booking confirmation) now does at least one `await` first.
+ * Returns `null` if the browser blocks even a same-tick `window.open`
+ * (rare) — callers degrade to `shareTextViaWhatsApp`'s no-handle path.
+ */
+export function preOpenWhatsAppTab(): Window | null {
+  try {
+    return window.open('', '_blank');
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Same Web-Share-API-with-`wa.me`-fallback shape as `shareFileToWhatsApp`,
  * for a plain link/text payload with no file involved (e.g. a patient
  * feedback link) — most of the app's "share this" actions have nothing to
  * attach, so this is the common case, not `shareFileToWhatsApp`'s.
+ *
+ * `preOpenedTab` (from `preOpenWhatsAppTab`, called before whatever async
+ * work produced `text`) is navigated to the `wa.me` fallback instead of
+ * opening a fresh tab — reusing a tab opened while activation was fresh
+ * sidesteps the popup blocker even though this function itself is being
+ * awaited well after the triggering click. `navigator.share` itself still
+ * needs its own fresh activation and may simply fail this late — that's
+ * fine, its catch below still falls through to the pre-opened tab.
  */
-export async function shareTextViaWhatsApp(text: string, title: string): Promise<void> {
+export async function shareTextViaWhatsApp(
+  text: string,
+  title: string,
+  preOpenedTab?: Window | null
+): Promise<void> {
   const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
   if (nav.share) {
     try {
       await nav.share({ text, title });
+      if (preOpenedTab && !preOpenedTab.closed) preOpenedTab.close();
       return;
     } catch (e) {
-      if (e instanceof Error && e.name === 'AbortError') return;
+      if (e instanceof Error && e.name === 'AbortError') {
+        if (preOpenedTab && !preOpenedTab.closed) preOpenedTab.close();
+        return;
+      }
       // Fall through to the wa.me link for any other Web Share failure —
       // same reasoning shareFileToWhatsApp falls back rather than erroring.
     }
   }
-  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  if (preOpenedTab && !preOpenedTab.closed) {
+    preOpenedTab.location.href = url;
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
 }

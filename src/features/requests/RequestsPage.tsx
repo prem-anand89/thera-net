@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService } from '@/services';
 import { db } from '@/lib/db';
+import { preOpenWhatsAppTab } from '@/lib/pdfShare';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { formatDateDMY } from '@/domain/fiscalYear';
@@ -458,17 +459,19 @@ export function RequestsPage() {
                 <button
                   type="button"
                   className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white"
-                  onClick={() =>
+                  onClick={() => {
+                    const tab = preOpenWhatsAppTab();
                     void bookingService
                       .shareBookingConfirmation(
                         clinic.id,
                         justConfirmed.patientName,
                         justConfirmed.patientPhone,
                         clinic.name,
-                        justConfirmed.scheduledAt
+                        justConfirmed.scheduledAt,
+                        tab
                       )
-                      .catch((e) => alert(toFriendlyMessage(e)))
-                  }
+                      .catch((e) => alert(toFriendlyMessage(e)));
+                  }}
                 >
                   Send confirmation
                 </button>
@@ -476,15 +479,17 @@ export function RequestsPage() {
                   <button
                     type="button"
                     className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white"
-                    onClick={() =>
+                    onClick={() => {
+                      const tab = preOpenWhatsAppTab();
                       void bookingService
                         .shareTherapistNotify(
                           therapistNameById.get(justConfirmed.therapistId!) ?? 'the therapist',
                           justConfirmed.patientName,
-                          justConfirmed.scheduledAt
+                          justConfirmed.scheduledAt,
+                          tab
                         )
-                        .catch((e) => alert(toFriendlyMessage(e)))
-                    }
+                        .catch((e) => alert(toFriendlyMessage(e)));
+                    }}
                   >
                     Notify therapist
                   </button>

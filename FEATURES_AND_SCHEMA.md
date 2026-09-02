@@ -590,6 +590,23 @@ still falls through to the existing share sheet, unchanged.
     `shareFileToWhatsApp`) — no WhatsApp Business API required for v1. The
     message template is a hardcoded string for now; per-clinic template
     editing is a later phase.
+  - **User-activation gotcha, fixed**: every WhatsApp-share action here
+    does at least one `await` (an RPC creating/rotating the feedback
+    request, now also a Business API send attempt) before it can call
+    `navigator.share`/`window.open` — and on mobile browsers especially,
+    both of those silently no-op once too much time has passed since the
+    triggering click, with no error surfaced. Fixed by
+    `preOpenWhatsAppTab()` (`pdfShare.ts`): called synchronously in the
+    `onClick`, before any `await`, it opens a blank tab while activation
+    is still fresh; `shareTextViaWhatsApp` then navigates that tab to the
+    real `wa.me` URL once the async work finishes, instead of trying to
+    open a fresh one late. Every call site that can end up sharing passes
+    the handle through (`askForFeedback`, `resend`, `askForGoogleReview`,
+    both reminder actions, `shareBookingConfirmation`,
+    `shareTherapistNotify`). `shareFileToWhatsApp` (the invoice-PDF share
+    button) has the same theoretical gap — `renderElementToPdf`'s
+    html2canvas render happens first — but wasn't reported broken and
+    wasn't touched here.
   - **One pending request per visit** — the foundation's own unique index
     enforces this. A visit whose last request is `expired` offers
     "+ Feedback" again (a fresh row); a `pending` request offers "Resend"

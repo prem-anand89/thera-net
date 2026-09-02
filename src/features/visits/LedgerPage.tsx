@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, feedbackService } from '@/services';
 import { db } from '@/lib/db';
+import { preOpenWhatsAppTab } from '@/lib/pdfShare';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -826,15 +827,17 @@ export function LedgerPage() {
                           <button
                             type="button"
                             className="whitespace-nowrap font-medium text-[var(--teal)] hover:underline"
-                            onClick={() =>
+                            onClick={() => {
+                              const tab = preOpenWhatsAppTab();
                               void feedbackService.sendStalePackageReminder(
                                 clinic.id,
                                 p.patientName,
                                 p.phone,
                                 clinic.name,
-                                p.serviceName
-                              )
-                            }
+                                p.serviceName,
+                                tab
+                              );
+                            }}
                           >
                             Send reminder
                           </button>
@@ -973,12 +976,14 @@ export function LedgerPage() {
                 }}
                 onAskForFeedback={(row) => {
                   setError(null);
+                  const tab = preOpenWhatsAppTab();
                   void feedbackService
                     .askForFeedback(
                       row.visitId,
                       row.patientName,
                       row.patientPhone ?? null,
-                      clinic.name
+                      clinic.name,
+                      tab
                     )
                     .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
@@ -986,20 +991,23 @@ export function LedgerPage() {
                   const request = feedbackRequestByVisitId.get(row.visitId);
                   if (!request?.token) return;
                   setError(null);
+                  const tab = preOpenWhatsAppTab();
                   void feedbackService
-                    .resend(request, row.patientName, row.patientPhone ?? null, clinic.name)
+                    .resend(request, row.patientName, row.patientPhone ?? null, clinic.name, tab)
                     .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 onAskForGoogleReview={(row) => {
                   if (!row.googleReviewUrl) return;
                   setError(null);
+                  const tab = preOpenWhatsAppTab();
                   void feedbackService
                     .askForGoogleReview(
                       clinic.id,
                       row.patientName,
                       row.patientPhone ?? null,
                       clinic.name,
-                      row.googleReviewUrl
+                      row.googleReviewUrl,
+                      tab
                     )
                     .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}

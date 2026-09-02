@@ -41,7 +41,8 @@ export function createFeedbackService(repos: Repos) {
       visitId: UUID,
       patientName: string,
       patientPhone: string | null,
-      clinicName: string
+      clinicName: string,
+      preOpenedTab?: Window | null
     ): Promise<FeedbackRequest> {
       const supabase = getSupabase();
       if (!supabase) throw new Error('Supabase is not configured');
@@ -93,6 +94,7 @@ export function createFeedbackService(repos: Repos) {
         bodyParams: [patientName, clinicName, feedbackLinkUrl(row.token)],
         shareText: feedbackShareMessage(patientName, clinicName, row.token),
         shareTitle: 'Ask for feedback',
+        preOpenedTab,
       });
       return request;
     },
@@ -107,7 +109,8 @@ export function createFeedbackService(repos: Repos) {
       request: FeedbackRequest,
       patientName: string,
       patientPhone: string | null,
-      clinicName: string
+      clinicName: string,
+      preOpenedTab?: Window | null
     ): Promise<FeedbackRequest> {
       const supabase = getSupabase();
       if (!supabase) throw new Error('Supabase is not configured');
@@ -134,6 +137,7 @@ export function createFeedbackService(repos: Repos) {
         bodyParams: [patientName, clinicName, feedbackLinkUrl(token)],
         shareText: feedbackShareMessage(patientName, clinicName, token),
         shareTitle: 'Ask for feedback',
+        preOpenedTab,
       });
       return updated;
     },
@@ -150,7 +154,8 @@ export function createFeedbackService(repos: Repos) {
       patientName: string,
       patientPhone: string | null,
       clinicName: string,
-      googleReviewUrl: string
+      googleReviewUrl: string,
+      preOpenedTab?: Window | null
     ): Promise<void> {
       const text = `Hi ${patientName}, so glad you had a great experience at ${clinicName}! Would you mind leaving us a quick Google review? ${googleReviewUrl}`;
       await sendWhatsAppMessage({
@@ -160,6 +165,7 @@ export function createFeedbackService(repos: Repos) {
         bodyParams: [patientName, clinicName, googleReviewUrl],
         shareText: text,
         shareTitle: 'Ask for a Google review',
+        preOpenedTab,
       });
     },
 
@@ -176,7 +182,8 @@ export function createFeedbackService(repos: Repos) {
       patientName: string,
       patientPhone: string | null,
       clinicName: string,
-      serviceName: string
+      serviceName: string,
+      preOpenedTab?: Window | null
     ): Promise<void> {
       const text = `Hi ${patientName}, we noticed it's been a while since your last ${serviceName} session at ${clinicName}. We'd love to see you again — reach out whenever you're ready to continue!`;
       await sendWhatsAppMessage({
@@ -186,6 +193,7 @@ export function createFeedbackService(repos: Repos) {
         bodyParams: [patientName, serviceName, clinicName],
         shareText: text,
         shareTitle: 'Send reminder',
+        preOpenedTab,
       });
     },
 
@@ -196,7 +204,8 @@ export function createFeedbackService(repos: Repos) {
       clinicId: UUID,
       patientName: string,
       patientPhone: string | null,
-      clinicName: string
+      clinicName: string,
+      preOpenedTab?: Window | null
     ): Promise<void> {
       const text = `Hi ${patientName}, thanks for visiting ${clinicName}! We hope you're doing well — let us know if you'd like to schedule a follow-up visit.`;
       await sendWhatsAppMessage({
@@ -206,6 +215,7 @@ export function createFeedbackService(repos: Repos) {
         bodyParams: [patientName, clinicName],
         shareText: text,
         shareTitle: 'Send reminder',
+        preOpenedTab,
       });
     },
 

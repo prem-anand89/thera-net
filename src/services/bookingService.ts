@@ -148,7 +148,8 @@ export const bookingService = {
     patientName: string,
     patientPhone: string | null,
     clinicName: string,
-    scheduledAt: string
+    scheduledAt: string,
+    preOpenedTab?: Window | null
   ): Promise<void> {
     const when = new Date(scheduledAt).toLocaleString('en-IN', {
       dateStyle: 'medium',
@@ -162,6 +163,7 @@ export const bookingService = {
       bodyParams: [patientName, clinicName, when],
       shareText: text,
       shareTitle: 'Send confirmation',
+      preOpenedTab,
     });
   },
 
@@ -173,7 +175,8 @@ export const bookingService = {
   async shareTherapistNotify(
     therapistName: string,
     patientName: string,
-    scheduledAt: string
+    scheduledAt: string,
+    preOpenedTab?: Window | null
   ): Promise<void> {
     const when = new Date(scheduledAt).toLocaleString('en-IN', {
       dateStyle: 'medium',
@@ -181,7 +184,8 @@ export const bookingService = {
     });
     await shareTextViaWhatsApp(
       `Hi ${therapistName}, you have an appointment with ${patientName} confirmed for ${when}.`,
-      'Notify therapist'
+      'Notify therapist',
+      preOpenedTab
     );
   },
 };

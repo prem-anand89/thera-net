@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, repos, feedbackService } from '@/services';
+import { preOpenWhatsAppTab } from '@/lib/pdfShare';
 import { CONDITION_TOP_N } from '@/services/dashboardService';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -691,14 +692,16 @@ export function ReportsOverviewPage() {
                           <button
                             type="button"
                             className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
-                            onClick={() =>
+                            onClick={() => {
+                              const tab = preOpenWhatsAppTab();
                               void feedbackService.sendSingleVisitReminder(
                                 clinic.id,
                                 p.patientName,
                                 p.phone,
-                                clinic.name
-                              )
-                            }
+                                clinic.name,
+                                tab
+                              );
+                            }}
                           >
                             Send reminder
                           </button>
