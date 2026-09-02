@@ -558,7 +558,7 @@ export function WorkspacePage() {
             }}
             onAskForFeedback={(row) => {
               void feedbackService
-                .askForFeedback(clinic.id, row.visitId, row.patientId, row.therapistId!)
+                .askForFeedback(row.visitId, row.patientName, clinic.name)
                 .catch((e) => alert(toFriendlyMessage(e)));
             }}
             onResendFeedback={(row) => {

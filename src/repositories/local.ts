@@ -335,7 +335,6 @@ const feedbackRequests: FeedbackRequestRepo = {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
   },
   listByClinic: (clinicId) => db.feedback_requests.where('clinicId').equals(clinicId).toArray(),
-  put: (request) => putWithOutbox('feedback_requests', request),
   putLocal: async (request) => {
     await db.feedback_requests.put(request);
   },

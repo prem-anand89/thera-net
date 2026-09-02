@@ -650,12 +650,7 @@ export function NewVisitPage() {
                 onClick={() => {
                   setFeedbackRequested(true);
                   void feedbackService
-                    .askForFeedback(
-                      clinic.id,
-                      justSaved.visitId,
-                      justSaved.patientId,
-                      justSaved.therapistId
-                    )
+                    .askForFeedback(justSaved.visitId, justSaved.patientName, clinic.name)
                     .catch((e) => {
                       setFeedbackRequested(false);
                       setError(toFriendlyMessage(e));
