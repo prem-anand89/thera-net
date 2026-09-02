@@ -2537,7 +2537,7 @@ its own narrow in-place edit path instead.
   than shipping the table alone and coming back for the card later.
 - **Header width budget** (`Shell.tsx`'s header) — the row carries the
   brand, five nav items, the sync badge, and the account trigger inside
-  `max-w-6xl`, which doesn't fit with full text everywhere at once. Four
+  `max-w-6xl`, which doesn't fit with full text everywhere at once. These
   rules keep it fitting, all the way down to a 744px iPad-portrait width:
   1. Only the brand/clinic name shrinks (truncates, then hides below
      `desktop:`) — nav and the sync/account cluster are `shrink-0`, so a
@@ -2545,15 +2545,19 @@ its own narrow in-place edit path instead.
   2. Nav item labels show from `tab:` up; below that they're icon-only
      with `aria-label`/`title` carrying the accessible name (a
      `hidden`/`display:none` span is skipped by screen readers).
-  3. `SyncBadge`'s text label is `desktop:`-only — below that it's just
-     the status dot (color still carries online/syncing/error/synced),
-     freeing the room nav labels need at `tab:`. `SyncStatusBanners`
-     covers the states that actually need a written explanation
-     (offline, sync failures) with a full-width banner regardless of
-     breakpoint, so the collapsed badge never hides something urgent.
-  4. The account trigger's display name is `desktop:`-only too (was
-     `sm:`) — below that it's just the avatar initials, same as it
-     already was on phone.
+  3. `SyncBadge`'s text label is `tab:`-only too — measured, there's room
+     for the full pill (dot + "Synced"/"3 pending"/etc.) right alongside
+     the nav labels at every iPad-portrait width down to 744px. It only
+     drops to just the status dot below `tab:`, on phone width where the
+     nav itself is gone too (color still carries online/syncing/error/
+     synced there, and `SyncStatusBanners` covers offline/failure states
+     with a full-width banner regardless of breakpoint). An earlier pass
+     collapsed this at `desktop:` instead, on the assumption there wasn't
+     room at `tab:` — measure before assuming; there was.
+  4. The account trigger's display name is `desktop:`-only (was `sm:`) —
+     below that it's just the avatar initials. This one's still
+     deliberately conservative rather than measured-and-widened like
+     SyncBadge, since the dropdown it opens already repeats the name.
 
 ---
 

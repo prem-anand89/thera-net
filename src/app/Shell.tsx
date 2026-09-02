@@ -414,22 +414,27 @@ export function Shell() {
               max-w-6xl (~1120px of usable width) — and with text labels on
               everything at once it doesn't, which is what left the nav
               squeezed and horizontally scrolling even on a full-width
-              screen. Four rules keep it fitting instead:
+              screen. These rules keep it fitting instead:
                 1. Only the brand name shrinks. Nav and the sync/account
                    cluster are shrink-0, so a tight row eats into the
                    clinic name (truncated, then hidden below desktop:)
                    rather than squeezing the things you click.
                 2. Nav labels are tab:-only (744px+, iPad-portrait and up).
                    Below that the nav is icons with tooltips + aria-labels.
-                   Getting labels to fit at iPad-portrait widths (as
-                   narrow as 744px) is what rules 3-4 free the room for.
-                3. SyncBadge's text collapses to just the status dot below
-                   desktop: (1000px+) — the dot's color already carries
-                   the state, and the panel behind a tap has the rest.
+                3. SyncBadge's text is tab:-only too — measured, there's
+                   room for it right alongside the nav labels at every
+                   iPad-portrait width down to 744px (an earlier pass
+                   collapsed it all the way to desktop: on the assumption
+                   there wasn't; there was). It only drops to just the
+                   status dot below tab:, on phone width where the nav
+                   itself is gone too — the dot's color still carries the
+                   state, and the panel behind a tap has the rest.
                 4. The account trigger's name collapses to just the avatar
-                   initials below desktop: too (was sm:, 640px+) — Settings
-                   moved to the account menu (see NAV above) keeps this at
-                   five nav items rather than six.
+                   initials below desktop: (was sm:, 640px+) — this is the
+                   one still deliberately conservative, since the dropdown
+                   it opens already repeats the name. Settings moved to
+                   the account menu (see NAV above) keeps this at five nav
+                   items rather than six.
               The clinic name is also the one genuinely redundant item
               here — the account trigger's dropdown names the current
               clinic too, and switches between them — so hiding it first
