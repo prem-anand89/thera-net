@@ -607,6 +607,22 @@ still falls through to the existing share sheet, unchanged.
     button) has the same theoretical gap — `renderElementToPdf`'s
     html2canvas render happens first — but wasn't reported broken and
     wasn't touched here.
+  - **Timeout + loading state on every send action.**
+    `whatsappBusinessService.sendViaBusinessApi()` passes
+    `timeout: 8000` to `supabase.functions.invoke` — without it, a hung
+    Meta call (or a hung Supabase hop before ever reaching Meta) had
+    nothing bounding how long a click waited before falling back to the
+    share sheet. Every "+ Feedback"/"Resend"/"⭐ Google review" button
+    (`VisitFeedbackLink` in `VisitCard.tsx`) tracks its own `busy` state
+    now — disabled and reading "Sending…" for the duration of the RPC +
+    send attempt — since previously nothing indicated a click had
+    registered during that gap, and a second click on the same row before
+    the first resolved was possible. The standalone reminder buttons
+    (Workspace/Ledger's stale-package reminder, Reports' single-visit
+    reminder) do the same via a page-local `Set<id>` of in-flight rows;
+    `RequestsPage`'s booking confirmation/therapist-notify do it with a
+    plain boolean each, since at most one of each is ever visible at a
+    time (right after confirming a single booking).
   - **One pending request per visit** — the foundation's own unique index
     enforces this. A visit whose last request is `expired` offers
     "+ Feedback" again (a fresh row); a `pending` request offers "Resend"

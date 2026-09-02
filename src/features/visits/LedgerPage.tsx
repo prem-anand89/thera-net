@@ -230,6 +230,22 @@ export function LedgerPage() {
   const [editing, setEditing] = useState<UUID | null>(null);
   const [editPatientId, setEditPatientId] = useState<UUID | null>(null);
   const [, setError] = useState<string | null>(null);
+  // Package-group ids currently mid-send for the stale-package reminder —
+  // a Set (not a single boolean) since several rows could each be
+  // independently clickable while another's send is still in flight.
+  const [sendingReminderFor, setSendingReminderFor] = useState<Set<string>>(new Set());
+  async function sendPackageReminder(packageGroupId: string, action: () => Promise<void>) {
+    setSendingReminderFor((s) => new Set(s).add(packageGroupId));
+    try {
+      await action();
+    } finally {
+      setSendingReminderFor((s) => {
+        const next = new Set(s);
+        next.delete(packageGroupId);
+        return next;
+      });
+    }
+  }
 
   function applyDatePreset(preset: DatePreset) {
     setDatePreset(preset);
@@ -826,20 +842,25 @@ export function LedgerPage() {
                         {clinic.enablePatientComms && (
                           <button
                             type="button"
-                            className="whitespace-nowrap font-medium text-[var(--teal)] hover:underline"
+                            disabled={sendingReminderFor.has(p.packageGroupId)}
+                            className="whitespace-nowrap font-medium text-[var(--teal)] hover:underline disabled:opacity-60"
                             onClick={() => {
                               const tab = preOpenWhatsAppTab();
-                              void feedbackService.sendStalePackageReminder(
-                                clinic.id,
-                                p.patientName,
-                                p.phone,
-                                clinic.name,
-                                p.serviceName,
-                                tab
+                              void sendPackageReminder(p.packageGroupId, () =>
+                                feedbackService.sendStalePackageReminder(
+                                  clinic.id,
+                                  p.patientName,
+                                  p.phone,
+                                  clinic.name,
+                                  p.serviceName,
+                                  tab
+                                )
                               );
                             }}
                           >
-                            Send reminder
+                            {sendingReminderFor.has(p.packageGroupId)
+                              ? 'Sending…'
+                              : 'Send reminder'}
                           </button>
                         )}
                         <Link
@@ -977,7 +998,7 @@ export function LedgerPage() {
                 onAskForFeedback={(row) => {
                   setError(null);
                   const tab = preOpenWhatsAppTab();
-                  void feedbackService
+                  return feedbackService
                     .askForFeedback(
                       row.visitId,
                       row.patientName,
@@ -985,22 +1006,28 @@ export function LedgerPage() {
                       clinic.name,
                       tab
                     )
-                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                    .then(() => {})
+                    .catch((e) => {
+                      setError(e instanceof Error ? e.message : String(e));
+                    });
                 }}
                 onResendFeedback={(row) => {
                   const request = feedbackRequestByVisitId.get(row.visitId);
-                  if (!request?.token) return;
+                  if (!request?.token) return Promise.resolve();
                   setError(null);
                   const tab = preOpenWhatsAppTab();
-                  void feedbackService
+                  return feedbackService
                     .resend(request, row.patientName, row.patientPhone ?? null, clinic.name, tab)
-                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                    .then(() => {})
+                    .catch((e) => {
+                      setError(e instanceof Error ? e.message : String(e));
+                    });
                 }}
                 onAskForGoogleReview={(row) => {
-                  if (!row.googleReviewUrl) return;
+                  if (!row.googleReviewUrl) return Promise.resolve();
                   setError(null);
                   const tab = preOpenWhatsAppTab();
-                  void feedbackService
+                  return feedbackService
                     .askForGoogleReview(
                       clinic.id,
                       row.patientName,
@@ -1009,7 +1036,9 @@ export function LedgerPage() {
                       row.googleReviewUrl,
                       tab
                     )
-                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                    .catch((e) => {
+                      setError(e instanceof Error ? e.message : String(e));
+                    });
                 }}
                 canInvoice={canBill}
                 backTo="/ledger"

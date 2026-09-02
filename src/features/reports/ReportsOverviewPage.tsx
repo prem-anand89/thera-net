@@ -140,6 +140,22 @@ export function ReportsOverviewPage() {
   // far back the window extends, so one query serves both the KPI strip and
   // the trend chart below.
   const [trendPeriod, setTrendPeriod] = useState<'6m' | 'ytd' | 'fy'>('6m');
+  // Patient ids currently mid-send for the single-visit reminder — a Set
+  // (not a single boolean) since this list can have several rows, each
+  // independently clickable while another's send is still in flight.
+  const [sendingReminderFor, setSendingReminderFor] = useState<Set<string>>(new Set());
+  async function sendPatientReminder(patientId: string, action: () => Promise<void>) {
+    setSendingReminderFor((s) => new Set(s).add(patientId));
+    try {
+      await action();
+    } finally {
+      setSendingReminderFor((s) => {
+        const next = new Set(s);
+        next.delete(patientId);
+        return next;
+      });
+    }
+  }
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
   const trendMonthsArg = useMemo((): number | FyMonth[] => {
     if (trendPeriod === 'ytd') {
@@ -691,19 +707,22 @@ export function ReportsOverviewPage() {
                         {clinic.enablePatientComms && p.phone && (
                           <button
                             type="button"
-                            className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                            disabled={sendingReminderFor.has(p.patientId)}
+                            className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)] disabled:opacity-60"
                             onClick={() => {
                               const tab = preOpenWhatsAppTab();
-                              void feedbackService.sendSingleVisitReminder(
-                                clinic.id,
-                                p.patientName,
-                                p.phone,
-                                clinic.name,
-                                tab
+                              void sendPatientReminder(p.patientId, () =>
+                                feedbackService.sendSingleVisitReminder(
+                                  clinic.id,
+                                  p.patientName,
+                                  p.phone,
+                                  clinic.name,
+                                  tab
+                                )
                               );
                             }}
                           >
-                            Send reminder
+                            {sendingReminderFor.has(p.patientId) ? 'Sending…' : 'Send reminder'}
                           </button>
                         )}
                       </div>

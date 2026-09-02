@@ -595,10 +595,24 @@ export function VisitFeedbackLink({
   onAskForGoogleReview,
 }: {
   data: VisitCardData;
-  onAskForFeedback?: () => void;
-  onResendFeedback?: () => void;
-  onAskForGoogleReview?: () => void;
+  onAskForFeedback?: () => Promise<void>;
+  onResendFeedback?: () => Promise<void>;
+  onAskForGoogleReview?: () => Promise<void>;
 }) {
+  // One flag for all three actions — only one of them is ever rendered at
+  // a time for a given row (the branches below are mutually exclusive), so
+  // there's never a case where a second action needs its own independent
+  // busy state while this one is in flight.
+  const [busy, setBusy] = useState(false);
+  async function run(action: () => Promise<void>) {
+    setBusy(true);
+    try {
+      await action();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!data.canAskForFeedback) return null;
   const request = data.feedbackRequest;
 
@@ -621,11 +635,12 @@ export function VisitFeedbackLink({
         {eligibleForGoogleReview && (
           <button
             type="button"
-            className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
-            onClick={onAskForGoogleReview}
+            disabled={busy}
+            className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline disabled:opacity-60"
+            onClick={() => void run(onAskForGoogleReview!)}
             title="Ask this patient to leave a Google review"
           >
-            ⭐ Google review
+            {busy ? 'Sending…' : '⭐ Google review'}
           </button>
         )}
       </div>
@@ -637,11 +652,12 @@ export function VisitFeedbackLink({
     return (
       <button
         type="button"
-        className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
-        onClick={onAskForFeedback}
+        disabled={busy}
+        className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline disabled:opacity-60"
+        onClick={() => void run(onAskForFeedback)}
         title="Ask this patient for feedback"
       >
-        + Feedback
+        {busy ? 'Sending…' : '+ Feedback'}
       </button>
     );
   }
@@ -680,11 +696,12 @@ export function VisitFeedbackLink({
   return (
     <button
       type="button"
-      className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
-      onClick={onResendFeedback}
+      disabled={busy}
+      className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline disabled:opacity-60"
+      onClick={() => void run(onResendFeedback)}
       title="Resend the feedback link"
     >
-      ↻ Resend
+      {busy ? 'Sending…' : '↻ Resend'}
     </button>
   );
 }
@@ -698,9 +715,9 @@ function NoteCell({
 }: {
   data: VisitCardData;
   backTo?: PatientProfileBackTarget;
-  onAskForFeedback?: () => void;
-  onResendFeedback?: () => void;
-  onAskForGoogleReview?: () => void;
+  onAskForFeedback?: () => Promise<void>;
+  onResendFeedback?: () => Promise<void>;
+  onAskForGoogleReview?: () => Promise<void>;
 }) {
   return (
     <div className="flex flex-col items-start gap-1">
@@ -812,9 +829,9 @@ export function SharedVisitCard({
   onEdit?: () => void;
   onSplit?: () => void;
   onDelete: () => void;
-  onAskForFeedback?: () => void;
-  onResendFeedback?: () => void;
-  onAskForGoogleReview?: () => void;
+  onAskForFeedback?: () => Promise<void>;
+  onResendFeedback?: () => Promise<void>;
+  onAskForGoogleReview?: () => Promise<void>;
   canInvoice?: boolean;
   backTo?: PatientProfileBackTarget;
 }) {
@@ -990,9 +1007,9 @@ function VisitTable({
   onEdit?: (row: VisitCardData) => void;
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
-  onAskForFeedback?: (row: VisitCardData) => void;
-  onResendFeedback?: (row: VisitCardData) => void;
-  onAskForGoogleReview?: (row: VisitCardData) => void;
+  onAskForFeedback?: (row: VisitCardData) => Promise<void>;
+  onResendFeedback?: (row: VisitCardData) => Promise<void>;
+  onAskForGoogleReview?: (row: VisitCardData) => Promise<void>;
   canInvoice: boolean;
   selection?: VisitSelectionProps;
   backTo?: PatientProfileBackTarget;
@@ -1301,9 +1318,9 @@ export function ResponsiveVisitList({
   onEdit?: (row: VisitCardData) => void;
   onSplit?: (row: VisitCardData) => void;
   onDelete: (row: VisitCardData) => void;
-  onAskForFeedback?: (row: VisitCardData) => void;
-  onResendFeedback?: (row: VisitCardData) => void;
-  onAskForGoogleReview?: (row: VisitCardData) => void;
+  onAskForFeedback?: (row: VisitCardData) => Promise<void>;
+  onResendFeedback?: (row: VisitCardData) => Promise<void>;
+  onAskForGoogleReview?: (row: VisitCardData) => Promise<void>;
   canInvoice?: boolean;
   /** Row checkboxes for bulk actions (e.g. Patient Profile's "select
    *  visits, issue one invoice"). Only wired up in the flat (non-grouped)

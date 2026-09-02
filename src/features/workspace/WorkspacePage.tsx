@@ -176,6 +176,22 @@ export function WorkspacePage() {
   );
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
+  // Package-group ids currently mid-send for the stale-package reminder —
+  // a Set (not a single boolean) since this list can have several rows,
+  // each independently clickable while another's send is still in flight.
+  const [sendingReminderFor, setSendingReminderFor] = useState<Set<string>>(new Set());
+  async function sendPackageReminder(packageGroupId: string, action: () => Promise<void>) {
+    setSendingReminderFor((s) => new Set(s).add(packageGroupId));
+    try {
+      await action();
+    } finally {
+      setSendingReminderFor((s) => {
+        const next = new Set(s);
+        next.delete(packageGroupId);
+        return next;
+      });
+    }
+  }
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
   const [, setVisitEditError] = useState<string | null>(null);
@@ -560,7 +576,7 @@ export function WorkspacePage() {
             }}
             onAskForFeedback={(row) => {
               const tab = preOpenWhatsAppTab();
-              void feedbackService
+              return feedbackService
                 .askForFeedback(
                   row.visitId,
                   row.patientName,
@@ -568,20 +584,26 @@ export function WorkspacePage() {
                   clinic.name,
                   tab
                 )
-                .catch((e) => alert(toFriendlyMessage(e)));
+                .then(() => {})
+                .catch((e) => {
+                  alert(toFriendlyMessage(e));
+                });
             }}
             onResendFeedback={(row) => {
               const request = feedbackRequestByVisitId.get(row.visitId);
-              if (!request?.token) return;
+              if (!request?.token) return Promise.resolve();
               const tab = preOpenWhatsAppTab();
-              void feedbackService
+              return feedbackService
                 .resend(request, row.patientName, row.patientPhone ?? null, clinic.name, tab)
-                .catch((e) => alert(toFriendlyMessage(e)));
+                .then(() => {})
+                .catch((e) => {
+                  alert(toFriendlyMessage(e));
+                });
             }}
             onAskForGoogleReview={(row) => {
-              if (!row.googleReviewUrl) return;
+              if (!row.googleReviewUrl) return Promise.resolve();
               const tab = preOpenWhatsAppTab();
-              void feedbackService
+              return feedbackService
                 .askForGoogleReview(
                   clinic.id,
                   row.patientName,
@@ -590,7 +612,9 @@ export function WorkspacePage() {
                   row.googleReviewUrl,
                   tab
                 )
-                .catch((e) => alert(toFriendlyMessage(e)));
+                .catch((e) => {
+                  alert(toFriendlyMessage(e));
+                });
             }}
             canInvoice={canBill}
             backTo="/workspace"
@@ -690,20 +714,23 @@ export function WorkspacePage() {
                       {p.stale && clinic.enablePatientComms && (
                         <button
                           type="button"
-                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                          disabled={sendingReminderFor.has(p.packageGroupId)}
+                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)] disabled:opacity-60"
                           onClick={() => {
                             const tab = preOpenWhatsAppTab();
-                            void feedbackService.sendStalePackageReminder(
-                              clinic.id,
-                              p.patientName,
-                              p.phone,
-                              clinic.name,
-                              p.serviceName,
-                              tab
+                            void sendPackageReminder(p.packageGroupId, () =>
+                              feedbackService.sendStalePackageReminder(
+                                clinic.id,
+                                p.patientName,
+                                p.phone,
+                                clinic.name,
+                                p.serviceName,
+                                tab
+                              )
                             );
                           }}
                         >
-                          Send reminder
+                          {sendingReminderFor.has(p.packageGroupId) ? 'Sending…' : 'Send reminder'}
                         </button>
                       )}
                       <Link
@@ -765,20 +792,25 @@ export function WorkspacePage() {
                           {p.stale && clinic.enablePatientComms && (
                             <button
                               type="button"
-                              className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                              disabled={sendingReminderFor.has(p.packageGroupId)}
+                              className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline disabled:opacity-60"
                               onClick={() => {
                                 const tab = preOpenWhatsAppTab();
-                                void feedbackService.sendStalePackageReminder(
-                                  clinic.id,
-                                  p.patientName,
-                                  p.phone,
-                                  clinic.name,
-                                  p.serviceName,
-                                  tab
+                                void sendPackageReminder(p.packageGroupId, () =>
+                                  feedbackService.sendStalePackageReminder(
+                                    clinic.id,
+                                    p.patientName,
+                                    p.phone,
+                                    clinic.name,
+                                    p.serviceName,
+                                    tab
+                                  )
                                 );
                               }}
                             >
-                              Send reminder
+                              {sendingReminderFor.has(p.packageGroupId)
+                                ? 'Sending…'
+                                : 'Send reminder'}
                             </button>
                           )}
                           <Link
