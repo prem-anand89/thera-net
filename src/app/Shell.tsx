@@ -199,10 +199,15 @@ const NAV = [
   { to: '/insights', label: 'Reports', Icon: IconReports },
   // Desktop-only — the mobile bottom tab bar is its own hand-built 5-item
   // row (Workspace/Patients/+New/Ledger/More), not driven by this array,
-  // so adding a 6th entry here never adds a 6th phone tab (per the locked
-  // spec's "no sixth phone tab" decision). Mobile reaches it via More.
+  // so adding an entry here never adds a phone tab (per the locked spec's
+  // "no sixth phone tab" decision). Mobile reaches it via More.
   { to: '/requests', label: 'Requests', Icon: IconRequests },
-  { to: '/settings', label: 'Settings', Icon: IconSettings },
+  // Settings deliberately isn't in this array — it sits in the account
+  // menu's Clinic section instead, under the same `role === 'admin'` gate
+  // this array's filter used to apply. Five labelled items is what the
+  // header row can actually carry (see the layout comment on <header>);
+  // Settings was the sixth, and the least-often-visited of them. Mobile is
+  // unaffected either way — More has always been its route there.
 ] as const;
 
 export function Shell() {
@@ -231,15 +236,13 @@ export function Shell() {
   // hasn't set a display name yet, not a full replacement for a real name.
   const fallbackName = session?.user?.email?.split('@')[0] ?? 'Account';
   // Reports (Dashboard + monthly statement) is admin/front_desk only —
-  // aggregates stay off-limits to a plain therapist (decision 3), same
-  // conservative default as Settings: hidden during 'unknown' role
-  // resolution too, not just for a confirmed therapist, so the item never
-  // flashes visible before role settles.
+  // aggregates stay off-limits to a plain therapist (decision 3), hidden
+  // during 'unknown' role resolution too, not just for a confirmed
+  // therapist, so the item never flashes visible before role settles.
   const nav = useMemo(
     () =>
       NAV.filter(
         (item) =>
-          (item.to !== '/settings' || role === 'admin') &&
           // Requests → Feedback is admin-only, but Bookings (Slice 5) is
           // front_desk's primary surface too — matching /insights' gate
           // just below, and the doc's "front desk + admin" nav rule.
@@ -406,6 +409,25 @@ export function Shell() {
     <ClinicContext.Provider value={clinic}>
       <div className="min-h-screen bg-[var(--paper)]">
         <header className="no-print sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--surface)]">
+          {/* Header width budget. This row has to carry the brand, five
+              nav items, the sync badge and the account trigger inside
+              max-w-6xl (~1120px of usable width) — and with text labels on
+              everything at once it doesn't, which is what left the nav
+              squeezed and horizontally scrolling even on a full-width
+              screen. Three rules keep it fitting instead:
+                1. Only the brand name shrinks. Nav and the sync/account
+                   cluster are shrink-0, so a tight row eats into the
+                   clinic name (truncated, then hidden below desktop:)
+                   rather than squeezing the things you click.
+                2. Nav labels are desktop:-only (1000px+). Between sm: and
+                   there the nav is icons with tooltips + aria-labels,
+                   which is what makes the whole row fit an iPad portrait.
+                3. Settings moved to the account menu (see NAV above), so
+                   this is five items, not six.
+              The clinic name is also the one genuinely redundant item
+              here — the account trigger's dropdown names the current
+              clinic too, and switches between them — so hiding it first
+              costs the least. */}
           <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
             <div className="flex min-w-0 items-center gap-2">
               <img
@@ -417,34 +439,34 @@ export function Shell() {
                     : 'h-8 w-8 shrink-0 rounded-[8px] object-contain'
                 }
               />
-              <div className="font-display truncate text-lg font-semibold text-[var(--ink)]">
+              <div className="font-display hidden max-w-[11rem] truncate text-lg font-semibold text-[var(--ink)] desktop:block">
                 {clinic.name}
               </div>
             </div>
-            {/* Desktop nav — the same items reappear as the bottom tab bar
-                below sm:, so this one only needs to render at sm: and up.
-                min-w-0 + overflow-x-auto: without min-w-0, a flex item's
-                default min-width is its own content size, so the six
-                items here (plenty wide at desktop widths) couldn't shrink
-                below that — forcing the whole header row to overflow the
-                viewport instead of just this nav scrolling internally.
-                That overflow was pushing the account menu's trigger (and
-                so its `right-0` dropdown, anchored to it) partly or fully
-                off-screen at iPad-portrait widths, where all six items
-                plus the logo and account cluster genuinely don't fit. */}
-            <nav className="hidden min-w-0 gap-1 overflow-x-auto sm:flex">
+            {/* The same items reappear as the bottom tab bar below sm:, so
+                this one only renders at sm: and up. shrink-0 (not the
+                overflow-x-auto scroller this briefly was) is the point:
+                nav items are targets, and a squeezed or scrolled row of
+                them is worse than a hidden label. The label is what gives
+                way instead, at desktop:. */}
+            <nav className="hidden shrink-0 gap-1 sm:flex">
               {nav.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--paper)] [&.active]:bg-[var(--teal-light)] [&.active]:font-medium [&.active]:text-[var(--teal)]"
+                  // Icon-only below desktop:, so the accessible name has to
+                  // come from the attribute rather than the hidden span —
+                  // `hidden` is display:none, which screen readers skip.
+                  aria-label={item.label}
+                  title={item.label}
+                  className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--paper)] [&.active]:bg-[var(--teal-light)] [&.active]:font-medium [&.active]:text-[var(--teal)] desktop:px-3"
                 >
                   <item.Icon className="shrink-0" />
-                  {item.label}
+                  <span className="hidden desktop:inline">{item.label}</span>
                 </Link>
               ))}
             </nav>
-            <div className="ml-auto flex shrink-0 items-center gap-4">
+            <div className="ml-auto flex shrink-0 items-center gap-3">
               <SyncBadge />
               <AccountMenu
                 displayName={displayName}
@@ -683,15 +705,12 @@ function AccountMenu({
         >
           {initialsFor(name)}
         </span>
-        <span className="hidden min-w-0 flex-col items-start sm:flex">
-          <span className="max-w-[9rem] truncate text-xs font-medium text-[var(--ink)]">
-            {name}
-          </span>
-          {currentClinic && (
-            <span className="max-w-[9rem] truncate text-[10px] text-[var(--muted)]">
-              {currentClinic.name}
-            </span>
-          )}
+        {/* Name only — the clinic name used to sit under it here *and* at
+            the far left of the header, and the dropdown below names the
+            current clinic a third time (with the switcher). One line here
+            gives the nav back the ~70px the wrapped pair was holding. */}
+        <span className="hidden max-w-[9rem] truncate text-xs font-medium text-[var(--ink)] sm:inline">
+          {name}
         </span>
       </button>
 
@@ -772,10 +791,26 @@ function AccountMenu({
                   {currentClinic?.name ?? 'Current clinic'}
                 </div>
               )}
+              {/* Settings' only desktop entry point, since it left the
+                  header nav (see NAV) — same `role === 'admin'` gate the
+                  nav filter applied, so who can reach it is unchanged.
+                  Sits in the Clinic section rather than Account below
+                  because that's what it configures: the clinic's catalog,
+                  team, billing and toggles, not this login. */}
+              {role === 'admin' && (
+                <Link
+                  to="/settings"
+                  onClick={closeMenu}
+                  className="mt-1.5 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
+                >
+                  <IconSettings className="h-4 w-4 shrink-0 text-[var(--muted)]" />
+                  Clinic settings
+                </Link>
+              )}
               {role === 'admin' && (
                 <button
                   type="button"
-                  className="mt-1.5 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
                   onClick={() => {
                     closeMenu();
                     setAddingClinic(true);

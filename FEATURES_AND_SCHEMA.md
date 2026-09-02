@@ -618,11 +618,14 @@ still falls through to the existing share sheet, unchanged.
     as the delta column for every synced table, so a migration added one
     (`updated_at = created_at` always, a permanent alias for the sync
     engine's benefit, not a real "last modified" signal).
-  - **Nav**: desktop gets a 6th top-nav item, **Requests**, originally
+  - **Nav**: desktop gets a top-nav item, **Requests**, originally
     admin-only (Feedback was the only tab that existed) and widened at
     Phase 5 to admin + front_desk — front_desk's whole reason to be on
     this page is Bookings, its primary surface per the handoff doc's role
-    table. The mobile bottom tab bar is a separate hand-built 5-item row
+    table. (It was the sixth item when added; Settings has since moved to
+    the account menu to get the row back within its width budget — see
+    **Header layout budget** below — so it's the fifth now.)
+    The mobile bottom tab bar is a separate hand-built 5-item row
     (Workspace/Patients/+New/Ledger/More), not driven by the same array,
     so this doesn't add a 6th phone tab; mobile reaches it via **More**
     instead (also widened to the same admin + front_desk gate), per the
@@ -2035,6 +2038,34 @@ by every clinic on a multi-clinic device (see "Multi-clinic accounts"),
 so an unscoped key would let dismissing/completing the checklist for one
 clinic silently do the same for every other clinic on the device.
 
+**Header layout budget** (`Shell.tsx`'s `<header>`) — the desktop header
+row has a fixed width to spend (`max-w-6xl`, ~1120px usable) and four
+things wanting it: brand, nav, sync badge, account trigger. With a text
+label on all of them at once it doesn't fit — six labelled nav items plus
+the clinic name alone overran it by ~160px, which showed up first as the
+account dropdown rendering off-screen at iPad-portrait widths (the row
+overflowed, taking the `right-0`-anchored panel's anchor with it) and then,
+after a stopgap `overflow-x-auto`, as a squeezed horizontally-scrolling nav
+even on a full-width screen. Three rules keep it fitting, and a change to
+any element in this row has to keep them true:
+- **Only the brand name shrinks.** The nav and the sync/account cluster are
+  `shrink-0`; the clinic name truncates (`max-w-[11rem]`) and is hidden
+  outright below `desktop:`. It's the one genuinely redundant item in the
+  row — the account dropdown names the current clinic and switches between
+  them — so it yields first, and clicked targets never squeeze.
+- **Nav labels are `desktop:`-only** (1000px+). Between `sm:` and there,
+  the nav is icons carrying `aria-label` + `title` (the label span is
+  `display:none`, which screen readers skip, so the accessible name has to
+  come from the attribute). This is what makes the row fit an iPad in
+  portrait at all.
+- **Five nav items, not six** — Settings lives in the account menu's Clinic
+  section instead (see below), under the same `role === 'admin'` gate the
+  `NAV` filter used to apply. Mobile is unaffected: `/more` has always been
+  its route there, and the phone tab bar is hand-built, not `NAV`-driven.
+The sync badge deliberately keeps its text label (`Synced`/`3 pending`/
+`Offline`) rather than collapsing to a bare dot — sync state is the one
+thing in this row a user needs to read, not decode.
+
 **Account menu** (`AccountMenu` in `src/app/Shell.tsx`) — one dropdown,
 same markup at every breakpoint (the name/role label collapses to just the
 initials-avatar trigger below `sm:`), replacing what used to be two
@@ -2048,7 +2079,8 @@ with the full card so both read the exact same derived state, and also
 returns `nextStep`: the first not-done step's own title and link, so the
 nudge's "Continue →" opens exactly where setup was left off — a Settings
 tab or `+ New visit` — instead of always bouncing to Settings' own default
-tab), a clinic switcher and "Add another clinic" action (only relevant to
+tab), a clinic switcher, **"Clinic settings"** and "Add another clinic"
+actions (the switcher and "Add another clinic" only relevant to
 multi-clinic accounts — see "Multi-clinic accounts" below), a "Change
 password" action (`ChangePasswordDialog`,
 `src/components/ChangePasswordDialog.tsx` — calls
