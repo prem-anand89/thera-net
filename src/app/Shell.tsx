@@ -421,14 +421,15 @@ export function Shell() {
                    rather than squeezing the things you click.
                 2. Nav labels are tab:-only (744px+, iPad-portrait and up).
                    Below that the nav is icons with tooltips + aria-labels.
-                3. SyncBadge's text is tab:-only too — measured, there's
-                   room for it right alongside the nav labels at every
-                   iPad-portrait width down to 744px (an earlier pass
-                   collapsed it all the way to desktop: on the assumption
-                   there wasn't; there was). It only drops to just the
-                   status dot below tab:, on phone width where the nav
-                   itself is gone too — the dot's color still carries the
-                   state, and the panel behind a tap has the rest.
+                3. SyncBadge's text is tab:-and-up only when it has
+                   nothing to say ("Synced", the common case) — measured,
+                   there's room for it right alongside the nav labels down
+                   to 744px, same as the label case above. It's a phone-
+                   width-only collapse there, not desktop:, and even that
+                   only applies while quiet: the moment there's something
+                   worth saying (offline, syncing, pending, failed) the
+                   badge expands at every width, phone included — see
+                   SyncBadge's own `quiet` check.
                 4. The account trigger's name collapses to just the avatar
                    initials below desktop: (was sm:, 640px+) — this is the
                    one still deliberately conservative, since the dropdown

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   VISIT_COLUMN_LABELS,
@@ -1171,8 +1171,23 @@ function VisitTable({
                   }
                 })}
                 <td className={tdNum}>{formatINR(row.billPaise)}</td>
+                {/* The row-stripe background comes from a `--td-bg` custom
+                    property set inline, read by one constant `bg-[var(--td-bg)]`
+                    class — not a class that swaps between `bg-[var(--paper)]`/
+                    `bg-[var(--surface)]` per row. Safari has a known bug
+                    where a `position: sticky` cell's background fails to
+                    paint (correctly on the never-scrolled first row, then
+                    not on the rest) when the class itself differs row to
+                    row; keeping the class identical and varying only the
+                    inline custom property paints reliably, and — unlike
+                    setting `backgroundColor` directly inline — still lets
+                    `group-hover:bg-[var(--teal-light)]` win on hover,
+                    since both stay class-vs-class in the cascade. */}
                 <td
-                  className={`sticky right-0 z-[1] border-l border-[var(--border)] group-hover:bg-[var(--teal-light)] ${td} ${i % 2 === 1 ? 'bg-[var(--paper)]' : 'bg-[var(--surface)]'}`}
+                  className={`sticky right-0 z-[1] border-l border-[var(--border)] bg-[var(--td-bg)] group-hover:bg-[var(--teal-light)] ${td}`}
+                  style={
+                    { '--td-bg': i % 2 === 1 ? 'var(--paper)' : 'var(--surface)' } as CSSProperties
+                  }
                 >
                   <PaymentStatusDisplay
                     data={row}

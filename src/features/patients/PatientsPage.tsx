@@ -478,7 +478,7 @@ function AllPatientsSection() {
                           '-'
                         )}
                       </td>
-                      <td className={td}>
+                      <td className={`${td} whitespace-nowrap`}>
                         {stats ? (
                           <div className="font-num text-xs text-[var(--ink)]">
                             {formatDateDMY(stats.lastVisitOn)}

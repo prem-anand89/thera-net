@@ -1,12 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, feedbackService, bookingService } from '@/services';
+import { db } from '@/lib/db';
+import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
+import { syncFreshnessCaption } from '@/domain/syncCopy';
 import {
   clinicBillingConfig,
   type ConsultationNote,
@@ -166,6 +169,14 @@ export function WorkspacePage() {
     [clinic.id, clinic.enablePatientComms, scope.scopeTherapistId]
   );
   const canManageBookings = scope.isClinicWideView;
+  // Same caveat as Ledger's totals, and arguably more time-sensitive here —
+  // "Collected today" is the number staff actually watch through the day.
+  // See LedgerPage's own comment on why unsynced changes take priority
+  // over a last-sync timestamp.
+  const syncSnapshot = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
+  const unsyncedVisitCount =
+    useLiveQuery(() => db.outbox.filter((e) => e.table === 'visits').count(), []) ?? 0;
+  const syncCaption = syncFreshnessCaption(unsyncedVisitCount, 'visits', syncSnapshot.lastSyncAt);
   const pendingRequestCount = useLiveQuery(
     () =>
       canManageBookings && clinic.enablePatientComms
@@ -387,6 +398,7 @@ export function WorkspacePage() {
           <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
         )}
       </div>
+      {syncCaption && <p className="text-xs text-[var(--slate)]">{syncCaption}</p>}
 
       {clinic.enablePatientComms && (
         <SectionCard

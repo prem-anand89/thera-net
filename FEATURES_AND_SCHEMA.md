@@ -2545,19 +2545,43 @@ its own narrow in-place edit path instead.
   2. Nav item labels show from `tab:` up; below that they're icon-only
      with `aria-label`/`title` carrying the accessible name (a
      `hidden`/`display:none` span is skipped by screen readers).
-  3. `SyncBadge`'s text label is `tab:`-only too — measured, there's room
-     for the full pill (dot + "Synced"/"3 pending"/etc.) right alongside
-     the nav labels at every iPad-portrait width down to 744px. It only
-     drops to just the status dot below `tab:`, on phone width where the
-     nav itself is gone too (color still carries online/syncing/error/
-     synced there, and `SyncStatusBanners` covers offline/failure states
-     with a full-width banner regardless of breakpoint). An earlier pass
-     collapsed this at `desktop:` instead, on the assumption there wasn't
-     room at `tab:` — measure before assuming; there was.
+  3. `SyncBadge`'s text label collapses to just the status dot only while
+     `quiet` (online, nothing queued, nothing failed — `status.syncing`
+     excluded too, i.e. mid-sync ranks as "has something to say") — and
+     even then only below `tab:` (744px), since measured, there's room for
+     the full pill (dot + "Synced") right alongside the nav labels at
+     every iPad-portrait width. The moment there's something to report
+     (offline, syncing, pending, failed) it expands at every width, phone
+     included — a state a person is actively waiting to resolve shouldn't
+     need a tap on a bare dot to read. `SyncStatusBanners` separately
+     covers offline/failure states with a full-width banner regardless of
+     breakpoint or badge state.
   4. The account trigger's display name is `desktop:`-only (was `sm:`) —
      below that it's just the avatar initials. This one's still
      deliberately conservative rather than measured-and-widened like
      SyncBadge, since the dropdown it opens already repeats the name.
+- **A sticky table cell's background must vary by CSS custom property, not
+  by class.** `VisitCard.tsx`'s Status column (`position: sticky; right:
+  0`) needs its own opaque background so the columns scrolling underneath
+  don't show through — but on Safari, a `bg-[var(--paper)]` /
+  `bg-[var(--surface)]` class that *swaps per row* (alternating stripe)
+  fails to paint on a sticky cell: the first, never-yet-scrolled row
+  renders fine, the rest silently don't. Setting one constant class
+  (`bg-[var(--td-bg)]`) and varying only an inline `--td-bg` custom
+  property per row paints reliably on Safari too, and — unlike setting
+  `backgroundColor` directly inline, which would out-specificity it —
+  still lets `group-hover:bg-[var(--teal-light)]` win on hover, since both
+  stay class-vs-class in the cascade. Any other sticky cell with a
+  per-row-varying background should use the same pattern.
+- **Sync-freshness caption** (`syncFreshnessCaption` in `syncCopy.ts`) — a
+  shared one-liner ("As of last sync HH:MM." / "Includes N unsynced
+  visits.") for any screen whose numbers are derived from local Dexie data
+  that might be behind the server or ahead of the last-sync timestamp.
+  Unsynced local changes take priority in the copy — "as of 14:02" would
+  understate what's actually showing if newer edits are still queued.
+  Ledger's totals and Workspace's "Collected today" stat both carry it;
+  any other screen aggregating from `visits` (or another synced table)
+  for a number people check repeatedly through the day should too.
 
 ---
 
