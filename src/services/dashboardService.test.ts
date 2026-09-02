@@ -181,7 +181,6 @@ function makeFakeRepos() {
     feedbackRequests: {
       getByVisitId: async () => undefined,
       listByClinic: async () => [],
-      put: async () => {},
       putLocal: async () => {},
     },
     feedbackResponses: {

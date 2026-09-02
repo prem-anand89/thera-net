@@ -611,18 +611,14 @@ export type FeedbackRequestStatus = 'pending' | 'responded' | 'expired';
  * (admin/front_desk/own-therapist) without an extra query, the same
  * reasoning the RLS policy itself is built on server-side.
  *
- * `token` is deliberately optional and never set by the client — the
- * Postgres column default (`generate_url_safe_token()`) only fires when a
- * column is omitted from an INSERT, and creating this row goes through
- * the normal Dexie/outbox path (same as any other clinic CRUD), not an
- * RPC. Leaving `token` unset here means the outbox's upsert payload omits
- * it, the server fills it in, and the real value round-trips back on the
- * next pull — so a freshly-created row reads `token: undefined` in the UI
- * for a moment, not a placeholder. Resending (rotating the token on an
- * existing row) can't go through this same path — column defaults don't
- * fire on UPDATE — so that's a small dedicated online-only RPC instead
- * (`rotate_feedback_request_token`), same reasoning `issue_invoice()` is
- * an RPC rather than outbox-synced.
+ * `token` is optional in the type only because a row read back mid-sync
+ * from a different session could in principle lack it — the client itself
+ * never creates one without a token. Both creating and resending go
+ * through small online-only RPCs (`create_feedback_request`,
+ * `rotate_feedback_request_token`) rather than the normal Dexie/outbox
+ * path, so the server-generated token comes back in the same round trip
+ * and can be shared immediately, instead of waiting on the next sync pull
+ * — same reasoning `issue_invoice()` is an RPC rather than outbox-synced.
  */
 export interface FeedbackRequest {
   id: UUID;

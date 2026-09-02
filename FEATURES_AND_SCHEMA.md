@@ -545,11 +545,21 @@ shipped ahead of anyone actually calling it — see its own bullet below.
   computed boolean, not a flat `Permissions` field, since the underlying
   RLS check is row-scoped). Also offered as a one-click button on
   `NewVisitPage`'s post-save screen, right after logging a visit.
-  - **Creating a request is Dexie + outbox**, identical to any other clinic
-    CRUD — *not* an RPC. The client leaves `token` unset on insert so the
-    column default (`generate_url_safe_token()`) fires server-side; the real
-    token round-trips back on the next sync pull. Until then the UI shows
-    "Preparing link…" rather than assuming the token exists immediately.
+  - **Creating a request is an online-only RPC,
+    `create_feedback_request(p_visit_id uuid) returns table(...)`**, not
+    Dexie + outbox. An earlier version went through the outbox (column
+    default `generate_url_safe_token()` firing server-side, token
+    round-tripping back on the next pull) — but that meant the very first
+    "+ Feedback" click never had a token to share, so it never opened a
+    WhatsApp share sheet at all; only Resend did. The RPC derives
+    `clinic_id`/`patient_id`/`therapist_id` from the visit row rather than
+    trusting the client, inserts (or, on a double-click race against the
+    `feedback_requests_one_pending_per_visit` partial unique index, rotates
+    the existing pending row — same `ON CONFLICT` shape as a fresh ask), and
+    returns the full row in one round trip so the client can write it
+    straight into Dexie (`putLocal`) and open the share sheet immediately.
+    `security invoker`: the existing `feedback_requests_insert` RLS policy
+    already gates who may call it correctly.
   - **Resending rotates the token via a dedicated RPC,
     `rotate_feedback_request_token(p_request_id uuid) returns text`** —
     column defaults never fire on UPDATE, so extending the 21-day expiry and
@@ -1532,17 +1542,36 @@ failing for an anonymous caller or explicitly revokes that default. A
 `public_rpc_rate_limit` table (self-pruning, no cron dependency) throttles
 both by client IP.
 
-`feedback_requests` is a synced Dexie table (`CLIENT_WRITABLE_TABLES`) —
-staff creation goes through the normal outbox, same as any other clinic
-CRUD, with `token` left unset so the column default fires server-side (the
-client never generates its own token). `feedback_responses` (Phase 2) is
-also synced, but read-only client-side — `ALL_SYNCED_TABLES` without
-`CLIENT_WRITABLE_TABLES`, same shape as `invoices` — since a response is
-only ever written by the anonymous patient's own SECURITY DEFINER RPC
-call; it needed an `updated_at` column added (a permanent alias for
-`created_at`, purely so the sync engine's hardcoded delta-column
-assumption holds) since the row is otherwise immutable. `message_log` has
-no Dexie table or repo at all — the app never reads or writes it directly.
+`feedback_requests` is a synced Dexie table (`ALL_SYNCED_TABLES`, pulled
+like any other clinic data) but **not** in `CLIENT_WRITABLE_TABLES` — staff
+creation and resend both go through online-only RPCs
+(`create_feedback_request`, `rotate_feedback_request_token`) rather than
+the outbox, so the local write is always a `putLocal` caching a
+server-confirmed row, never a queued push. (An earlier version created
+through the outbox with `token` left unset for the column default to fill
+in; that meant the token — and so the ability to share it — didn't exist
+until the next sync pull, so the very first "Ask for feedback" click never
+opened a share sheet. See `create_feedback_request` below.)
+`feedback_responses` (Phase 2) is also synced, but read-only client-side —
+`ALL_SYNCED_TABLES` without `CLIENT_WRITABLE_TABLES`, same shape as
+`invoices` — since a response is only ever written by the anonymous
+patient's own SECURITY DEFINER RPC call; it needed an `updated_at` column
+added (a permanent alias for `created_at`, purely so the sync engine's
+hardcoded delta-column assumption holds) since the row is otherwise
+immutable. `message_log` has no Dexie table or repo at all — the app never
+reads or writes it directly.
+
+`create_feedback_request(p_visit_id uuid) returns table(...)` (Phase 1,
+added after the outbox-creation gap above was found) — `security invoker`,
+EXECUTE revoked from `public`/`anon` and granted only to `authenticated`.
+Derives `clinic_id`/`patient_id`/`therapist_id` from the `visits` row
+rather than trusting client-supplied values, then inserts a new
+`feedback_requests` row — or, on `ON CONFLICT (visit_id) WHERE status =
+'pending'` against the existing `feedback_requests_one_pending_per_visit`
+partial unique index (a double-click race), rotates the existing pending
+row's token instead of erroring — and returns the full row in one round
+trip. The existing `feedback_requests_insert` RLS policy is the real
+authorization boundary.
 
 `rotate_feedback_request_token(p_request_id uuid) returns text` (Phase 1) —
 `security invoker`, EXECUTE revoked from `public`/`anon` and granted only

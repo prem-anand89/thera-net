@@ -1,15 +1,7 @@
-import type { FeedbackRequest, UUID } from '@/domain/types';
+import type { FeedbackRequest, FeedbackRequestStatus, UUID } from '@/domain/types';
 import type { Repos } from '@/repositories/types';
 import { getSupabase } from '@/lib/supabase';
 import { shareTextViaWhatsApp } from '@/lib/pdfShare';
-
-const FEEDBACK_LINK_EXPIRY_DAYS = 21;
-
-function expiryFromNow(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + FEEDBACK_LINK_EXPIRY_DAYS);
-  return d.toISOString();
-}
 
 /** Public `/f/$token` URL for a feedback request's token. */
 export function feedbackLinkUrl(token: string): string {
@@ -32,34 +24,71 @@ export function feedbackShareMessage(
 
 /**
  * Patient Communications, Slice 1: staff asking a patient for feedback on
- * a visit. `askForFeedback` is a normal Dexie+outbox write — same as any
- * other clinic CRUD — with `token` left unset so the server's column
- * default (`generate_url_safe_token()`) fills it in on insert; the real
- * value round-trips back on the next pull (see `FeedbackRequest`'s own
- * doc comment for why). `resend` can't use that path — rotating a token
- * on an existing row is an UPDATE, where column defaults never fire — so
- * it goes through a small online-only RPC instead, the same reasoning
- * `invoiceService.issueForVisit` is an RPC rather than outbox-synced.
+ * a visit. Originally a normal Dexie+outbox write (token left unset for
+ * the server's column default to fill in on insert, round-tripping back on
+ * the next pull) — but that meant the token, and so the share sheet,
+ * wasn't available until the next sync pull, and the very first ask never
+ * shared anything at all (see `resend`'s own comment on why an UPDATE
+ * needs an RPC; an INSERT run through the outbox has the same "no token
+ * back yet" gap, just on the create side instead of the rotate side). Now
+ * goes through `create_feedback_request()`, an online-only RPC returning
+ * the full row in one round trip, matching `resend`'s shape: write the
+ * result straight into Dexie and open the WhatsApp share sheet immediately.
  */
 export function createFeedbackService(repos: Repos) {
   return {
     async askForFeedback(
-      clinicId: UUID,
       visitId: UUID,
-      patientId: UUID,
-      therapistId: UUID
+      patientName: string,
+      clinicName: string
     ): Promise<FeedbackRequest> {
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('Supabase is not configured');
+      if (!navigator.onLine) {
+        throw new Error('Asking for feedback needs a connection — reconnect and try again.');
+      }
+      const { data, error } = await supabase.rpc('create_feedback_request', {
+        p_visit_id: visitId,
+      });
+      if (error) throw new Error(`Could not ask for feedback: ${error.message}`);
+
+      const row = (
+        data as
+          | {
+              id: UUID;
+              clinic_id: UUID;
+              visit_id: UUID;
+              patient_id: UUID;
+              therapist_id: UUID;
+              token: string;
+              status: FeedbackRequestStatus;
+              expires_at: string;
+              updated_at: string;
+              created_by: UUID | null;
+              updated_by: UUID | null;
+            }[]
+          | null
+      )?.[0];
+      if (!row) throw new Error('Could not ask for feedback: no response from the server.');
+
       const request: FeedbackRequest = {
-        id: crypto.randomUUID(),
-        clinicId,
-        visitId,
-        patientId,
-        therapistId,
-        status: 'pending',
-        expiresAt: expiryFromNow(),
-        updatedAt: new Date().toISOString(),
+        id: row.id,
+        clinicId: row.clinic_id,
+        visitId: row.visit_id,
+        patientId: row.patient_id,
+        therapistId: row.therapist_id,
+        token: row.token,
+        status: row.status,
+        expiresAt: row.expires_at,
+        updatedAt: row.updated_at,
+        createdBy: row.created_by ?? undefined,
+        updatedBy: row.updated_by ?? undefined,
       };
-      await repos.feedbackRequests.put(request);
+      await repos.feedbackRequests.putLocal(request);
+      await shareTextViaWhatsApp(
+        feedbackShareMessage(patientName, clinicName, row.token),
+        'Ask for feedback'
+      );
       return request;
     },
 

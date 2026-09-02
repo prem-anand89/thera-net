@@ -641,9 +641,10 @@ export function VisitFeedbackLink({
     );
   }
 
-  // Row exists locally but its server-generated token hasn't synced back
-  // down yet — column defaults only fire server-side on insert, so there's
-  // a brief window with nothing to share. Icon + word, not icon-only: this
+  // Defensive only — both askForFeedback and resend write a full row
+  // (token included) via their RPC's response, so this shouldn't be
+  // reachable in practice; kept as a fallback for a row pulled down from
+  // some other, unanticipated path. Icon + word, not icon-only: this
   // column also carries Note's actions, so a bare glyph here has no "this
   // is about feedback" context the way 🔒/✎ do sitting right next to the
   // billing/patient fields they describe.

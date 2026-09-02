@@ -971,7 +971,7 @@ export function LedgerPage() {
                 onAskForFeedback={(row) => {
                   setError(null);
                   void feedbackService
-                    .askForFeedback(clinic.id, row.visitId, row.patientId, row.therapistId!)
+                    .askForFeedback(row.visitId, row.patientName, clinic.name)
                     .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 onResendFeedback={(row) => {

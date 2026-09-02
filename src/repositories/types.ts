@@ -203,9 +203,10 @@ export interface FeedbackRequestRepo {
   /** Every request for a clinic, for building a visitId-keyed lookup map
    *  in bulk (VisitCardData builders) instead of one query per row. */
   listByClinic(clinicId: UUID): Promise<FeedbackRequest[]>;
-  put(request: FeedbackRequest): Promise<void>;
-  /** Caches a server-confirmed row (e.g. the RPC-based token rotation
-   *  below) without re-queuing an outbox push of our own. */
+  /** Caches a server-confirmed row — both creating and resending a request
+   *  go through online-only RPCs (`create_feedback_request`,
+   *  `rotate_feedback_request_token`), so there's no outbox-writing `put`
+   *  on this repo, only this local cache write. */
   putLocal(request: FeedbackRequest): Promise<void>;
 }
 

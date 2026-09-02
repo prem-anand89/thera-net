@@ -115,7 +115,14 @@ void _exhaustiveCheck;
  * confirm/decline, reschedule/no-show/cancel, mark-arrived/link-visit —
  * needs either anonymous-write or role-checked-online-only semantics the
  * Dexie/outbox model can't express, so all of it goes through RPCs; see
- * `src/services/bookingService.ts`.
+ * `src/services/bookingService.ts`. `feedback_requests` joined this list
+ * for the same reason: it started as a normal outbox-writable table, but
+ * that meant a freshly-created request's server-generated token wasn't
+ * available to share until the next sync pull, so the very first "Ask for
+ * feedback" click never opened a share sheet. Both create
+ * (`create_feedback_request`) and resend (`rotate_feedback_request_token`)
+ * now go through online-only RPCs instead, so every local write is a
+ * `putLocal` caching a server-confirmed row, never a queued outbox push.
  */
 export const CLIENT_WRITABLE_TABLES = [
   'clinics',
@@ -132,7 +139,6 @@ export const CLIENT_WRITABLE_TABLES = [
   'consultation_notes',
   'patient_module_enrollments',
   'patient_advances',
-  'feedback_requests',
 ] as const satisfies readonly SyncedTable[];
 
 export class ClinicDB extends Dexie {
