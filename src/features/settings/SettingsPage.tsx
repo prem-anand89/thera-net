@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
@@ -16,20 +16,9 @@ import { CLINIC_ROLE_LABELS, type ClinicRole } from '@/app/useClinicRole';
 import { PLAN_TIER_LABELS, minimumTierFor, type PlanFeature } from '@/domain/plans';
 import { getSupabase, publicTherapistPhotoUrl, publicLogoUrl } from '@/lib/supabase';
 import { resizeImageToBlob } from '@/lib/resizeImage';
-import { SUPABASE_URL } from '@/lib/env';
 import { db } from '@/lib/db';
-import { formatINR } from '@/domain/money';
 import { MONTH_NAMES } from '@/domain/fiscalYear';
-import {
-  clinicShareLabels,
-  effectivePricePerSession,
-  type CatalogItem,
-  type Clinic,
-  type ReferringSourceItem,
-  type Therapist,
-  type TreatmentItem,
-  type UUID,
-} from '@/domain/types';
+import { clinicShareLabels, type Clinic, type Therapist, type UUID } from '@/domain/types';
 import type { TdsBasis } from '@/domain/split';
 import {
   Field,
@@ -37,17 +26,13 @@ import {
   btnPrimary,
   btnSecondary,
   ErrorNote,
-  RupeeInput,
   SectionCard,
   ConfirmDialog,
-  th,
-  thNum,
-  td,
-  tdNum,
   InfoTip,
   Pill,
   StatTile,
 } from '@/components/ui';
+import { CatalogSection, type CatalogView } from './CatalogSection';
 import { toFriendlyMessage } from '@/lib/errors';
 import {
   FirstWeekChecklist,
@@ -57,16 +42,7 @@ import {
 import { isValidUpiVpa } from '@/domain/upiPay';
 
 type SectionKey =
-  | 'plan'
-  | 'profile'
-  | 'billing'
-  | 'partner'
-  | 'patientComms'
-  | 'team'
-  | 'services'
-  | 'treatments'
-  | 'referrals'
-  | 'data';
+  'plan' | 'profile' | 'billing' | 'partner' | 'patientComms' | 'team' | 'catalog' | 'data';
 
 /**
  * Grouped into the three jobs an admin actually comes here to do, rather
@@ -80,7 +56,7 @@ type SectionKey =
 const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
   { label: 'Account', keys: ['plan'] },
   { label: 'Clinic', keys: ['profile', 'billing', 'partner', 'patientComms'] },
-  { label: 'People & services', keys: ['team', 'services', 'treatments', 'referrals'] },
+  { label: 'People & services', keys: ['team', 'catalog'] },
   { label: 'System', keys: ['data'] },
 ];
 
@@ -127,22 +103,10 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
     accent: 'moss',
   },
   {
-    key: 'services',
-    label: 'Services',
-    description: 'Catalog of billable services and package prices.',
+    key: 'catalog',
+    label: 'Catalog',
+    description: 'Billing packages, treatments performed, and patient referral sources.',
     accent: 'teal',
-  },
-  {
-    key: 'treatments',
-    label: 'Treatments',
-    description: 'Treatment types tracked per visit, independent of billing.',
-    accent: 'moss',
-  },
-  {
-    key: 'referrals',
-    label: 'Referral sources',
-    description: 'Channels shown when adding or editing a patient.',
-    accent: 'rust',
   },
   {
     key: 'data',
@@ -173,9 +137,7 @@ const SECTION_ICON_PATHS: Record<SectionKey, string> = {
   partner: 'M8 2.5l1.4 3.1 3.4.4-2.5 2.3.7 3.4L8 10l-3 1.7.7-3.4-2.5-2.3 3.4-.4L8 2.5z',
   patientComms: 'M2.5 4.5h11v6.5h-6.2L4.5 13.5V11h-2zM5 7h6M5 9h4',
   team: 'M2.3 13c.4-2.5 2-3.9 3.9-3.9s3.5 1.4 3.9 3.9M9.9 9.5c1.6.2 2.8 1.4 3.1 3.5',
-  services: 'M3 4h10M3 8h10M3 12h6',
-  treatments: 'M5 3l6 10M11 3l-6 10M3 8h10',
-  referrals: 'M4 13V3l4 2.5L12 3v10M4 8h8',
+  catalog: 'M3 4h10M3 8h10M3 12h6',
   data: 'M3 5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2zM3 5v6c0 1.1 2.2 2 5 2s5-.9 5-2V5M3 8c0 1.1 2.2 2 5 2s5-.9 5-2',
 };
 
@@ -310,6 +272,7 @@ export function SettingsPage() {
   const search = useSearch({ from: '/settings' });
   const navigate = useNavigate({ from: '/settings' });
   const [activeKey, setActiveKeyState] = useState<SectionKey>(search.tab ?? 'profile');
+  const catalogView: CatalogView = search.catalogView ?? 'packages';
   const [, startTransition] = useTransition();
   const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
   const [pendingSectionKey, setPendingSectionKey] = useState<SectionKey | null>(null);
@@ -338,6 +301,13 @@ export function SettingsPage() {
   // still attributes the render it triggers to that same input. Marking the
   // update as a transition lets React deprioritize/interrupt that render
   // instead of blocking the next paint on it.
+  function setCatalogView(view: CatalogView) {
+    void navigate({
+      search: (prev) => ({ ...prev, tab: 'catalog', catalogView: view }),
+      replace: true,
+    });
+  }
+
   function setActiveKey(key: SectionKey) {
     startTransition(() => {
       setActiveKeyState(key);
@@ -352,7 +322,7 @@ export function SettingsPage() {
   const [landedOnDefault, setLandedOnDefault] = useState(!!search.tab);
   useEffect(() => {
     if (landedOnDefault || therapists === undefined || catalog === undefined) return;
-    setActiveKey(unlinkedCount > 0 ? 'team' : catalogEmpty ? 'services' : 'profile');
+    setActiveKey(unlinkedCount > 0 ? 'team' : catalogEmpty ? 'catalog' : 'profile');
     setLandedOnDefault(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landedOnDefault, therapists, catalog, unlinkedCount, catalogEmpty]);
@@ -539,9 +509,9 @@ export function SettingsPage() {
               <Therapists />
             </>
           )}
-          {activeKey === 'services' && <Catalog />}
-          {activeKey === 'treatments' && <TreatmentCatalog />}
-          {activeKey === 'referrals' && <ReferringSources />}
+          {activeKey === 'catalog' && (
+            <CatalogSection view={catalogView} onViewChange={setCatalogView} />
+          )}
           {activeKey === 'data' && (
             <>
               <HistoricalData />
@@ -1885,10 +1855,12 @@ function DataBackup() {
 
 function DangerZone() {
   const clinic = useClinic();
+  const clinics = useLiveQuery(() => db.clinics.toArray(), []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [confirmingWipe, setConfirmingWipe] = useState(false);
+  const [confirmingDeleteClinic, setConfirmingDeleteClinic] = useState(false);
   const [wipeResult, setWipeResult] = useState<{
     patients: number;
     visits: number;
@@ -1951,13 +1923,43 @@ function DangerZone() {
     location.reload();
   }
 
+  function deleteClinic() {
+    setError(null);
+    const supabase = getSupabase();
+    if (!supabase || !navigator.onLine) {
+      setError('Deleting a clinic needs a connection — try again when online.');
+      return;
+    }
+    setConfirmingDeleteClinic(true);
+  }
+
+  async function doDeleteClinic() {
+    setConfirmingDeleteClinic(false);
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setBusy(true);
+    try {
+      const { error: rpcError } = await supabase.rpc('admin_delete_clinic', {
+        p_clinic_id: clinic.id,
+      });
+      if (rpcError) throw new Error(rpcError.message);
+      await db.delete();
+      location.reload();
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+      setBusy(false);
+    }
+  }
+
+  const otherClinicCount = (clinics ?? []).filter((c) => c.id !== clinic.id).length;
+
   return (
     <SectionCard title="Danger zone">
       <p className="mb-3 text-xs text-[var(--muted)]">
         For test-data cleanup and troubleshooting. Wiping is admin-only and enforced by the server.
       </p>
-      {wipeResult ? (
-        <div className="rounded-md border border-[var(--moss)] bg-[var(--moss-light)] px-3 py-2.5 text-sm text-[var(--moss-strong)]">
+      {wipeResult && (
+        <div className="mb-3 rounded-md border border-[var(--moss)] bg-[var(--moss-light)] px-3 py-2.5 text-sm text-[var(--moss-strong)]">
           <p>
             Wiped {wipeResult.patients} patients, {wipeResult.visits} visits, and{' '}
             {wipeResult.invoices} invoices. The app needs to reload to show a clean slate.
@@ -1973,26 +1975,42 @@ function DangerZone() {
             Reload now
           </button>
         </div>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={btnSecondary}
-            disabled={busy}
-            onClick={() => setConfirmingReset(true)}
-          >
-            {busy ? 'Working…' : 'Reset local cache on this device'}
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-[var(--rust)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)] disabled:opacity-50"
-            disabled={busy}
-            onClick={wipeAll}
-          >
-            {busy ? 'Wiping…' : 'Wipe ALL clinic data…'}
-          </button>
-        </div>
       )}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={btnSecondary}
+          disabled={busy}
+          onClick={() => setConfirmingReset(true)}
+        >
+          {busy ? 'Working…' : 'Reset local cache on this device'}
+        </button>
+        <button
+          type="button"
+          className="rounded-md border border-[var(--rust)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--rust-light)] disabled:opacity-50"
+          disabled={busy}
+          onClick={wipeAll}
+        >
+          {busy ? 'Wiping…' : 'Wipe ALL clinic data…'}
+        </button>
+        <button
+          type="button"
+          className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-4 py-2 text-sm font-medium text-[var(--rust)] hover:bg-[var(--surface)] disabled:opacity-50"
+          disabled={busy}
+          onClick={deleteClinic}
+        >
+          {busy ? 'Working…' : 'Delete clinic entirely…'}
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-[var(--muted)]">
+        <strong>Wipe</strong> removes patients, visits, and invoices but keeps this clinic, its
+        catalog, therapists, and team logins. <strong>Delete clinic</strong> removes the whole
+        clinic permanently — including team access, catalog, and all data. Logo files in storage may
+        need manual cleanup.
+        {otherClinicCount > 0
+          ? ` You have ${otherClinicCount} other clinic${otherClinicCount === 1 ? '' : 's'} — after delete you'll switch to another.`
+          : " This is your only clinic — you'll set up a new one afterward."}
+      </p>
       <div className="mt-2">
         <ErrorNote message={error} />
       </div>
@@ -2018,533 +2036,19 @@ function DangerZone() {
         onCancel={() => setConfirmingWipe(false)}
         onConfirm={() => void doWipeAll()}
       />
-    </SectionCard>
-  );
-}
-
-function Catalog() {
-  const clinic = useClinic();
-  const items = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
-  // repos.catalog.list already sorts by category then name, so grouping is
-  // just a pass over that order — no re-sort needed here.
-  const groups = useMemo(() => {
-    const map = new Map<string, CatalogItem[]>();
-    for (const item of items ?? []) {
-      const key = item.category.trim() || 'Uncategorized';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(item);
-    }
-    return [...map.entries()];
-  }, [items]);
-  const [draft, setDraft] = useState({ category: '', name: '', sessionCount: '1' });
-  const [draftPrice, setDraftPrice] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // Price edits save instantly on blur with no Save bar — without this, a
-  // changed price looked identical to an unsaved one, and the section's own
-  // "Price changes affect FUTURE visits only" note reads as broken if
-  // nothing on screen confirms the edit actually took.
-  const [savedItemId, setSavedItemId] = useState<string | null>(null);
-  const savedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  async function addItem() {
-    setError(null);
-    if (!draft.category.trim() || !draft.name.trim() || draftPrice == null) {
-      setError('Category, name, and price are required');
-      return;
-    }
-    const item: CatalogItem = {
-      id: crypto.randomUUID(),
-      clinicId: clinic.id,
-      category: draft.category.trim(),
-      name: draft.name.trim(),
-      sessionCount: Math.max(1, Number(draft.sessionCount) || 1),
-      basePricePaise: draftPrice,
-      active: true,
-      updatedAt: new Date().toISOString(),
-    };
-    await repos.catalog.put(item);
-    setDraft({ category: draft.category, name: '', sessionCount: '1' });
-    setDraftPrice(null);
-  }
-
-  async function toggleActive(item: CatalogItem) {
-    await repos.catalog.put({ ...item, active: !item.active, updatedAt: new Date().toISOString() });
-  }
-
-  async function updatePrice(item: CatalogItem, pricePaise: number | null) {
-    if (pricePaise == null || pricePaise === item.basePricePaise) return;
-    await repos.catalog.put({
-      ...item,
-      basePricePaise: pricePaise,
-      updatedAt: new Date().toISOString(),
-    });
-    if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current);
-    setSavedItemId(item.id);
-    savedTimeoutRef.current = setTimeout(() => setSavedItemId(null), 1500);
-  }
-
-  return (
-    <SectionCard title="Service catalog">
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        Price changes affect FUTURE visits only — logged visits keep their price snapshot.
-        Deactivate instead of deleting so history keeps resolving; per-session price is always
-        derived (price ÷ sessions), never stored.
-      </p>
-      <datalist id="catalog-categories">
-        {[...new Set((items ?? []).map((i) => i.category))].map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
-
-      {/* Below tab: — same boxed-card treatment Today's visits, Patients,
-          Packages, and Invoices use, instead of forcing this 6-column table
-          (with an inline add-row) to scroll sideways on a phone. The add
-          form moves to its own block below the list, since a form doesn't
-          fit a table-row shape once it's not a table. */}
-      <div className="tab:hidden space-y-2">
-        {groups.map(([category, catItems]) => (
-          <div key={category}>
-            <p className="mb-1.5 px-0.5 text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]/80">
-              {category}
-            </p>
-            <div className="space-y-2">
-              {catItems.map((item) => (
-                <div
-                  key={item.id}
-                  className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm ${item.active ? '' : 'opacity-50'}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="font-display text-sm font-medium text-[var(--ink)]">
-                        {item.name}
-                      </div>
-                      <div className="text-xs text-[var(--muted)]">
-                        {item.sessionCount} session{item.sessionCount === 1 ? '' : 's'}
-                      </div>
-                    </div>
-                    <span
-                      className="shrink-0 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-                      style={
-                        item.active
-                          ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
-                          : { background: 'var(--paper)', color: 'var(--muted)' }
-                      }
-                    >
-                      {item.active ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <RupeeInput
-                        valuePaise={item.basePricePaise}
-                        onChange={(p) => void updatePrice(item, p)}
-                      />
-                      {savedItemId === item.id && (
-                        <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">
-                          Saved
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      className="text-xs text-[var(--teal)] hover:underline"
-                      onClick={() => void toggleActive(item)}
-                    >
-                      {item.active ? 'Deactivate' : 'Reactivate'}
-                    </button>
-                  </div>
-                  <div className="mt-1 text-xs text-[var(--muted)]">
-                    Per session: {formatINR(effectivePricePerSession(item))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-
-        <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-3.5">
-          <p className="mb-2 text-xs font-medium text-[var(--muted)]">Add a package</p>
-          <div className="space-y-2">
-            <Field label="Category">
-              <input
-                className={inputCls}
-                placeholder="Category"
-                list="catalog-categories"
-                value={draft.category}
-                onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-              />
-            </Field>
-            <Field label="Package name">
-              <input
-                className={inputCls}
-                placeholder="Package name"
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              />
-            </Field>
-            <div className="flex gap-2">
-              <Field label="Sessions">
-                <input
-                  type="number"
-                  min={1}
-                  className={inputCls}
-                  value={draft.sessionCount}
-                  onChange={(e) => setDraft({ ...draft, sessionCount: e.target.value })}
-                />
-              </Field>
-              <Field label="Price">
-                <RupeeInput valuePaise={draftPrice} onChange={setDraftPrice} />
-              </Field>
-            </div>
-            <button
-              type="button"
-              className={`${btnSecondary} w-full`}
-              onClick={() => void addItem()}
-            >
-              + Add
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="hidden tab:block overflow-x-auto">
-        <table className="min-w-full divide-y divide-[var(--border)]">
-          <thead className="bg-[var(--paper)]">
-            <tr>
-              <th className={th}>Package</th>
-              <th className={thNum}>Sessions</th>
-              <th className={thNum}>Price</th>
-              <th className={thNum}>Per session</th>
-              <th className={th}>Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border)]">
-            {groups.map(([category, catItems]) => (
-              <Fragment key={category}>
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="bg-[var(--paper)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]/80"
-                  >
-                    {category}
-                  </td>
-                </tr>
-                {catItems.map((item) => (
-                  <tr key={item.id} className={item.active ? '' : 'opacity-50'}>
-                    <td className={td}>{item.name}</td>
-                    <td className={tdNum}>{item.sessionCount}</td>
-                    <td className={`${tdNum} w-32`}>
-                      <div className="flex items-center justify-end gap-1.5">
-                        <RupeeInput
-                          valuePaise={item.basePricePaise}
-                          onChange={(p) => void updatePrice(item, p)}
-                        />
-                        {savedItemId === item.id && (
-                          <span className="shrink-0 text-[10.5px] font-semibold text-[var(--moss)]">
-                            Saved
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className={tdNum}>{formatINR(effectivePricePerSession(item))}</td>
-                    <td className={td}>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-                          style={
-                            item.active
-                              ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
-                              : { background: 'var(--paper)', color: 'var(--muted)' }
-                          }
-                        >
-                          {item.active ? 'Active' : 'Inactive'}
-                        </span>
-                        <button
-                          type="button"
-                          className="text-xs text-[var(--teal)] hover:underline"
-                          onClick={() => void toggleActive(item)}
-                        >
-                          {item.active ? 'Deactivate' : 'Reactivate'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </Fragment>
-            ))}
-            <tr className="bg-[var(--paper)]/50">
-              <td className={td}>
-                <div className="space-y-1">
-                  <input
-                    className={inputCls}
-                    placeholder="Category"
-                    list="catalog-categories"
-                    value={draft.category}
-                    onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-                  />
-                  <input
-                    className={inputCls}
-                    placeholder="Package name"
-                    value={draft.name}
-                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                  />
-                </div>
-              </td>
-              <td className={`${td} w-24`}>
-                <input
-                  type="number"
-                  min={1}
-                  className={inputCls}
-                  value={draft.sessionCount}
-                  onChange={(e) => setDraft({ ...draft, sessionCount: e.target.value })}
-                />
-              </td>
-              <td className={`${td} w-32`}>
-                <RupeeInput valuePaise={draftPrice} onChange={setDraftPrice} />
-              </td>
-              <td className={td} colSpan={2}>
-                <button type="button" className={btnSecondary} onClick={() => void addItem()}>
-                  + Add
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div className="mt-2">
-        <ErrorNote message={error} />
-      </div>
-    </SectionCard>
-  );
-}
-
-/**
- * Clinic-editable list of treatment types (Exercise, Manual Therapy, Kinesio
- * Taping, ...) — same add / deactivate-not-delete / rename shape as the
- * other catalogs on this tab. Independent of the billing-side service
- * catalog above: a visit can be billed under one package while recording
- * several treatment types performed, via the "Treatments performed" picker
- * on the visit-logging and edit-visit forms.
- */
-function TreatmentCatalog() {
-  const clinic = useClinic();
-  const items = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id, true), [clinic.id]) ?? [];
-  const [draftName, setDraftName] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  async function addItem() {
-    setError(null);
-    const name = draftName.trim();
-    if (!name) {
-      setError('Name is required');
-      return;
-    }
-    const item: TreatmentItem = {
-      id: crypto.randomUUID(),
-      clinicId: clinic.id,
-      name,
-      active: true,
-      updatedAt: new Date().toISOString(),
-    };
-    await repos.treatmentCatalog.put(item);
-    setDraftName('');
-  }
-
-  async function toggleActive(item: TreatmentItem) {
-    await repos.treatmentCatalog.put({
-      ...item,
-      active: !item.active,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  async function rename(item: TreatmentItem, name: string) {
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === item.name) return;
-    await repos.treatmentCatalog.put({
-      ...item,
-      name: trimmed,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  return (
-    <SectionCard title="Treatments">
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        Tracked per visit as a "Treatments performed" checklist, independent of billing. Deactivate
-        instead of deleting so past visits keep displaying correctly.
-      </p>
-      <div className="space-y-2">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className={`flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 ${item.active ? '' : 'opacity-50'}`}
-          >
-            <input
-              className={`${inputCls} min-w-0 flex-1`}
-              defaultValue={item.name}
-              onBlur={(e) => void rename(item, e.target.value)}
-              aria-label="Treatment name"
-            />
-            <button
-              type="button"
-              className="shrink-0 text-xs text-[var(--teal)] hover:underline"
-              onClick={() => void toggleActive(item)}
-            >
-              {item.active ? 'Deactivate' : 'Reactivate'}
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {error && <ErrorNote message={error} />}
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <input
-          type="text"
-          value={draftName}
-          onChange={(e) => setDraftName(e.target.value)}
-          placeholder="Add a treatment…"
-          className={`${inputCls} min-w-0 flex-1`}
-        />
-        <button type="button" className={btnSecondary} onClick={() => void addItem()}>
-          + Add
-        </button>
-      </div>
-    </SectionCard>
-  );
-}
-
-/**
- * Clinic-editable list of referral channels — same add / deactivate-not-
- * delete / rename shape as the no-return-reason catalog managed inline on
- * Reports. Seeded with the app's original six labels as defaults; a clinic
- * can rename, add, or deactivate any of them without losing how existing
- * patients display (see referringSourceDetailLabel/REFERRING_SOURCE_LABELS
- * fallback in dashboardService for patients tagged before this catalog
- * existed).
- */
-function ReferringSources() {
-  const clinic = useClinic();
-  const items =
-    useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id, true), [clinic.id]) ?? [];
-  const [draftName, setDraftName] = useState('');
-  const [draftDetailLabel, setDraftDetailLabel] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  async function addItem() {
-    setError(null);
-    const name = draftName.trim();
-    if (!name) {
-      setError('Name is required');
-      return;
-    }
-    const item: ReferringSourceItem = {
-      id: crypto.randomUUID(),
-      clinicId: clinic.id,
-      name,
-      detailLabel: draftDetailLabel.trim() || null,
-      active: true,
-      updatedAt: new Date().toISOString(),
-    };
-    await repos.referringSourceCatalog.put(item);
-    setDraftName('');
-    setDraftDetailLabel('');
-  }
-
-  async function toggleActive(item: ReferringSourceItem) {
-    await repos.referringSourceCatalog.put({
-      ...item,
-      active: !item.active,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  async function rename(item: ReferringSourceItem, name: string) {
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === item.name) return;
-    await repos.referringSourceCatalog.put({
-      ...item,
-      name: trimmed,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  async function updateDetailLabel(item: ReferringSourceItem, detailLabel: string) {
-    const trimmed = detailLabel.trim() || null;
-    if (trimmed === item.detailLabel) return;
-    await repos.referringSourceCatalog.put({
-      ...item,
-      detailLabel: trimmed,
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  return (
-    <SectionCard title="Referral sources">
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        Shown when adding or editing a patient. Deactivate instead of deleting so existing patients
-        keep displaying correctly. The optional detail label adds a follow-up field (e.g. "Referring
-        doctor") when that source is picked.
-      </p>
-      <div className="space-y-2">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 ${item.active ? '' : 'opacity-50'}`}
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className={`${inputCls} min-w-0 flex-1`}
-                defaultValue={item.name}
-                onBlur={(e) => void rename(item, e.target.value)}
-                aria-label="Source name"
-              />
-              <button
-                type="button"
-                className="shrink-0 text-xs text-[var(--teal)] hover:underline"
-                onClick={() => void toggleActive(item)}
-              >
-                {item.active ? 'Deactivate' : 'Reactivate'}
-              </button>
-            </div>
-            <input
-              className={`${inputCls} mt-2 text-xs`}
-              placeholder="Detail field label (optional), e.g. Referring doctor"
-              defaultValue={item.detailLabel ?? ''}
-              onBlur={(e) => void updateDetailLabel(item, e.target.value)}
-              aria-label="Detail field label"
-            />
-          </div>
-        ))}
-      </div>
-
-      {error && <ErrorNote message={error} />}
-
-      <div className="mt-3 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-3.5">
-        <p className="mb-2 text-xs font-medium text-[var(--muted)]">Add a source</p>
-        <div className="space-y-2">
-          <Field label="Name">
-            <input
-              className={inputCls}
-              placeholder="e.g. Instagram ad"
-              value={draftName}
-              onChange={(e) => setDraftName(e.target.value)}
-            />
-          </Field>
-          <Field label="Detail field label (optional)">
-            <input
-              className={inputCls}
-              placeholder="e.g. Referring doctor"
-              value={draftDetailLabel}
-              onChange={(e) => setDraftDetailLabel(e.target.value)}
-            />
-          </Field>
-          <button type="button" className={`${btnSecondary} w-full`} onClick={() => void addItem()}>
-            + Add
-          </button>
-        </div>
-      </div>
+      <ConfirmDialog
+        open={confirmingDeleteClinic}
+        title="Delete this clinic permanently?"
+        message={`This deletes "${clinic.name}" and everything in it — all patients, visits, invoices, catalog, therapists, and team logins. This cannot be undone.`}
+        confirmLabel="Delete clinic"
+        destructive
+        typeToConfirm={{
+          placeholder: `Type "${clinic.name}" to confirm`,
+          isMatch: (typed) => typed.trim() === clinic.name,
+        }}
+        onCancel={() => setConfirmingDeleteClinic(false)}
+        onConfirm={() => void doDeleteClinic()}
+      />
     </SectionCard>
   );
 }
@@ -2554,6 +2058,9 @@ interface ClinicMember {
   email: string;
   role: string;
   displayName: string | null;
+  /** Invite not finished — never signed in, or opened link without choosing a password. */
+  pending: boolean;
+  invitedAt: string | null;
 }
 
 /** Same accent per role everywhere a role shows up as a colored pill or
@@ -2618,6 +2125,7 @@ function Therapists() {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [resendInProgress, setResendInProgress] = useState<string | null>(null);
   // Client-side hint only — invite-therapist itself is the real boundary
   // (Phase 2 of the tier plan). Held off while entitlements/members are
   // still loading so a fresh page load doesn't flash "locked" for a real
@@ -2639,14 +2147,24 @@ function Therapists() {
       return;
     }
     setMembers(
-      (data as { user_id: string; email: string; role: string; display_name: string | null }[]).map(
-        (m) => ({
-          userId: m.user_id,
-          email: m.email,
-          role: m.role,
-          displayName: m.display_name,
-        })
-      )
+      (
+        data as {
+          user_id: string;
+          email: string;
+          role: string;
+          display_name: string | null;
+          invited_at: string | null;
+          last_sign_in_at: string | null;
+          require_password_setup: boolean | null;
+        }[]
+      ).map((m) => ({
+        userId: m.user_id,
+        email: m.email,
+        role: m.role,
+        displayName: m.display_name,
+        pending: m.last_sign_in_at == null || m.require_password_setup === true,
+        invitedAt: m.invited_at,
+      }))
     );
   }, [clinic.id]);
 
@@ -2752,37 +2270,43 @@ function Therapists() {
         throw new Error('Not authenticated');
       }
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/invite-therapist`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.data.session.access_token}`,
-        },
-        body: JSON.stringify({
-          clinicId: clinic.id,
-          email: inviteEmail.trim(),
-          role: inviteRole,
-          name: inviteName.trim(),
-          redirectOrigin: window.location.origin,
-        }),
-      });
+      // supabase.functions.invoke attaches apikey + Authorization correctly;
+      // a hand-rolled fetch to /functions/v1/... often omits apikey and can
+      // fail at the gateway before invite-therapist ever runs.
+      const { data: result, error: invokeError } = await supabase.functions.invoke(
+        'invite-therapist',
+        {
+          body: {
+            clinicId: clinic.id,
+            email: inviteEmail.trim(),
+            role: inviteRole,
+            name: inviteName.trim(),
+            redirectOrigin: window.location.origin,
+          },
+        }
+      );
 
-      const result = (await response.json()) as {
+      if (invokeError) {
+        throw new Error(invokeError.message);
+      }
+
+      const payload = result as {
         success?: boolean;
         message?: string;
         warning?: string;
         error?: string;
-      };
+      } | null;
 
-      if (!response.ok || result.error) {
-        throw new Error(result.error || `Request failed with status ${response.status}`);
+      if (payload?.error) {
+        throw new Error(payload.error);
       }
 
-      const baseMessage = result.message || `Invitation sent to ${inviteEmail}`;
-      setInviteSuccess(result.warning ? `${baseMessage}. ${result.warning}` : baseMessage);
+      const baseMessage = payload?.message || `Invitation sent to ${inviteEmail}`;
+      setInviteSuccess(payload?.warning ? `${baseMessage}. ${payload.warning}` : baseMessage);
       setInviteEmail('');
       setInviteName('');
       setInviteRole('therapist');
+      void refetchMembers();
     } catch (e) {
       setInviteError(toFriendlyMessage(e));
     } finally {
@@ -2821,11 +2345,49 @@ function Therapists() {
 
       if (error) throw error;
 
+      // Unlink any service-roster row still pointing at this login.
+      const linked = (therapists ?? []).filter((t) => t.userId === userId);
+      for (const t of linked) {
+        await repos.therapists.put({
+          ...t,
+          userId: null,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
       setMembers((prev) => prev?.filter((m) => m.userId !== userId) ?? null);
     } catch (e) {
       setMembersError(toFriendlyMessage(e));
     } finally {
       setRevokeInProgress(null);
+    }
+  }
+
+  async function resendInvite(userId: string, setErr: (msg: string | null) => void) {
+    setErr(null);
+    setResendInProgress(userId);
+    try {
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('No Supabase connection');
+      const { data: result, error: invokeError } = await supabase.functions.invoke(
+        'invite-therapist',
+        {
+          body: {
+            action: 'resend',
+            clinicId: clinic.id,
+            userId,
+            redirectOrigin: window.location.origin,
+          },
+        }
+      );
+      if (invokeError) throw new Error(invokeError.message);
+      const payload = result as { error?: string; message?: string } | null;
+      if (payload?.error) throw new Error(payload.error);
+      setInviteSuccess(payload?.message ?? 'Sign-in email resent.');
+    } catch (e) {
+      setErr(toFriendlyMessage(e));
+    } finally {
+      setResendInProgress(null);
     }
   }
 
@@ -2882,9 +2444,13 @@ function Therapists() {
                       member={m}
                       clinicId={clinic.id}
                       revoking={revokeInProgress === m.userId}
+                      resending={resendInProgress === m.userId}
                       isLastAdmin={isLastAdmin}
                       onRevoke={() => revokeMember(m.userId, m.email)}
                       onSaved={() => void refetchMembers()}
+                      onResend={
+                        m.pending ? () => void resendInvite(m.userId, setMembersError) : undefined
+                      }
                     />
                   );
                 })}
@@ -2892,6 +2458,7 @@ function Therapists() {
             ) : (
               <p className="text-xs text-[var(--muted)]">No team members yet.</p>
             )}
+            {inviteSuccess && <p className="mt-2 text-sm text-[var(--moss)]">{inviteSuccess}</p>}
             <ErrorNote message={membersError} />
           </div>
 
@@ -2967,7 +2534,6 @@ function Therapists() {
                 </p>
               </div>
             )}
-            {inviteSuccess && <p className="mt-2 text-sm text-[var(--moss)]">{inviteSuccess}</p>}
             {inviteError && <ErrorNote message={inviteError} />}
           </div>
         </>
@@ -2975,139 +2541,88 @@ function Therapists() {
 
       {teamView === 'roster' && (
         <div>
-          <div className="mb-3 flex items-baseline justify-between gap-2">
-            <h3 className="text-sm font-semibold text-[var(--ink)]">Service roster</h3>
-            <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2 py-0.5 font-mono text-[11px] text-[var(--muted)]">
-              {(therapists ?? []).filter((t) => t.active).length} active
-            </span>
-          </div>
-          <p className="mb-3 text-xs text-[var(--muted)]">
-            Who patients get billed against and assigned to on a visit — every Member above with the
-            "Therapist" role gets a roster entry automatically; add one manually here for a
-            therapist who doesn't need a login of their own.
-          </p>
-          <div className="mb-3 divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-            {(therapists ?? []).map((t) => (
-              <div key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
-                <label
-                  className="block h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-full border border-[var(--border)] bg-[var(--paper)]"
-                  title="Change photo"
-                >
-                  {t.photoPath ? (
-                    <img
-                      src={publicTherapistPhotoUrl(t.photoPath) ?? ''}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-[var(--muted)]">
-                      {therapistInitials(t.name)}
-                    </span>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) =>
-                      e.target.files?.[0] && void uploadTherapistPhoto(t, e.target.files[0])
-                    }
-                  />
-                </label>
-                <span className="min-w-32 text-[var(--ink)]">{t.name}</span>
-                <input
-                  key={t.id}
-                  className={`${inputCls} w-36 text-xs`}
-                  placeholder="Reg. no."
-                  title="Registration/license number — printed on invoices"
-                  defaultValue={t.registrationNo ?? ''}
-                  onBlur={(e) => {
-                    const value = e.target.value.trim() || null;
-                    if (value === (t.registrationNo ?? null)) return;
-                    void repos.therapists.put({
-                      ...t,
-                      registrationNo: value,
-                      updatedAt: new Date().toISOString(),
-                    });
-                  }}
-                />
-                <span
-                  className="rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-                  style={
-                    t.active
-                      ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
-                      : { background: 'var(--paper)', color: 'var(--muted)' }
-                  }
-                >
-                  {t.active ? 'Active' : 'Inactive'}
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--ink)]">Service roster</h3>
+              <p className="mt-1 max-w-xl text-xs text-[var(--muted)]">
+                Who patients are assigned to and billed against. Therapist logins are added
+                automatically when you invite from Logins — add here only for someone without their
+                own login.
+              </p>
+            </div>
+            {therapists && (
+              <div className="flex flex-wrap gap-1.5">
+                <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2.5 py-0.5 font-mono text-[11px] text-[var(--muted)]">
+                  {therapists.length} total
                 </span>
-                <button
-                  type="button"
-                  className="text-xs text-[var(--teal)] hover:underline"
-                  onClick={() =>
-                    void repos.therapists.put({
-                      ...t,
-                      active: !t.active,
-                      updatedAt: new Date().toISOString(),
-                    })
-                  }
-                >
-                  {t.active ? 'Deactivate' : 'Reactivate'}
-                </button>
-                <button
-                  type="button"
-                  className="text-xs text-[var(--rust)] hover:underline"
-                  onClick={() => void startDeleteTherapist(t)}
-                >
-                  Delete
-                </button>
-                {members && members.length > 0 && (
-                  <label className="ml-auto flex items-center gap-2 text-xs text-[var(--muted)]">
-                    Linked login
-                    <select
-                      className={inputCls}
-                      value={t.userId ?? ''}
-                      onChange={(e) =>
-                        void repos.therapists.put({
-                          ...t,
-                          userId: e.target.value || null,
-                          updatedAt: new Date().toISOString(),
-                        })
-                      }
-                    >
-                      <option value="">— None —</option>
-                      {members.map((m) => (
-                        <option key={m.userId} value={m.userId}>
-                          {m.email}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2.5 py-0.5 font-mono text-[11px] text-[var(--muted)]">
+                  {therapists.filter((t) => t.active).length} active
+                </span>
+                {unlinkedCount > 0 && (
+                  <span className="rounded-full border border-[var(--amber)] bg-[var(--amber-light)] px-2.5 py-0.5 font-mono text-[11px] text-[var(--amber-strong)]">
+                    {unlinkedCount} need login link
+                  </span>
                 )}
               </div>
-            ))}
-          </div>
-          <div className="flex max-w-sm gap-2">
-            <input
-              className={inputCls}
-              placeholder="New therapist name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <button type="button" className={btnSecondary} onClick={() => void add()}>
-              + Add
-            </button>
-          </div>
-          <p className="mt-2 text-xs text-[var(--muted)]">
-            Deactivating keeps history intact — past visits still show the therapist. Delete only
-            works for someone with zero visits, notes, or invoices on record (added by mistake, or
-            left before seeing a patient) — anyone with real history can only be deactivated.
-            {members && members.length > 0 && (
-              <>
-                {' '}
-                Inviting a therapist above links their login automatically; the login dropdown here
-                is for linking one after the fact, or for a roster entry added manually.
-              </>
             )}
+          </div>
+
+          {therapists && therapists.length > 0 ? (
+            <div className="mb-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              {[...therapists]
+                .sort((a, b) => {
+                  if (a.active !== b.active) return a.active ? -1 : 1;
+                  return a.name.localeCompare(b.name);
+                })
+                .map((t) => (
+                  <RosterCard
+                    key={t.id}
+                    therapist={t}
+                    members={members}
+                    linkedEmail={
+                      t.userId ? (members?.find((m) => m.userId === t.userId)?.email ?? null) : null
+                    }
+                    onPhotoUpload={(file) => void uploadTherapistPhoto(t, file)}
+                    onToggleActive={() =>
+                      void repos.therapists.put({
+                        ...t,
+                        active: !t.active,
+                        updatedAt: new Date().toISOString(),
+                      })
+                    }
+                    onDelete={() => void startDeleteTherapist(t)}
+                  />
+                ))}
+            </div>
+          ) : (
+            <p className="mb-6 text-xs text-[var(--muted)]">No therapists on the roster yet.</p>
+          )}
+
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4">
+            <h4 className="mb-2 text-sm font-semibold text-[var(--ink)]">Add manually</h4>
+            <p className="mb-3 text-xs text-[var(--muted)]">
+              For a therapist who does not need their own login — e.g. a locum billed under the
+              clinic account.
+            </p>
+            <div className="flex max-w-md gap-2">
+              <input
+                className={inputCls}
+                placeholder="Therapist name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void add();
+                }}
+              />
+              <button type="button" className={btnSecondary} onClick={() => void add()}>
+                + Add
+              </button>
+            </div>
+          </div>
+
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            Deactivate to keep history without assigning new visits. Delete only works when someone
+            has zero visits, notes, or invoices.
           </p>
           <div className="mt-2">
             <ErrorNote message={rosterError} />
@@ -3146,6 +2661,207 @@ function Therapists() {
   );
 }
 
+/** One service-roster card — view state shows photo, name, reg no, login link,
+ *  and status; edit state exposes all editable fields in one place. */
+function RosterCard({
+  therapist,
+  members,
+  linkedEmail,
+  onPhotoUpload,
+  onToggleActive,
+  onDelete,
+}: {
+  therapist: Therapist;
+  members: ClinicMember[] | null;
+  linkedEmail: string | null;
+  onPhotoUpload: (file: File) => void;
+  onToggleActive: () => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState(therapist.name);
+  const [regDraft, setRegDraft] = useState(therapist.registrationNo ?? '');
+  const [loginDraft, setLoginDraft] = useState(therapist.userId ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!editing) {
+      setNameDraft(therapist.name);
+      setRegDraft(therapist.registrationNo ?? '');
+      setLoginDraft(therapist.userId ?? '');
+    }
+  }, [therapist, editing]);
+
+  async function save() {
+    if (!nameDraft.trim()) {
+      setError('Name is required');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await repos.therapists.put({
+        ...therapist,
+        name: nameDraft.trim(),
+        registrationNo: regDraft.trim() || null,
+        userId: loginDraft || null,
+        updatedAt: new Date().toISOString(),
+      });
+      setEditing(false);
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const photo = (
+    <label
+      className="block h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded-full border border-[var(--border)] bg-[var(--paper)]"
+      title="Change photo"
+    >
+      {therapist.photoPath ? (
+        <img
+          src={publicTherapistPhotoUrl(therapist.photoPath) ?? ''}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-[var(--muted)]">
+          {therapistInitials(therapist.name)}
+        </span>
+      )}
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onPhotoUpload(file);
+          e.target.value = '';
+        }}
+      />
+    </label>
+  );
+
+  if (editing) {
+    return (
+      <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+        <div className="flex items-center gap-2.5">
+          {photo}
+          <p className="text-sm font-semibold text-[var(--ink)]">Edit therapist</p>
+        </div>
+        <Field label="Name">
+          <input
+            className={inputCls}
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            autoFocus
+          />
+        </Field>
+        <Field label="Registration no.">
+          <input
+            className={inputCls}
+            placeholder="Printed on invoices"
+            value={regDraft}
+            onChange={(e) => setRegDraft(e.target.value)}
+          />
+        </Field>
+        {members && members.length > 0 && (
+          <Field label="Linked login">
+            <select
+              className={inputCls}
+              value={loginDraft}
+              onChange={(e) => setLoginDraft(e.target.value)}
+            >
+              <option value="">— None —</option>
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.displayName ? `${m.displayName} (${m.email})` : m.email}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className={btnPrimary}
+            disabled={saving}
+            onClick={() => void save()}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            className={btnSecondary}
+            disabled={saving}
+            onClick={() => setEditing(false)}
+          >
+            Cancel
+          </button>
+        </div>
+        <ErrorNote message={error} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+      <div className="flex items-center gap-2.5">
+        {photo}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-[var(--ink)]">{therapist.name}</p>
+          <p className="truncate text-[11.5px] text-[var(--muted)]">
+            {therapist.registrationNo ? `Reg. ${therapist.registrationNo}` : 'No registration no.'}
+          </p>
+        </div>
+      </div>
+      <span
+        className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+        style={
+          therapist.active
+            ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
+            : { background: 'var(--paper)', color: 'var(--muted)' }
+        }
+      >
+        {therapist.active ? 'Active' : 'Inactive'}
+      </span>
+      {linkedEmail ? (
+        <p className="truncate text-[11.5px] text-[var(--muted)]">
+          Login: <span className="text-[var(--ink)]">{linkedEmail}</span>
+        </p>
+      ) : (
+        <p className="text-[11.5px] text-[var(--amber-strong)]">No login linked</p>
+      )}
+      <div className="mt-auto flex flex-wrap gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
+        <button
+          type="button"
+          className="text-[var(--teal)] hover:underline"
+          onClick={() => setEditing(true)}
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          className="text-[var(--teal)] hover:underline"
+          onClick={onToggleActive}
+        >
+          {therapist.active ? 'Deactivate' : 'Reactivate'}
+        </button>
+        <button
+          type="button"
+          className="ml-auto text-[var(--rust)] hover:underline"
+          onClick={onDelete}
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** One "Members" card — view state shows a role-colored avatar, display
  *  name (falling back to email if the member hasn't set one), and a role
  *  pill; edit state swaps the card body for a small inline form. This is
@@ -3156,13 +2872,16 @@ function MemberCard({
   member,
   clinicId,
   revoking,
+  resending,
   isLastAdmin,
   onRevoke,
   onSaved,
+  onResend,
 }: {
   member: ClinicMember;
   clinicId: string;
   revoking: boolean;
+  resending: boolean;
   /** True when this member is the clinic's only admin — demoting or
    *  revoking them would leave nobody able to reach Settings again. The DB
    *  rejects it either way (see guard_clinic_members_last_admin), but
@@ -3170,6 +2889,7 @@ function MemberCard({
   isLastAdmin: boolean;
   onRevoke: () => void;
   onSaved: () => void;
+  onResend?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(member.displayName ?? '');
@@ -3265,10 +2985,25 @@ function MemberCard({
         </div>
       </div>
       <RolePill role={role} />
+      {member.pending ? (
+        <span
+          className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+          style={{ background: 'var(--amber-light)', color: 'var(--amber-strong)' }}
+        >
+          Pending — hasn't finished signing in
+        </span>
+      ) : (
+        <span
+          className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+          style={{ background: 'var(--moss-light)', color: 'var(--moss-strong)' }}
+        >
+          Active
+        </span>
+      )}
       {isLastAdmin && (
         <p className="text-[11px] text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
       )}
-      <div className="mt-auto flex gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
+      <div className="mt-auto flex flex-wrap gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
         <button
           type="button"
           className="text-[var(--teal)] hover:underline"
@@ -3276,6 +3011,16 @@ function MemberCard({
         >
           Edit
         </button>
+        {onResend && (
+          <button
+            type="button"
+            className="text-[var(--teal)] hover:underline disabled:opacity-50"
+            disabled={resending}
+            onClick={onResend}
+          >
+            {resending ? 'Sending…' : 'Resend email'}
+          </button>
+        )}
         <button
           type="button"
           className="ml-auto text-[var(--rust)] hover:underline disabled:opacity-50"

@@ -97,6 +97,8 @@ function todayRowToCardData(
     canRepeat: Boolean(row.packageGroupId && openPackageGroupIds.has(row.packageGroupId)),
     canSplit: therapistSplit && row.billPaise > 0 && canModify,
     hasSplit: Boolean(row.sharedTherapistId),
+    sharedPct: row.sharedPct,
+    sharedTherapistName: row.sharedTherapistName,
     // Pre-flight mirror of visits_delete's RLS check (is_clinic_admin or
     // is_own_therapist). front_desk is never either, so this always comes
     // out false for them — matching RLS, which rejects their delete too.

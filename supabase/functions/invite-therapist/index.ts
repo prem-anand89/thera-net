@@ -1,9 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 
 interface InviteRequest {
+  /** Default `invite`. `resend` re-sends a sign-in email to a pending member. */
+  action?: 'invite' | 'resend';
   clinicId: string;
-  email: string;
-  role: 'admin' | 'therapist' | 'front_desk';
+  email?: string;
+  role?: 'admin' | 'therapist' | 'front_desk';
   /** Required for every role — seeds clinic_members.display_name (shown
    *  throughout the app instead of raw email; the invited person can
    *  rename themselves once they've signed in) and, for a therapist
@@ -13,6 +15,8 @@ interface InviteRequest {
    *  instead of needing a separate manual "add to roster, then link"
    *  step an admin has to remember to do afterward. */
   name?: string;
+  /** Resend path: the pending member's auth.users id. */
+  userId?: string;
   /** The inviting browser's own origin (`window.location.origin`) — used
    *  to build the invite email's redirect link. Without this, the link
    *  falls back to whatever the Supabase project's Site URL happens to be
@@ -66,6 +70,63 @@ async function findUserIdByEmail(
   return null;
 }
 
+function notifyMessageForRelink(email: string, emailed: boolean): string {
+  return emailed
+    ? `Added ${email} to this clinic — a sign-in email was sent`
+    : `${email} was added to this clinic`;
+}
+
+/** Link a therapist login to an existing unlinked roster row when possible,
+ *  otherwise insert a new row. Avoids duplicate roster entries after revoke
+ *  + re-invite. */
+async function linkTherapistRosterRow(
+  serviceClient: ReturnType<typeof createClient>,
+  clinicId: string,
+  userId: string,
+  displayName: string
+): Promise<string | null> {
+  const { data: alreadyLinked } = await serviceClient
+    .from('therapists')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (alreadyLinked) return null;
+
+  const { data: unlinkedRows } = await serviceClient
+    .from('therapists')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .is('user_id', null)
+    .ilike('name', displayName)
+    .limit(1);
+  const unlinked = unlinkedRows?.[0] ?? null;
+
+  if (unlinked) {
+    const { error } = await serviceClient
+      .from('therapists')
+      .update({ user_id: userId, name: displayName, active: true })
+      .eq('id', unlinked.id);
+    if (error) {
+      console.error(`Failed to re-link therapist roster row for user ${userId}:`, error);
+      return `Could not link them to the service roster automatically: ${error.message}. Link them from Settings → Team → Service roster.`;
+    }
+    return null;
+  }
+
+  const { error: therapistError } = await serviceClient.from('therapists').insert({
+    clinic_id: clinicId,
+    name: displayName,
+    user_id: userId,
+    active: true,
+  });
+  if (therapistError) {
+    console.error(`Failed to create therapist roster row for user ${userId}:`, therapistError);
+    return `Could not add them to the service roster automatically: ${therapistError.message}. Add them from Settings → Team → Service roster.`;
+  }
+  return null;
+}
+
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -77,18 +138,14 @@ export default async function handler(req: Request): Promise<Response> {
 
   try {
     const body: InviteRequest = await req.json();
-    const { clinicId, email, role, name, redirectOrigin } = body;
+    const { clinicId, email, role, name, redirectOrigin, action = 'invite', userId } = body;
 
-    if (!clinicId || !email || !role) {
-      return json({ error: 'Missing required fields: clinicId, email, role' }, 400);
+    if (!clinicId) {
+      return json({ error: 'Missing required field: clinicId' }, 400);
     }
 
-    if (!['admin', 'therapist', 'front_desk'].includes(role)) {
-      return json({ error: 'Invalid role: must be admin, therapist, or front_desk' }, 400);
-    }
-
-    if (!name?.trim()) {
-      return json({ error: 'A name is required to invite a team member' }, 400);
+    if (action !== 'invite' && action !== 'resend') {
+      return json({ error: 'Invalid action' }, 400);
     }
 
     // Get the caller's JWT from the Authorization header
@@ -149,13 +206,75 @@ export default async function handler(req: Request): Promise<Response> {
       return json({ error: 'Only clinic admins can invite therapists' }, 403);
     }
 
-    // Use service-role client for admin operations
     const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
       },
     });
+
+    const redirectTo =
+      redirectOrigin && /^https?:\/\//.test(redirectOrigin)
+        ? `${redirectOrigin}/reset-password`
+        : undefined;
+
+    // -----------------------------------------------------------------------
+    // Resend: pending member never signed in — send a fresh sign-in email.
+    // Uses the recovery mailer (lands on /reset-password, same as invite).
+    // -----------------------------------------------------------------------
+    if (action === 'resend') {
+      if (!userId) {
+        return json({ error: 'Missing userId for resend' }, 400);
+      }
+      const { data: membership } = await serviceClient
+        .from('clinic_members')
+        .select('user_id')
+        .eq('clinic_id', clinicId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!membership) {
+        return json({ error: 'That person is not a member of this clinic.' }, 404);
+      }
+      const { data: userData, error: userError } =
+        await serviceClient.auth.admin.getUserById(userId);
+      if (userError || !userData.user?.email) {
+        return json({ error: 'Could not look up that login.' }, 400);
+      }
+      const needsPasswordSetup =
+        userData.user.user_metadata?.require_password_setup === true;
+      if (userData.user.last_sign_in_at && !needsPasswordSetup) {
+        return json({ error: 'This member has already signed in — no resend needed.' }, 409);
+      }
+      if (!redirectTo) {
+        return json({ error: 'redirectOrigin is required for resend' }, 400);
+      }
+      const { error: resendError } = await serviceClient.auth.resetPasswordForEmail(
+        userData.user.email,
+        { redirectTo }
+      );
+      if (resendError) {
+        return json({ error: `Could not resend: ${resendError.message}` }, 400);
+      }
+      await serviceClient.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          ...(userData.user.user_metadata ?? {}),
+          require_password_setup: true,
+        },
+      });
+      return json({ success: true, message: `Sign-in email resent to ${userData.user.email}` }, 200);
+    }
+
+    if (!email || !role) {
+      return json({ error: 'Missing required fields: email, role' }, 400);
+    }
+
+    if (!['admin', 'therapist', 'front_desk'].includes(role)) {
+      return json({ error: 'Invalid role: must be admin, therapist, or front_desk' }, 400);
+    }
+
+    if (!name?.trim()) {
+      return json({ error: 'A name is required to invite a team member' }, 400);
+    }
 
     // Best-effort — feeds the invite email's metadata (below) so a
     // customized "Invite user" template can greet the invitee by clinic
@@ -233,10 +352,6 @@ export default async function handler(req: Request): Promise<Response> {
     // `{{ .Data.clinicName }}`/`{{ .Data.invitedByName }}` — the stock
     // Supabase template doesn't reference these, so the email stays generic
     // until that template is edited in the Supabase dashboard.
-    const redirectTo =
-      redirectOrigin && /^https?:\/\//.test(redirectOrigin)
-        ? `${redirectOrigin}/reset-password`
-        : undefined;
     const { data: inviteData, error: inviteError } =
       await serviceClient.auth.admin.inviteUserByEmail(email, {
         redirectTo,
@@ -244,6 +359,7 @@ export default async function handler(req: Request): Promise<Response> {
           clinicName: clinicData?.name ?? null,
           invitedByName: memberData?.display_name ?? null,
           role,
+          require_password_setup: true,
         },
       });
 
@@ -331,27 +447,49 @@ export default async function handler(req: Request): Promise<Response> {
     // above, so a failure here is reported but doesn't undo either --  the
     // existing manual roster path still works as a fallback.
     if (role === 'therapist') {
-      const { error: therapistError } = await serviceClient.from('therapists').insert({
-        clinic_id: clinicId,
-        name: name!.trim(),
-        user_id: newUserId,
-        active: true,
-      });
-      if (therapistError) {
-        console.error(
-          `Failed to create therapist roster row for user ${newUserId}:`,
-          therapistError
-        );
+      const therapistWarning = await linkTherapistRosterRow(
+        serviceClient,
+        clinicId,
+        newUserId,
+        name!.trim()
+      );
+      if (therapistWarning) {
         return json(
           {
             success: true,
             message: reLinkedExisting
               ? `${email} was added to this clinic`
               : `Invitation sent to ${email}`,
-            warning: `Could not add them to the service roster automatically: ${therapistError.message}. Add them from Settings → Team → Service roster.`,
+            warning: therapistWarning,
           },
           200
         );
+      }
+    }
+
+    // Re-linking an existing auth account doesn't trigger inviteUserByEmail —
+    // send a sign-in email so they know they were added to this clinic.
+    let relinkEmailed = false;
+    if (reLinkedExisting && redirectTo) {
+      const { data: existingUserData } =
+        await serviceClient.auth.admin.getUserById(newUserId);
+      const { error: notifyError } = await serviceClient.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      });
+      if (notifyError) {
+        console.error(`Could not notify re-linked user ${newUserId}:`, notifyError);
+      } else {
+        relinkEmailed = true;
+        const neverSignedIn = !existingUserData?.user?.last_sign_in_at;
+        await serviceClient.auth.admin.updateUserById(newUserId, {
+          user_metadata: {
+            ...(existingUserData?.user?.user_metadata ?? {}),
+            clinicName: clinicData?.name ?? null,
+            invitedByName: memberData?.display_name ?? null,
+            role,
+            ...(neverSignedIn ? { require_password_setup: true } : {}),
+          },
+        });
       }
     }
 
@@ -359,7 +497,7 @@ export default async function handler(req: Request): Promise<Response> {
       {
         success: true,
         message: reLinkedExisting
-          ? `${email} was added to this clinic`
+          ? notifyMessageForRelink(email, relinkEmailed)
           : `Invitation sent to ${email}`,
       },
       200

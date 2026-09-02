@@ -60,6 +60,64 @@ export function treatmentsDisplayText(
   return parts.join(' — ') || '—';
 }
 
+/** Subtly brighter variants of the app's --teal/--rust tokens, same hues
+ *  (184°/19°) with only a modest lightness/saturation bump, used only by
+ *  the split-percentage ring below. At the ring's 12px size the standard
+ *  tokens (tuned for larger fills — buttons, pills) read as slightly
+ *  murky; a small step up keeps the ring legibly the same teal shown on
+ *  TherapistPill (not a lighter, more turquoise color) while still
+ *  standing out from the paper background. Every other teal/rust use in
+ *  the app keeps the standard, darker tokens unchanged. */
+const RING_TEAL = '#31777d';
+const RING_RUST = '#c65f2f';
+
+/** Percentage ring for the shared-split line under a therapist's name —
+ *  the rust arc's length is the visit's actual split share (not just a
+ *  two-color hint), traced over a teal track standing for the rest, so
+ *  the icon itself carries real information rather than only decorating
+ *  the "N% → colleague" text next to it. */
+function IconSplit({ pct, className }: { pct: number; className?: string }) {
+  const r = 4.5;
+  const circumference = 2 * Math.PI * r;
+  const shared = (Math.min(Math.max(pct, 0), 100) / 100) * circumference;
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className={className}>
+      <circle cx="6" cy="6" r={r} fill="none" stroke={RING_TEAL} strokeWidth="2.4" />
+      <circle
+        cx="6"
+        cy="6"
+        r={r}
+        fill="none"
+        stroke={RING_RUST}
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeDasharray={`${shared} ${circumference - shared}`}
+        transform="rotate(-90 6 6)"
+      />
+    </svg>
+  );
+}
+
+/** Compact "N% → colleague" line shown under a therapist's name when a
+ *  visit's revenue is split — stacked below rather than beside the name
+ *  pill so a long colleague name can't widen the row/column; wraps within
+ *  its own line if it must instead. Matches the ring's rust arc,
+ *  distinguishing it at a glance from the plain grey metadata (dates,
+ *  session counts) elsewhere in the same card. */
+function SharedSplitLine({ pct, name }: { pct: number; name: string }) {
+  return (
+    <span
+      className="inline-flex max-w-[9rem] items-center gap-1 text-[11px] leading-tight"
+      style={{ color: RING_RUST }}
+    >
+      <IconSplit pct={pct} className="shrink-0" />
+      <span className="truncate" title={`${pct}% → ${name}`}>
+        {pct}% → {name}
+      </span>
+    </span>
+  );
+}
+
 /** ID · age · sex under the name, matching New visit's Patient panel. */
 export function patientIdentityLine(
   mrno: string,
@@ -156,6 +214,12 @@ export interface VisitCardData {
   canEdit?: boolean;
   canSplit?: boolean;
   hasSplit?: boolean;
+  /** The assisting therapist's share, set together with `hasSplit` — the
+   *  row previously only showed *whether* a split existed (via the kebab
+   *  menu's "Edit split" vs "Split revenue" label), with no indication of
+   *  the percentage or who it went to short of opening that dialog. */
+  sharedPct?: number | null;
+  sharedTherapistName?: string | null;
   canDelete: boolean;
   /** True when this visit is flagged for a clinical note that hasn't been completed yet. */
   needsNote?: boolean;
@@ -680,7 +744,15 @@ function VisitCardDetails({ data }: { data: VisitCardData }) {
     <div className="mt-1.5 space-y-1">
       {data.therapistName && (
         <CardDetailRow label="Therapist">
-          <TherapistPill>{data.therapistName}</TherapistPill>
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+            <TherapistPill>{data.therapistName}</TherapistPill>
+            {data.hasSplit && data.sharedPct != null && (
+              <SharedSplitLine
+                pct={data.sharedPct}
+                name={data.sharedTherapistName ?? 'colleague'}
+              />
+            )}
+          </span>
         </CardDetailRow>
       )}
       {data.condition && <CardDetailRow label="Condition">{data.condition}</CardDetailRow>}
@@ -1054,7 +1126,15 @@ function VisitTable({
                     case 'therapist':
                       return (
                         <td key={key} className={td}>
-                          <TherapistPill>{row.therapistName}</TherapistPill>
+                          <div className="flex min-w-0 flex-col gap-0.5">
+                            <TherapistPill>{row.therapistName}</TherapistPill>
+                            {row.hasSplit && row.sharedPct != null && (
+                              <SharedSplitLine
+                                pct={row.sharedPct}
+                                name={row.sharedTherapistName ?? 'colleague'}
+                              />
+                            )}
+                          </div>
                         </td>
                       );
                     case 'condition':

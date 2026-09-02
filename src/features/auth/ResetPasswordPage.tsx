@@ -6,17 +6,16 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { Field, inputCls, btnPrimary, ErrorNote, AuthBrandHeader } from '@/components/ui';
 
 /**
- * Landing page for a Supabase password-recovery email link. Handles both
- * link shapes Supabase can send: an implicit-flow token in the URL fragment
- * (auto-detected by the client before this component mounts) and a PKCE
- * `?code=` query param (needs an explicit exchange, done below). Distinct
- * "checking" vs "invalid" states matter here — collapsing them meant a slow
- * check or an unhandled PKCE code both looked identical to a dead link.
+ * Landing page for a Supabase password-recovery or team-invite email link.
+ * Handles both link shapes Supabase can send: an implicit-flow token in the
+ * URL fragment (auto-detected by the client before this component mounts)
+ * and a PKCE `?code=` query param (needs an explicit exchange, done below).
  */
 export function ResetPasswordPage() {
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
   const [ready, setReady] = useState(false);
+  const [inviteSetup, setInviteSetup] = useState(false);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +30,10 @@ export function ResetPasswordPage() {
       if (code) await supabase.auth.exchangeCodeForSession(code);
       const { data } = await supabase.auth.getSession();
       setReady(Boolean(data.session));
+      if (data.session) {
+        const { data: userData } = await supabase.auth.getUser();
+        setInviteSetup(userData.user?.user_metadata?.require_password_setup === true);
+      }
       setChecking(false);
     })();
   }, []);
@@ -58,7 +61,10 @@ export function ResetPasswordPage() {
       return;
     }
     setBusy(true);
-    const { error } = await getSupabase()!.auth.updateUser({ password });
+    const { error } = await getSupabase()!.auth.updateUser({
+      password,
+      data: { require_password_setup: false },
+    });
     if (error) {
       setError(toFriendlyMessage(error));
       setBusy(false);
@@ -70,7 +76,13 @@ export function ResetPasswordPage() {
 
   return (
     <div className="mx-auto mt-24 max-w-sm">
-      <AuthBrandHeader subtitle="Choose a new password" />
+      <AuthBrandHeader
+        subtitle={
+          inviteSetup
+            ? 'Choose a password to finish joining your clinic'
+            : 'Choose a new password'
+        }
+      />
       <div className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
         {checking ? (
           <p className="text-sm text-[var(--muted)]">Checking your link…</p>
@@ -115,7 +127,7 @@ export function ResetPasswordPage() {
             </Field>
             <ErrorNote message={error} />
             <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
-              {busy ? 'Saving…' : 'Set new password'}
+              {busy ? 'Saving…' : inviteSetup ? 'Set password & continue' : 'Set new password'}
             </button>
           </form>
         )}

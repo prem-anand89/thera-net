@@ -909,7 +909,27 @@ export function ReportsOverviewPage() {
                         {conditionActive.patients.length === 1 ? '' : 's'}
                       </span>
                     </div>
-                    <div className="max-h-72 overflow-y-auto rounded-lg border border-[var(--border)]">
+                    {/* Below tab: — boxed rows instead of a 3-column
+                          table too tight for patient name + mrno on a
+                          phone. */}
+                    <div className="tab:hidden max-h-72 space-y-1.5 overflow-y-auto">
+                      {conditionActive.patients.map((p) => (
+                        <div
+                          key={p.patientId}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                        >
+                          <span className="min-w-0 truncate">
+                            {p.patientName}{' '}
+                            <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                          </span>
+                          <span className="font-num shrink-0 text-xs text-[var(--muted)]">
+                            {p.visitCount} visit{p.visitCount === 1 ? '' : 's'} ·{' '}
+                            {formatINR(p.revenuePaise)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="hidden tab:block max-h-72 overflow-y-auto rounded-lg border border-[var(--border)]">
                       <table className="min-w-full divide-y divide-[var(--border)]">
                         <thead className="sticky top-0 bg-[var(--paper)]">
                           <tr>
@@ -975,7 +995,40 @@ export function ReportsOverviewPage() {
                       {referralActive.patients.length === 1 ? '' : 's'}
                     </span>
                   </div>
-                  <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+                  {/* Below tab: — boxed rows instead of a 3-4 column
+                        table too tight on a phone. */}
+                  <div className="tab:hidden space-y-1.5">
+                    {referralNeedsDetail
+                      ? referralDetailGroups.map(([name, g]) => (
+                          <div
+                            key={name}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                          >
+                            <span className="min-w-0 truncate">{name}</span>
+                            <span className="font-num shrink-0 text-xs text-[var(--muted)]">
+                              {g.patients} patient{g.patients === 1 ? '' : 's'} · {g.visits} visit
+                              {g.visits === 1 ? '' : 's'} · {formatINR(g.revenuePaise)}
+                            </span>
+                          </div>
+                        ))
+                      : referralActive.patients.map((p) => (
+                          <div
+                            key={p.patientId}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                          >
+                            <span className="min-w-0 truncate">
+                              {p.patientName}{' '}
+                              <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                            </span>
+                            <span className="font-num shrink-0 text-xs text-[var(--muted)]">
+                              {p.visitCount} visit{p.visitCount === 1 ? '' : 's'} ·{' '}
+                              {formatINR(p.revenuePaise)}
+                            </span>
+                          </div>
+                        ))}
+                  </div>
+
+                  <div className="hidden tab:block overflow-x-auto rounded-lg border border-[var(--border)]">
                     <table className="min-w-full divide-y divide-[var(--border)]">
                       {referralNeedsDetail ? (
                         <>

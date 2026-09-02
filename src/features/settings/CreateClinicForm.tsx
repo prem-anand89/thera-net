@@ -5,6 +5,7 @@ import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote } from '@/componen
 import type { Clinic } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
 import { toFriendlyMessage } from '@/lib/errors';
+import { signOutSafely } from '@/app/signOut';
 
 interface CreateClinicFormProps {
   onSuccess: () => void;
@@ -178,7 +179,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         <button
           type="button"
           className={`${btnSecondary} w-full`}
-          onClick={() => getSupabase()?.auth.signOut()}
+          onClick={() => void signOutSafely()}
         >
           Sign out
         </button>

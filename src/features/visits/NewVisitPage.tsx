@@ -30,7 +30,6 @@ import {
   btnPrimary,
   btnSecondary,
   ErrorNote,
-  RupeeInput,
   SectionCard,
   Pill,
   PackageThread,
@@ -45,6 +44,13 @@ import {
   isPackageContinuation,
   paymentBadge,
 } from '@/domain/paymentState';
+import {
+  computeAdjustedBillPaise,
+  inferBillAdjustment,
+  type BillAdjustmentMode,
+  type BillAdjustmentValueType,
+} from '@/domain/billAdjustment';
+import { BillAdjustmentFields, billAdjustmentFromFields } from '@/components/BillAdjustmentFields';
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
 
 /** Digits only, so "98765 43210" and "+91-98765-43210" compare equal. */
@@ -172,7 +178,9 @@ export function NewVisitPage() {
   const [mode, setMode] = useState<'new' | 'continuation'>('new');
   const [serviceCatalogId, setServiceCatalogId] = useState('');
   const [openPackageId, setOpenPackageId] = useState('');
-  const [billOverride, setBillOverride] = useState<number | null>(null);
+  const [adjustmentMode, setAdjustmentMode] = useState<BillAdjustmentMode>('none');
+  const [adjustmentValueType, setAdjustmentValueType] = useState<BillAdjustmentValueType>('amount');
+  const [adjustmentValue, setAdjustmentValue] = useState('');
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [condition, setCondition] = useState('');
   const [notes, setNotes] = useState('');
@@ -355,7 +363,14 @@ export function NewVisitPage() {
       // regardless of whether there was a package to continue, landing on
       // an empty, unpickable "Open package" field for a plain repeat visit.
       setServiceCatalogId(repeatVisit.serviceCatalogId);
-      setBillOverride(repeatVisit.actualBillPaise);
+      const inferred = inferBillAdjustment(
+        repeatVisit.catalogPricePaise,
+        repeatVisit.actualBillPaise
+      );
+      setAdjustmentMode(inferred.mode);
+      setAdjustmentValueType(inferred.valueType);
+      setAdjustmentValue(inferred.value > 0 ? String(inferred.value) : '');
+      setAdjustmentReason(repeatVisit.adjustmentReason ?? '');
       setMode(repeatVisit.packageGroupId ? 'continuation' : 'new');
     })();
   }, [repeatVisit, patient]);
@@ -443,8 +458,18 @@ export function NewVisitPage() {
   );
 
   const catalogPricePaise = mode === 'continuation' ? 0 : (selectedService?.basePricePaise ?? 0);
-  const billPaise = billOverride ?? catalogPricePaise;
+  const billPaise = computeAdjustedBillPaise(
+    catalogPricePaise,
+    billAdjustmentFromFields(adjustmentMode, adjustmentValueType, adjustmentValue)
+  );
   const adjustmentPaise = billPaise - catalogPricePaise;
+
+  function resetBillAdjustment() {
+    setAdjustmentMode('none');
+    setAdjustmentValueType('amount');
+    setAdjustmentValue('');
+    setAdjustmentReason('');
+  }
 
   const categories = useMemo(() => {
     const map = new Map<string, NonNullable<typeof catalog>>();
@@ -499,6 +524,9 @@ export function NewVisitPage() {
     if (!therapistId) return setError('Select a therapist');
     if (mode === 'new' && !serviceCatalogId) return setError('Select a service');
     if (mode === 'continuation' && !selectedPackage) return setError('Select the open package');
+    if (adjustmentPaise !== 0 && !adjustmentReason.trim()) {
+      return setError('Enter a reason for the bill adjustment');
+    }
     if (
       entitlements.enforcementEnabled &&
       entitlements.visitCapPerMonth != null &&
@@ -520,8 +548,8 @@ export function NewVisitPage() {
         condition,
         treatmentNotes: notes,
         treatmentIds,
-        actualBillPaise: billOverride ?? undefined,
-        adjustmentReason,
+        actualBillPaise: adjustmentPaise !== 0 ? billPaise : undefined,
+        adjustmentReason: adjustmentPaise !== 0 ? adjustmentReason : undefined,
         ...(mode === 'continuation'
           ? {
               isContinuation: true,
@@ -1002,7 +1030,7 @@ export function NewVisitPage() {
             value={mode}
             onChange={(v) => {
               setMode(v);
-              setBillOverride(null);
+              resetBillAdjustment();
             }}
             options={[
               { value: 'new', label: 'New service / package' },
@@ -1020,8 +1048,7 @@ export function NewVisitPage() {
               value={serviceCatalogId}
               onChange={(v) => {
                 setServiceCatalogId(v);
-                setBillOverride(null);
-                setAdjustmentReason('');
+                resetBillAdjustment();
               }}
               options={categories.flatMap(([category, items]) =>
                 items.map((i) => ({
@@ -1082,28 +1109,25 @@ export function NewVisitPage() {
 
       <SectionCard title="Billing">
         <div className="grid grid-cols-1 gap-3">
-          <Field
-            label={
+          <BillAdjustmentFields
+            catalogPricePaise={catalogPricePaise}
+            catalogLabel={
               mode === 'continuation'
-                ? 'Bill amount (₹0 unless topping up)'
-                : `Bill amount${selectedService ? ` (catalog: ${formatINR(selectedService.basePricePaise)})` : ''}`
+                ? 'Package session (catalog)'
+                : selectedService
+                  ? `Catalog — ${selectedService.name}`
+                  : 'Catalog price'
             }
-          >
-            <RupeeInput valuePaise={billOverride ?? catalogPricePaise} onChange={setBillOverride} />
-          </Field>
-
-          {adjustmentPaise !== 0 && (
-            <Field
-              label={`Adjustment reason * (${adjustmentPaise < 0 ? 'discount' : 'top-up'} of ${formatINR(Math.abs(adjustmentPaise))})`}
-            >
-              <input
-                className={inputCls}
-                placeholder="e.g. loyalty discount, added session"
-                value={adjustmentReason}
-                onChange={(e) => setAdjustmentReason(e.target.value)}
-              />
-            </Field>
-          )}
+            mode={adjustmentMode}
+            valueType={adjustmentValueType}
+            value={adjustmentValue}
+            reason={adjustmentReason}
+            onModeChange={setAdjustmentMode}
+            onValueTypeChange={setAdjustmentValueType}
+            onValueChange={setAdjustmentValue}
+            onReasonChange={setAdjustmentReason}
+            continuationSession={mode === 'continuation'}
+          />
 
           {billPaise > 0 && !canBill && (
             <p className="text-xs text-[var(--muted)]">

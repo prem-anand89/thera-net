@@ -20,7 +20,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
   - Fully offline-supported via collision retry loop
   - Prefix configurable per clinic in Settings (defaults to 'W')
 - **Visit entry** with catalog price autofill
-- **Price override** with mandatory adjustment reason
+- **Discount or extra** on new visits — by fixed amount or percent, with mandatory adjustment reason (stored as `adjustment_paise` on the visit)
 - **Package session tracking** (1/3, 2/3, etc.) with ₹0 continuations for subsequent sessions
 - **Reference panel** showing patient's last visit and open-package progress
 
@@ -390,14 +390,23 @@ queued with a visible error.
 - **Invite email → password setup**: `invite-therapist` calls
   `auth.admin.inviteUserByEmail()` with `redirectTo` set to the inviting
   browser's own origin + `/reset-password` (sent as `redirectOrigin` in the
-  request body from `SettingsPage.tsx`). Without this, the link falls back
-  to whatever the Supabase project's Site URL is configured to — the
-  invite token still signs the invitee in, but they land on the app fully
-  authenticated with no password ever set and no UI prompting them to set
-  one. `ResetPasswordPage.tsx` (`/reset-password`) is deliberately
-  invite/recovery-agnostic: it just checks for an active session (however
-  it got established) and lets the visitor choose a password, so no
-  separate "accept invite" page was needed.
+  request body from `SettingsPage.tsx`). New invites also set
+  `user_metadata.require_password_setup = true`; `Shell.tsx` redirects any
+  signed-in user with that flag to `/reset-password` before they reach
+  Workspace. `ResetPasswordPage.tsx` clears the flag when a password is chosen.
+- **Member status in Team → Logins**: `list_clinic_members_with_email()` joins
+  `auth.users.last_sign_in_at` and `raw_user_meta_data.require_password_setup` —
+  **Pending** (never signed in, or still needs a password) vs **Active**.
+  Pending cards get a **Resend email** action (`invite-therapist` with
+  `action: 'resend'`, recovery mailer → `/reset-password`). Resend stays
+  available while `require_password_setup` is true even if the invite link was
+  opened (which sets `last_sign_in_at`).
+- **Revoke** unlinks any `therapists.user_id` pointing at the removed login.
+- **Delete clinic** (Settings → Data → Danger zone): `admin_delete_clinic()`
+  RPC — admin-only, disables invoice/visit immutability triggers, deletes the
+  `clinics` row (ON DELETE CASCADE to all child tables). Distinct from
+  `admin_wipe_clinic_data()` which keeps the clinic shell. Client clears
+  local Dexie and reloads afterward.
 - **Invite email content**: the invite also seeds `user_metadata` with
   `clinicName`/`invitedByName`/`role` (looked up server-side from
   `clinics.name` and the caller's `clinic_members.display_name`), but the
@@ -469,13 +478,18 @@ queued with a visible error.
 - Fiscal year start month (default April → FY 26-27)
 - **Walk-in MRNO prefix** (configurable, defaults to 'W')
 
-#### Service Catalog
+#### Catalog (Settings → Catalog)
+Single settings section with three sub-tabs — **Billing packages**, **Treatments
+performed**, and **Referral sources** — each using the same card + **Edit**
+(Save/Cancel) pattern as Team → Logins. Legacy `?tab=services|treatments|referrals`
+URLs redirect to `?tab=catalog&catalogView=…`.
+
+#### Service Catalog (Billing packages tab)
 - Category and name per item — category is free text (autocompleted from
-  existing categories via a datalist), and the Settings list/table groups
-  items under a category heading rather than repeating it per row
-- Session count (1, 3, 5, etc. for package pricing)
-- Base price (in paise)
-- Active toggle
+  existing categories via a datalist), grouped under category headings
+- Session count (1, 3, 5, etc. for package pricing) — editable after create
+- Base price (in paise) — price changes affect future visits only
+- Active toggle (deactivate, not delete)
 - Unique constraint per clinic
 
 #### No-Return Reason Catalog
@@ -1603,7 +1617,7 @@ updated_at      timestamptz NOT NULL
 UNIQUE (clinic_id, name)
 ```
 Clinic-editable list of referral channels shown when adding/editing a
-patient (Settings → Referral sources, its own tab), same add / deactivate-not-delete / rename
+patient (Settings → Catalog → Referral sources), same add / deactivate-not-delete / edit
 pattern as `no_return_reason_catalog`. Seeded with the app's original six
 labels (Hospital referral, Doctor referral, Walk-in, Word of mouth, Online,
 Other) for every clinic — new via `create_clinic_with_admin()`, existing via
@@ -2052,6 +2066,17 @@ re-blocks the same clinic with no other change.
 - **Outbox table** (in Supabase) for tracking changes made offline
 - **Sync engine** pushes to Supabase when online, pulls deltas to stay in sync
 - **Collision handling** — visit/patient/invoice conflicts resolved server-side
+- **Sign-out clear must gate on `loading`, not just `!session`** —
+  `Shell.tsx` wipes every synced Dexie table plus the outbox on sign-out
+  (privacy: prevents one account's cached data leaking to the next login
+  on a shared device). `useSession()`'s state starts as `{loading: true,
+  session: null}` for one render before the real `getSession()` call
+  resolves — that transient `null` is not a confirmed sign-out. The
+  clearing effect must check `loading === false` before treating `session
+  === null` as "actually signed out"; keying it off `session` alone fires
+  the wipe on every app launch/reload, discarding any outbox entry not
+  yet pushed to the server (e.g. a patient added while offline, then the
+  tab closed before sync ran) with no warning and no way to recover it.
 
 ### 2. Revenue Split Snapshot at Billing
 - **Rates stored with each visit** (bm_split_pct, tax_pct, tds_basis)
@@ -2400,7 +2425,16 @@ its own narrow in-place edit path instead.
    / grant further clinic access via `supabase/setup_members.sql`
 5. Deploy the `invite-therapist` edge function (`supabase/functions/`) —
    used by Settings → Team to invite a new login without exposing a
-   service-role key to the client
+   service-role key to the browser. `supabase/config.toml` pins
+   `[functions.invite-therapist] verify_jwt = false` so browser CORS
+   preflights reach the handler (the function still checks the caller's
+   JWT + admin role inside). Redeploy after changing the function or
+   config: `supabase functions deploy invite-therapist`. Ensure
+   Authentication → URL configuration lists every production/staging
+   origin in **Redirect URLs** (the invite link uses
+   `{origin}/reset-password`) and that **SMTP** or Supabase's built-in
+   mailer is configured under Authentication → Email — without it,
+   `inviteUserByEmail()` creates the user but no message is delivered.
 6. `cp .env.example .env` and fill in project URL + anon key
 7. `npm install && npm run dev`
 

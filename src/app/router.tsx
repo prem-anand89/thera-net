@@ -353,19 +353,41 @@ const SETTINGS_TABS = [
   'partner',
   'patientComms',
   'team',
-  'services',
-  'treatments',
-  'referrals',
+  'catalog',
   'data',
 ] as const;
+
+const CATALOG_VIEWS = ['packages', 'treatments', 'referrals'] as const;
+
+const LEGACY_CATALOG_TABS: Record<string, (typeof CATALOG_VIEWS)[number]> = {
+  services: 'packages',
+  treatments: 'treatments',
+  referrals: 'referrals',
+};
 
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
-  validateSearch: (search: Record<string, unknown>): { tab?: (typeof SETTINGS_TABS)[number] } =>
-    typeof search.tab === 'string' && (SETTINGS_TABS as readonly string[]).includes(search.tab)
-      ? { tab: search.tab as (typeof SETTINGS_TABS)[number] }
-      : {},
+  validateSearch: (
+    search: Record<string, unknown>
+  ): { tab?: (typeof SETTINGS_TABS)[number]; catalogView?: (typeof CATALOG_VIEWS)[number] } => {
+    const tab = typeof search.tab === 'string' ? search.tab : undefined;
+    if (tab && tab in LEGACY_CATALOG_TABS) {
+      return { tab: 'catalog', catalogView: LEGACY_CATALOG_TABS[tab] };
+    }
+    const catalogView =
+      typeof search.catalogView === 'string' &&
+      (CATALOG_VIEWS as readonly string[]).includes(search.catalogView)
+        ? (search.catalogView as (typeof CATALOG_VIEWS)[number])
+        : undefined;
+    if (typeof tab === 'string' && (SETTINGS_TABS as readonly string[]).includes(tab)) {
+      return {
+        tab: tab as (typeof SETTINGS_TABS)[number],
+        ...(catalogView ? { catalogView } : {}),
+      };
+    }
+    return {};
+  },
   component: SettingsPage,
 });
 
