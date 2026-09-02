@@ -2516,6 +2516,45 @@ its own narrow in-place edit path instead.
   is a per-usage judgment call, not something to change without checking
   which bucket a given date falls into.
 
+### 10. Responsive Breakpoints & the Mobile-Card/Table Split
+- **Two custom breakpoints** (`src/index.css`'s `@theme`), not Tailwind's
+  defaults: `tab:` at 744px (iPad Mini portrait — deliberately below
+  Tailwind's `md:` 768px, so the phone/tablet split doesn't misclassify it)
+  and `desktop:` at 1000px. Every "does this count as a working tablet"
+  decision in the app uses `tab:`, so the answer stays consistent app-wide.
+- **Every table needs a phone-card twin.** A bare `<table>` with no
+  `tab:hidden`/`hidden tab:block` pair renders unusably on a phone —
+  horizontal scroll inside a cramped column, not a bug that shows up in
+  typecheck/lint/tests. The established pattern (Workspace's Packages
+  table, Ledger, Patients, Reports, Invoices, Attribution Audit, and —
+  since this pattern's writeup — Workspace's "Expected today" and
+  Requests' Feedback/Appointments tables) is always the same two blocks:
+  `<div className="tab:hidden space-y-2">` of rounded-2xl pill cards
+  (phone, below 744px) immediately followed by
+  `<div className="hidden tab:block overflow-x-auto"><table>...</table></div>`
+  (tab: and up) — same data, same actions, just laid out differently.
+  When adding a new table-shaped list, build both from the start rather
+  than shipping the table alone and coming back for the card later.
+- **Header width budget** (`Shell.tsx`'s header) — the row carries the
+  brand, five nav items, the sync badge, and the account trigger inside
+  `max-w-6xl`, which doesn't fit with full text everywhere at once. Four
+  rules keep it fitting, all the way down to a 744px iPad-portrait width:
+  1. Only the brand/clinic name shrinks (truncates, then hides below
+     `desktop:`) — nav and the sync/account cluster are `shrink-0`, so a
+     tight row never squeezes the things you click.
+  2. Nav item labels show from `tab:` up; below that they're icon-only
+     with `aria-label`/`title` carrying the accessible name (a
+     `hidden`/`display:none` span is skipped by screen readers).
+  3. `SyncBadge`'s text label is `desktop:`-only — below that it's just
+     the status dot (color still carries online/syncing/error/synced),
+     freeing the room nav labels need at `tab:`. `SyncStatusBanners`
+     covers the states that actually need a written explanation
+     (offline, sync failures) with a full-width banner regardless of
+     breakpoint, so the collapsed badge never hides something urgent.
+  4. The account trigger's display name is `desktop:`-only too (was
+     `sm:`) — below that it's just the avatar initials, same as it
+     already was on phone.
+
 ---
 
 ## Key Technologies

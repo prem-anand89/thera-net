@@ -414,16 +414,22 @@ export function Shell() {
               max-w-6xl (~1120px of usable width) — and with text labels on
               everything at once it doesn't, which is what left the nav
               squeezed and horizontally scrolling even on a full-width
-              screen. Three rules keep it fitting instead:
+              screen. Four rules keep it fitting instead:
                 1. Only the brand name shrinks. Nav and the sync/account
                    cluster are shrink-0, so a tight row eats into the
                    clinic name (truncated, then hidden below desktop:)
                    rather than squeezing the things you click.
-                2. Nav labels are desktop:-only (1000px+). Between sm: and
-                   there the nav is icons with tooltips + aria-labels,
-                   which is what makes the whole row fit an iPad portrait.
-                3. Settings moved to the account menu (see NAV above), so
-                   this is five items, not six.
+                2. Nav labels are tab:-only (744px+, iPad-portrait and up).
+                   Below that the nav is icons with tooltips + aria-labels.
+                   Getting labels to fit at iPad-portrait widths (as
+                   narrow as 744px) is what rules 3-4 free the room for.
+                3. SyncBadge's text collapses to just the status dot below
+                   desktop: (1000px+) — the dot's color already carries
+                   the state, and the panel behind a tap has the rest.
+                4. The account trigger's name collapses to just the avatar
+                   initials below desktop: too (was sm:, 640px+) — Settings
+                   moved to the account menu (see NAV above) keeps this at
+                   five nav items rather than six.
               The clinic name is also the one genuinely redundant item
               here — the account trigger's dropdown names the current
               clinic too, and switches between them — so hiding it first
@@ -448,13 +454,13 @@ export function Shell() {
                 overflow-x-auto scroller this briefly was) is the point:
                 nav items are targets, and a squeezed or scrolled row of
                 them is worse than a hidden label. The label is what gives
-                way instead, at desktop:. */}
+                way instead, at tab:. */}
             <nav className="hidden shrink-0 gap-1 sm:flex">
               {nav.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
-                  // Icon-only below desktop:, so the accessible name has to
+                  // Icon-only below tab:, so the accessible name has to
                   // come from the attribute rather than the hidden span —
                   // `hidden` is display:none, which screen readers skip.
                   aria-label={item.label}
@@ -462,7 +468,7 @@ export function Shell() {
                   className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--paper)] [&.active]:bg-[var(--teal-light)] [&.active]:font-medium [&.active]:text-[var(--teal)] desktop:px-3"
                 >
                   <item.Icon className="shrink-0" />
-                  <span className="hidden desktop:inline">{item.label}</span>
+                  <span className="hidden tab:inline">{item.label}</span>
                 </Link>
               ))}
             </nav>
@@ -708,8 +714,11 @@ function AccountMenu({
         {/* Name only — the clinic name used to sit under it here *and* at
             the far left of the header, and the dropdown below names the
             current clinic a third time (with the switcher). One line here
-            gives the nav back the ~70px the wrapped pair was holding. */}
-        <span className="hidden max-w-[9rem] truncate text-xs font-medium text-[var(--ink)] sm:inline">
+            gives the nav back the ~70px the wrapped pair was holding.
+            Hidden through the whole tab: range (not just below sm:) so the
+            nav's own labels (tab:-and-up now) have the room — just the
+            avatar initials show there, same as on phone. */}
+        <span className="hidden max-w-[9rem] truncate text-xs font-medium text-[var(--ink)] desktop:inline">
           {name}
         </span>
       </button>

@@ -69,10 +69,14 @@ export function SyncBadge() {
         onClick={() => setOpen((o) => !o)}
         title={status.error ?? 'Sync status'}
         aria-label={`Sync: ${label}`}
-        className="flex min-h-11 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs text-[var(--muted)] hover:bg-[var(--paper)]"
+        className="flex min-h-11 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--paper)] desktop:px-3"
       >
         <span className={`h-2 w-2 rounded-full ${dot}`} />
-        {label}
+        {/* Text collapses below desktop: (the dot's color already carries
+            the state, and the panel this button opens has the rest) —
+            that's the room the header nav needs to show tab:-and-up
+            labels at iPad-portrait widths. */}
+        <span className="hidden desktop:inline">{label}</span>
       </button>
 
       {open && (
