@@ -83,17 +83,24 @@ export const bookingService = {
 
   // ---- Staff (Requests → Bookings, Workspace "Expected today") ----------
 
-  /** Returns the new `appointments.id`. */
+  /** Returns the new `appointments.id`. `patientId` is optional and stays
+   *  undefined by default — deferring identity resolution to New Visit's
+   *  own search-or-create typeahead, same as before. Pass it only when
+   *  staff have explicitly matched the request to an existing patient
+   *  (a real human confirming identity, not a name-string guess) via the
+   *  Confirm form's own patient picker. */
   async confirmAppointmentRequest(
     requestId: UUID,
     scheduledAt: string,
-    therapistId: UUID | null
+    therapistId: UUID | null,
+    patientId?: UUID | null
   ): Promise<UUID> {
     const supabase = supabaseOrThrow();
     const { data, error } = await supabase.rpc('confirm_appointment_request', {
       p_request_id: requestId,
       p_scheduled_at: scheduledAt,
       p_therapist_id: therapistId,
+      p_patient_id: patientId ?? null,
     });
     if (error) throw new Error(`Could not confirm: ${error.message}`);
     syncEngine.schedule(0);
@@ -105,13 +112,18 @@ export const bookingService = {
    *  row) since staff already know the date/time/therapist when entering
    *  one by hand. Returns the new `appointments.id`, same as
    *  `confirmAppointmentRequest`, so callers can reuse the same
-   *  post-confirm banner either way. */
+   *  post-confirm banner either way. `patientId` is optional — pass it
+   *  when the caller already knows exactly which patient this is (e.g.
+   *  the Patients list's own "Book" action, starting from a clicked row,
+   *  not a typed name), so the appointment is linked from creation
+   *  instead of waiting for a visit. */
   async createAppointmentStaff(
     clinicId: UUID,
     name: string,
     phone: string,
     therapistId: UUID | null,
-    scheduledAt: string
+    scheduledAt: string,
+    patientId?: UUID | null
   ): Promise<UUID> {
     const supabase = supabaseOrThrow();
     const { data, error } = await supabase.rpc('create_appointment_staff', {
@@ -120,6 +132,7 @@ export const bookingService = {
       p_phone: phone,
       p_therapist_id: therapistId,
       p_scheduled_at: scheduledAt,
+      p_patient_id: patientId ?? null,
     });
     if (error) throw new Error(`Could not create booking: ${error.message}`);
     syncEngine.schedule(0);

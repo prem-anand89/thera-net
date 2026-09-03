@@ -909,6 +909,32 @@ still falls through to the existing share sheet, unchanged.
     the same therapist" is the common case. Gated on
     `clinic.enablePatientComms`, same as the Bookings tab itself; hidden
     entirely (not just disabled) when that's off.
+  - **Optional `patient_id` linking at booking/confirm time** — both
+    `create_appointment_staff` and `confirm_appointment_request` grew a
+    trailing `p_patient_id uuid default null` parameter (drop+create, not
+    `create or replace` — see §3c), used at exactly the two entry points
+    where identity is already unambiguous, without relaxing the documented
+    "`appointments.patient_id` stays null until arrival" rule for every
+    other path (a public form submission or a hand-typed name still
+    carries real duplicate-name risk, so it still waits for New Visit's
+    own search-or-create typeahead):
+    - The Patients-list "Book" action above always passes it —
+      `BookAppointmentDialog` opens from an already-clicked patient row,
+      so there's no name to match and no ambiguity to defer.
+    - The Bookings tab's Confirm mini-form (`RequestsPage.tsx`) grew a
+      third, optional field alongside Scheduled-for/Therapist: a
+      `SearchableSelect` "Link to existing patient · optional" picker
+      (options built from `repos.patients.list`, broadened from
+      admin-only to admin-or-front_desk for this). Left blank — the
+      default — it's exactly today's behavior, identity resolves later.
+      Staff only fill it in when they explicitly recognize the requester
+      (by the name/phone already shown on the request card) as someone
+      already on file; nothing else on the form depends on it.
+    Both RPCs check the passed id belongs to the same clinic before
+    trusting it. `bookingService.confirmAppointmentRequest` and
+    `.createAppointmentStaff` both take the new id as a trailing optional
+    parameter, defaulting to `null`, so every existing call site is
+    unaffected.
   - **`NewVisitPage.tsx`'s Condition/Treatments fields collapse behind a
     "+ Add condition / treatments (optional)" disclosure for front_desk
     only** — reception usually doesn't know either at log time (that's

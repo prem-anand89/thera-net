@@ -641,6 +641,7 @@ function AllPatientsSection() {
       {booking && (
         <BookAppointmentDialog
           clinicId={clinic.id}
+          patientId={booking.id}
           patientName={booking.name}
           patientPhone={booking.phone}
           defaultTherapistId={visitStatsByPatient.get(booking.id)?.latestVisit.therapistId}

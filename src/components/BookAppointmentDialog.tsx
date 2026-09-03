@@ -29,6 +29,7 @@ function defaultScheduledAt(): string {
  */
 export function BookAppointmentDialog({
   clinicId,
+  patientId,
   patientName,
   patientPhone,
   defaultTherapistId,
@@ -36,6 +37,12 @@ export function BookAppointmentDialog({
   onBooked,
 }: {
   clinicId: UUID;
+  /** Always known here — this dialog only ever opens from a clicked row
+   *  in the Patients list, never from a typed name, so the appointment
+   *  links to the real patient record from creation rather than waiting
+   *  for a visit (see the RPC's own migration comment on why that's safe
+   *  here specifically). */
+  patientId: UUID;
   patientName: string;
   patientPhone: string | null;
   defaultTherapistId?: string | null;
@@ -62,7 +69,8 @@ export function BookAppointmentDialog({
         patientName,
         phone,
         therapistId || null,
-        new Date(scheduledAt).toISOString()
+        new Date(scheduledAt).toISOString(),
+        patientId
       );
       onBooked();
     } catch (e) {

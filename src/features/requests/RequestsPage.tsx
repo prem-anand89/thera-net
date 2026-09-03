@@ -8,6 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { toFriendlyMessage } from '@/lib/errors';
 import { SectionCard, Pill, th, td } from '@/components/ui';
+import { SearchableSelect } from '@/components/SearchableSelect';
 import { requestsLastViewedKey } from './requestsSignals';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import type { UUID } from '@/domain/types';
@@ -91,11 +92,21 @@ export function RequestsPage() {
   );
   const visitById = useMemo(() => new Map((visits ?? []).map((v) => [v.id, v])), [visits]);
 
+  // Admin-only originally (the Feedback tab's own patient link); broadened
+  // to canSeeBookings too so front_desk gets it for the Confirm form's
+  // "link to existing patient" picker below.
   const patients = useLiveQuery(
-    () => (isAdmin ? repos.patients.list(clinic.id) : undefined),
-    [clinic.id, isAdmin]
+    () => (isAdmin || canSeeBookings ? repos.patients.list(clinic.id) : undefined),
+    [clinic.id, isAdmin, canSeeBookings]
   );
   const patientById = useMemo(() => new Map((patients ?? []).map((p) => [p.id, p])), [patients]);
+  const patientOptions = useMemo(
+    () =>
+      [...(patients ?? [])]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((p) => ({ value: p.id, label: `${p.name} (${p.mrno})` })),
+    [patients]
+  );
 
   const therapists = useLiveQuery(
     () => (isAdmin || canSeeBookings ? repos.therapists.list(clinic.id, true) : undefined),
@@ -147,6 +158,10 @@ export function RequestsPage() {
   const [confirmingId, setConfirmingId] = useState<UUID | null>(null);
   const [confirmScheduledAt, setConfirmScheduledAt] = useState(defaultScheduledAt(null));
   const [confirmTherapistId, setConfirmTherapistId] = useState('');
+  // Optional — left blank keeps today's exact behavior (patient_id stays
+  // null until a visit resolves identity). Set only when staff explicitly
+  // recognize the requester as an existing patient and pick them here.
+  const [confirmPatientId, setConfirmPatientId] = useState('');
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [justConfirmed, setJustConfirmed] = useState<{
@@ -220,6 +235,7 @@ export function RequestsPage() {
     setConfirmingId(requestId);
     setConfirmScheduledAt(defaultScheduledAt(preferredDate));
     setConfirmTherapistId(preferredTherapistId ?? '');
+    setConfirmPatientId('');
     setConfirmError(null);
     setJustConfirmed(null);
   }
@@ -232,7 +248,8 @@ export function RequestsPage() {
       const appointmentId = await bookingService.confirmAppointmentRequest(
         request.id,
         scheduledIso,
-        confirmTherapistId || null
+        confirmTherapistId || null,
+        confirmPatientId || null
       );
       setJustConfirmed({
         appointmentId,
@@ -609,6 +626,21 @@ export function RequestsPage() {
                               ))}
                             </select>
                           </label>
+                          {/* Optional — leaving it blank keeps today's exact
+                              behavior (patient_id resolves later, at New
+                              Visit). Only worth filling in when staff
+                              actually recognize this requester as someone
+                              already on file; nothing else here depends on
+                              it. */}
+                          <div className="w-52">
+                            <SearchableSelect
+                              label="Link to existing patient · optional"
+                              value={confirmPatientId}
+                              onChange={setConfirmPatientId}
+                              options={patientOptions}
+                              placeholder="No match — leave unlinked"
+                            />
+                          </div>
                           <button
                             type="button"
                             disabled={confirmBusy}
