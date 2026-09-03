@@ -18,7 +18,7 @@ import {
   formatDateDMY,
   formatDateDM,
 } from '@/domain/fiscalYear';
-import { type Patient, type Visit } from '@/domain/types';
+import { REFERRING_SOURCE_LABELS, type Patient, type Visit } from '@/domain/types';
 import {
   inputCls,
   th,
@@ -33,6 +33,16 @@ import {
 import { patientIdentityLine, CardDetailRow } from '@/components/VisitCard';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
+
+/** "Doctor referral — Dr. Mehta" style summary, same shape as
+ *  PatientProfilePage's own `referral` line — null when nothing's on
+ *  file, which is common (older/walk-in patients predate the field). */
+function patientReferralLine(p: Patient): string | null {
+  if (!p.referringSource) return null;
+  return [REFERRING_SOURCE_LABELS[p.referringSource], p.referringSourceDetail]
+    .filter(Boolean)
+    .join(' — ');
+}
 
 type PatientSortKey = 'name' | 'mrno' | 'age' | 'condition' | 'lastVisit';
 const PATIENT_COMPARATORS = {
@@ -439,12 +449,23 @@ function AllPatientsSection() {
                   return (
                     <tr key={p.id} className="hover:bg-[var(--paper)]">
                       <td className={td}>
-                        {p.mrno}
-                        {p.mrnoSource === 'auto' && (
-                          <span className="ml-1.5">
-                            <Pill tone="slate">walk-in</Pill>
-                          </span>
-                        )}
+                        <div>
+                          {p.mrno}
+                          {p.mrnoSource === 'auto' && (
+                            <span className="ml-1.5">
+                              <Pill tone="slate">walk-in</Pill>
+                            </span>
+                          )}
+                        </div>
+                        {/* Second line, same pattern as Name's age/sex line
+                            below — referral is the one other fact worth a
+                            glance at roster level, and pairing it here
+                            (rather than a column of its own) keeps every
+                            multi-fact cell in this table the same fixed
+                            two-line shape. */}
+                        <div className="text-xs text-[var(--muted)]">
+                          {patientReferralLine(p) ?? '—'}
+                        </div>
                       </td>
                       <td className={`${td} font-display`}>
                         <Link
@@ -480,13 +501,14 @@ function AllPatientsSection() {
                       </td>
                       <td className={`${td} whitespace-nowrap`}>
                         {stats ? (
-                          <div className="font-num text-xs text-[var(--ink)]">
-                            {formatDateDMY(stats.lastVisitOn)}
-                            <span className="text-[var(--muted)]">
-                              {' '}
-                              · {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
-                            </span>
-                          </div>
+                          <>
+                            <div className="font-num text-xs text-[var(--ink)]">
+                              {formatDateDMY(stats.lastVisitOn)}
+                            </div>
+                            <div className="text-xs text-[var(--muted)]">
+                              {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
+                            </div>
+                          </>
                         ) : (
                           <span className="text-xs text-[var(--muted)]">No visits yet</span>
                         )}
@@ -666,8 +688,14 @@ function PatientCard({
         </KebabMenu>
       </div>
 
-      {(p.primaryCondition || therapistLine || stats?.latestVisit?.treatmentNotes) && (
+      {(p.primaryCondition ||
+        therapistLine ||
+        stats?.latestVisit?.treatmentNotes ||
+        patientReferralLine(p)) && (
         <div className="mt-1.5 space-y-1">
+          {patientReferralLine(p) && (
+            <CardDetailRow label="Referral">{patientReferralLine(p)}</CardDetailRow>
+          )}
           {therapistLine && (
             <CardDetailRow label="Therapist">
               <TherapistPill>{therapistLine}</TherapistPill>

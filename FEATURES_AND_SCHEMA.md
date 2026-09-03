@@ -2582,6 +2582,21 @@ its own narrow in-place edit path instead.
   Ledger's totals and Workspace's "Collected today" stat both carry it;
   any other screen aggregating from `visits` (or another synced table)
   for a number people check repeatedly through the day should too.
+- **A `<button>` needs `uppercase` re-declared, not inherited.** Every
+  sortable column header goes through `SortHeader` (`sortable.tsx`),
+  which wraps the label in a `<button>` so the whole header is clickable.
+  Browsers reset a `<button>`'s `text-transform` to `none` by default,
+  and that reset doesn't inherit through from the ancestor `<th>` — so
+  every sortable header silently rendered in plain case while every
+  plain, non-sortable `<th className={th}>` in the same table correctly
+  showed the `th`/`thNum` uppercase styling, a mismatch easy to miss
+  since nothing in typecheck/lint/tests catches a CSS property silently
+  not applying. Fixed by adding `uppercase` directly to `SortHeader`'s
+  `<button>` class list. The general lesson: a `<button>` (or `<input>`/
+  `<select>`) wrapping styled text doesn't automatically inherit
+  `text-transform`/`letter-spacing` the way a plain element would —
+  re-declare them on the control itself, don't assume the ancestor's
+  class is enough.
 
 ---
 
