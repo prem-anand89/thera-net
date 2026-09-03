@@ -50,6 +50,11 @@ const MonthlyLedgerPrintPage = lazy(() =>
     default: m.MonthlyLedgerPrintPage,
   }))
 );
+const MonthlyPerformanceReportPage = lazy(() =>
+  import('@/features/reports/MonthlyPerformanceReportPage').then((m) => ({
+    default: m.MonthlyPerformanceReportPage,
+  }))
+);
 const InvoicePrintPage = lazy(() =>
   import('@/features/invoices/InvoicePrintPage').then((m) => ({ default: m.InvoicePrintPage }))
 );
@@ -305,6 +310,16 @@ const insightsPrintRoute = createRoute({
   component: MonthlyLedgerPrintPage,
 });
 
+// Same search shape and parent nav (/insights, Reports) as the ledger print
+// route above — a second, separate print view rather than a mode on the
+// same page, since the two share nothing but the month/year picker.
+const performancePrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/insights/performance-print',
+  validateSearch: monthlyPrintSearch,
+  component: MonthlyPerformanceReportPage,
+});
+
 const reportsRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports',
@@ -438,8 +453,10 @@ const insightsRoute = createRoute({
   path: '/insights',
   validateSearch: (
     search: Record<string, unknown>
-  ): { tab?: 'monthly' | 'audit'; year?: number; month?: number } => ({
-    ...(search.tab === 'monthly' || search.tab === 'audit' ? { tab: search.tab } : {}),
+  ): { tab?: 'monthly' | 'audit' | 'performance'; year?: number; month?: number } => ({
+    ...(search.tab === 'monthly' || search.tab === 'audit' || search.tab === 'performance'
+      ? { tab: search.tab }
+      : {}),
     ...(typeof search.year === 'number' && typeof search.month === 'number'
       ? { year: search.year, month: search.month }
       : {}),
@@ -505,6 +522,7 @@ const routeTree = rootRoute.addChildren([
   insurerPacketRoute,
   advanceReceiptPrintRoute,
   insightsPrintRoute,
+  performancePrintRoute,
   reportsRedirectRoute,
   reportsPrintRedirectRoute,
   invoicePrintRoute,

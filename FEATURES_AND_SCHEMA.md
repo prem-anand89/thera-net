@@ -1035,6 +1035,42 @@ still falls through to the existing share sheet, unchanged.
     are free text with no format enforced, and a 10-digit local number is
     what staff overwhelmingly type); anything else passes through as-is
     and Meta's own validation is the real backstop.
+- **Monthly performance report** (`/insights?tab=performance` picker →
+  `/insights/performance-print`) — a print-only, one-month "hand this to
+  the team" document, alongside the existing per-therapist Monthly
+  statement rather than replacing it (that one's still the payout-figure
+  source of truth; this one's a review deck). Same admin-only gate
+  (`canViewPayouts`) and print shell (letterhead, `.no-print` button bar,
+  A4 sizing via `@page`) as `MonthlyLedgerPrintPage`, reached the same way
+  (a picker tab with an FY/month select feeding `year`/`month` into the
+  print route's search params).
+  - **Clinic totals** — `reportService.monthly`'s own `.total` row
+    (revenue, using the same hospital-split-aware `Post-Tax {label}` vs.
+    plain "Revenue" label the rest of the app uses), plus new-vs-returning
+    patient counts computed locally (a patient's own earliest visit across
+    *all* history, not just this month, decides which bucket they're in —
+    deliberately not a `dashboardService` addition, since nowhere else
+    needs this specific month-scoped split). Revenue and visit counts each
+    carry a "vs last month" delta, the one comparison this session's
+    Trends review flagged as missing everywhere else in Reports too.
+  - **Per-therapist breakdown** reuses `reportService.monthly`'s `rows`
+    (already the exact per-therapist Bill/Post-Tax/Net/Visits data
+    `MonthlyReportTable` renders) for two `BarChart`s (revenue, visits)
+    plus the table itself — not `TherapistComparisonCard`, which is
+    hardcoded to "current month, live" and a 6-month trend with no month
+    parameter, the wrong shape for an arbitrary past month.
+  - **Referral sources & conditions** — two `PieChart`s, computed locally
+    from that month's visits/patients rather than reusing
+    `dashboardService.referralSourceStats`/`conditionUsage`, both of which
+    are deliberately all-time/unscoped (Trends dashboard's own semantics)
+    and would need a signature change to take a date range — a local
+    month-scoped aggregation here was the smaller, self-contained change.
+  - **Retention follow-ups** — current `dashboardService.singleVisitPatients`
+    and stale `openPackages`, explicitly labeled "as of today, not scoped
+    to `<month>`" rather than filtered to the report's own month: the
+    point of this section is what the team should act on at the review
+    meeting, not a historical record, so it always reflects the live
+    queue regardless of which past month the rest of the report covers.
 
 ---
 
@@ -1061,8 +1097,9 @@ src/features/            UI pages and components (React + TanStack Router)
   ├── workspace/         WorkspacePage (Today, Recent, Open Packages, Pending)
   ├── visits/            LedgerPage at /ledger (Visits/Invoices sub-tabs); NewVisitPage
   ├── patients/          PatientsPage, PatientProfilePage, NoteEditorPage
-  ├── reports/           ReportsPage at /insights (Trends + monthly statement),
-                         MonthlyLedgerPrintPage
+  ├── reports/           ReportsPage at /insights (Trends + monthly statement +
+                         performance report), MonthlyLedgerPrintPage,
+                         MonthlyPerformancePickerPage, MonthlyPerformanceReportPage
   ├── settings/          SettingsPage at /settings; CreateClinicForm
   ├── invoices/          InvoicePrintPage
   ├── import/            Historical Excel visit import (preview + commit)
@@ -1104,8 +1141,9 @@ supabase/                SQL migrations, RLS policies, RPCs, realtime
 | `/patients/$patientId` | Individual patient profile, visit history, payments summary, clinical notes | All roles |
 | `/patients/$patientId/notes/new`, `/patients/$patientId/notes/$noteId` | Core Assessment note editor (Initial/Follow-up) | Therapists & admins (`canViewClinicalNotes`) |
 | `/patients/$patientId/notes/$noteId/print` | Printable consultation note | Therapists & admins |
-| `/insights` | Dashboard + monthly per-therapist statement (`?tab=monthly`) | Admins & front_desk (monthly statement sub-view further gated admin-only) |
+| `/insights` | Dashboard + monthly per-therapist statement (`?tab=monthly`) + monthly performance report picker (`?tab=performance`) | Admins & front_desk (monthly statement and performance report sub-views further gated admin-only, same `canViewPayouts` check) |
 | `/insights/print` | Printable monthly ledger (portrait A4) | Admins & front_desk |
+| `/insights/performance-print` | Printable monthly performance report — clinic totals, per-therapist chart + table, referral/condition mix, retention follow-ups (portrait A4) | Admins & front_desk |
 | `/invoices/$invoiceId/print` | Printable Bill/Bill Cum Receipt (A4/A5) | Anyone who can reach the invoice |
 | `/settings` | Clinic configuration, MRNO settings, billing mode, rate setup, feature toggles | Admins only |
 | `/settings/import-visits` | Historical Excel visit import | Admins only |
