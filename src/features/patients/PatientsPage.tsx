@@ -444,6 +444,7 @@ function AllPatientsSection() {
                 <tr>
                   <SortHeader label="Patient ID" k="mrno" sort={sort} />
                   <SortHeader label="Name" k="name" sort={sort} />
+                  <th className={th}>Phone</th>
                   <th className={th}>Therapist</th>
                   <SortHeader label="Primary condition" k="condition" sort={sort} />
                   <SortHeader label="Last visit" k="lastVisit" sort={sort} firstDir="desc" />
@@ -492,6 +493,15 @@ function AllPatientsSection() {
                           <div className="text-xs text-[var(--muted)]">
                             {p.age ?? '-'} / {p.sex ?? '-'}
                           </div>
+                        )}
+                      </td>
+                      <td className={`${td} whitespace-nowrap`}>
+                        {p.phone ? (
+                          <a href={`tel:${p.phone}`} className="hover:underline">
+                            {p.phone}
+                          </a>
+                        ) : (
+                          <span className="text-[var(--muted)]">—</span>
                         )}
                       </td>
                       <td className={td}>
@@ -728,8 +738,15 @@ function PatientCard({
         </KebabMenu>
       </div>
 
-      {(p.primaryCondition || therapistLine || patientReferralLine(p)) && (
+      {(p.phone || p.primaryCondition || therapistLine || patientReferralLine(p)) && (
         <div className="mt-1.5 space-y-1">
+          {p.phone && (
+            <CardDetailRow label="Phone">
+              <a href={`tel:${p.phone}`} className="hover:underline">
+                {p.phone}
+              </a>
+            </CardDetailRow>
+          )}
           {patientReferralLine(p) && (
             <CardDetailRow label="Referral">{patientReferralLine(p)}</CardDetailRow>
           )}
