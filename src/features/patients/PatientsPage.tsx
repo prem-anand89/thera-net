@@ -265,8 +265,36 @@ function AllPatientsSection() {
 
   return (
     <SectionCard title="All Patients">
-      <div className="mb-3 flex flex-wrap items-end gap-3">
-        <div className="ml-auto flex flex-wrap items-end gap-2">
+      {/* One row, not two — chips and the FY/search controls used to each
+          sit on their own full-width row (chips left with empty space to
+          their right, controls right with empty space to their left).
+          justify-between puts them on the same row, chips claiming the
+          left and controls the right, so nothing goes to waste; wrap lets
+          narrower widths fall back to two rows without an empty gap. */}
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {(
+            [
+              { key: 'all', label: 'All' },
+              { key: 'needs_invoice', label: 'Needs invoice' },
+              { key: 'mine', label: 'My patients' },
+            ] as const
+          ).map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              className={`min-h-11 rounded-full px-3 py-1 text-xs font-medium ${
+                chip === c.key
+                  ? 'bg-[var(--teal-light)] text-[var(--teal)]'
+                  : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+              }`}
+              onClick={() => setChip(c.key)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
           <div className="flex gap-2">
             <select
               className={inputCls}
@@ -316,28 +344,6 @@ function AllPatientsSection() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-      </div>
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        {(
-          [
-            { key: 'all', label: 'All' },
-            { key: 'needs_invoice', label: 'Needs invoice' },
-            { key: 'mine', label: 'My patients' },
-          ] as const
-        ).map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            className={`min-h-11 rounded-full px-3 py-1 text-xs font-medium ${
-              chip === c.key
-                ? 'bg-[var(--teal-light)] text-[var(--teal)]'
-                : 'text-[var(--muted)] hover:bg-[var(--paper)]'
-            }`}
-            onClick={() => setChip(c.key)}
-          >
-            {c.label}
-          </button>
-        ))}
       </div>
       <p className="mb-3 text-xs text-[var(--muted)]">
         {selectedPeriod ? (
@@ -436,7 +442,6 @@ function AllPatientsSection() {
                   <SortHeader label="Name" k="name" sort={sort} />
                   <th className={th}>Therapist</th>
                   <SortHeader label="Primary condition" k="condition" sort={sort} />
-                  <th className={th}>Treatment</th>
                   <SortHeader label="Last visit" k="lastVisit" sort={sort} firstDir="desc" />
                   <th className={th}>Bill</th>
                   <th className={th}></th>
@@ -446,16 +451,29 @@ function AllPatientsSection() {
                 {rows.map((p) => {
                   const stats = visitStatsByPatient.get(p.id);
                   const billing = billingByPatient.get(p.id);
+                  const referral = patientReferralLine(p);
+                  // The "walk-in" pill (mrnoSource: no real ID was ever
+                  // assigned) and a referral of "Walk-in" (how they found
+                  // the clinic) are two different facts that happen to
+                  // share a word — showing both reads as a repeated
+                  // "Walk-in / Walk-in" rather than two facts. Only the
+                  // pill's flavor of it earns a line when there's nothing
+                  // else (a detail, or a different source) to add.
+                  const showReferral =
+                    referral && !(p.mrnoSource === 'auto' && referral === 'Walk-in');
                   return (
                     <tr key={p.id} className="hover:bg-[var(--paper)]">
                       <td className={td}>
-                        <div>
-                          {p.mrno}
-                          {p.mrnoSource === 'auto' && (
-                            <span className="ml-1.5">
-                              <Pill tone="slate">walk-in</Pill>
-                            </span>
-                          )}
+                        {/* Fixed height so the pill (its own padding gives
+                            it a taller line box than plain text) doesn't
+                            push this row's second line down relative to
+                            rows with no pill — that was the misalignment:
+                            referral lines started at different heights
+                            row to row depending on whether a pill sat
+                            above them. */}
+                        <div className="flex h-5 items-center gap-1.5">
+                          <span>{p.mrno}</span>
+                          {p.mrnoSource === 'auto' && <Pill tone="slate">walk-in</Pill>}
                         </div>
                         {/* Second line, same pattern as Name's age/sex line
                             below — referral is the one other fact worth a
@@ -464,7 +482,7 @@ function AllPatientsSection() {
                             multi-fact cell in this table the same fixed
                             two-line shape. */}
                         <div className="text-xs text-[var(--muted)]">
-                          {patientReferralLine(p) ?? '—'}
+                          {showReferral ? referral : '—'}
                         </div>
                       </td>
                       <td className={`${td} font-display`}>
@@ -492,13 +510,6 @@ function AllPatientsSection() {
                         )}
                       </td>
                       <td className={td}>{p.primaryCondition ?? '-'}</td>
-                      <td className={td}>
-                        {stats?.latestVisit?.treatmentNotes ? (
-                          <span className="text-xs">{stats.latestVisit.treatmentNotes}</span>
-                        ) : (
-                          '-'
-                        )}
-                      </td>
                       <td className={`${td} whitespace-nowrap`}>
                         {stats ? (
                           <>
@@ -688,10 +699,7 @@ function PatientCard({
         </KebabMenu>
       </div>
 
-      {(p.primaryCondition ||
-        therapistLine ||
-        stats?.latestVisit?.treatmentNotes ||
-        patientReferralLine(p)) && (
+      {(p.primaryCondition || therapistLine || patientReferralLine(p)) && (
         <div className="mt-1.5 space-y-1">
           {patientReferralLine(p) && (
             <CardDetailRow label="Referral">{patientReferralLine(p)}</CardDetailRow>
@@ -703,11 +711,6 @@ function PatientCard({
           )}
           {p.primaryCondition && (
             <CardDetailRow label="Condition">{p.primaryCondition}</CardDetailRow>
-          )}
-          {stats?.latestVisit?.treatmentNotes && (
-            <CardDetailRow label="Treatment" clamp>
-              {stats.latestVisit.treatmentNotes}
-            </CardDetailRow>
           )}
         </div>
       )}
