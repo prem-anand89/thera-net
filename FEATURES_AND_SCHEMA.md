@@ -394,13 +394,30 @@ queued with a visible error.
   `user_metadata.require_password_setup = true`; `Shell.tsx` redirects any
   signed-in user with that flag to `/reset-password` before they reach
   Workspace. `ResetPasswordPage.tsx` clears the flag when a password is chosen.
-- **Member status in Team → Logins**: `list_clinic_members_with_email()` joins
-  `auth.users.last_sign_in_at` and `raw_user_meta_data.require_password_setup` —
-  **Pending** (never signed in, or still needs a password) vs **Active**.
-  Pending cards get a **Resend email** action (`invite-therapist` with
-  `action: 'resend'`, recovery mailer → `/reset-password`). Resend stays
-  available while `require_password_setup` is true even if the invite link was
-  opened (which sets `last_sign_in_at`).
+- **Member onboarding status in Team → Logins** (`src/domain/memberOnboarding.ts`,
+  `memberOnboardingStatus()`) — three states, not the earlier flat
+  Pending/Active split, derived from the same two fields
+  `list_clinic_members_with_email()` already joined
+  (`auth.users.last_sign_in_at`, `raw_user_meta_data.require_password_setup`):
+  - **Invited** (slate badge) — `last_sign_in_at` still null; mail sent
+    (`invited_at` shown in the badge), nothing else has happened yet.
+  - **Opened invite — setting up** (amber badge) — `last_sign_in_at` is set
+    but `require_password_setup` is still true. Supabase's invite link is a
+    magic-link-style token: clicking it *is* the sign-in event, establishing
+    a session before the invitee has chosen a password — so this is the
+    only "did they engage with the invite" signal available without a
+    transactional email provider's own delivery/open-tracking webhooks
+    (Resend, Postmark, SendGrid, ...). Supabase's built-in mailer has no
+    such tracking; a literal "opened in an inbox" pixel isn't available
+    without adding one of those. The badge reports "clicked the invite
+    link," worded that way rather than a plain "opened" to stay accurate
+    about what's actually being detected.
+  - **Active** (moss badge) — `require_password_setup` is false;
+    `ResetPasswordPage.tsx` clears it once a password is actually chosen.
+  Both non-Active states get a **Resend email** action (`invite-therapist`
+  with `action: 'resend'`, recovery mailer → `/reset-password`) — unchanged
+  from before, just re-keyed off `status !== 'active'` instead of the old
+  boolean.
 - **Revoke** unlinks any `therapists.user_id` pointing at the removed login.
 - **Delete clinic** (Settings → Data → Danger zone): `admin_delete_clinic()`
   RPC — admin-only, disables invoice/visit immutability triggers, deletes the

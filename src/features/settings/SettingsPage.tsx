@@ -17,8 +17,13 @@ import { PLAN_TIER_LABELS, minimumTierFor, type PlanFeature } from '@/domain/pla
 import { getSupabase, publicTherapistPhotoUrl, publicLogoUrl } from '@/lib/supabase';
 import { resizeImageToBlob } from '@/lib/resizeImage';
 import { db } from '@/lib/db';
-import { MONTH_NAMES } from '@/domain/fiscalYear';
+import { MONTH_NAMES, formatDateDM } from '@/domain/fiscalYear';
 import { clinicShareLabels, type Clinic, type Therapist, type UUID } from '@/domain/types';
+import {
+  memberOnboardingStatus,
+  MEMBER_ONBOARDING_LABELS,
+  type MemberOnboardingStatus,
+} from '@/domain/memberOnboarding';
 import type { TdsBasis } from '@/domain/split';
 import {
   Field,
@@ -2058,9 +2063,9 @@ interface ClinicMember {
   email: string;
   role: string;
   displayName: string | null;
-  /** Invite not finished — never signed in, or opened link without choosing a password. */
-  pending: boolean;
+  status: MemberOnboardingStatus;
   invitedAt: string | null;
+  lastSignInAt: string | null;
 }
 
 /** Same accent per role everywhere a role shows up as a colored pill or
@@ -2079,6 +2084,32 @@ function RolePill({ role }: { role: Exclude<ClinicRole, 'unknown'> }) {
       style={{ background: light, color }}
     >
       {CLINIC_ROLE_LABELS[role]}
+    </span>
+  );
+}
+
+/** Slate (invited, nothing's happened yet) → amber (clicked the invite
+ *  link, hasn't chosen a password) → moss (done). Caption dates from
+ *  whichever timestamp actually moved for that state — invitedAt for the
+ *  first, lastSignInAt (the moment the link was clicked) for the second —
+ *  so the badge always answers "since when," not just "which state." */
+function OnboardingBadge({ member }: { member: ClinicMember }) {
+  const accent: Accent =
+    member.status === 'active' ? 'moss' : member.status === 'link_opened' ? 'amber' : 'slate';
+  const { color, light } = ACCENT_VARS[accent];
+  const dateSuffix =
+    member.status === 'invited' && member.invitedAt
+      ? ` ${formatDateDM(member.invitedAt)}`
+      : member.status === 'link_opened' && member.lastSignInAt
+        ? ` ${formatDateDM(member.lastSignInAt)}`
+        : '';
+  return (
+    <span
+      className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+      style={{ background: light, color }}
+    >
+      {MEMBER_ONBOARDING_LABELS[member.status]}
+      {dateSuffix}
     </span>
   );
 }
@@ -2162,8 +2193,12 @@ function Therapists() {
         email: m.email,
         role: m.role,
         displayName: m.display_name,
-        pending: m.last_sign_in_at == null || m.require_password_setup === true,
+        status: memberOnboardingStatus({
+          lastSignInAt: m.last_sign_in_at,
+          requirePasswordSetup: m.require_password_setup === true,
+        }),
         invitedAt: m.invited_at,
+        lastSignInAt: m.last_sign_in_at,
       }))
     );
   }, [clinic.id]);
@@ -2449,7 +2484,9 @@ function Therapists() {
                       onRevoke={() => revokeMember(m.userId, m.email)}
                       onSaved={() => void refetchMembers()}
                       onResend={
-                        m.pending ? () => void resendInvite(m.userId, setMembersError) : undefined
+                        m.status !== 'active'
+                          ? () => void resendInvite(m.userId, setMembersError)
+                          : undefined
                       }
                     />
                   );
@@ -2996,21 +3033,7 @@ function MemberCard({
         </div>
       </div>
       <RolePill role={role} />
-      {member.pending ? (
-        <span
-          className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-          style={{ background: 'var(--amber-light)', color: 'var(--amber-strong)' }}
-        >
-          Pending — hasn't finished signing in
-        </span>
-      ) : (
-        <span
-          className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-          style={{ background: 'var(--moss-light)', color: 'var(--moss-strong)' }}
-        >
-          Active
-        </span>
-      )}
+      <OnboardingBadge member={member} />
       {isLastAdmin && (
         <p className="text-[11px] text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
       )}
