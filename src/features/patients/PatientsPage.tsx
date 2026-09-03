@@ -8,6 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { computeVisitPaymentState, isCollected, paymentActions } from '@/domain/paymentState';
 import { EditPatientModal } from './EditPatientModal';
+import { BookAppointmentDialog } from '@/components/BookAppointmentDialog';
 import {
   fiscalYearOf,
   monthsOfFiscalYear,
@@ -34,14 +35,15 @@ import { patientIdentityLine, CardDetailRow } from '@/components/VisitCard';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
 
-/** "Doctor referral — Dr. Mehta" style summary, same shape as
- *  PatientProfilePage's own `referral` line — null when nothing's on
- *  file, which is common (older/walk-in patients predate the field). */
+/** Just the source label ("Doctor referral"), not the "— Dr. Mehta" detail
+ *  PatientProfilePage's own `referral` line adds — this is a roster-glance
+ *  column, not the full record, and the detail routinely doubled the line's
+ *  width. Null when nothing's on file, common for older/walk-in patients
+ *  who predate the field. Full detail is still one click away on the
+ *  patient's own profile. */
 function patientReferralLine(p: Patient): string | null {
   if (!p.referringSource) return null;
-  return [REFERRING_SOURCE_LABELS[p.referringSource], p.referringSourceDetail]
-    .filter(Boolean)
-    .join(' — ');
+  return REFERRING_SOURCE_LABELS[p.referringSource];
 }
 
 type PatientSortKey = 'name' | 'mrno' | 'age' | 'condition' | 'lastVisit';
@@ -70,6 +72,7 @@ function AllPatientsSection() {
   const [showHidden, setShowHidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Patient | null>(null);
+  const [booking, setBooking] = useState<Patient | null>(null);
   const sort = useSort<PatientSortKey>('lastVisit', 'desc');
 
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
@@ -429,6 +432,7 @@ function AllPatientsSection() {
                   therapistName={therapistName}
                   onEdit={() => setEditing(p)}
                   onHide={() => void hide(p)}
+                  onBook={clinic.enablePatientComms ? () => setBooking(p) : undefined}
                 />
               </div>
             ))}
@@ -541,13 +545,24 @@ function AllPatientsSection() {
                         )}
                       </td>
                       <td className={`${td} whitespace-nowrap`}>
-                        <Link
-                          to="/visits/new"
-                          search={{ patientId: p.id }}
-                          className="text-xs font-medium text-[var(--teal)] hover:underline"
-                        >
-                          + Visit
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            to="/visits/new"
+                            search={{ patientId: p.id }}
+                            className="text-xs font-medium text-[var(--teal)] hover:underline"
+                          >
+                            + Visit
+                          </Link>
+                          {clinic.enablePatientComms && (
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-[var(--teal)] hover:underline"
+                              onClick={() => setBooking(p)}
+                            >
+                              Book
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -620,6 +635,17 @@ function AllPatientsSection() {
           onSave={() => setEditing(null)}
         />
       )}
+
+      {booking && (
+        <BookAppointmentDialog
+          clinicId={clinic.id}
+          patientName={booking.name}
+          patientPhone={booking.phone}
+          defaultTherapistId={visitStatsByPatient.get(booking.id)?.latestVisit.therapistId}
+          onClose={() => setBooking(null)}
+          onBooked={() => setBooking(null)}
+        />
+      )}
     </SectionCard>
   );
 }
@@ -635,6 +661,7 @@ function PatientCard({
   therapistName,
   onEdit,
   onHide,
+  onBook,
 }: {
   patient: Patient;
   stats: { lastVisitOn: string; visitCount: number; latestVisit: Visit } | undefined;
@@ -643,6 +670,9 @@ function PatientCard({
   therapistName: Map<string, string>;
   onEdit: () => void;
   onHide: () => void;
+  /** Omitted (not just a no-op) when clinic.enablePatientComms is off,
+   *  so the button itself doesn't show — same gate as Requests → Bookings. */
+  onBook?: () => void;
 }) {
   const initials = p.name
     .split(/\s+/)
@@ -734,17 +764,28 @@ function PatientCard({
             <span>No visits yet</span>
           )}
         </div>
-        <Link
-          to="/visits/new"
-          search={{ patientId: p.id }}
-          className={
-            nextAction === 'invoice'
-              ? 'rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]'
-              : 'rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]'
-          }
-        >
-          {nextAction === 'invoice' ? 'Needs invoice' : '+ Visit'}
-        </Link>
+        <div className="flex items-center gap-2">
+          {onBook && (
+            <button
+              type="button"
+              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+              onClick={onBook}
+            >
+              Book
+            </button>
+          )}
+          <Link
+            to="/visits/new"
+            search={{ patientId: p.id }}
+            className={
+              nextAction === 'invoice'
+                ? 'rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]'
+                : 'rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]'
+            }
+          >
+            {nextAction === 'invoice' ? 'Needs invoice' : '+ Visit'}
+          </Link>
+        </div>
       </div>
     </div>
   );

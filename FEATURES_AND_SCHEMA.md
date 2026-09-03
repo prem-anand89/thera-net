@@ -900,6 +900,26 @@ still falls through to the existing share sheet, unchanged.
     actually configures the Business API and has an approved template,
     every send still falls through to the share sheet — which still
     doesn't log anything, same gap as before.
+  - **A "Book" action on each Patients-list row** (`BookAppointmentDialog.tsx`)
+    — same `create_appointment_staff` RPC as the Bookings tab's own "New
+    booking" card, reachable straight from a patient's row instead of a
+    detour through Requests. Pre-fills name/phone from the patient record
+    (phone stays editable — some patients predate having one on file) and
+    defaults Therapist to whoever ran their last visit, since "book with
+    the same therapist" is the common case. Gated on
+    `clinic.enablePatientComms`, same as the Bookings tab itself; hidden
+    entirely (not just disabled) when that's off.
+  - **`NewVisitPage.tsx`'s Condition/Treatments fields collapse behind a
+    "+ Add condition / treatments (optional)" disclosure for front_desk
+    only** — reception usually doesn't know either at log time (that's
+    the therapist's own read of the patient after seeing them, not
+    something a booking or walk-in carries), so their path is Patient →
+    Therapist → Service → Payment, the four things they always have,
+    without two clinical fields sitting in the middle of it. Still one
+    click away, and admin/therapist never see it collapsed — this is a
+    front_desk-only default, not a permission: the fields were never
+    access-gated, only de-prioritized in the one role that usually can't
+    fill them in yet.
 - **WhatsApp Business Cloud API — wired, pending real templates (Phase 9)**
   — built ahead of the clinic actually having Meta credentials, so that
   turning real sending on is a config step, not a code change.
