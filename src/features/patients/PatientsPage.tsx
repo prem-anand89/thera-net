@@ -448,7 +448,7 @@ function AllPatientsSection() {
                   <SortHeader label="Primary condition" k="condition" sort={sort} />
                   <SortHeader label="Last visit" k="lastVisit" sort={sort} firstDir="desc" />
                   <th className={th}>Bill</th>
-                  <th className={th}></th>
+                  <th className={th}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
@@ -456,15 +456,6 @@ function AllPatientsSection() {
                   const stats = visitStatsByPatient.get(p.id);
                   const billing = billingByPatient.get(p.id);
                   const referral = patientReferralLine(p);
-                  // The "walk-in" pill (mrnoSource: no real ID was ever
-                  // assigned) and a referral of "Walk-in" (how they found
-                  // the clinic) are two different facts that happen to
-                  // share a word — showing both reads as a repeated
-                  // "Walk-in / Walk-in" rather than two facts. Only the
-                  // pill's flavor of it earns a line when there's nothing
-                  // else (a detail, or a different source) to add.
-                  const showReferral =
-                    referral && !(p.mrnoSource === 'auto' && referral === 'Walk-in');
                   return (
                     <tr key={p.id} className="hover:bg-[var(--paper)]">
                       <td className={td}>
@@ -484,10 +475,13 @@ function AllPatientsSection() {
                             glance at roster level, and pairing it here
                             (rather than a column of its own) keeps every
                             multi-fact cell in this table the same fixed
-                            two-line shape. */}
-                        <div className="text-xs text-[var(--muted)]">
-                          {showReferral ? referral : '—'}
-                        </div>
+                            two-line shape. Always shows the actual value
+                            (or '—' when nothing's on file) — an earlier
+                            pass suppressed it to '—' whenever it happened
+                            to echo the walk-in pill's own wording, which
+                            read as broken/missing data instead of the
+                            de-duplication it was meant to be. */}
+                        <div className="text-xs text-[var(--muted)]">{referral ?? '—'}</div>
                       </td>
                       <td className={`${td} font-display`}>
                         <Link
@@ -545,18 +539,26 @@ function AllPatientsSection() {
                         )}
                       </td>
                       <td className={`${td} whitespace-nowrap`}>
-                        <div className="flex items-center gap-2">
+                        {/* Bordered pills, not plain text links — two bare
+                            underlined links in the same teal sat flush
+                            against each other with nothing marking where
+                            one ended and the other began, reading as one
+                            run-on "+ Visit Book" phrase. A visible edge
+                            per button (same pill shape the phone card
+                            already uses for these two) fixes that
+                            regardless of color. */}
+                        <div className="flex items-center gap-1.5">
                           <Link
                             to="/visits/new"
                             search={{ patientId: p.id }}
-                            className="text-xs font-medium text-[var(--teal)] hover:underline"
+                            className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
                           >
                             + Visit
                           </Link>
                           {clinic.enablePatientComms && (
                             <button
                               type="button"
-                              className="text-xs font-medium text-[var(--teal)] hover:underline"
+                              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
                               onClick={() => setBooking(p)}
                             >
                               Book
