@@ -278,6 +278,19 @@ export function ReportsOverviewPage() {
   const revenueThisMonth = trend ? revenueRow(trend[trend.length - 1]) : null;
   const revenueLastMonth = trend && trend.length > 1 ? revenueRow(trend[trend.length - 2]) : null;
 
+  // Visit count vs last month — the one raw activity number ("are we
+  // busier or quieter") the KPI strip didn't carry at all before; every
+  // other card here answers a rate/quality question (repeat rate, avg
+  // charge), not "how much work happened." Same trend-array reuse as
+  // revenue above, no extra query.
+  const visitsRow = (report: MonthlyReport | undefined) => {
+    if (!report) return null;
+    if (scope.isClinicWideView) return report.total.visitCount;
+    return myMonthRow(report.rows).visitCount;
+  };
+  const visitsThisMonth = trend ? visitsRow(trend[trend.length - 1]) : null;
+  const visitsLastMonth = trend && trend.length > 1 ? visitsRow(trend[trend.length - 2]) : null;
+
   // Average charge/session — always the clinic-wide figure, not scoped to
   // just one therapist (per request: "a clinic overall metric"), from the
   // same latest trend entry.
@@ -432,7 +445,12 @@ export function ReportsOverviewPage() {
           sense of "how's this month going" without reading the revenue
           chart. Trend badges compare to the prior calendar month; null
           (not a literal "0%") when there's nothing to compare against yet. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      {/* xl (1280px), not lg (1024px), for the 6-across row — six cards at
+          lg's narrower column width squeezed the Revenue card's "▲ 12%"
+          trend badge past its own card edge (the longest value + widest
+          label of the six). sm:grid-cols-3 already gives every width from
+          640px up two comfortable rows of 3 in the meantime. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label={scope.isClinicWideView ? revenueLabel : `My ${revenueLabel}`}
           value={revenueThisMonth != null ? formatINR(revenueThisMonth) : '—'}
@@ -443,6 +461,17 @@ export function ReportsOverviewPage() {
           }
           trendLabel="vs last month"
           lastMonthValue={revenueLastMonth != null ? formatINR(revenueLastMonth) : undefined}
+        />
+        <KpiCard
+          label={scope.isClinicWideView ? 'Visits' : 'My visits'}
+          value={visitsThisMonth ?? '—'}
+          trendPct={
+            visitsThisMonth != null && visitsLastMonth != null
+              ? pctChange(visitsThisMonth, visitsLastMonth)
+              : null
+          }
+          trendLabel="vs last month"
+          lastMonthValue={visitsLastMonth ?? undefined}
         />
         <KpiCard
           label="Avg charge/session"
@@ -692,7 +721,7 @@ export function ReportsOverviewPage() {
                             type="button"
                             className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
                             onClick={() =>
-                              void feedbackService.sendSingleVisitReminder(
+                              void feedbackService.sendReturnReminder(
                                 clinic.id,
                                 p.patientName,
                                 p.phone,

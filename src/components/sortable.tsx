@@ -10,7 +10,10 @@ export interface SortState<K extends string> {
 }
 
 /** Column-sort state for a table: clicking a new column sorts by it, clicking again flips direction. */
-export function useSort<K extends string>(defaultKey: K, defaultDir: SortDir = 'asc'): SortState<K> {
+export function useSort<K extends string>(
+  defaultKey: K,
+  defaultDir: SortDir = 'asc'
+): SortState<K> {
   const [key, setKey] = useState<K>(defaultKey);
   const [dir, setDir] = useState<SortDir>(defaultDir);
   return {
@@ -61,9 +64,15 @@ export function SortHeader<K extends string>({
   const active = sort.key === k;
   return (
     <th className={numeric ? thNum : th}>
+      {/* `uppercase` is repeated here, not just inherited from the <th> —
+          browsers reset a <button>'s text-transform to `none` by default,
+          which doesn't inherit through, so every sortable header silently
+          rendered in plain case (title/sentence case, whatever the label
+          string was typed as) while every non-sortable plain <th> in the
+          same table correctly showed the uppercase th/thNum styling. */}
       <button
         type="button"
-        className="inline-flex items-center gap-1 rounded hover:text-[var(--ink)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className="inline-flex items-center gap-1 rounded uppercase hover:text-[var(--ink)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         onClick={() => sort.toggle(k, firstDir)}
       >
         {label}

@@ -1,12 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, feedbackService, bookingService } from '@/services';
+import { db } from '@/lib/db';
+import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
+import { syncFreshnessCaption } from '@/domain/syncCopy';
 import {
   clinicBillingConfig,
   type ConsultationNote,
@@ -166,6 +169,14 @@ export function WorkspacePage() {
     [clinic.id, clinic.enablePatientComms, scope.scopeTherapistId]
   );
   const canManageBookings = scope.isClinicWideView;
+  // Same caveat as Ledger's totals, and arguably more time-sensitive here —
+  // "Collected today" is the number staff actually watch through the day.
+  // See LedgerPage's own comment on why unsynced changes take priority
+  // over a last-sync timestamp.
+  const syncSnapshot = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
+  const unsyncedVisitCount =
+    useLiveQuery(() => db.outbox.filter((e) => e.table === 'visits').count(), []) ?? 0;
+  const syncCaption = syncFreshnessCaption(unsyncedVisitCount, 'visits', syncSnapshot.lastSyncAt);
   const pendingRequestCount = useLiveQuery(
     () =>
       canManageBookings && clinic.enablePatientComms
@@ -387,6 +398,7 @@ export function WorkspacePage() {
           <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
         )}
       </div>
+      {syncCaption && <p className="text-xs text-[var(--slate)]">{syncCaption}</p>}
 
       {clinic.enablePatientComms && (
         <SectionCard
@@ -399,114 +411,222 @@ export function WorkspacePage() {
           {!todayAppointmentsList || todayAppointmentsList.length === 0 ? (
             <p className="text-sm text-[var(--muted)]">No appointments confirmed for today.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-[var(--border)]">
-                <thead className="bg-[var(--paper)]">
-                  <tr>
-                    <th className={th}>Time</th>
-                    <th className={th}>Patient</th>
-                    <th className={th}>Therapist</th>
-                    <th className={th}>Status</th>
-                    <th className={th}></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {todayAppointmentsList.map((a) => (
-                    <tr key={a.id}>
-                      <td className={td}>
-                        {new Date(a.scheduledAt).toLocaleTimeString('en-IN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </td>
-                      <td className={td}>
-                        {a.patientId ? (
-                          <Link
-                            to="/patients/$patientId"
-                            params={{ patientId: a.patientId }}
-                            search={{ from: '/workspace' }}
-                            className="font-medium text-[var(--teal)] hover:underline"
-                          >
-                            {a.patientName}
-                          </Link>
-                        ) : (
-                          a.patientName
-                        )}
-                      </td>
-                      <td className={td}>{a.therapistName ?? '—'}</td>
-                      <td className={td}>
-                        <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>
-                          {APPOINTMENT_STATUS_LABEL[a.status]}
-                        </Pill>
-                      </td>
-                      <td className={td}>
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                          {(a.status === 'confirmed' || a.status === 'rescheduled') && (
-                            <button
-                              type="button"
-                              className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
-                              onClick={() =>
-                                void bookingService
-                                  .markAppointmentArrived(a.id)
-                                  .catch((e) => alert(toFriendlyMessage(e)))
-                              }
+            <>
+              {/* Below tab: pill cards on phone; table from iPad portrait up. */}
+              <div className="tab:hidden space-y-2">
+                {todayAppointmentsList.map((a) => (
+                  <div
+                    key={a.id}
+                    className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-display text-sm font-medium text-[var(--ink)]">
+                          {a.patientId ? (
+                            <Link
+                              to="/patients/$patientId"
+                              params={{ patientId: a.patientId }}
+                              search={{ from: '/workspace' }}
+                              className="text-[var(--teal)] hover:underline"
                             >
-                              Mark arrived
-                            </button>
+                              {a.patientName}
+                            </Link>
+                          ) : (
+                            a.patientName
                           )}
-                          {canManageBookings &&
-                            (a.status === 'confirmed' || a.status === 'rescheduled') && (
+                        </div>
+                        <div className="text-xs text-[var(--muted)]">
+                          {new Date(a.scheduledAt).toLocaleTimeString('en-IN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                          {a.therapistName && <> · {a.therapistName}</>}
+                        </div>
+                      </div>
+                      <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>
+                        {APPOINTMENT_STATUS_LABEL[a.status]}
+                      </Pill>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {(a.status === 'confirmed' || a.status === 'rescheduled') && (
+                        <button
+                          type="button"
+                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                          onClick={() =>
+                            void bookingService
+                              .markAppointmentArrived(a.id)
+                              .catch((e) => alert(toFriendlyMessage(e)))
+                          }
+                        >
+                          Mark arrived
+                        </button>
+                      )}
+                      {canManageBookings &&
+                        (a.status === 'confirmed' || a.status === 'rescheduled') && (
+                          <button
+                            type="button"
+                            className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
+                            onClick={() =>
+                              void bookingService
+                                .markAppointmentNoShow(a.id)
+                                .catch((e) => alert(toFriendlyMessage(e)))
+                            }
+                          >
+                            No-show
+                          </button>
+                        )}
+                      {canManageBookings &&
+                        (a.status === 'confirmed' || a.status === 'rescheduled') && (
+                          <button
+                            type="button"
+                            className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:bg-[var(--paper)]"
+                            onClick={() => {
+                              if (!confirm('Cancel this appointment?')) return;
+                              void bookingService
+                                .cancelAppointment(a.id)
+                                .catch((e) => alert(toFriendlyMessage(e)));
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      {!a.visitId && a.status !== 'cancelled' && a.status !== 'no_show' && (
+                        <Link
+                          to="/visits/new"
+                          search={{
+                            appointmentId: a.id,
+                            prefillName: a.patientName,
+                            prefillPhone: a.patientPhone,
+                            // Set when this appointment was booked via the
+                            // Patients-list "Book" action or an explicit
+                            // Confirm-step pick — identity is already
+                            // known, so New Visit pre-selects that patient
+                            // instead of re-running the typeahead.
+                            ...(a.patientId ? { patientId: a.patientId } : {}),
+                          }}
+                          className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                        >
+                          Create visit
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden tab:block overflow-x-auto">
+                <table className="min-w-full divide-y divide-[var(--border)]">
+                  <thead className="bg-[var(--paper)]">
+                    <tr>
+                      <th className={th}>Time</th>
+                      <th className={th}>Patient</th>
+                      <th className={th}>Therapist</th>
+                      <th className={th}>Status</th>
+                      <th className={th}></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {todayAppointmentsList.map((a) => (
+                      <tr key={a.id}>
+                        <td className={td}>
+                          {new Date(a.scheduledAt).toLocaleTimeString('en-IN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                        <td className={td}>
+                          {a.patientId ? (
+                            <Link
+                              to="/patients/$patientId"
+                              params={{ patientId: a.patientId }}
+                              search={{ from: '/workspace' }}
+                              className="font-medium text-[var(--teal)] hover:underline"
+                            >
+                              {a.patientName}
+                            </Link>
+                          ) : (
+                            a.patientName
+                          )}
+                        </td>
+                        <td className={td}>{a.therapistName ?? '—'}</td>
+                        <td className={td}>
+                          <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>
+                            {APPOINTMENT_STATUS_LABEL[a.status]}
+                          </Pill>
+                        </td>
+                        <td className={td}>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {(a.status === 'confirmed' || a.status === 'rescheduled') && (
                               <button
                                 type="button"
-                                className="whitespace-nowrap text-xs font-medium text-[var(--muted)] hover:underline"
+                                className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
                                 onClick={() =>
                                   void bookingService
-                                    .markAppointmentNoShow(a.id)
+                                    .markAppointmentArrived(a.id)
                                     .catch((e) => alert(toFriendlyMessage(e)))
                                 }
                               >
-                                No-show
+                                Mark arrived
                               </button>
                             )}
-                          {canManageBookings &&
-                            (a.status === 'confirmed' || a.status === 'rescheduled') && (
-                              <button
-                                type="button"
-                                className="whitespace-nowrap text-xs font-medium text-[var(--rust)] hover:underline"
-                                onClick={() => {
-                                  if (!confirm('Cancel this appointment?')) return;
-                                  void bookingService
-                                    .cancelAppointment(a.id)
-                                    .catch((e) => alert(toFriendlyMessage(e)));
+                            {canManageBookings &&
+                              (a.status === 'confirmed' || a.status === 'rescheduled') && (
+                                <button
+                                  type="button"
+                                  className="whitespace-nowrap text-xs font-medium text-[var(--muted)] hover:underline"
+                                  onClick={() =>
+                                    void bookingService
+                                      .markAppointmentNoShow(a.id)
+                                      .catch((e) => alert(toFriendlyMessage(e)))
+                                  }
+                                >
+                                  No-show
+                                </button>
+                              )}
+                            {canManageBookings &&
+                              (a.status === 'confirmed' || a.status === 'rescheduled') && (
+                                <button
+                                  type="button"
+                                  className="whitespace-nowrap text-xs font-medium text-[var(--rust)] hover:underline"
+                                  onClick={() => {
+                                    if (!confirm('Cancel this appointment?')) return;
+                                    void bookingService
+                                      .cancelAppointment(a.id)
+                                      .catch((e) => alert(toFriendlyMessage(e)));
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                            {/* patientId can now be set before visitId too —
+                              the Patients-list "Book" action and an
+                              explicit Confirm-step pick both link identity
+                              at booking time (see the patient_id-linking
+                              migration). When it's set, pass it through so
+                              New Visit pre-selects that patient instead of
+                              re-running the name/phone typeahead. */}
+                            {!a.visitId && a.status !== 'cancelled' && a.status !== 'no_show' && (
+                              <Link
+                                to="/visits/new"
+                                search={{
+                                  appointmentId: a.id,
+                                  prefillName: a.patientName,
+                                  prefillPhone: a.patientPhone,
+                                  ...(a.patientId ? { patientId: a.patientId } : {}),
                                 }}
+                                className="whitespace-nowrap rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
                               >
-                                Cancel
-                              </button>
+                                Create visit
+                              </Link>
                             )}
-                          {/* patientId is only ever set alongside visitId
-                              (link_appointment_visit sets both together),
-                              so !a.visitId here always means identity is
-                              still unresolved — nothing to pre-select. */}
-                          {!a.visitId && a.status !== 'cancelled' && a.status !== 'no_show' && (
-                            <Link
-                              to="/visits/new"
-                              search={{
-                                appointmentId: a.id,
-                                prefillName: a.patientName,
-                                prefillPhone: a.patientPhone,
-                              }}
-                              className="whitespace-nowrap rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
-                            >
-                              Create visit
-                            </Link>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </SectionCard>
       )}

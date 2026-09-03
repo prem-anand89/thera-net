@@ -203,7 +203,7 @@ const NAV = [
   // "no sixth phone tab" decision). Mobile reaches it via More.
   { to: '/requests', label: 'Requests', Icon: IconRequests },
   // Settings deliberately isn't in this array — it sits in the account
-  // menu's Clinic section instead, under the same `role === 'admin'` gate
+  // menu's Account section instead, under the same `role === 'admin'` gate
   // this array's filter used to apply. Five labelled items is what the
   // header row can actually carry (see the layout comment on <header>);
   // Settings was the sixth, and the least-often-visited of them. Mobile is
@@ -414,16 +414,28 @@ export function Shell() {
               max-w-6xl (~1120px of usable width) — and with text labels on
               everything at once it doesn't, which is what left the nav
               squeezed and horizontally scrolling even on a full-width
-              screen. Three rules keep it fitting instead:
+              screen. These rules keep it fitting instead:
                 1. Only the brand name shrinks. Nav and the sync/account
                    cluster are shrink-0, so a tight row eats into the
                    clinic name (truncated, then hidden below desktop:)
                    rather than squeezing the things you click.
-                2. Nav labels are desktop:-only (1000px+). Between sm: and
-                   there the nav is icons with tooltips + aria-labels,
-                   which is what makes the whole row fit an iPad portrait.
-                3. Settings moved to the account menu (see NAV above), so
-                   this is five items, not six.
+                2. Nav labels are tab:-only (744px+, iPad-portrait and up).
+                   Below that the nav is icons with tooltips + aria-labels.
+                3. SyncBadge's text is tab:-and-up only when it has
+                   nothing to say ("Synced", the common case) — measured,
+                   there's room for it right alongside the nav labels down
+                   to 744px, same as the label case above. It's a phone-
+                   width-only collapse there, not desktop:, and even that
+                   only applies while quiet: the moment there's something
+                   worth saying (offline, syncing, pending, failed) the
+                   badge expands at every width, phone included — see
+                   SyncBadge's own `quiet` check.
+                4. The account trigger's name collapses to just the avatar
+                   initials below desktop: (was sm:, 640px+) — this is the
+                   one still deliberately conservative, since the dropdown
+                   it opens already repeats the name. Settings moved to
+                   the account menu (see NAV above) keeps this at five nav
+                   items rather than six.
               The clinic name is also the one genuinely redundant item
               here — the account trigger's dropdown names the current
               clinic too, and switches between them — so hiding it first
@@ -448,13 +460,13 @@ export function Shell() {
                 overflow-x-auto scroller this briefly was) is the point:
                 nav items are targets, and a squeezed or scrolled row of
                 them is worse than a hidden label. The label is what gives
-                way instead, at desktop:. */}
+                way instead, at tab:. */}
             <nav className="hidden shrink-0 gap-1 sm:flex">
               {nav.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
-                  // Icon-only below desktop:, so the accessible name has to
+                  // Icon-only below tab:, so the accessible name has to
                   // come from the attribute rather than the hidden span —
                   // `hidden` is display:none, which screen readers skip.
                   aria-label={item.label}
@@ -462,7 +474,7 @@ export function Shell() {
                   className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--paper)] [&.active]:bg-[var(--teal-light)] [&.active]:font-medium [&.active]:text-[var(--teal)] desktop:px-3"
                 >
                   <item.Icon className="shrink-0" />
-                  <span className="hidden desktop:inline">{item.label}</span>
+                  <span className="hidden tab:inline">{item.label}</span>
                 </Link>
               ))}
             </nav>
@@ -708,8 +720,11 @@ function AccountMenu({
         {/* Name only — the clinic name used to sit under it here *and* at
             the far left of the header, and the dropdown below names the
             current clinic a third time (with the switcher). One line here
-            gives the nav back the ~70px the wrapped pair was holding. */}
-        <span className="hidden max-w-[9rem] truncate text-xs font-medium text-[var(--ink)] sm:inline">
+            gives the nav back the ~70px the wrapped pair was holding.
+            Hidden through the whole tab: range (not just below sm:) so the
+            nav's own labels (tab:-and-up now) have the room — just the
+            avatar initials show there, same as on phone. */}
+        <span className="hidden max-w-[9rem] truncate text-xs font-medium text-[var(--ink)] desktop:inline">
           {name}
         </span>
       </button>
@@ -791,22 +806,6 @@ function AccountMenu({
                   {currentClinic?.name ?? 'Current clinic'}
                 </div>
               )}
-              {/* Settings' only desktop entry point, since it left the
-                  header nav (see NAV) — same `role === 'admin'` gate the
-                  nav filter applied, so who can reach it is unchanged.
-                  Sits in the Clinic section rather than Account below
-                  because that's what it configures: the clinic's catalog,
-                  team, billing and toggles, not this login. */}
-              {role === 'admin' && (
-                <Link
-                  to="/settings"
-                  onClick={closeMenu}
-                  className="mt-1.5 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
-                >
-                  <IconSettings className="h-4 w-4 shrink-0 text-[var(--muted)]" />
-                  Clinic settings
-                </Link>
-              )}
               {role === 'admin' && (
                 <button
                   type="button"
@@ -828,6 +827,19 @@ function AccountMenu({
               <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
                 Account
               </p>
+              {/* Settings' only desktop entry point, since it left the
+                  header nav (see NAV) — same `role === 'admin'` gate the
+                  nav filter applied, so who can reach it is unchanged. */}
+              {role === 'admin' && (
+                <Link
+                  to="/settings"
+                  onClick={closeMenu}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
+                >
+                  <IconSettings className="h-4 w-4 shrink-0 text-[var(--muted)]" />
+                  Settings
+                </Link>
+              )}
               <button
                 type="button"
                 className="flex w-full rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"

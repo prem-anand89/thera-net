@@ -13,6 +13,7 @@ import { formatDateDMY, formatDateDM, currentWeekRange } from '@/domain/fiscalYe
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
+import { syncFreshnessCaption } from '@/domain/syncCopy';
 import {
   clinicBillingConfig,
   clinicShareLabels,
@@ -570,12 +571,7 @@ export function LedgerPage() {
   const syncSnapshot = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
   const unsyncedVisitCount =
     useLiveQuery(() => db.outbox.filter((e) => e.table === 'visits').count(), []) ?? 0;
-  const syncCaption =
-    unsyncedVisitCount > 0
-      ? `Includes ${unsyncedVisitCount} unsynced visit${unsyncedVisitCount === 1 ? '' : 's'}.`
-      : syncSnapshot.lastSyncAt
-        ? `As of last sync ${new Date(syncSnapshot.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
-        : null;
+  const syncCaption = syncFreshnessCaption(unsyncedVisitCount, 'visits', syncSnapshot.lastSyncAt);
 
   return (
     <div className="space-y-5">

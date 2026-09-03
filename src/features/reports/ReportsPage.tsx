@@ -5,8 +5,9 @@ import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { ReportsOverviewPage } from './ReportsOverviewPage';
 import { MonthlyStatementPage } from './MonthlyStatementPage';
 import { AttributionAuditPage } from './AttributionAuditPage';
+import { MonthlyPerformancePickerPage } from './MonthlyPerformancePickerPage';
 
-type InsightsView = 'overview' | 'monthly' | 'audit';
+type InsightsView = 'overview' | 'monthly' | 'audit' | 'performance';
 
 /**
  * Reports nav tab: what you read periodically, as opposed to Ledger (what
@@ -26,7 +27,13 @@ export function ReportsPage() {
   const navigate = useNavigate();
   const search = useSearch({ from: '/insights' });
   const view: InsightsView =
-    search.tab === 'monthly' ? 'monthly' : search.tab === 'audit' ? 'audit' : 'overview';
+    search.tab === 'monthly'
+      ? 'monthly'
+      : search.tab === 'audit'
+        ? 'audit'
+        : search.tab === 'performance'
+          ? 'performance'
+          : 'overview';
 
   const setView = useCallback(
     (next: InsightsView) => {
@@ -75,6 +82,7 @@ export function ReportsPage() {
           [
             { key: 'overview', label: 'Trends' },
             { key: 'monthly', label: 'Monthly statement' },
+            { key: 'performance', label: 'Performance report' },
             { key: 'audit', label: 'Attribution audit' },
           ] as const
         )
@@ -97,6 +105,7 @@ export function ReportsPage() {
 
       {view === 'overview' && <ReportsOverviewPage />}
       {view === 'monthly' && canViewPayouts && <MonthlyStatementPage />}
+      {view === 'performance' && canViewPayouts && <MonthlyPerformancePickerPage />}
       {view === 'audit' && canViewPayouts && <AttributionAuditPage />}
     </div>
   );

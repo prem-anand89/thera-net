@@ -126,7 +126,7 @@ function SegmentedToggle<T extends string>({
 
 export function NewVisitPage() {
   const clinic = useClinic();
-  const { canBill } = usePermissions();
+  const { canBill, role } = usePermissions();
   const navigate = useNavigate();
   const { session } = useSession();
   const entitlements = useEntitlements(clinic.id);
@@ -185,6 +185,26 @@ export function NewVisitPage() {
   const [condition, setCondition] = useState('');
   const [notes, setNotes] = useState('');
   const [treatmentIds, setTreatmentIds] = useState<string[]>([]);
+  // Front desk usually doesn't know condition/treatments at log time —
+  // that's the therapist's own read of the patient, not something
+  // reception can fill in from a booking or a walk-in. Collapsed by
+  // default for that role only (still there, one click away — never
+  // hidden from admin/therapist, who typically do know this) so their
+  // path is Patient → Therapist → Service → Payment, the four things
+  // front desk always has, without a clinical field sitting between.
+  const [clinicalDetailsExpanded, setClinicalDetailsExpanded] = useState(false);
+  // Two prefill paths can fill `condition` in behind this collapsed
+  // section before front desk ever opens it — the ?patientId= prefill
+  // effect (from the patient's own primaryCondition) and "Repeat last
+  // visit" (from the prior visit's own condition). Either way, a value
+  // that's about to be submitted needs to be visible, not carried over
+  // silently behind a "+ Add condition / treatments (optional)" button
+  // that still reads as empty.
+  useEffect(() => {
+    if (role === 'front_desk' && !clinicalDetailsExpanded && condition) {
+      setClinicalDetailsExpanded(true);
+    }
+  }, [role, clinicalDetailsExpanded, condition]);
   const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending'>('paid');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi');
   const [pendingNote, setPendingNote] = useState('');
@@ -1082,30 +1102,42 @@ export function NewVisitPage() {
             </Field>
           )}
 
-          <Field label="Condition (this visit)">
-            <input
-              className={inputCls}
-              value={condition}
-              onChange={(e) => setCondition(e.target.value)}
-            />
-          </Field>
-          <Field label="Treatments">
-            <div className="space-y-2">
-              {treatments.length > 0 && (
-                <MultiToggle
-                  options={treatments.map((t) => ({ value: t.id, label: t.name }))}
-                  value={treatmentIds}
-                  onChange={setTreatmentIds}
+          {role === 'front_desk' && !clinicalDetailsExpanded ? (
+            <button
+              type="button"
+              className="justify-self-start text-left text-xs font-medium text-[var(--teal)] hover:underline"
+              onClick={() => setClinicalDetailsExpanded(true)}
+            >
+              + Add condition / treatments (optional)
+            </button>
+          ) : (
+            <>
+              <Field label="Condition (this visit)">
+                <input
+                  className={inputCls}
+                  value={condition}
+                  onChange={(e) => setCondition(e.target.value)}
                 />
-              )}
-              <input
-                className={inputCls}
-                placeholder="Add something not in the list above…"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </div>
-          </Field>
+              </Field>
+              <Field label="Treatments">
+                <div className="space-y-2">
+                  {treatments.length > 0 && (
+                    <MultiToggle
+                      options={treatments.map((t) => ({ value: t.id, label: t.name }))}
+                      value={treatmentIds}
+                      onChange={setTreatmentIds}
+                    />
+                  )}
+                  <input
+                    className={inputCls}
+                    placeholder="Add something not in the list above…"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </div>
+              </Field>
+            </>
+          )}
         </div>
       </SectionCard>
 

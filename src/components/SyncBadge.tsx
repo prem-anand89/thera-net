@@ -62,6 +62,14 @@ export function SyncBadge() {
           ? `${pending} pending`
           : 'Synced';
 
+  // "Quiet" = the boring, common case (online, nothing queued, nothing
+  // failed) — the one state where collapsing to just the dot costs
+  // nothing, since there's genuinely nothing to say. Anything else
+  // (offline, syncing, pending, failed) is the badge's whole reason to
+  // exist, so it stays expanded everywhere, phone included, rather than
+  // making someone tap a dot to discover their changes aren't syncing.
+  const quiet = status.online && !status.syncing && failed.length === 0 && pending === 0;
+
   return (
     <div className="relative">
       <button
@@ -69,10 +77,15 @@ export function SyncBadge() {
         onClick={() => setOpen((o) => !o)}
         title={status.error ?? 'Sync status'}
         aria-label={`Sync: ${label}`}
-        className="flex min-h-11 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs text-[var(--muted)] hover:bg-[var(--paper)]"
+        className={`flex min-h-11 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 text-xs text-[var(--muted)] hover:bg-[var(--paper)] ${quiet ? 'px-2 tab:px-3' : 'px-3'}`}
       >
-        <span className={`h-2 w-2 rounded-full ${dot}`} />
-        {label}
+        <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
+        {/* Quiet: text shows tab:-and-up only, same room-sharing as the
+            nav's own labels — collapses to just the dot on phone, where
+            the color alone ("all good") is enough. Anything else: text
+            shows at every width, phone included, since it's the one
+            thing this badge exists to surface. */}
+        <span className={quiet ? 'hidden tab:inline' : 'inline'}>{label}</span>
       </button>
 
       {open && (

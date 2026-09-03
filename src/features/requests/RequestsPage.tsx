@@ -8,6 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { toFriendlyMessage } from '@/lib/errors';
 import { SectionCard, Pill, th, td } from '@/components/ui';
+import { SearchableSelect } from '@/components/SearchableSelect';
 import { requestsLastViewedKey } from './requestsSignals';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import type { UUID } from '@/domain/types';
@@ -91,11 +92,21 @@ export function RequestsPage() {
   );
   const visitById = useMemo(() => new Map((visits ?? []).map((v) => [v.id, v])), [visits]);
 
+  // Admin-only originally (the Feedback tab's own patient link); broadened
+  // to canSeeBookings too so front_desk gets it for the Confirm form's
+  // "link to existing patient" picker below.
   const patients = useLiveQuery(
-    () => (isAdmin ? repos.patients.list(clinic.id) : undefined),
-    [clinic.id, isAdmin]
+    () => (isAdmin || canSeeBookings ? repos.patients.list(clinic.id) : undefined),
+    [clinic.id, isAdmin, canSeeBookings]
   );
   const patientById = useMemo(() => new Map((patients ?? []).map((p) => [p.id, p])), [patients]);
+  const patientOptions = useMemo(
+    () =>
+      [...(patients ?? [])]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((p) => ({ value: p.id, label: `${p.name} (${p.mrno})` })),
+    [patients]
+  );
 
   const therapists = useLiveQuery(
     () => (isAdmin || canSeeBookings ? repos.therapists.list(clinic.id, true) : undefined),
@@ -147,6 +158,10 @@ export function RequestsPage() {
   const [confirmingId, setConfirmingId] = useState<UUID | null>(null);
   const [confirmScheduledAt, setConfirmScheduledAt] = useState(defaultScheduledAt(null));
   const [confirmTherapistId, setConfirmTherapistId] = useState('');
+  // Optional — left blank keeps today's exact behavior (patient_id stays
+  // null until a visit resolves identity). Set only when staff explicitly
+  // recognize the requester as an existing patient and pick them here.
+  const [confirmPatientId, setConfirmPatientId] = useState('');
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [justConfirmed, setJustConfirmed] = useState<{
@@ -220,6 +235,7 @@ export function RequestsPage() {
     setConfirmingId(requestId);
     setConfirmScheduledAt(defaultScheduledAt(preferredDate));
     setConfirmTherapistId(preferredTherapistId ?? '');
+    setConfirmPatientId('');
     setConfirmError(null);
     setJustConfirmed(null);
   }
@@ -232,7 +248,8 @@ export function RequestsPage() {
       const appointmentId = await bookingService.confirmAppointmentRequest(
         request.id,
         scheduledIso,
-        confirmTherapistId || null
+        confirmTherapistId || null,
+        confirmPatientId || null
       );
       setJustConfirmed({
         appointmentId,
@@ -323,57 +340,104 @@ export function RequestsPage() {
                 No feedback responses yet.
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-                  <thead>
-                    <tr>
-                      <th className={th}>Patient</th>
-                      <th className={th}>Visit</th>
-                      <th className={th}>Therapist</th>
-                      <th className={th}>Rating</th>
-                      <th className={th}>Comment</th>
-                      <th className={th}>Responded</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--border)]">
-                    {rows.map(({ response, request, visit, patient }) => (
-                      <tr key={response.id}>
-                        <td className={td}>
-                          {patient ? (
-                            <Link
-                              to="/patients/$patientId"
-                              params={{ patientId: patient.id }}
-                              className="font-medium text-[var(--teal)] hover:underline"
-                            >
-                              {patient.name}
-                            </Link>
-                          ) : (
-                            <span className="text-[var(--muted)]">—</span>
-                          )}
-                          {patient && (
-                            <span className="ml-1 text-xs text-[var(--muted)]">{patient.mrno}</span>
-                          )}
-                        </td>
-                        <td className={td}>{visit ? formatDateDMY(visit.visitDate) : '—'}</td>
-                        <td className={td}>
-                          {request ? (therapistNameById.get(request.therapistId) ?? '—') : '—'}
-                        </td>
-                        <td className={td}>
-                          <span className="text-[var(--amber)]" title={`${response.rating} of 5`}>
-                            {ratingStars(response.rating)}
-                          </span>
-                        </td>
-                        <td className={`${td} max-w-xs`}>
-                          {response.comment ?? (
-                            <span className="text-[var(--muted)]">No comment</span>
-                          )}
-                        </td>
-                        <td className={td}>{formatDateDMY(response.createdAt)}</td>
+              <>
+                {/* Below tab: cards on phone; table from iPad portrait up. */}
+                <div className="tab:hidden space-y-2">
+                  {rows.map(({ response, request, visit, patient }) => (
+                    <div
+                      key={response.id}
+                      className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-display text-sm font-medium text-[var(--ink)]">
+                            {patient ? (
+                              <Link
+                                to="/patients/$patientId"
+                                params={{ patientId: patient.id }}
+                                className="text-[var(--teal)] hover:underline"
+                              >
+                                {patient.name}
+                              </Link>
+                            ) : (
+                              <span className="text-[var(--muted)]">—</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-[var(--muted)]">
+                            {visit ? formatDateDMY(visit.visitDate) : '—'}
+                            {request && <> · {therapistNameById.get(request.therapistId) ?? '—'}</>}
+                          </div>
+                        </div>
+                        <span className="text-[var(--amber)]" title={`${response.rating} of 5`}>
+                          {ratingStars(response.rating)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-[var(--ink)]">
+                        {response.comment ?? (
+                          <span className="text-[var(--muted)]">No comment</span>
+                        )}
+                      </p>
+                      <div className="mt-1 text-xs text-[var(--muted)]">
+                        Responded {formatDateDMY(response.createdAt)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="hidden tab:block overflow-x-auto">
+                  <table className="min-w-full divide-y divide-[var(--border)] text-sm">
+                    <thead>
+                      <tr>
+                        <th className={th}>Patient</th>
+                        <th className={th}>Visit</th>
+                        <th className={th}>Therapist</th>
+                        <th className={th}>Rating</th>
+                        <th className={th}>Comment</th>
+                        <th className={th}>Responded</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border)]">
+                      {rows.map(({ response, request, visit, patient }) => (
+                        <tr key={response.id}>
+                          <td className={td}>
+                            {patient ? (
+                              <Link
+                                to="/patients/$patientId"
+                                params={{ patientId: patient.id }}
+                                className="font-medium text-[var(--teal)] hover:underline"
+                              >
+                                {patient.name}
+                              </Link>
+                            ) : (
+                              <span className="text-[var(--muted)]">—</span>
+                            )}
+                            {patient && (
+                              <span className="ml-1 text-xs text-[var(--muted)]">
+                                {patient.mrno}
+                              </span>
+                            )}
+                          </td>
+                          <td className={td}>{visit ? formatDateDMY(visit.visitDate) : '—'}</td>
+                          <td className={td}>
+                            {request ? (therapistNameById.get(request.therapistId) ?? '—') : '—'}
+                          </td>
+                          <td className={td}>
+                            <span className="text-[var(--amber)]" title={`${response.rating} of 5`}>
+                              {ratingStars(response.rating)}
+                            </span>
+                          </td>
+                          <td className={`${td} max-w-xs`}>
+                            {response.comment ?? (
+                              <span className="text-[var(--muted)]">No comment</span>
+                            )}
+                          </td>
+                          <td className={td}>{formatDateDMY(response.createdAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </SectionCard>
         ))}
@@ -562,6 +626,21 @@ export function RequestsPage() {
                               ))}
                             </select>
                           </label>
+                          {/* Optional — leaving it blank keeps today's exact
+                              behavior (patient_id resolves later, at New
+                              Visit). Only worth filling in when staff
+                              actually recognize this requester as someone
+                              already on file; nothing else here depends on
+                              it. */}
+                          <div className="w-52">
+                            <SearchableSelect
+                              label="Link to existing patient · optional"
+                              value={confirmPatientId}
+                              onChange={setConfirmPatientId}
+                              options={patientOptions}
+                              placeholder="No match — leave unlinked"
+                            />
+                          </div>
                           <button
                             type="button"
                             disabled={confirmBusy}
@@ -643,155 +722,297 @@ export function RequestsPage() {
               {appointmentRows.length === 0 ? (
                 <p className="py-6 text-center text-sm text-[var(--muted)]">No appointments yet.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-[var(--border)] text-sm">
-                    <thead>
-                      <tr>
-                        <th className={th}>When</th>
-                        <th className={th}>Patient</th>
-                        <th className={th}>Therapist</th>
-                        <th className={th}>Status</th>
-                        <th className={th}></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--border)]">
-                      {appointmentRows.map((a) => (
-                        <tr key={a.id}>
-                          <td className={td}>
-                            {formatDateDMY(a.scheduledAt)}{' '}
-                            <span className="text-[var(--muted)]">
+                <>
+                  {/* Below tab: cards on phone; table from iPad portrait up. */}
+                  <div className="tab:hidden space-y-2">
+                    {appointmentRows.map((a) => (
+                      <div
+                        key={a.id}
+                        className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-display text-sm font-medium text-[var(--ink)]">
+                              {a.patientId ? (
+                                <Link
+                                  to="/patients/$patientId"
+                                  params={{ patientId: a.patientId }}
+                                  className="text-[var(--teal)] hover:underline"
+                                >
+                                  {a.patientName}
+                                </Link>
+                              ) : (
+                                a.patientName
+                              )}
+                            </div>
+                            <div className="text-xs text-[var(--muted)]">
+                              {formatDateDMY(a.scheduledAt)}{' '}
                               {new Date(a.scheduledAt).toLocaleTimeString('en-IN', {
                                 hour: '2-digit',
                                 minute: '2-digit',
                               })}
-                            </span>
-                          </td>
-                          <td className={td}>
-                            {a.patientId ? (
-                              <Link
-                                to="/patients/$patientId"
-                                params={{ patientId: a.patientId }}
-                                className="font-medium text-[var(--teal)] hover:underline"
-                              >
-                                {a.patientName}
-                              </Link>
-                            ) : (
-                              a.patientName
-                            )}
-                          </td>
-                          <td className={td}>
-                            {a.therapistId ? (therapistNameById.get(a.therapistId) ?? '—') : '—'}
-                          </td>
-                          <td className={td}>
-                            <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>
-                              {APPOINTMENT_STATUS_LABEL[a.status]}
-                            </Pill>
-                          </td>
-                          <td className={td}>
-                            {reschedulingId === a.id ? (
-                              <div className="flex flex-wrap items-center gap-2">
-                                <input
-                                  type="datetime-local"
-                                  className="rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-1 text-xs text-[var(--ink)]"
-                                  value={rescheduleValue}
-                                  onChange={(e) => setRescheduleValue(e.target.value)}
-                                />
+                              {a.therapistId && (
+                                <> · {therapistNameById.get(a.therapistId) ?? '—'}</>
+                              )}
+                            </div>
+                          </div>
+                          <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>
+                            {APPOINTMENT_STATUS_LABEL[a.status]}
+                          </Pill>
+                        </div>
+
+                        {reschedulingId === a.id ? (
+                          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">
+                            <input
+                              type="datetime-local"
+                              className="rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-1.5 text-xs text-[var(--ink)]"
+                              value={rescheduleValue}
+                              onChange={(e) => setRescheduleValue(e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              disabled={rescheduleBusy}
+                              className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                              onClick={() => {
+                                setRescheduleBusy(true);
+                                void bookingService
+                                  .rescheduleAppointment(
+                                    a.id,
+                                    new Date(rescheduleValue).toISOString()
+                                  )
+                                  .catch((e) => alert(toFriendlyMessage(e)))
+                                  .finally(() => {
+                                    setRescheduleBusy(false);
+                                    setReschedulingId(null);
+                                  });
+                              }}
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
+                              onClick={() => setReschedulingId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            {(a.status === 'confirmed' || a.status === 'rescheduled') && (
+                              <>
                                 <button
                                   type="button"
-                                  disabled={rescheduleBusy}
-                                  className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                                  className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
                                   onClick={() => {
-                                    setRescheduleBusy(true);
-                                    void bookingService
-                                      .rescheduleAppointment(
-                                        a.id,
-                                        new Date(rescheduleValue).toISOString()
-                                      )
-                                      .catch((e) => alert(toFriendlyMessage(e)))
-                                      .finally(() => {
-                                        setRescheduleBusy(false);
-                                        setReschedulingId(null);
-                                      });
+                                    setReschedulingId(a.id);
+                                    setRescheduleValue(toDatetimeLocalValue(a.scheduledAt));
                                   }}
                                 >
-                                  Save
+                                  Reschedule
                                 </button>
                                 <button
                                   type="button"
-                                  className="whitespace-nowrap text-xs text-[var(--muted)] hover:underline"
-                                  onClick={() => setReschedulingId(null)}
+                                  className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
+                                  onClick={() =>
+                                    void bookingService
+                                      .markAppointmentNoShow(a.id)
+                                      .catch((e) => alert(toFriendlyMessage(e)))
+                                  }
+                                >
+                                  No-show
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:bg-[var(--paper)]"
+                                  onClick={() => {
+                                    if (!confirm('Cancel this appointment?')) return;
+                                    void bookingService
+                                      .cancelAppointment(a.id)
+                                      .catch((e) => alert(toFriendlyMessage(e)));
+                                  }}
                                 >
                                   Cancel
                                 </button>
-                              </div>
-                            ) : (
-                              <div className="flex flex-wrap items-center justify-end gap-2">
-                                {(a.status === 'confirmed' || a.status === 'rescheduled') && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
-                                      onClick={() => {
-                                        setReschedulingId(a.id);
-                                        setRescheduleValue(toDatetimeLocalValue(a.scheduledAt));
-                                      }}
-                                    >
-                                      Reschedule
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="whitespace-nowrap text-xs font-medium text-[var(--muted)] hover:underline"
-                                      onClick={() =>
-                                        void bookingService
-                                          .markAppointmentNoShow(a.id)
-                                          .catch((e) => alert(toFriendlyMessage(e)))
-                                      }
-                                    >
-                                      No-show
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="whitespace-nowrap text-xs font-medium text-[var(--rust)] hover:underline"
-                                      onClick={() => {
-                                        if (!confirm('Cancel this appointment?')) return;
-                                        void bookingService
-                                          .cancelAppointment(a.id)
-                                          .catch((e) => alert(toFriendlyMessage(e)));
-                                      }}
-                                    >
-                                      Cancel
-                                    </button>
-                                  </>
-                                )}
-                                {/* Same condition as Workspace's "Expected
+                              </>
+                            )}
+                            {!a.visitId && a.status !== 'cancelled' && a.status !== 'no_show' && (
+                              <Link
+                                to="/visits/new"
+                                search={{
+                                  appointmentId: a.id,
+                                  prefillName: a.patientName,
+                                  prefillPhone: a.patientPhone,
+                                  // Set when this appointment was booked via
+                                  // the Patients-list "Book" action or an
+                                  // explicit Confirm-step pick — identity is
+                                  // already known, so New Visit should
+                                  // pre-select that patient instead of
+                                  // re-running the name/phone typeahead.
+                                  ...(a.patientId ? { patientId: a.patientId } : {}),
+                                }}
+                                className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                              >
+                                Create visit
+                              </Link>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="hidden tab:block overflow-x-auto">
+                    <table className="min-w-full divide-y divide-[var(--border)] text-sm">
+                      <thead>
+                        <tr>
+                          <th className={th}>When</th>
+                          <th className={th}>Patient</th>
+                          <th className={th}>Therapist</th>
+                          <th className={th}>Status</th>
+                          <th className={th}></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--border)]">
+                        {appointmentRows.map((a) => (
+                          <tr key={a.id}>
+                            <td className={td}>
+                              {formatDateDMY(a.scheduledAt)}{' '}
+                              <span className="text-[var(--muted)]">
+                                {new Date(a.scheduledAt).toLocaleTimeString('en-IN', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            </td>
+                            <td className={td}>
+                              {a.patientId ? (
+                                <Link
+                                  to="/patients/$patientId"
+                                  params={{ patientId: a.patientId }}
+                                  className="font-medium text-[var(--teal)] hover:underline"
+                                >
+                                  {a.patientName}
+                                </Link>
+                              ) : (
+                                a.patientName
+                              )}
+                            </td>
+                            <td className={td}>
+                              {a.therapistId ? (therapistNameById.get(a.therapistId) ?? '—') : '—'}
+                            </td>
+                            <td className={td}>
+                              <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>
+                                {APPOINTMENT_STATUS_LABEL[a.status]}
+                              </Pill>
+                            </td>
+                            <td className={td}>
+                              {reschedulingId === a.id ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <input
+                                    type="datetime-local"
+                                    className="rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-1 text-xs text-[var(--ink)]"
+                                    value={rescheduleValue}
+                                    onChange={(e) => setRescheduleValue(e.target.value)}
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={rescheduleBusy}
+                                    className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                                    onClick={() => {
+                                      setRescheduleBusy(true);
+                                      void bookingService
+                                        .rescheduleAppointment(
+                                          a.id,
+                                          new Date(rescheduleValue).toISOString()
+                                        )
+                                        .catch((e) => alert(toFriendlyMessage(e)))
+                                        .finally(() => {
+                                          setRescheduleBusy(false);
+                                          setReschedulingId(null);
+                                        });
+                                    }}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="whitespace-nowrap text-xs text-[var(--muted)] hover:underline"
+                                    onClick={() => setReschedulingId(null)}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap items-center justify-end gap-2">
+                                  {(a.status === 'confirmed' || a.status === 'rescheduled') && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                                        onClick={() => {
+                                          setReschedulingId(a.id);
+                                          setRescheduleValue(toDatetimeLocalValue(a.scheduledAt));
+                                        }}
+                                      >
+                                        Reschedule
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="whitespace-nowrap text-xs font-medium text-[var(--muted)] hover:underline"
+                                        onClick={() =>
+                                          void bookingService
+                                            .markAppointmentNoShow(a.id)
+                                            .catch((e) => alert(toFriendlyMessage(e)))
+                                        }
+                                      >
+                                        No-show
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="whitespace-nowrap text-xs font-medium text-[var(--rust)] hover:underline"
+                                        onClick={() => {
+                                          if (!confirm('Cancel this appointment?')) return;
+                                          void bookingService
+                                            .cancelAppointment(a.id)
+                                            .catch((e) => alert(toFriendlyMessage(e)));
+                                        }}
+                                      >
+                                        Cancel
+                                      </button>
+                                    </>
+                                  )}
+                                  {/* Same condition as Workspace's "Expected
                                     today" — an appointment marked arrived
                                     manually (no visit yet) still needs a
                                     way to reach New Visit once it's no
                                     longer "today" and has dropped off that
                                     list; without this it was unreachable. */}
-                                {!a.visitId &&
-                                  a.status !== 'cancelled' &&
-                                  a.status !== 'no_show' && (
-                                    <Link
-                                      to="/visits/new"
-                                      search={{
-                                        appointmentId: a.id,
-                                        prefillName: a.patientName,
-                                        prefillPhone: a.patientPhone,
-                                      }}
-                                      className="whitespace-nowrap rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
-                                    >
-                                      Create visit
-                                    </Link>
-                                  )}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                                  {!a.visitId &&
+                                    a.status !== 'cancelled' &&
+                                    a.status !== 'no_show' && (
+                                      <Link
+                                        to="/visits/new"
+                                        search={{
+                                          appointmentId: a.id,
+                                          prefillName: a.patientName,
+                                          prefillPhone: a.patientPhone,
+                                          ...(a.patientId ? { patientId: a.patientId } : {}),
+                                        }}
+                                        className="whitespace-nowrap rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                                      >
+                                        Create visit
+                                      </Link>
+                                    )}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </SectionCard>
           </div>

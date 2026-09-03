@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, patientService } from '@/services';
+import { repos, patientService, feedbackService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { computeVisitPaymentState, isCollected, paymentActions } from '@/domain/paymentState';
 import { EditPatientModal } from './EditPatientModal';
+import { BookAppointmentDialog } from '@/components/BookAppointmentDialog';
 import {
   fiscalYearOf,
   monthsOfFiscalYear,
@@ -18,7 +19,8 @@ import {
   formatDateDMY,
   formatDateDM,
 } from '@/domain/fiscalYear';
-import { type Patient, type Visit } from '@/domain/types';
+import { REFERRING_SOURCE_LABELS, type Patient, type Visit } from '@/domain/types';
+import { isStale } from '@/domain/packageTracking';
 import {
   inputCls,
   th,
@@ -33,6 +35,17 @@ import {
 import { patientIdentityLine, CardDetailRow } from '@/components/VisitCard';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
+
+/** Just the source label ("Doctor referral"), not the "— Dr. Mehta" detail
+ *  PatientProfilePage's own `referral` line adds — this is a roster-glance
+ *  column, not the full record, and the detail routinely doubled the line's
+ *  width. Null when nothing's on file, common for older/walk-in patients
+ *  who predate the field. Full detail is still one click away on the
+ *  patient's own profile. */
+function patientReferralLine(p: Patient): string | null {
+  if (!p.referringSource) return null;
+  return REFERRING_SOURCE_LABELS[p.referringSource];
+}
 
 type PatientSortKey = 'name' | 'mrno' | 'age' | 'condition' | 'lastVisit';
 const PATIENT_COMPARATORS = {
@@ -53,13 +66,20 @@ export function PatientsPage() {
 
 function AllPatientsSection() {
   const clinic = useClinic();
-  const { myTherapistId } = useWorkspaceScope();
-  const { canBill } = usePermissions();
+  const { myTherapistId, isFrontDesk } = useWorkspaceScope();
+  const { canBill, isAdmin } = usePermissions();
+  // create_appointment_staff (the RPC the "Book" action calls) rejects
+  // anyone who isn't admin or front_desk server-side — same role check
+  // Requests → Bookings' own "New booking" card is gated on
+  // (`canSeeBookings` there). Without this, a therapist saw a live-looking
+  // Book button that always failed with "Not authorized."
+  const canBook = clinic.enablePatientComms && (isAdmin || isFrontDesk);
   const [query, setQuery] = useState('');
   const [chip, setChip] = useState<'all' | 'needs_invoice' | 'mine'>('all');
   const [showHidden, setShowHidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Patient | null>(null);
+  const [booking, setBooking] = useState<Patient | null>(null);
   const sort = useSort<PatientSortKey>('lastVisit', 'desc');
 
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
@@ -255,8 +275,36 @@ function AllPatientsSection() {
 
   return (
     <SectionCard title="All Patients">
-      <div className="mb-3 flex flex-wrap items-end gap-3">
-        <div className="ml-auto flex flex-wrap items-end gap-2">
+      {/* One row, not two — chips and the FY/search controls used to each
+          sit on their own full-width row (chips left with empty space to
+          their right, controls right with empty space to their left).
+          justify-between puts them on the same row, chips claiming the
+          left and controls the right, so nothing goes to waste; wrap lets
+          narrower widths fall back to two rows without an empty gap. */}
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {(
+            [
+              { key: 'all', label: 'All' },
+              { key: 'needs_invoice', label: 'Needs invoice' },
+              { key: 'mine', label: 'My patients' },
+            ] as const
+          ).map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              className={`min-h-11 rounded-full px-3 py-1 text-xs font-medium ${
+                chip === c.key
+                  ? 'bg-[var(--teal-light)] text-[var(--teal)]'
+                  : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+              }`}
+              onClick={() => setChip(c.key)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
           <div className="flex gap-2">
             <select
               className={inputCls}
@@ -306,28 +354,6 @@ function AllPatientsSection() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-      </div>
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        {(
-          [
-            { key: 'all', label: 'All' },
-            { key: 'needs_invoice', label: 'Needs invoice' },
-            { key: 'mine', label: 'My patients' },
-          ] as const
-        ).map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            className={`min-h-11 rounded-full px-3 py-1 text-xs font-medium ${
-              chip === c.key
-                ? 'bg-[var(--teal-light)] text-[var(--teal)]'
-                : 'text-[var(--muted)] hover:bg-[var(--paper)]'
-            }`}
-            onClick={() => setChip(c.key)}
-          >
-            {c.label}
-          </button>
-        ))}
       </div>
       <p className="mb-3 text-xs text-[var(--muted)]">
         {selectedPeriod ? (
@@ -413,6 +439,21 @@ function AllPatientsSection() {
                   therapistName={therapistName}
                   onEdit={() => setEditing(p)}
                   onHide={() => void hide(p)}
+                  onBook={canBook ? () => setBooking(p) : undefined}
+                  onRemind={
+                    clinic.enablePatientComms &&
+                    p.phone &&
+                    visitStatsByPatient.get(p.id) &&
+                    isStale(visitStatsByPatient.get(p.id)!.lastVisitOn)
+                      ? () =>
+                          void feedbackService.sendReturnReminder(
+                            clinic.id,
+                            p.name,
+                            p.phone,
+                            clinic.name
+                          )
+                      : undefined
+                  }
                 />
               </div>
             ))}
@@ -424,27 +465,41 @@ function AllPatientsSection() {
                 <tr>
                   <SortHeader label="Patient ID" k="mrno" sort={sort} />
                   <SortHeader label="Name" k="name" sort={sort} />
+                  <th className={th}>Phone</th>
                   <th className={th}>Therapist</th>
                   <SortHeader label="Primary condition" k="condition" sort={sort} />
-                  <th className={th}>Treatment</th>
                   <SortHeader label="Last visit" k="lastVisit" sort={sort} firstDir="desc" />
                   <th className={th}>Bill</th>
-                  <th className={th}></th>
+                  <th className={th}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {rows.map((p) => {
                   const stats = visitStatsByPatient.get(p.id);
                   const billing = billingByPatient.get(p.id);
+                  const referral = patientReferralLine(p);
                   return (
                     <tr key={p.id} className="hover:bg-[var(--paper)]">
                       <td className={td}>
-                        {p.mrno}
-                        {p.mrnoSource === 'auto' && (
-                          <span className="ml-1.5">
-                            <Pill tone="slate">walk-in</Pill>
-                          </span>
-                        )}
+                        {/* No walk-in/auto-MRN pill here — the mobile card
+                            never had one (just patientIdentityLine's plain
+                            mrno/age/sex), and this table's own referral
+                            line right below already says "Walk-in" for the
+                            common case where that's also how the patient
+                            arrived. Showing both read as the same fact
+                            twice, once as a pill and once as text. The
+                            auto-vs-hospital MRN distinction is still
+                            visible on the patient's own profile — this is
+                            a roster-glance row, not the full record. */}
+                        <div>{p.mrno}</div>
+                        {/* Second line, same pattern as Name's age/sex line
+                            below — referral is the one other fact worth a
+                            glance at roster level, and pairing it here
+                            (rather than a column of its own) keeps every
+                            multi-fact cell in this table the same fixed
+                            two-line shape. Always shows the actual value
+                            (or '—' when nothing's on file). */}
+                        <div className="text-xs text-[var(--muted)]">{referral ?? '—'}</div>
                       </td>
                       <td className={`${td} font-display`}>
                         <Link
@@ -461,6 +516,15 @@ function AllPatientsSection() {
                           </div>
                         )}
                       </td>
+                      <td className={`${td} whitespace-nowrap`}>
+                        {p.phone ? (
+                          <a href={`tel:${p.phone}`} className="hover:underline">
+                            {p.phone}
+                          </a>
+                        ) : (
+                          <span className="text-[var(--muted)]">—</span>
+                        )}
+                      </td>
                       <td className={td}>
                         {stats?.latestVisit ? (
                           <TherapistPill>
@@ -471,22 +535,16 @@ function AllPatientsSection() {
                         )}
                       </td>
                       <td className={td}>{p.primaryCondition ?? '-'}</td>
-                      <td className={td}>
-                        {stats?.latestVisit?.treatmentNotes ? (
-                          <span className="text-xs">{stats.latestVisit.treatmentNotes}</span>
-                        ) : (
-                          '-'
-                        )}
-                      </td>
-                      <td className={td}>
+                      <td className={`${td} whitespace-nowrap`}>
                         {stats ? (
-                          <div className="font-num text-xs text-[var(--ink)]">
-                            {formatDateDMY(stats.lastVisitOn)}
-                            <span className="text-[var(--muted)]">
-                              {' '}
-                              · {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
-                            </span>
-                          </div>
+                          <>
+                            <div className="font-num text-xs text-[var(--ink)]">
+                              {formatDateDMY(stats.lastVisitOn)}
+                            </div>
+                            <div className="text-xs text-[var(--muted)]">
+                              {stats.visitCount} visit{stats.visitCount === 1 ? '' : 's'}
+                            </div>
+                          </>
                         ) : (
                           <span className="text-xs text-[var(--muted)]">No visits yet</span>
                         )}
@@ -508,13 +566,59 @@ function AllPatientsSection() {
                         )}
                       </td>
                       <td className={`${td} whitespace-nowrap`}>
-                        <Link
-                          to="/visits/new"
-                          search={{ patientId: p.id }}
-                          className="text-xs font-medium text-[var(--teal)] hover:underline"
-                        >
-                          + Visit
-                        </Link>
+                        {/* Bordered pills, not plain text links — two bare
+                            underlined links in the same teal sat flush
+                            against each other with nothing marking where
+                            one ended and the other began, reading as one
+                            run-on "+ Visit Book" phrase. A visible edge
+                            per button (same pill shape the phone card
+                            already uses for these two) fixes that
+                            regardless of color. */}
+                        <div className="flex items-center gap-1.5">
+                          <Link
+                            to="/visits/new"
+                            search={{ patientId: p.id }}
+                            className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                          >
+                            + Visit
+                          </Link>
+                          {canBook && (
+                            <button
+                              type="button"
+                              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+                              onClick={() => setBooking(p)}
+                            >
+                              Book
+                            </button>
+                          )}
+                          {/* Same re-engagement nudge Reports → "Single-visit
+                              patients" already offers, surfaced here too so
+                              front desk doesn't need a detour through Reports
+                              for a patient they're already looking at. Same
+                              "stale" threshold as the package follow-up
+                              queue (STALE_PACKAGE_DAYS) — no visits yet
+                              never qualifies, there's nothing to follow up
+                              on. */}
+                          {clinic.enablePatientComms &&
+                            p.phone &&
+                            stats &&
+                            isStale(stats.lastVisitOn) && (
+                              <button
+                                type="button"
+                                className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                                onClick={() =>
+                                  void feedbackService.sendReturnReminder(
+                                    clinic.id,
+                                    p.name,
+                                    p.phone,
+                                    clinic.name
+                                  )
+                                }
+                              >
+                                Remind
+                              </button>
+                            )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -587,6 +691,18 @@ function AllPatientsSection() {
           onSave={() => setEditing(null)}
         />
       )}
+
+      {booking && (
+        <BookAppointmentDialog
+          clinicId={clinic.id}
+          patientId={booking.id}
+          patientName={booking.name}
+          patientPhone={booking.phone}
+          defaultTherapistId={visitStatsByPatient.get(booking.id)?.latestVisit.therapistId}
+          onClose={() => setBooking(null)}
+          onBooked={() => setBooking(null)}
+        />
+      )}
     </SectionCard>
   );
 }
@@ -602,6 +718,8 @@ function PatientCard({
   therapistName,
   onEdit,
   onHide,
+  onBook,
+  onRemind,
 }: {
   patient: Patient;
   stats: { lastVisitOn: string; visitCount: number; latestVisit: Visit } | undefined;
@@ -610,6 +728,12 @@ function PatientCard({
   therapistName: Map<string, string>;
   onEdit: () => void;
   onHide: () => void;
+  /** Omitted (not just a no-op) when clinic.enablePatientComms is off,
+   *  so the button itself doesn't show — same gate as Requests → Bookings. */
+  onBook?: () => void;
+  /** Omitted when the patient isn't stale (no visits, or last one within
+   *  STALE_PACKAGE_DAYS) or has no phone on file — same gating as onBook. */
+  onRemind?: () => void;
 }) {
   const initials = p.name
     .split(/\s+/)
@@ -666,8 +790,18 @@ function PatientCard({
         </KebabMenu>
       </div>
 
-      {(p.primaryCondition || therapistLine || stats?.latestVisit?.treatmentNotes) && (
+      {(p.phone || p.primaryCondition || therapistLine || patientReferralLine(p)) && (
         <div className="mt-1.5 space-y-1">
+          {p.phone && (
+            <CardDetailRow label="Phone">
+              <a href={`tel:${p.phone}`} className="hover:underline">
+                {p.phone}
+              </a>
+            </CardDetailRow>
+          )}
+          {patientReferralLine(p) && (
+            <CardDetailRow label="Referral">{patientReferralLine(p)}</CardDetailRow>
+          )}
           {therapistLine && (
             <CardDetailRow label="Therapist">
               <TherapistPill>{therapistLine}</TherapistPill>
@@ -675,11 +809,6 @@ function PatientCard({
           )}
           {p.primaryCondition && (
             <CardDetailRow label="Condition">{p.primaryCondition}</CardDetailRow>
-          )}
-          {stats?.latestVisit?.treatmentNotes && (
-            <CardDetailRow label="Treatment" clamp>
-              {stats.latestVisit.treatmentNotes}
-            </CardDetailRow>
           )}
         </div>
       )}
@@ -703,17 +832,37 @@ function PatientCard({
             <span>No visits yet</span>
           )}
         </div>
-        <Link
-          to="/visits/new"
-          search={{ patientId: p.id }}
-          className={
-            nextAction === 'invoice'
-              ? 'rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]'
-              : 'rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]'
-          }
-        >
-          {nextAction === 'invoice' ? 'Needs invoice' : '+ Visit'}
-        </Link>
+        <div className="flex items-center gap-2">
+          {onBook && (
+            <button
+              type="button"
+              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+              onClick={onBook}
+            >
+              Book
+            </button>
+          )}
+          {onRemind && (
+            <button
+              type="button"
+              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+              onClick={onRemind}
+            >
+              Remind
+            </button>
+          )}
+          <Link
+            to="/visits/new"
+            search={{ patientId: p.id }}
+            className={
+              nextAction === 'invoice'
+                ? 'rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]'
+                : 'rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]'
+            }
+          >
+            {nextAction === 'invoice' ? 'Needs invoice' : '+ Visit'}
+          </Link>
+        </div>
       </div>
     </div>
   );

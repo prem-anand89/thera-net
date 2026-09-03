@@ -41,3 +41,28 @@ export function syncRecordLabel(table: string): string {
   const phrase = TABLE_PHRASE[table as SyncedTable];
   return phrase?.one ?? 'change';
 }
+
+/**
+ * Data-freshness caption for a screen whose numbers are derived from local
+ * Dexie data — "as of the last sync" if everything relevant has pushed, or
+ * "includes N unsynced X" when it hasn't, since an unsynced local change
+ * means the number is actually *more* current than the last-sync timestamp
+ * would suggest, not less. Shared by every screen with the same caveat
+ * (Ledger's totals, Workspace's "Collected today" et al.) rather than each
+ * reimplementing the same two-branch string.
+ */
+export function syncFreshnessCaption(
+  unsyncedCount: number,
+  table: SyncedTable,
+  lastSyncAt: number | string | null | undefined
+): string | null {
+  if (unsyncedCount > 0) {
+    const phrase = TABLE_PHRASE[table] ?? { one: 'change', many: 'changes' };
+    const label = unsyncedCount === 1 ? phrase.one : phrase.many;
+    return `Includes ${unsyncedCount} unsynced ${label}.`;
+  }
+  if (lastSyncAt) {
+    return `As of last sync ${new Date(lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
+  }
+  return null;
+}

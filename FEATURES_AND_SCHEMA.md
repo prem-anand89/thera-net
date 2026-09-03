@@ -689,7 +689,20 @@ still falls through to the existing share sheet, unchanged.
     (`dashboardService.singleVisitPatients`), gated the same way plus
     `p.phone` present — mirroring the existing call link's own gating,
     even though the share itself doesn't target that number directly (see
-    below).
+    below). Backed by `feedbackService.sendReturnReminder` (renamed from
+    `sendSingleVisitReminder` once the Patients list below started reusing
+    it for any stale patient, not just single-visit ones — the message
+    text never claimed "first visit," so nothing else needed to change).
+  - **Same reminder, reused on the Patients list** (`PatientsPage.tsx`) —
+    a "Remind" action (table + phone card) next to Book, shown whenever a
+    patient's own `visitStatsByPatient` entry is stale
+    (`isStale(lastVisitOn)`, the same `STALE_PACKAGE_DAYS` threshold as
+    the package follow-up queue) and they have a phone on file, gated on
+    `clinic.enablePatientComms` same as everywhere else. Lets front desk
+    nudge a patient they're already looking at without a detour through
+    Reports; package-specific wording (`sendStalePackageReminder`) stays
+    Ledger/Workspace-only since this view doesn't carry a per-patient
+    service name to plug into that message.
   - **Deliberately not phone-targeted.** `SingleVisitPatientRow.phone` and
     the `tel:` link already on that row could in principle build a
     number-specific `wa.me/<digits>` deep link, but patient phone numbers
@@ -900,6 +913,76 @@ still falls through to the existing share sheet, unchanged.
     actually configures the Business API and has an approved template,
     every send still falls through to the share sheet — which still
     doesn't log anything, same gap as before.
+  - **A "Book" action on each Patients-list row** (`BookAppointmentDialog.tsx`)
+    — same `create_appointment_staff` RPC as the Bookings tab's own "New
+    booking" card, reachable straight from a patient's row instead of a
+    detour through Requests. Pre-fills name/phone from the patient record
+    (phone stays editable — some patients predate having one on file) and
+    defaults Therapist to whoever ran their last visit, since "book with
+    the same therapist" is the common case. Gated on
+    `clinic.enablePatientComms` **and** admin-or-front_desk (`canBook` in
+    `PatientsPage.tsx`) — the RPC itself rejects any other role, so the
+    role check isn't optional the way the comms-flag check is; a plain
+    therapist never sees the button at all, same as Requests → Bookings'
+    own gate.
+  - **Optional `patient_id` linking at booking/confirm time** — both
+    `create_appointment_staff` and `confirm_appointment_request` grew a
+    trailing `p_patient_id uuid default null` parameter (drop+create, not
+    `create or replace` — see §3c), used at exactly the two entry points
+    where identity is already unambiguous, without relaxing the documented
+    "`appointments.patient_id` stays null until arrival" rule for every
+    other path (a public form submission or a hand-typed name still
+    carries real duplicate-name risk, so it still waits for New Visit's
+    own search-or-create typeahead):
+    - The Patients-list "Book" action above always passes it —
+      `BookAppointmentDialog` opens from an already-clicked patient row,
+      so there's no name to match and no ambiguity to defer.
+    - The Bookings tab's Confirm mini-form (`RequestsPage.tsx`) grew a
+      third, optional field alongside Scheduled-for/Therapist: a
+      `SearchableSelect` "Link to existing patient · optional" picker
+      (options built from `repos.patients.list`, broadened from
+      admin-only to admin-or-front_desk for this). Left blank — the
+      default — it's exactly today's behavior, identity resolves later.
+      Staff only fill it in when they explicitly recognize the requester
+      (by the name/phone already shown on the request card) as someone
+      already on file; nothing else on the form depends on it.
+    Both RPCs check the passed id belongs to the same clinic before
+    trusting it. `bookingService.confirmAppointmentRequest` and
+    `.createAppointmentStaff` both take the new id as a trailing optional
+    parameter, defaulting to `null`, so every existing call site is
+    unaffected.
+  - **Every "Create visit" link now passes `patientId` through when the
+    appointment already has one** (Workspace's "Expected today", both
+    mobile card and desktop table, plus Requests → Bookings' Appointments
+    table) — found in review right after the two entry points above
+    shipped: `NewVisitPage.tsx`'s `?patientId=…` search param already
+    pre-selects that exact patient (`repos.patients.get`, skipping the
+    typeahead entirely — the same fast path Patient Profile's own "New
+    visit" button and the repeat-visit flow use), but every "Create
+    visit" `Link` still only passed `prefillName`/`prefillPhone`, on a
+    now-stale assumption (a comment on the desktop-table one said so
+    outright) that `patientId` is only ever set alongside `visitId`. Once
+    the Book/Confirm-picker linking above could set it earlier, that
+    assumption broke: a patient already linked at booking time would hit
+    "Create visit" and land in the create-new-patient form instead of
+    being recognized, risking a duplicate patient record for someone
+    already correctly identified.
+  - **`NewVisitPage.tsx`'s Condition/Treatments fields collapse behind a
+    "+ Add condition / treatments (optional)" disclosure for front_desk
+    only** — reception usually doesn't know either at log time (that's
+    the therapist's own read of the patient after seeing them, not
+    something a booking or walk-in carries), so their path is Patient →
+    Therapist → Service → Payment, the four things they always have,
+    without two clinical fields sitting in the middle of it. Still one
+    click away, and admin/therapist never see it collapsed — this is a
+    front_desk-only default, not a permission: the fields were never
+    access-gated, only de-prioritized in the one role that usually can't
+    fill them in yet. **Auto-expands the moment either field gets a
+    non-empty value from anywhere else** — "Repeat last visit" and the
+    `?patientId=` prefill (a patient's own `primaryCondition`) both set
+    `condition` programmatically, and without this a value could sit
+    filled in behind the still-collapsed button and get submitted without
+    front desk ever seeing it (found in review, not the shipped behavior).
 - **WhatsApp Business Cloud API — wired, pending real templates (Phase 9)**
   — built ahead of the clinic actually having Meta credentials, so that
   turning real sending on is a config step, not a code change.
@@ -948,7 +1031,7 @@ still falls through to the existing share sheet, unchanged.
     template-name/param swap in `WHATSAPP_TEMPLATES`, not a code change.
     All seven patient/staff-facing send actions (`askForFeedback`,
     `resend`, `askForGoogleReview`, `sendStalePackageReminder`,
-    `sendSingleVisitReminder`, `shareBookingConfirmation`,
+    `sendReturnReminder`, `shareBookingConfirmation`,
     `shareTherapistNotify`) go through it, reading the recipient's phone
     off `Patient.phone` (added to `VisitCardData` as `patientPhone`,
     `OpenPackageRow` as `phone`, and threaded through `NewVisitPage`'s
@@ -976,6 +1059,55 @@ still falls through to the existing share sheet, unchanged.
     are free text with no format enforced, and a 10-digit local number is
     what staff overwhelmingly type); anything else passes through as-is
     and Meta's own validation is the real backstop.
+- **Monthly performance report** (`/insights?tab=performance` picker →
+  `/insights/performance-print`) — a print-only, one-month "hand this to
+  the team" document, alongside the existing per-therapist Monthly
+  statement rather than replacing it (that one's still the payout-figure
+  source of truth; this one's a review deck). Same admin-only gate
+  (`canViewPayouts`) and print shell (letterhead, `.no-print` button bar,
+  A4 sizing via `@page`) as `MonthlyLedgerPrintPage`, reached the same way
+  (a picker tab with an FY/month select feeding `year`/`month` into the
+  print route's search params).
+  - **Clinic totals** — `reportService.monthly`'s own `.total` row
+    (revenue, using the same hospital-split-aware `Post-Tax {label}` vs.
+    plain "Revenue" label the rest of the app uses), plus new-vs-returning
+    patient counts computed locally (a patient's own earliest visit across
+    *all* history, not just this month, decides which bucket they're in —
+    deliberately not a `dashboardService` addition, since nowhere else
+    needs this specific month-scoped split). Revenue and visit counts each
+    carry a "vs last month" delta, the one comparison this session's
+    Trends review flagged as missing everywhere else in Reports too.
+  - **Per-therapist breakdown** reuses `reportService.monthly`'s `rows`
+    (already the exact per-therapist Bill/Post-Tax/Net/Visits data
+    `MonthlyReportTable` renders) for two `BarChart`s (revenue, visits)
+    plus the table itself — not `TherapistComparisonCard`, which is
+    hardcoded to "current month, live" and a 6-month trend with no month
+    parameter, the wrong shape for an arbitrary past month.
+  - **Referral sources & conditions** — two `PieChart`s, computed locally
+    from that month's visits/patients rather than reusing
+    `dashboardService.referralSourceStats`/`conditionUsage`, both of which
+    are deliberately all-time/unscoped (Trends dashboard's own semantics)
+    and would need a signature change to take a date range — a local
+    month-scoped aggregation here was the smaller, self-contained change.
+  - **Retention follow-ups** — current `dashboardService.singleVisitPatients`
+    and stale `openPackages`, explicitly labeled "as of today, not scoped
+    to `<month>`" rather than filtered to the report's own month: the
+    point of this section is what the team should act on at the review
+    meeting, not a historical record, so it always reflects the live
+    queue regardless of which past month the rest of the report covers.
+- **Trends dashboard's "at a glance" KPI strip gained a Visits card** —
+  `ReportsOverviewPage.tsx`'s `KpiCard` strip already had month-over-month
+  trend badges on Revenue, Repeat visits, New patients, and Packages
+  (`pctChange` against the `revenueTrend` array's last two entries, no
+  extra query); raw visit count — "are we busier or quieter," not a
+  rate/quality metric like everything else in the strip — was the one gap.
+  `visitsThisMonth`/`visitsLastMonth` reuse the same already-fetched
+  `trend` array the Revenue card reads from. Grid went from 5 to 6 cards,
+  and its breakpoint moved from `lg:grid-cols-6` (1024px) to
+  `xl:grid-cols-6` (1280px) — six cards at the narrower width squeezed the
+  Revenue card's longest value ("₹1,84,500 ▲ 12%") into wrapping past its
+  own card edge; `sm:grid-cols-3` already covers every width from 640px up
+  with two comfortable rows of three in the gap between.
 
 ---
 
@@ -1002,8 +1134,9 @@ src/features/            UI pages and components (React + TanStack Router)
   ├── workspace/         WorkspacePage (Today, Recent, Open Packages, Pending)
   ├── visits/            LedgerPage at /ledger (Visits/Invoices sub-tabs); NewVisitPage
   ├── patients/          PatientsPage, PatientProfilePage, NoteEditorPage
-  ├── reports/           ReportsPage at /insights (Trends + monthly statement),
-                         MonthlyLedgerPrintPage
+  ├── reports/           ReportsPage at /insights (Trends + monthly statement +
+                         performance report), MonthlyLedgerPrintPage,
+                         MonthlyPerformancePickerPage, MonthlyPerformanceReportPage
   ├── settings/          SettingsPage at /settings; CreateClinicForm
   ├── invoices/          InvoicePrintPage
   ├── import/            Historical Excel visit import (preview + commit)
@@ -1045,8 +1178,9 @@ supabase/                SQL migrations, RLS policies, RPCs, realtime
 | `/patients/$patientId` | Individual patient profile, visit history, payments summary, clinical notes | All roles |
 | `/patients/$patientId/notes/new`, `/patients/$patientId/notes/$noteId` | Core Assessment note editor (Initial/Follow-up) | Therapists & admins (`canViewClinicalNotes`) |
 | `/patients/$patientId/notes/$noteId/print` | Printable consultation note | Therapists & admins |
-| `/insights` | Dashboard + monthly per-therapist statement (`?tab=monthly`) | Admins & front_desk (monthly statement sub-view further gated admin-only) |
+| `/insights` | Dashboard + monthly per-therapist statement (`?tab=monthly`) + monthly performance report picker (`?tab=performance`) | Admins & front_desk (monthly statement and performance report sub-views further gated admin-only, same `canViewPayouts` check) |
 | `/insights/print` | Printable monthly ledger (portrait A4) | Admins & front_desk |
+| `/insights/performance-print` | Printable monthly performance report — clinic totals, per-therapist chart + table, referral/condition mix, retention follow-ups (portrait A4) | Admins & front_desk |
 | `/invoices/$invoiceId/print` | Printable Bill/Bill Cum Receipt (A4/A5) | Anyone who can reach the invoice |
 | `/settings` | Clinic configuration, MRNO settings, billing mode, rate setup, feature toggles | Admins only |
 | `/settings/import-visits` | Historical Excel visit import | Admins only |
@@ -2515,6 +2649,88 @@ its own narrow in-place edit path instead.
 - Both functions live in `src/domain/fiscalYear.ts`; the choice between them
   is a per-usage judgment call, not something to change without checking
   which bucket a given date falls into.
+
+### 10. Responsive Breakpoints & the Mobile-Card/Table Split
+- **Two custom breakpoints** (`src/index.css`'s `@theme`), not Tailwind's
+  defaults: `tab:` at 744px (iPad Mini portrait — deliberately below
+  Tailwind's `md:` 768px, so the phone/tablet split doesn't misclassify it)
+  and `desktop:` at 1000px. Every "does this count as a working tablet"
+  decision in the app uses `tab:`, so the answer stays consistent app-wide.
+- **Every table needs a phone-card twin.** A bare `<table>` with no
+  `tab:hidden`/`hidden tab:block` pair renders unusably on a phone —
+  horizontal scroll inside a cramped column, not a bug that shows up in
+  typecheck/lint/tests. The established pattern (Workspace's Packages
+  table, Ledger, Patients, Reports, Invoices, Attribution Audit, and —
+  since this pattern's writeup — Workspace's "Expected today" and
+  Requests' Feedback/Appointments tables) is always the same two blocks:
+  `<div className="tab:hidden space-y-2">` of rounded-2xl pill cards
+  (phone, below 744px) immediately followed by
+  `<div className="hidden tab:block overflow-x-auto"><table>...</table></div>`
+  (tab: and up) — same data, same actions, just laid out differently.
+  When adding a new table-shaped list, build both from the start rather
+  than shipping the table alone and coming back for the card later.
+- **Header width budget** (`Shell.tsx`'s header) — the row carries the
+  brand, five nav items, the sync badge, and the account trigger inside
+  `max-w-6xl`, which doesn't fit with full text everywhere at once. These
+  rules keep it fitting, all the way down to a 744px iPad-portrait width:
+  1. Only the brand/clinic name shrinks (truncates, then hides below
+     `desktop:`) — nav and the sync/account cluster are `shrink-0`, so a
+     tight row never squeezes the things you click.
+  2. Nav item labels show from `tab:` up; below that they're icon-only
+     with `aria-label`/`title` carrying the accessible name (a
+     `hidden`/`display:none` span is skipped by screen readers).
+  3. `SyncBadge`'s text label collapses to just the status dot only while
+     `quiet` (online, nothing queued, nothing failed — `status.syncing`
+     excluded too, i.e. mid-sync ranks as "has something to say") — and
+     even then only below `tab:` (744px), since measured, there's room for
+     the full pill (dot + "Synced") right alongside the nav labels at
+     every iPad-portrait width. The moment there's something to report
+     (offline, syncing, pending, failed) it expands at every width, phone
+     included — a state a person is actively waiting to resolve shouldn't
+     need a tap on a bare dot to read. `SyncStatusBanners` separately
+     covers offline/failure states with a full-width banner regardless of
+     breakpoint or badge state.
+  4. The account trigger's display name is `desktop:`-only (was `sm:`) —
+     below that it's just the avatar initials. This one's still
+     deliberately conservative rather than measured-and-widened like
+     SyncBadge, since the dropdown it opens already repeats the name.
+- **A sticky table cell's background must vary by CSS custom property, not
+  by class.** `VisitCard.tsx`'s Status column (`position: sticky; right:
+  0`) needs its own opaque background so the columns scrolling underneath
+  don't show through — but on Safari, a `bg-[var(--paper)]` /
+  `bg-[var(--surface)]` class that *swaps per row* (alternating stripe)
+  fails to paint on a sticky cell: the first, never-yet-scrolled row
+  renders fine, the rest silently don't. Setting one constant class
+  (`bg-[var(--td-bg)]`) and varying only an inline `--td-bg` custom
+  property per row paints reliably on Safari too, and — unlike setting
+  `backgroundColor` directly inline, which would out-specificity it —
+  still lets `group-hover:bg-[var(--teal-light)]` win on hover, since both
+  stay class-vs-class in the cascade. Any other sticky cell with a
+  per-row-varying background should use the same pattern.
+- **Sync-freshness caption** (`syncFreshnessCaption` in `syncCopy.ts`) — a
+  shared one-liner ("As of last sync HH:MM." / "Includes N unsynced
+  visits.") for any screen whose numbers are derived from local Dexie data
+  that might be behind the server or ahead of the last-sync timestamp.
+  Unsynced local changes take priority in the copy — "as of 14:02" would
+  understate what's actually showing if newer edits are still queued.
+  Ledger's totals and Workspace's "Collected today" stat both carry it;
+  any other screen aggregating from `visits` (or another synced table)
+  for a number people check repeatedly through the day should too.
+- **A `<button>` needs `uppercase` re-declared, not inherited.** Every
+  sortable column header goes through `SortHeader` (`sortable.tsx`),
+  which wraps the label in a `<button>` so the whole header is clickable.
+  Browsers reset a `<button>`'s `text-transform` to `none` by default,
+  and that reset doesn't inherit through from the ancestor `<th>` — so
+  every sortable header silently rendered in plain case while every
+  plain, non-sortable `<th className={th}>` in the same table correctly
+  showed the `th`/`thNum` uppercase styling, a mismatch easy to miss
+  since nothing in typecheck/lint/tests catches a CSS property silently
+  not applying. Fixed by adding `uppercase` directly to `SortHeader`'s
+  `<button>` class list. The general lesson: a `<button>` (or `<input>`/
+  `<select>`) wrapping styled text doesn't automatically inherit
+  `text-transform`/`letter-spacing` the way a plain element would —
+  re-declare them on the control itself, don't assume the ancestor's
+  class is enough.
 
 ---
 
