@@ -497,6 +497,12 @@ export function WorkspacePage() {
                             appointmentId: a.id,
                             prefillName: a.patientName,
                             prefillPhone: a.patientPhone,
+                            // Set when this appointment was booked via the
+                            // Patients-list "Book" action or an explicit
+                            // Confirm-step pick — identity is already
+                            // known, so New Visit pre-selects that patient
+                            // instead of re-running the typeahead.
+                            ...(a.patientId ? { patientId: a.patientId } : {}),
                           }}
                           className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
                         >
@@ -592,10 +598,13 @@ export function WorkspacePage() {
                                   Cancel
                                 </button>
                               )}
-                            {/* patientId is only ever set alongside visitId
-                              (link_appointment_visit sets both together),
-                              so !a.visitId here always means identity is
-                              still unresolved — nothing to pre-select. */}
+                            {/* patientId can now be set before visitId too —
+                              the Patients-list "Book" action and an
+                              explicit Confirm-step pick both link identity
+                              at booking time (see the patient_id-linking
+                              migration). When it's set, pass it through so
+                              New Visit pre-selects that patient instead of
+                              re-running the name/phone typeahead. */}
                             {!a.visitId && a.status !== 'cancelled' && a.status !== 'no_show' && (
                               <Link
                                 to="/visits/new"
@@ -603,6 +612,7 @@ export function WorkspacePage() {
                                   appointmentId: a.id,
                                   prefillName: a.patientName,
                                   prefillPhone: a.patientPhone,
+                                  ...(a.patientId ? { patientId: a.patientId } : {}),
                                 }}
                                 className="whitespace-nowrap rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
                               >

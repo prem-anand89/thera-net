@@ -193,6 +193,18 @@ export function NewVisitPage() {
   // path is Patient → Therapist → Service → Payment, the four things
   // front desk always has, without a clinical field sitting between.
   const [clinicalDetailsExpanded, setClinicalDetailsExpanded] = useState(false);
+  // Two prefill paths can fill `condition` in behind this collapsed
+  // section before front desk ever opens it — the ?patientId= prefill
+  // effect (from the patient's own primaryCondition) and "Repeat last
+  // visit" (from the prior visit's own condition). Either way, a value
+  // that's about to be submitted needs to be visible, not carried over
+  // silently behind a "+ Add condition / treatments (optional)" button
+  // that still reads as empty.
+  useEffect(() => {
+    if (role === 'front_desk' && !clinicalDetailsExpanded && condition) {
+      setClinicalDetailsExpanded(true);
+    }
+  }, [role, clinicalDetailsExpanded, condition]);
   const [paymentChoice, setPaymentChoice] = useState<'paid' | 'pending'>('paid');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi');
   const [pendingNote, setPendingNote] = useState('');

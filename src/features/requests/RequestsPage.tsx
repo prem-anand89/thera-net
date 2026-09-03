@@ -843,6 +843,13 @@ export function RequestsPage() {
                                   appointmentId: a.id,
                                   prefillName: a.patientName,
                                   prefillPhone: a.patientPhone,
+                                  // Set when this appointment was booked via
+                                  // the Patients-list "Book" action or an
+                                  // explicit Confirm-step pick — identity is
+                                  // already known, so New Visit should
+                                  // pre-select that patient instead of
+                                  // re-running the name/phone typeahead.
+                                  ...(a.patientId ? { patientId: a.patientId } : {}),
                                 }}
                                 className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
                               >
@@ -990,6 +997,7 @@ export function RequestsPage() {
                                           appointmentId: a.id,
                                           prefillName: a.patientName,
                                           prefillPhone: a.patientPhone,
+                                          ...(a.patientId ? { patientId: a.patientId } : {}),
                                         }}
                                         className="whitespace-nowrap rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
                                       >

@@ -920,8 +920,11 @@ still falls through to the existing share sheet, unchanged.
     (phone stays editable — some patients predate having one on file) and
     defaults Therapist to whoever ran their last visit, since "book with
     the same therapist" is the common case. Gated on
-    `clinic.enablePatientComms`, same as the Bookings tab itself; hidden
-    entirely (not just disabled) when that's off.
+    `clinic.enablePatientComms` **and** admin-or-front_desk (`canBook` in
+    `PatientsPage.tsx`) — the RPC itself rejects any other role, so the
+    role check isn't optional the way the comms-flag check is; a plain
+    therapist never sees the button at all, same as Requests → Bookings'
+    own gate.
   - **Optional `patient_id` linking at booking/confirm time** — both
     `create_appointment_staff` and `confirm_appointment_request` grew a
     trailing `p_patient_id uuid default null` parameter (drop+create, not
@@ -948,6 +951,22 @@ still falls through to the existing share sheet, unchanged.
     `.createAppointmentStaff` both take the new id as a trailing optional
     parameter, defaulting to `null`, so every existing call site is
     unaffected.
+  - **Every "Create visit" link now passes `patientId` through when the
+    appointment already has one** (Workspace's "Expected today", both
+    mobile card and desktop table, plus Requests → Bookings' Appointments
+    table) — found in review right after the two entry points above
+    shipped: `NewVisitPage.tsx`'s `?patientId=…` search param already
+    pre-selects that exact patient (`repos.patients.get`, skipping the
+    typeahead entirely — the same fast path Patient Profile's own "New
+    visit" button and the repeat-visit flow use), but every "Create
+    visit" `Link` still only passed `prefillName`/`prefillPhone`, on a
+    now-stale assumption (a comment on the desktop-table one said so
+    outright) that `patientId` is only ever set alongside `visitId`. Once
+    the Book/Confirm-picker linking above could set it earlier, that
+    assumption broke: a patient already linked at booking time would hit
+    "Create visit" and land in the create-new-patient form instead of
+    being recognized, risking a duplicate patient record for someone
+    already correctly identified.
   - **`NewVisitPage.tsx`'s Condition/Treatments fields collapse behind a
     "+ Add condition / treatments (optional)" disclosure for front_desk
     only** — reception usually doesn't know either at log time (that's
@@ -958,7 +977,12 @@ still falls through to the existing share sheet, unchanged.
     click away, and admin/therapist never see it collapsed — this is a
     front_desk-only default, not a permission: the fields were never
     access-gated, only de-prioritized in the one role that usually can't
-    fill them in yet.
+    fill them in yet. **Auto-expands the moment either field gets a
+    non-empty value from anywhere else** — "Repeat last visit" and the
+    `?patientId=` prefill (a patient's own `primaryCondition`) both set
+    `condition` programmatically, and without this a value could sit
+    filled in behind the still-collapsed button and get submitted without
+    front desk ever seeing it (found in review, not the shipped behavior).
 - **WhatsApp Business Cloud API — wired, pending real templates (Phase 9)**
   — built ahead of the clinic actually having Meta credentials, so that
   turning real sending on is a config step, not a code change.

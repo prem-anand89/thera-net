@@ -66,8 +66,14 @@ export function PatientsPage() {
 
 function AllPatientsSection() {
   const clinic = useClinic();
-  const { myTherapistId } = useWorkspaceScope();
-  const { canBill } = usePermissions();
+  const { myTherapistId, isFrontDesk } = useWorkspaceScope();
+  const { canBill, isAdmin } = usePermissions();
+  // create_appointment_staff (the RPC the "Book" action calls) rejects
+  // anyone who isn't admin or front_desk server-side — same role check
+  // Requests → Bookings' own "New booking" card is gated on
+  // (`canSeeBookings` there). Without this, a therapist saw a live-looking
+  // Book button that always failed with "Not authorized."
+  const canBook = clinic.enablePatientComms && (isAdmin || isFrontDesk);
   const [query, setQuery] = useState('');
   const [chip, setChip] = useState<'all' | 'needs_invoice' | 'mine'>('all');
   const [showHidden, setShowHidden] = useState(false);
@@ -433,7 +439,7 @@ function AllPatientsSection() {
                   therapistName={therapistName}
                   onEdit={() => setEditing(p)}
                   onHide={() => void hide(p)}
-                  onBook={clinic.enablePatientComms ? () => setBooking(p) : undefined}
+                  onBook={canBook ? () => setBooking(p) : undefined}
                   onRemind={
                     clinic.enablePatientComms &&
                     p.phone &&
@@ -576,7 +582,7 @@ function AllPatientsSection() {
                           >
                             + Visit
                           </Link>
-                          {clinic.enablePatientComms && (
+                          {canBook && (
                             <button
                               type="button"
                               className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
