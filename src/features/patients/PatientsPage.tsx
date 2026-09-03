@@ -459,28 +459,24 @@ function AllPatientsSection() {
                   return (
                     <tr key={p.id} className="hover:bg-[var(--paper)]">
                       <td className={td}>
-                        {/* Fixed height so the pill (its own padding gives
-                            it a taller line box than plain text) doesn't
-                            push this row's second line down relative to
-                            rows with no pill — that was the misalignment:
-                            referral lines started at different heights
-                            row to row depending on whether a pill sat
-                            above them. */}
-                        <div className="flex h-5 items-center gap-1.5">
-                          <span>{p.mrno}</span>
-                          {p.mrnoSource === 'auto' && <Pill tone="slate">walk-in</Pill>}
-                        </div>
+                        {/* No walk-in/auto-MRN pill here — the mobile card
+                            never had one (just patientIdentityLine's plain
+                            mrno/age/sex), and this table's own referral
+                            line right below already says "Walk-in" for the
+                            common case where that's also how the patient
+                            arrived. Showing both read as the same fact
+                            twice, once as a pill and once as text. The
+                            auto-vs-hospital MRN distinction is still
+                            visible on the patient's own profile — this is
+                            a roster-glance row, not the full record. */}
+                        <div>{p.mrno}</div>
                         {/* Second line, same pattern as Name's age/sex line
                             below — referral is the one other fact worth a
                             glance at roster level, and pairing it here
                             (rather than a column of its own) keeps every
                             multi-fact cell in this table the same fixed
                             two-line shape. Always shows the actual value
-                            (or '—' when nothing's on file) — an earlier
-                            pass suppressed it to '—' whenever it happened
-                            to echo the walk-in pill's own wording, which
-                            read as broken/missing data instead of the
-                            de-duplication it was meant to be. */}
+                            (or '—' when nothing's on file). */}
                         <div className="text-xs text-[var(--muted)]">{referral ?? '—'}</div>
                       </td>
                       <td className={`${td} font-display`}>
