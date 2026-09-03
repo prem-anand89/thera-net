@@ -1071,6 +1071,19 @@ still falls through to the existing share sheet, unchanged.
     point of this section is what the team should act on at the review
     meeting, not a historical record, so it always reflects the live
     queue regardless of which past month the rest of the report covers.
+- **Trends dashboard's "at a glance" KPI strip gained a Visits card** —
+  `ReportsOverviewPage.tsx`'s `KpiCard` strip already had month-over-month
+  trend badges on Revenue, Repeat visits, New patients, and Packages
+  (`pctChange` against the `revenueTrend` array's last two entries, no
+  extra query); raw visit count — "are we busier or quieter," not a
+  rate/quality metric like everything else in the strip — was the one gap.
+  `visitsThisMonth`/`visitsLastMonth` reuse the same already-fetched
+  `trend` array the Revenue card reads from. Grid went from 5 to 6 cards,
+  and its breakpoint moved from `lg:grid-cols-6` (1024px) to
+  `xl:grid-cols-6` (1280px) — six cards at the narrower width squeezed the
+  Revenue card's longest value ("₹1,84,500 ▲ 12%") into wrapping past its
+  own card edge; `sm:grid-cols-3` already covers every width from 640px up
+  with two comfortable rows of three in the gap between.
 
 ---
 
