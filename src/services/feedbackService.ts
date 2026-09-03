@@ -189,10 +189,16 @@ export function createFeedbackService(repos: Repos) {
       });
     },
 
-    /** Slice 4: re-engagement nudge for a patient with exactly one visit,
-     *  no follow-up booked — reuses `dashboardService.singleVisitPatients`,
-     *  same "no new detection" reasoning as the stale-package reminder. */
-    async sendSingleVisitReminder(
+    /** Slice 4: generic re-engagement nudge for a patient who hasn't been
+     *  back in a while — originally built for `dashboardService.
+     *  singleVisitPatients` (Reports → "Single-visit patients"), same
+     *  "no new detection" reasoning as the stale-package reminder. Reused
+     *  as-is (message text never claims "your first visit" or similar) by
+     *  the Patients list's own "Remind" action for any stale patient,
+     *  package or not — one wording is enough; a package-specific one
+     *  already exists in `sendStalePackageReminder` above for when the
+     *  service name is known. */
+    async sendReturnReminder(
       clinicId: UUID,
       patientName: string,
       patientPhone: string | null,

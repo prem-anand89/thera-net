@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, patientService } from '@/services';
+import { repos, patientService, feedbackService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
@@ -20,6 +20,7 @@ import {
   formatDateDM,
 } from '@/domain/fiscalYear';
 import { REFERRING_SOURCE_LABELS, type Patient, type Visit } from '@/domain/types';
+import { isStale } from '@/domain/packageTracking';
 import {
   inputCls,
   th,
@@ -433,6 +434,20 @@ function AllPatientsSection() {
                   onEdit={() => setEditing(p)}
                   onHide={() => void hide(p)}
                   onBook={clinic.enablePatientComms ? () => setBooking(p) : undefined}
+                  onRemind={
+                    clinic.enablePatientComms &&
+                    p.phone &&
+                    visitStatsByPatient.get(p.id) &&
+                    isStale(visitStatsByPatient.get(p.id)!.lastVisitOn)
+                      ? () =>
+                          void feedbackService.sendReturnReminder(
+                            clinic.id,
+                            p.name,
+                            p.phone,
+                            clinic.name
+                          )
+                      : undefined
+                  }
                 />
               </div>
             ))}
@@ -570,6 +585,33 @@ function AllPatientsSection() {
                               Book
                             </button>
                           )}
+                          {/* Same re-engagement nudge Reports → "Single-visit
+                              patients" already offers, surfaced here too so
+                              front desk doesn't need a detour through Reports
+                              for a patient they're already looking at. Same
+                              "stale" threshold as the package follow-up
+                              queue (STALE_PACKAGE_DAYS) — no visits yet
+                              never qualifies, there's nothing to follow up
+                              on. */}
+                          {clinic.enablePatientComms &&
+                            p.phone &&
+                            stats &&
+                            isStale(stats.lastVisitOn) && (
+                              <button
+                                type="button"
+                                className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                                onClick={() =>
+                                  void feedbackService.sendReturnReminder(
+                                    clinic.id,
+                                    p.name,
+                                    p.phone,
+                                    clinic.name
+                                  )
+                                }
+                              >
+                                Remind
+                              </button>
+                            )}
                         </div>
                       </td>
                     </tr>
@@ -671,6 +713,7 @@ function PatientCard({
   onEdit,
   onHide,
   onBook,
+  onRemind,
 }: {
   patient: Patient;
   stats: { lastVisitOn: string; visitCount: number; latestVisit: Visit } | undefined;
@@ -682,6 +725,9 @@ function PatientCard({
   /** Omitted (not just a no-op) when clinic.enablePatientComms is off,
    *  so the button itself doesn't show — same gate as Requests → Bookings. */
   onBook?: () => void;
+  /** Omitted when the patient isn't stale (no visits, or last one within
+   *  STALE_PACKAGE_DAYS) or has no phone on file — same gating as onBook. */
+  onRemind?: () => void;
 }) {
   const initials = p.name
     .split(/\s+/)
@@ -788,6 +834,15 @@ function PatientCard({
               onClick={onBook}
             >
               Book
+            </button>
+          )}
+          {onRemind && (
+            <button
+              type="button"
+              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+              onClick={onRemind}
+            >
+              Remind
             </button>
           )}
           <Link

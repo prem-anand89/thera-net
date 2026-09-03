@@ -689,7 +689,20 @@ still falls through to the existing share sheet, unchanged.
     (`dashboardService.singleVisitPatients`), gated the same way plus
     `p.phone` present — mirroring the existing call link's own gating,
     even though the share itself doesn't target that number directly (see
-    below).
+    below). Backed by `feedbackService.sendReturnReminder` (renamed from
+    `sendSingleVisitReminder` once the Patients list below started reusing
+    it for any stale patient, not just single-visit ones — the message
+    text never claimed "first visit," so nothing else needed to change).
+  - **Same reminder, reused on the Patients list** (`PatientsPage.tsx`) —
+    a "Remind" action (table + phone card) next to Book, shown whenever a
+    patient's own `visitStatsByPatient` entry is stale
+    (`isStale(lastVisitOn)`, the same `STALE_PACKAGE_DAYS` threshold as
+    the package follow-up queue) and they have a phone on file, gated on
+    `clinic.enablePatientComms` same as everywhere else. Lets front desk
+    nudge a patient they're already looking at without a detour through
+    Reports; package-specific wording (`sendStalePackageReminder`) stays
+    Ledger/Workspace-only since this view doesn't carry a per-patient
+    service name to plug into that message.
   - **Deliberately not phone-targeted.** `SingleVisitPatientRow.phone` and
     the `tel:` link already on that row could in principle build a
     number-specific `wa.me/<digits>` deep link, but patient phone numbers
@@ -994,7 +1007,7 @@ still falls through to the existing share sheet, unchanged.
     template-name/param swap in `WHATSAPP_TEMPLATES`, not a code change.
     All seven patient/staff-facing send actions (`askForFeedback`,
     `resend`, `askForGoogleReview`, `sendStalePackageReminder`,
-    `sendSingleVisitReminder`, `shareBookingConfirmation`,
+    `sendReturnReminder`, `shareBookingConfirmation`,
     `shareTherapistNotify`) go through it, reading the recipient's phone
     off `Patient.phone` (added to `VisitCardData` as `patientPhone`,
     `OpenPackageRow` as `phone`, and threaded through `NewVisitPage`'s
