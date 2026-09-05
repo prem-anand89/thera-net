@@ -103,30 +103,6 @@ const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> =
   uniquePatients: 0,
 };
 
-/** Buckets a list of counts-with-a-number into fixed ranges for a small
- *  histogram — the shape "single-visit patients" needs (how overdue). */
-function bucketCounts(values: number[], edges: { max: number; label: string }[]): number[] {
-  const counts = new Array(edges.length).fill(0) as number[];
-  for (const v of values) {
-    const idx = edges.findIndex((e) => v <= e.max);
-    counts[idx === -1 ? edges.length - 1 : idx]++;
-  }
-  return counts;
-}
-
-/** Which bucket index a single value falls into, for filtering a list by
- *  the same edges a BarChart derived from bucketCounts is showing. */
-function bucketIndexOf(value: number, edges: { max: number }[]): number {
-  const idx = edges.findIndex((e) => value <= e.max);
-  return idx === -1 ? edges.length - 1 : idx;
-}
-
-const SINGLE_VISIT_BUCKET_EDGES = [
-  { max: 30, label: '15–30d' },
-  { max: 60, label: '31–60d' },
-  { max: Infinity, label: '60d+' },
-];
-
 export function ReportsOverviewPage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
@@ -369,29 +345,12 @@ export function ReportsOverviewPage() {
   const conditionActive =
     conditionSelectedIdx != null ? conditionUsage?.[conditionSelectedIdx] : undefined;
 
-  const singleVisitBuckets = useMemo(
-    () =>
-      bucketCounts(
-        (singleVisitPatients ?? []).map((p) => p.daysSince),
-        SINGLE_VISIT_BUCKET_EDGES
-      ),
-    [singleVisitPatients]
-  );
-  // Clicking a histogram bar filters the list below to that day-range;
-  // null means "show everyone" (the default, and the BarChart itself has
-  // no "all" bar to click back to, so a Clear affordance covers that).
-  const [singleVisitBucketFilter, setSingleVisitBucketFilter] = useState<number | null>(null);
   const [hideClosedReasons, setHideClosedReasons] = useState(false);
   const filteredSingleVisit = useMemo(() => {
     let rows = singleVisitPatients ?? [];
-    if (singleVisitBucketFilter != null) {
-      rows = rows.filter(
-        (p) => bucketIndexOf(p.daysSince, SINGLE_VISIT_BUCKET_EDGES) === singleVisitBucketFilter
-      );
-    }
     if (hideClosedReasons) rows = rows.filter((p) => !p.noReturnReasonClosed);
     return rows;
-  }, [singleVisitPatients, singleVisitBucketFilter, hideClosedReasons]);
+  }, [singleVisitPatients, hideClosedReasons]);
 
   // The clinic's own "why didn't they come back" list — same editable-list
   // shape as the service catalog (see Catalog() in Settings), managed
@@ -617,35 +576,10 @@ export function ReportsOverviewPage() {
               </p>
             ) : (
               <>
-                <div className="mb-4 flex flex-wrap items-center gap-4">
+                <div className="mb-4">
                   <StatTile label="Total" value={singleVisitPatients.length} />
-                  <div className="min-w-0 flex-1">
-                    <BarChart
-                      categories={SINGLE_VISIT_BUCKET_EDGES.map((e) => e.label)}
-                      series={[
-                        { label: 'Patients', color: SERIES_COLORS[0], values: singleVisitBuckets },
-                      ]}
-                      height={140}
-                      selectedCategoryIndex={singleVisitBucketFilter}
-                      onCategoryClick={(i) =>
-                        setSingleVisitBucketFilter((prev) => (prev === i ? null : i))
-                      }
-                    />
-                  </div>
                 </div>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  {singleVisitBucketFilter != null ? (
-                    <button
-                      type="button"
-                      onClick={() => setSingleVisitBucketFilter(null)}
-                      className="text-xs font-medium text-[var(--teal)] hover:underline"
-                    >
-                      Showing {SINGLE_VISIT_BUCKET_EDGES[singleVisitBucketFilter].label} only —
-                      clear filter
-                    </button>
-                  ) : (
-                    <span />
-                  )}
+                <div className="mb-2 flex justify-end">
                   <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
                     <input
                       type="checkbox"
