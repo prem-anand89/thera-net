@@ -28,7 +28,8 @@ export function TherapistComparisonCard() {
   // Clinic/Clinic+ feature (Part 3 of the tier plan) — the clinic-wide
   // opt-in still applies on top, but a Lite/Solo clinic doesn't get this
   // regardless of whether the toggle happens to be on.
-  const showComparison = clinic.showTherapistComparison && !scope.isFrontDesk && entitlements.can('revenueSplit');
+  const showComparison =
+    clinic.showTherapistComparison && !scope.isFrontDesk && entitlements.can('revenueSplit');
   // Post-Tax BM adjusted for same-visit splits and automatic package-session
   // attribution (reportService's netPostTaxPaise) — genuinely post-tax for a
   // hospital-split clinic, and equal to the plain net bill for a simple one
@@ -56,7 +57,10 @@ export function TherapistComparisonCard() {
   );
 
   const categories = useMemo(
-    () => (trend ?? []).map((r) => `${monthName(r.month.month).slice(0, 3)} '${String(r.month.year).slice(2)}`),
+    () =>
+      (trend ?? []).map(
+        (r) => `${monthName(r.month.month).slice(0, 3)} '${String(r.month.year).slice(2)}`
+      ),
     [trend]
   );
   const therapistNames = useMemo(
@@ -114,30 +118,18 @@ export function TherapistComparisonCard() {
             />
           </div>
           <div>
-            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Visits</h3>
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+              Visits
+            </h3>
             <BarChart
               categories={categories}
               series={therapistNames.slice(0, SERIES_COLORS.length).map((name, i) => ({
                 label: name,
                 color: SERIES_COLORS[i],
-                values: trend.map((r) => r.rows.find((row) => row.therapistName === name)?.visitCount ?? 0),
+                values: trend.map(
+                  (r) => r.rows.find((row) => row.therapistName === name)?.visitCount ?? 0
+                ),
               }))}
-            />
-          </div>
-          {/* One-value-per-therapist snapshot (this month, right now), not a
-              6-month trend like the two above — one bar per therapist rather
-              than one series per therapist. */}
-          <div>
-            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Open packages</h3>
-            <BarChart
-              categories={therapistNames}
-              series={[
-                {
-                  label: 'Open packages',
-                  color: SERIES_COLORS[1],
-                  values: therapistNames.map((name) => openPackageCountByName.get(name) ?? 0),
-                },
-              ]}
             />
           </div>
         </div>
@@ -169,7 +161,9 @@ export function TherapistComparisonCard() {
                     <tr key={name}>
                       <td className={td}>{name}</td>
                       <td className={tdNum}>{formatINR(row?.billPaise ?? 0)}</td>
-                      {hospitalSplit && <td className={tdNum}>{formatINR(row?.postTaxPaise ?? 0)}</td>}
+                      {hospitalSplit && (
+                        <td className={tdNum}>{formatINR(row?.postTaxPaise ?? 0)}</td>
+                      )}
                       <td className={tdNum}>{formatINR(row?.netPostTaxPaise ?? 0)}</td>
                       <td className={tdNum}>{row?.visitCount ?? 0}</td>
                       <td className={tdNum}>{openPackageCountByName.get(name) ?? 0}</td>

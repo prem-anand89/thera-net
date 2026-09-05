@@ -89,6 +89,22 @@ export function LoginPage() {
     setResetSent(true);
   }
 
+  async function onGoogleSignIn() {
+    setBusy(true);
+    setError(null);
+    const { error } = await getSupabase()!.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/reset-password`,
+      },
+    });
+    setBusy(false);
+    if (error) {
+      console.error('Google sign in error:', error);
+      setError(error.message || 'Failed to sign in with Google');
+    }
+  }
+
   if (mode === 'signup') {
     return (
       <div className="mx-auto mt-24 max-w-sm">
@@ -145,6 +161,19 @@ export function LoginPage() {
               <ErrorNote message={error} />
               <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
                 {busy ? 'Creating account…' : 'Sign up'}
+              </button>
+              <div className="relative flex items-center">
+                <div className="flex-grow border-t border-[var(--border)]" />
+                <span className="mx-2 text-xs text-[var(--muted)]">or</span>
+                <div className="flex-grow border-t border-[var(--border)]" />
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onGoogleSignIn}
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)] disabled:opacity-50"
+              >
+                Sign up with Google
               </button>
               <button
                 type="button"
@@ -211,7 +240,10 @@ export function LoginPage() {
   return (
     <div className="mx-auto mt-24 max-w-sm">
       <AuthBrandHeader subtitle="Sign in" />
-      <form onSubmit={onSubmit} className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
+      <form
+        onSubmit={onSubmit}
+        className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6"
+      >
         <Field label="Email">
           <input
             type="email"
@@ -233,6 +265,19 @@ export function LoginPage() {
         <ErrorNote message={error} />
         <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
           {busy ? 'Signing in…' : 'Sign in'}
+        </button>
+        <div className="relative flex items-center">
+          <div className="flex-grow border-t border-[var(--border)]" />
+          <span className="mx-2 text-xs text-[var(--muted)]">or</span>
+          <div className="flex-grow border-t border-[var(--border)]" />
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onGoogleSignIn}
+          className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)] disabled:opacity-50"
+        >
+          Sign in with Google
         </button>
         <div className="flex flex-col gap-2">
           <button
