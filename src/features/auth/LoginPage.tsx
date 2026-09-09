@@ -182,6 +182,7 @@ export function LoginPage() {
           ) : (
             <>
               <GoogleButton onClick={onGoogleSignIn} busy={busy} label="Sign up with Google" />
+              <ErrorNote message={error} />
               <div className="relative flex items-center">
                 <div className="flex-grow border-t border-[var(--border)]" />
                 <span className="mx-2 text-xs text-[var(--muted)]">or</span>
@@ -217,7 +218,6 @@ export function LoginPage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                   />
                 </Field>
-                <ErrorNote message={error} />
                 <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
                   {busy ? 'Creating account…' : 'Sign up'}
                 </button>
@@ -289,6 +289,7 @@ export function LoginPage() {
       <AuthBrandHeader subtitle="Sign in" />
       <div className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
         <GoogleButton onClick={onGoogleSignIn} busy={busy} label="Sign in with Google" />
+        <ErrorNote message={error} />
         <div className="relative flex items-center">
           <div className="flex-grow border-t border-[var(--border)]" />
           <span className="mx-2 text-xs text-[var(--muted)]">or</span>
@@ -313,7 +314,6 @@ export function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </Field>
-          <ErrorNote message={error} />
           <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
