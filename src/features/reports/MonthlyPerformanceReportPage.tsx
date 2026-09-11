@@ -44,6 +44,9 @@ export function MonthlyPerformanceReportPage() {
   const prevPeriod = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
   const labels = clinicShareLabels(clinic);
   const { hospitalSplit } = clinicBillingConfig(clinic);
+  // A 0% TDS rate leaves the split itself in place, but with nothing
+  // actually withheld "Post-Tax" no longer describes the figure.
+  const showPostTax = hospitalSplit && clinic.taxPct > 0;
   const fy = fiscalYearOf(new Date(period.year, period.month - 1, 1), clinic.fyStartMonth);
   const { from } = monthDateRange(period);
 
@@ -129,7 +132,7 @@ export function MonthlyPerformanceReportPage() {
 
   const stalePackages = useMemo(() => (openPackages ?? []).filter((p) => p.stale), [openPackages]);
 
-  const revenueLabel = hospitalSplit ? `Post-Tax ${labels.own}` : 'Revenue';
+  const revenueLabel = showPostTax ? `Post-Tax ${labels.own}` : 'Revenue';
   const revenueDeltaPct =
     report && prevReport && prevReport.total.netPostTaxPaise > 0
       ? Math.round(
@@ -243,6 +246,7 @@ export function MonthlyPerformanceReportPage() {
               <MonthlyReportTable
                 report={report}
                 hospitalSplit={hospitalSplit}
+                showPostTax={showPostTax}
                 own={labels.own}
                 partner={labels.partner}
               />

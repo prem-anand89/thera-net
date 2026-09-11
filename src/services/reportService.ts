@@ -239,19 +239,24 @@ export function createReportService(repos: Repos) {
       opts: {
         labels?: { own: string; partner: string };
         hospitalSplit?: boolean;
+        /** At 0% TDS nothing is actually withheld, so Post Tax {own} would
+         *  just repeat {own} Share — defaults to `hospitalSplit` for
+         *  backward compatibility; pass false to drop the column. */
+        showPostTax?: boolean;
         therapistSplit?: boolean;
       } = {}
     ): string {
       const labels = opts.labels ?? { own: 'Clinic', partner: 'Partner' };
       const hospitalSplit = opts.hospitalSplit ?? true;
+      const showPostTax = opts.showPostTax ?? hospitalSplit;
       const therapistSplit = opts.therapistSplit ?? true;
 
       const header = [
         'Therapist',
         'Bill Amount',
-        ...(hospitalSplit
-          ? [`${labels.own} Share`, 'TDS Deducted', `Post Tax ${labels.own}`, `${labels.partner} Share`]
-          : []),
+        ...(hospitalSplit ? [`${labels.own} Share`, 'TDS Deducted'] : []),
+        ...(showPostTax ? [`Post Tax ${labels.own}`] : []),
+        ...(hospitalSplit ? [`${labels.partner} Share`] : []),
         ...(therapistSplit ? ['Shared'] : []),
         'Net',
         'Visits',
@@ -260,14 +265,9 @@ export function createReportService(repos: Repos) {
       const line = (r: TherapistMonthRow) => [
         r.therapistName,
         paiseToRupees(r.billPaise),
-        ...(hospitalSplit
-          ? [
-              paiseToRupees(r.bmSharePaise),
-              paiseToRupees(r.tdsPaise),
-              paiseToRupees(r.postTaxPaise),
-              paiseToRupees(r.hvPaise),
-            ]
-          : []),
+        ...(hospitalSplit ? [paiseToRupees(r.bmSharePaise), paiseToRupees(r.tdsPaise)] : []),
+        ...(showPostTax ? [paiseToRupees(r.postTaxPaise)] : []),
+        ...(hospitalSplit ? [paiseToRupees(r.hvPaise)] : []),
         ...(therapistSplit ? [paiseToRupees(r.sharedPaise)] : []),
         paiseToRupees(r.netPostTaxPaise),
         r.visitCount,

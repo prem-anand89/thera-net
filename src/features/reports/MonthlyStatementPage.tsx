@@ -23,6 +23,9 @@ export function MonthlyStatementPage() {
   const clinic = useClinic();
   const labels = clinicShareLabels(clinic);
   const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
+  // A 0% TDS rate leaves the split itself in place, but with nothing
+  // actually withheld "Post-Tax" no longer describes the figure.
+  const showPostTax = hospitalSplit && clinic.taxPct > 0;
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
   const [fyStartYear, setFyStartYear] = useState(currentFy.startYear);
   const now = new Date();
@@ -46,7 +49,7 @@ export function MonthlyStatementPage() {
   function downloadCsv() {
     if (!report) return;
     const blob = new Blob(
-      [reportService.toCsv(report, { labels, hospitalSplit, therapistSplit })],
+      [reportService.toCsv(report, { labels, hospitalSplit, showPostTax, therapistSplit })],
       {
         type: 'text/csv',
       }
@@ -105,6 +108,7 @@ export function MonthlyStatementPage() {
         <MonthlyReportTable
           report={report}
           hospitalSplit={hospitalSplit}
+          showPostTax={showPostTax}
           showShared={therapistSplit}
           own={labels.own}
           partner={labels.partner}
@@ -144,6 +148,7 @@ export function MonthlyStatementPage() {
           month={selected}
           expectedPaise={report?.total.postTaxPaise ?? null}
           labels={labels}
+          showPostTax={showPostTax}
         />
       )}
     </div>
@@ -155,11 +160,16 @@ function SettlementCard({
   month,
   expectedPaise,
   labels,
+  showPostTax,
 }: {
   clinicId: string;
   month: FyMonth;
   expectedPaise: Paise | null;
   labels: { own: string; partner: string };
+  /** At 0% TDS the expected figure is still the clinic's computed share,
+   *  just nothing was actually withheld from it — "Post Tax" would overstate
+   *  that. */
+  showPostTax: boolean;
 }) {
   const settlement = useLiveQuery(
     () => settlementService.get(clinicId, month.year, month.month),
@@ -200,7 +210,7 @@ function SettlementCard({
     <SectionCard title={`${labels.partner} settlement — ${monthName(month.month)} ${month.year}`}>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Field
-          label={`Expected (computed Post Tax ${labels.own})${expectedPaise == null ? '' : `: ${formatINR(expectedPaise)}`}`}
+          label={`Expected (computed ${showPostTax ? `Post Tax ${labels.own}` : `${labels.own} Share`})${expectedPaise == null ? '' : `: ${formatINR(expectedPaise)}`}`}
         >
           <div className="rounded-md border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-sm text-[var(--ink)]">
             {expectedPaise != null ? formatINR(expectedPaise) : '—'}
