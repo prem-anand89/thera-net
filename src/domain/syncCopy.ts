@@ -13,6 +13,7 @@ const TABLE_PHRASE: Record<SyncedTable, { one: string; many: string }> = {
   invoice_payments: { one: 'payment change', many: 'payment changes' },
   payments: { one: 'payment', many: 'payments' },
   settlements: { one: 'settlement', many: 'settlements' },
+  settlement_payments: { one: 'settlement payment', many: 'settlement payments' },
   consultation_notes: { one: 'clinical note', many: 'clinical notes' },
   patient_module_enrollments: { one: 'patient setup change', many: 'patient setup changes' },
   patient_advances: { one: 'advance payment', many: 'advance payments' },

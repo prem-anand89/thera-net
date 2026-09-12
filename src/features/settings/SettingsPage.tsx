@@ -794,6 +794,7 @@ type ProfileFields = Pick<
   | 'clinicType'
   | 'clinicalDocsEnabled'
   | 'showTherapistComparison'
+  | 'lastSplitChangeAt'
 >;
 
 function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
@@ -840,6 +841,7 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
     const splitAffected = form.clinicType !== clinic.clinicType;
     const ok = await save();
     if (ok && splitAffected) {
+      await saveFieldNow({ lastSplitChangeAt: new Date().toISOString() });
       try {
         const { updated } = await visitService.recomputeUninvoicedSplits(clinic.id);
         setRecomputeMsg(
@@ -1247,6 +1249,7 @@ type PartnerFields = Pick<
   | 'bmSplitPct'
   | 'taxPct'
   | 'tdsBasis'
+  | 'lastSplitChangeAt'
 >;
 
 // These fields are read together by clinicBillingConfig() to determine
@@ -1287,6 +1290,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
       form.tdsBasis !== clinic.tdsBasis;
     const ok = await save();
     if (ok && splitAffected) {
+      await saveFieldNow({ lastSplitChangeAt: new Date().toISOString() });
       try {
         const { updated } = await visitService.recomputeUninvoicedSplits(clinic.id);
         setRecomputeMsg(

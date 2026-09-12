@@ -1,7 +1,7 @@
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService, feedbackService, bookingService } from '@/services';
+import { repos, dashboardService, reportService, feedbackService, bookingService } from '@/services';
 import { db } from '@/lib/db';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
@@ -48,6 +48,74 @@ import { FirstWeekSetupLink } from '@/features/settings/FirstWeekChecklist';
 
 /** What the invoice-issuance modal needs, independent of which card opened it. */
 type InvoicingTarget = IssueInvoiceTarget;
+
+/**
+ * "How am I doing this month" for a linked therapist, computed live from
+ * local Dexie (reportService.monthly reads visits/therapists, both synced
+ * tables) rather than requiring an admin to open the (admin/front_desk-only)
+ * Monthly Statement and read a number back to them. Deliberately just Net +
+ * visits — no clinic-wide totals, no other therapist's row — so it can't be
+ * used to infer clinic revenue from a therapist login.
+ */
+function MyNumbersThisMonth({ clinicId, therapistId }: { clinicId: string; therapistId: string }) {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const period = useMemo(
+    () => ({ year: currentYear, month: currentMonth }),
+    [currentYear, currentMonth]
+  );
+  const report = useLiveQuery(
+    () => reportService.monthly(clinicId, period),
+    [clinicId, period.year, period.month]
+  );
+  const mine = report?.rows.find((r) => r.therapistId === therapistId);
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <StatTile
+        label="My net this month"
+        value={report ? formatINR(mine?.netPostTaxPaise ?? 0) : '—'}
+      />
+      <StatTile label="My visits this month" value={mine?.visitCount ?? 0} />
+    </div>
+  );
+}
+
+/** A changed hasPartner/bmSplitPct/taxPct/tdsBasis/clinicType (stamped as
+ *  clinic.lastSplitChangeAt by SettingsPage) silently moves every
+ *  not-yet-invoiced visit's split and, downstream, a therapist's Net figure
+ *  — with nothing on Workspace explaining why. Surfaced for 14 days after
+ *  the change, then it stops being "news." Dismissal is per-device (Dexie
+ *  meta, not synced) and keyed by the exact timestamp so a *later* change
+ *  re-shows the banner even if an earlier one was dismissed. */
+const SPLIT_CHANGE_BANNER_WINDOW_DAYS = 14;
+
+function SplitChangeBanner({ clinicId, changedAt }: { clinicId: string; changedAt: string }) {
+  const ackKey = `splitChangeAck:${clinicId}`;
+  const acked = useLiveQuery(async () => (await db.meta.get(ackKey))?.value ?? null, [ackKey]);
+  const withinWindow =
+    Date.now() - new Date(changedAt).getTime() <
+    SPLIT_CHANGE_BANNER_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+  if (!withinWindow || acked === changedAt) return null;
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3">
+      <p className="text-sm text-[var(--ink)]">
+        The revenue split changed on {formatDateDM(changedAt)} — already-invoiced visits keep
+        their original numbers, but not-yet-invoiced ones (and this month's totals) now reflect
+        the new split.
+      </p>
+      <button
+        type="button"
+        className="whitespace-nowrap text-sm font-medium text-[var(--teal)] hover:underline"
+        onClick={() => void db.meta.put({ key: ackKey, value: changedAt })}
+      >
+        Got it
+      </button>
+    </div>
+  );
+}
 
 function todayRowToCardData(
   row: TodayVisitRow,
@@ -356,6 +424,10 @@ export function WorkspacePage() {
         </section>
       )}
 
+      {clinic.lastSplitChangeAt && (
+        <SplitChangeBanner clinicId={clinic.id} changedAt={clinic.lastSplitChangeAt} />
+      )}
+
       {newFeedbackCount > 0 && (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--teal)] bg-[var(--teal-light)] px-4 py-3">
           <p className="text-sm text-[var(--ink)]">
@@ -399,6 +471,17 @@ export function WorkspacePage() {
         )}
       </div>
       {syncCaption && <p className="text-xs text-[var(--slate)]">{syncCaption}</p>}
+
+      {/* A linked therapist's own real-time "how am I doing this month"
+          answer — previously only visible by asking an admin to run the
+          (admin/front_desk-only) Monthly Statement. Own-therapist figures
+          only (Net, visits), never clinic-wide totals, so this doesn't
+          widen the reports access boundary — it's the same
+          netPostTaxPaise reportService.monthly() already computes,
+          filtered to this one row client-side. */}
+      {scope.myTherapistId && (
+        <MyNumbersThisMonth clinicId={clinic.id} therapistId={scope.myTherapistId} />
+      )}
 
       {clinic.enablePatientComms && (
         <SectionCard

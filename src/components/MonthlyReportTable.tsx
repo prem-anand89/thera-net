@@ -1,6 +1,8 @@
+import { Link } from '@tanstack/react-router';
 import { formatINR } from '@/domain/money';
 import { th, thNum, td, tdNum, InfoTip } from './ui';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
+import type { FyMonth } from '@/domain/fiscalYear';
 
 /**
  * Per-therapist totals table — used on the Reports page and the monthly
@@ -26,6 +28,7 @@ export function MonthlyReportTable({
   showShared = false,
   own = 'Clinic',
   partner = 'Partner',
+  auditLinkMonth,
 }: {
   report: MonthlyReport | undefined;
   hospitalSplit?: boolean;
@@ -36,6 +39,13 @@ export function MonthlyReportTable({
   showShared?: boolean;
   own?: string;
   partner?: string;
+  /** When set, a row whose Net is negative gets a "Why?" link straight to
+   *  that visit's entry in the Attribution Audit tab — a zero-visit,
+   *  negative-Net row (a colleague ran this period's session of a package
+   *  this therapist billed) reads as a bug to anyone who hasn't read
+   *  reportService's own packageAttributionDeltas doc. Omit on print
+   *  surfaces, which have no in-app navigation to link to. */
+  auditLinkMonth?: FyMonth;
 }) {
   const cells = (r: TherapistMonthRow) => (
     <>
@@ -45,7 +55,18 @@ export function MonthlyReportTable({
       {hospitalSplit && showPostTax && <td className={tdNum}>{formatINR(r.postTaxPaise)}</td>}
       {hospitalSplit && <td className={tdNum}>{formatINR(r.hvPaise)}</td>}
       {showShared && <td className={tdNum}>{r.sharedPaise !== 0 ? formatINR(r.sharedPaise) : '—'}</td>}
-      <td className={tdNum}>{formatINR(r.netPostTaxPaise)}</td>
+      <td className={tdNum}>
+        {formatINR(r.netPostTaxPaise)}
+        {auditLinkMonth && r.netPostTaxPaise < 0 && (
+          <Link
+            to="/insights"
+            search={{ tab: 'audit', year: auditLinkMonth.year, month: auditLinkMonth.month }}
+            className="ml-1.5 text-xs font-normal text-[var(--teal)] hover:underline"
+          >
+            Why?
+          </Link>
+        )}
+      </td>
       <td className={tdNum}>{r.visitCount}</td>
       <td className={tdNum}>{r.uniquePatients}</td>
     </>

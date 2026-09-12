@@ -8,12 +8,13 @@ import type {
   Patient,
   Payment,
   Settlement,
+  SettlementPayment,
   Therapist,
   UUID,
   Visit,
 } from '@/domain/types';
 
-const BACKUP_VERSION = 2;
+const BACKUP_VERSION = 3;
 
 export interface BackupBundle {
   version: number;
@@ -28,6 +29,7 @@ export interface BackupBundle {
   invoicePayments: InvoicePayment[];
   payments: Payment[];
   settlements: Settlement[];
+  settlementPayments: SettlementPayment[];
   consultationNotes: ConsultationNote[];
 }
 
@@ -40,6 +42,7 @@ export interface RestoreSummary {
   invoicePayments: number;
   payments: number;
   settlements: number;
+  settlementPayments: number;
   consultationNotes: number;
 }
 
@@ -56,6 +59,7 @@ export function createBackupService(repos: Repos) {
       invoicePayments,
       payments,
       settlements,
+      settlementPayments,
       consultationNotes,
     ] = await Promise.all([
       repos.clinics.get(clinicId),
@@ -67,6 +71,7 @@ export function createBackupService(repos: Repos) {
       repos.invoicePayments.list(clinicId),
       repos.payments.list(clinicId),
       repos.settlements.list(clinicId),
+      repos.settlementPayments.list(clinicId),
       repos.consultationNotes.listByClinic(clinicId),
     ]);
     if (!clinic) throw new Error('Clinic not found');
@@ -84,6 +89,7 @@ export function createBackupService(repos: Repos) {
       invoicePayments,
       payments,
       settlements,
+      settlementPayments,
       consultationNotes,
     };
   }
@@ -118,12 +124,18 @@ export function createBackupService(repos: Repos) {
      * local cache usable again before that next sync.
      */
     async restoreBundle(bundle: BackupBundle, currentClinicId: UUID): Promise<RestoreSummary> {
-      if (bundle.version !== BACKUP_VERSION) {
+      // Version 2 predates settlementPayments (SettlementCard's move from
+      // one editable settlement per month to multiple tranches) — its
+      // bundles simply have no such rows to restore, not an unsupported
+      // shape. Accept both rather than stranding every backup a clinic took
+      // before this field existed.
+      if (bundle.version !== BACKUP_VERSION && bundle.version !== 2) {
         throw new Error(`Unsupported backup version ${bundle.version} (expected ${BACKUP_VERSION}).`);
       }
       if (bundle.clinicId !== currentClinicId) {
         throw new Error('This backup was exported from a different clinic — restore is only supported into the same clinic it came from.');
       }
+      const settlementPayments = bundle.settlementPayments ?? [];
 
       await Promise.all([
         ...bundle.therapists.map((t) => repos.therapists.put(t)),
@@ -134,6 +146,7 @@ export function createBackupService(repos: Repos) {
         ...bundle.invoicePayments.map((p) => repos.invoicePayments.put(p)),
         ...bundle.payments.map((p) => repos.payments.put(p)),
         ...bundle.settlements.map((s) => repos.settlements.put(s)),
+        ...settlementPayments.map((p) => repos.settlementPayments.put(p)),
         ...bundle.consultationNotes.map((n) => repos.consultationNotes.put(n)),
       ]);
 
@@ -146,6 +159,7 @@ export function createBackupService(repos: Repos) {
         invoicePayments: bundle.invoicePayments.length,
         payments: bundle.payments.length,
         settlements: bundle.settlements.length,
+        settlementPayments: settlementPayments.length,
         consultationNotes: bundle.consultationNotes.length,
       };
     },

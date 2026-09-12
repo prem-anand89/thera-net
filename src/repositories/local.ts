@@ -12,6 +12,7 @@ import type {
   InvoicePayment,
   Payment,
   Settlement,
+  SettlementPayment,
   ConsultationNote,
   UUID,
 } from '@/domain/types';
@@ -30,6 +31,7 @@ import type {
   InvoicePaymentRepo,
   PaymentRepo,
   SettlementRepo,
+  SettlementPaymentRepo,
   ConsultationNoteRepo,
   PatientModuleEnrollmentRepo,
   PatientAdvanceRepo,
@@ -243,6 +245,21 @@ const settlements: SettlementRepo = {
   put: (settlement) => putWithOutbox('settlements', settlement),
 };
 
+const settlementPayments: SettlementPaymentRepo = {
+  listByPeriod: (clinicId, year, month) =>
+    db.settlement_payments.where('[clinicId+year+month]').equals([clinicId, year, month]).toArray(),
+  list: (clinicId) => db.settlement_payments.where('clinicId').equals(clinicId).toArray(),
+  put: (payment) => putWithOutbox('settlement_payments', payment),
+  // Local-only, same as payments.delete below — a hard delete here isn't
+  // pushed to Supabase (no outbox tombstone mechanism exists for this
+  // model), so a payment deleted on one device can still reappear from a
+  // later pull if another device's copy is still live server-side. Existing
+  // limitation shared with payments.delete, not something new to this table.
+  delete: async (id) => {
+    await db.settlement_payments.delete(id);
+  },
+};
+
 const payments: PaymentRepo = {
   get: (id) => db.payments.get(id),
   async list(clinicId) {
@@ -365,6 +382,7 @@ export const repos: Repos = {
   invoicePayments,
   payments,
   settlements,
+  settlementPayments,
   consultationNotes,
   patientModuleEnrollments,
   patientAdvances,
@@ -388,5 +406,6 @@ export type {
   InvoicePayment,
   Payment,
   Settlement,
+  SettlementPayment,
   ConsultationNote,
 };

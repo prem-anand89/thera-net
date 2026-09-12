@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { reportService, settlementService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import type { Paise } from '@/domain/money';
-import { fiscalYearOf, monthsOfFiscalYear, monthName, type FyMonth } from '@/domain/fiscalYear';
-import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
+import { fiscalYearOf, monthsOfFiscalYear, monthName, formatDateDM, type FyMonth } from '@/domain/fiscalYear';
+import { clinicBillingConfig, clinicShareLabels, type SettlementPayment } from '@/domain/types';
 import {
   btnPrimary,
   btnSecondary,
@@ -112,6 +112,7 @@ export function MonthlyStatementPage() {
           showShared={therapistSplit}
           own={labels.own}
           partner={labels.partner}
+          auditLinkMonth={therapistSplit ? selected : undefined}
         />
       </div>
       {therapistSplit && (
@@ -155,6 +156,16 @@ export function MonthlyStatementPage() {
   );
 }
 
+/**
+ * A partner hospital rarely pays a month's settlement as one lump sum — an
+ * advance plus a final tranche is typical, sometimes with an unrelated
+ * deduction explained only in a note on that specific payment. Recording
+ * one editable amount/date/notes per month (the old model) forced every
+ * later tranche to overwrite the one before it, so a clinic reconciling a
+ * month with two real payments had nowhere to keep the first one's own
+ * date/note once the second was entered. Each tranche is now its own row;
+ * "received" for the month is their sum (settlementService.totalReceived).
+ */
 function SettlementCard({
   clinicId,
   month,
@@ -171,52 +182,149 @@ function SettlementCard({
    *  that. */
   showPostTax: boolean;
 }) {
-  const settlement = useLiveQuery(
-    () => settlementService.get(clinicId, month.year, month.month),
+  const payments = useLiveQuery(
+    () => settlementService.listPayments(clinicId, month.year, month.month),
     [clinicId, month.year, month.month]
   );
-
-  const [amountPaise, setAmountPaise] = useState<Paise | null>(null);
-  const [receivedDate, setReceivedDate] = useState('');
-  const [notes, setNotes] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [editing, setEditing] = useState<SettlementPayment | null>(null);
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setAmountPaise(settlement?.amountReceivedPaise ?? null);
-    setReceivedDate(settlement?.receivedDate ?? '');
-    setNotes(settlement?.notes ?? '');
-    setSaved(false);
-  }, [settlement, month.year, month.month]);
+  const totalReceivedPaise = (payments ?? []).reduce((sum, p) => sum + p.amountReceivedPaise, 0);
+  const variancePaise = payments && expectedPaise != null ? totalReceivedPaise - expectedPaise : null;
 
-  async function save() {
+  async function remove(id: string) {
     setError(null);
     try {
-      await settlementService.save(clinicId, month.year, month.month, {
-        amountReceivedPaise: amountPaise ?? 0,
-        receivedDate: receivedDate || null,
-        notes: notes || null,
-      });
-      setSaved(true);
+      await settlementService.deletePayment(id);
     } catch (e) {
       setError(toFriendlyMessage(e));
     }
   }
 
-  const variancePaise =
-    amountPaise != null && expectedPaise != null ? amountPaise - expectedPaise : null;
-
   return (
     <SectionCard title={`${labels.partner} settlement — ${monthName(month.month)} ${month.year}`}>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Field
-          label={`Expected (computed ${showPostTax ? `Post Tax ${labels.own}` : `${labels.own} Share`})${expectedPaise == null ? '' : `: ${formatINR(expectedPaise)}`}`}
+      <p className="text-sm text-[var(--muted)]">
+        Expected (computed {showPostTax ? `Post Tax ${labels.own}` : `${labels.own} Share`}):{' '}
+        <span className="font-medium text-[var(--ink)]">
+          {expectedPaise != null ? formatINR(expectedPaise) : '—'}
+        </span>
+      </p>
+
+      {payments && payments.length > 0 && (
+        <div className="mt-3 divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">
+          {payments.map((p) => (
+            <div key={p.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+              <div className="min-w-0">
+                <span className="font-medium text-[var(--ink)]">
+                  {formatINR(p.amountReceivedPaise)}
+                </span>
+                {p.receivedDate && (
+                  <span className="ml-2 text-[var(--muted)]">{formatDateDM(p.receivedDate)}</span>
+                )}
+                {p.notes && <span className="ml-2 truncate text-[var(--muted)]">— {p.notes}</span>}
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  className="text-xs font-medium text-[var(--teal)] hover:underline"
+                  onClick={() => setEditing(p)}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-[var(--rust)] hover:underline"
+                  onClick={() => void remove(p.id)}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="mt-3 text-sm font-medium text-[var(--ink)]">
+        Total received: {formatINR(totalReceivedPaise as Paise)}
+      </p>
+      {variancePaise != null && (
+        <p
+          className={`text-sm font-medium ${variancePaise === 0 ? 'text-[var(--moss)]' : 'text-[var(--rust)]'}`}
         >
-          <div className="rounded-md border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-sm text-[var(--ink)]">
-            {expectedPaise != null ? formatINR(expectedPaise) : '—'}
-          </div>
-        </Field>
-        <Field label={`Amount received from ${labels.partner}`}>
+          Variance: {variancePaise >= 0 ? '+' : ''}
+          {formatINR(variancePaise as Paise)}
+        </p>
+      )}
+
+      <div className="mt-3">
+        {adding || editing ? (
+          <SettlementPaymentForm
+            clinicId={clinicId}
+            month={month}
+            existing={editing}
+            onDone={() => {
+              setAdding(false);
+              setEditing(null);
+            }}
+          />
+        ) : (
+          <button type="button" className={btnSecondary} onClick={() => setAdding(true)}>
+            + Record a payment
+          </button>
+        )}
+      </div>
+      <ErrorNote message={error} />
+    </SectionCard>
+  );
+}
+
+/** Add-or-edit form for one settlement tranche — a separate small component
+ *  so its own draft state (amount/date/notes being typed) doesn't leak into
+ *  SettlementCard's list-rendering state. */
+function SettlementPaymentForm({
+  clinicId,
+  month,
+  existing,
+  onDone,
+}: {
+  clinicId: string;
+  month: FyMonth;
+  existing: SettlementPayment | null;
+  onDone: () => void;
+}) {
+  const [amountPaise, setAmountPaise] = useState<Paise | null>(existing?.amountReceivedPaise ?? null);
+  const [receivedDate, setReceivedDate] = useState(existing?.receivedDate ?? '');
+  const [notes, setNotes] = useState(existing?.notes ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    setError(null);
+    setBusy(true);
+    try {
+      const input = {
+        amountReceivedPaise: amountPaise ?? 0,
+        receivedDate: receivedDate || null,
+        notes: notes || null,
+      };
+      if (existing) {
+        await settlementService.editPayment(existing, input);
+      } else {
+        await settlementService.addPayment(clinicId, month.year, month.month, input);
+      }
+      onDone();
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-[var(--border)] bg-[var(--paper)] p-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Field label="Amount received">
           <RupeeInput valuePaise={amountPaise} onChange={setAmountPaise} />
         </Field>
         <Field label="Received date">
@@ -231,27 +339,15 @@ function SettlementCard({
           <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
       </div>
-      {variancePaise != null && (
-        <p
-          className={`mt-3 text-sm font-medium ${
-            variancePaise === 0
-              ? 'text-[var(--moss)]'
-              : Math.abs(variancePaise) < 100
-                ? 'text-[var(--rust)]'
-                : 'text-[var(--rust)]'
-          }`}
-        >
-          Variance: {variancePaise >= 0 ? '+' : ''}
-          {formatINR(variancePaise)}
-        </p>
-      )}
       <div className="mt-3 flex items-center gap-3">
-        <button type="button" className={btnPrimary} onClick={() => void save()}>
-          Save settlement
+        <button type="button" disabled={busy} className={btnPrimary} onClick={() => void submit()}>
+          {existing ? 'Save changes' : 'Add payment'}
         </button>
-        {saved && <span className="text-sm text-[var(--moss)]">Saved ✓</span>}
+        <button type="button" className={btnSecondary} onClick={onDone}>
+          Cancel
+        </button>
       </div>
       <ErrorNote message={error} />
-    </SectionCard>
+    </div>
   );
 }

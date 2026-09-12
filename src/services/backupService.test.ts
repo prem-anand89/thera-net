@@ -10,6 +10,7 @@ import type {
   Patient,
   Payment,
   Settlement,
+  SettlementPayment,
   Therapist,
   Visit,
 } from '@/domain/types';
@@ -40,6 +41,7 @@ function makeFakeRepos() {
   const invoicePayments = new Map<string, InvoicePayment>();
   const payments = new Map<string, Payment>();
   const settlements = new Map<string, Settlement>();
+  const settlementPayments = new Map<string, SettlementPayment>();
   const consultationNotes = new Map<string, ConsultationNote>();
 
   const repos = {
@@ -70,13 +72,28 @@ function makeFakeRepos() {
       list: async () => [...settlements.values()],
       put: async (s: Settlement) => void settlements.set(s.id, s),
     },
+    settlementPayments: {
+      list: async () => [...settlementPayments.values()],
+      put: async (p: SettlementPayment) => void settlementPayments.set(p.id, p),
+    },
     consultationNotes: {
       listByClinic: async () => [...consultationNotes.values()],
       put: async (n: ConsultationNote) => void consultationNotes.set(n.id, n),
     },
   } as unknown as Repos;
 
-  return { repos, clinic, patients, visits, invoices, invoicePayments, payments, settlements, consultationNotes };
+  return {
+    repos,
+    clinic,
+    patients,
+    visits,
+    invoices,
+    invoicePayments,
+    payments,
+    settlements,
+    settlementPayments,
+    consultationNotes,
+  };
 }
 
 describe('backupService.exportBundle', () => {
@@ -97,7 +114,7 @@ describe('backupService.exportBundle', () => {
     });
     const svc = createBackupService(fake.repos);
     const bundle = await svc.exportBundle('clinic-1');
-    expect(bundle.version).toBe(2);
+    expect(bundle.version).toBe(3);
     expect(bundle.clinicId).toBe('clinic-1');
     expect(bundle.patients).toHaveLength(1);
     expect(bundle.exportedAt).toBeTruthy();
@@ -126,6 +143,15 @@ describe('backupService.restoreBundle', () => {
     const svc = createBackupService(fake.repos);
     const bundle = await svc.exportBundle('clinic-1');
     await expect(svc.restoreBundle({ ...bundle, version: 99 }, 'clinic-1')).rejects.toThrow(/version/);
+  });
+
+  it('accepts a version-2 bundle (predates settlementPayments) with zero settlement payments restored', async () => {
+    const svc = createBackupService(fake.repos);
+    const bundle = await svc.exportBundle('clinic-1');
+    const v2Bundle: Partial<typeof bundle> = { ...bundle };
+    delete v2Bundle.settlementPayments;
+    const summary = await svc.restoreBundle({ ...v2Bundle, version: 2 } as typeof bundle, 'clinic-1');
+    expect(summary.settlementPayments).toBe(0);
   });
 
   it('restores every table and reports accurate counts', async () => {
