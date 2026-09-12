@@ -139,7 +139,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
           type="text"
           required
           className={inputCls}
-          placeholder="e.g., Beyond Mechanics"
+          placeholder="e.g., Sunrise Physiotherapy"
           value={form.name}
           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
         />

@@ -297,45 +297,54 @@ export class SyncEngine {
   }
 
   private async pull() {
+    // One table's pages are still fetched in order (a page's cursor depends
+    // on the previous page), but the tables themselves have no dependency on
+    // each other — pulling them one after another only serializes their
+    // network latency for no reason. Running all of them concurrently turns
+    // a first sync's wait from "sum of every table's round-trips" into
+    // roughly "the slowest table's round-trips," which is most of the
+    // startup delay on a fresh login/device.
+    await Promise.all(SYNC_TABLES.map((table) => this.pullTable(table)));
+  }
+
+  private async pullTable(table: SyncedTable) {
     const supabase = this.supabase!;
-    for (const table of SYNC_TABLES) {
-      let cursor = (await db.meta.get(`cursor:${table}`))?.value ?? EPOCH;
-      for (;;) {
-        const { data, error } = await supabase
-          .from(table)
-          .select('*')
-          .gt('updated_at', cursor)
-          .order('updated_at', { ascending: true })
-          .limit(PAGE);
-        if (error) throw new Error(`pull ${table}: ${error.message}`);
-        if (!data?.length) break;
+    let cursor = (await db.meta.get(`cursor:${table}`))?.value ?? EPOCH;
+    for (;;) {
+      const { data, error } = await supabase
+        .from(table)
+        .select('*')
+        .gt('updated_at', cursor)
+        .order('updated_at', { ascending: true })
+        .limit(PAGE);
+      if (error) throw new Error(`pull ${table}: ${error.message}`);
+      if (!data?.length) break;
 
-        const pendingIds = new Set(
-          (await db.outbox.where('table').equals(table).toArray()).map((e) => e.rowId)
-        );
-        // Validate rows before bulk insert to catch schema mismatches early.
-        // A single .filter() pass, not a for-loop splicing invalid rows out
-        // of `incoming` while iterating it — splicing mid-iteration shifts
-        // the next element down into the index the iterator has already
-        // passed, so two or more consecutive invalid rows in one page let
-        // the second one skip validation entirely and reach bulkPut below.
-        const incoming = data
-          .map((row) => normalize(table, rowToDomain<Record<string, unknown>>(row)))
-          .filter((obj) => !pendingIds.has(obj.id as string))
-          .filter((row) => {
-            const valid = validateNormalizedRow(table, row);
-            if (!valid) console.error(`[Sync] Skipping invalid row from ${table}:`, row);
-            return valid;
-          });
+      const pendingIds = new Set(
+        (await db.outbox.where('table').equals(table).toArray()).map((e) => e.rowId)
+      );
+      // Validate rows before bulk insert to catch schema mismatches early.
+      // A single .filter() pass, not a for-loop splicing invalid rows out
+      // of `incoming` while iterating it — splicing mid-iteration shifts
+      // the next element down into the index the iterator has already
+      // passed, so two or more consecutive invalid rows in one page let
+      // the second one skip validation entirely and reach bulkPut below.
+      const incoming = data
+        .map((row) => normalize(table, rowToDomain<Record<string, unknown>>(row)))
+        .filter((obj) => !pendingIds.has(obj.id as string))
+        .filter((row) => {
+          const valid = validateNormalizedRow(table, row);
+          if (!valid) console.error(`[Sync] Skipping invalid row from ${table}:`, row);
+          return valid;
+        });
 
-        if (incoming.length > 0) {
-          await db.table(table).bulkPut(incoming);
-        }
-
-        cursor = (data[data.length - 1] as { updated_at: string }).updated_at;
-        await db.meta.put({ key: `cursor:${table}`, value: cursor });
-        if (data.length < PAGE) break;
+      if (incoming.length > 0) {
+        await db.table(table).bulkPut(incoming);
       }
+
+      cursor = (data[data.length - 1] as { updated_at: string }).updated_at;
+      await db.meta.put({ key: `cursor:${table}`, value: cursor });
+      if (data.length < PAGE) break;
     }
   }
 }

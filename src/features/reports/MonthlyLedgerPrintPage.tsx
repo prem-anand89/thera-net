@@ -27,6 +27,13 @@ export function MonthlyLedgerPrintPage() {
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
   const report = useLiveQuery(() => reportService.monthly(clinic.id, period), [clinic.id, period.year, period.month]);
 
+  // A 0% TDS rate leaves the split itself in place, but with nothing
+  // actually withheld "Post-Tax" no longer describes the figure.
+  const showPostTax = useMemo(
+    () => hospitalSplit && (report?.total.tdsPaise ?? 0) > 0,
+    [hospitalSplit, report]
+  );
+
   const patientById = useMemo(() => new Map((patients ?? []).map((p) => [p.id, p])), [patients]);
   const therapistName = useMemo(
     () => new Map((therapists ?? []).map((t) => [t.id, t.name])),
@@ -145,7 +152,13 @@ export function MonthlyLedgerPrintPage() {
         {/* Per-therapist summary */}
         <h2 className="mt-8 text-sm font-bold text-[var(--ink)]">Monthly Summary</h2>
         <div className="mt-2 overflow-x-auto">
-          <MonthlyReportTable report={report} hospitalSplit={hospitalSplit} own={labels.own} partner={labels.partner} />
+          <MonthlyReportTable
+            report={report}
+            hospitalSplit={hospitalSplit}
+            showPostTax={showPostTax}
+            own={labels.own}
+            partner={labels.partner}
+          />
         </div>
 
         <footer className="mt-8 border-t border-[var(--border)] pt-3 text-xs text-[var(--muted)]">

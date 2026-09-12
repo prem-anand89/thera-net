@@ -1,6 +1,8 @@
+import { Link } from '@tanstack/react-router';
 import { formatINR } from '@/domain/money';
 import { th, thNum, td, tdNum, InfoTip } from './ui';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
+import type { FyMonth } from '@/domain/fiscalYear';
 
 /**
  * Per-therapist totals table — used on the Reports page and the monthly
@@ -8,7 +10,9 @@ import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService'
  *
  * `hospitalSplit` (default on) shows the clinic-share / TDS / Post-Tax /
  * partner-share columns; a simple clinic turns it off and sees just billed
- * totals. `Net` (Post-Tax BM adjusted for same-visit Shared/Split splits AND
+ * totals. `showPostTax` further drops just the Post Tax column on top of
+ * that — at 0% TDS nothing is withheld, so it would only repeat the
+ * clinic-share figure. `Net` (Post-Tax BM adjusted for same-visit Shared/Split splits AND
  * automatic package-session attribution — see TherapistMonthRow.netPostTaxPaise)
  * always shows, on both the Reports page and the hospital-facing PDF, since
  * it's the one number that answers "how much did this therapist actually
@@ -20,25 +24,49 @@ import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService'
 export function MonthlyReportTable({
   report,
   hospitalSplit = true,
+  showPostTax = true,
   showShared = false,
   own = 'Clinic',
   partner = 'Partner',
+  auditLinkMonth,
 }: {
   report: MonthlyReport | undefined;
   hospitalSplit?: boolean;
+  /** Separate from `hospitalSplit`: at 0% TDS nothing is actually withheld,
+   *  so Post Tax {own} would just repeat {own} Share — pass false to drop
+   *  the redundant column while keeping the rest of the split breakdown. */
+  showPostTax?: boolean;
   showShared?: boolean;
   own?: string;
   partner?: string;
+  /** When set, a row whose Net is negative gets a "Why?" link straight to
+   *  that visit's entry in the Attribution Audit tab — a zero-visit,
+   *  negative-Net row (a colleague ran this period's session of a package
+   *  this therapist billed) reads as a bug to anyone who hasn't read
+   *  reportService's own packageAttributionDeltas doc. Omit on print
+   *  surfaces, which have no in-app navigation to link to. */
+  auditLinkMonth?: FyMonth;
 }) {
   const cells = (r: TherapistMonthRow) => (
     <>
       <td className={tdNum}>{formatINR(r.billPaise)}</td>
       {hospitalSplit && <td className={tdNum}>{formatINR(r.bmSharePaise)}</td>}
       {hospitalSplit && <td className={tdNum}>{formatINR(r.tdsPaise)}</td>}
-      {hospitalSplit && <td className={tdNum}>{formatINR(r.postTaxPaise)}</td>}
+      {hospitalSplit && showPostTax && <td className={tdNum}>{formatINR(r.postTaxPaise)}</td>}
       {hospitalSplit && <td className={tdNum}>{formatINR(r.hvPaise)}</td>}
       {showShared && <td className={tdNum}>{r.sharedPaise !== 0 ? formatINR(r.sharedPaise) : '—'}</td>}
-      <td className={tdNum}>{formatINR(r.netPostTaxPaise)}</td>
+      <td className={tdNum}>
+        {formatINR(r.netPostTaxPaise)}
+        {auditLinkMonth && r.netPostTaxPaise < 0 && (
+          <Link
+            to="/insights"
+            search={{ tab: 'audit', year: auditLinkMonth.year, month: auditLinkMonth.month }}
+            className="ml-1.5 text-xs font-normal text-[var(--teal)] hover:underline"
+          >
+            Why?
+          </Link>
+        )}
+      </td>
       <td className={tdNum}>{r.visitCount}</td>
       <td className={tdNum}>{r.uniquePatients}</td>
     </>
@@ -62,7 +90,7 @@ export function MonthlyReportTable({
               {showShared && <InfoTip text="Tax Deducted at Source — withheld before payout, per the clinic's TDS basis." />}
             </th>
           )}
-          {hospitalSplit && (
+          {hospitalSplit && showPostTax && (
             <th className={thNum}>
               Post Tax {own}
               {showShared && <InfoTip text={`${own} Share after TDS — what the clinic actually keeps from this bill.`} />}

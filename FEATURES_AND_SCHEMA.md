@@ -1235,6 +1235,10 @@ has_partner                 boolean NOT NULL
 billing_mode                text NOT NULL — legacy, maps to clinic_type+has_partner
 enable_therapist_split      boolean (NULLABLE)
 own_share_label, partner_share_label  text (NULLABLE) — default "BM"/"HV"
+last_split_change_at        timestamptz (NULLABLE) — stamped whenever an
+                             admin changes hasPartner/bmSplitPct/taxPct/
+                             tdsBasis/clinicType; Workspace shows a 14-day
+                             "your split changed on X" banner off this
 billing_enabled              boolean NOT NULL
 invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
 clinical_docs_enabled       boolean NOT NULL
@@ -1598,7 +1602,32 @@ created_by, updated_by uuid (NULLABLE)
 updated_at             timestamptz (NULLABLE)
 ```
 Per-month partner-hospital (HV) settlement record, for the Monthly Report's
-variance tracking.
+variance tracking. **Deprecated single-entry model** — superseded by
+`settlement_payments` below; left in place (not dropped) for audit/rollback,
+and its rows were backfilled into `settlement_payments` as each period's
+first tranche (migration `20260912070000_settlement_payments.sql`).
+`settlementService.get`/`.save` still read/write it for backward
+compatibility, but no UI writes new rows to it anymore.
+
+#### `settlement_payments`
+```sql
+id                     uuid PRIMARY KEY
+clinic_id              uuid NOT NULL (FOREIGN KEY → clinics.id)
+year, month            int NOT NULL
+amount_received_paise  bigint NOT NULL
+received_date          date (NULLABLE)
+notes                  text (NULLABLE)
+created_by, updated_by uuid (NULLABLE)
+updated_at             timestamptz NOT NULL
+```
+One row per partner-hospital payment **tranche** for a month — replaces
+`settlements`' assumption that a month settles in one lump sum. A real
+payout is often an advance plus a final payment, sometimes with a deduction
+that only makes sense noted against the specific tranche it applied to.
+Any number of rows can share `[clinic_id, year, month]`; the month's total
+received is their sum (`settlementService.totalReceived`), computed
+client-side, not stored. `SettlementCard` (Monthly Statement page) lists
+every tranche with edit/delete, and a form to record another.
 
 ---
 
@@ -2748,6 +2777,61 @@ its own narrow in-place edit path instead.
   `text-transform`/`letter-spacing` the way a plain element would —
   re-declare them on the control itself, don't assume the ancestor's
   class is enough.
+
+### 5. Revenue-Split Change Visibility (Workspace)
+A `hasPartner`/`bmSplitPct`/`taxPct`/`tdsBasis`/`clinicType` edit in Settings
+already recomputes every not-yet-invoiced visit's split
+(`recomputeUninvoicedSplits`) — but that recompute was previously invisible
+to anyone but the admin who made it, so a therapist's Net figure could move
+with no explanation. `clinics.last_split_change_at` is stamped by both
+`saveProfile()`/`savePartner()` (SettingsPage) whenever their own
+`splitAffected` check trips; `WorkspacePage`'s `SplitChangeBanner` shows a
+plain-language notice for 14 days afterward, dismissible per-device (Dexie
+`meta` key `splitChangeAck:{clinicId}`, keyed by the exact timestamp so a
+*later* change re-shows the banner even if an earlier one was dismissed).
+
+### 6. Therapist Self-Serve "My Numbers"
+Reports/Monthly Statement are admin/front_desk-only (§ Locked Decisions),
+which previously meant a therapist asking "how much have I made this month"
+needed an admin to run a report for them. `WorkspacePage`'s
+`MyNumbersThisMonth` (visible to any signed-in user with a linked
+`therapists` row, i.e. `useWorkspaceScope().myTherapistId`) calls the same
+`reportService.monthly()` every report page uses, computed live from local
+Dexie, and reads out only that one therapist's own row (`netPostTaxPaise`,
+`visitCount`) — never another therapist's figures or a clinic-wide total —
+so it doesn't widen the admin/front_desk reports boundary, just answers one
+narrower question in real time.
+
+### 7. Attribution Audit Link on a Negative Net
+A package-attribution debit (§2b) can leave a therapist with a genuine
+zero-visit, negative-Net row — correct, but indistinguishable from a bug to
+someone who hasn't read reportService's own doc comment. `MonthlyReportTable`
+accepts an optional `auditLinkMonth`; when set, any row whose
+`netPostTaxPaise < 0` gets a "Why?" link straight to that month's
+Attribution Audit tab (`/insights?tab=audit`). Only `MonthlyStatementPage`
+passes it — the print surfaces (`MonthlyLedgerPrintPage`,
+`MonthlyPerformanceReportPage`) have no in-app navigation to link to.
+
+---
+
+## Deferred Ideas
+
+Recorded so they aren't re-discovered from scratch, not because they're
+scheduled — pick back up only if the underlying need actually shows up.
+
+- **Per-visit or per-location partner/split, not per-clinic.** Today
+  `hasPartner`/`partnerHospitalName`/`bmSplitPct` all live on the `clinics`
+  row — one clinic can have exactly one partner hospital and one split. A
+  practice whose therapists split time across two or more partner hospitals
+  with different splits has to run each as a separate "clinic" in the app
+  today, which fragments the same patients/therapists across accounts.
+  Fixing this properly means moving partner/split from clinic-level to
+  visit-level or location-level — a materially bigger change (schema,
+  `computeVisitSplit` call sites, every report surface) than the other
+  partnership improvements shipped alongside this note, so it was
+  deliberately deferred rather than bundled in. Revisit if multi-hospital
+  therapists turn out to be a real, recurring setup rather than a
+  hypothetical.
 
 ---
 

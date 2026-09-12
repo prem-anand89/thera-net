@@ -156,6 +156,12 @@ function makeFakeRepos() {
       list: async () => [],
       put: async () => {},
     },
+    settlementPayments: {
+      listByPeriod: async () => [],
+      list: async () => [],
+      put: async () => {},
+      delete: async () => {},
+    },
     consultationNotes: {
       get: async (id) => consultationNotesStore.get(id),
       listByPatient: async () => [],

@@ -491,6 +491,21 @@ describe('reportService.toCsv — configurable share labels', () => {
       .split('\n')[0];
     expect(header).toBe('"Therapist","Bill Amount","Net","Visits","Patients"');
   });
+
+  it('drops just Post Tax when showPostTax is false, keeping the rest of the split', async () => {
+    const report = await createReportService(makeFakeRepos([visit({})])).monthly(CLINIC, JULY);
+    const csv = createReportService(makeFakeRepos([])).toCsv(report, {
+      hospitalSplit: true,
+      showPostTax: false,
+      therapistSplit: false,
+    });
+    const header = csv.split('\n')[0];
+    expect(header).toBe(
+      '"Therapist","Bill Amount","Clinic Share","TDS Deducted","Partner Share","Net","Visits","Patients"'
+    );
+    // Header and data rows must stay column-aligned once Post Tax is spliced out.
+    expect(csv.split('\n')[1].split(',').length).toBe(header.split(',').length);
+  });
 });
 
 describe('clinicShareLabels', () => {

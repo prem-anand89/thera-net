@@ -12,6 +12,7 @@ import type {
   InvoicePayment,
   Payment,
   Settlement,
+  SettlementPayment,
   ConsultationNote,
   PatientModuleEnrollment,
   PatientAdvance,
@@ -61,6 +62,7 @@ export type SyncedTable =
   | 'invoice_payments'
   | 'payments'
   | 'settlements'
+  | 'settlement_payments'
   | 'consultation_notes'
   | 'patient_module_enrollments'
   | 'patient_advances'
@@ -91,6 +93,7 @@ export const ALL_SYNCED_TABLES = [
   'invoice_payments',
   'payments',
   'settlements',
+  'settlement_payments',
   'consultation_notes',
   'patient_module_enrollments',
   'patient_advances',
@@ -136,6 +139,7 @@ export const CLIENT_WRITABLE_TABLES = [
   'invoice_payments',
   'payments',
   'settlements',
+  'settlement_payments',
   'consultation_notes',
   'patient_module_enrollments',
   'patient_advances',
@@ -154,6 +158,7 @@ export class ClinicDB extends Dexie {
   invoice_payments!: Table<InvoicePayment, string>;
   payments!: Table<Payment, string>;
   settlements!: Table<Settlement, string>;
+  settlement_payments!: Table<SettlementPayment, string>;
   consultation_notes!: Table<ConsultationNote, string>;
   patient_module_enrollments!: Table<PatientModuleEnrollment, string>;
   patient_advances!: Table<PatientAdvance, string>;
@@ -252,6 +257,11 @@ export class ClinicDB extends Dexie {
       // scheduledAt is the hot lookup path — Workspace's "Expected today"
       // filters to the current calendar day on every render.
       appointments: 'id, clinicId, scheduledAt, status',
+    });
+    this.version(19).stores({
+      // Same compound index as settlements — multiple rows per
+      // [clinicId+year+month] now (one per payment tranche), not one.
+      settlement_payments: 'id, clinicId, [clinicId+year+month]',
     });
   }
 }

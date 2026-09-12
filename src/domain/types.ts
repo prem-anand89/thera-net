@@ -39,6 +39,12 @@ export interface Clinic {
   billingMode?: 'simple' | 'hospital_split';
   /** Whether the internal therapist revenue-split feature is available. */
   enableTherapistSplit?: boolean;
+  /** When a field feeding clinicBillingConfig()/computeVisitSplit() (hasPartner,
+   *  bmSplitPct, taxPct, tdsBasis, clinicType) was last changed — lets
+   *  Workspace tell a therapist "your split changed on X" instead of their
+   *  Net figure silently moving with no explanation. Null until the first
+   *  such change after this field shipped. */
+  lastSplitChangeAt?: string | null;
   /**
    * Legacy: clinic-wide Visits-table column show/hide. Superseded by
    * per-user prefs (useVisitColumnPrefs, stored in Dexie) — this was never
@@ -731,6 +737,26 @@ export interface Appointment {
 
 /** What Health Valley actually paid Beyond Mechanics for one fiscal month. */
 export interface Settlement {
+  id: UUID;
+  clinicId: UUID;
+  year: number;
+  month: number;
+  amountReceivedPaise: Paise;
+  receivedDate: string | null;
+  notes: string | null;
+  updatedAt: string;
+}
+
+/**
+ * One partner-hospital payment received toward a month's settlement.
+ * `Settlement` above holds a single amount/date/notes per month, which
+ * doesn't match how hospitals actually pay in practice — an advance plus a
+ * final tranche, or a deduction explained only in a note on that specific
+ * payment. Several `SettlementPayment` rows can exist for the same
+ * `[clinicId, year, month]`; the month's total received is their sum
+ * (`settlementService.totalReceived`), not a single stored figure.
+ */
+export interface SettlementPayment {
   id: UUID;
   clinicId: UUID;
   year: number;

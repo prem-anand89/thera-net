@@ -37,7 +37,14 @@ export function TherapistComparisonCard() {
   // ReportsOverviewPage's KPI strip uses applies here too.
   const { hospitalSplit } = clinicBillingConfig(clinic);
   const labels = clinicShareLabels(clinic);
-  const revenueLabel = hospitalSplit ? `Post-Tax ${labels.own}` : 'Revenue generated';
+  // A 0% TDS rate still leaves the revenue split itself in place, but with
+  // nothing actually withheld "Post-Tax" is no longer an accurate label —
+  // the clinic's share is just its share, same wording as a non-split
+  // clinic's plain revenue.
+  // For trend views, if hospital split is configured, label reflects that
+  // (actual TDS for a given month is checked in the monthly report pages).
+  const showPostTax = hospitalSplit;
+  const revenueLabel = showPostTax ? `Post-Tax ${labels.own}` : 'Revenue generated';
 
   const trend = useLiveQuery(
     () => (showComparison ? dashboardService.revenueTrend(clinic.id) : undefined),
@@ -148,7 +155,7 @@ export function TherapistComparisonCard() {
                 <tr>
                   <th className={th}>Therapist</th>
                   <th className={thNum}>Bill Amount</th>
-                  {hospitalSplit && <th className={thNum}>Post Tax {labels.own}</th>}
+                  {showPostTax && <th className={thNum}>Post Tax {labels.own}</th>}
                   <th className={thNum}>Net</th>
                   <th className={thNum}>Visits</th>
                   <th className={thNum}>Open packages</th>
@@ -161,7 +168,7 @@ export function TherapistComparisonCard() {
                     <tr key={name}>
                       <td className={td}>{name}</td>
                       <td className={tdNum}>{formatINR(row?.billPaise ?? 0)}</td>
-                      {hospitalSplit && (
+                      {showPostTax && (
                         <td className={tdNum}>{formatINR(row?.postTaxPaise ?? 0)}</td>
                       )}
                       <td className={tdNum}>{formatINR(row?.netPostTaxPaise ?? 0)}</td>
@@ -174,7 +181,7 @@ export function TherapistComparisonCard() {
                   <tr className="bg-[var(--paper)] font-semibold">
                     <td className={td}>Total</td>
                     <td className={tdNum}>{formatINR(currentMonthRow.total.billPaise)}</td>
-                    {hospitalSplit && (
+                    {showPostTax && (
                       <td className={tdNum}>{formatINR(currentMonthRow.total.postTaxPaise)}</td>
                     )}
                     <td className={tdNum}>{formatINR(currentMonthRow.total.netPostTaxPaise)}</td>

@@ -108,6 +108,11 @@ export function ReportsOverviewPage() {
   const scope = useWorkspaceScope();
   const labels = clinicShareLabels(clinic);
   const { hospitalSplit } = clinicBillingConfig(clinic);
+  // A 0% TDS rate leaves the revenue split itself in place, but with
+  // nothing actually withheld "Post-Tax" no longer describes the figure —
+  // it's just the clinic's share, same wording as a non-split clinic.
+  // For trend views spanning multiple months, check actual TDS in the data
+  // when available; for consistency with single-month report pages.
   const revenueLabel = hospitalSplit ? `Post-Tax ${labels.own}` : 'Revenue';
 
   // Revenue trend period — the KPI strip's "this/last month" figures only

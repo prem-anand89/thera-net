@@ -11,6 +11,7 @@ import type {
   InvoicePayment,
   Payment,
   Settlement,
+  SettlementPayment,
   ConsultationNote,
   PatientModuleEnrollment,
   PatientAdvance,
@@ -116,6 +117,13 @@ export interface SettlementRepo {
   getByPeriod(clinicId: UUID, year: number, month: number): Promise<Settlement | undefined>;
   list(clinicId: UUID): Promise<Settlement[]>;
   put(settlement: Settlement): Promise<void>;
+}
+
+export interface SettlementPaymentRepo {
+  listByPeriod(clinicId: UUID, year: number, month: number): Promise<SettlementPayment[]>;
+  list(clinicId: UUID): Promise<SettlementPayment[]>;
+  put(payment: SettlementPayment): Promise<void>;
+  delete(id: UUID): Promise<void>;
 }
 
 export interface PaymentRepo {
@@ -242,6 +250,7 @@ export interface Repos {
   invoicePayments: InvoicePaymentRepo;
   payments: PaymentRepo;
   settlements: SettlementRepo;
+  settlementPayments: SettlementPaymentRepo;
   consultationNotes: ConsultationNoteRepo;
   patientModuleEnrollments: PatientModuleEnrollmentRepo;
   patientAdvances: PatientAdvanceRepo;
