@@ -35,7 +35,7 @@ export function TherapistComparisonCard() {
   // hospital-split clinic, and equal to the plain net bill for a simple one
   // (postTaxPaise === actualBillPaise there), so the same mode-aware label
   // ReportsOverviewPage's KPI strip uses applies here too.
-  const { hospitalSplit } = clinicBillingConfig(clinic);
+  const { partnerSplit } = clinicBillingConfig(clinic);
   const labels = clinicShareLabels(clinic);
   // A 0% TDS rate still leaves the revenue split itself in place, but with
   // nothing actually withheld "Post-Tax" is no longer an accurate label —
@@ -43,7 +43,7 @@ export function TherapistComparisonCard() {
   // clinic's plain revenue.
   // For trend views, if hospital split is configured, label reflects that
   // (actual TDS for a given month is checked in the monthly report pages).
-  const showPostTax = hospitalSplit;
+  const showPostTax = partnerSplit;
   const revenueLabel = showPostTax ? `Post-Tax ${labels.own}` : 'Revenue generated';
 
   const trend = useLiveQuery(

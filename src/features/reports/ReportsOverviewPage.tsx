@@ -107,13 +107,13 @@ export function ReportsOverviewPage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
   const labels = clinicShareLabels(clinic);
-  const { hospitalSplit } = clinicBillingConfig(clinic);
+  const { partnerSplit } = clinicBillingConfig(clinic);
   // A 0% TDS rate leaves the revenue split itself in place, but with
   // nothing actually withheld "Post-Tax" no longer describes the figure —
   // it's just the clinic's share, same wording as a non-split clinic.
   // For trend views spanning multiple months, check actual TDS in the data
   // when available; for consistency with single-month report pages.
-  const revenueLabel = hospitalSplit ? `Post-Tax ${labels.own}` : 'Revenue';
+  const revenueLabel = partnerSplit ? `Post-Tax ${labels.own}` : 'Revenue';
 
   // Revenue trend period — the KPI strip's "this/last month" figures only
   // ever read the final two entries, which stay the same regardless of how
@@ -253,7 +253,7 @@ export function ReportsOverviewPage() {
   const revenueRow = (report: MonthlyReport | undefined) => {
     if (!report) return null;
     if (scope.isClinicWideView)
-      return hospitalSplit ? report.total.postTaxPaise : report.total.billPaise;
+      return partnerSplit ? report.total.postTaxPaise : report.total.billPaise;
     return myMonthRow(report.rows).netPostTaxPaise;
   };
   const revenueThisMonth = trend ? revenueRow(trend[trend.length - 1]) : null;
@@ -736,7 +736,7 @@ export function ReportsOverviewPage() {
                   formatBarValue={formatINR}
                   barValues={
                     scope.isClinicWideView
-                      ? trend.map((r) => (hospitalSplit ? r.total.postTaxPaise : r.total.billPaise))
+                      ? trend.map((r) => (partnerSplit ? r.total.postTaxPaise : r.total.billPaise))
                       : trend.map((r) => myMonthRow(r.rows).netPostTaxPaise)
                   }
                   lineLabel="Visits"

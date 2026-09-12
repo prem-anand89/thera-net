@@ -1086,7 +1086,7 @@ still falls through to the existing share sheet, unchanged.
   (a picker tab with an FY/month select feeding `year`/`month` into the
   print route's search params).
   - **Clinic totals** — `reportService.monthly`'s own `.total` row
-    (revenue, using the same hospital-split-aware `Post-Tax {label}` vs.
+    (revenue, using the same partner-split-aware `Post-Tax {label}` vs.
     plain "Revenue" label the rest of the app uses), plus new-vs-returning
     patient counts computed locally (a patient's own earliest visit across
     *all* history, not just this month, decides which bucket they're in —

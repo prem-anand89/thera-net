@@ -8,7 +8,7 @@ import type { FyMonth } from '@/domain/fiscalYear';
  * Per-therapist totals table — used on the Reports page and the monthly
  * ledger PDF.
  *
- * `hospitalSplit` (default on) shows the clinic-share / TDS / Post-Tax /
+ * `partnerSplit` (default on) shows the clinic-share / TDS / Post-Tax /
  * partner-share columns; a simple clinic turns it off and sees just billed
  * totals. `showPostTax` further drops just the Post Tax column on top of
  * that — at 0% TDS nothing is withheld, so it would only repeat the
@@ -23,7 +23,7 @@ import type { FyMonth } from '@/domain/fiscalYear';
  */
 export function MonthlyReportTable({
   report,
-  hospitalSplit = true,
+  partnerSplit = true,
   showPostTax = true,
   showShared = false,
   own = 'Clinic',
@@ -31,8 +31,8 @@ export function MonthlyReportTable({
   auditLinkMonth,
 }: {
   report: MonthlyReport | undefined;
-  hospitalSplit?: boolean;
-  /** Separate from `hospitalSplit`: at 0% TDS nothing is actually withheld,
+  partnerSplit?: boolean;
+  /** Separate from `partnerSplit`: at 0% TDS nothing is actually withheld,
    *  so Post Tax {own} would just repeat {own} Share — pass false to drop
    *  the redundant column while keeping the rest of the split breakdown. */
   showPostTax?: boolean;
@@ -50,10 +50,10 @@ export function MonthlyReportTable({
   const cells = (r: TherapistMonthRow) => (
     <>
       <td className={tdNum}>{formatINR(r.billPaise)}</td>
-      {hospitalSplit && <td className={tdNum}>{formatINR(r.bmSharePaise)}</td>}
-      {hospitalSplit && <td className={tdNum}>{formatINR(r.tdsPaise)}</td>}
-      {hospitalSplit && showPostTax && <td className={tdNum}>{formatINR(r.postTaxPaise)}</td>}
-      {hospitalSplit && <td className={tdNum}>{formatINR(r.hvPaise)}</td>}
+      {partnerSplit && <td className={tdNum}>{formatINR(r.bmSharePaise)}</td>}
+      {partnerSplit && <td className={tdNum}>{formatINR(r.tdsPaise)}</td>}
+      {partnerSplit && showPostTax && <td className={tdNum}>{formatINR(r.postTaxPaise)}</td>}
+      {partnerSplit && <td className={tdNum}>{formatINR(r.hvPaise)}</td>}
       {showShared && <td className={tdNum}>{r.sharedPaise !== 0 ? formatINR(r.sharedPaise) : '—'}</td>}
       <td className={tdNum}>
         {formatINR(r.netPostTaxPaise)}
@@ -78,25 +78,25 @@ export function MonthlyReportTable({
         <tr>
           <th className={`${th} sticky left-0 z-[1] bg-[var(--paper)]`}>Therapist</th>
           <th className={thNum}>Bill Amount</th>
-          {hospitalSplit && (
+          {partnerSplit && (
             <th className={thNum}>
               {own} Share
               {showShared && <InfoTip text={`The clinic's own cut of the bill, before tax (${own} split % from Setup).`} />}
             </th>
           )}
-          {hospitalSplit && (
+          {partnerSplit && (
             <th className={thNum}>
               TDS Deducted
               {showShared && <InfoTip text="Tax Deducted at Source — withheld before payout, per the clinic's TDS basis." />}
             </th>
           )}
-          {hospitalSplit && showPostTax && (
+          {partnerSplit && showPostTax && (
             <th className={thNum}>
               Post Tax {own}
               {showShared && <InfoTip text={`${own} Share after TDS — what the clinic actually keeps from this bill.`} />}
             </th>
           )}
-          {hospitalSplit && (
+          {partnerSplit && (
             <th className={thNum}>
               {partner} Share
               {showShared && (

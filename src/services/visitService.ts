@@ -65,10 +65,10 @@ export function createVisitService(repos: Repos) {
       // the clinic's, no tax withheld. Snapshots stored as 100 / 0 keep the
       // visit self-consistent (share=bill, post-tax=bill, tds=0, hv=0) so
       // reports reconcile and the immutability trigger stays satisfied.
-      const { hospitalSplit } = clinicBillingConfig(clinic);
-      const splitPct = hospitalSplit ? clinic.bmSplitPct : 100;
-      const taxPct = hospitalSplit ? clinic.taxPct : 0;
-      const tdsBasis = hospitalSplit ? clinic.tdsBasis : 'gross_bill';
+      const { partnerSplit } = clinicBillingConfig(clinic);
+      const splitPct = partnerSplit ? clinic.bmSplitPct : 100;
+      const taxPct = partnerSplit ? clinic.taxPct : 0;
+      const tdsBasis = partnerSplit ? clinic.tdsBasis : 'gross_bill';
       const split = computeVisitSplit(actualBillPaise, splitPct, taxPct, tdsBasis);
 
       const isPackage = (input.packageTotal ?? item.sessionCount) > 1;
@@ -242,10 +242,10 @@ export function createVisitService(repos: Repos) {
     async recomputeUninvoicedSplits(clinicId: UUID): Promise<{ updated: number }> {
       const clinic = await repos.clinics.get(clinicId);
       if (!clinic) throw new Error(`Clinic not found (id: ${clinicId})`);
-      const { hospitalSplit } = clinicBillingConfig(clinic);
-      const splitPct = hospitalSplit ? clinic.bmSplitPct : 100;
-      const taxPct = hospitalSplit ? clinic.taxPct : 0;
-      const tdsBasis = hospitalSplit ? clinic.tdsBasis : 'gross_bill';
+      const { partnerSplit } = clinicBillingConfig(clinic);
+      const splitPct = partnerSplit ? clinic.bmSplitPct : 100;
+      const taxPct = partnerSplit ? clinic.taxPct : 0;
+      const tdsBasis = partnerSplit ? clinic.tdsBasis : 'gross_bill';
 
       const visits = await repos.visits.list({ clinicId });
       let updated = 0;

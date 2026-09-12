@@ -185,7 +185,7 @@ export function LedgerPage() {
   const { canBill, isAdmin, canViewClinicalNotes, canViewPayouts, entitlementsLoading } =
     usePermissions();
   const { myTherapistId } = useWorkspaceScope();
-  const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
+  const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView };
 
@@ -553,7 +553,7 @@ export function LedgerPage() {
     }));
     const csv = visitsToCsv(rows, {
       filterDescription,
-      hospitalSplit,
+      partnerSplit,
       ownShareLabel: clinicShareLabels(clinic).own,
     });
     const blob = new Blob([csv], { type: 'text/csv' });

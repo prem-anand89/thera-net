@@ -238,25 +238,25 @@ export function createReportService(repos: Repos) {
       report: MonthlyReport,
       opts: {
         labels?: { own: string; partner: string };
-        hospitalSplit?: boolean;
+        partnerSplit?: boolean;
         /** At 0% TDS nothing is actually withheld, so Post Tax {own} would
-         *  just repeat {own} Share — defaults to `hospitalSplit` for
+         *  just repeat {own} Share — defaults to `partnerSplit` for
          *  backward compatibility; pass false to drop the column. */
         showPostTax?: boolean;
         therapistSplit?: boolean;
       } = {}
     ): string {
       const labels = opts.labels ?? { own: 'Clinic', partner: 'Partner' };
-      const hospitalSplit = opts.hospitalSplit ?? true;
-      const showPostTax = opts.showPostTax ?? hospitalSplit;
+      const partnerSplit = opts.partnerSplit ?? true;
+      const showPostTax = opts.showPostTax ?? partnerSplit;
       const therapistSplit = opts.therapistSplit ?? true;
 
       const header = [
         'Therapist',
         'Bill Amount',
-        ...(hospitalSplit ? [`${labels.own} Share`, 'TDS Deducted'] : []),
+        ...(partnerSplit ? [`${labels.own} Share`, 'TDS Deducted'] : []),
         ...(showPostTax ? [`Post Tax ${labels.own}`] : []),
-        ...(hospitalSplit ? [`${labels.partner} Share`] : []),
+        ...(partnerSplit ? [`${labels.partner} Share`] : []),
         ...(therapistSplit ? ['Shared'] : []),
         'Net',
         'Visits',
@@ -265,9 +265,9 @@ export function createReportService(repos: Repos) {
       const line = (r: TherapistMonthRow) => [
         r.therapistName,
         paiseToRupees(r.billPaise),
-        ...(hospitalSplit ? [paiseToRupees(r.bmSharePaise), paiseToRupees(r.tdsPaise)] : []),
+        ...(partnerSplit ? [paiseToRupees(r.bmSharePaise), paiseToRupees(r.tdsPaise)] : []),
         ...(showPostTax ? [paiseToRupees(r.postTaxPaise)] : []),
-        ...(hospitalSplit ? [paiseToRupees(r.hvPaise)] : []),
+        ...(partnerSplit ? [paiseToRupees(r.hvPaise)] : []),
         ...(therapistSplit ? [paiseToRupees(r.sharedPaise)] : []),
         paiseToRupees(r.netPostTaxPaise),
         r.visitCount,
