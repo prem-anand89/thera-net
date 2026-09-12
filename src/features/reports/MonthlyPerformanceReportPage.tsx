@@ -46,7 +46,7 @@ export function MonthlyPerformanceReportPage() {
   const { hospitalSplit } = clinicBillingConfig(clinic);
   // A 0% TDS rate leaves the split itself in place, but with nothing
   // actually withheld "Post-Tax" no longer describes the figure.
-  const showPostTax = hospitalSplit && clinic.taxPct > 0;
+  const showPostTax = hospitalSplit && (report?.total.tdsPaise ?? 0) > 0;
   const fy = fiscalYearOf(new Date(period.year, period.month - 1, 1), clinic.fyStartMonth);
   const { from } = monthDateRange(period);
 

@@ -41,7 +41,9 @@ export function TherapistComparisonCard() {
   // nothing actually withheld "Post-Tax" is no longer an accurate label —
   // the clinic's share is just its share, same wording as a non-split
   // clinic's plain revenue.
-  const showPostTax = hospitalSplit && clinic.taxPct > 0;
+  // For trend views, if hospital split is configured, label reflects that
+  // (actual TDS for a given month is checked in the monthly report pages).
+  const showPostTax = hospitalSplit;
   const revenueLabel = showPostTax ? `Post-Tax ${labels.own}` : 'Revenue generated';
 
   const trend = useLiveQuery(

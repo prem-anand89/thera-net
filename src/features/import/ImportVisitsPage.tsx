@@ -89,7 +89,7 @@ export function ImportVisitsPage() {
       {stage.kind === 'upload' && (
         <SectionCard title="Upload the workbook">
           <p className="mb-3 text-xs text-[var(--muted)]">
-            Expects the same layout as the Beyond Mechanics / Health Valley sheet: month tabs
+            Expects the same layout as a typical Excel visit ledger: month tabs
             (April, May, June…) with columns Date, Patients, MRNO, A/S, Condition, Therapist,
             Treatment, Service Name, Bill Amount.
           </p>
