@@ -30,7 +30,7 @@ function csvLine(cells: unknown[]): string {
  */
 export function visitsToCsv(
   rows: VisitsCsvRow[],
-  opts: { filterDescription: string; hospitalSplit: boolean; ownShareLabel: string }
+  opts: { filterDescription: string; partnerSplit: boolean; ownShareLabel: string }
 ): string {
   const header = [
     'Date',
@@ -40,7 +40,7 @@ export function visitsToCsv(
     'Service',
     'Condition',
     'Bill',
-    ...(opts.hospitalSplit ? [`${opts.ownShareLabel} Share`, 'Post Tax'] : []),
+    ...(opts.partnerSplit ? [`${opts.ownShareLabel} Share`, 'Post Tax'] : []),
     'Invoiced',
   ];
   const line = (r: VisitsCsvRow) => [
@@ -51,7 +51,7 @@ export function visitsToCsv(
     r.serviceName,
     r.condition ?? '',
     paiseToRupees(r.billPaise),
-    ...(opts.hospitalSplit ? [paiseToRupees(r.bmSharePaise), paiseToRupees(r.postTaxPaise)] : []),
+    ...(opts.partnerSplit ? [paiseToRupees(r.bmSharePaise), paiseToRupees(r.postTaxPaise)] : []),
     r.invoiced ? 'Yes' : 'No',
   ];
   const totals = rows.reduce(
@@ -70,7 +70,7 @@ export function visitsToCsv(
     '',
     `Total (${rows.length} visit${rows.length === 1 ? '' : 's'})`,
     paiseToRupees(totals.billPaise),
-    ...(opts.hospitalSplit ? [paiseToRupees(totals.bmSharePaise), paiseToRupees(totals.postTaxPaise)] : []),
+    ...(opts.partnerSplit ? [paiseToRupees(totals.bmSharePaise), paiseToRupees(totals.postTaxPaise)] : []),
     '',
   ];
   return [

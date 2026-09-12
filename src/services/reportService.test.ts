@@ -487,7 +487,7 @@ describe('reportService.toCsv — configurable share labels', () => {
   it('drops the split columns in simple (non-hospital) mode', async () => {
     const report = await createReportService(makeFakeRepos([visit({})])).monthly(CLINIC, JULY);
     const header = createReportService(makeFakeRepos([]))
-      .toCsv(report, { hospitalSplit: false, therapistSplit: false })
+      .toCsv(report, { partnerSplit: false, therapistSplit: false })
       .split('\n')[0];
     expect(header).toBe('"Therapist","Bill Amount","Net","Visits","Patients"');
   });
@@ -495,7 +495,7 @@ describe('reportService.toCsv — configurable share labels', () => {
   it('drops just Post Tax when showPostTax is false, keeping the rest of the split', async () => {
     const report = await createReportService(makeFakeRepos([visit({})])).monthly(CLINIC, JULY);
     const csv = createReportService(makeFakeRepos([])).toCsv(report, {
-      hospitalSplit: true,
+      partnerSplit: true,
       showPostTax: false,
       therapistSplit: false,
     });

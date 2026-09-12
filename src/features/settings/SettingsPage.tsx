@@ -832,7 +832,7 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
     await saveFieldNow({ logoPath: path } as Partial<ProfileFields>);
   }
 
-  // clinicType feeds clinicBillingConfig()'s hospitalSplit flag alongside
+  // clinicType feeds clinicBillingConfig()'s partnerSplit flag alongside
   // Partner & split's own fields — switching Individual/Multiple can turn
   // the clinic/partner split on or off, so it needs the same catch-up as a
   // bmSplitPct/taxPct change there. See PartnerSection.savePartner.
@@ -1253,7 +1253,7 @@ type PartnerFields = Pick<
 >;
 
 // These fields are read together by clinicBillingConfig() to determine
-// hospitalSplit/therapistSplit — kept in one section/save so they can never
+// partnerSplit/therapistSplit — kept in one section/save so they can never
 // go out of sync with each other mid-edit.
 function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =

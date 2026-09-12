@@ -22,7 +22,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 export function MonthlyStatementPage() {
   const clinic = useClinic();
   const labels = clinicShareLabels(clinic);
-  const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
+  const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
   const [fyStartYear, setFyStartYear] = useState(currentFy.startYear);
   const now = new Date();
@@ -46,14 +46,14 @@ export function MonthlyStatementPage() {
   // A 0% TDS rate leaves the split itself in place, but with nothing
   // actually withheld "Post-Tax" no longer describes the figure.
   const showPostTax = useMemo(
-    () => hospitalSplit && (report?.total.tdsPaise ?? 0) > 0,
-    [hospitalSplit, report]
+    () => partnerSplit && (report?.total.tdsPaise ?? 0) > 0,
+    [partnerSplit, report]
   );
 
   function downloadCsv() {
     if (!report) return;
     const blob = new Blob(
-      [reportService.toCsv(report, { labels, hospitalSplit, showPostTax, therapistSplit })],
+      [reportService.toCsv(report, { labels, partnerSplit, showPostTax, therapistSplit })],
       {
         type: 'text/csv',
       }
@@ -111,7 +111,7 @@ export function MonthlyStatementPage() {
       <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
         <MonthlyReportTable
           report={report}
-          hospitalSplit={hospitalSplit}
+          partnerSplit={partnerSplit}
           showPostTax={showPostTax}
           showShared={therapistSplit}
           own={labels.own}
@@ -135,7 +135,7 @@ export function MonthlyStatementPage() {
 
       <p className="text-xs text-[var(--muted)]">
         Patients = unique patients in the month, not visit count.
-        {hospitalSplit && (
+        {partnerSplit && (
           <>
             {' '}
             TDS basis for new visits:{' '}
@@ -147,7 +147,7 @@ export function MonthlyStatementPage() {
         )}
       </p>
 
-      {hospitalSplit && (
+      {partnerSplit && (
         <SettlementCard
           clinicId={clinic.id}
           month={selected}

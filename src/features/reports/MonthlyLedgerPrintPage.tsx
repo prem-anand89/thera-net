@@ -14,7 +14,7 @@ export function MonthlyLedgerPrintPage() {
   const clinic = useClinic();
   const { year, month } = useSearch({ strict: false }) as { year: number; month: number };
   const labels = clinicShareLabels(clinic);
-  const { hospitalSplit } = clinicBillingConfig(clinic);
+  const { partnerSplit } = clinicBillingConfig(clinic);
   const period = { year, month };
   const fy = fiscalYearOf(new Date(period.year, period.month - 1, 1), clinic.fyStartMonth);
 
@@ -30,8 +30,8 @@ export function MonthlyLedgerPrintPage() {
   // A 0% TDS rate leaves the split itself in place, but with nothing
   // actually withheld "Post-Tax" no longer describes the figure.
   const showPostTax = useMemo(
-    () => hospitalSplit && (report?.total.tdsPaise ?? 0) > 0,
-    [hospitalSplit, report]
+    () => partnerSplit && (report?.total.tdsPaise ?? 0) > 0,
+    [partnerSplit, report]
   );
 
   const patientById = useMemo(() => new Map((patients ?? []).map((p) => [p.id, p])), [patients]);
@@ -154,7 +154,7 @@ export function MonthlyLedgerPrintPage() {
         <div className="mt-2 overflow-x-auto">
           <MonthlyReportTable
             report={report}
-            hospitalSplit={hospitalSplit}
+            partnerSplit={partnerSplit}
             showPostTax={showPostTax}
             own={labels.own}
             partner={labels.partner}

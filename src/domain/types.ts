@@ -179,18 +179,18 @@ export function clinicShareLabels(clinic: Pick<Clinic, 'ownShareLabel' | 'partne
  */
 export function clinicBillingConfig(
   clinic: Pick<Clinic, 'clinicType' | 'hasPartner' | 'billingMode' | 'enableTherapistSplit'>
-): { hospitalSplit: boolean; therapistSplit: boolean } {
+): { partnerSplit: boolean; therapistSplit: boolean } {
   // Prefer new clinicType/hasPartner model; fall back to billingMode for backward compat
-  let hospitalSplit: boolean;
+  let partnerSplit: boolean;
   if (clinic.clinicType !== undefined) {
-    // New model: hospitalSplit = multiple therapists AND has a partner
-    hospitalSplit = clinic.clinicType === 'multiple' && (clinic.hasPartner ?? false);
+    // New model: partnerSplit = multiple therapists AND has a partner
+    partnerSplit = clinic.clinicType === 'multiple' && (clinic.hasPartner ?? false);
   } else {
     // Legacy: billingMode
-    hospitalSplit = (clinic.billingMode ?? 'hospital_split') === 'hospital_split';
+    partnerSplit = (clinic.billingMode ?? 'hospital_split') === 'hospital_split';
   }
   return {
-    hospitalSplit,
+    partnerSplit,
     therapistSplit: clinic.enableTherapistSplit ?? true,
   };
 }

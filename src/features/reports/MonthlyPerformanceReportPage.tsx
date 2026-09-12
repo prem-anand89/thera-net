@@ -43,7 +43,7 @@ export function MonthlyPerformanceReportPage() {
   const period = { year, month };
   const prevPeriod = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
   const labels = clinicShareLabels(clinic);
-  const { hospitalSplit } = clinicBillingConfig(clinic);
+  const { partnerSplit } = clinicBillingConfig(clinic);
   const fy = fiscalYearOf(new Date(period.year, period.month - 1, 1), clinic.fyStartMonth);
   const { from } = monthDateRange(period);
 
@@ -59,8 +59,8 @@ export function MonthlyPerformanceReportPage() {
   // A 0% TDS rate leaves the split itself in place, but with nothing
   // actually withheld "Post-Tax" no longer describes the figure.
   const showPostTax = useMemo(
-    () => hospitalSplit && (report?.total.tdsPaise ?? 0) > 0,
-    [hospitalSplit, report]
+    () => partnerSplit && (report?.total.tdsPaise ?? 0) > 0,
+    [partnerSplit, report]
   );
   const monthVisits = useLiveQuery(() => {
     const { from: f, to } = monthDateRange(period);
@@ -249,7 +249,7 @@ export function MonthlyPerformanceReportPage() {
             <div className="mt-3 overflow-x-auto">
               <MonthlyReportTable
                 report={report}
-                hospitalSplit={hospitalSplit}
+                partnerSplit={partnerSplit}
                 showPostTax={showPostTax}
                 own={labels.own}
                 partner={labels.partner}
