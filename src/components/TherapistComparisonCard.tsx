@@ -30,9 +30,9 @@ export function TherapistComparisonCard() {
   // regardless of whether the toggle happens to be on.
   const showComparison =
     clinic.showTherapistComparison && !scope.isFrontDesk && entitlements.can('revenueSplit');
-  // Post-Tax BM adjusted for same-visit splits and automatic package-session
+  // Post-Tax own share adjusted for same-visit splits and automatic package-session
   // attribution (reportService's netPostTaxPaise) — genuinely post-tax for a
-  // hospital-split clinic, and equal to the plain net bill for a simple one
+  // partner-split clinic, and equal to the plain net bill for a simple one
   // (postTaxPaise === actualBillPaise there), so the same mode-aware label
   // ReportsOverviewPage's KPI strip uses applies here too.
   const { partnerSplit } = clinicBillingConfig(clinic);
@@ -41,7 +41,7 @@ export function TherapistComparisonCard() {
   // nothing actually withheld "Post-Tax" is no longer an accurate label —
   // the clinic's share is just its share, same wording as a non-split
   // clinic's plain revenue.
-  // For trend views, if hospital split is configured, label reflects that
+  // For trend views, if partner split is configured, label reflects that
   // (actual TDS for a given month is checked in the monthly report pages).
   const showPostTax = partnerSplit;
   const revenueLabel = showPostTax ? `Post-Tax ${labels.own}` : 'Revenue generated';

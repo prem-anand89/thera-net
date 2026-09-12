@@ -7,7 +7,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 
 /**
  * Credits part of a visit's revenue to an assisting therapist — internal
- * only, doesn't touch the billed amount/date/therapist the hospital sees.
+ * only, doesn't touch the billed amount/date/therapist in the billing record.
  * Shared by every screen with a row-level "Split revenue" action (Ledger,
  * Workspace's Today's visits) rather than each maintaining its own copy.
  */
@@ -53,8 +53,8 @@ export function SplitModal({
         <h2 className="text-sm font-semibold text-[var(--ink)]">Share visit revenue</h2>
         <p className="text-sm text-[var(--muted)]">
           Credit part of this {formatINR(visit.actualBillPaise)} visit (billed under {primaryName}) to
-          an assisting therapist. This is internal only - the billed amount, date, and therapist the
-          hospital sees don't change.
+          an assisting therapist. This is internal only - the billed amount, date, and therapist in the
+          billing record don't change.
         </p>
         <Field label="Assisting therapist">
           <select
