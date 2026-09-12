@@ -92,7 +92,7 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
   {
     key: 'partner',
     label: 'Partner & split',
-    description: 'Revenue share with a partner hospital, therapist splits, TDS.',
+    description: 'Revenue share with a partner (therapist, hospital, etc.), splits, TDS.',
     accent: 'rust',
   },
   {
@@ -288,7 +288,7 @@ export function SettingsPage() {
   const catalogEmpty = catalog !== undefined && catalog.length === 0;
   const entitlements = useEntitlements(clinic.id);
   // partner is hidden (not locked) below Clinic — a Lite/Solo clinic can't
-  // have a hospital revenue-split relationship at all under its plan, so
+  // have a partner revenue-split relationship at all under its plan, so
   // showing it as a purchasable upsell would be a lie (Part 3 of the tier
   // plan). billing stays visible everywhere, just locked — hiding a paid
   // feature is how you get zero upgrades.
@@ -1102,7 +1102,7 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
           label={
             <>
               Billing module
-              <InfoTip text="Off for clinics that bill entirely through a partner hospital's own system — hides Invoices everywhere, for everyone, regardless of role." />
+              <InfoTip text="Off for clinics that bill entirely through a partner's own system — hides Invoices everywhere, for everyone, regardless of role." />
             </>
           }
         >
@@ -1419,7 +1419,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             label={
               <>
                 TDS basis
-                <InfoTip text="Whether the tax % is calculated on the full bill (matches most hospital sheets) or only on the clinic's own share. Both produce the same final clinic payout." />
+                <InfoTip text="Whether the tax % is calculated on the full bill (standard format) or only on the clinic's own share. Both produce the same final clinic payout." />
               </>
             }
           >

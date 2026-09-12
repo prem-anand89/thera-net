@@ -14,12 +14,12 @@ import type { FyMonth } from '@/domain/fiscalYear';
  * that — at 0% TDS nothing is withheld, so it would only repeat the
  * clinic-share figure. `Net` (Post-Tax BM adjusted for same-visit Shared/Split splits AND
  * automatic package-session attribution — see TherapistMonthRow.netPostTaxPaise)
- * always shows, on both the Reports page and the hospital-facing PDF, since
+ * always shows, on both the Reports page and the partner-facing PDF, since
  * it's the one number that answers "how much did this therapist actually
  * generate" regardless of billing quirks. `showShared` additionally reveals
  * the raw internal-split mechanics (the Shared column) — off by default on
- * the hospital PDF, which otherwise stays purely about billed figures the
- * hospital reconciles.
+ * the partner PDF, which otherwise stays purely about billed figures the
+ * partner reconciles.
  */
 export function MonthlyReportTable({
   report,

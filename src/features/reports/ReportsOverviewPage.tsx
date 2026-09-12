@@ -246,7 +246,7 @@ export function ReportsOverviewPage() {
   // attribution folded in, "my revenue" credits 100% of a package to
   // whoever logged its first (billed) session and 0% to a colleague who
   // ran the rest of it. netPostTaxPaise is genuinely post-tax in
-  // hospital_split mode, and equals the plain net bill in simple mode
+  // partner_split mode, and equals the plain net bill in simple mode
   // (postTaxPaise === actualBillPaise there) — so revenueLabel's
   // "Post-Tax {own}" / "Revenue" split above already describes it
   // accurately in both modes.
