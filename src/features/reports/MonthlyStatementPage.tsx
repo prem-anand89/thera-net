@@ -23,9 +23,6 @@ export function MonthlyStatementPage() {
   const clinic = useClinic();
   const labels = clinicShareLabels(clinic);
   const { hospitalSplit, therapistSplit } = clinicBillingConfig(clinic);
-  // A 0% TDS rate leaves the split itself in place, but with nothing
-  // actually withheld "Post-Tax" no longer describes the figure.
-  const showPostTax = hospitalSplit && (report?.total.tdsPaise ?? 0) > 0;
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
   const [fyStartYear, setFyStartYear] = useState(currentFy.startYear);
   const now = new Date();
@@ -44,6 +41,13 @@ export function MonthlyStatementPage() {
   const report = useLiveQuery(
     () => reportService.monthly(clinic.id, selected),
     [clinic.id, selected.year, selected.month]
+  );
+
+  // A 0% TDS rate leaves the split itself in place, but with nothing
+  // actually withheld "Post-Tax" no longer describes the figure.
+  const showPostTax = useMemo(
+    () => hospitalSplit && (report?.total.tdsPaise ?? 0) > 0,
+    [hospitalSplit, report]
   );
 
   function downloadCsv() {

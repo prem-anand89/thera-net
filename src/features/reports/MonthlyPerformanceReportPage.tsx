@@ -44,9 +44,6 @@ export function MonthlyPerformanceReportPage() {
   const prevPeriod = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
   const labels = clinicShareLabels(clinic);
   const { hospitalSplit } = clinicBillingConfig(clinic);
-  // A 0% TDS rate leaves the split itself in place, but with nothing
-  // actually withheld "Post-Tax" no longer describes the figure.
-  const showPostTax = hospitalSplit && (report?.total.tdsPaise ?? 0) > 0;
   const fy = fiscalYearOf(new Date(period.year, period.month - 1, 1), clinic.fyStartMonth);
   const { from } = monthDateRange(period);
 
@@ -57,6 +54,13 @@ export function MonthlyPerformanceReportPage() {
   const prevReport = useLiveQuery(
     () => reportService.monthly(clinic.id, prevPeriod),
     [clinic.id, prevPeriod.year, prevPeriod.month]
+  );
+
+  // A 0% TDS rate leaves the split itself in place, but with nothing
+  // actually withheld "Post-Tax" no longer describes the figure.
+  const showPostTax = useMemo(
+    () => hospitalSplit && (report?.total.tdsPaise ?? 0) > 0,
+    [hospitalSplit, report]
   );
   const monthVisits = useLiveQuery(() => {
     const { from: f, to } = monthDateRange(period);

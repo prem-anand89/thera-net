@@ -15,9 +15,6 @@ export function MonthlyLedgerPrintPage() {
   const { year, month } = useSearch({ strict: false }) as { year: number; month: number };
   const labels = clinicShareLabels(clinic);
   const { hospitalSplit } = clinicBillingConfig(clinic);
-  // A 0% TDS rate leaves the split itself in place, but with nothing
-  // actually withheld "Post-Tax" no longer describes the figure.
-  const showPostTax = hospitalSplit && (report?.total.tdsPaise ?? 0) > 0;
   const period = { year, month };
   const fy = fiscalYearOf(new Date(period.year, period.month - 1, 1), clinic.fyStartMonth);
 
@@ -29,6 +26,13 @@ export function MonthlyLedgerPrintPage() {
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
   const report = useLiveQuery(() => reportService.monthly(clinic.id, period), [clinic.id, period.year, period.month]);
+
+  // A 0% TDS rate leaves the split itself in place, but with nothing
+  // actually withheld "Post-Tax" no longer describes the figure.
+  const showPostTax = useMemo(
+    () => hospitalSplit && (report?.total.tdsPaise ?? 0) > 0,
+    [hospitalSplit, report]
+  );
 
   const patientById = useMemo(() => new Map((patients ?? []).map((p) => [p.id, p])), [patients]);
   const therapistName = useMemo(
