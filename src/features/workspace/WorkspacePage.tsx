@@ -19,7 +19,7 @@ import {
 } from '@/domain/types';
 import { noteForVisit } from '@/domain/noteLinks';
 import { toFriendlyMessage } from '@/lib/errors';
-import type { TodayVisitRow } from '@/services/dashboardService';
+import type { OpenPackageRow, TodayVisitRow } from '@/services/dashboardService';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import {
   btnPrimary,
@@ -203,6 +203,16 @@ function todayRowToCardData(
       !!row.packageGroupId &&
       invoicedSiblingGroupIds.has(row.packageGroupId),
   };
+}
+
+/** Single status pill for an open package — `stale` (hasn't been visited in
+ *  a while) takes priority over `nearingCompletion` (still active, just
+ *  running low on sessions) since a package can't need re-engaging and be
+ *  actively finishing up at the same time in any way staff should act on. */
+function PackageStatusPill({ pkg }: { pkg: OpenPackageRow }) {
+  if (pkg.stale) return <Pill tone="amber">Stale</Pill>;
+  if (pkg.nearingCompletion) return <Pill tone="amber">Renew soon</Pill>;
+  return <Pill tone="green">Open</Pill>;
 }
 
 export function WorkspacePage() {
@@ -858,7 +868,7 @@ export function WorkspacePage() {
                       </div>
                       <div className="text-xs text-[var(--muted)]">{p.mrno}</div>
                     </Link>
-                    <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
+                    <PackageStatusPill pkg={p} />
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     <Pill tone="slate">{p.serviceName}</Pill>
@@ -948,7 +958,7 @@ export function WorkspacePage() {
                         <span className="text-[var(--muted)]">({p.daysSinceLastVisit}d ago)</span>
                       </td>
                       <td className={td}>
-                        <Pill tone={p.stale ? 'amber' : 'green'}>{p.stale ? 'Stale' : 'Open'}</Pill>
+                        <PackageStatusPill pkg={p} />
                       </td>
                       <td className={td}>
                         <div className="flex items-center gap-2">

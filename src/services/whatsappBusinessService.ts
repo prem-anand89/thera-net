@@ -1,7 +1,7 @@
 import type { UUID } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
 
-/** One of `message_log.kind`'s six existing values — kept here (not
+/** One of `message_log.kind`'s existing values — kept here (not
  *  domain/types.ts) since it's only meaningful to the Business API send
  *  path; `send-whatsapp-template`'s own copy of this list is the real
  *  validation, this one just keeps the client call sites honest. */
@@ -11,7 +11,8 @@ export type WhatsAppMessageKind =
   | 'therapist_notify'
   | 'google_review'
   | 'reminder_stale_package'
-  | 'reminder_single_visit';
+  | 'reminder_single_visit'
+  | 'payment_reminder';
 
 /**
  * Patient Communications, Phase 9: thin wrappers around

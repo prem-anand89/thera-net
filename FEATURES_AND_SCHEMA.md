@@ -296,6 +296,14 @@ queued with a visible error.
   visit card (works standalone; for an invoiced visit it now looks up and
   is bounded by that invoice's real total rather than assuming one visit
   is the whole bill).
+- **Split one collection across payment methods** (e.g. part cash, part
+  UPI): `TakePaymentDialog`'s "Split across methods" toggle replaces the
+  single method dropdown with a list of `{amount, method}` rows that must
+  sum to the entered total. This was always possible by reopening the
+  dialog once per method — `payments` has no invoice-level singular
+  method constraint, it's already a multi-row ledger — the toggle just
+  does the same sequential `recordInvoicePayment`/`logPayment` calls in
+  one sitting instead of three round trips.
 - **Monthly report** shows HV settlement card for variance tracking
 
 #### Advance Payments
@@ -753,6 +761,30 @@ still falls through to the existing share sheet, unchanged.
     fallback (`shareTextViaWhatsApp`) and lets staff pick the recipient
     themselves, consistent behavior across the whole feature rather than
     a special-cased, riskier path for reminders alone.
+- **Package nearing completion** — `isNearingCompletion()` in
+  `packageTracking.ts` (2 or fewer sessions left, package still open),
+  threaded onto `OpenPackageRow.nearingCompletion` alongside the existing
+  time-based `stale` flag. Purely an in-context "Renew soon" badge
+  wherever package progress already shows (Workspace's package list/table,
+  Patient Profile's care plan, the visit-logging patient overview, New
+  Visit's package summary tile) — no separate Ledger filter yet, and
+  `stale` still takes priority over it in the one place both could apply
+  (Workspace's single status pill) since a package can't need
+  re-engaging and be actively finishing up at the same time in any way
+  staff should act on.
+- **"Remind to pay" (Invoices page)** — a seventh `message_log` kind,
+  `payment_reminder`, alongside a "Remind to pay" action next to "Record
+  payment" on any outstanding invoice, gated on `clinic.enablePatientComms`
+  same as the reminders above. Unlike those, this is staff-initiated on a
+  specific invoice rather than driven by a staleness signal, so
+  `feedbackService.sendPaymentReminder()` takes the amount due and invoice
+  number as given rather than deriving anything. When the clinic has UPI
+  collection configured (`clinicCanShowUpiQr`), the message includes a
+  `upi://pay?...` deep link pre-filled with the balance due — this opens a
+  UPI app when the *recipient* taps it on their own phone, but there's no
+  payment gateway behind it (no order tracking, no confirmation webhook),
+  so the invoice still needs to be marked paid by hand once money actually
+  arrives.
 - **Public booking, no slots (Phase 5, folding in the doc's own Phase 6)**
   — a public form collects name/phone/optional-therapist/preferred-
   day-time-as-text; front desk or admin confirms it by hand into a real
@@ -1805,7 +1837,8 @@ updated_at   timestamptz NOT NULL (default now()) — always == created_at;
 id                    uuid PRIMARY KEY
 clinic_id             uuid NOT NULL (FOREIGN KEY → clinics.id)
 kind                  text NOT NULL — 'feedback_request' | 'booking_confirmation' | 'therapist_notify' |
-                        'google_review' | 'reminder_stale_package' | 'reminder_single_visit'
+                        'google_review' | 'reminder_stale_package' | 'reminder_single_visit' |
+                        'payment_reminder'
 recipient_patient_id  uuid (NULLABLE, FOREIGN KEY → patients.id)
 recipient_phone       text (NULLABLE)
 channel               text NOT NULL — 'wa_share' | 'wa_business_api'

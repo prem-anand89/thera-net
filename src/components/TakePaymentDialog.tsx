@@ -46,6 +46,15 @@ export function TakePaymentDialog({
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Splitting one collection across methods (e.g. part cash, part UPI) was
+  // already possible by reopening this dialog once per method — each call
+  // below is its own independent payments-table write. This just lets staff
+  // do it in one sitting instead of three separate round trips.
+  const [splitMode, setSplitMode] = useState(false);
+  const [splits, setSplits] = useState<{ method: PaymentMethod; amountRupees: string }[]>([
+    { method: 'cash', amountRupees: '' },
+    { method: 'upi', amountRupees: '' },
+  ]);
   const openAdvances = useLiveQuery(
     () => (patientId ? advanceService.openAdvancesWithBalance(clinicId, patientId) : undefined),
     [clinicId, patientId]
@@ -93,32 +102,51 @@ export function TakePaymentDialog({
   const amountValid =
     amountRupees.trim() !== '' && Number.isFinite(parsedAmountPaise) && parsedAmountPaise > 0;
 
+  const splitAmountsPaise = splits.map((s) => rupeesToPaise(Number(s.amountRupees || '0')));
+  const splitTotalPaise = splitAmountsPaise.reduce((sum, p) => sum + p, 0);
+  const splitRowsValid = splits.every(
+    (s, i) => s.amountRupees.trim() !== '' && Number.isFinite(splitAmountsPaise[i]) && splitAmountsPaise[i] > 0
+  );
+  const splitMatchesTotal = amountValid && splitTotalPaise === parsedAmountPaise;
+  const splitValid = splitRowsValid && splitMatchesTotal;
+
+  function updateSplit(index: number, patch: Partial<{ method: PaymentMethod; amountRupees: string }>) {
+    setSplits((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
+
+  async function recordOne(amount: Paise, forMethod: PaymentMethod) {
+    if (invoiceId && invoice) {
+      await paymentService.recordInvoicePayment(clinicId, invoice, amount, forMethod, visitDate, null);
+    } else {
+      await directPaymentService.logPayment(clinicId, visitId, amount, forMethod, visitDate, null);
+    }
+  }
+
   async function save() {
     if (!amountValid) {
       setError('Enter a valid amount.');
       return;
     }
+    if (splitMode && !splitValid) {
+      setError(
+        splitRowsValid
+          ? `Split amounts must add up to ${formatINR(parsedAmountPaise)}.`
+          : 'Enter a valid amount for each method.'
+      );
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      if (invoiceId && invoice) {
-        await paymentService.recordInvoicePayment(
-          clinicId,
-          invoice,
-          parsedAmountPaise,
-          method,
-          visitDate,
-          null
-        );
+      if (splitMode) {
+        // Sequential, not Promise.all — recordInvoicePayment re-reads the
+        // invoice's paid-so-far total from scratch each call, so the next
+        // slice needs the previous one's write to have already landed.
+        for (const s of splits) {
+          await recordOne(rupeesToPaise(Number(s.amountRupees)), s.method);
+        }
       } else {
-        await directPaymentService.logPayment(
-          clinicId,
-          visitId,
-          parsedAmountPaise,
-          method,
-          visitDate,
-          null
-        );
+        await recordOne(parsedAmountPaise, method);
       }
       onClose();
     } catch (e) {
@@ -197,27 +225,102 @@ export function TakePaymentDialog({
             onChange={(e) => setAmountRupeesDraft(e.target.value)}
           />
         </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Method</span>
-          <select
-            className={inputCls}
-            value={method}
-            onChange={(e) => setMethod(e.target.value as PaymentMethod)}
-          >
-            {METHODS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
+        {splitMode ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-[var(--muted)]">Split by method</span>
+              <button
+                type="button"
+                className="text-xs font-medium text-[var(--teal)] hover:underline"
+                onClick={() => setSplitMode(false)}
+              >
+                Use one method
+              </button>
+            </div>
+            {splits.map((s, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="Amount"
+                  className={`${inputCls} w-28`}
+                  value={s.amountRupees}
+                  onChange={(e) => updateSplit(i, { amountRupees: e.target.value })}
+                />
+                <select
+                  className={inputCls}
+                  value={s.method}
+                  onChange={(e) => updateSplit(i, { method: e.target.value as PaymentMethod })}
+                >
+                  {METHODS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+                {splits.length > 2 && (
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs text-[var(--rust)] hover:underline"
+                    onClick={() => setSplits((rows) => rows.filter((_, idx) => idx !== i))}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
             ))}
-          </select>
-        </label>
-        {method === 'upi' && (
-          <ShowUpiQrButton
-            amountPaise={parsedAmountPaise}
-            mrno={mrno}
-            visitDate={visitDate}
-            patientName={patientLabel}
-          />
+            <button
+              type="button"
+              className="text-xs font-medium text-[var(--teal)] hover:underline"
+              onClick={() => setSplits((rows) => [...rows, { method: 'cash', amountRupees: '' }])}
+            >
+              + Add another method
+            </button>
+            {amountValid && (
+              <p className={`text-xs ${splitMatchesTotal ? 'text-[var(--muted)]' : 'text-[var(--rust)]'}`}>
+                {formatINR(splitTotalPaise)} allocated of {formatINR(parsedAmountPaise)}
+                {!splitMatchesTotal &&
+                  (splitTotalPaise < parsedAmountPaise
+                    ? ` — ${formatINR(parsedAmountPaise - splitTotalPaise)} left to allocate`
+                    : ` — ${formatINR(splitTotalPaise - parsedAmountPaise)} over`)}
+              </p>
+            )}
+          </div>
+        ) : (
+          <>
+            <label className="block">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-xs font-medium text-[var(--muted)]">Method</span>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-[var(--teal)] hover:underline"
+                  onClick={() => setSplitMode(true)}
+                >
+                  Split across methods
+                </button>
+              </div>
+              <select
+                className={inputCls}
+                value={method}
+                onChange={(e) => setMethod(e.target.value as PaymentMethod)}
+              >
+                {METHODS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {method === 'upi' && (
+              <ShowUpiQrButton
+                amountPaise={parsedAmountPaise}
+                mrno={mrno}
+                visitDate={visitDate}
+                patientName={patientLabel}
+              />
+            )}
+          </>
         )}
         {invoiceId && remainingDuePaise > 0 && parsedAmountPaise < remainingDuePaise && (
           <p className="text-xs text-[var(--muted)]">
@@ -232,7 +335,7 @@ export function TakePaymentDialog({
           <button
             type="button"
             className={btnPrimary}
-            disabled={busy || !amountValid}
+            disabled={busy || !amountValid || (splitMode && !splitValid)}
             onClick={() => void save()}
           >
             {busy ? 'Saving…' : 'Save'}

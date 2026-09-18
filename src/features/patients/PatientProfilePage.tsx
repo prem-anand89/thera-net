@@ -547,7 +547,11 @@ export function PatientProfilePage() {
                       <li key={p.packageGroupId}>
                         <div className="flex items-center justify-between text-sm font-medium text-[var(--ink)]">
                           <span>{p.serviceName}</span>
-                          {p.stale && <Pill tone="amber">⚠ Stale</Pill>}
+                          {p.stale ? (
+                            <Pill tone="amber">⚠ Stale</Pill>
+                          ) : (
+                            p.nearingCompletion && <Pill tone="amber">Renew soon</Pill>
+                          )}
                         </div>
                         <div className="my-1.5 h-2 overflow-hidden rounded-full bg-[var(--paper)]">
                           <span

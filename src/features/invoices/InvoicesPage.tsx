@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, paymentService, dashboardService } from '@/services';
+import { repos, paymentService, dashboardService, feedbackService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { type Invoice } from '@/domain/types';
+import { buildUpiPayUri, clinicCanShowUpiQr, clinicUpiPayeeName } from '@/domain/upiPay';
 import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -37,10 +38,12 @@ export function InvoicesPage() {
   // visit(s) this invoice covers.
   const visits = useLiveQuery(() => repos.visits.list({ clinicId: clinic.id }), [clinic.id]);
   const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
+  const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [takingPayment, setTakingPayment] = useState<Invoice | null>(null);
+  const [remindingId, setRemindingId] = useState<string | null>(null);
 
   const sort = useSort<InvoiceSortKey>('date', 'desc');
 
@@ -61,16 +64,50 @@ export function InvoicesPage() {
   // plus a lookup of one representative visit per invoice (any one will do —
   // TakePaymentDialog's invoice-aware path allocates across all of them, the
   // passed visitId only anchors the dialog to a concrete row).
-  const { paidByInvoiceId, sampleVisitIdByInvoiceId } = useMemo(() => {
+  const { paidByInvoiceId, sampleVisitIdByInvoiceId, patientIdByInvoiceId } = useMemo(() => {
     const paid = new Map<string, number>();
     const sampleVisit = new Map<string, string>();
+    const patientId = new Map<string, string>();
     for (const v of visits ?? []) {
       if (v.deleted || !v.invoiceId) continue;
       paid.set(v.invoiceId, (paid.get(v.invoiceId) ?? 0) + (directPaymentByVisitId.get(v.id) ?? 0));
       if (!sampleVisit.has(v.invoiceId)) sampleVisit.set(v.invoiceId, v.id);
+      if (!patientId.has(v.invoiceId)) patientId.set(v.invoiceId, v.patientId);
     }
-    return { paidByInvoiceId: paid, sampleVisitIdByInvoiceId: sampleVisit };
+    return { paidByInvoiceId: paid, sampleVisitIdByInvoiceId: sampleVisit, patientIdByInvoiceId: patientId };
   }, [visits, directPaymentByVisitId]);
+
+  const phoneByPatientId = useMemo(
+    () => new Map((patients ?? []).map((p) => [p.id, p.phone])),
+    [patients]
+  );
+
+  async function remindToPay(inv: Invoice, remainingPaise: number) {
+    setRemindingId(inv.id);
+    try {
+      const patientId = patientIdByInvoiceId.get(inv.id);
+      const phone = patientId ? (phoneByPatientId.get(patientId) ?? null) : null;
+      const upiPayUri = clinicCanShowUpiQr(clinic)
+        ? buildUpiPayUri({
+            vpa: clinic.upiVpa ?? '',
+            payeeName: clinicUpiPayeeName(clinic),
+            amountPaise: remainingPaise,
+            note: inv.invoiceNo,
+          })
+        : null;
+      await feedbackService.sendPaymentReminder(
+        clinic.id,
+        inv.patientSnapshot.name,
+        phone,
+        clinic.name,
+        inv.invoiceNo,
+        formatINR(remainingPaise),
+        upiPayUri
+      );
+    } finally {
+      setRemindingId(null);
+    }
+  }
 
   function balanceFor(inv: Invoice): { paidPaise: number; remainingPaise: number } {
     const status = statusByInvoiceId.get(inv.id) ?? 'paid';
@@ -291,6 +328,16 @@ export function InvoicesPage() {
                           Record payment
                         </button>
                       )}
+                      {status === 'outstanding' && clinic.enablePatientComms && (
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={remindingId === inv.id}
+                          onClick={() => void remindToPay(inv, remainingPaise)}
+                        >
+                          {remindingId === inv.id ? 'Sending…' : 'Remind to pay'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
@@ -373,6 +420,16 @@ export function InvoicesPage() {
                             disabled={busy}
                           >
                             Record payment
+                          </button>
+                        )}
+                        {status === 'outstanding' && clinic.enablePatientComms && (
+                          <button
+                            type="button"
+                            className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => void remindToPay(inv, remainingPaise)}
+                            disabled={remindingId === inv.id}
+                          >
+                            {remindingId === inv.id ? 'Sending…' : 'Remind to pay'}
                           </button>
                         )}
                         <button
