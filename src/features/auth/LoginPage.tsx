@@ -62,9 +62,11 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
+  const [confirmationResent, setConfirmationResent] = useState(false);
 
   if (!hasSupabaseConfig) {
     return (
@@ -83,6 +85,8 @@ export function LoginPage() {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    setEmailNotConfirmed(false);
+    setConfirmationResent(false);
     const { error } = await getSupabase()!.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) {
@@ -91,6 +95,7 @@ export function LoginPage() {
         message = 'Incorrect email or password.';
       } else if (error.message.includes('Email not confirmed')) {
         message = 'Please check your email to confirm your account before signing in.';
+        setEmailNotConfirmed(true);
       } else if (error.message.includes('too many')) {
         message = 'Too many login attempts. Please try again in a few minutes.';
       }
@@ -144,16 +149,34 @@ export function LoginPage() {
   async function onGoogleSignIn() {
     setBusy(true);
     setError(null);
+    // /workspace, not /reset-password — that page unconditionally shows a
+    // "choose a new password" form to any session that lands on it, which
+    // used to mean every Google sign-in got diverted into a confusing
+    // mandatory password-setup step it never needed. /reset-password stays
+    // reserved for actual recovery and invite links.
     const { error } = await getSupabase()!.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/workspace`,
       },
     });
     setBusy(false);
     if (error) {
       console.error('Google sign in error:', error);
       setError(error.message || 'Failed to sign in with Google');
+    }
+  }
+
+  async function onResendConfirmation() {
+    setBusy(true);
+    setError(null);
+    const { error } = await getSupabase()!.auth.resend({ type: 'signup', email });
+    setBusy(false);
+    if (error) {
+      console.error('Resend confirmation error:', error);
+      setError(toFriendlyMessage(error));
+    } else {
+      setConfirmationResent(true);
     }
   }
 
@@ -290,6 +313,21 @@ export function LoginPage() {
       <div className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
         <GoogleButton onClick={onGoogleSignIn} busy={busy} label="Sign in with Google" />
         <ErrorNote message={error} />
+        {emailNotConfirmed &&
+          (confirmationResent ? (
+            <p className="text-xs text-[var(--muted)]">
+              Confirmation email resent — check your inbox (and spam folder).
+            </p>
+          ) : (
+            <button
+              type="button"
+              className="text-xs text-[var(--teal)] hover:underline"
+              disabled={busy}
+              onClick={() => void onResendConfirmation()}
+            >
+              Resend confirmation email
+            </button>
+          ))}
         <div className="relative flex items-center">
           <div className="flex-grow border-t border-[var(--border)]" />
           <span className="mx-2 text-xs text-[var(--muted)]">or</span>
@@ -324,6 +362,8 @@ export function LoginPage() {
               onClick={() => {
                 setMode('reset');
                 setError(null);
+                setEmailNotConfirmed(false);
+                setConfirmationResent(false);
               }}
             >
               Forgot password?
@@ -336,6 +376,8 @@ export function LoginPage() {
                 setError(null);
                 setEmail('');
                 setPassword('');
+                setEmailNotConfirmed(false);
+                setConfirmationResent(false);
               }}
             >
               Don't have an account? Sign up

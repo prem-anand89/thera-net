@@ -383,6 +383,29 @@ queued with a visible error.
 - **therapist** — clinic-wide reads, scoped writes (own visits/notes only), no roster/catalog/pricing changes
 - **front_desk** — reads and visit/invoice entry, no clinical-notes access, no roster/catalog writes, excluded from clinical dashboards
 
+#### Self-Service Sign-In (Email/Password and Google)
+- **`LoginPage.tsx`** offers both email/password (`signInWithPassword`/`signUp`)
+  and "Sign in/up with Google" (`signInWithOAuth`) — either can create the
+  account, and both can coexist on one `auth.users` row as separate linked
+  identities once the person adds both.
+- **OAuth redirects to `/workspace`**, not `/reset-password` — `/reset-password`
+  unconditionally shows a mandatory "choose a new password" form to any
+  session that lands on it (see Onboarding below), so routing OAuth through
+  it forced every Google sign-in into a confusing, skippable-looking password
+  step it never needed. Google sign-in now lands straight in the app, same
+  as email/password sign-in.
+- **Adding a password to a Google-only account is deliberate, not automatic**:
+  the account-menu action reads "Set a password" instead of "Change password"
+  when `session.user.identities` has no `provider: 'email'` entry
+  (`Shell.tsx`'s `hasPasswordIdentity`), and `ChangePasswordDialog`'s copy
+  adjusts accordingly (`isFirstPassword`). Same underlying `updateUser({
+  password })` call either way — Supabase doesn't require an existing
+  password to set one on a session that's already authenticated via Google.
+- **"Email not confirmed" sign-in failures** get a **Resend confirmation
+  email** action right on `LoginPage.tsx` (`auth.resend({ type: 'signup' })`)
+  — previously a self-signup with a lost/undelivered confirmation email had
+  no in-app recovery path at all.
+
 #### Onboarding
 - **Therapist invites** from Settings → Team create login *and* service-roster entry in one step
 - **Admin/front_desk invites** only need login

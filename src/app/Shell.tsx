@@ -487,6 +487,9 @@ export function Shell() {
                 setDisplayName={setDisplayName}
                 clinicId={clinic.id}
                 clinics={clinics ?? []}
+                hasPasswordIdentity={
+                  session?.user.identities?.some((i) => i.provider === 'email') ?? true
+                }
               />
             </div>
           </div>
@@ -663,7 +666,9 @@ function SetupNudgeLink({
  * SettingsPage's own card is the full version of this, this is a one-line
  * "N of M, continue" pointer to it), a clinic switcher (only rendered once
  * this account actually has 2+ clinics — most accounts never see it), an
- * admin-gated "Add another clinic" action, Change password, and Sign out.
+ * admin-gated "Add another clinic" action, Change/Set password (label
+ * depends on whether the account has an email/password identity yet), and
+ * Sign out.
  */
 function AccountMenu({
   displayName,
@@ -672,6 +677,7 @@ function AccountMenu({
   setDisplayName,
   clinicId,
   clinics,
+  hasPasswordIdentity,
 }: {
   displayName: string | null;
   fallbackName: string;
@@ -679,6 +685,10 @@ function AccountMenu({
   setDisplayName: (name: string) => Promise<void>;
   clinicId: string;
   clinics: Clinic[];
+  /** False for a Google-only account with no email/password identity yet —
+   *  relabels the menu item and dialog from "Change" to "Set" so it reads
+   *  as the deliberate opt-in it is, not a correction of something broken. */
+  hasPasswordIdentity: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
@@ -848,7 +858,7 @@ function AccountMenu({
                   setChangingPassword(true);
                 }}
               >
-                Change password
+                {hasPasswordIdentity ? 'Change password' : 'Set a password'}
               </button>
             </div>
 
@@ -865,7 +875,12 @@ function AccountMenu({
         </>
       )}
 
-      {changingPassword && <ChangePasswordDialog onClose={() => setChangingPassword(false)} />}
+      {changingPassword && (
+        <ChangePasswordDialog
+          isFirstPassword={!hasPasswordIdentity}
+          onClose={() => setChangingPassword(false)}
+        />
+      )}
       {addingClinic && (
         <AddClinicDialog
           onClose={() => setAddingClinic(false)}

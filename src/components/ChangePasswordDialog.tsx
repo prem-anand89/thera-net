@@ -8,9 +8,18 @@ import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/componen
  * menu, not just at invite/recovery time. `ResetPasswordPage.tsx` handles
  * those two — it needs to establish a session from an email link's token
  * first — but here a valid session already exists, so this just calls
- * `updateUser` directly, same underlying Supabase call.
+ * `updateUser` directly, same underlying Supabase call. `isFirstPassword`
+ * only changes the copy — a Google-only account has no existing password
+ * to "change," so the dialog should read as adding an optional sign-in
+ * method, not fixing something broken.
  */
-export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
+export function ChangePasswordDialog({
+  isFirstPassword = false,
+  onClose,
+}: {
+  isFirstPassword?: boolean;
+  onClose: () => void;
+}) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -48,9 +57,13 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
         {done ? (
           <>
             <h2 id="change-password-title" className="text-sm font-semibold text-[var(--ink)]">
-              Password updated
+              {isFirstPassword ? 'Password set' : 'Password updated'}
             </h2>
-            <p className="text-sm text-[var(--ink)]">Your password has been changed.</p>
+            <p className="text-sm text-[var(--ink)]">
+              {isFirstPassword
+                ? "You can now sign in with your email and this password, in addition to Google."
+                : 'Your password has been changed.'}
+            </p>
             <div className="flex justify-end">
               <button type="button" className={btnPrimary} onClick={onClose}>
                 Done
@@ -60,8 +73,14 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             <h2 id="change-password-title" className="text-sm font-semibold text-[var(--ink)]">
-              Change password
+              {isFirstPassword ? 'Set a password' : 'Change password'}
             </h2>
+            {isFirstPassword && (
+              <p className="text-sm text-[var(--muted)]">
+                Your account currently only signs in with Google. Add a password to also sign in
+                with your email.
+              </p>
+            )}
             <Field label="New password">
               <input
                 type="password"
@@ -92,7 +111,7 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
                 disabled={busy}
                 onClick={() => void save()}
               >
-                {busy ? 'Saving…' : 'Save password'}
+                {busy ? 'Saving…' : isFirstPassword ? 'Set password' : 'Save password'}
               </button>
             </div>
           </>
