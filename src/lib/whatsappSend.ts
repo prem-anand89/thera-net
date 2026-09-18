@@ -29,6 +29,7 @@ const WHATSAPP_TEMPLATES: Record<WhatsAppMessageKind, string> = {
   google_review: 'google_review_nudge_v1',
   reminder_stale_package: 'reminder_stale_package_v1',
   reminder_single_visit: 'reminder_single_visit_v1',
+  payment_reminder: 'payment_reminder_v1',
 };
 
 /**

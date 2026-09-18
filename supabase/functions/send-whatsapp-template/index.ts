@@ -24,7 +24,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 
 interface SendRequest {
   clinicId: string;
-  /** One of message_log.kind's six existing values — validated below
+  /** One of message_log.kind's existing values — validated below
    *  against that same list. */
   kind: string;
   toPhone: string;
@@ -40,6 +40,7 @@ const MESSAGE_LOG_KINDS = [
   'google_review',
   'reminder_stale_package',
   'reminder_single_visit',
+  'payment_reminder',
 ];
 
 // Same CORS reasoning as invite-therapist/index.ts: the browser preflights

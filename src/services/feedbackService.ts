@@ -236,5 +236,38 @@ export function createFeedbackService(repos: Repos) {
       if (error) return new Set();
       return new Set((data as UUID[] | null) ?? []);
     },
+
+    /**
+     * "Remind to pay" on an outstanding invoice — staff-initiated, not a
+     * staleness-driven nudge like the other four reminders, so it takes the
+     * amount/invoice number as-is rather than deriving anything itself.
+     * `upiPayUri` is optional and only ever a `upi://pay?...` deep link
+     * (see `domain/upiPay.ts`): it opens a UPI app pre-filled with the
+     * amount when the *recipient* taps it on their own phone, but there's
+     * no gateway behind it — no order tracking, no payment-confirmation
+     * webhook, so the invoice still has to be marked paid by hand once
+     * money actually arrives. Omitted entirely when the clinic hasn't set
+     * up UPI collection (see `clinicCanShowUpiQr`).
+     */
+    async sendPaymentReminder(
+      clinicId: UUID,
+      patientName: string,
+      patientPhone: string | null,
+      clinicName: string,
+      invoiceNo: string,
+      amountDueFormatted: string,
+      upiPayUri: string | null
+    ): Promise<void> {
+      const payLine = upiPayUri ? ` You can pay via UPI here: ${upiPayUri}` : '';
+      const text = `Hi ${patientName}, this is a reminder that ${amountDueFormatted} is due on invoice ${invoiceNo} at ${clinicName}.${payLine}`;
+      await sendWhatsAppMessage({
+        clinicId,
+        kind: 'payment_reminder',
+        toPhone: patientPhone,
+        bodyParams: [patientName, invoiceNo, amountDueFormatted, clinicName],
+        shareText: text,
+        shareTitle: 'Send payment reminder',
+      });
+    },
   };
 }
