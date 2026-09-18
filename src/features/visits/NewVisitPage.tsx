@@ -17,6 +17,7 @@ import { useEntitlements } from '@/app/useEntitlements';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { DUPLICATE_NAME_THRESHOLD, nameSimilarity } from '@/domain/nameSimilarity';
+import { isNearingCompletion } from '@/domain/packageTracking';
 import {
   effectivePricePerSession,
   type Patient,
@@ -797,6 +798,9 @@ export function NewVisitPage() {
                     sessionIndex={openPackages[0].logged + 1}
                     packageTotal={openPackages[0].packageTotal}
                   />
+                  {isNearingCompletion(openPackages[0].logged, openPackages[0].packageTotal) && (
+                    <Pill tone="amber">Renew soon</Pill>
+                  )}
                   <span className="text-xs text-[var(--muted)]">
                     started {formatDateDMY(openPackages[0].startedOn)}
                   </span>

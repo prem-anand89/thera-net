@@ -10,6 +10,7 @@ import { currentWeekRange, monthDateRange, type FyMonth } from '@/domain/fiscalY
 import {
   daysSince,
   groupOpenPackages,
+  isNearingCompletion,
   isStale,
   STALE_PACKAGE_DAYS,
 } from '@/domain/packageTracking';
@@ -35,6 +36,9 @@ export interface OpenPackageRow {
   lastVisitId: UUID;
   daysSinceLastVisit: number;
   stale: boolean;
+  /** 2 or fewer sessions left — see `isNearingCompletion`. Independent of
+   *  `stale`: a package can be actively attended and still running out. */
+  nearingCompletion: boolean;
   /** Therapist who logged the package's first session — for "my open packages" scoping. */
   startedByTherapistId: UUID;
   startedByTherapistName: string;
@@ -322,6 +326,7 @@ export function createDashboardService(repos: Repos) {
             lastVisitId: g.lastVisitId,
             daysSinceLastVisit: daysSince(g.lastVisitOn),
             stale: isStale(g.lastVisitOn),
+            nearingCompletion: isNearingCompletion(g.sessionsLogged, g.packageTotal),
             startedByTherapistId: g.startedByTherapistId,
             startedByTherapistName: therapistNameById.get(g.startedByTherapistId) ?? 'Unknown',
           };

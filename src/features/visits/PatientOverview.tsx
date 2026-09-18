@@ -83,10 +83,16 @@ export function PatientOverview({ patient }: { patient: Patient }) {
             <li key={p.packageGroupId}>
               <span className="font-medium text-[var(--ink)]">{p.serviceName}</span> — session{' '}
               {p.sessionsLogged} of {p.packageTotal}, last visit {formatDateDMY(p.lastVisitOn)}
-              {p.stale && (
+              {p.stale ? (
                 <span className="ml-1.5">
                   <Pill tone="amber">⚠ Stale</Pill>
                 </span>
+              ) : (
+                p.nearingCompletion && (
+                  <span className="ml-1.5">
+                    <Pill tone="amber">Renew soon</Pill>
+                  </span>
+                )
               )}
             </li>
           ))}

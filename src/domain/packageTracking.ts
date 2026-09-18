@@ -68,3 +68,17 @@ export function isStale(
 ): boolean {
   return daysSince(lastVisitDate, asOf) > thresholdDays;
 }
+
+/** Sessions left before a package is fully used up. */
+export function sessionsRemaining(sessionsLogged: number, packageTotal: number): number {
+  return Math.max(0, packageTotal - sessionsLogged);
+}
+
+/** 2 or fewer sessions left — the point where staff should raise renewal
+ *  before the patient runs out, rather than after (that's `isStale`'s job). */
+export const NEARING_COMPLETION_REMAINING = 2;
+
+export function isNearingCompletion(sessionsLogged: number, packageTotal: number): boolean {
+  const remaining = sessionsRemaining(sessionsLogged, packageTotal);
+  return remaining > 0 && remaining <= NEARING_COMPLETION_REMAINING;
+}
