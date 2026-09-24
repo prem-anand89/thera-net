@@ -857,7 +857,7 @@ describe('dashboardService.weeklySummary', () => {
   });
 
   it('counts this Mon–Sun week and collects only paid visits by visit date', async () => {
-    const asOf = new Date(2026, 5, 10); // Wed 10 Jun 2026 (local)
+    const asOf = new Date('2026-06-10T12:00:00Z'); // Wed 10 Jun 2026
     const inWeek = '2026-06-10';
     // Invoiced with no explicit payment row → reads as paid → counts as collected.
     fake.visits.set(
@@ -892,7 +892,7 @@ describe('dashboardService.weeklySummary', () => {
 
 describe('dashboardService.todayWorklist', () => {
   let fake: ReturnType<typeof makeFakeRepos>;
-  const today = new Date(2026, 5, 10); // Wed 10 Jun 2026 (local)
+  const today = new Date('2026-06-10T12:00:00Z'); // Wed 10 Jun 2026
   const todayStr = '2026-06-10';
   beforeEach(() => {
     fake = makeFakeRepos();
