@@ -2796,19 +2796,15 @@ its own narrow in-place edit path instead.
      below that it's just the avatar initials. This one's still
      deliberately conservative rather than measured-and-widened like
      SyncBadge, since the dropdown it opens already repeats the name.
-- **A sticky table cell's background must vary by CSS custom property, not
-  by class.** `VisitCard.tsx`'s Status column (`position: sticky; right:
-  0`) needs its own opaque background so the columns scrolling underneath
-  don't show through — but on Safari, a `bg-[var(--paper)]` /
-  `bg-[var(--surface)]` class that *swaps per row* (alternating stripe)
-  fails to paint on a sticky cell: the first, never-yet-scrolled row
-  renders fine, the rest silently don't. Setting one constant class
-  (`bg-[var(--td-bg)]`) and varying only an inline `--td-bg` custom
-  property per row paints reliably on Safari too, and — unlike setting
-  `backgroundColor` directly inline, which would out-specificity it —
-  still lets `group-hover:bg-[var(--teal-light)]` win on hover, since both
-  stay class-vs-class in the cascade. Any other sticky cell with a
-  per-row-varying background should use the same pattern.
+- **Visit table row backgrounds use one CSS variable on the `<tr>`, applied
+  on every `<td>`.** `VisitCard.tsx` sets `--visit-row-bg` per row and
+  gives each cell the same `bg-[var(--visit-row-bg)]` +
+  `group-hover:bg-[var(--teal-light)]` classes (including the sticky
+  Status column) so stripes and hover stay even — Safari won't reliably
+  paint alternating `bg-[var(--paper)]` / `bg-[var(--surface)]` classes on
+  sticky cells when the class name swaps row to row. Status pills stay the
+  standard rounded `Pill` components; contrast comes from the pill tones,
+  not full-width cell fills.
 - **Sync-freshness caption** (`syncFreshnessCaption` in `syncCopy.ts`) — a
   shared one-liner ("As of last sync HH:MM." / "Includes N unsynced
   visits.") for any screen whose numbers are derived from local Dexie data
