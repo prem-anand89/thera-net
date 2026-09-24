@@ -823,8 +823,8 @@ export function WorkspacePage() {
         }
       >
         <p className="mb-3 text-xs text-[var(--muted)]">
-          Open packages across the clinic — including mid-package patients not seen in over{' '}
-          {STALE_PACKAGE_DAYS} days (your retention list; formerly on Ledger).
+          Open packages — who still has sessions left, and who has gone quiet for more than{' '}
+          {STALE_PACKAGE_DAYS} days mid-package.
         </p>
         {staleFollowUpCount > 0 && pkgStatusFilter !== 'stale' && (
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3">
