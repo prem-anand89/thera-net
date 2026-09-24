@@ -419,10 +419,13 @@ function PaymentStatusDisplay({
   data,
   onTakePayment,
   canInvoice,
+  fillWidth = false,
 }: {
   data: VisitCardData;
   onTakePayment?: () => void;
   canInvoice: boolean;
+  /** Table status column — stretch chips to a consistent width. */
+  fillWidth?: boolean;
 }) {
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
   const badge = paymentBadge({
@@ -445,9 +448,12 @@ function PaymentStatusDisplay({
   const hasSecondaryRow =
     (!canInvoice && paymentActions(data.paymentState).length > 0) || data.packageInvoicePending;
 
+  const chipWrap = fillWidth ? 'flex w-full max-w-[7.5rem] flex-col gap-1' : 'flex flex-col items-start gap-1';
+  const chipInner = fillWidth ? 'flex w-full justify-center' : '';
+
   return (
-    <div className="flex flex-col items-start gap-1">
-      <div className="flex items-center gap-1">
+    <div className={chipWrap}>
+      <div className={`flex items-center gap-1 ${fillWidth ? 'w-full' : ''}`}>
         {billingLocked && (
           <span className="text-[10px]" title="Billing locked — this visit is invoiced">
             🔒
@@ -457,35 +463,43 @@ function PaymentStatusDisplay({
           <button
             type="button"
             className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium text-white hover:opacity-90 ${
-              badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'
-            }`}
+              fillWidth ? 'w-full text-center' : ''
+            } ${badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'}`}
             onClick={onTakePayment}
             title={badge.title}
           >
             Collect {formatINR(data.billPaise - data.collectedPaise)}
           </button>
         ) : (
-          <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
-            <span className="whitespace-nowrap" title={badge.title}>
-              {badge.label}
-            </span>
-          </Pill>
+          <span className={chipInner}>
+            <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+              <span className={`whitespace-nowrap ${fillWidth ? 'block w-full text-center' : ''}`} title={badge.title}>
+                {badge.label}
+              </span>
+            </Pill>
+          </span>
         )}
       </div>
       {hasSecondaryRow && (
-        <div className="flex flex-wrap items-center gap-1">
+        <div className={`flex flex-wrap items-center gap-1 ${fillWidth ? 'w-full' : ''}`}>
           {!canInvoice && paymentActions(data.paymentState).length > 0 && (
-            <Pill tone="slate">Ask billing</Pill>
+            <span className={chipInner}>
+              <Pill tone="slate">
+                <span className={fillWidth ? 'block w-full text-center' : ''}>Ask billing</span>
+              </Pill>
+            </span>
           )}
           {data.packageInvoicePending && (
-            <Pill tone="amber">
-              <span
-                className="whitespace-nowrap"
-                title="This session isn't on the package's invoice yet — amend the invoice to include it."
-              >
-                Not invoiced
-              </span>
-            </Pill>
+            <span className={chipInner}>
+              <Pill tone="amber">
+                <span
+                  className={`whitespace-nowrap ${fillWidth ? 'block w-full text-center' : ''}`}
+                  title="This session isn't on the package's invoice yet — amend the invoice to include it."
+                >
+                  Not invoiced
+                </span>
+              </Pill>
+            </span>
           )}
         </div>
       )}
@@ -1184,16 +1198,24 @@ function VisitTable({
                     `group-hover:bg-[var(--teal-light)]` win on hover,
                     since both stay class-vs-class in the cascade. */}
                 <td
-                  className={`sticky right-0 z-[1] border-l border-[var(--border)] bg-[var(--td-bg)] group-hover:bg-[var(--teal-light)] ${td}`}
-                  style={
-                    { '--td-bg': i % 2 === 1 ? 'var(--paper)' : 'var(--surface)' } as CSSProperties
-                  }
+                  className={`sticky right-0 z-[1] border-l border-[var(--border)] p-0 align-top ${td}`}
+                  style={{ height: 1 }}
                 >
-                  <PaymentStatusDisplay
-                    data={row}
-                    onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
-                    canInvoice={canInvoice}
-                  />
+                  <div
+                    className="flex h-full min-h-[2.75rem] flex-col justify-center gap-1 px-3 py-3 bg-[var(--td-bg)] group-hover:bg-[var(--teal-light)]"
+                    style={
+                      {
+                        '--td-bg': i % 2 === 1 ? 'var(--paper)' : 'var(--surface)',
+                      } as CSSProperties
+                    }
+                  >
+                    <PaymentStatusDisplay
+                      data={row}
+                      onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
+                      canInvoice={canInvoice}
+                      fillWidth
+                    />
+                  </div>
                 </td>
                 <td className={td}>
                   <NoteCell

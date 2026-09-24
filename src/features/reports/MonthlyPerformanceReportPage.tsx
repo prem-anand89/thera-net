@@ -318,7 +318,7 @@ export function MonthlyPerformanceReportPage() {
             </div>
             <div>
               <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-                Stale packages ({stalePackages.length})
+                Due for follow-up ({stalePackages.length})
               </h3>
               <ul className="space-y-1 text-xs text-[var(--ink)]">
                 {stalePackages.slice(0, 8).map((p) => (

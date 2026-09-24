@@ -18,6 +18,7 @@ import {
   type Visit,
 } from '@/domain/types';
 import { noteForVisit } from '@/domain/noteLinks';
+import { STALE_PACKAGE_DAYS } from '@/domain/packageTracking';
 import { toFriendlyMessage } from '@/lib/errors';
 import type { OpenPackageRow, TodayVisitRow } from '@/services/dashboardService';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
@@ -210,7 +211,7 @@ function todayRowToCardData(
  *  running low on sessions) since a package can't need re-engaging and be
  *  actively finishing up at the same time in any way staff should act on. */
 function PackageStatusPill({ pkg }: { pkg: OpenPackageRow }) {
-  if (pkg.stale) return <Pill tone="amber">Stale</Pill>;
+  if (pkg.stale) return <Pill tone="amber">Due for follow-up</Pill>;
   if (pkg.nearingCompletion) return <Pill tone="amber">Renew soon</Pill>;
   return <Pill tone="green">Open</Pill>;
 }
@@ -311,6 +312,18 @@ export function WorkspacePage() {
       rows = rows.filter((p) => p.stale === (pkgStatusFilter === 'stale'));
     return rows;
   }, [openPackages, pkgMineOnly, scope.myTherapistId, pkgStatusFilter]);
+
+  const scopedOpenPackages = useMemo(() => {
+    let rows = openPackages ?? [];
+    if (pkgMineOnly && scope.myTherapistId)
+      rows = rows.filter((p) => p.startedByTherapistId === scope.myTherapistId);
+    return rows;
+  }, [openPackages, pkgMineOnly, scope.myTherapistId]);
+
+  const staleFollowUpCount = useMemo(
+    () => scopedOpenPackages.filter((p) => p.stale).length,
+    [scopedOpenPackages]
+  );
 
   const editPatient = useLiveQuery(
     () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
@@ -800,17 +813,40 @@ export function WorkspacePage() {
         )}
       </SectionCard>
 
-      <SectionCard title="Packages">
+      {!scope.isClinicWideView && <TherapistComparisonCard />}
+
+      <SectionCard
+        title={
+          staleFollowUpCount > 0
+            ? `Packages (${staleFollowUpCount} due for follow-up)`
+            : 'Packages'
+        }
+      >
         <p className="mb-3 text-xs text-[var(--muted)]">
-          Every patient on a package — who&rsquo;s still owed sessions, and whose package has gone
-          quiet.
+          Open packages across the clinic — including mid-package patients not seen in over{' '}
+          {STALE_PACKAGE_DAYS} days (your retention list; formerly on Ledger).
         </p>
+        {staleFollowUpCount > 0 && pkgStatusFilter !== 'stale' && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3">
+            <p className="text-sm text-[var(--ink)]">
+              {staleFollowUpCount} package{staleFollowUpCount === 1 ? '' : 's'} need a follow-up
+              visit.
+            </p>
+            <button
+              type="button"
+              className="whitespace-nowrap text-sm font-medium text-[var(--teal)] hover:underline"
+              onClick={() => setPkgStatusFilter('stale')}
+            >
+              Show follow-ups →
+            </button>
+          </div>
+        )}
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5">
             {(
               [
                 { key: 'open', label: 'Open' },
-                { key: 'stale', label: 'Stale' },
+                { key: 'stale', label: 'Due for follow-up' },
                 { key: 'all', label: 'All' },
               ] as const
             ).map((opt) => (
@@ -907,6 +943,13 @@ export function WorkspacePage() {
                         </button>
                       )}
                       <Link
+                        to="/ledger"
+                        search={{ patientId: p.patientId }}
+                        className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                      >
+                        View ledger
+                      </Link>
+                      <Link
                         to="/visits/new"
                         search={{ repeatVisitId: p.lastVisitId }}
                         className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
@@ -980,6 +1023,13 @@ export function WorkspacePage() {
                             </button>
                           )}
                           <Link
+                            to="/ledger"
+                            search={{ patientId: p.patientId }}
+                            className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                          >
+                            View ledger
+                          </Link>
+                          <Link
                             to="/visits/new"
                             search={{ repeatVisitId: p.lastVisitId }}
                             className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
@@ -996,13 +1046,6 @@ export function WorkspacePage() {
           </>
         )}
       </SectionCard>
-
-      {/* A plain therapist can't reach the Reports nav tab (admin/front_desk
-          only, decision 3) — this is the one financial-aggregate exception
-          they do get (decision 4), so it surfaces here instead. Admin and
-          front_desk see it on Reports instead, not here, so it never shows
-          twice. */}
-      {!scope.isClinicWideView && <TherapistComparisonCard />}
 
       {invoicing && (
         <IssueInvoiceDialog
