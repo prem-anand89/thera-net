@@ -119,7 +119,7 @@ export function StatTile({ label, value }: { label: string; value: ReactNode }) 
 }
 
 const PILL_TONES = {
-  green: 'bg-[var(--moss-light)] text-[var(--moss)]',
+  green: 'border border-[var(--border)] bg-[var(--moss-light)] text-[var(--moss-strong)]',
   // True amber (caution) — was aliased to the rust palette before the
   // Billing & Notes Rebuild Phase 1 badge collapse needed a genuinely
   // distinct, more urgent tone for Overdue than for Due/Partial. Callers
@@ -128,10 +128,12 @@ const PILL_TONES = {
   // deliberate, coherent fix, not incidental: it now matches how the rest
   // of the app already uses these two colors (screening-banner/flag-pill's
   // amber = caution vs. rust = alert distinction).
-  amber: 'bg-[var(--amber-light)] text-[var(--amber)]',
-  rust: 'bg-[var(--rust-light)] text-[var(--rust)]',
-  slate: 'bg-[var(--paper)] text-[var(--muted)]',
-  teal: 'bg-[var(--teal-light)] text-[var(--teal)]',
+  amber: 'border border-[var(--border)] bg-[var(--amber-light)] text-[var(--amber)]',
+  rust: 'border border-[var(--border)] bg-[var(--rust-light)] text-[var(--rust)]',
+  // `slate-light` + border — not `paper` fill, which vanished on striped visit rows.
+  slate:
+    'border border-[var(--border)] bg-[var(--slate-light)] text-[var(--slate)]',
+  teal: 'border border-[var(--border)] bg-[var(--teal-light)] text-[var(--teal-strong)]',
 } as const;
 
 /** Status badge. Pair color with words/icons — never color alone. */
