@@ -9,9 +9,14 @@ import { fiscalYearOf, monthDateRange, monthName, formatDateDM } from '@/domain/
 import { clinicBillingConfig, clinicShareLabels, REFERRING_SOURCE_LABELS } from '@/domain/types';
 import { btnPrimary, btnSecondary, StatTile } from '@/components/ui';
 import { MonthlyReportTable } from '@/components/MonthlyReportTable';
-import { BarChart } from '@/components/BarChart';
 import { PieChart } from '@/components/PieChart';
 import { SERIES_COLORS } from '@/components/chartColors';
+import { VisitsRevenueTrendChart } from '@/components/VisitsRevenueTrendChart';
+import {
+  TherapistComparisonTable,
+  type TherapistComparisonRow,
+} from '@/components/TherapistComparisonTable';
+import { useCompactChart } from '@/components/useCompactChart';
 
 /** One row's worth of signed delta text under a StatTile — "+12% vs last
  *  month" / "−3 vs last month" — omitted (not shown as 0%/flat) when there's
@@ -39,6 +44,7 @@ function DeltaCaption({ value, suffix }: { value: number | null; suffix: string 
  */
 export function MonthlyPerformanceReportPage() {
   const clinic = useClinic();
+  const compact = useCompactChart();
   const { year, month } = useSearch({ strict: false }) as { year: number; month: number };
   const period = { year, month };
   const prevPeriod = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
@@ -150,6 +156,63 @@ export function MonthlyPerformanceReportPage() {
 
   const therapistNames = (report?.rows ?? []).map((r) => r.therapistName);
 
+  const therapistEngagement = useLiveQuery(async () => {
+    if (!report?.rows.length) return undefined;
+    const asOf = new Date(period.year, period.month - 1, 15);
+    return Promise.all(
+      report.rows.map(async (r) => {
+        const [rep, counts] = await Promise.all([
+          dashboardService.repeatVisits(clinic.id, period, r.therapistId),
+          dashboardService.monthlyNewCounts(clinic.id, asOf, r.therapistId),
+        ]);
+        return {
+          therapistId: r.therapistId,
+          retentionPct: rep.ratePct,
+          newPackages: counts.newPackages,
+        };
+      })
+    );
+  }, [clinic.id, period.year, period.month, report?.rows]);
+
+  const engagementByTherapistId = useMemo(
+    () => new Map((therapistEngagement ?? []).map((e) => [e.therapistId, e])),
+    [therapistEngagement]
+  );
+
+  const therapistChartCategories = useMemo(
+    () =>
+      therapistNames.map((name) => (compact && name.length > 10 ? `${name.slice(0, 9)}…` : name)),
+    [therapistNames, compact]
+  );
+
+  const comparisonRows = useMemo((): TherapistComparisonRow[] => {
+    return (report?.rows ?? []).map((r) => {
+      const live = engagementByTherapistId.get(r.therapistId);
+      return {
+        therapistName: r.therapistName,
+        billPaise: r.billPaise,
+        postTaxPaise: r.postTaxPaise,
+        netPostTaxPaise: r.netPostTaxPaise,
+        visitCount: r.visitCount,
+        retentionPct: live?.retentionPct ?? null,
+        newPackages: live?.newPackages ?? 0,
+      };
+    });
+  }, [report?.rows, engagementByTherapistId]);
+
+  const comparisonTotal = useMemo((): TherapistComparisonRow | undefined => {
+    if (!report) return undefined;
+    return {
+      therapistName: 'Total',
+      billPaise: report.total.billPaise,
+      postTaxPaise: report.total.postTaxPaise,
+      netPostTaxPaise: report.total.netPostTaxPaise,
+      visitCount: report.total.visitCount,
+      retentionPct: null,
+      newPackages: (therapistEngagement ?? []).reduce((s, e) => s + e.newPackages, 0),
+    };
+  }, [report, therapistEngagement]);
+
   const logoUrl = useMemo(() => publicLogoUrl(clinic.logoPath), [clinic.logoPath]);
 
   return (
@@ -213,47 +276,45 @@ export function MonthlyPerformanceReportPage() {
         {report && therapistNames.length > 0 && (
           <section className="break-inside-avoid">
             <h2 className="mb-2 text-sm font-bold text-[var(--ink)]">Per-therapist breakdown</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-                  {revenueLabel}
-                </h3>
-                <BarChart
-                  categories={therapistNames}
-                  series={[
-                    {
-                      label: revenueLabel,
-                      color: SERIES_COLORS[0],
-                      values: report.rows.map((r) => r.netPostTaxPaise),
-                    },
-                  ]}
-                  formatValue={formatINR}
-                />
-              </div>
-              <div>
-                <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-                  Visits
-                </h3>
-                <BarChart
-                  categories={therapistNames}
-                  series={[
-                    {
-                      label: 'Visits',
-                      color: SERIES_COLORS[1],
-                      values: report.rows.map((r) => r.visitCount),
-                    },
-                  ]}
-                />
-              </div>
-            </div>
-            <div className="mt-3 overflow-x-auto">
-              <MonthlyReportTable
-                report={report}
-                partnerSplit={partnerSplit}
+            <p className="mb-2 text-xs text-[var(--muted)]">
+              {monthName(period.month)} {period.year} — same dual-bar layout as therapist comparison
+              and revenue trends (visits + {revenueLabel.toLowerCase()}).
+            </p>
+            <VisitsRevenueTrendChart
+              categories={therapistChartCategories}
+              fullCategories={therapistNames}
+              visitCounts={report.rows.map((r) => r.visitCount)}
+              revenuePaise={report.rows.map((r) => r.netPostTaxPaise)}
+              visitsColor={SERIES_COLORS[1]}
+              revenueColor={SERIES_COLORS[0]}
+              formatRevenue={formatINR}
+              compact={compact}
+              currentMonthIndices={[]}
+            />
+            <div className="mt-4">
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+                Therapist totals
+              </h3>
+              <TherapistComparisonTable
+                rows={comparisonRows}
+                total={comparisonTotal}
                 showPostTax={showPostTax}
-                own={labels.own}
-                partner={labels.partner}
+                ownLabel={labels.own}
               />
+            </div>
+            <div className="mt-4">
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+                Split detail
+              </h3>
+              <div className="overflow-x-auto">
+                <MonthlyReportTable
+                  report={report}
+                  partnerSplit={partnerSplit}
+                  showPostTax={showPostTax}
+                  own={labels.own}
+                  partner={labels.partner}
+                />
+              </div>
             </div>
           </section>
         )}
@@ -318,7 +379,7 @@ export function MonthlyPerformanceReportPage() {
             </div>
             <div>
               <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-                Due for follow-up ({stalePackages.length})
+                Stale packages ({stalePackages.length})
               </h3>
               <ul className="space-y-1 text-xs text-[var(--ink)]">
                 {stalePackages.slice(0, 8).map((p) => (

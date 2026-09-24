@@ -32,7 +32,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 #### Today-First Workspace
 - **Default landing page** showing:
   - Today's visits with payment state at a glance (Paid / Collect ₹X / Package / No charge) — boxed cards on phone, a table on tablet/desktop
-  - Packages panel (bottom of page) — Open / Due for follow-up / All filter, retention banner when stale packages exist, plus a "Mine only" checkbox for anyone with a linked therapist record (admin included)
+  - Packages panel (bottom of page) — Open / Stale / All filter, plus a "Mine only" checkbox for anyone with a linked therapist record (admin included)
 - **Stat strip** — Collected today, new patients this month, and either "My open packages" (linked therapist) or "Packages this month" (clinic-wide)
 - **Quick actions** — take payment / issue invoice / split revenue / delete directly from each visit row's kebab menu; "Log visit" from a Packages row resumes the right package
 
@@ -727,11 +727,10 @@ still falls through to the existing share sheet, unchanged.
   adding a new signal. Pure `shareTextViaWhatsApp` actions, no DB write, no
   `message_log` entry, no booking link (public booking is a later phase,
   nothing to link to yet) — same shape as the Google review nudge.
-  - **Stale packages (due for follow-up)** — a "Send reminder" button on
-    `OpenPackageRow`s where `stale` is already `true`, in Workspace's
-    Packages section at the bottom of the page (mobile card + desktop table;
-    filter pill "Due for follow-up"). Ledger no longer duplicates this list.
-    Gated on `clinic.enablePatientComms`.
+  - **Stale packages** — a "Send reminder" button on `OpenPackageRow`s where
+    `stale` is already `true`, in Workspace's Packages section at the bottom
+    of the page (mobile card + desktop table; Stale filter). Ledger no longer
+    duplicates a separate follow-up list. Gated on `clinic.enablePatientComms`.
   - **Single-visit patients** — a "Send reminder" button next to the
     existing `tel:` call link on Reports' single-visit-patients list
     (`dashboardService.singleVisitPatients`), gated the same way plus

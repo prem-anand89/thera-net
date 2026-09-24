@@ -419,13 +419,13 @@ function PaymentStatusDisplay({
   data,
   onTakePayment,
   canInvoice,
-  fillWidth = false,
+  tableCell = false,
 }: {
   data: VisitCardData;
   onTakePayment?: () => void;
   canInvoice: boolean;
-  /** Table status column — stretch chips to a consistent width. */
-  fillWidth?: boolean;
+  /** Ledger/workspace table — stack full-width status blocks in the sticky column. */
+  tableCell?: boolean;
 }) {
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
   const badge = paymentBadge({
@@ -448,12 +448,12 @@ function PaymentStatusDisplay({
   const hasSecondaryRow =
     (!canInvoice && paymentActions(data.paymentState).length > 0) || data.packageInvoicePending;
 
-  const chipWrap = fillWidth ? 'flex w-full max-w-[7.5rem] flex-col gap-1' : 'flex flex-col items-start gap-1';
-  const chipInner = fillWidth ? 'flex w-full justify-center' : '';
+  const pillLayout = tableCell ? 'cell' : 'pill';
+  const wrap = tableCell ? 'flex min-w-[6.5rem] flex-col gap-1' : 'flex flex-col items-start gap-1';
 
   return (
-    <div className={chipWrap}>
-      <div className={`flex items-center gap-1 ${fillWidth ? 'w-full' : ''}`}>
+    <div className={wrap}>
+      <div className={`flex items-center gap-1 ${tableCell ? 'w-full' : ''}`}>
         {billingLocked && (
           <span className="text-[10px]" title="Billing locked — this visit is invoiced">
             🔒
@@ -462,8 +462,10 @@ function PaymentStatusDisplay({
         {showCollect ? (
           <button
             type="button"
-            className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium text-white hover:opacity-90 ${
-              fillWidth ? 'w-full text-center' : ''
+            className={`font-medium text-white hover:opacity-90 ${
+              tableCell
+                ? 'block w-full min-w-[6.5rem] rounded-md px-2 py-1 text-center text-[10px]'
+                : 'whitespace-nowrap rounded-full px-2 py-0.5 text-[10px]'
             } ${badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'}`}
             onClick={onTakePayment}
             title={badge.title}
@@ -471,35 +473,26 @@ function PaymentStatusDisplay({
             Collect {formatINR(data.billPaise - data.collectedPaise)}
           </button>
         ) : (
-          <span className={chipInner}>
-            <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
-              <span className={`whitespace-nowrap ${fillWidth ? 'block w-full text-center' : ''}`} title={badge.title}>
-                {badge.label}
-              </span>
-            </Pill>
-          </span>
+          <Pill tone={PAYMENT_CHIP[badge.kind].tone} layout={pillLayout}>
+            <span className={tableCell ? '' : 'whitespace-nowrap'} title={badge.title}>
+              {badge.label}
+            </span>
+          </Pill>
         )}
       </div>
       {hasSecondaryRow && (
-        <div className={`flex flex-wrap items-center gap-1 ${fillWidth ? 'w-full' : ''}`}>
+        <div className={`flex flex-col gap-1 ${tableCell ? 'w-full' : 'flex-wrap'}`}>
           {!canInvoice && paymentActions(data.paymentState).length > 0 && (
-            <span className={chipInner}>
-              <Pill tone="slate">
-                <span className={fillWidth ? 'block w-full text-center' : ''}>Ask billing</span>
-              </Pill>
-            </span>
+            <Pill tone="slate" layout={pillLayout}>Ask billing</Pill>
           )}
           {data.packageInvoicePending && (
-            <span className={chipInner}>
-              <Pill tone="amber">
-                <span
-                  className={`whitespace-nowrap ${fillWidth ? 'block w-full text-center' : ''}`}
-                  title="This session isn't on the package's invoice yet — amend the invoice to include it."
-                >
-                  Not invoiced
-                </span>
-              </Pill>
-            </span>
+            <Pill tone="amber" layout={pillLayout}>
+              <span
+                title="This session isn't on the package's invoice yet — amend the invoice to include it."
+              >
+                Not invoiced
+              </span>
+            </Pill>
           )}
         </div>
       )}
@@ -1198,24 +1191,19 @@ function VisitTable({
                     `group-hover:bg-[var(--teal-light)]` win on hover,
                     since both stay class-vs-class in the cascade. */}
                 <td
-                  className={`sticky right-0 z-[1] border-l border-[var(--border)] p-0 align-top ${td}`}
-                  style={{ height: 1 }}
+                  className={`sticky right-0 z-[1] border-l border-[var(--border)] align-top bg-[var(--td-bg)] group-hover:bg-[var(--teal-light)] ${td}`}
+                  style={
+                    {
+                      '--td-bg': i % 2 === 1 ? 'var(--paper)' : 'var(--surface)',
+                    } as CSSProperties
+                  }
                 >
-                  <div
-                    className="flex h-full min-h-[2.75rem] flex-col justify-center gap-1 px-3 py-3 bg-[var(--td-bg)] group-hover:bg-[var(--teal-light)]"
-                    style={
-                      {
-                        '--td-bg': i % 2 === 1 ? 'var(--paper)' : 'var(--surface)',
-                      } as CSSProperties
-                    }
-                  >
-                    <PaymentStatusDisplay
-                      data={row}
-                      onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
-                      canInvoice={canInvoice}
-                      fillWidth
-                    />
-                  </div>
+                  <PaymentStatusDisplay
+                    data={row}
+                    onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
+                    canInvoice={canInvoice}
+                    tableCell
+                  />
                 </td>
                 <td className={td}>
                   <NoteCell

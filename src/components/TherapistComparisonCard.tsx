@@ -7,19 +7,14 @@ import { useEntitlements } from '@/app/useEntitlements';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { formatINR } from '@/domain/money';
 import { monthName } from '@/domain/fiscalYear';
-import { SectionCard, th, thNum, td, tdNum } from '@/components/ui';
+import { SectionCard } from '@/components/ui';
 import { SERIES_COLORS } from '@/components/chartColors';
 import { VisitsRevenueTrendChart } from '@/components/VisitsRevenueTrendChart';
 import { useCompactChart } from '@/components/useCompactChart';
-
-function TableColumnHead({ title, detail }: { title: string; detail: string }) {
-  return (
-    <th className={thNum}>
-      <div>{title}</div>
-      <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-[var(--muted)]">{detail}</div>
-    </th>
-  );
-}
+import {
+  TherapistComparisonTable,
+  type TherapistComparisonRow,
+} from '@/components/TherapistComparisonTable';
 
 /**
  * Revenue and visit-count side by side, one bar series per therapist.
@@ -131,6 +126,35 @@ export function TherapistComparisonCard() {
     [therapistLiveStats]
   );
 
+  const comparisonRows = useMemo((): TherapistComparisonRow[] => {
+    return therapistNames.map((name) => {
+      const row = currentMonthRow?.rows.find((r) => r.therapistName === name);
+      const live = statsByName.get(name);
+      return {
+        therapistName: name,
+        billPaise: row?.billPaise ?? 0,
+        postTaxPaise: row?.postTaxPaise ?? 0,
+        netPostTaxPaise: row?.netPostTaxPaise ?? 0,
+        visitCount: row?.visitCount ?? 0,
+        retentionPct: live?.retentionPct ?? null,
+        newPackages: live?.newPackages ?? 0,
+      };
+    });
+  }, [therapistNames, currentMonthRow, statsByName]);
+
+  const comparisonTotal = useMemo((): TherapistComparisonRow | undefined => {
+    if (!currentMonthRow) return undefined;
+    return {
+      therapistName: 'Total',
+      billPaise: currentMonthRow.total.billPaise,
+      postTaxPaise: currentMonthRow.total.postTaxPaise,
+      netPostTaxPaise: currentMonthRow.total.netPostTaxPaise,
+      visitCount: currentMonthRow.total.visitCount,
+      retentionPct: null,
+      newPackages: (therapistLiveStats ?? []).reduce((s, t) => s + t.newPackages, 0),
+    };
+  }, [currentMonthRow, therapistLiveStats]);
+
   if (!showComparison) return null;
 
   return (
@@ -190,75 +214,12 @@ export function TherapistComparisonCard() {
         <div className="mt-6 border-t border-[var(--border)] pt-4">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">This month</p>
           <h3 className="font-display text-sm font-semibold text-[var(--ink)]">Live totals</h3>
-          <div className="mt-3 overflow-x-auto overscroll-x-contain rounded-lg border border-[var(--border)]">
-            <table className="min-w-full divide-y divide-[var(--border)]">
-              <thead className="bg-[var(--paper)]">
-                <tr>
-                  <th
-                    className={`${th} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]`}
-                  >
-                    <div>Therapist</div>
-                    <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-[var(--muted)]">
-                      Team member
-                    </div>
-                  </th>
-                  <TableColumnHead title="Bill amount" detail="Total billed this month" />
-                  {showPostTax && (
-                    <TableColumnHead title={`Post tax ${labels.own}`} detail="Clinic share after TDS" />
-                  )}
-                  <TableColumnHead title="Net" detail="After splits & package attribution" />
-                  <TableColumnHead title="Visits" detail="Sessions this month" />
-                  <TableColumnHead
-                    title="Retention"
-                    detail="Repeat visits within 30 days, % of visits"
-                  />
-                  <TableColumnHead title="Packages" detail="New packages started this month" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {therapistNames.map((name) => {
-                  const row = currentMonthRow?.rows.find((r) => r.therapistName === name);
-                  const live = statsByName.get(name);
-                  return (
-                    <tr key={name}>
-                      <td
-                        className={`${td} sticky left-0 z-[1] bg-[var(--surface)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]`}
-                      >
-                        {name}
-                      </td>
-                      <td className={tdNum}>{formatINR(row?.billPaise ?? 0)}</td>
-                      {showPostTax && <td className={tdNum}>{formatINR(row?.postTaxPaise ?? 0)}</td>}
-                      <td className={tdNum}>{formatINR(row?.netPostTaxPaise ?? 0)}</td>
-                      <td className={tdNum}>{row?.visitCount ?? 0}</td>
-                      <td className={tdNum}>
-                        {live?.retentionPct != null ? `${live.retentionPct}%` : '—'}
-                      </td>
-                      <td className={tdNum}>{live?.newPackages ?? 0}</td>
-                    </tr>
-                  );
-                })}
-                {currentMonthRow && (
-                  <tr className="bg-[var(--paper)] font-semibold">
-                    <td
-                      className={`${td} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]`}
-                    >
-                      Total
-                    </td>
-                    <td className={tdNum}>{formatINR(currentMonthRow.total.billPaise)}</td>
-                    {showPostTax && (
-                      <td className={tdNum}>{formatINR(currentMonthRow.total.postTaxPaise)}</td>
-                    )}
-                    <td className={tdNum}>{formatINR(currentMonthRow.total.netPostTaxPaise)}</td>
-                    <td className={tdNum}>{currentMonthRow.total.visitCount}</td>
-                    <td className={tdNum}>—</td>
-                    <td className={tdNum}>
-                      {(therapistLiveStats ?? []).reduce((s, t) => s + t.newPackages, 0)}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <TherapistComparisonTable
+            rows={comparisonRows}
+            total={comparisonTotal}
+            showPostTax={showPostTax}
+            ownLabel={labels.own}
+          />
         </div>
       )}
     </SectionCard>
