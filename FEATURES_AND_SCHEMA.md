@@ -369,7 +369,7 @@ queued with a visible error.
 
 #### Therapist Comparison
 - **Opt-in chart** (off by default; admin enables in Settings → Features)
-- **Shows side-by-side**: revenue and visit-count per therapist
+- **Single dual-bar chart** (visits + revenue per therapist, month picker) plus live month table with retention % and new packages
 - **Visible to therapists too**, not just admins — deliberate exception to "financial aggregates are admin-only"
 - **3 key metrics** per therapist
 - **6-month trend charts** need at least 2 months of history to render (otherwise read as a false spike);

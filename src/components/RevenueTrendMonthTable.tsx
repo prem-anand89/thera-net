@@ -6,7 +6,12 @@ import { monthOverMonthDelta, monthOverMonthPctSeries } from '@/components/chart
 function PctCell({ value }: { value: number | null }) {
   if (value == null) return <span className="text-[var(--muted)]">—</span>;
   const cls = value >= 0 ? 'text-[var(--moss)]' : 'text-[var(--rust)]';
-  return <span className={`font-num font-medium ${cls}`}>{value >= 0 ? '+' : ''}{value}%</span>;
+  return (
+    <span className={`font-num font-medium ${cls}`}>
+      {value >= 0 ? '+' : ''}
+      {value}%
+    </span>
+  );
 }
 
 function DeltaInrCell({ deltaPaise }: { deltaPaise: number | null }) {
@@ -17,6 +22,24 @@ function DeltaInrCell({ deltaPaise }: { deltaPaise: number | null }) {
       {deltaPaise >= 0 ? '+' : '−'}
       {formatINR(Math.abs(deltaPaise))}
     </span>
+  );
+}
+
+function ColumnHead({
+  title,
+  detail,
+  sticky,
+}: {
+  title: string;
+  detail: string;
+  sticky?: boolean;
+}) {
+  const base = sticky ? `${th} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]` : thNum;
+  return (
+    <th className={base}>
+      <div>{title}</div>
+      <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-[var(--muted)]">{detail}</div>
+    </th>
   );
 }
 
@@ -48,7 +71,7 @@ export function RevenueTrendMonthTable({
   const visitPct = monthOverMonthPctSeries(visitCounts);
 
   async function copyTable() {
-    const header = ['Month', revenueColumnLabel, 'Δ ₹', 'Rev MoM %', 'Visits', 'Visit MoM %', '₹/visit'].join(
+    const header = ['Month', revenueColumnLabel, 'Change ₹', 'Revenue MoM %', 'Visits', 'Visit MoM %', '₹/visit'].join(
       '\t'
     );
     const rows = monthLabels.map((lab, i) => {
@@ -81,15 +104,13 @@ export function RevenueTrendMonthTable({
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
             <tr>
-              <th className={`${th} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]`}>
-                Month
-              </th>
-              <th className={thNum}>{revenueColumnLabel}</th>
-              <th className={thNum}>Δ ₹</th>
-              <th className={thNum}>Rev MoM</th>
-              <th className={thNum}>Visits</th>
-              <th className={thNum}>Visit MoM</th>
-              <th className={thNum}>₹/visit</th>
+              <ColumnHead title="Month" detail="Calendar month in this window" sticky />
+              <ColumnHead title={revenueColumnLabel} detail="Total for the month" />
+              <ColumnHead title="Change ₹" detail="More or less vs the month before" />
+              <ColumnHead title="Revenue MoM" detail="% change vs prior month" />
+              <ColumnHead title="Visits" detail="Sessions logged" />
+              <ColumnHead title="Visit MoM" detail="% change vs prior month" />
+              <ColumnHead title="₹/visit" detail="Average revenue per visit" />
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
@@ -138,8 +159,7 @@ export function RevenueTrendMonthTable({
         {copyOk ? 'Copied' : 'Copy month table'}
       </button>
       <p className="mt-2 text-[11px] text-[var(--muted)]">
-        Swipe sideways on small screens. Row highlights when you hover a chart. Visit growth % is in this table only
-        (waterfall above is revenue ₹ only).
+        Swipe sideways on a phone to see all columns. Tap or drag on a chart to highlight the matching row.
       </p>
     </div>
   );

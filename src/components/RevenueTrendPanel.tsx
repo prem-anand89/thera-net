@@ -4,6 +4,7 @@ import { SERIES_COLORS } from '@/components/chartColors';
 import { RevenueWaterfallChart } from '@/components/RevenueWaterfallChart';
 import { VisitsRevenueTrendChart } from '@/components/VisitsRevenueTrendChart';
 import { RevenueTrendMonthTable } from '@/components/RevenueTrendMonthTable';
+import { useCompactChart } from '@/components/useCompactChart';
 
 function TrendSection({
   kicker,
@@ -37,6 +38,7 @@ export function RevenueTrendPanel({
   currentMonthIndices: number[];
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const compact = useCompactChart();
 
   const shortCategories = useMemo(
     () =>
@@ -47,7 +49,10 @@ export function RevenueTrendPanel({
     [categories]
   );
 
-  const chartCategories = categories.length > 8 ? shortCategories : categories;
+  const chartCategories =
+    compact || categories.length > 8
+      ? shortCategories
+      : categories;
 
   return (
     <div className="space-y-1">
@@ -57,8 +62,10 @@ export function RevenueTrendPanel({
         </p>
         <RevenueWaterfallChart
           categories={chartCategories}
+          fullCategories={categories}
           revenuePaise={revenuePaise}
           formatValue={formatINR}
+          compact={compact}
           selectedCategoryIndex={activeIndex}
           onCategoryHover={setActiveIndex}
         />
@@ -67,11 +74,13 @@ export function RevenueTrendPanel({
       <TrendSection kicker="Volume & earnings" title="Visits and revenue each month">
         <VisitsRevenueTrendChart
           categories={chartCategories}
+          fullCategories={categories}
           visitCounts={visitCounts}
           revenuePaise={revenuePaise}
           visitsColor={SERIES_COLORS[1]}
           revenueColor={SERIES_COLORS[0]}
           formatRevenue={formatINR}
+          compact={compact}
           currentMonthIndices={currentMonthIndices}
           selectedCategoryIndex={activeIndex}
           onCategoryHover={setActiveIndex}

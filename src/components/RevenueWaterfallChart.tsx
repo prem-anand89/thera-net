@@ -20,14 +20,18 @@ const DOWN = 'var(--rust)';
 
 export function RevenueWaterfallChart({
   categories,
+  fullCategories,
   revenuePaise,
   formatValue,
+  compact = false,
   selectedCategoryIndex = null,
   onCategoryHover,
 }: {
   categories: string[];
+  fullCategories?: string[];
   revenuePaise: number[];
   formatValue: (paise: number) => string;
+  compact?: boolean;
   selectedCategoryIndex?: number | null;
   onCategoryHover?: (index: number | null) => void;
 }) {
@@ -40,8 +44,11 @@ export function RevenueWaterfallChart({
 
   const deltas = monthOverMonthDelta(revenuePaise);
   const width = 640;
-  const height = 200;
-  const padding = { top: 22, right: 10, bottom: 28, left: 40 };
+  const height = compact ? 188 : 200;
+  const padding = compact
+    ? { top: 20, right: 6, bottom: 26, left: 32 }
+    : { top: 22, right: 10, bottom: 28, left: 40 };
+  const labelFor = (i: number) => fullCategories?.[i] ?? categories[i];
   const plotW = width - padding.left - padding.right;
   const plotH = height - padding.top - padding.bottom;
   const baseline = padding.top + plotH;
@@ -49,11 +56,18 @@ export function RevenueWaterfallChart({
   const maxAbs = niceMax(Math.max(1, ...deltas.filter((d): d is number => d != null).map(Math.abs)));
   const yFor = (delta: number) => y0 - (delta / maxAbs) * (plotH / 2 - 8);
   const groupW = plotW / categories.length;
-  const barW = Math.min(26, groupW * 0.5);
+  const barW = Math.min(compact ? 20 : 26, groupW * 0.5);
 
   const setActive = (i: number | null) => {
     setHovered(i);
     onCategoryHover?.(i);
+  };
+
+  const indexFromEvent = (clientX: number, rect: DOMRect) => {
+    const x = ((clientX - rect.left) / rect.width) * width;
+    const ci = Math.floor((x - padding.left) / groupW);
+    if (ci < 0 || ci >= categories.length) return null;
+    return ci;
   };
 
   return (
@@ -64,6 +78,10 @@ export function RevenueWaterfallChart({
         role="img"
         aria-label="Revenue change from prior month"
         onPointerLeave={() => setActive(null)}
+        onPointerMove={(e) => {
+          const i = indexFromEvent(e.clientX, e.currentTarget.getBoundingClientRect());
+          if (i != null) setActive(i);
+        }}
       >
         <text x={padding.left} y={12} className="fill-slate-400" fontSize={8}>
           ₹ change
@@ -150,7 +168,7 @@ export function RevenueWaterfallChart({
                 y={height - 8}
                 textAnchor="middle"
                 className={isActive ? 'fill-[var(--teal)]' : 'fill-slate-500'}
-                fontSize={9}
+                fontSize={compact ? 8 : 9}
                 fontWeight={isActive ? 600 : 400}
               >
                 {cat}
@@ -161,10 +179,12 @@ export function RevenueWaterfallChart({
       </svg>
       {active != null && (
         <div
-          className="pointer-events-none absolute left-1/2 top-0 z-10 -translate-x-1/2 rounded-lg border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-xs text-[var(--paper)] shadow-md"
-          style={{ marginTop: 4 }}
+          className={`pointer-events-none absolute z-10 rounded-lg border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-xs text-[var(--paper)] shadow-md ${
+            compact ? 'bottom-1 left-2 right-2' : 'left-1/2 top-0 -translate-x-1/2'
+          }`}
+          style={compact ? undefined : { marginTop: 4 }}
         >
-          <div className="font-medium">{categories[active]}</div>
+          <div className="font-medium">{labelFor(active)}</div>
           <div className="mt-0.5 tabular-nums">
             {revenuePaise[active] > 0 ? formatValue(revenuePaise[active]) : '—'}
             {deltas[active] != null && deltas[active] !== 0 && (

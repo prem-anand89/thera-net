@@ -14,9 +14,9 @@ function niceMax(v: number): number {
   return step * base;
 }
 
-function barLayout(plotW: number, categoryCount: number) {
-  const barGap = 4;
-  const maxBarW = 16;
+function barLayout(plotW: number, categoryCount: number, compact: boolean) {
+  const barGap = compact ? 3 : 4;
+  const maxBarW = compact ? 12 : 16;
   const stretchedGroupW = plotW / categoryCount;
   const barW = Math.min(maxBarW, Math.max(6, (stretchedGroupW - barGap * 3) / 2));
   const groupW = barW * 2 + barGap * 3;
@@ -27,23 +27,27 @@ function barLayout(plotW: number, categoryCount: number) {
 
 export function VisitsRevenueTrendChart({
   categories,
+  fullCategories,
   visitCounts,
   revenuePaise,
   visitsColor,
   revenueColor,
   formatRevenue,
   formatVisits = (v) => String(v),
+  compact = false,
   currentMonthIndices = [],
   selectedCategoryIndex = null,
   onCategoryHover,
 }: {
   categories: string[];
+  fullCategories?: string[];
   visitCounts: number[];
   revenuePaise: number[];
   visitsColor: string;
   revenueColor: string;
   formatRevenue: (paise: number) => string;
   formatVisits?: (v: number) => string;
+  compact?: boolean;
   /** Months still in progress — dashed outline on bars. */
   currentMonthIndices?: number[];
   selectedCategoryIndex?: number | null;
@@ -57,8 +61,11 @@ export function VisitsRevenueTrendChart({
   }
 
   const width = 640;
-  const height = 210;
-  const padding = { top: 24, right: 44, bottom: 28, left: 36 };
+  const height = compact ? 196 : 210;
+  const padding = compact
+    ? { top: 22, right: 32, bottom: 26, left: 28 }
+    : { top: 24, right: 44, bottom: 28, left: 36 };
+  const labelFor = (i: number) => fullCategories?.[i] ?? categories[i];
   const plotW = width - padding.left - padding.right;
   const plotH = height - padding.top - padding.bottom;
   const baseline = padding.top + plotH;
@@ -66,11 +73,19 @@ export function VisitsRevenueTrendChart({
   const maxRevenue = niceMax(Math.max(1, ...revenuePaise));
   const yVisits = (v: number) => baseline - (v / maxVisits) * plotH;
   const yRevenue = (p: number) => baseline - (p / maxRevenue) * plotH;
-  const { barGap, barW, groupW, offsetX } = barLayout(plotW, categories.length);
+  const { barGap, barW, groupW, offsetX } = barLayout(plotW, categories.length, compact);
 
   const setActive = (i: number | null) => {
     setHovered(i);
     onCategoryHover?.(i);
+  };
+
+  const indexFromEvent = (clientX: number, rect: DOMRect) => {
+    const x = ((clientX - rect.left) / rect.width) * width;
+    const rel = x - padding.left - offsetX;
+    const ci = Math.floor(rel / groupW);
+    if (ci < 0 || ci >= categories.length) return null;
+    return ci;
   };
 
   return (
@@ -91,6 +106,10 @@ export function VisitsRevenueTrendChart({
         role="img"
         aria-label="Monthly visits and revenue"
         onPointerLeave={() => setActive(null)}
+        onPointerMove={(e) => {
+          const i = indexFromEvent(e.clientX, e.currentTarget.getBoundingClientRect());
+          if (i != null) setActive(i);
+        }}
       >
         <text x={padding.left} y={12} className="fill-slate-400" fontSize={8}>
           visits
@@ -200,7 +219,7 @@ export function VisitsRevenueTrendChart({
                 y={height - 8}
                 textAnchor="middle"
                 className={isActive ? 'fill-[var(--teal)]' : 'fill-slate-500'}
-                fontSize={9}
+                fontSize={compact ? 8 : 9}
                 fontWeight={isActive ? 600 : 400}
               >
                 {cat}
@@ -211,9 +230,11 @@ export function VisitsRevenueTrendChart({
       </svg>
       {active != null && (
         <div
-          className="pointer-events-none absolute left-1/2 top-8 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-xs text-[var(--paper)] shadow-md"
+          className={`pointer-events-none absolute z-10 rounded-lg border border-[var(--border)] bg-[var(--ink)] px-3 py-2 text-xs text-[var(--paper)] shadow-md ${
+            compact ? 'bottom-1 left-2 right-2 whitespace-normal' : 'left-1/2 top-8 -translate-x-1/2 whitespace-nowrap'
+          }`}
         >
-          <div className="font-medium">{categories[active]}</div>
+          <div className="font-medium">{labelFor(active)}</div>
           <div className="mt-0.5 tabular-nums">
             Visits {formatVisits(visitCounts[active] ?? 0)} ·{' '}
             {revenuePaise[active] > 0 ? formatRevenue(revenuePaise[active]) : '—'}
