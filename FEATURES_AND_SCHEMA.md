@@ -1148,12 +1148,13 @@ still falls through to the existing share sheet, unchanged.
     needs this specific month-scoped split). Revenue and visit counts each
     carry a "vs last month" delta, the one comparison this session's
     Trends review flagged as missing everywhere else in Reports too.
-  - **Per-therapist breakdown** reuses `reportService.monthly`'s `rows`
-    (already the exact per-therapist Bill/Post-Tax/Net/Visits data
-    `MonthlyReportTable` renders) for two `BarChart`s (revenue, visits)
-    plus the table itself — not `TherapistComparisonCard`, which is
-    hardcoded to "current month, live" and a 6-month trend with no month
-    parameter, the wrong shape for an arbitrary past month.
+  - **Per-therapist breakdown** — `VisitsRevenueTrendChart` (same dual-bar
+    layout as Trends and therapist comparison) for the report month, then
+    `TherapistComparisonTable` (retention % + new packages for that month,
+    via `repeatVisits` / `monthlyNewCounts` scoped to the report period),
+    then `MonthlyReportTable` for full split detail. Workspace's
+    `TherapistComparisonCard` stays "current month, live" with a 6-month
+    picker; this page is keyed to the picker's arbitrary `year`/`month`.
   - **Referral sources & conditions** — two `PieChart`s, computed locally
     from that month's visits/patients rather than reusing
     `dashboardService.referralSourceStats`/`conditionUsage`, both of which
