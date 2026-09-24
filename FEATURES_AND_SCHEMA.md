@@ -380,7 +380,7 @@ queued with a visible error.
 - Condition pie chart (grouped raw text)
 - Referral source breakdown (doctor/hospital detail-name)
 - Visit count aggregation
-- Revenue trends with period toggle
+- **Revenue trends** (Reports → Trends): period toggle (6m / YTD / FY); **revenue ₹ waterfall** (green up / red down vs prior month); **grouped visits + revenue bars** (dual axis); scrollable **month table** with sticky first column, MoM %, copy-to-clipboard. Therapist scope uses `netPostTaxPaise` per month; clinic-wide uses post-tax or billed total per split settings. Indexed overlay chart removed.
 
 ---
 
