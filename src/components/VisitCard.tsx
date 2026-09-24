@@ -47,6 +47,10 @@ export const PAYMENT_CHIP: Record<
   none: { tone: 'slate' },
 };
 
+/** Every visit-table `<td>` shares the row's `--visit-row-bg` (set on `<tr>`)
+ *  so sticky cells stripe and hover the same as the rest of the row. */
+const VISIT_ROW_CELL_BG = 'bg-[var(--visit-row-bg)] group-hover:bg-[var(--teal-light)]';
+
 /** Combines catalog treatment picks with the free-text add-on into one
  *  display string for the single "Treatments" column/cell — e.g. "Manual
  *  Therapy, Exercise Therapy — FM An/Re S,S". Either half can be absent. */
@@ -419,13 +423,10 @@ function PaymentStatusDisplay({
   data,
   onTakePayment,
   canInvoice,
-  tableCell = false,
 }: {
   data: VisitCardData;
   onTakePayment?: () => void;
   canInvoice: boolean;
-  /** Ledger/workspace table — stack full-width status blocks in the sticky column. */
-  tableCell?: boolean;
 }) {
   const actions = canInvoice ? paymentActions(data.paymentState) : [];
   const badge = paymentBadge({
@@ -448,12 +449,9 @@ function PaymentStatusDisplay({
   const hasSecondaryRow =
     (!canInvoice && paymentActions(data.paymentState).length > 0) || data.packageInvoicePending;
 
-  const pillLayout = tableCell ? 'cell' : 'pill';
-  const wrap = tableCell ? 'flex min-w-[6.5rem] flex-col gap-1' : 'flex flex-col items-start gap-1';
-
   return (
-    <div className={wrap}>
-      <div className={`flex items-center gap-1 ${tableCell ? 'w-full' : ''}`}>
+    <div className="flex flex-col items-start gap-1">
+      <div className="flex items-center gap-1">
         {billingLocked && (
           <span className="text-[10px]" title="Billing locked — this visit is invoiced">
             🔒
@@ -462,32 +460,31 @@ function PaymentStatusDisplay({
         {showCollect ? (
           <button
             type="button"
-            className={`font-medium text-white hover:opacity-90 ${
-              tableCell
-                ? 'block w-full min-w-[6.5rem] rounded-md px-2 py-1 text-center text-[10px]'
-                : 'whitespace-nowrap rounded-full px-2 py-0.5 text-[10px]'
-            } ${badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'}`}
+            className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium text-white hover:opacity-90 ${badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'}`}
             onClick={onTakePayment}
             title={badge.title}
           >
             Collect {formatINR(data.billPaise - data.collectedPaise)}
           </button>
         ) : (
-          <Pill tone={PAYMENT_CHIP[badge.kind].tone} layout={pillLayout}>
-            <span className={tableCell ? '' : 'whitespace-nowrap'} title={badge.title}>
+          <Pill tone={PAYMENT_CHIP[badge.kind].tone}>
+            <span className="whitespace-nowrap" title={badge.title}>
               {badge.label}
             </span>
           </Pill>
         )}
       </div>
       {hasSecondaryRow && (
-        <div className={`flex flex-col gap-1 ${tableCell ? 'w-full' : 'flex-wrap'}`}>
+        <div className="flex flex-wrap items-center gap-1">
           {!canInvoice && paymentActions(data.paymentState).length > 0 && (
-            <Pill tone="slate" layout={pillLayout}>Ask billing</Pill>
+            <Pill tone="slate">
+              <span className="whitespace-nowrap">Ask billing</span>
+            </Pill>
           )}
           {data.packageInvoicePending && (
-            <Pill tone="amber" layout={pillLayout}>
+            <Pill tone="amber">
               <span
+                className="whitespace-nowrap"
                 title="This session isn't on the package's invoice yet — amend the invoice to include it."
               >
                 Not invoiced
@@ -1084,10 +1081,15 @@ function VisitTable({
             {rows.map((row, i) => (
               <tr
                 key={row.visitId}
-                className={`group align-top hover:bg-[var(--teal-light)] ${i % 2 === 1 ? 'bg-[var(--paper)]' : ''}`}
+                className="group align-top"
+                style={
+                  {
+                    '--visit-row-bg': i % 2 === 1 ? 'var(--paper)' : 'var(--surface)',
+                  } as CSSProperties
+                }
               >
                 {selection && (
-                  <td className={td}>
+                  <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                     {selection.isSelectable(row) && (
                       <input
                         type="checkbox"
@@ -1100,7 +1102,7 @@ function VisitTable({
                   </td>
                 )}
                 {showDate && (
-                  <td className={td}>
+                  <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                     {formatDateDM(row.visitDate)}
                     {row.editedBy && (
                       <span
@@ -1121,7 +1123,7 @@ function VisitTable({
                   </td>
                 )}
                 {showPatient && (
-                  <td className={td}>
+                  <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                     <PatientNameBlock
                       data={row}
                       onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
@@ -1134,7 +1136,7 @@ function VisitTable({
                   switch (key) {
                     case 'service':
                       return (
-                        <td key={key} className={td}>
+                        <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
                           <div>{row.serviceName}</div>
                           {row.sessionIndex && row.packageTotal && (
                             <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
@@ -1151,7 +1153,7 @@ function VisitTable({
                       );
                     case 'therapist':
                       return (
-                        <td key={key} className={td}>
+                        <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
                           <div className="flex min-w-0 flex-col gap-0.5">
                             <TherapistPill>{row.therapistName}</TherapistPill>
                             {row.hasSplit && row.sharedPct != null && (
@@ -1165,47 +1167,29 @@ function VisitTable({
                       );
                     case 'condition':
                       return (
-                        <td key={key} className={td}>
+                        <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
                           {row.condition ?? '—'}
                         </td>
                       );
                     case 'treatments':
                       return (
-                        <td key={key} className={td}>
+                        <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
                           {treatmentsDisplayText(row.treatmentNames, row.treatmentNotes)}
                         </td>
                       );
                   }
                 })}
-                <td className={tdNum}>{formatINR(row.billPaise)}</td>
-                {/* The row-stripe background comes from a `--td-bg` custom
-                    property set inline, read by one constant `bg-[var(--td-bg)]`
-                    class — not a class that swaps between `bg-[var(--paper)]`/
-                    `bg-[var(--surface)]` per row. Safari has a known bug
-                    where a `position: sticky` cell's background fails to
-                    paint (correctly on the never-scrolled first row, then
-                    not on the rest) when the class itself differs row to
-                    row; keeping the class identical and varying only the
-                    inline custom property paints reliably, and — unlike
-                    setting `backgroundColor` directly inline — still lets
-                    `group-hover:bg-[var(--teal-light)]` win on hover,
-                    since both stay class-vs-class in the cascade. */}
+                <td className={`${tdNum} ${VISIT_ROW_CELL_BG}`}>{formatINR(row.billPaise)}</td>
                 <td
-                  className={`sticky right-0 z-[1] border-l border-[var(--border)] align-top bg-[var(--td-bg)] group-hover:bg-[var(--teal-light)] ${td}`}
-                  style={
-                    {
-                      '--td-bg': i % 2 === 1 ? 'var(--paper)' : 'var(--surface)',
-                    } as CSSProperties
-                  }
+                  className={`sticky right-0 z-[1] border-l border-[var(--border)] align-top ${td} ${VISIT_ROW_CELL_BG}`}
                 >
                   <PaymentStatusDisplay
                     data={row}
                     onTakePayment={onTakePayment ? () => onTakePayment(row) : undefined}
                     canInvoice={canInvoice}
-                    tableCell
                   />
                 </td>
-                <td className={td}>
+                <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                   <NoteCell
                     data={row}
                     backTo={backTo}
@@ -1216,7 +1200,7 @@ function VisitTable({
                     }
                   />
                 </td>
-                <td className={td}>
+                <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                   <RowActionsMenu
                     data={row}
                     onEdit={onEdit ? () => onEdit(row) : undefined}

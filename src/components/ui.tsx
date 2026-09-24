@@ -135,21 +135,14 @@ const PILL_TONES = {
 } as const;
 
 /** Status badge. Pair color with words/icons — never color alone. */
-export function Pill({
-  tone,
-  children,
-  layout = 'pill',
-}: {
-  tone: keyof typeof PILL_TONES;
-  children: ReactNode;
-  /** Full-width rounded block for dense table cells (e.g. visit Status column). */
-  layout?: 'pill' | 'cell';
-}) {
-  const shape =
-    layout === 'cell'
-      ? 'block w-full min-w-[6.5rem] rounded-md px-2 py-1 text-center text-[10px] leading-snug'
-      : 'inline-block rounded-full px-2 py-0.5 text-xs';
-  return <span className={`font-medium ${shape} ${PILL_TONES[tone]}`}>{children}</span>;
+export function Pill({ tone, children }: { tone: keyof typeof PILL_TONES; children: ReactNode }) {
+  return (
+    <span
+      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PILL_TONES[tone]}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 /** Therapist name badge — teal fill so "who treated" stands out from condition/treatment text. */
