@@ -8,6 +8,7 @@ import {
   visitService,
   whatsappBusinessService,
 } from '@/services';
+import { brevoEmailService } from '@/services/brevoEmailService';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -1576,6 +1577,7 @@ function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
         saveDisabled={slugInvalid}
       />
       <WhatsAppBusinessSubsection clinicId={clinic.id} />
+      <BrevoEmailSubsection clinicId={clinic.id} />
     </SectionCard>
   );
 }
@@ -1696,6 +1698,124 @@ function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
                   type="button"
                   disabled={busy}
                   className="rounded-full bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                  onClick={() => void onSave()}
+                >
+                  {busy ? 'Saving…' : saved ? 'Saved!' : 'Save'}
+                </button>
+                {error && <p className="text-xs text-[var(--rust)]">{error}</p>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BrevoEmailSubsection({ clinicId }: { clinicId: UUID }) {
+  const [expanded, setExpanded] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [enabled, setEnabled] = useState(false);
+  const [senderEmail, setSenderEmail] = useState('');
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!expanded || loaded) return;
+    void brevoEmailService
+      .getConfigStatus(clinicId)
+      .then((status) => {
+        if (status) {
+          setEnabled(status.enabled);
+          setSenderEmail(status.senderEmail ?? '');
+          setHasApiKey(status.hasApiKey);
+        }
+        setLoaded(true);
+      })
+      .catch((e) => setError(toFriendlyMessage(e)));
+  }, [expanded, loaded, clinicId]);
+
+  async function onSave() {
+    if (!senderEmail.trim()) {
+      setError('Sender email is required');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await brevoEmailService.setConfig(
+        clinicId,
+        senderEmail.trim(),
+        apiKeyInput.trim() || null,
+        enabled
+      );
+      if (apiKeyInput.trim()) setHasApiKey(true);
+      setApiKeyInput('');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="mt-4 border-t border-[var(--border)] pt-4">
+      <button
+        type="button"
+        className="text-sm font-medium text-[var(--muted)] hover:text-[var(--ink)]"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {expanded ? '▾' : '▸'} Brevo Email (advanced)
+      </button>
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-[var(--muted)]">
+            Sends proper invitation emails when adding team members with existing accounts.
+            Requires a Brevo account with SMTP API access configured.
+          </p>
+          {!loaded ? (
+            <p className="text-xs text-[var(--muted)]">Loading…</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Enable">
+                  <BoolToggle value={enabled} onChange={setEnabled} />
+                </Field>
+                <Field label="Status">
+                  <span className="text-xs text-[var(--muted)]">
+                    {hasApiKey ? 'Connected ✓' : 'Not connected'}
+                  </span>
+                </Field>
+                <Field label="Sender email">
+                  <input
+                    type="email"
+                    className={inputCls}
+                    placeholder="noreply@yourtherapyclinic.com"
+                    value={senderEmail}
+                    onChange={(e) => setSenderEmail(e.target.value)}
+                  />
+                </Field>
+                <Field label="API key">
+                  <input
+                    type="password"
+                    className={inputCls}
+                    placeholder={
+                      hasApiKey ? '•••• (leave blank to keep the current one)' : 'Brevo SMTP API key'
+                    }
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                  />
+                </Field>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="rounded-full bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--teal-strong)] disabled:opacity-50"
                   onClick={() => void onSave()}
                 >
                   {busy ? 'Saving…' : saved ? 'Saved!' : 'Save'}

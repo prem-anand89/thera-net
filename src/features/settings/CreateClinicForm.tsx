@@ -58,6 +58,24 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         return;
       }
 
+      // create_clinic_with_admin raises 'not signed in' server-side when
+      // auth.uid() is null — which happens if the client's session never
+      // got picked up (most commonly: confirming a brand-new signup's
+      // email lands the session in one browser/tab, then "Create clinic"
+      // is submitted in a different one with no session at all). Checking
+      // here, with a round trip to the server rather than trusting the
+      // locally cached session, catches that before wasting the RPC call
+      // and gives a specific, actionable message instead of the RPC's
+      // generic-looking failure.
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        setError(
+          "You're not signed in — this can happen right after confirming your email in a different browser or tab. Sign out and sign back in, then try again."
+        );
+        setBusy(false);
+        return;
+      }
+
       const { data, error: rpcError } = await supabase.rpc('create_clinic_with_admin', {
         p_name: form.name.trim(),
         p_email: form.email.trim(),
