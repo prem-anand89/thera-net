@@ -109,18 +109,22 @@ export function StatTile({
   label,
   value,
   detail,
+  className = '',
 }: {
   label: string;
   value: ReactNode;
-  /** Secondary line under the number — e.g. visit count or period context. */
+  /** Optional secondary line (reports/print only — workspace strip stays label + value). */
   detail?: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="min-w-[86px] flex-1 basis-[86px] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 shadow-sm">
-      <div className="truncate text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
+    <div
+      className={`min-w-0 flex-1 basis-[86px] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 shadow-sm sm:px-2.5 sm:py-2 ${className}`.trim()}
+    >
+      <div className="line-clamp-2 text-[11px] font-medium leading-snug text-[var(--muted)] sm:line-clamp-1 sm:truncate sm:text-[10px] sm:uppercase sm:tracking-wide">
         {label}
       </div>
-      <div className="font-num mt-0.5 whitespace-nowrap text-lg font-semibold text-[var(--ink)] sm:text-2xl">
+      <div className="font-num mt-0.5 truncate text-base font-semibold tabular-nums text-[var(--ink)] sm:text-xl md:text-2xl">
         {value}
       </div>
       {detail != null && detail !== '' && (

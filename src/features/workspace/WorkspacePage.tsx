@@ -291,12 +291,6 @@ export function WorkspacePage() {
     [clinic.id, calendarMonth.year, calendarMonth.month, scope.myTherapistId]
   );
   const myMonthRow = myMonthReport?.rows.find((r) => r.therapistId === scope.myTherapistId);
-  const myStaleOpenPackages = useMemo(() => {
-    if (!scope.myTherapistId) return 0;
-    return (openPackages ?? []).filter(
-      (p) => p.stale && p.startedByTherapistId === scope.myTherapistId
-    ).length;
-  }, [openPackages, scope.myTherapistId]);
 
   const editPatient = useLiveQuery(
     () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
@@ -454,51 +448,28 @@ export function WorkspacePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <StatTile
-          label="Collected today"
-          value={formatINR(today?.collectedPaise ?? 0)}
-          detail={`${visitsTodayCount} visit${visitsTodayCount === 1 ? '' : 's'} today`}
-        />
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+        <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
         {scope.myTherapistId ? (
           <>
             <StatTile
               label="My net this month"
               value={myMonthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—'}
-              detail="Your attributed net"
             />
             <StatTile
               label="My visits this month"
               value={myMonthReport ? (myMonthRow?.visitCount ?? 0) : '—'}
-              detail="Calendar month"
             />
             <StatTile
               label="My open packages"
               value={openPackages === undefined ? '—' : myOpenPackageCount}
-              detail={
-                myStaleOpenPackages > 0
-                  ? `${myStaleOpenPackages} stale — see Packages below`
-                  : 'Sessions still owed'
-              }
             />
           </>
         ) : (
           <>
-            <StatTile
-              label="Visits today"
-              value={visitsTodayCount}
-              detail="Logged today"
-            />
-            <StatTile
-              label="New patients this month"
-              value={monthlyNew?.newPatients ?? 0}
-              detail="Calendar month"
-            />
-            <StatTile
-              label="Packages this month"
-              value={monthlyNew?.newPackages ?? 0}
-              detail="New packages started"
-            />
+            <StatTile label="Visits today" value={visitsTodayCount} />
+            <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
+            <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
           </>
         )}
       </div>
