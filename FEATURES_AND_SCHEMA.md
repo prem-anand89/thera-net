@@ -32,7 +32,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 #### Today-First Workspace
 - **Default landing page** showing:
   - Today's visits with payment state at a glance (Paid / Collect ₹X / Package / No charge) — boxed cards on phone, a table on tablet/desktop
-  - Packages panel — Open/Stale/All status filter, plus a "Mine only" checkbox for anyone with a linked therapist record (admin included)
+  - Packages panel (bottom of page) — Open / Stale / All filter, plus a "Mine only" checkbox for anyone with a linked therapist record (admin included)
 - **Stat strip** — Collected today, new patients this month, and either "My open packages" (linked therapist) or "Packages this month" (clinic-wide)
 - **Quick actions** — take payment / issue invoice / split revenue / delete directly from each visit row's kebab menu; "Log visit" from a Packages row resumes the right package
 
@@ -369,7 +369,7 @@ queued with a visible error.
 
 #### Therapist Comparison
 - **Opt-in chart** (off by default; admin enables in Settings → Features)
-- **Shows side-by-side**: revenue and visit-count per therapist
+- **Single dual-bar chart** (visits + revenue per therapist, month picker) plus live month table with retention % and new packages
 - **Visible to therapists too**, not just admins — deliberate exception to "financial aggregates are admin-only"
 - **3 key metrics** per therapist
 - **6-month trend charts** need at least 2 months of history to render (otherwise read as a false spike);
@@ -380,7 +380,7 @@ queued with a visible error.
 - Condition pie chart (grouped raw text)
 - Referral source breakdown (doctor/hospital detail-name)
 - Visit count aggregation
-- Revenue trends with period toggle
+- **Revenue trends** (Reports → Trends): period toggle (6m / YTD / FY); **revenue ₹ waterfall** (green up / red down vs prior month); **grouped visits + revenue bars** (dual axis); scrollable **month table** with sticky first column, MoM %, copy-to-clipboard. Therapist scope uses `netPostTaxPaise` per month; clinic-wide uses post-tax or billed total per split settings. Indexed overlay chart removed.
 
 ---
 
@@ -727,11 +727,10 @@ still falls through to the existing share sheet, unchanged.
   adding a new signal. Pure `shareTextViaWhatsApp` actions, no DB write, no
   `message_log` entry, no booking link (public booking is a later phase,
   nothing to link to yet) — same shape as the Google review nudge.
-  - **Stale packages** — a "Send reminder" button on `OpenPackageRow`s
-    where `stale` is already `true`, on both of that data's existing
-    homes: Workspace's Packages section (mobile card + desktop table) and
-    Ledger's "Due for follow-up" list (which is already stale-only, so no
-    extra `stale` check needed there). Gated on `clinic.enablePatientComms`.
+  - **Stale packages** — a "Send reminder" button on `OpenPackageRow`s where
+    `stale` is already `true`, in Workspace's Packages section at the bottom
+    of the page (mobile card + desktop table; Stale filter). Ledger no longer
+    duplicates a separate follow-up list. Gated on `clinic.enablePatientComms`.
   - **Single-visit patients** — a "Send reminder" button next to the
     existing `tel:` call link on Reports' single-visit-patients list
     (`dashboardService.singleVisitPatients`), gated the same way plus
@@ -1149,12 +1148,13 @@ still falls through to the existing share sheet, unchanged.
     needs this specific month-scoped split). Revenue and visit counts each
     carry a "vs last month" delta, the one comparison this session's
     Trends review flagged as missing everywhere else in Reports too.
-  - **Per-therapist breakdown** reuses `reportService.monthly`'s `rows`
-    (already the exact per-therapist Bill/Post-Tax/Net/Visits data
-    `MonthlyReportTable` renders) for two `BarChart`s (revenue, visits)
-    plus the table itself — not `TherapistComparisonCard`, which is
-    hardcoded to "current month, live" and a 6-month trend with no month
-    parameter, the wrong shape for an arbitrary past month.
+  - **Per-therapist breakdown** — `VisitsRevenueTrendChart` (same dual-bar
+    layout as Trends and therapist comparison) for the report month, then
+    `TherapistComparisonTable` (retention % + new packages for that month,
+    via `repeatVisits` / `monthlyNewCounts` scoped to the report period),
+    then `MonthlyReportTable` for full split detail. Workspace's
+    `TherapistComparisonCard` stays "current month, live" with a 6-month
+    picker; this page is keyed to the picker's arbitrary `year`/`month`.
   - **Referral sources & conditions** — two `PieChart`s, computed locally
     from that month's visits/patients rather than reusing
     `dashboardService.referralSourceStats`/`conditionUsage`, both of which
@@ -2796,19 +2796,15 @@ its own narrow in-place edit path instead.
      below that it's just the avatar initials. This one's still
      deliberately conservative rather than measured-and-widened like
      SyncBadge, since the dropdown it opens already repeats the name.
-- **A sticky table cell's background must vary by CSS custom property, not
-  by class.** `VisitCard.tsx`'s Status column (`position: sticky; right:
-  0`) needs its own opaque background so the columns scrolling underneath
-  don't show through — but on Safari, a `bg-[var(--paper)]` /
-  `bg-[var(--surface)]` class that *swaps per row* (alternating stripe)
-  fails to paint on a sticky cell: the first, never-yet-scrolled row
-  renders fine, the rest silently don't. Setting one constant class
-  (`bg-[var(--td-bg)]`) and varying only an inline `--td-bg` custom
-  property per row paints reliably on Safari too, and — unlike setting
-  `backgroundColor` directly inline, which would out-specificity it —
-  still lets `group-hover:bg-[var(--teal-light)]` win on hover, since both
-  stay class-vs-class in the cascade. Any other sticky cell with a
-  per-row-varying background should use the same pattern.
+- **Visit table row backgrounds use one CSS variable on the `<tr>`, applied
+  on every `<td>`.** `VisitCard.tsx` sets `--visit-row-bg` per row and
+  gives each cell the same `bg-[var(--visit-row-bg)]` +
+  `group-hover:bg-[var(--teal-light)]` classes (including the sticky
+  Status column) so stripes and hover stay even — Safari won't reliably
+  paint alternating `bg-[var(--paper)]` / `bg-[var(--surface)]` classes on
+  sticky cells when the class name swaps row to row. Status pills stay the
+  standard rounded `Pill` components; contrast comes from the pill tones,
+  not full-width cell fills.
 - **Sync-freshness caption** (`syncFreshnessCaption` in `syncCopy.ts`) — a
   shared one-liner ("As of last sync HH:MM." / "Includes N unsynced
   visits.") for any screen whose numbers are derived from local Dexie data

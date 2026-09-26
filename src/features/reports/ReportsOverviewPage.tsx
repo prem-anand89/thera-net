@@ -17,7 +17,7 @@ import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from 
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
 import { SectionCard, StatTile, Pill, th, td, tdNum, thNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
-import { IndexedTrendChart } from '@/components/IndexedTrendChart';
+import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { SERIES_COLORS } from '@/components/chartColors';
@@ -234,6 +234,37 @@ export function ReportsOverviewPage() {
       therapistId: scope.myTherapistId ?? 'none',
       therapistName: '',
     };
+
+  const trendRevenuePaise = useMemo(
+    () =>
+      (trend ?? []).map((r) => {
+        if (scope.isClinicWideView) {
+          return partnerSplit ? r.total.postTaxPaise : r.total.billPaise;
+        }
+        const row = r.rows.find((t) => t.therapistId === scope.myTherapistId);
+        return row?.netPostTaxPaise ?? 0;
+      }),
+    [trend, scope.isClinicWideView, scope.myTherapistId, partnerSplit]
+  );
+
+  const trendVisitCounts = useMemo(
+    () =>
+      (trend ?? []).map((r) => {
+        if (scope.isClinicWideView) return r.total.visitCount;
+        const row = r.rows.find((t) => t.therapistId === scope.myTherapistId);
+        return row?.visitCount ?? 0;
+      }),
+    [trend, scope.isClinicWideView, scope.myTherapistId]
+  );
+
+  const trendInProgressIndices = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    return (trend ?? [])
+      .map((r, i) => (r.month.year === y && r.month.month === m ? i : -1))
+      .filter((i) => i >= 0);
+  }, [trend]);
 
   // Revenue and packages-this-month vs last month, from the 6-month trend
   // and monthlyNewCounts pair already being fetched for the chart/other
@@ -728,36 +759,13 @@ export function ReportsOverviewPage() {
               </p>
             )}
             {trend && hasEnoughTrendHistory && (
-              <>
-                <IndexedTrendChart
-                  categories={categories}
-                  barLabel={revenueLabel}
-                  barColor={SERIES_COLORS[0]}
-                  formatBarValue={formatINR}
-                  barValues={
-                    scope.isClinicWideView
-                      ? trend.map((r) => (partnerSplit ? r.total.postTaxPaise : r.total.billPaise))
-                      : trend.map((r) => myMonthRow(r.rows).netPostTaxPaise)
-                  }
-                  lineLabel="Visits"
-                  lineColor={SERIES_COLORS[1]}
-                  lineValues={
-                    scope.isClinicWideView
-                      ? trend.map((r) => r.total.visitCount)
-                      : trend.map((r) => myMonthRow(r.rows).visitCount)
-                  }
-                />
-                <div className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-3 text-xs text-[var(--muted)]">
-                  <span aria-hidden="true">ⓘ</span>
-                  <span>
-                    Both lines are indexed to the first active month = 100, not plotted in
-                    rupees/visits on two different scales. A true dual-axis chart lets you pick the
-                    scales, which can make any two lines look correlated whether or not they are —
-                    indexing keeps the comparison honest while still showing which moved more. Hover
-                    a point for the real rupee/visit figure.
-                  </span>
-                </div>
-              </>
+              <RevenueTrendPanel
+                categories={categories}
+                revenuePaise={trendRevenuePaise}
+                visitCounts={trendVisitCounts}
+                revenueColumnLabel={revenueLabel}
+                currentMonthIndices={trendInProgressIndices}
+              />
             )}
           </SectionCard>
         </div>

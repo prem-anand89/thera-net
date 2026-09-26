@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
@@ -7,9 +7,14 @@ import { useEntitlements } from '@/app/useEntitlements';
 import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { formatINR } from '@/domain/money';
 import { monthName } from '@/domain/fiscalYear';
-import { SectionCard, th, thNum, td, tdNum } from '@/components/ui';
-import { BarChart } from '@/components/BarChart';
+import { SectionCard } from '@/components/ui';
 import { SERIES_COLORS } from '@/components/chartColors';
+import { VisitsRevenueTrendChart } from '@/components/VisitsRevenueTrendChart';
+import { useCompactChart } from '@/components/useCompactChart';
+import {
+  TherapistComparisonTable,
+  type TherapistComparisonRow,
+} from '@/components/TherapistComparisonTable';
 
 /**
  * Revenue and visit-count side by side, one bar series per therapist.
@@ -25,37 +30,16 @@ export function TherapistComparisonCard() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
   const entitlements = useEntitlements(clinic.id);
-  // Clinic/Clinic+ feature (Part 3 of the tier plan) — the clinic-wide
-  // opt-in still applies on top, but a Lite/Solo clinic doesn't get this
-  // regardless of whether the toggle happens to be on.
+  const compact = useCompactChart();
   const showComparison =
     clinic.showTherapistComparison && !scope.isFrontDesk && entitlements.can('revenueSplit');
-  // Post-Tax own share adjusted for same-visit splits and automatic package-session
-  // attribution (reportService's netPostTaxPaise) — genuinely post-tax for a
-  // partner-split clinic, and equal to the plain net bill for a simple one
-  // (postTaxPaise === actualBillPaise there), so the same mode-aware label
-  // ReportsOverviewPage's KPI strip uses applies here too.
   const { partnerSplit } = clinicBillingConfig(clinic);
   const labels = clinicShareLabels(clinic);
-  // A 0% TDS rate still leaves the revenue split itself in place, but with
-  // nothing actually withheld "Post-Tax" is no longer an accurate label —
-  // the clinic's share is just its share, same wording as a non-split
-  // clinic's plain revenue.
-  // For trend views, if partner split is configured, label reflects that
-  // (actual TDS for a given month is checked in the monthly report pages).
   const showPostTax = partnerSplit;
   const revenueLabel = showPostTax ? `Post-Tax ${labels.own}` : 'Revenue generated';
 
   const trend = useLiveQuery(
     () => (showComparison ? dashboardService.revenueTrend(clinic.id) : undefined),
-    [clinic.id, showComparison]
-  );
-  // Packages don't come back keyed by therapist name the way trend's rows
-  // do (openPackages only has startedByTherapistId, a real id) — fetch the
-  // roster once to resolve it, same join every other packages-by-therapist
-  // spot in the app already needs.
-  const openPackages = useLiveQuery(
-    () => (showComparison ? dashboardService.openPackages(clinic.id) : undefined),
     [clinic.id, showComparison]
   );
   const therapists = useLiveQuery(
@@ -74,26 +58,102 @@ export function TherapistComparisonCard() {
     () => [...new Set((trend ?? []).flatMap((r) => r.rows.map((row) => row.therapistName)))].sort(),
     [trend]
   );
-  // A trend line built mostly from months with zero activity (a clinic only
-  // a few weeks old, or a therapist who just joined) reads as a dramatic
-  // spike rather than what it actually is — not enough history yet.
   const hasEnoughTrendHistory = useMemo(
     () => (trend ?? []).filter((r) => r.total.visitCount > 0).length >= 2,
     [trend]
   );
 
-  const nameByTherapistId = new Map((therapists ?? []).map((t) => [t.id, t.name]));
-  const openPackageCountByName = new Map<string, number>();
-  for (const p of openPackages ?? []) {
-    const name = nameByTherapistId.get(p.startedByTherapistId);
-    if (!name) continue;
-    openPackageCountByName.set(name, (openPackageCountByName.get(name) ?? 0) + 1);
-  }
+  const [chartMonthIndex, setChartMonthIndex] = useState(0);
+  useEffect(() => {
+    if (trend?.length) setChartMonthIndex(trend.length - 1);
+  }, [trend?.length]);
 
-  // trend's last entry is always the current calendar month, and useLiveQuery
-  // re-runs it the moment a visit is logged — so this table stays real-time
-  // even while the charts above it are gated behind two months of history.
+  const chartMonth = trend?.[chartMonthIndex];
+  const chartMonthIsInProgress = useMemo(() => {
+    if (!chartMonth) return false;
+    const now = new Date();
+    return chartMonth.month.year === now.getFullYear() && chartMonth.month.month === now.getMonth() + 1;
+  }, [chartMonth]);
+
+  const therapistChartCategories = useMemo(
+    () =>
+      therapistNames.map((name) => (compact && name.length > 10 ? `${name.slice(0, 9)}…` : name)),
+    [therapistNames, compact]
+  );
+
+  const therapistVisitCounts = useMemo(
+    () =>
+      therapistNames.map(
+        (name) => chartMonth?.rows.find((r) => r.therapistName === name)?.visitCount ?? 0
+      ),
+    [therapistNames, chartMonth]
+  );
+
+  const therapistRevenuePaise = useMemo(
+    () =>
+      therapistNames.map(
+        (name) => chartMonth?.rows.find((r) => r.therapistName === name)?.netPostTaxPaise ?? 0
+      ),
+    [therapistNames, chartMonth]
+  );
+
   const currentMonthRow = trend?.[trend.length - 1];
+
+  const therapistLiveStats = useLiveQuery(
+    async () => {
+      if (!showComparison || !currentMonthRow || !therapists?.length) return undefined;
+      const asOf = new Date(currentMonthRow.month.year, currentMonthRow.month.month - 1, 15);
+      return Promise.all(
+        therapists.map(async (t) => {
+          const [rep, counts] = await Promise.all([
+            dashboardService.repeatVisits(clinic.id, currentMonthRow.month, t.id),
+            dashboardService.monthlyNewCounts(clinic.id, asOf, t.id),
+          ]);
+          return {
+            therapistId: t.id,
+            name: t.name,
+            retentionPct: rep.ratePct,
+            newPackages: counts.newPackages,
+          };
+        })
+      );
+    },
+    [clinic.id, showComparison, currentMonthRow?.month.year, currentMonthRow?.month.month, therapists]
+  );
+
+  const statsByName = useMemo(
+    () => new Map((therapistLiveStats ?? []).map((s) => [s.name, s])),
+    [therapistLiveStats]
+  );
+
+  const comparisonRows = useMemo((): TherapistComparisonRow[] => {
+    return therapistNames.map((name) => {
+      const row = currentMonthRow?.rows.find((r) => r.therapistName === name);
+      const live = statsByName.get(name);
+      return {
+        therapistName: name,
+        billPaise: row?.billPaise ?? 0,
+        postTaxPaise: row?.postTaxPaise ?? 0,
+        netPostTaxPaise: row?.netPostTaxPaise ?? 0,
+        visitCount: row?.visitCount ?? 0,
+        retentionPct: live?.retentionPct ?? null,
+        newPackages: live?.newPackages ?? 0,
+      };
+    });
+  }, [therapistNames, currentMonthRow, statsByName]);
+
+  const comparisonTotal = useMemo((): TherapistComparisonRow | undefined => {
+    if (!currentMonthRow) return undefined;
+    return {
+      therapistName: 'Total',
+      billPaise: currentMonthRow.total.billPaise,
+      postTaxPaise: currentMonthRow.total.postTaxPaise,
+      netPostTaxPaise: currentMonthRow.total.netPostTaxPaise,
+      visitCount: currentMonthRow.total.visitCount,
+      retentionPct: null,
+      newPackages: (therapistLiveStats ?? []).reduce((s, t) => s + t.newPackages, 0),
+    };
+  }, [currentMonthRow, therapistLiveStats]);
 
   if (!showComparison) return null;
 
@@ -105,95 +165,61 @@ export function TherapistComparisonCard() {
           reflects this month.
         </p>
       )}
-      {trend && hasEnoughTrendHistory && therapistNames.length > 0 && (
-        <div className="space-y-6">
-          <div>
-            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-              {revenueLabel}
-            </h3>
-            <BarChart
-              categories={categories}
-              series={therapistNames.slice(0, SERIES_COLORS.length).map((name, i) => ({
-                label: name,
-                color: SERIES_COLORS[i],
-                values: trend.map((r) => {
-                  const row = r.rows.find((row) => row.therapistName === name);
-                  return row?.netPostTaxPaise ?? 0;
-                }),
-              }))}
-              formatValue={formatINR}
-            />
-          </div>
-          <div>
-            <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-              Visits
-            </h3>
-            <BarChart
-              categories={categories}
-              series={therapistNames.slice(0, SERIES_COLORS.length).map((name, i) => ({
-                label: name,
-                color: SERIES_COLORS[i],
-                values: trend.map(
-                  (r) => r.rows.find((row) => row.therapistName === name)?.visitCount ?? 0
-                ),
-              }))}
-            />
-          </div>
+      {trend && therapistNames.length > 0 && (
+        <div className="border-t border-[var(--border)] pt-4 first:border-t-0 first:pt-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">By month</p>
+          <h3 className="font-display text-sm font-semibold text-[var(--ink)]">
+            Visits and {revenueLabel.toLowerCase()} per therapist
+          </h3>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            Same layout as the revenue trend chart — orange = visits, blue = revenue (dual scale).
+          </p>
+          {categories.length > 1 && (
+            <div className="mb-3 mt-3 flex gap-1.5 overflow-x-auto pb-1">
+              {categories.map((label, i) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setChartMonthIndex(i)}
+                  className="shrink-0 rounded-full border px-3 py-1 text-xs font-medium"
+                  style={{
+                    background: chartMonthIndex === i ? 'var(--teal-light)' : 'var(--surface)',
+                    borderColor: chartMonthIndex === i ? 'transparent' : 'var(--border)',
+                    color: chartMonthIndex === i ? 'var(--teal)' : 'var(--muted)',
+                  }}
+                >
+                  {label}
+                  {i === categories.length - 1 && chartMonthIsInProgress && i === chartMonthIndex ? ' · live' : ''}
+                </button>
+              ))}
+            </div>
+          )}
+          <VisitsRevenueTrendChart
+            categories={therapistChartCategories}
+            fullCategories={therapistNames}
+            visitCounts={therapistVisitCounts}
+            revenuePaise={therapistRevenuePaise}
+            visitsColor={SERIES_COLORS[1]}
+            revenueColor={SERIES_COLORS[0]}
+            formatRevenue={formatINR}
+            compact={compact}
+            currentMonthIndices={[]}
+          />
         </div>
       )}
-      {trend && hasEnoughTrendHistory && therapistNames.length === 0 && (
+      {trend && therapistNames.length === 0 && (
         <p className="text-sm text-[var(--muted)]">No visits in the last 6 months.</p>
       )}
       {trend && therapistNames.length > 0 && (
-        <div className={hasEnoughTrendHistory ? 'mt-6' : ''}>
-          <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-            This month — live
-          </h3>
-          <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-            <table className="min-w-full divide-y divide-[var(--border)]">
-              <thead className="bg-[var(--paper)]">
-                <tr>
-                  <th className={th}>Therapist</th>
-                  <th className={thNum}>Bill Amount</th>
-                  {showPostTax && <th className={thNum}>Post Tax {labels.own}</th>}
-                  <th className={thNum}>Net</th>
-                  <th className={thNum}>Visits</th>
-                  <th className={thNum}>Open packages</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {therapistNames.map((name) => {
-                  const row = currentMonthRow?.rows.find((r) => r.therapistName === name);
-                  return (
-                    <tr key={name}>
-                      <td className={td}>{name}</td>
-                      <td className={tdNum}>{formatINR(row?.billPaise ?? 0)}</td>
-                      {showPostTax && (
-                        <td className={tdNum}>{formatINR(row?.postTaxPaise ?? 0)}</td>
-                      )}
-                      <td className={tdNum}>{formatINR(row?.netPostTaxPaise ?? 0)}</td>
-                      <td className={tdNum}>{row?.visitCount ?? 0}</td>
-                      <td className={tdNum}>{openPackageCountByName.get(name) ?? 0}</td>
-                    </tr>
-                  );
-                })}
-                {currentMonthRow && (
-                  <tr className="bg-[var(--paper)] font-semibold">
-                    <td className={td}>Total</td>
-                    <td className={tdNum}>{formatINR(currentMonthRow.total.billPaise)}</td>
-                    {showPostTax && (
-                      <td className={tdNum}>{formatINR(currentMonthRow.total.postTaxPaise)}</td>
-                    )}
-                    <td className={tdNum}>{formatINR(currentMonthRow.total.netPostTaxPaise)}</td>
-                    <td className={tdNum}>{currentMonthRow.total.visitCount}</td>
-                    <td className={tdNum}>
-                      {[...openPackageCountByName.values()].reduce((s, n) => s + n, 0)}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+        <div className="mt-6 border-t border-[var(--border)] pt-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">This month</p>
+          <h3 className="font-display text-sm font-semibold text-[var(--ink)]">Live totals</h3>
+          <TherapistComparisonTable
+            rows={comparisonRows}
+            total={comparisonTotal}
+            showPostTax={showPostTax}
+            ownLabel={labels.own}
+          />
         </div>
       )}
     </SectionCard>

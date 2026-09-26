@@ -800,6 +800,8 @@ export function WorkspacePage() {
         )}
       </SectionCard>
 
+      {!scope.isClinicWideView && <TherapistComparisonCard />}
+
       <SectionCard title="Packages">
         <p className="mb-3 text-xs text-[var(--muted)]">
           Every patient on a package — who&rsquo;s still owed sessions, and whose package has gone
@@ -996,13 +998,6 @@ export function WorkspacePage() {
           </>
         )}
       </SectionCard>
-
-      {/* A plain therapist can't reach the Reports nav tab (admin/front_desk
-          only, decision 3) — this is the one financial-aggregate exception
-          they do get (decision 4), so it surfaces here instead. Admin and
-          front_desk see it on Reports instead, not here, so it never shows
-          twice. */}
-      {!scope.isClinicWideView && <TherapistComparisonCard />}
 
       {invoicing && (
         <IssueInvoiceDialog
