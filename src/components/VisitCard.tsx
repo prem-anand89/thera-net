@@ -150,7 +150,7 @@ function PatientNameBlock({
           to="/patients/$patientId"
           params={{ patientId: data.patientId }}
           search={backTo ? { from: backTo } : undefined}
-          className="font-display text-sm font-medium text-[var(--ink)] hover:underline"
+          className="whitespace-nowrap font-display text-sm font-medium text-[var(--ink)] hover:underline"
         >
           {data.patientName}
         </Link>
@@ -1077,7 +1077,10 @@ function VisitTable({
             {rows.map((row, i) => (
               <tr
                 key={row.visitId}
-                className={`group align-top hover:bg-[var(--teal-light)] ${i % 2 === 1 ? 'bg-[var(--paper)]' : ''}`}
+                className="group align-top bg-[var(--td-bg)] hover:bg-[var(--teal-light)]"
+                style={
+                  { '--td-bg': i % 2 === 1 ? 'var(--paper)' : 'var(--surface)' } as CSSProperties
+                }
               >
                 {selection && (
                   <td className={td}>
@@ -1165,29 +1168,31 @@ function VisitTable({
                     case 'treatments':
                       return (
                         <td key={key} className={td}>
-                          {treatmentsDisplayText(row.treatmentNames, row.treatmentNotes)}
+                          <div className="max-w-[200px]">
+                            {treatmentsDisplayText(row.treatmentNames, row.treatmentNotes)}
+                          </div>
                         </td>
                       );
                   }
                 })}
                 <td className={tdNum}>{formatINR(row.billPaise)}</td>
-                {/* The row-stripe background comes from a `--td-bg` custom
-                    property set inline, read by one constant `bg-[var(--td-bg)]`
-                    class — not a class that swaps between `bg-[var(--paper)]`/
-                    `bg-[var(--surface)]` per row. Safari has a known bug
-                    where a `position: sticky` cell's background fails to
-                    paint (correctly on the never-scrolled first row, then
-                    not on the rest) when the class itself differs row to
-                    row; keeping the class identical and varying only the
-                    inline custom property paints reliably, and — unlike
+                {/* The row-stripe background comes from the `--td-bg` custom
+                    property set once on the enclosing `<tr>` above and
+                    inherited here — not a class that swaps between
+                    `bg-[var(--paper)]`/`bg-[var(--surface)]` per row (that
+                    used to be computed a second time on this cell alone,
+                    which could drift out of sync with the row and paint
+                    this column the wrong shade). Safari also has a known
+                    bug where a `position: sticky` cell's background fails
+                    to paint (correctly on the never-scrolled first row,
+                    then not on the rest) when the class itself differs row
+                    to row; keeping the class identical and only inheriting
+                    the custom property paints reliably, and — unlike
                     setting `backgroundColor` directly inline — still lets
-                    `group-hover:bg-[var(--teal-light)]` win on hover,
-                    since both stay class-vs-class in the cascade. */}
+                    `group-hover:bg-[var(--teal-light)]` win on hover, since
+                    both stay class-vs-class in the cascade. */}
                 <td
                   className={`sticky right-0 z-[1] border-l border-[var(--border)] bg-[var(--td-bg)] group-hover:bg-[var(--teal-light)] ${td}`}
-                  style={
-                    { '--td-bg': i % 2 === 1 ? 'var(--paper)' : 'var(--surface)' } as CSSProperties
-                  }
                 >
                   <PaymentStatusDisplay
                     data={row}

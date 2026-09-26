@@ -138,7 +138,7 @@ const PILL_TONES = {
 export function Pill({ tone, children }: { tone: keyof typeof PILL_TONES; children: ReactNode }) {
   return (
     <span
-      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PILL_TONES[tone]}`}
+      className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${PILL_TONES[tone]}`}
     >
       {children}
     </span>

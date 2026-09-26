@@ -745,6 +745,9 @@ export interface Settlement {
   receivedDate: string | null;
   notes: string | null;
   updatedAt: string;
+  /** Auth user who created/last touched this row. Optional: older cached rows lack the key. */
+  createdBy?: UUID | null;
+  updatedBy?: UUID | null;
 }
 
 /**
@@ -765,6 +768,9 @@ export interface SettlementPayment {
   receivedDate: string | null;
   notes: string | null;
   updatedAt: string;
+  /** Auth user who created/last touched this row. Optional: older cached rows lack the key. */
+  createdBy?: UUID | null;
+  updatedBy?: UUID | null;
 }
 
 export type EnrollmentStatus = 'active' | 'completed' | 'discharged';

@@ -76,6 +76,54 @@ function notifyMessageForRelink(email: string, emailed: boolean): string {
     : `${email} was added to this clinic`;
 }
 
+/** Send custom email via Brevo API for team member notifications. */
+async function sendBrevoEmail(
+  serviceClient: ReturnType<typeof createClient>,
+  clinicId: string,
+  toEmail: string,
+  subject: string,
+  htmlContent: string,
+  textContent: string
+): Promise<boolean> {
+  try {
+    const { data: brevoConfig } = await serviceClient
+      .from('clinic_brevo_config')
+      .select('api_key, sender_email')
+      .eq('clinic_id', clinicId)
+      .maybeSingle();
+
+    if (!brevoConfig?.api_key || !brevoConfig?.sender_email) {
+      return false;
+    }
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': brevoConfig.api_key,
+      },
+      body: JSON.stringify({
+        to: [{ email: toEmail }],
+        sender: { email: brevoConfig.sender_email },
+        subject,
+        htmlContent,
+        textContent,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Brevo API error: ${response.status} ${response.statusText}`);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to send Brevo email:', error);
+    return false;
+  }
+}
+
 /** Link a therapist login to an existing unlinked roster row when possible,
  *  otherwise insert a new row. Avoids duplicate roster entries after revoke
  *  + re-invite. */
@@ -468,29 +516,54 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     // Re-linking an existing auth account doesn't trigger inviteUserByEmail —
-    // send a sign-in email so they know they were added to this clinic.
+    // try Brevo first for a proper invitation email; fall back to password
+    // reset email if Brevo isn't configured.
     let relinkEmailed = false;
     if (reLinkedExisting && redirectTo) {
       const { data: existingUserData } =
         await serviceClient.auth.admin.getUserById(newUserId);
-      const { error: notifyError } = await serviceClient.auth.resetPasswordForEmail(email, {
-        redirectTo,
-      });
-      if (notifyError) {
-        console.error(`Could not notify re-linked user ${newUserId}:`, notifyError);
-      } else {
+
+      const clinicNameStr = clinicData?.name ?? 'Thera.Net';
+      const inviterName = memberData?.display_name ?? 'Your clinic admin';
+
+      const brevoSent = await sendBrevoEmail(
+        serviceClient,
+        clinicId,
+        email,
+        `You've been added to ${clinicNameStr}`,
+        `
+          <h2>You've been added to ${clinicNameStr}!</h2>
+          <p>Your account has been added to <strong>${clinicNameStr}</strong> by <strong>${inviterName}</strong>.</p>
+          <p>You can now sign in at: <a href="${redirectTo}">${redirectTo}</a></p>
+          <p style="color: #666; font-size: 12px; margin-top: 20px;">You're receiving this because you were invited to join a clinic on Thera.Net.</p>
+        `,
+        `You've been added to ${clinicNameStr}!\n\nYour account has been added by ${inviterName}.\n\nSign in here: ${redirectTo}`
+      );
+
+      if (brevoSent) {
         relinkEmailed = true;
-        const neverSignedIn = !existingUserData?.user?.last_sign_in_at;
-        await serviceClient.auth.admin.updateUserById(newUserId, {
-          user_metadata: {
-            ...(existingUserData?.user?.user_metadata ?? {}),
-            clinicName: clinicData?.name ?? null,
-            invitedByName: memberData?.display_name ?? null,
-            role,
-            ...(neverSignedIn ? { require_password_setup: true } : {}),
-          },
+      } else {
+        // Fall back to Supabase password reset email if Brevo isn't configured
+        const { error: notifyError } = await serviceClient.auth.resetPasswordForEmail(email, {
+          redirectTo,
         });
+        if (!notifyError) {
+          relinkEmailed = true;
+        } else {
+          console.error(`Could not notify re-linked user ${newUserId}:`, notifyError);
+        }
       }
+
+      const neverSignedIn = !existingUserData?.user?.last_sign_in_at;
+      await serviceClient.auth.admin.updateUserById(newUserId, {
+        user_metadata: {
+          ...(existingUserData?.user?.user_metadata ?? {}),
+          clinicName: clinicData?.name ?? null,
+          invitedByName: memberData?.display_name ?? null,
+          role,
+          ...(neverSignedIn ? { require_password_setup: true } : {}),
+        },
+      });
     }
 
     return json(

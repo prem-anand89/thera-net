@@ -26,6 +26,10 @@ const MESSAGE_PATTERNS: Array<[RegExp, string]> = [
     "You don't have access to this clinic. Try signing out and back in, or ask your admin.",
   ],
   [
+    /^not signed in$/i,
+    "Your session isn't active — this can happen right after confirming your email in a different browser or tab. Sign out and sign back in, then try again.",
+  ],
+  [
     /new row violates row-level security policy/i,
     "You don't have permission to save this change — it may belong to another therapist. Ask your admin if this looks wrong.",
   ],
