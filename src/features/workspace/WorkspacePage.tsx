@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, reportService, feedbackService, bookingService } from '@/services';
@@ -24,7 +24,6 @@ import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appo
 import {
   btnPrimary,
   SectionCard,
-  StatTile,
   Pill,
   PackageThread,
   th,
@@ -57,6 +56,29 @@ type InvoicingTarget = IssueInvoiceTarget;
  * visits — no clinic-wide totals, no other therapist's row — so it can't be
  * used to infer clinic revenue from a therapist login.
  */
+/** A single entry in the Workspace's stat strip — deliberately leaner than
+ *  the shared `StatTile` card (no per-tile border/shadow, smaller type):
+ *  Workspace can show up to five of these at once (three clinic-wide plus
+ *  two "my numbers"), and stacking that many full StatTile cards ate a
+ *  screenful of space above the actual visit list this page exists to
+ *  show. One shared container supplies the border/shadow/dividers instead
+ *  of every tile carrying its own. */
+function WorkspaceStat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="min-w-[92px] flex-1 px-3 py-2 text-center">
+      <div className="truncate text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
+        {label}
+      </div>
+      <div className="font-num mt-0.5 whitespace-nowrap text-sm font-semibold text-[var(--ink)]">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+/** Renders as bare `WorkspaceStat` tiles (no wrapping card of its own) so
+ *  the caller can lay them out in the same strip as the clinic-wide stats
+ *  below instead of a second stacked box. */
 function MyNumbersThisMonth({ clinicId, therapistId }: { clinicId: string; therapistId: string }) {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
@@ -71,13 +93,13 @@ function MyNumbersThisMonth({ clinicId, therapistId }: { clinicId: string; thera
   const mine = report?.rows.find((r) => r.therapistId === therapistId);
 
   return (
-    <div className="grid grid-cols-2 gap-2">
-      <StatTile
+    <>
+      <WorkspaceStat
         label="My net this month"
         value={report ? formatINR(mine?.netPostTaxPaise ?? 0) : '—'}
       />
-      <StatTile label="My visits this month" value={mine?.visitCount ?? 0} />
-    </div>
+      <WorkspaceStat label="My visits this month" value={mine?.visitCount ?? 0} />
+    </>
   );
 }
 
@@ -468,30 +490,36 @@ export function WorkspacePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
-        <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
-        <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
+      {/* One shared card holding every stat tile in a wrapping row, divided
+          by hairlines — not a StatTile-per-card grid (previously two
+          separate bordered/shadowed blocks stacked on top of each other
+          for a therapist login: three clinic-wide tiles, then two "my
+          numbers" tiles below). That ate a screenful of space above the
+          actual visit list Workspace exists to show; one flatter strip
+          fits the same five numbers in roughly a third of the height. */}
+      <div className="flex flex-wrap divide-x divide-y divide-[var(--border)] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+        <WorkspaceStat label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
+        <WorkspaceStat label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
         {scope.myTherapistId ? (
-          <StatTile
+          <WorkspaceStat
             label="My open packages"
             value={openPackages === undefined ? '—' : myOpenPackageCount}
           />
         ) : (
-          <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
+          <WorkspaceStat label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
+        )}
+        {/* A linked therapist's own real-time "how am I doing this month"
+            answer — previously only visible by asking an admin to run the
+            (admin/front_desk-only) Monthly Statement. Own-therapist figures
+            only (Net, visits), never clinic-wide totals, so this doesn't
+            widen the reports access boundary — it's the same
+            netPostTaxPaise reportService.monthly() already computes,
+            filtered to this one row client-side. */}
+        {scope.myTherapistId && (
+          <MyNumbersThisMonth clinicId={clinic.id} therapistId={scope.myTherapistId} />
         )}
       </div>
       {syncCaption && <p className="text-xs text-[var(--slate)]">{syncCaption}</p>}
-
-      {/* A linked therapist's own real-time "how am I doing this month"
-          answer — previously only visible by asking an admin to run the
-          (admin/front_desk-only) Monthly Statement. Own-therapist figures
-          only (Net, visits), never clinic-wide totals, so this doesn't
-          widen the reports access boundary — it's the same
-          netPostTaxPaise reportService.monthly() already computes,
-          filtered to this one row client-side. */}
-      {scope.myTherapistId && (
-        <MyNumbersThisMonth clinicId={clinic.id} therapistId={scope.myTherapistId} />
-      )}
 
       {clinic.enablePatientComms && (
         <SectionCard
