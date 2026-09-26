@@ -27,7 +27,7 @@ This document outlines the architecture and design for integrating clinic-level 
   - **Roster Integration:** Approved leaves are automatically injected into `therapist_schedule_overrides` to block out availability.
 
 ## 3. Payroll & Compensation
-**Goal:** Expand the existing visit-based Revenue Split into a full payroll generator that includes base pay.
+**Goal:** Expand the existing visit-based Revenue Split into a full payroll generator that includes base pay and tracks clinic profitability per therapist.
 
 - **Data Model:**
   - `compensation_config`: `therapist_id`, `base_pay_amount`, `pay_period` (monthly).
@@ -35,13 +35,18 @@ This document outlines the architecture and design for integrating clinic-level 
 - **User Interface:**
   - **Configuration:** Admins set base pay in Settings -> Team -> Therapist Profile.
   - **Payroll Generator:** End-of-month action in the Reports/Team section. System calculates: `Base Salary` (pro-rated for unpaid leaves) + `Revenue Split` (from visits) = `Final Payout`.
+  - **Profitability Metrics (New):** The payroll run also computes the clinic's margin per therapist: 
+    - `Total Generated` (Gross billed amount by therapist)
+    - `Total Paid Out` (Base Salary + Therapist's Revenue Split)
+    - `Net Clinic Profit` (`Total Generated` - `Total Paid Out`)
+    - `Profit Margin %` (`Net Clinic Profit` / `Total Generated`)
   - **Payslips:** System generates a downloadable PDF payslip. Therapists can download their own payslips from their profile.
 
 ## 4. Performance Reviews
-**Goal:** Simple, private check-ins between admins and therapists.
+**Goal:** Private check-ins between admins and therapists, backed by hard performance data.
 
 - **Data Model:**
-  - `performance_reviews`: `therapist_id`, `admin_id`, `review_date`, `rating` (e.g., 1-5 or custom scale), `feedback_notes`.
+  - `performance_reviews`: `therapist_id`, `admin_id`, `review_date`, `period_start`, `period_end`, `rating` (e.g., 1-5 or custom scale), `feedback_notes`, `snapshot_revenue_generated`, `snapshot_clinic_profit`.
 - **User Interface:**
-  - **Admin Form:** Inside Team -> Therapist Profile, admins can create a new review.
+  - **Data-Driven Admin Form:** When creating a review for a specific period (e.g., Q1), the form automatically pulls in the therapist's `Net Clinic Profit` and `Total Revenue Generated` for that time frame. This allows admins to evaluate the clinician directly against their financial impact on the clinic.
   - **Visibility:** Strictly limited to the Admin and the specific Therapist. Visible in a new "Reviews" tab on the Therapist's own profile page.
