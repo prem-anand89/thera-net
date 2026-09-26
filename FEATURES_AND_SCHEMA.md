@@ -33,7 +33,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Default landing page** showing:
   - Today's visits with payment state at a glance (Paid / Collect ₹X / Package / No charge) — boxed cards on phone, a table on tablet/desktop
   - Packages panel (bottom of page) — Open / Stale / All filter, plus a "Mine only" checkbox for anyone with a linked therapist record (admin included)
-- **Stat strip** — Collected today, new patients this month, and either "My open packages" (linked therapist) or "Packages this month" (clinic-wide)
+- **Stat strip** — four tiles with a detail line each: linked therapists see collected today (with visit count), my net/visits this month, and open packages (stale count when any); clinic-wide roles see collected today, visits today, new patients, and packages started this month
 - **Quick actions** — take payment / issue invoice / split revenue / delete directly from each visit row's kebab menu; "Log visit" from a Packages row resumes the right package
 
 #### Ledger & History
