@@ -86,13 +86,11 @@ async function sendBrevoEmail(
   textContent: string
 ): Promise<boolean> {
   try {
-    const { data: brevoConfig } = await serviceClient
-      .from('clinic_brevo_config')
-      .select('api_key, sender_email')
-      .eq('clinic_id', clinicId)
-      .maybeSingle();
+    const apiKey = Deno.env.get('BREVO_API_KEY');
+    const senderEmail = Deno.env.get('BREVO_SENDER_EMAIL');
 
-    if (!brevoConfig?.api_key || !brevoConfig?.sender_email) {
+    if (!apiKey || !senderEmail) {
+      console.warn('BREVO_API_KEY or BREVO_SENDER_EMAIL is not configured in Edge Function secrets.');
       return false;
     }
 
@@ -101,11 +99,11 @@ async function sendBrevoEmail(
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'api-key': brevoConfig.api_key,
+        'api-key': apiKey,
       },
       body: JSON.stringify({
         to: [{ email: toEmail }],
-        sender: { email: brevoConfig.sender_email },
+        sender: { email: senderEmail },
         subject,
         htmlContent,
         textContent,
