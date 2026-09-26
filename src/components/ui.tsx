@@ -105,7 +105,16 @@ export function RupeeInput({
  *  — sized to sit three-plus across even on a phone, not one per row — so a
  *  strip of them reads as a glanceable stat bar instead of eating most of
  *  the screen before any actual content shows. */
-export function StatTile({ label, value }: { label: string; value: ReactNode }) {
+export function StatTile({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: ReactNode;
+  /** Secondary line under the number — e.g. visit count or period context. */
+  detail?: ReactNode;
+}) {
   return (
     <div className="min-w-[86px] flex-1 basis-[86px] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 shadow-sm">
       <div className="truncate text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
@@ -114,6 +123,9 @@ export function StatTile({ label, value }: { label: string; value: ReactNode }) 
       <div className="font-num mt-0.5 whitespace-nowrap text-lg font-semibold text-[var(--ink)] sm:text-2xl">
         {value}
       </div>
+      {detail != null && detail !== '' && (
+        <div className="mt-0.5 text-[11px] font-normal leading-snug text-[var(--muted)]">{detail}</div>
+      )}
     </div>
   );
 }

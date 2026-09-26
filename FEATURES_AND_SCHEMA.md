@@ -1130,15 +1130,13 @@ still falls through to the existing share sheet, unchanged.
     are free text with no format enforced, and a 10-digit local number is
     what staff overwhelmingly type); anything else passes through as-is
     and Meta's own validation is the real backstop.
-- **Monthly performance report** (`/insights?tab=performance` picker →
-  `/insights/performance-print`) — a print-only, one-month "hand this to
-  the team" document, alongside the existing per-therapist Monthly
-  statement rather than replacing it (that one's still the payout-figure
-  source of truth; this one's a review deck). Same admin-only gate
-  (`canViewPayouts`) and print shell (letterhead, `.no-print` button bar,
-  A4 sizing via `@page`) as `MonthlyLedgerPrintPage`, reached the same way
-  (a picker tab with an FY/month select feeding `year`/`month` into the
-  print route's search params).
+- **Trends review print** (`/insights/trends-print?year=&month=`, linked from
+  Reports → Trends as "Print / PDF review") — combines the selected month's
+  KPI snapshot, the 6-month `RevenueTrendPanel`, therapist dual-bar +
+  `TherapistComparisonTable` when comparison is enabled, and live retention
+  lists. `/insights/performance-print` redirects here (the separate
+  Performance report tab is removed). Same admin-only gate (`canViewPayouts`)
+  and A4 print shell as other insights print routes.
   - **Clinic totals** — `reportService.monthly`'s own `.total` row
     (revenue, using the same partner-split-aware `Post-Tax {label}` vs.
     plain "Revenue" label the rest of the app uses), plus new-vs-returning

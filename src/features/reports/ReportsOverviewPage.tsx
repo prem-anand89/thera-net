@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, repos, feedbackService } from '@/services';
-import { CONDITION_TOP_N } from '@/services/dashboardService';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
@@ -15,7 +14,7 @@ import {
 } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
-import { SectionCard, StatTile, Pill, th, td, tdNum, thNum } from '@/components/ui';
+import { SectionCard, StatTile, Pill, th, td, tdNum, thNum, btnSecondary } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
 import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { PieChart } from '@/components/PieChart';
@@ -32,9 +31,7 @@ const DASHBOARD_SECTIONS: { key: string; label: string }[] = [
   { key: 'singleVisit', label: 'Single-visit patients' },
   { key: 'revenue', label: 'Revenue trend' },
   { key: 'therapistComparison', label: 'Therapist comparison' },
-  { key: 'serviceUsage', label: 'Frequently used services' },
   { key: 'modalityUsage', label: 'Treatment modalities' },
-  { key: 'conditionUsage', label: 'Conditions' },
   { key: 'referralSources', label: 'Referral sources' },
 ];
 
@@ -157,24 +154,10 @@ export function ReportsOverviewPage() {
     () => dashboardService.referralSourceStats(clinic.id),
     [clinic.id]
   );
-  const serviceUsage = useLiveQuery(
-    () =>
-      dashboardService.serviceUsage(
-        clinic.id,
-        { year: new Date().getFullYear(), month: new Date().getMonth() + 1 },
-        scope.scopeTherapistId
-      ),
-    [clinic.id, scope.scopeTherapistId]
-  );
   const modalityUsage = useLiveQuery(
     () => (clinic.clinicalDocsEnabled ? dashboardService.modalityUsage(clinic.id) : undefined),
     [clinic.id, clinic.clinicalDocsEnabled]
   );
-  const conditionUsage = useLiveQuery(
-    () => dashboardService.conditionUsage(clinic.id),
-    [clinic.id]
-  );
-
   // KPI strip data — current calendar month, plus one month back for the
   // trend badges. now/prevMonth are recomputed each render (cheap, plain
   // Date math) rather than memoized; only their derived year/month numbers
@@ -375,12 +358,6 @@ export function ReportsOverviewPage() {
     return [...byDetail.entries()].sort((a, b) => b[1].revenuePaise - a[1].revenuePaise);
   }, [referralActive, referralNeedsDetail]);
 
-  // Conditions — unlike referral sources, no default slice: nothing is
-  // selected until clicked, since there's no one "always relevant" answer.
-  const [conditionSelectedIdx, setConditionSelectedIdx] = useState<number | null>(null);
-  const conditionActive =
-    conditionSelectedIdx != null ? conditionUsage?.[conditionSelectedIdx] : undefined;
-
   const [hideClosedReasons, setHideClosedReasons] = useState(false);
   const filteredSingleVisit = useMemo(() => {
     let rows = singleVisitPatients ?? [];
@@ -506,6 +483,16 @@ export function ReportsOverviewPage() {
           value={newPatientsThisMonth?.newPackages ?? '—'}
           lastMonthValue={newPatientsLastMonth ? newPatientsLastMonth.newPackages : undefined}
         />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Link
+          to="/insights/trends-print"
+          search={{ year: now.getFullYear(), month: now.getMonth() + 1 }}
+          className={btnSecondary}
+        >
+          Print / PDF review
+        </Link>
       </div>
 
       {/* Jump-nav — sticky under Shell's own header, same pattern the note
@@ -782,45 +769,6 @@ export function ReportsOverviewPage() {
           </div>
         )}
 
-        <div
-          ref={(el) => {
-            if (el) sectionRefs.current.set('serviceUsage', el);
-            else sectionRefs.current.delete('serviceUsage');
-          }}
-          className="scroll-mt-28 md:scroll-mt-20"
-        >
-          <SectionCard
-            title={
-              scope.isClinicWideView
-                ? 'Frequently used services — this month'
-                : 'My frequently used services — this month'
-            }
-          >
-            <p className="mb-3 text-xs text-[var(--muted)]">
-              Which billable services actually got used this month, most-visited first.
-            </p>
-            {serviceUsage === undefined ? null : serviceUsage.length === 0 ? (
-              <p className="py-6 text-center text-sm text-[var(--muted)]">
-                No visits logged yet this month.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {serviceUsage.slice(0, 5).map((s) => (
-                  <li key={s.serviceId} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-[var(--ink)]">{s.serviceName}</span>
-                    <span className="flex items-center gap-3">
-                      <span className="font-num text-[var(--muted)]">{s.visitCount} visits</span>
-                      <span className="font-num text-[var(--muted)]">
-                        {formatINR(s.totalBilledPaise)}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </SectionCard>
-        </div>
-
         {clinic.clinicalDocsEnabled && (
           <div
             ref={(el) => {
@@ -853,93 +801,6 @@ export function ReportsOverviewPage() {
             </SectionCard>
           </div>
         )}
-
-        <div
-          ref={(el) => {
-            if (el) sectionRefs.current.set('conditionUsage', el);
-            else sectionRefs.current.delete('conditionUsage');
-          }}
-          className="scroll-mt-28 md:scroll-mt-20"
-        >
-          <SectionCard title="Conditions">
-            <p className="mb-4 text-xs text-[var(--muted)]">
-              What you're actually treating, all-time — click a slice for the patient list.
-              Free-text conditions past the top {CONDITION_TOP_N} fold into "Other" rather than
-              fragmenting.
-            </p>
-            {conditionUsage === undefined ? null : conditionUsage.length === 0 ? (
-              <p className="py-6 text-center text-sm text-[var(--muted)]">No visits logged yet.</p>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <PieChart
-                  data={conditionUsage.map((c) => ({ label: c.condition, value: c.count }))}
-                  selectedIndex={conditionSelectedIdx}
-                  onSelect={setConditionSelectedIdx}
-                />
-                {conditionActive ? (
-                  <div>
-                    <div className="mb-2 flex items-baseline justify-between gap-2">
-                      <h3 className="text-sm font-medium text-[var(--ink)]">
-                        {conditionActive.condition}
-                      </h3>
-                      <span className="text-xs text-[var(--muted)]">
-                        {conditionActive.patients.length} patient
-                        {conditionActive.patients.length === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                    {/* Below tab: — boxed rows instead of a 3-column
-                          table too tight for patient name + mrno on a
-                          phone. */}
-                    <div className="tab:hidden max-h-72 space-y-1.5 overflow-y-auto">
-                      {conditionActive.patients.map((p) => (
-                        <div
-                          key={p.patientId}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-                        >
-                          <span className="min-w-0 truncate">
-                            {p.patientName}{' '}
-                            <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                          </span>
-                          <span className="font-num shrink-0 text-xs text-[var(--muted)]">
-                            {p.visitCount} visit{p.visitCount === 1 ? '' : 's'} ·{' '}
-                            {formatINR(p.revenuePaise)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="hidden tab:block max-h-72 overflow-y-auto rounded-lg border border-[var(--border)]">
-                      <table className="min-w-full divide-y divide-[var(--border)]">
-                        <thead className="sticky top-0 bg-[var(--paper)]">
-                          <tr>
-                            <th className={th}>Patient</th>
-                            <th className={thNum}>Visits</th>
-                            <th className={thNum}>Revenue</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--border)]">
-                          {conditionActive.patients.map((p) => (
-                            <tr key={p.patientId}>
-                              <td className={td}>
-                                {p.patientName}{' '}
-                                <span className="text-[var(--muted)]">{p.mrno}</span>
-                              </td>
-                              <td className={tdNum}>{p.visitCount}</td>
-                              <td className={tdNum}>{formatINR(p.revenuePaise)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="flex items-center justify-center py-8 text-center text-sm text-[var(--muted)]">
-                    Click a slice to see who's being treated for it.
-                  </p>
-                )}
-              </div>
-            )}
-          </SectionCard>
-        </div>
 
         <div
           ref={(el) => {

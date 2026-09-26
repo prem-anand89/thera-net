@@ -49,38 +49,6 @@ import { FirstWeekSetupLink } from '@/features/settings/FirstWeekChecklist';
 /** What the invoice-issuance modal needs, independent of which card opened it. */
 type InvoicingTarget = IssueInvoiceTarget;
 
-/**
- * "How am I doing this month" for a linked therapist, computed live from
- * local Dexie (reportService.monthly reads visits/therapists, both synced
- * tables) rather than requiring an admin to open the (admin/front_desk-only)
- * Monthly Statement and read a number back to them. Deliberately just Net +
- * visits — no clinic-wide totals, no other therapist's row — so it can't be
- * used to infer clinic revenue from a therapist login.
- */
-function MyNumbersThisMonth({ clinicId, therapistId }: { clinicId: string; therapistId: string }) {
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth() + 1;
-  const period = useMemo(
-    () => ({ year: currentYear, month: currentMonth }),
-    [currentYear, currentMonth]
-  );
-  const report = useLiveQuery(
-    () => reportService.monthly(clinicId, period),
-    [clinicId, period.year, period.month]
-  );
-  const mine = report?.rows.find((r) => r.therapistId === therapistId);
-
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      <StatTile
-        label="My net this month"
-        value={report ? formatINR(mine?.netPostTaxPaise ?? 0) : '—'}
-      />
-      <StatTile label="My visits this month" value={mine?.visitCount ?? 0} />
-    </div>
-  );
-}
-
 /** A changed hasPartner/bmSplitPct/taxPct/tdsBasis/clinicType (stamped as
  *  clinic.lastSplitChangeAt by SettingsPage) silently moves every
  *  not-yet-invoiced visit's split and, downstream, a therapist's Net figure
@@ -312,6 +280,24 @@ export function WorkspacePage() {
     return rows;
   }, [openPackages, pkgMineOnly, scope.myTherapistId, pkgStatusFilter]);
 
+  const visitsTodayCount = today?.visits.length ?? 0;
+  const now = new Date();
+  const calendarMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
+  const myMonthReport = useLiveQuery(
+    () =>
+      scope.myTherapistId
+        ? reportService.monthly(clinic.id, calendarMonth)
+        : undefined,
+    [clinic.id, calendarMonth.year, calendarMonth.month, scope.myTherapistId]
+  );
+  const myMonthRow = myMonthReport?.rows.find((r) => r.therapistId === scope.myTherapistId);
+  const myStaleOpenPackages = useMemo(() => {
+    if (!scope.myTherapistId) return 0;
+    return (openPackages ?? []).filter(
+      (p) => p.stale && p.startedByTherapistId === scope.myTherapistId
+    ).length;
+  }, [openPackages, scope.myTherapistId]);
+
   const editPatient = useLiveQuery(
     () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
     [editPatientId]
@@ -468,30 +454,55 @@ export function WorkspacePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
-        <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
-        <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <StatTile
+          label="Collected today"
+          value={formatINR(today?.collectedPaise ?? 0)}
+          detail={`${visitsTodayCount} visit${visitsTodayCount === 1 ? '' : 's'} today`}
+        />
         {scope.myTherapistId ? (
-          <StatTile
-            label="My open packages"
-            value={openPackages === undefined ? '—' : myOpenPackageCount}
-          />
+          <>
+            <StatTile
+              label="My net this month"
+              value={myMonthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—'}
+              detail="Your attributed net"
+            />
+            <StatTile
+              label="My visits this month"
+              value={myMonthReport ? (myMonthRow?.visitCount ?? 0) : '—'}
+              detail="Calendar month"
+            />
+            <StatTile
+              label="My open packages"
+              value={openPackages === undefined ? '—' : myOpenPackageCount}
+              detail={
+                myStaleOpenPackages > 0
+                  ? `${myStaleOpenPackages} stale — see Packages below`
+                  : 'Sessions still owed'
+              }
+            />
+          </>
         ) : (
-          <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
+          <>
+            <StatTile
+              label="Visits today"
+              value={visitsTodayCount}
+              detail="Logged today"
+            />
+            <StatTile
+              label="New patients this month"
+              value={monthlyNew?.newPatients ?? 0}
+              detail="Calendar month"
+            />
+            <StatTile
+              label="Packages this month"
+              value={monthlyNew?.newPackages ?? 0}
+              detail="New packages started"
+            />
+          </>
         )}
       </div>
       {syncCaption && <p className="text-xs text-[var(--slate)]">{syncCaption}</p>}
-
-      {/* A linked therapist's own real-time "how am I doing this month"
-          answer — previously only visible by asking an admin to run the
-          (admin/front_desk-only) Monthly Statement. Own-therapist figures
-          only (Net, visits), never clinic-wide totals, so this doesn't
-          widen the reports access boundary — it's the same
-          netPostTaxPaise reportService.monthly() already computes,
-          filtered to this one row client-side. */}
-      {scope.myTherapistId && (
-        <MyNumbersThisMonth clinicId={clinic.id} therapistId={scope.myTherapistId} />
-      )}
 
       {clinic.enablePatientComms && (
         <SectionCard
