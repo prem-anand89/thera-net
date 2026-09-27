@@ -380,7 +380,7 @@ queued with a visible error.
 - Condition pie chart (grouped raw text)
 - Referral source breakdown (doctor/hospital detail-name)
 - Visit count aggregation
-- **Revenue trends** (Reports → Trends): period toggle (6m / YTD / FY); **revenue ₹ waterfall** (green up / red down vs prior month); **grouped visits + revenue bars** (dual axis); scrollable **month table** with sticky first column, MoM %, copy-to-clipboard. Therapist scope uses `netPostTaxPaise` per month; clinic-wide uses post-tax or billed total per split settings. Indexed overlay chart removed.
+- **Revenue trends** (Reports → Trends): unified **trend period** bar (**MoM** | 6m | YTD | FY) on URL (`?period=&year=&month=`) drives the **revenue trend** block and **therapist comparison** together; KPI strip above stays **current calendar month** only. **MoM** picks a focus month and loads that month plus the prior month for waterfall/MoM charts. **revenue ₹ waterfall**; dual visits + revenue bars; scrollable month table. Therapist scope uses `netPostTaxPaise`; clinic-wide uses post-tax or billed total per split settings.
 
 ---
 
@@ -1130,41 +1130,22 @@ still falls through to the existing share sheet, unchanged.
     are free text with no format enforced, and a 10-digit local number is
     what staff overwhelmingly type); anything else passes through as-is
     and Meta's own validation is the real backstop.
-- **Trends review print** (`/insights/trends-print?year=&month=`, linked from
-  Reports → Trends as "Print / PDF review") — combines the selected month's
-  KPI snapshot, the 6-month `RevenueTrendPanel`, therapist dual-bar +
-  `TherapistComparisonTable` when comparison is enabled, and live retention
-  lists. `/insights/performance-print` redirects here (the separate
-  Performance report tab is removed). Same admin-only gate (`canViewPayouts`)
-  and A4 print shell as other insights print routes.
-  - **Clinic totals** — `reportService.monthly`'s own `.total` row
-    (revenue, using the same partner-split-aware `Post-Tax {label}` vs.
-    plain "Revenue" label the rest of the app uses), plus new-vs-returning
-    patient counts computed locally (a patient's own earliest visit across
-    *all* history, not just this month, decides which bucket they're in —
-    deliberately not a `dashboardService` addition, since nowhere else
-    needs this specific month-scoped split). Revenue and visit counts each
-    carry a "vs last month" delta, the one comparison this session's
-    Trends review flagged as missing everywhere else in Reports too.
-  - **Per-therapist breakdown** — `VisitsRevenueTrendChart` (same dual-bar
-    layout as Trends and therapist comparison) for the report month, then
-    `TherapistComparisonTable` (retention % + new packages for that month,
-    via `repeatVisits` / `monthlyNewCounts` scoped to the report period),
-    then `MonthlyReportTable` for full split detail. Workspace's
-    `TherapistComparisonCard` stays "current month, live" with a 6-month
-    picker; this page is keyed to the picker's arbitrary `year`/`month`.
-  - **Referral sources & conditions** — two `PieChart`s, computed locally
-    from that month's visits/patients rather than reusing
-    `dashboardService.referralSourceStats`/`conditionUsage`, both of which
-    are deliberately all-time/unscoped (Trends dashboard's own semantics)
-    and would need a signature change to take a date range — a local
-    month-scoped aggregation here was the smaller, self-contained change.
-  - **Retention follow-ups** — current `dashboardService.singleVisitPatients`
-    and stale `openPackages`, explicitly labeled "as of today, not scoped
-    to `<month>`" rather than filtered to the report's own month: the
-    point of this section is what the team should act on at the review
-    meeting, not a historical record, so it always reflects the live
-    queue regardless of which past month the rest of the report covers.
+- **Trends review print** (`/insights/trends-print?period=&year=&month=`, linked from
+  Reports → Trends as "Print / PDF review") — **internal team review** handout,
+  **not** the official **Monthly statement** (`/insights/print`, per-therapist
+  Bill/BM/TDS/split for hospitals/partners/therapists). Carries the same
+  `period` window as the on-screen trend bar, a focus-month KPI snapshot,
+  `RevenueTrendPanel`, therapist dual-bar + `TherapistComparisonTable` when
+  enabled, and live retention lists. **No** `MonthlyReportTable`, **no**
+  conditions (deferred — free-text condition field would not produce a useful
+  pie). `/insights/performance-print` redirects here. Same admin/front_desk gate
+  as Reports.
+  - **Clinic totals** — `reportService.monthly` for the focus month (revenue +
+    visits vs prior month).
+  - **Per-therapist breakdown** — dual-bar + comparison table for the focus
+    month only (retention % + packages via `repeatVisits` / `monthlyNewCounts`).
+  - **Retention follow-ups** — live `singleVisitPatients` and stale
+    `openPackages`, labeled as-of today, not historical to the focus month.
 - **Trends dashboard's "at a glance" KPI strip gained a Visits card** —
   `ReportsOverviewPage.tsx`'s `KpiCard` strip already had month-over-month
   trend badges on Revenue, Repeat visits, New patients, and Packages

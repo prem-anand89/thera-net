@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, repos, feedbackService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
@@ -8,9 +8,6 @@ import { formatINR } from '@/domain/money';
 import {
   monthName,
   formatDateDMY,
-  fiscalYearOf,
-  monthsOfFiscalYear,
-  type FyMonth,
 } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
@@ -20,6 +17,16 @@ import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { SERIES_COLORS } from '@/components/chartColors';
+import { InsightsTrendPeriodBar } from './InsightsTrendPeriodBar';
+import {
+  buildTrendMonthsInRange,
+  clampFocusMonth,
+  focusMonthIndex,
+  parseFocusMonth,
+  parseInsightsTrendPeriodMode,
+  trendPeriodLabel,
+  type InsightsTrendPeriodMode,
+} from './insightsTrendPeriod';
 
 /** Jump-nav sections, in the order they appear on the page — the "Full page
  *  restructure" this became: a long undifferentiated scroll of 6 cards had
@@ -116,35 +123,69 @@ export function ReportsOverviewPage() {
   // ever read the final two entries, which stay the same regardless of how
   // far back the window extends, so one query serves both the KPI strip and
   // the trend chart below.
-  const [trendPeriod, setTrendPeriod] = useState<'6m' | 'ytd' | 'fy'>('6m');
-  const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
-  const trendMonthsArg = useMemo((): number | FyMonth[] => {
-    if (trendPeriod === 'ytd') {
-      const now = new Date();
-      const months: FyMonth[] = [];
-      for (let m = 1; m <= now.getMonth() + 1; m++)
-        months.push({ year: now.getFullYear(), month: m });
-      return months;
-    }
-    if (trendPeriod === 'fy') {
-      const now = new Date();
-      const nowKey = now.getFullYear() * 12 + now.getMonth() + 1;
-      return monthsOfFiscalYear(currentFy.startYear, clinic.fyStartMonth).filter(
-        (m) => m.year * 12 + m.month <= nowKey
-      );
-    }
-    return 6;
-  }, [trendPeriod, currentFy.startYear, clinic.fyStartMonth]);
-  const trendPeriodLabel =
-    trendPeriod === '6m'
-      ? 'last 6 months'
-      : trendPeriod === 'ytd'
-        ? `YTD ${new Date().getFullYear()}`
-        : `FY ${currentFy.label}`;
+  const navigate = useNavigate({ from: '/insights' });
+  const insightsSearch = useSearch({ from: '/insights' });
+  const trendPeriodMode = parseInsightsTrendPeriodMode(insightsSearch.period ?? '6m');
+  const focusMonthRaw = parseFocusMonth(insightsSearch as Record<string, unknown>);
+  const monthsInRange = useMemo(
+    () =>
+      buildTrendMonthsInRange(trendPeriodMode, {
+        fyStartMonth: clinic.fyStartMonth,
+        momFocus: focusMonthRaw,
+      }),
+    [trendPeriodMode, clinic.fyStartMonth, focusMonthRaw.year, focusMonthRaw.month]
+  );
+  const focusMonth = useMemo(
+    () => clampFocusMonth(focusMonthRaw, monthsInRange),
+    [focusMonthRaw, monthsInRange]
+  );
+  const trendFocusIndex = focusMonthIndex(monthsInRange, focusMonth);
+  const trendPeriodCaption = trendPeriodLabel(trendPeriodMode, {
+    fyStartMonth: clinic.fyStartMonth,
+    momFocus: focusMonth,
+  });
+
+  useEffect(() => {
+    if (insightsSearch.period != null) return;
+    const now = new Date();
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        period: '6m',
+        year: now.getFullYear(),
+        month: now.getMonth() + 1,
+      }),
+      replace: true,
+    });
+  }, [insightsSearch.period, navigate]);
+
+  function updateTrendPeriod(
+    next: Partial<{ period: InsightsTrendPeriodMode; year: number; month: number }>
+  ) {
+    const mode = next.period ?? trendPeriodMode;
+    const momFocus =
+      next.year != null && next.month != null
+        ? { year: next.year, month: next.month }
+        : focusMonth;
+    const range = buildTrendMonthsInRange(mode, {
+      fyStartMonth: clinic.fyStartMonth,
+      momFocus,
+    });
+    const focus = clampFocusMonth(momFocus, range);
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        period: mode,
+        year: focus.year,
+        month: focus.month,
+      }),
+      replace: true,
+    });
+  }
 
   const trend = useLiveQuery(
-    () => dashboardService.revenueTrend(clinic.id, trendMonthsArg),
-    [clinic.id, trendMonthsArg]
+    () => dashboardService.revenueTrend(clinic.id, monthsInRange),
+    [clinic.id, monthsInRange]
   );
   const singleVisitPatients = useLiveQuery(
     () => dashboardService.singleVisitPatients(clinic.id),
@@ -488,7 +529,11 @@ export function ReportsOverviewPage() {
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Link
           to="/insights/trends-print"
-          search={{ year: now.getFullYear(), month: now.getMonth() + 1 }}
+          search={{
+            year: focusMonth.year,
+            month: focusMonth.month,
+            period: trendPeriodMode,
+          }}
           className={btnSecondary}
         >
           Print / PDF review
@@ -708,38 +753,30 @@ export function ReportsOverviewPage() {
             if (el) sectionRefs.current.set('revenue', el);
             else sectionRefs.current.delete('revenue');
           }}
-          className="scroll-mt-28 md:scroll-mt-20"
+          className="scroll-mt-28 md:scroll-mt-20 space-y-4"
         >
+          <InsightsTrendPeriodBar
+            clinic={clinic}
+            mode={trendPeriodMode}
+            onModeChange={(mode) => {
+              const range = buildTrendMonthsInRange(mode, {
+                fyStartMonth: clinic.fyStartMonth,
+                momFocus: focusMonth,
+              });
+              const last = range[range.length - 1];
+              updateTrendPeriod({ period: mode, year: last.year, month: last.month });
+            }}
+            momFocus={focusMonth}
+            onMomFocusChange={(m) => updateTrendPeriod({ period: 'mom', year: m.year, month: m.month })}
+            periodCaption={`Applies to revenue trend and therapist comparison · ${trendPeriodCaption}`}
+          />
           <SectionCard
             title={
               scope.isClinicWideView
-                ? `Revenue trend — ${trendPeriodLabel} (${revenueLabel})`
-                : `My revenue trend — ${trendPeriodLabel} (${revenueLabel})`
+                ? `Revenue trend — ${trendPeriodCaption} (${revenueLabel})`
+                : `My revenue trend — ${trendPeriodCaption} (${revenueLabel})`
             }
           >
-            <div className="mb-3 flex gap-1.5">
-              {(
-                [
-                  { key: '6m', label: '6 months' },
-                  { key: 'ytd', label: 'YTD' },
-                  { key: 'fy', label: `FY ${currentFy.label}` },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => setTrendPeriod(opt.key)}
-                  className="rounded-full border px-3 py-1 text-xs font-medium"
-                  style={{
-                    background: trendPeriod === opt.key ? 'var(--teal-light)' : 'var(--surface)',
-                    borderColor: trendPeriod === opt.key ? 'transparent' : 'var(--border)',
-                    color: trendPeriod === opt.key ? 'var(--teal)' : 'var(--muted)',
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
             {trend && !hasEnoughTrendHistory && (
               <p className="py-8 text-center text-sm text-[var(--muted)]">
                 Not enough data yet — a trend needs at least two months of visits to be meaningful.
@@ -765,7 +802,15 @@ export function ReportsOverviewPage() {
             }}
             className="scroll-mt-28 md:scroll-mt-20"
           >
-            <TherapistComparisonCard />
+            <TherapistComparisonCard
+              controlledTrend
+              trendData={trend}
+              chartMonthIndex={trendFocusIndex}
+              onChartMonthIndexChange={(i) => {
+                const m = monthsInRange[i];
+                if (m) updateTrendPeriod({ year: m.year, month: m.month });
+              }}
+            />
           </div>
         )}
 

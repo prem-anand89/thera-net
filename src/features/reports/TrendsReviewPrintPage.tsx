@@ -16,6 +16,11 @@ import {
   type TherapistComparisonRow,
 } from '@/components/TherapistComparisonTable';
 import { useCompactChart } from '@/components/useCompactChart';
+import {
+  buildTrendMonthsInRange,
+  parseInsightsTrendPeriodMode,
+  trendPeriodLabel,
+} from './insightsTrendPeriod';
 
 function DeltaCaption({ value, suffix }: { value: number | null; suffix: string }) {
   if (value == null) return null;
@@ -37,11 +42,21 @@ function DeltaCaption({ value, suffix }: { value: number | null; suffix: string 
 export function TrendsReviewPrintPage() {
   const clinic = useClinic();
   const compact = useCompactChart();
-  const { year, month } = useSearch({ strict: false }) as { year?: number; month?: number };
-  const period = {
-    year: year ?? new Date().getFullYear(),
-    month: month ?? new Date().getMonth() + 1,
-  };
+  const search = useSearch({ from: '/insights/trends-print' });
+  const period = { year: search.year, month: search.month };
+  const trendPeriodMode = parseInsightsTrendPeriodMode(search.period);
+  const monthsInRange = useMemo(
+    () =>
+      buildTrendMonthsInRange(trendPeriodMode, {
+        fyStartMonth: clinic.fyStartMonth,
+        momFocus: period,
+      }),
+    [trendPeriodMode, clinic.fyStartMonth, period.year, period.month]
+  );
+  const trendPeriodCaption = trendPeriodLabel(trendPeriodMode, {
+    fyStartMonth: clinic.fyStartMonth,
+    momFocus: period,
+  });
   const prevPeriod =
     period.month === 1
       ? { year: period.year - 1, month: 12 }
@@ -61,7 +76,10 @@ export function TrendsReviewPrintPage() {
     [clinic.id, prevPeriod.year, prevPeriod.month]
   );
 
-  const trend = useLiveQuery(() => dashboardService.revenueTrend(clinic.id, 6), [clinic.id]);
+  const trend = useLiveQuery(
+    () => dashboardService.revenueTrend(clinic.id, monthsInRange),
+    [clinic.id, monthsInRange]
+  );
   const singleVisitPatients = useLiveQuery(
     () => dashboardService.singleVisitPatients(clinic.id),
     [clinic.id]
@@ -228,7 +246,9 @@ export function TrendsReviewPrintPage() {
         </section>
 
         <section className="break-inside-avoid">
-          <h2 className="mb-2 text-sm font-bold text-[var(--ink)]">Revenue trend — last 6 months</h2>
+          <h2 className="mb-2 text-sm font-bold text-[var(--ink)]">
+            Revenue trend — {trendPeriodCaption}
+          </h2>
           {trend && !hasEnoughTrendHistory && (
             <p className="text-sm text-[var(--muted)]">Not enough history for trend charts yet.</p>
           )}

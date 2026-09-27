@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, repos } from '@/services';
+import type { MonthlyReport } from '@/services/reportService';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { useEntitlements } from '@/app/useEntitlements';
@@ -26,7 +27,20 @@ import {
  * nothing when the clinic hasn't opted in, or for front_desk, so call
  * sites can drop it in without re-deriving that gate themselves.
  */
-export function TherapistComparisonCard() {
+type TherapistComparisonCardProps = {
+  /** Reports → Trends: parent owns period + `revenueTrend` query. */
+  controlledTrend?: boolean;
+  trendData?: MonthlyReport[];
+  chartMonthIndex?: number;
+  onChartMonthIndexChange?: (index: number) => void;
+};
+
+export function TherapistComparisonCard({
+  controlledTrend = false,
+  trendData,
+  chartMonthIndex: chartMonthIndexProp,
+  onChartMonthIndexChange,
+}: TherapistComparisonCardProps = {}) {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
   const entitlements = useEntitlements(clinic.id);
@@ -38,10 +52,11 @@ export function TherapistComparisonCard() {
   const showPostTax = partnerSplit;
   const revenueLabel = showPostTax ? `Post-Tax ${labels.own}` : 'Revenue generated';
 
-  const trend = useLiveQuery(
-    () => (showComparison ? dashboardService.revenueTrend(clinic.id) : undefined),
-    [clinic.id, showComparison]
+  const trendQuery = useLiveQuery(
+    () => (showComparison && !controlledTrend ? dashboardService.revenueTrend(clinic.id) : undefined),
+    [clinic.id, showComparison, controlledTrend]
   );
+  const trend = controlledTrend ? trendData : (trendData ?? trendQuery);
   const therapists = useLiveQuery(
     () => (showComparison ? repos.therapists.list(clinic.id, true) : undefined),
     [clinic.id, showComparison]
@@ -63,10 +78,13 @@ export function TherapistComparisonCard() {
     [trend]
   );
 
-  const [chartMonthIndex, setChartMonthIndex] = useState(0);
+  const [chartMonthIndexLocal, setChartMonthIndexLocal] = useState(0);
+  const chartMonthIndex = chartMonthIndexProp ?? chartMonthIndexLocal;
+  const setChartMonthIndex = onChartMonthIndexChange ?? setChartMonthIndexLocal;
   useEffect(() => {
-    if (trend?.length) setChartMonthIndex(trend.length - 1);
-  }, [trend?.length]);
+    if (controlledTrend) return;
+    if (trend?.length) setChartMonthIndexLocal(trend.length - 1);
+  }, [trend?.length, controlledTrend]);
 
   const chartMonth = trend?.[chartMonthIndex];
   const chartMonthIsInProgress = useMemo(() => {
@@ -97,16 +115,14 @@ export function TherapistComparisonCard() {
     [therapistNames, chartMonth]
   );
 
-  const currentMonthRow = trend?.[trend.length - 1];
-
   const therapistLiveStats = useLiveQuery(
     async () => {
-      if (!showComparison || !currentMonthRow || !therapists?.length) return undefined;
-      const asOf = new Date(currentMonthRow.month.year, currentMonthRow.month.month - 1, 15);
+      if (!showComparison || !chartMonth || !therapists?.length) return undefined;
+      const asOf = new Date(chartMonth.month.year, chartMonth.month.month - 1, 15);
       return Promise.all(
         therapists.map(async (t) => {
           const [rep, counts] = await Promise.all([
-            dashboardService.repeatVisits(clinic.id, currentMonthRow.month, t.id),
+            dashboardService.repeatVisits(clinic.id, chartMonth.month, t.id),
             dashboardService.monthlyNewCounts(clinic.id, asOf, t.id),
           ]);
           return {
@@ -118,7 +134,7 @@ export function TherapistComparisonCard() {
         })
       );
     },
-    [clinic.id, showComparison, currentMonthRow?.month.year, currentMonthRow?.month.month, therapists]
+    [clinic.id, showComparison, chartMonth?.month.year, chartMonth?.month.month, therapists]
   );
 
   const statsByName = useMemo(
@@ -128,7 +144,7 @@ export function TherapistComparisonCard() {
 
   const comparisonRows = useMemo((): TherapistComparisonRow[] => {
     return therapistNames.map((name) => {
-      const row = currentMonthRow?.rows.find((r) => r.therapistName === name);
+      const row = chartMonth?.rows.find((r) => r.therapistName === name);
       const live = statsByName.get(name);
       return {
         therapistName: name,
@@ -140,20 +156,20 @@ export function TherapistComparisonCard() {
         newPackages: live?.newPackages ?? 0,
       };
     });
-  }, [therapistNames, currentMonthRow, statsByName]);
+  }, [therapistNames, chartMonth, statsByName]);
 
   const comparisonTotal = useMemo((): TherapistComparisonRow | undefined => {
-    if (!currentMonthRow) return undefined;
+    if (!chartMonth) return undefined;
     return {
       therapistName: 'Total',
-      billPaise: currentMonthRow.total.billPaise,
-      postTaxPaise: currentMonthRow.total.postTaxPaise,
-      netPostTaxPaise: currentMonthRow.total.netPostTaxPaise,
-      visitCount: currentMonthRow.total.visitCount,
+      billPaise: chartMonth.total.billPaise,
+      postTaxPaise: chartMonth.total.postTaxPaise,
+      netPostTaxPaise: chartMonth.total.netPostTaxPaise,
+      visitCount: chartMonth.total.visitCount,
       retentionPct: null,
       newPackages: (therapistLiveStats ?? []).reduce((s, t) => s + t.newPackages, 0),
     };
-  }, [currentMonthRow, therapistLiveStats]);
+  }, [chartMonth, therapistLiveStats]);
 
   if (!showComparison) return null;
 
@@ -212,8 +228,12 @@ export function TherapistComparisonCard() {
       )}
       {trend && therapistNames.length > 0 && (
         <div className="mt-6 border-t border-[var(--border)] pt-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">This month</p>
-          <h3 className="font-display text-sm font-semibold text-[var(--ink)]">Live totals</h3>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            {chartMonth
+              ? `${monthName(chartMonth.month.month)} ${chartMonth.month.year}`
+              : 'Selected month'}
+          </p>
+          <h3 className="font-display text-sm font-semibold text-[var(--ink)]">Totals</h3>
           <TherapistComparisonTable
             rows={comparisonRows}
             total={comparisonTotal}
