@@ -70,6 +70,10 @@ export function PatientsPage() {
 
 function AllPatientsSection() {
   const clinic = useClinic();
+  const referringSources = useLiveQuery(
+    () => repos.referringSourceCatalog.list(clinic.id),
+    [clinic.id]
+  ) ?? [];
   const { myTherapistId, isFrontDesk } = useWorkspaceScope();
   const { canBill, isAdmin } = usePermissions();
   // create_appointment_staff (the RPC the "Book" action calls) rejects
@@ -458,6 +462,7 @@ function AllPatientsSection() {
                           )
                       : undefined
                   }
+                  referringSources={referringSources}
                 />
               </div>
             ))}
@@ -481,7 +486,7 @@ function AllPatientsSection() {
                 {rows.map((p) => {
                   const stats = visitStatsByPatient.get(p.id);
                   const billing = billingByPatient.get(p.id);
-                  const referral = patientReferralLine(p, clinic?.referringSourceItems ?? []);
+                  const referral = patientReferralLine(p, referringSources);
                   return (
                     <tr key={p.id} className="hover:bg-[var(--paper)]">
                       <td className={td}>
@@ -738,6 +743,7 @@ function PatientCard({
   /** Omitted when the patient isn't stale (no visits, or last one within
    *  STALE_PACKAGE_DAYS) or has no phone on file — same gating as onBook. */
   onRemind?: () => void;
+  referringSources: ReferringSourceItem[];
 }) {
   const initials = p.name
     .split(/\s+/)
@@ -794,7 +800,7 @@ function PatientCard({
         </KebabMenu>
       </div>
 
-      {(p.phone || p.primaryCondition || therapistLine || patientReferralLine(p, clinic?.referringSourceItems ?? [])) && (
+      {(p.phone || p.primaryCondition || therapistLine || patientReferralLine(p, referringSources)) && (
         <div className="mt-1.5 space-y-1">
           {p.phone && (
             <CardDetailRow label="Phone">
@@ -803,8 +809,8 @@ function PatientCard({
               </a>
             </CardDetailRow>
           )}
-          {patientReferralLine(p, clinic?.referringSourceItems ?? []) && (
-            <CardDetailRow label="Referral">{patientReferralLine(p, clinic?.referringSourceItems ?? [])}</CardDetailRow>
+          {patientReferralLine(p, referringSources) && (
+            <CardDetailRow label="Referral">{patientReferralLine(p, referringSources)}</CardDetailRow>
           )}
           {therapistLine && (
             <CardDetailRow label="Therapist">

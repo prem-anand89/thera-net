@@ -24,6 +24,7 @@ describe('visitsToCsv', () => {
     const csv = visitsToCsv([row()], {
       filterDescription: 'This week (04/05/26–10/05/26), Therapist: All',
       partnerSplit: true,
+      showPostTax: true,
       ownShareLabel: 'BM',
     });
     const lines = csv.split('\n');
@@ -31,8 +32,22 @@ describe('visitsToCsv', () => {
     expect(lines[1]).toBe('"Date","Patient","Patient ID","Therapist","Service","Condition","Bill","BM Share","Post Tax","Invoiced"');
   });
 
+  it('omits Post Tax but keeps Own Share when showPostTax is false (0% TDS)', () => {
+    const csv = visitsToCsv([row()], {
+      filterDescription: 'All time',
+      partnerSplit: true,
+      showPostTax: false,
+      ownShareLabel: 'BM',
+    });
+    const lines = csv.split('\n');
+    expect(lines[1]).toBe('"Date","Patient","Patient ID","Therapist","Service","Condition","Bill","BM Share","Invoiced"');
+    expect(lines[2]).toBe('"04/05/26","Anita Rao","H-100","Prem","Physiotherapy","Back pain","2200","1650","Yes"');
+    // totals line has no post-tax column either
+    expect(lines[lines.length - 1]).toBe('"","","","","","Total (1 visit)","2200","1650",""');
+  });
+
   it('formats a data row with rupee amounts and DD/MM/YY dates', () => {
-    const csv = visitsToCsv([row()], { filterDescription: 'All time', partnerSplit: true, ownShareLabel: 'BM' });
+    const csv = visitsToCsv([row()], { filterDescription: 'All time', partnerSplit: true, showPostTax: true, ownShareLabel: 'BM' });
     const lines = csv.split('\n');
     expect(lines[2]).toBe('"04/05/26","Anita Rao","H-100","Prem","Physiotherapy","Back pain","2200","1650","1485","Yes"');
   });
@@ -47,7 +62,7 @@ describe('visitsToCsv', () => {
   it('ends with a totals line summing bill, share, and post-tax across all rows', () => {
     const csv = visitsToCsv(
       [row({ billPaise: rs(2200), bmSharePaise: rs(1650), postTaxPaise: rs(1485) }), row({ billPaise: rs(800), bmSharePaise: rs(600), postTaxPaise: rs(540) })],
-      { filterDescription: 'All time', partnerSplit: true, ownShareLabel: 'BM' }
+      { filterDescription: 'All time', partnerSplit: true, showPostTax: true, ownShareLabel: 'BM' }
     );
     const lines = csv.split('\n');
     expect(lines[lines.length - 1]).toBe('"","","","","","Total (2 visits)","3000","2250","2025",""');
