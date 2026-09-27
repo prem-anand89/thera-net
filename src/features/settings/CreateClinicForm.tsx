@@ -1,5 +1,7 @@
 import { FormEvent, useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { db } from '@/lib/db';
+import { OnboardingProgress } from '@/features/onboarding/OnboardingProgress';
 import { repos } from '@/services';
 import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
 import type { Clinic } from '@/domain/types';
@@ -31,6 +33,7 @@ interface CreateClinicFormProps {
  * atomically in the same transaction, so there's nothing left to race.
  */
 export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFormProps) {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -44,6 +47,10 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
     e.preventDefault();
     if (!form.name.trim()) {
       setError('Clinic name is required');
+      return;
+    }
+    if (!form.address.trim()) {
+      setError('Clinic address is required for invoices');
       return;
     }
 
@@ -125,6 +132,8 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         tdsBasis: row.tds_basis,
         fyStartMonth: row.fy_start_month,
         enableTherapistSplit: row.enable_therapist_split,
+        onboardingCompletedAt:
+          (row as { onboarding_completed_at?: string | null }).onboarding_completed_at ?? null,
         updatedAt: row.updated_at,
       };
 
@@ -135,7 +144,12 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
       await db.meta.put({ key: 'activeClinicId', value: clinic.id });
 
       setBusy(false);
-      onSuccess();
+      if (variant === 'page') {
+        onSuccess();
+        void navigate({ to: '/onboarding', search: { step: 2 } });
+      } else {
+        onSuccess();
+      }
     } catch (err) {
       console.error('Clinic creation error:', err);
       setError(err instanceof Error ? toFriendlyMessage(err) : 'Failed to create clinic');
@@ -180,18 +194,19 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
           onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
         />
       </Field>
-      <Field label="Address">
+      <Field label="Address *">
         <input
           type="text"
           className={inputCls}
-          placeholder="Clinic address"
+          placeholder="Street, city — shown on invoices"
           value={form.address}
+          required
           onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
         />
       </Field>
       <ErrorNote message={error} />
       <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
-        {busy ? 'Creating clinic…' : 'Create clinic'}
+        {busy ? 'Creating clinic…' : variant === 'page' ? 'Continue' : 'Create clinic'}
       </button>
       {variant === 'page' && (
         <button
@@ -208,11 +223,14 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
   if (variant === 'dialog') return formEl;
 
   return (
-    <div className="mx-auto mt-24 max-w-sm">
+    <div className="mx-auto mt-16 max-w-sm px-4">
+      <OnboardingProgress step={1} />
       <div className="mb-6 flex flex-col items-center gap-2">
         <img src="/apple-touch-icon.png" alt="" className="h-12 w-12 rounded-[12px]" />
         <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Create your clinic</h1>
-        <p className="text-sm text-[var(--muted)]">Get started with Thera.Net</p>
+        <p className="text-center text-sm text-[var(--muted)]">
+          This is what patients see on invoices. Logo and GST can wait until Settings.
+        </p>
       </div>
       {formEl}
     </div>

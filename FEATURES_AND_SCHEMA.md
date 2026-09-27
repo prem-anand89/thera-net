@@ -527,15 +527,43 @@ queued with a visible error.
 - **Walk-in MRNO prefix** (configurable, defaults to 'W')
 
 #### Catalog (Settings → Catalog)
-Single settings section with three sub-tabs — **Billing packages**, **Treatments
+Single settings section with three sub-tabs — **Services & packages**, **Treatments
 performed**, and **Referral sources** — each using the same card + **Edit**
 (Save/Cancel) pattern as Team → Logins. Legacy `?tab=services|treatments|referrals`
 URLs redirect to `?tab=catalog&catalogView=…`.
 
-#### Service Catalog (Billing packages tab)
-- Category and name per item — category is free text (autocompleted from
-  existing categories via a datalist), grouped under category headings
-- Session count (1, 3, 5, etc. for package pricing) — editable after create
+#### Clinic onboarding wizard (new self-service clinics)
+- **Step 1** — Create clinic (`CreateClinicForm`): address required, progress “1 of 3”, then `/onboarding`.
+- **Step 2** — Team: optional self-link on the service roster (“I treat patients”), therapist invite
+  (same `invite-therapist` edge function as Settings).
+- **Optional** — Google-only sign-in: skippable password step (`/onboarding?step=password`) before catalog.
+- **Step 3** — Services: editable starter templates (`STARTER_CATALOG_TEMPLATE` in
+  `onboardingCatalogTemplates.ts`) — same groups/names/session counts as the old RPC seed;
+  admin sets prices and can add groups, singles, and packages before any `service_catalog` rows
+  are written.
+- Completion sets `clinics.onboarding_completed_at`; Shell **blocks all in-app routes** except
+  `/onboarding` (wizard only), `/reset-password`, and public `/f/*` / `/book/*` until then.
+  `create_clinic_with_admin` no longer inserts `service_catalog` rows (other catalog
+  seeds unchanged). Existing clinics are backfilled as already complete.
+- **Catalog draft persistence** — step 3 edits are stored in `localStorage` per clinic until finish
+  (one-time migrate from legacy `sessionStorage` keys); catalog row ids reuse template draft keys so
+  retries are idempotent.
+- **Wizard phase** — `localStorage` tracks `team` → `password` (optional) → `catalog`; deep links
+  cannot skip ahead of the phase reached. `/onboarding` is **admin-only** (non-admins redirect to workspace).
+- **Therapist profile** — `/onboarding/profile` for any login linked to a `therapists.user_id` row:
+  invoice name, registration no., phone. Completion sets `therapists.profile_confirmed_at` (synced).
+  RLS `therapists_update_self` plus trigger `therapists_guard_self_update` limit self-updates to safe
+  columns only.
+
+#### Service Catalog (Services & packages tab)
+- **Service groups** — stored as `category` on each row; UI shows editable group
+  panels (rename rewrites all items in the group). New groups are created by name
+  when adding the first service or package in that group.
+- **Single-session services** (`session_count = 1`) and **packages** (`session_count ≥ 2`)
+  per group — add via **+ Single session** or **+ Package** on the group header; session
+  count and total price on each row (per-session rate derived for packages).
+- Name per item — autocompleted group names via datalist when moving a row between groups
+- Session count — editable after create; 1 = one visit, 2+ = package line on invoices
 - Base price (in paise) — price changes affect future visits only
 - Active toggle (deactivate, not delete)
 - Unique constraint per clinic
@@ -1284,6 +1312,9 @@ visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
 upi_vpa, upi_payee_name, upi_qr_path  text (NULLABLE)
 upi_qr_enabled               boolean (NULLABLE)
 signature_path               text (NULLABLE)
+onboarding_completed_at      timestamptz (NULLABLE) — set when admin finishes
+                             the post–create-clinic wizard; NULL ⇒ Shell keeps
+                             redirecting to `/onboarding`
 created_by, updated_by       uuid (FOREIGN KEY → auth.users.id, NULLABLE)
 updated_at                  timestamptz NOT NULL
 ```
@@ -1311,6 +1342,8 @@ photo_path      text (NULLABLE)
 registration_no text (NULLABLE) — printed on invoices under the therapist's name
 phone           text (NULLABLE) — lets `shareTherapistNotify` use the WhatsApp
                 Business API instead of always falling back to the share sheet
+profile_confirmed_at timestamptz (NULLABLE) — set when linked login finishes
+                `/onboarding/profile`; NULL triggers profile onboarding
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 ```
