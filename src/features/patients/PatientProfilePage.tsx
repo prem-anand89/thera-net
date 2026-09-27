@@ -402,8 +402,14 @@ export function PatientProfilePage() {
     patient.phone,
   ].filter(Boolean);
 
-  const referral = patient.referringSource
-    ? [REFERRING_SOURCE_LABELS[patient.referringSource], patient.referringSourceDetail]
+  const matchedReferralName = patient.referringSourceId
+    ? clinic.referringSourceItems?.find((s) => s.id === patient.referringSourceId)?.name
+    : patient.referringSource
+      ? REFERRING_SOURCE_LABELS[patient.referringSource]
+      : null;
+
+  const referral = matchedReferralName
+    ? [matchedReferralName, patient.referringSourceDetail]
         .filter(Boolean)
         .join(' — ')
     : null;

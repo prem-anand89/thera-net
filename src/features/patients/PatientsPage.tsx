@@ -19,7 +19,7 @@ import {
   formatDateDMY,
   formatDateDM,
 } from '@/domain/fiscalYear';
-import { REFERRING_SOURCE_LABELS, type Patient, type Visit } from '@/domain/types';
+import { REFERRING_SOURCE_LABELS, type Patient, type Visit, type ReferringSourceItem } from '@/domain/types';
 import { isStale } from '@/domain/packageTracking';
 import {
   inputCls,
@@ -42,9 +42,13 @@ import { toFriendlyMessage } from '@/lib/errors';
  *  width. Null when nothing's on file, common for older/walk-in patients
  *  who predate the field. Full detail is still one click away on the
  *  patient's own profile. */
-function patientReferralLine(p: Patient): string | null {
-  if (!p.referringSource) return null;
-  return REFERRING_SOURCE_LABELS[p.referringSource];
+function patientReferralLine(p: Patient, referringSources: ReferringSourceItem[]): string | null {
+  const match = p.referringSourceId
+    ? referringSources.find((s) => s.id === p.referringSourceId)?.name
+    : p.referringSource
+      ? REFERRING_SOURCE_LABELS[p.referringSource]
+      : null;
+  return match ?? null;
 }
 
 type PatientSortKey = 'name' | 'mrno' | 'age' | 'condition' | 'lastVisit';
@@ -477,7 +481,7 @@ function AllPatientsSection() {
                 {rows.map((p) => {
                   const stats = visitStatsByPatient.get(p.id);
                   const billing = billingByPatient.get(p.id);
-                  const referral = patientReferralLine(p);
+                  const referral = patientReferralLine(p, clinic?.referringSourceItems ?? []);
                   return (
                     <tr key={p.id} className="hover:bg-[var(--paper)]">
                       <td className={td}>
@@ -790,7 +794,7 @@ function PatientCard({
         </KebabMenu>
       </div>
 
-      {(p.phone || p.primaryCondition || therapistLine || patientReferralLine(p)) && (
+      {(p.phone || p.primaryCondition || therapistLine || patientReferralLine(p, clinic?.referringSourceItems ?? [])) && (
         <div className="mt-1.5 space-y-1">
           {p.phone && (
             <CardDetailRow label="Phone">
@@ -799,8 +803,8 @@ function PatientCard({
               </a>
             </CardDetailRow>
           )}
-          {patientReferralLine(p) && (
-            <CardDetailRow label="Referral">{patientReferralLine(p)}</CardDetailRow>
+          {patientReferralLine(p, clinic?.referringSourceItems ?? []) && (
+            <CardDetailRow label="Referral">{patientReferralLine(p, clinic?.referringSourceItems ?? [])}</CardDetailRow>
           )}
           {therapistLine && (
             <CardDetailRow label="Therapist">
