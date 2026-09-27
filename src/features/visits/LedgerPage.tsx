@@ -46,6 +46,7 @@ import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { InvoicesPage } from '@/features/invoices/InvoicesPage';
+import { DaybookPage } from './DaybookPage';
 
 const PATIENT_SEARCH_LIMIT = 6;
 
@@ -597,6 +598,7 @@ export function LedgerPage() {
           [
             { key: 'visits', label: 'Visits' },
             { key: 'invoices', label: 'Invoices' },
+            { key: 'daybook', label: 'Daybook' },
           ] as const
         )
           .filter((v) => v.key !== 'invoices' || canBill || entitlementsLoading)
@@ -922,6 +924,7 @@ export function LedgerPage() {
       )}
 
       {recordsView === 'invoices' && <InvoicesPage />}
+      {recordsView === 'daybook' && <DaybookPage />}
 
       {invoicing && (
         <IssueInvoiceDialog

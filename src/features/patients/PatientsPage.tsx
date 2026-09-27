@@ -729,6 +729,7 @@ function PatientCard({
   onHide,
   onBook,
   onRemind,
+  referringSources,
 }: {
   patient: Patient;
   stats: { lastVisitOn: string; visitCount: number; latestVisit: Visit } | undefined;

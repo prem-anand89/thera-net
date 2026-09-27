@@ -1,5 +1,5 @@
-import { useMemo, useState, useSyncExternalStore } from 'react';
-import { Link } from '@tanstack/react-router';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, reportService, feedbackService, bookingService } from '@/services';
 import { db } from '@/lib/db';
@@ -186,7 +186,15 @@ function PackageStatusPill({ pkg }: { pkg: OpenPackageRow }) {
 export function WorkspacePage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
-  const { canBill, canViewClinicalNotes, canEditSettings } = usePermissions();
+  const { role, canBill, canViewClinicalNotes, canEditSettings } = usePermissions();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (role === 'front_desk') {
+      void navigate({ to: '/ledger', search: { tab: 'daybook' } });
+    }
+  }, [role, navigate]);
+
   const { therapistSplit } = clinicBillingConfig(clinic);
   // Patient Communications, Slice 2 — "something arrived" surface per the
   // handoff doc's own question table: admin-only (feedback content is

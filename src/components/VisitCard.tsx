@@ -1,5 +1,7 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
+import { useClinic } from '@/app/clinicContext';
+import { clinicCanShowUpiQr, clinicUpiPayeeName, buildUpiPayUri } from '@/domain/upiPay';
 import {
   VISIT_COLUMN_LABELS,
   VISIT_OPTIONAL_COLUMN_ORDER,
@@ -324,17 +326,51 @@ function RowActionsMenu({
   onInvoice?: () => void;
   canInvoice?: boolean;
 }) {
+  const clinic = useClinic();
   const canIssueInvoice =
     Boolean(canInvoice) &&
     Boolean(onInvoice) &&
     paymentActions(data.paymentState).includes('issue_invoice');
+  const showReminder = canInvoice && paymentActions(data.paymentState).includes('take_payment');
+  
   const hasMenu =
     data.canRepeat ||
     canIssueInvoice ||
+    showReminder ||
     (data.canEdit && onEdit) ||
     (data.canSplit && onSplit) ||
     data.canDelete;
   if (!hasMenu) return null;
+
+  const handleSendReminder = () => {
+    const remainingPaise = data.billPaise - data.collectedPaise;
+    const upiPayUri = clinicCanShowUpiQr(clinic)
+      ? buildUpiPayUri({
+          vpa: clinic.upiVpa ?? '',
+          payeeName: clinicUpiPayeeName(clinic),
+          amountPaise: remainingPaise,
+          note: data.patientName,
+        })
+      : null;
+
+    let text = `Hi ${data.patientName},\n\nThis is a reminder from ${clinic.name} regarding your pending bill for your visit on ${formatDateDM(data.visitDate)} of ${formatINR(remainingPaise)}.`;
+    
+    if (upiPayUri) {
+      text += `\n\nYou can pay directly via UPI using this link:\n${upiPayUri}`;
+    }
+
+    const phone = data.patientPhone;
+    if (!phone) {
+      alert('Patient has no phone number on file');
+      return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const waPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    
+    const url = `https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
 
   return (
     <KebabMenu>
@@ -360,6 +396,18 @@ function RowActionsMenu({
               }}
             >
               Issue invoice
+            </button>
+          )}
+          {showReminder && (
+            <button
+              type="button"
+              className={menuItem}
+              onClick={() => {
+                close();
+                handleSendReminder();
+              }}
+            >
+              Send WhatsApp reminder
             </button>
           )}
           {data.canEdit && onEdit && (

@@ -4,8 +4,20 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, paymentService, dashboardService, feedbackService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
-import { formatDateDM } from '@/domain/fiscalYear';
+import { formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
 import { type Invoice } from '@/domain/types';
+
+const toIsoDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+type DatePreset = 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
+const DATE_PRESETS: { key: DatePreset; label: string }[] = [
+  { key: 'week', label: 'This week' },
+  { key: 'month', label: 'This month' },
+  { key: 'lastMonth', label: 'Last month' },
+  { key: 'all', label: 'All time' },
+  { key: 'custom', label: 'Custom range…' },
+];
 import { buildUpiPayUri, clinicCanShowUpiQr, clinicUpiPayeeName } from '@/domain/upiPay';
 import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
@@ -45,6 +57,31 @@ export function InvoicesPage() {
   const [takingPayment, setTakingPayment] = useState<Invoice | null>(null);
   const [remindingId, setRemindingId] = useState<string | null>(null);
 
+  const initialWeek = currentWeekRange();
+  const [from, setFrom] = useState(toIsoDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
+  const [to, setTo] = useState(toIsoDate(new Date()));
+  const [datePreset, setDatePreset] = useState<DatePreset>('month');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'outstanding'>('all');
+
+  function applyDatePreset(preset: DatePreset) {
+    setDatePreset(preset);
+    const now = new Date();
+    if (preset === 'week') {
+      const { from: weekFrom, to: weekTo } = currentWeekRange(now);
+      setFrom(weekFrom);
+      setTo(weekTo);
+    } else if (preset === 'month') {
+      setFrom(toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)));
+      setTo(toIsoDate(now));
+    } else if (preset === 'lastMonth') {
+      setFrom(toIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
+      setTo(toIsoDate(new Date(now.getFullYear(), now.getMonth(), 0)));
+    } else if (preset === 'all') {
+      setFrom('');
+      setTo('');
+    }
+  }
+
   const sort = useSort<InvoiceSortKey>('date', 'desc');
 
   const statusByInvoiceId = useMemo(
@@ -83,30 +120,34 @@ export function InvoicesPage() {
   );
 
   async function remindToPay(inv: Invoice, remainingPaise: number) {
-    setRemindingId(inv.id);
-    try {
-      const patientId = patientIdByInvoiceId.get(inv.id);
-      const phone = patientId ? (phoneByPatientId.get(patientId) ?? null) : null;
-      const upiPayUri = clinicCanShowUpiQr(clinic)
-        ? buildUpiPayUri({
-            vpa: clinic.upiVpa ?? '',
-            payeeName: clinicUpiPayeeName(clinic),
-            amountPaise: remainingPaise,
-            note: inv.invoiceNo,
-          })
-        : null;
-      await feedbackService.sendPaymentReminder(
-        clinic.id,
-        inv.patientSnapshot.name,
-        phone,
-        clinic.name,
-        inv.invoiceNo,
-        formatINR(remainingPaise),
-        upiPayUri
-      );
-    } finally {
-      setRemindingId(null);
+    const patientId = patientIdByInvoiceId.get(inv.id);
+    const phone = patientId ? (phoneByPatientId.get(patientId) ?? null) : null;
+    
+    if (!phone) {
+      setError('Patient has no phone number on file');
+      return;
     }
+
+    const upiPayUri = clinicCanShowUpiQr(clinic)
+      ? buildUpiPayUri({
+          vpa: clinic.upiVpa ?? '',
+          payeeName: clinicUpiPayeeName(clinic),
+          amountPaise: remainingPaise,
+          note: inv.invoiceNo,
+        })
+      : null;
+
+    let text = `Hi ${inv.patientSnapshot.name},\n\nThis is a reminder from ${clinic.name} regarding your pending bill (${inv.invoiceNo}) of ${formatINR(remainingPaise)}.`;
+    
+    if (upiPayUri) {
+      text += `\n\nYou can pay directly via UPI using this link:\n${upiPayUri}`;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const waPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    
+    const url = `https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
   }
 
   function balanceFor(inv: Invoice): { paidPaise: number; remainingPaise: number } {
@@ -116,15 +157,30 @@ export function InvoicesPage() {
     return { paidPaise, remainingPaise: Math.max(0, inv.totalPaise - paidPaise) };
   }
 
+  const filteredInvoices = useMemo(() => {
+    let filtered = invoices ?? [];
+    if (from) filtered = filtered.filter((i) => i.issuedAt.slice(0, 10) >= from);
+    if (to) filtered = filtered.filter((i) => i.issuedAt.slice(0, 10) <= to);
+    if (statusFilter === 'outstanding') {
+      filtered = filtered.filter((i) => {
+        const status = statusByInvoiceId.get(i.id) ?? 'paid';
+        if (status === 'paid') return false;
+        const paidPaise = paidByInvoiceId.get(i.id) ?? 0;
+        return i.totalPaise > paidPaise;
+      });
+    }
+    return filtered;
+  }, [invoices, from, to, statusFilter, statusByInvoiceId, paidByInvoiceId]);
+
   const sortedInvoices = useMemo(
-    () => applySort(invoices ?? [], INVOICE_COMPARATORS, sort),
-    [invoices, sort]
+    () => applySort(filteredInvoices, INVOICE_COMPARATORS, sort),
+    [filteredInvoices, sort]
   );
 
   const { totalOutstanding, totalCollected } = useMemo(() => {
     let outstanding = 0;
     let collected = 0;
-    for (const inv of invoices ?? []) {
+    for (const inv of filteredInvoices) {
       const status = statusByInvoiceId.get(inv.id) ?? 'paid';
       if (status === 'paid') {
         collected += inv.totalPaise;
@@ -135,7 +191,7 @@ export function InvoicesPage() {
       }
     }
     return { totalOutstanding: outstanding, totalCollected: collected };
-  }, [invoices, statusByInvoiceId, paidByInvoiceId]);
+  }, [filteredInvoices, statusByInvoiceId, paidByInvoiceId]);
 
   async function toggleInvoiceStatus(invoiceId: string, currentStatus: string) {
     setError(null);
@@ -152,6 +208,62 @@ export function InvoicesPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 text-sm overflow-x-auto hide-scrollbar">
+            {DATE_PRESETS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                className={`whitespace-nowrap rounded px-3 py-1 transition-colors ${
+                  datePreset === p.key ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+                }`}
+                onClick={() => applyDatePreset(p.key)}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {datePreset === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm"
+              />
+              <span className="text-[var(--muted)]">to</span>
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm"
+              />
+            </div>
+          )}
+        </div>
+        <div className="flex rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 text-sm">
+          <button
+            type="button"
+            className={`rounded px-3 py-1 transition-colors ${
+              statusFilter === 'all' ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+            }`}
+            onClick={() => setStatusFilter('all')}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            className={`rounded px-3 py-1 transition-colors ${
+              statusFilter === 'outstanding' ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+            }`}
+            onClick={() => setStatusFilter('outstanding')}
+          >
+            Outstanding
+          </button>
+        </div>
+      </div>
+
       <div className="flex flex-wrap gap-3">
         <div className="flex-1 min-w-64 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Total Collected</div>
@@ -328,14 +440,13 @@ export function InvoicesPage() {
                           Record payment
                         </button>
                       )}
-                      {status === 'outstanding' && clinic.enablePatientComms && (
+                      {status === 'outstanding' && (
                         <button
                           type="button"
                           className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={remindingId === inv.id}
                           onClick={() => void remindToPay(inv, remainingPaise)}
                         >
-                          {remindingId === inv.id ? 'Sending…' : 'Remind to pay'}
+                          Send WhatsApp reminder
                         </button>
                       )}
                       <button
@@ -422,14 +533,13 @@ export function InvoicesPage() {
                             Record payment
                           </button>
                         )}
-                        {status === 'outstanding' && clinic.enablePatientComms && (
+                        {status === 'outstanding' && (
                           <button
                             type="button"
                             className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => void remindToPay(inv, remainingPaise)}
-                            disabled={remindingId === inv.id}
                           >
-                            {remindingId === inv.id ? 'Sending…' : 'Remind to pay'}
+                            Send WhatsApp reminder
                           </button>
                         )}
                         <button

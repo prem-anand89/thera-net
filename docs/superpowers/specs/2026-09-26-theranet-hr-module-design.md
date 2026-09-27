@@ -50,3 +50,23 @@ This document outlines the architecture and design for integrating clinic-level 
 - **User Interface:**
   - **Data-Driven Admin Form:** When creating a review for a specific period (e.g., Q1), the form automatically pulls in the therapist's `Net Clinic Profit` and `Total Revenue Generated` for that time frame. This allows admins to evaluate the clinician directly against their financial impact on the clinic.
   - **Visibility:** Strictly limited to the Admin and the specific Therapist. Visible in a new "Reviews" tab on the Therapist's own profile page.
+
+## 5. Expense Tracking & Reimbursements
+**Goal:** Allow therapists to easily claim work-related expenses and get reimbursed through payroll.
+
+- **Data Model:**
+  - `expense_claims`: `therapist_id`, `amount`, `category` (e.g., Supplies, Travel), `date_incurred`, `receipt_url` (Supabase Storage), `status` (pending, approved, rejected, paid).
+- **User Interface:**
+  - **Therapist Flow:** A simple "Submit Expense" form in the Workspace where they upload a photo of the receipt and enter the amount.
+  - **Admin Approval:** A queue in the Team tab where admins review and approve/reject claims.
+  - **Payroll Integration:** Approved but unpaid expenses are automatically bundled as an "Additions" line item on the next generated Payslip.
+
+## 6. Incentive Management
+**Goal:** Motivate therapists with ad-hoc bonuses or performance-based incentives that seamlessly hit their payslip.
+
+- **Data Model:**
+  - `incentive_rules` (Optional future phase): Rules for automated bonuses (e.g., `target_type`: 'visit_count', `target_value`: 100, `bonus_amount`: 5000).
+  - `payroll_adjustments`: `payroll_run_id`, `therapist_id`, `amount`, `type` (Bonus, Deduction, Commission), `description`.
+- **User Interface:**
+  - **Manual Bonuses (Phase 1):** When the Admin runs the end-of-month Payroll Generator, the UI includes an "Add Bonus/Incentive" button for each therapist. Admins can manually type in a bonus amount (e.g., "Hit target revenue: ₹5000") before finalizing the payslip.
+  - **Automated Incentives (Phase 2):** During payroll generation, the system checks `incentive_rules`. If a therapist crossed a threshold (e.g., > 80 visits this month), it automatically injects the bonus line item into the payroll preview for admin approval.
