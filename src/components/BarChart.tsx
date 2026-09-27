@@ -44,6 +44,23 @@ function niceMax(v: number): number {
   return step * base;
 }
 
+/** Cap bar width and center the plot when there are few categories (e.g. one
+ *  therapist on Monthly Performance, or 1–2 months on a trend). Without
+ *  this, `plotW / categories.length` stretches a single bar across the card. */
+function barLayout(plotW: number, categoryCount: number, seriesCount: number) {
+  const barGap = 3;
+  const maxBarW = seriesCount === 1 ? 40 : 28;
+  const stretchedGroupW = plotW / categoryCount;
+  const barW = Math.min(
+    maxBarW,
+    Math.max(6, (stretchedGroupW - barGap * (seriesCount + 1)) / seriesCount)
+  );
+  const groupW = barW * seriesCount + barGap * (seriesCount + 1);
+  const chartW = groupW * categoryCount;
+  const offsetX = (plotW - chartW) / 2;
+  return { barGap, barW, groupW, offsetX };
+}
+
 export function BarChart({
   categories,
   series,
@@ -77,9 +94,7 @@ export function BarChart({
   const baseline = padding.top + plotH;
 
   const max = niceMax(Math.max(1, ...series.flatMap((s) => s.values)));
-  const groupW = plotW / categories.length;
-  const barGap = 3;
-  const barW = (groupW - barGap * (series.length + 1)) / series.length;
+  const { barGap, barW, groupW, offsetX } = barLayout(plotW, categories.length, series.length);
 
   const gridlines = [1, 2, 3, 4].map((i) => ({
     value: (max * i) / 4,
@@ -114,7 +129,7 @@ export function BarChart({
           <line x1={padding.left} y1={baseline} x2={padding.left + plotW} y2={baseline} stroke="#e2e8f0" strokeWidth={1} />
 
           {categories.map((cat, ci) => {
-            const groupX = padding.left + ci * groupW;
+            const groupX = padding.left + offsetX + ci * groupW;
             return (
               <g key={cat}>
                 {series.map((s, si) => {
