@@ -215,6 +215,8 @@ export interface Therapist {
    *  Business API when configured; falls back to the share sheet when
    *  absent (see bookingService.shareTherapistNotify). */
   phone?: string | null;
+  /** Set when the linked login completes roster profile onboarding (invoice name, etc.). */
+  profileConfirmedAt?: string | null;
   updatedAt: string;
 }
 

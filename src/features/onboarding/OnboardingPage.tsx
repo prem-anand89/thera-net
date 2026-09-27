@@ -6,7 +6,11 @@ import { repos } from '@/services';
 import { syncEngine } from '@/sync/engine';
 import { toFriendlyMessage } from '@/lib/errors';
 import { btnPrimary, ErrorNote } from '@/components/ui';
-import { hasPasswordIdentity } from '@/domain/onboarding';
+import {
+  clampOnboardingStep,
+  hasPasswordIdentity,
+  type OnboardingWizardStep,
+} from '@/domain/onboarding';
 import { OnboardingProgress } from './OnboardingProgress';
 import { OnboardingTeamStep } from './OnboardingTeamStep';
 import { OnboardingPasswordStep } from './OnboardingPasswordStep';
@@ -18,14 +22,16 @@ import {
 } from '@/domain/onboardingCatalogTemplates';
 import type { CatalogItem } from '@/domain/types';
 import {
-  clearCatalogDrafts,
+  clearOnboardingWizardStorage,
   isPasswordNudgeSkipped,
   loadCatalogDrafts,
   markPasswordNudgeSkipped,
   saveCatalogDrafts,
+  setOnboardingWizardPhase,
+  getOnboardingWizardPhase,
 } from './onboardingDraftStorage';
 
-export type OnboardingWizardStep = 2 | 3 | 'password';
+export type { OnboardingWizardStep };
 
 export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
   const clinic = useClinic();
@@ -37,11 +43,21 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
   const [finishBusy, setFinishBusy] = useState(false);
   const [finishError, setFinishError] = useState<string | null>(null);
 
+  const phase = getOnboardingWizardPhase(clinic.id);
+  const clampedStep = clampOnboardingStep(step, phase);
+
+  useEffect(() => {
+    if (clampedStep !== step) {
+      void navigate({ to: '/onboarding', search: { step: clampedStep }, replace: true });
+    }
+  }, [clampedStep, step, navigate]);
+
   useEffect(() => {
     saveCatalogDrafts(clinic.id, catalogDrafts);
   }, [clinic.id, catalogDrafts]);
 
   function goToCatalogStep() {
+    setOnboardingWizardPhase(clinic.id, 'catalog');
     void navigate({ to: '/onboarding', search: { step: 3 } });
   }
 
@@ -51,6 +67,7 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
       !hasPasswordIdentity(session.user.identities) &&
       !isPasswordNudgeSkipped(clinic.id);
     if (needsPassword) {
+      setOnboardingWizardPhase(clinic.id, 'password');
       void navigate({ to: '/onboarding', search: { step: 'password' } });
     } else {
       goToCatalogStep();
@@ -71,7 +88,7 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
       );
       for (const d of toSave) {
         const item: CatalogItem = {
-          id: crypto.randomUUID(),
+          id: d.key,
           clinicId: clinic.id,
           category: d.group.trim(),
           name: d.name.trim(),
@@ -87,23 +104,25 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
         onboardingCompletedAt: now,
         updatedAt: now,
       });
-      clearCatalogDrafts(clinic.id);
+      clearOnboardingWizardStorage(clinic.id);
       void syncEngine.schedule(0);
       void navigate({ to: '/workspace' });
     } catch (e) {
-      setFinishError(toFriendlyMessage(e));
+      setFinishError(
+        `${toFriendlyMessage(e)} If this mentions a missing column, apply the latest Supabase migrations first.`
+      );
     } finally {
       setFinishBusy(false);
     }
   }
 
-  const progressStep = step === 3 ? 3 : 2;
+  const progressStep = clampedStep === 3 ? 3 : 2;
 
   return (
     <div className="mx-auto max-w-lg">
-      {step !== 'password' && <OnboardingProgress step={progressStep} />}
-      {step === 2 && <OnboardingTeamStep onContinue={goAfterTeamStep} />}
-      {step === 'password' && (
+      {clampedStep !== 'password' && <OnboardingProgress step={progressStep} />}
+      {clampedStep === 2 && <OnboardingTeamStep onContinue={goAfterTeamStep} />}
+      {clampedStep === 'password' && (
         <OnboardingPasswordStep
           onSkip={() => {
             markPasswordNudgeSkipped(clinic.id);
@@ -112,7 +131,7 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
           onDone={goToCatalogStep}
         />
       )}
-      {step === 3 && (
+      {clampedStep === 3 && (
         <div className="space-y-4">
           <div>
             <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Services you bill for</h1>
@@ -134,7 +153,10 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
           <button
             type="button"
             className="text-sm font-semibold text-[var(--teal)]"
-            onClick={() => void navigate({ to: '/onboarding', search: { step: 2 } })}
+            onClick={() => {
+              setOnboardingWizardPhase(clinic.id, 'team');
+              void navigate({ to: '/onboarding', search: { step: 2 } });
+            }}
           >
             ← Back to team
           </button>

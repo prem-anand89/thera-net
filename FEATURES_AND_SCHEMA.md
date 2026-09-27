@@ -541,14 +541,18 @@ URLs redirect to `?tab=catalog&catalogView=…`.
   `onboardingCatalogTemplates.ts`) — same groups/names/session counts as the old RPC seed;
   admin sets prices and can add groups, singles, and packages before any `service_catalog` rows
   are written.
-- Completion sets `clinics.onboarding_completed_at`; Shell redirects admins back to `/onboarding`
-  until then. `create_clinic_with_admin` no longer inserts `service_catalog` rows (other catalog
+- Completion sets `clinics.onboarding_completed_at`; Shell **blocks all in-app routes** except
+  `/onboarding` (wizard only), `/reset-password`, and public `/f/*` / `/book/*` until then.
+  `create_clinic_with_admin` no longer inserts `service_catalog` rows (other catalog
   seeds unchanged). Existing clinics are backfilled as already complete.
-- **Catalog draft persistence** — step 3 edits are stored in `sessionStorage` per clinic until finish.
-- **Therapist profile** — `/onboarding/profile` for any login linked to a `therapists.user_id` row
-  (invited therapist or admin who linked themselves): invoice name, registration no., phone.
-  Completion is tracked in Dexie `meta` per clinic+user. RLS policy `therapists_update_self` allows
-  linked therapists to update their own roster row.
+- **Catalog draft persistence** — step 3 edits are stored in `sessionStorage` per clinic until finish;
+  catalog row ids reuse template draft keys so retries are idempotent.
+- **Wizard phase** — `sessionStorage` tracks `team` → `password` (optional) → `catalog`; deep links
+  cannot skip ahead of the phase reached.
+- **Therapist profile** — `/onboarding/profile` for any login linked to a `therapists.user_id` row:
+  invoice name, registration no., phone. Completion sets `therapists.profile_confirmed_at` (synced).
+  RLS `therapists_update_self` plus trigger `therapists_guard_self_update` limit self-updates to safe
+  columns only.
 
 #### Service Catalog (Services & packages tab)
 - **Service groups** — stored as `category` on each row; UI shows editable group
@@ -1337,6 +1341,8 @@ photo_path      text (NULLABLE)
 registration_no text (NULLABLE) — printed on invoices under the therapist's name
 phone           text (NULLABLE) — lets `shareTherapistNotify` use the WhatsApp
                 Business API instead of always falling back to the share sheet
+profile_confirmed_at timestamptz (NULLABLE) — set when linked login finishes
+                `/onboarding/profile`; NULL triggers profile onboarding
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 ```

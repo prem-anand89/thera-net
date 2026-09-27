@@ -49,7 +49,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
       setError('Clinic name is required');
       return;
     }
-    if (variant === 'page' && !form.address.trim()) {
+    if (!form.address.trim()) {
       setError('Clinic address is required for invoices');
       return;
     }
@@ -194,13 +194,13 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
           onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
         />
       </Field>
-      <Field label={variant === 'page' ? 'Address *' : 'Address'}>
+      <Field label="Address *">
         <input
           type="text"
           className={inputCls}
           placeholder="Street, city — shown on invoices"
           value={form.address}
-          required={variant === 'page'}
+          required
           onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
         />
       </Field>

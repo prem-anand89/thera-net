@@ -4,8 +4,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
 import { repos } from '@/services';
-import { db } from '@/lib/db';
-import { therapistProfileOnboardingMetaKey } from '@/domain/onboarding';
 import { toFriendlyMessage } from '@/lib/errors';
 import { Field, inputCls, btnPrimary, ErrorNote } from '@/components/ui';
 
@@ -42,16 +40,14 @@ export function TherapistProfileOnboardingPage() {
     setBusy(true);
     setError(null);
     try {
+      const now = new Date().toISOString();
       await repos.therapists.put({
         ...therapist,
         name: name.trim(),
         registrationNo: registrationNo.trim() || null,
         phone: phone.trim() || null,
-        updatedAt: new Date().toISOString(),
-      });
-      await db.meta.put({
-        key: therapistProfileOnboardingMetaKey(clinic.id, userId),
-        value: '1',
+        profileConfirmedAt: now,
+        updatedAt: now,
       });
       void navigate({ to: '/workspace' });
     } catch (e) {
