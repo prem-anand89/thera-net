@@ -85,6 +85,9 @@ const MorePage = lazy(() =>
 const ResetPasswordPage = lazy(() =>
   import('@/features/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage }))
 );
+const OnboardingRoute = lazy(() =>
+  import('@/features/onboarding/OnboardingRoute').then((m) => ({ default: m.OnboardingRoute }))
+);
 const FeedbackFormPage = lazy(() =>
   import('@/features/publicFeedback/FeedbackFormPage').then((m) => ({
     default: m.FeedbackFormPage,
@@ -494,6 +497,14 @@ const resetPasswordRoute = createRoute({
   component: ResetPasswordPage,
 });
 
+const onboardingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/onboarding',
+  validateSearch: (search: Record<string, unknown>): { step: 2 | 3 } =>
+    search.step === 3 || search.step === '3' ? { step: 3 } : { step: 2 },
+  component: OnboardingRoute,
+});
+
 // Public, unauthenticated patient feedback link — see Shell.tsx's early
 // bypass for this path (renders before the session/clinic gating below).
 const feedbackFormRoute = createRoute({
@@ -541,6 +552,7 @@ const routeTree = rootRoute.addChildren([
   insightsRoute,
   moreRoute,
   resetPasswordRoute,
+  onboardingRoute,
   feedbackFormRoute,
   bookingFormRoute,
 ]);

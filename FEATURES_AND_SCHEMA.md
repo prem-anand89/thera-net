@@ -532,6 +532,17 @@ performed**, and **Referral sources** — each using the same card + **Edit**
 (Save/Cancel) pattern as Team → Logins. Legacy `?tab=services|treatments|referrals`
 URLs redirect to `?tab=catalog&catalogView=…`.
 
+#### Clinic onboarding wizard (new self-service clinics)
+- **Step 1** — Create clinic (`CreateClinicForm`): address required, progress “1 of 3”, then `/onboarding`.
+- **Step 2** — Team: optional therapist invite (same `invite-therapist` edge function as Settings).
+- **Step 3** — Services: editable starter templates (`STARTER_CATALOG_TEMPLATE` in
+  `onboardingCatalogTemplates.ts`) — same groups/names/session counts as the old RPC seed;
+  admin sets prices and can add groups, singles, and packages before any `service_catalog` rows
+  are written.
+- Completion sets `clinics.onboarding_completed_at`; Shell redirects admins back to `/onboarding`
+  until then. `create_clinic_with_admin` no longer inserts `service_catalog` rows (other catalog
+  seeds unchanged). Existing clinics are backfilled as already complete.
+
 #### Service Catalog (Services & packages tab)
 - **Service groups** — stored as `category` on each row; UI shows editable group
   panels (rename rewrites all items in the group). New groups are created by name
@@ -1289,6 +1300,9 @@ visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
 upi_vpa, upi_payee_name, upi_qr_path  text (NULLABLE)
 upi_qr_enabled               boolean (NULLABLE)
 signature_path               text (NULLABLE)
+onboarding_completed_at      timestamptz (NULLABLE) — set when admin finishes
+                             the post–create-clinic wizard; NULL ⇒ Shell keeps
+                             redirecting to `/onboarding`
 created_by, updated_by       uuid (FOREIGN KEY → auth.users.id, NULLABLE)
 updated_at                  timestamptz NOT NULL
 ```

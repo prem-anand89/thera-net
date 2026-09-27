@@ -23,6 +23,7 @@ import { SyncBadge, SyncStatusBanners } from '@/components/SyncBadge';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { AddClinicDialog } from '@/components/AddClinicDialog';
 import type { Clinic } from '@/domain/types';
+import { clinicNeedsOnboarding } from '@/domain/onboarding';
 import { useFirstWeekChecklistSummary } from '@/features/settings/FirstWeekChecklist';
 
 /** Minimal stroke icons, one per main nav item — same visual language as
@@ -308,6 +309,21 @@ export function Shell() {
       void navigate({ to: '/reset-password' });
     }
   }, [session, pathname, navigate]);
+
+  // New-clinic admins finish team + catalog on /onboarding before the rest of the app.
+  useEffect(() => {
+    if (!clinic || role !== 'admin') return;
+    if (pathname === '/reset-password') return;
+    if (clinicNeedsOnboarding(clinic)) {
+      if (pathname !== '/onboarding') {
+        void navigate({ to: '/onboarding', search: { step: 2 } });
+      }
+      return;
+    }
+    if (pathname === '/onboarding') {
+      void navigate({ to: '/workspace' });
+    }
+  }, [clinic, role, pathname, navigate]);
 
   // The recovery link's own auth flow doesn't need session/clinic gating —
   // it may be opened by someone whose local session has expired, and it
