@@ -553,6 +553,7 @@ export function LedgerPage() {
     const csv = visitsToCsv(rows, {
       filterDescription,
       partnerSplit,
+      showPostTax: partnerSplit && (clinic.taxPct ?? 0) > 0,
       ownShareLabel: clinicShareLabels(clinic).own,
     });
     const blob = new Blob([csv], { type: 'text/csv' });
