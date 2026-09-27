@@ -5,9 +5,51 @@ const CATALOG_KEY = (clinicId: string) => `onboardingCatalogDraft:v1:${clinicId}
 const PASSWORD_SKIP_KEY = (clinicId: string) => `onboardingPasswordSkipped:v1:${clinicId}`;
 const PHASE_KEY = (clinicId: string) => `onboardingWizardPhase:v1:${clinicId}`;
 
+function wizardKey(clinicId: string, keyFn: (id: string) => string): string {
+  return keyFn(clinicId);
+}
+
+/** Prefer localStorage (survives tab close); one-time migrate from sessionStorage. */
+function readWizardItem(clinicId: string, keyFn: (id: string) => string): string | null {
+  const key = wizardKey(clinicId, keyFn);
+  try {
+    const fromLocal = localStorage.getItem(key);
+    if (fromLocal != null) return fromLocal;
+    const fromSession = sessionStorage.getItem(key);
+    if (fromSession != null) {
+      localStorage.setItem(key, fromSession);
+      sessionStorage.removeItem(key);
+      return fromSession;
+    }
+  } catch {
+    /* private mode / quota */
+  }
+  return null;
+}
+
+function writeWizardItem(clinicId: string, keyFn: (id: string) => string, value: string) {
+  const key = wizardKey(clinicId, keyFn);
+  try {
+    localStorage.setItem(key, value);
+    sessionStorage.removeItem(key);
+  } catch {
+    /* quota / private mode — wizard still works for this session in memory */
+  }
+}
+
+function removeWizardItem(clinicId: string, keyFn: (id: string) => string) {
+  const key = wizardKey(clinicId, keyFn);
+  try {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function loadCatalogDrafts(clinicId: string): CatalogTemplateDraft[] | null {
   try {
-    const raw = sessionStorage.getItem(CATALOG_KEY(clinicId));
+    const raw = readWizardItem(clinicId, CATALOG_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CatalogTemplateDraft[];
     return Array.isArray(parsed) ? parsed : null;
@@ -18,52 +60,32 @@ export function loadCatalogDrafts(clinicId: string): CatalogTemplateDraft[] | nu
 
 export function saveCatalogDrafts(clinicId: string, drafts: CatalogTemplateDraft[]) {
   try {
-    sessionStorage.setItem(CATALOG_KEY(clinicId), JSON.stringify(drafts));
+    writeWizardItem(clinicId, CATALOG_KEY, JSON.stringify(drafts));
   } catch {
-    /* quota / private mode — wizard still works for this session */
+    /* quota / private mode */
   }
 }
 
 export function clearOnboardingWizardStorage(clinicId: string) {
-  try {
-    sessionStorage.removeItem(CATALOG_KEY(clinicId));
-    sessionStorage.removeItem(PASSWORD_SKIP_KEY(clinicId));
-    sessionStorage.removeItem(PHASE_KEY(clinicId));
-  } catch {
-    /* ignore */
-  }
+  removeWizardItem(clinicId, CATALOG_KEY);
+  removeWizardItem(clinicId, PASSWORD_SKIP_KEY);
+  removeWizardItem(clinicId, PHASE_KEY);
 }
 
 export function isPasswordNudgeSkipped(clinicId: string): boolean {
-  try {
-    return sessionStorage.getItem(PASSWORD_SKIP_KEY(clinicId)) === '1';
-  } catch {
-    return false;
-  }
+  return readWizardItem(clinicId, PASSWORD_SKIP_KEY) === '1';
 }
 
 export function markPasswordNudgeSkipped(clinicId: string) {
-  try {
-    sessionStorage.setItem(PASSWORD_SKIP_KEY(clinicId), '1');
-  } catch {
-    /* ignore */
-  }
+  writeWizardItem(clinicId, PASSWORD_SKIP_KEY, '1');
 }
 
 export function getOnboardingWizardPhase(clinicId: string): OnboardingWizardPhase {
-  try {
-    const raw = sessionStorage.getItem(PHASE_KEY(clinicId));
-    if (raw === 'password' || raw === 'catalog') return raw;
-    return 'team';
-  } catch {
-    return 'team';
-  }
+  const raw = readWizardItem(clinicId, PHASE_KEY);
+  if (raw === 'password' || raw === 'catalog') return raw;
+  return 'team';
 }
 
 export function setOnboardingWizardPhase(clinicId: string, phase: OnboardingWizardPhase) {
-  try {
-    sessionStorage.setItem(PHASE_KEY(clinicId), phase);
-  } catch {
-    /* ignore */
-  }
+  writeWizardItem(clinicId, PHASE_KEY, phase);
 }

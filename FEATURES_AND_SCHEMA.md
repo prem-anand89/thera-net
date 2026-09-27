@@ -545,10 +545,11 @@ URLs redirect to `?tab=catalog&catalogView=…`.
   `/onboarding` (wizard only), `/reset-password`, and public `/f/*` / `/book/*` until then.
   `create_clinic_with_admin` no longer inserts `service_catalog` rows (other catalog
   seeds unchanged). Existing clinics are backfilled as already complete.
-- **Catalog draft persistence** — step 3 edits are stored in `sessionStorage` per clinic until finish;
-  catalog row ids reuse template draft keys so retries are idempotent.
-- **Wizard phase** — `sessionStorage` tracks `team` → `password` (optional) → `catalog`; deep links
-  cannot skip ahead of the phase reached.
+- **Catalog draft persistence** — step 3 edits are stored in `localStorage` per clinic until finish
+  (one-time migrate from legacy `sessionStorage` keys); catalog row ids reuse template draft keys so
+  retries are idempotent.
+- **Wizard phase** — `localStorage` tracks `team` → `password` (optional) → `catalog`; deep links
+  cannot skip ahead of the phase reached. `/onboarding` is **admin-only** (non-admins redirect to workspace).
 - **Therapist profile** — `/onboarding/profile` for any login linked to a `therapists.user_id` row:
   invoice name, registration no., phone. Completion sets `therapists.profile_confirmed_at` (synced).
   RLS `therapists_update_self` plus trigger `therapists_guard_self_update` limit self-updates to safe

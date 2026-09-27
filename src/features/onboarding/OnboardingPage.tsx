@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useClinic } from '@/app/clinicContext';
+import { useClinicRole } from '@/app/useClinicRole';
 import { useSession } from '@/app/useSession';
 import { repos } from '@/services';
 import { syncEngine } from '@/sync/engine';
@@ -35,6 +36,7 @@ export type { OnboardingWizardStep };
 
 export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
   const clinic = useClinic();
+  const { role, loading: roleLoading } = useClinicRole(clinic.id);
   const { session } = useSession();
   const navigate = useNavigate();
   const [catalogDrafts, setCatalogDrafts] = useState<CatalogTemplateDraft[]>(() =>
@@ -45,6 +47,13 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
 
   const phase = getOnboardingWizardPhase(clinic.id);
   const clampedStep = clampOnboardingStep(step, phase);
+
+  useEffect(() => {
+    if (roleLoading) return;
+    if (role !== 'admin') {
+      void navigate({ to: '/workspace', replace: true });
+    }
+  }, [role, roleLoading, navigate]);
 
   useEffect(() => {
     if (clampedStep !== step) {
@@ -117,6 +126,10 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
   }
 
   const progressStep = clampedStep === 3 ? 3 : 2;
+
+  if (roleLoading || role !== 'admin') {
+    return <p className="text-sm text-[var(--muted)]">Loading…</p>;
+  }
 
   return (
     <div className="mx-auto max-w-lg">

@@ -237,7 +237,9 @@ export function Shell() {
   // down. useClinicRole takes a clinicId directly instead. Nav filtering
   // (not RLS) is display-only, same caveat as everywhere else this role
   // value is read; the real boundary is the settings tables' RLS policies.
-  const { role, displayName, setDisplayName } = useClinicRole(clinic?.id ?? '');
+  const { role, displayName, setDisplayName, loading: roleLoading } = useClinicRole(
+    clinic?.id ?? ''
+  );
   const therapists = useLiveQuery(
     () => (clinic ? repos.therapists.list(clinic.id) : []),
     [clinic?.id]
@@ -318,6 +320,14 @@ export function Shell() {
       void navigate({ to: '/reset-password' });
     }
   }, [session, pathname, navigate]);
+
+  // Clinic setup wizard is admin-only (RLS would block writes; redirect avoids confusion).
+  useEffect(() => {
+    if (pathname !== '/onboarding' || !clinic || roleLoading) return;
+    if (role !== 'admin') {
+      void navigate({ to: '/workspace' });
+    }
+  }, [clinic, role, roleLoading, pathname, navigate]);
 
   // New-clinic admins must finish /onboarding before any other in-app route.
   useEffect(() => {

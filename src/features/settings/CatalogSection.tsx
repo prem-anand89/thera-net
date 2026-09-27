@@ -197,7 +197,7 @@ function ServiceCatalog() {
       {groups.length > 0 ? (
         <div className="mb-6 space-y-4">
           {groups.map(([category, catItems]) => (
-            <ServiceGroupPanel key={category} category={category} items={catItems} groupNames={groupNames} />
+            <ServiceGroupPanel key={category} category={category} items={catItems} />
           ))}
         </div>
       ) : (
@@ -227,15 +227,7 @@ function SessionKindPill({ sessionCount }: { sessionCount: number }) {
   );
 }
 
-function ServiceGroupPanel({
-  category,
-  items,
-  groupNames,
-}: {
-  category: string;
-  items: CatalogItem[];
-  groupNames: string[];
-}) {
+function ServiceGroupPanel({ category, items }: { category: string; items: CatalogItem[] }) {
   const [editingGroupName, setEditingGroupName] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(category);
   const [groupRenameBusy, setGroupRenameBusy] = useState(false);
@@ -245,6 +237,10 @@ function ServiceGroupPanel({
   useEffect(() => {
     if (!editingGroupName) setGroupNameDraft(category);
   }, [category, editingGroupName]);
+
+  useEffect(() => {
+    setAddKind(null);
+  }, [category]);
 
   async function saveGroupRename() {
     const trimmed = groupNameDraft.trim();
@@ -265,6 +261,7 @@ function ServiceGroupPanel({
         await repos.catalog.put({ ...item, category: trimmed, updatedAt: now });
       }
       setEditingGroupName(false);
+      setAddKind(null);
     } catch (e) {
       setGroupError(toFriendlyMessage(e));
     } finally {
@@ -341,7 +338,7 @@ function ServiceGroupPanel({
       </div>
       <div className="divide-y divide-[var(--border)]">
         {items.map((item) => (
-          <ServiceCatalogItemRow key={item.id} item={item} groupNames={groupNames} />
+          <ServiceCatalogItemRow key={item.id} item={item} />
         ))}
       </div>
       {addKind && (
@@ -358,7 +355,7 @@ function ServiceGroupPanel({
   );
 }
 
-function ServiceCatalogItemRow({ item }: { item: CatalogItem; groupNames: string[] }) {
+function ServiceCatalogItemRow({ item }: { item: CatalogItem }) {
   const [editing, setEditing] = useState(false);
   const [category, setCategory] = useState(item.category);
   const [name, setName] = useState(item.name);
