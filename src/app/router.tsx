@@ -88,6 +88,11 @@ const ResetPasswordPage = lazy(() =>
 const OnboardingRoute = lazy(() =>
   import('@/features/onboarding/OnboardingRoute').then((m) => ({ default: m.OnboardingRoute }))
 );
+const TherapistProfileOnboardingPage = lazy(() =>
+  import('@/features/onboarding/TherapistProfileOnboardingPage').then((m) => ({
+    default: m.TherapistProfileOnboardingPage,
+  }))
+);
 const FeedbackFormPage = lazy(() =>
   import('@/features/publicFeedback/FeedbackFormPage').then((m) => ({
     default: m.FeedbackFormPage,
@@ -500,9 +505,20 @@ const resetPasswordRoute = createRoute({
 const onboardingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/onboarding',
-  validateSearch: (search: Record<string, unknown>): { step: 2 | 3 } =>
-    search.step === 3 || search.step === '3' ? { step: 3 } : { step: 2 },
+  validateSearch: (
+    search: Record<string, unknown>
+  ): { step: 2 | 3 | 'password' } => {
+    if (search.step === 3 || search.step === '3') return { step: 3 };
+    if (search.step === 'password') return { step: 'password' };
+    return { step: 2 };
+  },
   component: OnboardingRoute,
+});
+
+const onboardingProfileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/onboarding/profile',
+  component: TherapistProfileOnboardingPage,
 });
 
 // Public, unauthenticated patient feedback link — see Shell.tsx's early
@@ -553,6 +569,7 @@ const routeTree = rootRoute.addChildren([
   moreRoute,
   resetPasswordRoute,
   onboardingRoute,
+  onboardingProfileRoute,
   feedbackFormRoute,
   bookingFormRoute,
 ]);

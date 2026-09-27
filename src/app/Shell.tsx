@@ -23,8 +23,9 @@ import { SyncBadge, SyncStatusBanners } from '@/components/SyncBadge';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { AddClinicDialog } from '@/components/AddClinicDialog';
 import type { Clinic } from '@/domain/types';
-import { clinicNeedsOnboarding } from '@/domain/onboarding';
+import { clinicNeedsOnboarding, therapistProfileOnboardingMetaKey } from '@/domain/onboarding';
 import { useFirstWeekChecklistSummary } from '@/features/settings/FirstWeekChecklist';
+import { repos } from '@/services';
 
 /** Minimal stroke icons, one per main nav item — same visual language as
  *  the existing hamburger/close glyphs (currentColor, ~1.6px stroke,
@@ -233,6 +234,15 @@ export function Shell() {
   // (not RLS) is display-only, same caveat as everywhere else this role
   // value is read; the real boundary is the settings tables' RLS policies.
   const { role, displayName, setDisplayName } = useClinicRole(clinic?.id ?? '');
+  const therapists = useLiveQuery(
+    () => (clinic ? repos.therapists.list(clinic.id) : []),
+    [clinic?.id]
+  );
+  const therapistProfileDone = useLiveQuery(async () => {
+    if (!clinic || !session?.user?.id) return undefined;
+    const row = await db.meta.get(therapistProfileOnboardingMetaKey(clinic.id, session.user.id));
+    return row?.value === '1';
+  }, [clinic?.id, session?.user?.id]);
   // Local-part of the email, not the full address — the account area used
   // to show the raw email everywhere; this is the fallback for anyone who
   // hasn't set a display name yet, not a full replacement for a real name.
@@ -313,7 +323,7 @@ export function Shell() {
   // New-clinic admins finish team + catalog on /onboarding before the rest of the app.
   useEffect(() => {
     if (!clinic || role !== 'admin') return;
-    if (pathname === '/reset-password') return;
+    if (pathname === '/reset-password' || pathname === '/onboarding/profile') return;
     if (clinicNeedsOnboarding(clinic)) {
       if (pathname !== '/onboarding') {
         void navigate({ to: '/onboarding', search: { step: 2 } });
@@ -324,6 +334,18 @@ export function Shell() {
       void navigate({ to: '/workspace' });
     }
   }, [clinic, role, pathname, navigate]);
+
+  // Linked roster members confirm invoice name / registration no. once per device.
+  useEffect(() => {
+    if (!clinic || !session?.user?.id || pathname === '/reset-password') return;
+    if (role === 'admin' && clinicNeedsOnboarding(clinic)) return;
+    if (therapists === undefined || therapistProfileDone === undefined) return;
+    const linked = therapists.some((t) => t.userId === session.user.id);
+    if (!linked || therapistProfileDone) return;
+    if (pathname !== '/onboarding/profile') {
+      void navigate({ to: '/onboarding/profile' });
+    }
+  }, [clinic, session, therapists, therapistProfileDone, pathname, navigate, role]);
 
   // The recovery link's own auth flow doesn't need session/clinic gating —
   // it may be opened by someone whose local session has expired, and it

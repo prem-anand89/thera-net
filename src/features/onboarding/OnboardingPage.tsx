@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useClinic } from '@/app/clinicContext';
+import { useSession } from '@/app/useSession';
 import { repos } from '@/services';
 import { syncEngine } from '@/sync/engine';
 import { toFriendlyMessage } from '@/lib/errors';
 import { btnPrimary, ErrorNote } from '@/components/ui';
+import { hasPasswordIdentity } from '@/domain/onboarding';
 import { OnboardingProgress } from './OnboardingProgress';
 import { OnboardingTeamStep } from './OnboardingTeamStep';
+import { OnboardingPasswordStep } from './OnboardingPasswordStep';
 import { ServiceCatalogTemplateEditor } from './ServiceCatalogTemplateEditor';
 import {
   catalogDraftsReadyToSave,
@@ -14,13 +17,45 @@ import {
   type CatalogTemplateDraft,
 } from '@/domain/onboardingCatalogTemplates';
 import type { CatalogItem } from '@/domain/types';
+import {
+  clearCatalogDrafts,
+  isPasswordNudgeSkipped,
+  loadCatalogDrafts,
+  markPasswordNudgeSkipped,
+  saveCatalogDrafts,
+} from './onboardingDraftStorage';
 
-export function OnboardingPage({ step }: { step: 2 | 3 }) {
+export type OnboardingWizardStep = 2 | 3 | 'password';
+
+export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
   const clinic = useClinic();
+  const { session } = useSession();
   const navigate = useNavigate();
-  const [catalogDrafts, setCatalogDrafts] = useState<CatalogTemplateDraft[]>(() => createStarterCatalogDrafts());
+  const [catalogDrafts, setCatalogDrafts] = useState<CatalogTemplateDraft[]>(() =>
+    loadCatalogDrafts(clinic.id) ?? createStarterCatalogDrafts()
+  );
   const [finishBusy, setFinishBusy] = useState(false);
   const [finishError, setFinishError] = useState<string | null>(null);
+
+  useEffect(() => {
+    saveCatalogDrafts(clinic.id, catalogDrafts);
+  }, [clinic.id, catalogDrafts]);
+
+  function goToCatalogStep() {
+    void navigate({ to: '/onboarding', search: { step: 3 } });
+  }
+
+  function goAfterTeamStep() {
+    const needsPassword =
+      session?.user &&
+      !hasPasswordIdentity(session.user.identities) &&
+      !isPasswordNudgeSkipped(clinic.id);
+    if (needsPassword) {
+      void navigate({ to: '/onboarding', search: { step: 'password' } });
+    } else {
+      goToCatalogStep();
+    }
+  }
 
   async function finishOnboarding() {
     if (!catalogDraftsReadyToSave(catalogDrafts)) {
@@ -52,6 +87,7 @@ export function OnboardingPage({ step }: { step: 2 | 3 }) {
         onboardingCompletedAt: now,
         updatedAt: now,
       });
+      clearCatalogDrafts(clinic.id);
       void syncEngine.schedule(0);
       void navigate({ to: '/workspace' });
     } catch (e) {
@@ -61,11 +97,20 @@ export function OnboardingPage({ step }: { step: 2 | 3 }) {
     }
   }
 
+  const progressStep = step === 3 ? 3 : 2;
+
   return (
     <div className="mx-auto max-w-lg">
-      <OnboardingProgress step={step} />
-      {step === 2 && (
-        <OnboardingTeamStep onContinue={() => void navigate({ to: '/onboarding', search: { step: 3 } })} />
+      {step !== 'password' && <OnboardingProgress step={progressStep} />}
+      {step === 2 && <OnboardingTeamStep onContinue={goAfterTeamStep} />}
+      {step === 'password' && (
+        <OnboardingPasswordStep
+          onSkip={() => {
+            markPasswordNudgeSkipped(clinic.id);
+            goToCatalogStep();
+          }}
+          onDone={goToCatalogStep}
+        />
       )}
       {step === 3 && (
         <div className="space-y-4">

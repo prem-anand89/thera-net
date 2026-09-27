@@ -1,8 +1,13 @@
 import { useSearch } from '@tanstack/react-router';
-import { OnboardingPage } from './OnboardingPage';
+import { OnboardingPage, type OnboardingWizardStep } from './OnboardingPage';
+
+function parseStep(raw: unknown): OnboardingWizardStep {
+  if (raw === 3 || raw === '3') return 3;
+  if (raw === 'password') return 'password';
+  return 2;
+}
 
 export function OnboardingRoute() {
-  const { step } = useSearch({ strict: false }) as { step?: number };
-  const resolved: 2 | 3 = step === 3 ? 3 : 2;
-  return <OnboardingPage step={resolved} />;
+  const { step } = useSearch({ strict: false }) as { step?: unknown };
+  return <OnboardingPage step={parseStep(step)} />;
 }

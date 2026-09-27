@@ -534,7 +534,9 @@ URLs redirect to `?tab=catalog&catalogView=…`.
 
 #### Clinic onboarding wizard (new self-service clinics)
 - **Step 1** — Create clinic (`CreateClinicForm`): address required, progress “1 of 3”, then `/onboarding`.
-- **Step 2** — Team: optional therapist invite (same `invite-therapist` edge function as Settings).
+- **Step 2** — Team: optional self-link on the service roster (“I treat patients”), therapist invite
+  (same `invite-therapist` edge function as Settings).
+- **Optional** — Google-only sign-in: skippable password step (`/onboarding?step=password`) before catalog.
 - **Step 3** — Services: editable starter templates (`STARTER_CATALOG_TEMPLATE` in
   `onboardingCatalogTemplates.ts`) — same groups/names/session counts as the old RPC seed;
   admin sets prices and can add groups, singles, and packages before any `service_catalog` rows
@@ -542,6 +544,11 @@ URLs redirect to `?tab=catalog&catalogView=…`.
 - Completion sets `clinics.onboarding_completed_at`; Shell redirects admins back to `/onboarding`
   until then. `create_clinic_with_admin` no longer inserts `service_catalog` rows (other catalog
   seeds unchanged). Existing clinics are backfilled as already complete.
+- **Catalog draft persistence** — step 3 edits are stored in `sessionStorage` per clinic until finish.
+- **Therapist profile** — `/onboarding/profile` for any login linked to a `therapists.user_id` row
+  (invited therapist or admin who linked themselves): invoice name, registration no., phone.
+  Completion is tracked in Dexie `meta` per clinic+user. RLS policy `therapists_update_self` allows
+  linked therapists to update their own roster row.
 
 #### Service Catalog (Services & packages tab)
 - **Service groups** — stored as `category` on each row; UI shows editable group
