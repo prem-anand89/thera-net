@@ -129,6 +129,35 @@ function LegacyLineItemsTable({
           })}
         </tbody>
         <tfoot>
+          {hasAdjustments && (
+            <>
+              <tr>
+                <td
+                  colSpan={4}
+                  className="pt-3 pb-1 text-right font-medium text-[var(--muted)]"
+                >
+                  Subtotal
+                </td>
+                <td className="font-num pt-3 pb-1 text-right text-[var(--muted)]">
+                  {formatINR(lineItems.reduce((acc, li) => acc + (li.totalPaise - li.adjustmentPaise), 0))}
+                </td>
+              </tr>
+              <tr>
+                <td
+                  colSpan={4}
+                  className="py-1 text-right font-medium text-[var(--muted)]"
+                >
+                  Total Adjustment
+                </td>
+                <td className="font-num py-1 text-right text-[var(--muted)]">
+                  {(() => {
+                    const adj = lineItems.reduce((acc, li) => acc + li.adjustmentPaise, 0);
+                    return adj < 0 ? `-${formatINR(Math.abs(adj))}` : formatINR(adj);
+                  })()}
+                </td>
+              </tr>
+            </>
+          )}
           <tr>
             <td
               colSpan={hasAdjustments ? 4 : 3}
@@ -207,6 +236,35 @@ function LineItemsTable({
           })}
         </tbody>
         <tfoot>
+          {hasAdjustments && (
+            <>
+              <tr>
+                <td
+                  colSpan={5}
+                  className="pt-3 pb-1 text-right font-medium text-[var(--muted)]"
+                >
+                  Subtotal
+                </td>
+                <td className="font-num pt-3 pb-1 text-right text-[var(--muted)]">
+                  {formatINR(lineItems.reduce((acc, li) => acc + (li.totalPaise - li.adjustmentPaise), 0))}
+                </td>
+              </tr>
+              <tr>
+                <td
+                  colSpan={5}
+                  className="py-1 text-right font-medium text-[var(--muted)]"
+                >
+                  Total Adjustment
+                </td>
+                <td className="font-num py-1 text-right text-[var(--muted)]">
+                  {(() => {
+                    const adj = lineItems.reduce((acc, li) => acc + li.adjustmentPaise, 0);
+                    return adj < 0 ? `-${formatINR(Math.abs(adj))}` : formatINR(adj);
+                  })()}
+                </td>
+              </tr>
+            </>
+          )}
           <tr>
             <td
               colSpan={hasAdjustments ? 5 : 4}
@@ -465,11 +523,11 @@ export function InvoicePrintPage() {
             <p className="text-[var(--ink)]">{invoice.invoiceNo}</p>
             <p className="text-[var(--muted)]">{formatDateDMY(invoice.issuedAt)}</p>
             <p
-              className="mt-1 inline-block rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
+              className="mt-1 inline-block rounded border px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-widest"
               style={
                 isPaid
-                  ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
-                  : { background: 'var(--rust-light)', color: 'var(--rust)' }
+                  ? { borderColor: 'var(--moss-strong)', color: 'var(--moss-strong)' }
+                  : { borderColor: 'var(--rust)', color: 'var(--rust)' }
               }
             >
               {isPaid ? 'PAID' : 'PAYMENT DUE'}
