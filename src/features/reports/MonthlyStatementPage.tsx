@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { reportService, settlementService } from '@/services';
+import { dashboardService, reportService, settlementService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import type { Paise } from '@/domain/money';
@@ -18,6 +18,8 @@ import {
 } from '@/components/ui';
 import { MonthlyReportTable } from '@/components/MonthlyReportTable';
 import { toFriendlyMessage } from '@/lib/errors';
+import { SERIES_COLORS } from '@/components/chartColors';
+import { VisitsRevenueTrendChart } from '@/components/VisitsRevenueTrendChart';
 
 export function MonthlyStatementPage() {
   const clinic = useClinic();
@@ -42,6 +44,42 @@ export function MonthlyStatementPage() {
     () => reportService.monthly(clinic.id, selected),
     [clinic.id, selected.year, selected.month]
   );
+
+  const trendMonths = useMemo(() => {
+    const res = [];
+    let y = selected.year;
+    let m = selected.month;
+    for (let i = 0; i < 6; i++) {
+      res.unshift({ year: y, month: m });
+      m--;
+      if (m < 1) {
+        m = 12;
+        y--;
+      }
+    }
+    return res;
+  }, [selected.year, selected.month]);
+
+  const trendData = useLiveQuery(
+    () => dashboardService.revenueTrend(clinic.id, trendMonths),
+    [clinic.id, trendMonths]
+  );
+
+  const trendCategories = useMemo(
+    () =>
+      (trendData ?? []).map(
+        (r) => `${monthName(r.month.month).slice(0, 3)} '${String(r.month.year).slice(2)}`
+      ),
+    [trendData]
+  );
+  
+  const trendVisits = useMemo(() => (trendData ?? []).map((r) => r.total.visitCount), [trendData]);
+  const trendRevenue = useMemo(
+    () => (trendData ?? []).map((r) => r.total.postTaxPaise),
+    [trendData]
+  );
+
+  const [showTrend, setShowTrend] = useState(false);
 
   // A 0% TDS rate leaves the split itself in place, but with nothing
   // actually withheld "Post-Tax" no longer describes the figure.
@@ -103,6 +141,30 @@ export function MonthlyStatementPage() {
             Export as PDF
           </Link>
         </div>
+      </div>
+
+      <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowTrend((s) => !s)}
+          className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)] focus:outline-none"
+        >
+          <span>6-Month Trend</span>
+          <span className="text-xs text-[var(--muted)]">{showTrend ? '▲ Hide' : '▼ Show'}</span>
+        </button>
+        {showTrend && trendCategories.length > 0 && (
+          <div className="border-t border-[var(--border)] p-4">
+            <VisitsRevenueTrendChart
+              categories={trendCategories}
+              visitCounts={trendVisits}
+              revenuePaise={trendRevenue}
+              visitsColor={SERIES_COLORS[1]}
+              revenueColor={SERIES_COLORS[0]}
+              formatRevenue={formatINR}
+              compact={true}
+            />
+          </div>
+        )}
       </div>
 
       <p className="mb-2 text-xs text-[var(--muted)] sm:hidden">
