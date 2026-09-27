@@ -2,6 +2,10 @@ import { lazy } from 'react';
 import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { Shell } from './Shell';
 import { WorkspacePage } from '@/features/workspace/WorkspacePage';
+import {
+  trendsPrintSearch,
+  validateInsightsSearch,
+} from '@/features/reports/insightsTrendPeriod';
 
 // Code-split every route except the default post-login landing page
 // (Workspace) — that one stays eager so the most common path pays no extra
@@ -50,9 +54,9 @@ const MonthlyLedgerPrintPage = lazy(() =>
     default: m.MonthlyLedgerPrintPage,
   }))
 );
-const MonthlyPerformanceReportPage = lazy(() =>
-  import('@/features/reports/MonthlyPerformanceReportPage').then((m) => ({
-    default: m.MonthlyPerformanceReportPage,
+const TrendsReviewPrintPage = lazy(() =>
+  import('@/features/reports/TrendsReviewPrintPage').then((m) => ({
+    default: m.TrendsReviewPrintPage,
   }))
 );
 const InvoicePrintPage = lazy(() =>
@@ -313,11 +317,21 @@ const insightsPrintRoute = createRoute({
 // Same search shape and parent nav (/insights, Reports) as the ledger print
 // route above — a second, separate print view rather than a mode on the
 // same page, since the two share nothing but the month/year picker.
+const trendsPrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/insights/trends-print',
+  validateSearch: trendsPrintSearch,
+  component: TrendsReviewPrintPage,
+});
+
 const performancePrintRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/insights/performance-print',
   validateSearch: monthlyPrintSearch,
-  component: MonthlyPerformanceReportPage,
+  beforeLoad: ({ search }) => {
+    const s = trendsPrintSearch(search as Record<string, unknown>);
+    throw redirect({ to: '/insights/trends-print', search: s });
+  },
 });
 
 const reportsRedirectRoute = createRoute({
@@ -451,16 +465,7 @@ const importVisitsRedirectRoute = createRoute({
 const insightsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/insights',
-  validateSearch: (
-    search: Record<string, unknown>
-  ): { tab?: 'monthly' | 'audit' | 'performance'; year?: number; month?: number } => ({
-    ...(search.tab === 'monthly' || search.tab === 'audit' || search.tab === 'performance'
-      ? { tab: search.tab }
-      : {}),
-    ...(typeof search.year === 'number' && typeof search.month === 'number'
-      ? { year: search.year, month: search.month }
-      : {}),
-  }),
+  validateSearch: validateInsightsSearch,
   component: ReportsPage,
 });
 
@@ -522,6 +527,7 @@ const routeTree = rootRoute.addChildren([
   insurerPacketRoute,
   advanceReceiptPrintRoute,
   insightsPrintRoute,
+  trendsPrintRoute,
   performancePrintRoute,
   reportsRedirectRoute,
   reportsPrintRedirectRoute,

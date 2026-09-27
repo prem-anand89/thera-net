@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, reportService, feedbackService, bookingService } from '@/services';
@@ -24,6 +24,7 @@ import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appo
 import {
   btnPrimary,
   SectionCard,
+  StatTile,
   Pill,
   PackageThread,
   th,
@@ -47,61 +48,6 @@ import { FirstWeekSetupLink } from '@/features/settings/FirstWeekChecklist';
 
 /** What the invoice-issuance modal needs, independent of which card opened it. */
 type InvoicingTarget = IssueInvoiceTarget;
-
-/**
- * "How am I doing this month" for a linked therapist, computed live from
- * local Dexie (reportService.monthly reads visits/therapists, both synced
- * tables) rather than requiring an admin to open the (admin/front_desk-only)
- * Monthly Statement and read a number back to them. Deliberately just Net +
- * visits — no clinic-wide totals, no other therapist's row — so it can't be
- * used to infer clinic revenue from a therapist login.
- */
-/** A single entry in the Workspace's stat strip — deliberately leaner than
- *  the shared `StatTile` card (no per-tile border/shadow, smaller type):
- *  Workspace can show up to five of these at once (three clinic-wide plus
- *  two "my numbers"), and stacking that many full StatTile cards ate a
- *  screenful of space above the actual visit list this page exists to
- *  show. One shared container supplies the border/shadow/dividers instead
- *  of every tile carrying its own. */
-function WorkspaceStat({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="min-w-[92px] flex-1 px-3 py-2 text-center">
-      <div className="truncate text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
-        {label}
-      </div>
-      <div className="font-num mt-0.5 whitespace-nowrap text-sm font-semibold text-[var(--ink)]">
-        {value}
-      </div>
-    </div>
-  );
-}
-
-/** Renders as bare `WorkspaceStat` tiles (no wrapping card of its own) so
- *  the caller can lay them out in the same strip as the clinic-wide stats
- *  below instead of a second stacked box. */
-function MyNumbersThisMonth({ clinicId, therapistId }: { clinicId: string; therapistId: string }) {
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth() + 1;
-  const period = useMemo(
-    () => ({ year: currentYear, month: currentMonth }),
-    [currentYear, currentMonth]
-  );
-  const report = useLiveQuery(
-    () => reportService.monthly(clinicId, period),
-    [clinicId, period.year, period.month]
-  );
-  const mine = report?.rows.find((r) => r.therapistId === therapistId);
-
-  return (
-    <>
-      <WorkspaceStat
-        label="My net this month"
-        value={report ? formatINR(mine?.netPostTaxPaise ?? 0) : '—'}
-      />
-      <WorkspaceStat label="My visits this month" value={mine?.visitCount ?? 0} />
-    </>
-  );
-}
 
 /** A changed hasPartner/bmSplitPct/taxPct/tdsBasis/clinicType (stamped as
  *  clinic.lastSplitChangeAt by SettingsPage) silently moves every
@@ -334,6 +280,18 @@ export function WorkspacePage() {
     return rows;
   }, [openPackages, pkgMineOnly, scope.myTherapistId, pkgStatusFilter]);
 
+  const visitsTodayCount = today?.visits.length ?? 0;
+  const now = new Date();
+  const calendarMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
+  const myMonthReport = useLiveQuery(
+    () =>
+      scope.myTherapistId
+        ? reportService.monthly(clinic.id, calendarMonth)
+        : undefined,
+    [clinic.id, calendarMonth.year, calendarMonth.month, scope.myTherapistId]
+  );
+  const myMonthRow = myMonthReport?.rows.find((r) => r.therapistId === scope.myTherapistId);
+
   const editPatient = useLiveQuery(
     () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
     [editPatientId]
@@ -490,33 +448,29 @@ export function WorkspacePage() {
         </div>
       )}
 
-      {/* One shared card holding every stat tile in a wrapping row, divided
-          by hairlines — not a StatTile-per-card grid (previously two
-          separate bordered/shadowed blocks stacked on top of each other
-          for a therapist login: three clinic-wide tiles, then two "my
-          numbers" tiles below). That ate a screenful of space above the
-          actual visit list Workspace exists to show; one flatter strip
-          fits the same five numbers in roughly a third of the height. */}
-      <div className="flex flex-wrap divide-x divide-y divide-[var(--border)] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-        <WorkspaceStat label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
-        <WorkspaceStat label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+        <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
         {scope.myTherapistId ? (
-          <WorkspaceStat
-            label="My open packages"
-            value={openPackages === undefined ? '—' : myOpenPackageCount}
-          />
+          <>
+            <StatTile
+              label="My net this month"
+              value={myMonthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—'}
+            />
+            <StatTile
+              label="My visits this month"
+              value={myMonthReport ? (myMonthRow?.visitCount ?? 0) : '—'}
+            />
+            <StatTile
+              label="My open packages"
+              value={openPackages === undefined ? '—' : myOpenPackageCount}
+            />
+          </>
         ) : (
-          <WorkspaceStat label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
-        )}
-        {/* A linked therapist's own real-time "how am I doing this month"
-            answer — previously only visible by asking an admin to run the
-            (admin/front_desk-only) Monthly Statement. Own-therapist figures
-            only (Net, visits), never clinic-wide totals, so this doesn't
-            widen the reports access boundary — it's the same
-            netPostTaxPaise reportService.monthly() already computes,
-            filtered to this one row client-side. */}
-        {scope.myTherapistId && (
-          <MyNumbersThisMonth clinicId={clinic.id} therapistId={scope.myTherapistId} />
+          <>
+            <StatTile label="Visits today" value={visitsTodayCount} />
+            <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
+            <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
+          </>
         )}
       </div>
       {syncCaption && <p className="text-xs text-[var(--slate)]">{syncCaption}</p>}
@@ -828,6 +782,8 @@ export function WorkspacePage() {
         )}
       </SectionCard>
 
+      {!scope.isClinicWideView && <TherapistComparisonCard />}
+
       <SectionCard title="Packages">
         <p className="mb-3 text-xs text-[var(--muted)]">
           Every patient on a package — who&rsquo;s still owed sessions, and whose package has gone
@@ -1024,13 +980,6 @@ export function WorkspacePage() {
           </>
         )}
       </SectionCard>
-
-      {/* A plain therapist can't reach the Reports nav tab (admin/front_desk
-          only, decision 3) — this is the one financial-aggregate exception
-          they do get (decision 4), so it surfaces here instead. Admin and
-          front_desk see it on Reports instead, not here, so it never shows
-          twice. */}
-      {!scope.isClinicWideView && <TherapistComparisonCard />}
 
       {invoicing && (
         <IssueInvoiceDialog

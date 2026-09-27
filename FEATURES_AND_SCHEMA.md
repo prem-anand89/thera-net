@@ -32,8 +32,8 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 #### Today-First Workspace
 - **Default landing page** showing:
   - Today's visits with payment state at a glance (Paid / Collect ₹X / Package / No charge) — boxed cards on phone, a table on tablet/desktop
-  - Packages panel — Open/Stale/All status filter, plus a "Mine only" checkbox for anyone with a linked therapist record (admin included)
-- **Stat strip** — Collected today, new patients this month, and either "My open packages" (linked therapist) or "Packages this month" (clinic-wide)
+  - Packages panel (bottom of page) — Open / Stale / All filter, plus a "Mine only" checkbox for anyone with a linked therapist record (admin included)
+- **Stat strip** — four tiles with a detail line each: linked therapists see collected today (with visit count), my net/visits this month, and open packages (stale count when any); clinic-wide roles see collected today, visits today, new patients, and packages started this month
 - **Quick actions** — take payment / issue invoice / split revenue / delete directly from each visit row's kebab menu; "Log visit" from a Packages row resumes the right package
 
 #### Ledger & History
@@ -369,7 +369,7 @@ queued with a visible error.
 
 #### Therapist Comparison
 - **Opt-in chart** (off by default; admin enables in Settings → Features)
-- **Shows side-by-side**: revenue and visit-count per therapist
+- **Single dual-bar chart** (visits + revenue per therapist, month picker) plus live month table with retention % and new packages
 - **Visible to therapists too**, not just admins — deliberate exception to "financial aggregates are admin-only"
 - **3 key metrics** per therapist
 - **6-month trend charts** need at least 2 months of history to render (otherwise read as a false spike);
@@ -380,7 +380,7 @@ queued with a visible error.
 - Condition pie chart (grouped raw text)
 - Referral source breakdown (doctor/hospital detail-name)
 - Visit count aggregation
-- Revenue trends with period toggle
+- **Revenue trends** (Reports → Trends): unified **trend period** bar (**MoM** | 6m | YTD | FY) on URL (`?period=&year=&month=`) drives the **revenue trend** block and **therapist comparison** together; KPI strip above stays **current calendar month** only. **MoM** picks a focus month and loads that month plus the prior month for waterfall/MoM charts. **revenue ₹ waterfall**; dual visits + revenue bars; scrollable month table. Therapist scope uses `netPostTaxPaise`; clinic-wide uses post-tax or billed total per split settings.
 
 ---
 
@@ -727,11 +727,10 @@ still falls through to the existing share sheet, unchanged.
   adding a new signal. Pure `shareTextViaWhatsApp` actions, no DB write, no
   `message_log` entry, no booking link (public booking is a later phase,
   nothing to link to yet) — same shape as the Google review nudge.
-  - **Stale packages** — a "Send reminder" button on `OpenPackageRow`s
-    where `stale` is already `true`, on both of that data's existing
-    homes: Workspace's Packages section (mobile card + desktop table) and
-    Ledger's "Due for follow-up" list (which is already stale-only, so no
-    extra `stale` check needed there). Gated on `clinic.enablePatientComms`.
+  - **Stale packages** — a "Send reminder" button on `OpenPackageRow`s where
+    `stale` is already `true`, in Workspace's Packages section at the bottom
+    of the page (mobile card + desktop table; Stale filter). Ledger no longer
+    duplicates a separate follow-up list. Gated on `clinic.enablePatientComms`.
   - **Single-visit patients** — a "Send reminder" button next to the
     existing `tel:` call link on Reports' single-visit-patients list
     (`dashboardService.singleVisitPatients`), gated the same way plus
@@ -1131,42 +1130,22 @@ still falls through to the existing share sheet, unchanged.
     are free text with no format enforced, and a 10-digit local number is
     what staff overwhelmingly type); anything else passes through as-is
     and Meta's own validation is the real backstop.
-- **Monthly performance report** (`/insights?tab=performance` picker →
-  `/insights/performance-print`) — a print-only, one-month "hand this to
-  the team" document, alongside the existing per-therapist Monthly
-  statement rather than replacing it (that one's still the payout-figure
-  source of truth; this one's a review deck). Same admin-only gate
-  (`canViewPayouts`) and print shell (letterhead, `.no-print` button bar,
-  A4 sizing via `@page`) as `MonthlyLedgerPrintPage`, reached the same way
-  (a picker tab with an FY/month select feeding `year`/`month` into the
-  print route's search params).
-  - **Clinic totals** — `reportService.monthly`'s own `.total` row
-    (revenue, using the same partner-split-aware `Post-Tax {label}` vs.
-    plain "Revenue" label the rest of the app uses), plus new-vs-returning
-    patient counts computed locally (a patient's own earliest visit across
-    *all* history, not just this month, decides which bucket they're in —
-    deliberately not a `dashboardService` addition, since nowhere else
-    needs this specific month-scoped split). Revenue and visit counts each
-    carry a "vs last month" delta, the one comparison this session's
-    Trends review flagged as missing everywhere else in Reports too.
-  - **Per-therapist breakdown** reuses `reportService.monthly`'s `rows`
-    (already the exact per-therapist Bill/Post-Tax/Net/Visits data
-    `MonthlyReportTable` renders) for two `BarChart`s (revenue, visits)
-    plus the table itself — not `TherapistComparisonCard`, which is
-    hardcoded to "current month, live" and a 6-month trend with no month
-    parameter, the wrong shape for an arbitrary past month.
-  - **Referral sources & conditions** — two `PieChart`s, computed locally
-    from that month's visits/patients rather than reusing
-    `dashboardService.referralSourceStats`/`conditionUsage`, both of which
-    are deliberately all-time/unscoped (Trends dashboard's own semantics)
-    and would need a signature change to take a date range — a local
-    month-scoped aggregation here was the smaller, self-contained change.
-  - **Retention follow-ups** — current `dashboardService.singleVisitPatients`
-    and stale `openPackages`, explicitly labeled "as of today, not scoped
-    to `<month>`" rather than filtered to the report's own month: the
-    point of this section is what the team should act on at the review
-    meeting, not a historical record, so it always reflects the live
-    queue regardless of which past month the rest of the report covers.
+- **Trends review print** (`/insights/trends-print?period=&year=&month=`, linked from
+  Reports → Trends as "Print / PDF review") — **internal team review** handout,
+  **not** the official **Monthly statement** (`/insights/print`, per-therapist
+  Bill/BM/TDS/split for hospitals/partners/therapists). Carries the same
+  `period` window as the on-screen trend bar, a focus-month KPI snapshot,
+  `RevenueTrendPanel`, therapist dual-bar + `TherapistComparisonTable` when
+  enabled, and live retention lists. **No** `MonthlyReportTable`, **no**
+  conditions (deferred — free-text condition field would not produce a useful
+  pie). `/insights/performance-print` redirects here. Same admin/front_desk gate
+  as Reports.
+  - **Clinic totals** — `reportService.monthly` for the focus month (revenue +
+    visits vs prior month).
+  - **Per-therapist breakdown** — dual-bar + comparison table for the focus
+    month only (retention % + packages via `repeatVisits` / `monthlyNewCounts`).
+  - **Retention follow-ups** — live `singleVisitPatients` and stale
+    `openPackages`, labeled as-of today, not historical to the focus month.
 - **Trends dashboard's "at a glance" KPI strip gained a Visits card** —
   `ReportsOverviewPage.tsx`'s `KpiCard` strip already had month-over-month
   trend badges on Revenue, Repeat visits, New patients, and Packages
@@ -2796,19 +2775,15 @@ its own narrow in-place edit path instead.
      below that it's just the avatar initials. This one's still
      deliberately conservative rather than measured-and-widened like
      SyncBadge, since the dropdown it opens already repeats the name.
-- **A sticky table cell's background must vary by CSS custom property, not
-  by class.** `VisitCard.tsx`'s Status column (`position: sticky; right:
-  0`) needs its own opaque background so the columns scrolling underneath
-  don't show through — but on Safari, a `bg-[var(--paper)]` /
-  `bg-[var(--surface)]` class that *swaps per row* (alternating stripe)
-  fails to paint on a sticky cell: the first, never-yet-scrolled row
-  renders fine, the rest silently don't. Setting one constant class
-  (`bg-[var(--td-bg)]`) and varying only an inline `--td-bg` custom
-  property per row paints reliably on Safari too, and — unlike setting
-  `backgroundColor` directly inline, which would out-specificity it —
-  still lets `group-hover:bg-[var(--teal-light)]` win on hover, since both
-  stay class-vs-class in the cascade. Any other sticky cell with a
-  per-row-varying background should use the same pattern.
+- **Visit table row backgrounds use one CSS variable on the `<tr>`, applied
+  on every `<td>`.** `VisitCard.tsx` sets `--visit-row-bg` per row and
+  gives each cell the same `bg-[var(--visit-row-bg)]` +
+  `group-hover:bg-[var(--teal-light)]` classes (including the sticky
+  Status column) so stripes and hover stay even — Safari won't reliably
+  paint alternating `bg-[var(--paper)]` / `bg-[var(--surface)]` classes on
+  sticky cells when the class name swaps row to row. Status pills stay the
+  standard rounded `Pill` components; contrast comes from the pill tones,
+  not full-width cell fills.
 - **Sync-freshness caption** (`syncFreshnessCaption` in `syncCopy.ts`) — a
   shared one-liner ("As of last sync HH:MM." / "Includes N unsynced
   visits.") for any screen whose numbers are derived from local Dexie data
