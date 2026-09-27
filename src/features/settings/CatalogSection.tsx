@@ -15,7 +15,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 export type CatalogView = 'packages' | 'treatments' | 'referrals';
 
 const CATALOG_VIEWS: { key: CatalogView; label: string }[] = [
-  { key: 'packages', label: 'Billing packages' },
+  { key: 'packages', label: 'Services & packages' },
   { key: 'treatments', label: 'Treatments' },
   { key: 'referrals', label: 'Referral sources' },
 ];
@@ -125,6 +125,10 @@ function CatalogAddCard({ title, hint, children }: { title: string; hint?: strin
   );
 }
 
+function groupKey(category: string) {
+  return category.trim() || 'Uncategorized';
+}
+
 function ServiceCatalog() {
   const clinic = useClinic();
   const items = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
@@ -133,35 +137,44 @@ function ServiceCatalog() {
     const map = new Map<string, CatalogItem[]>();
     for (const item of items ?? []) {
       if (!showInactive && !item.active) continue;
-      const key = item.category.trim() || 'Uncategorized';
+      const key = groupKey(item.category);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(item);
     }
-    return [...map.entries()];
+    for (const [, list] of map) {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [items, showInactive]);
   const stats = useMemo(() => {
     const all = items ?? [];
     const active = all.filter((i) => i.active).length;
-    const categories = new Set(all.map((i) => i.category.trim() || 'Uncategorized')).size;
-    return { total: all.length, active, inactive: all.length - active, categories };
+    const groupCount = new Set(all.map((i) => groupKey(i.category))).size;
+    const singles = all.filter((i) => i.sessionCount <= 1).length;
+    const packages = all.filter((i) => i.sessionCount > 1).length;
+    return { total: all.length, active, inactive: all.length - active, groupCount, singles, packages };
   }, [items]);
 
-  const categoryOptions = useMemo(
-    () => [...new Set((items ?? []).map((i) => i.category))].filter(Boolean),
+  const groupNames = useMemo(
+    () => [...new Set((items ?? []).map((i) => groupKey(i.category)))].sort(),
     [items]
   );
 
   return (
-    <SectionCard title="Billing packages">
+    <SectionCard title="Services & packages">
       <p className="mb-3 text-xs text-[var(--muted)]">
-        Billable services and package prices. Price changes affect <strong>future</strong> visits only —
-        logged visits keep their snapshot. Deactivate instead of deleting so history keeps resolving.
+        Organize billable items into <strong>service groups</strong> (e.g. Consultation, Treatment).
+        Each row is a single-session service (<strong>1 session</strong>) or a multi-session{' '}
+        <strong>package</strong> (2+ sessions, one total price). Price changes affect{' '}
+        <strong>future</strong> visits only — deactivate instead of deleting so history keeps resolving.
       </p>
       <CatalogStats
         items={[
-          { label: 'packages', value: stats.total },
+          { label: 'items', value: stats.total },
           { label: 'active', value: stats.active },
-          { label: 'categories', value: stats.categories },
+          { label: 'groups', value: stats.groupCount },
+          { label: 'single-session', value: stats.singles },
+          { label: 'packages', value: stats.packages },
           ...(stats.inactive > 0 ? [{ label: 'inactive', value: stats.inactive, warn: true }] : []),
         ]}
       />
@@ -172,11 +185,11 @@ function ServiceCatalog() {
             checked={showInactive}
             onChange={(e) => setShowInactive(e.target.checked)}
           />
-          Show inactive packages
+          Show inactive items
         </label>
       )}
-      <datalist id="catalog-categories">
-        {categoryOptions.map((c) => (
+      <datalist id="catalog-service-groups">
+        {groupNames.map((c) => (
           <option key={c} value={c} />
         ))}
       </datalist>
@@ -184,28 +197,168 @@ function ServiceCatalog() {
       {groups.length > 0 ? (
         <div className="mb-6 space-y-4">
           {groups.map(([category, catItems]) => (
-            <div key={category}>
-              <p className="mb-2 px-0.5 text-[11px] font-bold uppercase tracking-wider text-[var(--muted)]/80">
-                {category}
-              </p>
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                {catItems.map((item) => (
-                  <ServicePackageCard key={item.id} item={item} />
-                ))}
-              </div>
-            </div>
+            <ServiceGroupPanel key={category} category={category} items={catItems} groupNames={groupNames} />
           ))}
         </div>
       ) : (
-        <p className="mb-6 text-xs text-[var(--muted)]">No packages yet.</p>
+        <p className="mb-6 text-xs text-[var(--muted)]">No services yet — add a group below.</p>
       )}
 
-      <ServicePackageAddForm categoryOptions={categoryOptions} />
+      <NewServiceGroupForm existingGroupNames={groupNames} />
     </SectionCard>
   );
 }
 
-function ServicePackageCard({ item }: { item: CatalogItem }) {
+type CatalogAddKind = 'single' | 'package';
+
+function SessionKindPill({ sessionCount }: { sessionCount: number }) {
+  const isPackage = sessionCount > 1;
+  return (
+    <span
+      className="inline-block shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+      style={
+        isPackage
+          ? { background: 'var(--teal-light)', color: 'var(--teal-strong)' }
+          : { background: 'var(--paper)', color: 'var(--muted)', border: '1px solid var(--border)' }
+      }
+    >
+      {isPackage ? `Package · ${sessionCount} sessions` : 'Single session'}
+    </span>
+  );
+}
+
+function ServiceGroupPanel({
+  category,
+  items,
+  groupNames,
+}: {
+  category: string;
+  items: CatalogItem[];
+  groupNames: string[];
+}) {
+  const [editingGroupName, setEditingGroupName] = useState(false);
+  const [groupNameDraft, setGroupNameDraft] = useState(category);
+  const [groupRenameBusy, setGroupRenameBusy] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
+  const [addKind, setAddKind] = useState<CatalogAddKind | null>(null);
+
+  useEffect(() => {
+    if (!editingGroupName) setGroupNameDraft(category);
+  }, [category, editingGroupName]);
+
+  async function saveGroupRename() {
+    const trimmed = groupNameDraft.trim();
+    if (!trimmed) {
+      setGroupError('Group name is required');
+      return;
+    }
+    if (trimmed === category) {
+      setEditingGroupName(false);
+      setGroupError(null);
+      return;
+    }
+    setGroupRenameBusy(true);
+    setGroupError(null);
+    try {
+      const now = new Date().toISOString();
+      for (const item of items) {
+        await repos.catalog.put({ ...item, category: trimmed, updatedAt: now });
+      }
+      setEditingGroupName(false);
+    } catch (e) {
+      setGroupError(toFriendlyMessage(e));
+    } finally {
+      setGroupRenameBusy(false);
+    }
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+      <div className="flex flex-col gap-2 border-b border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          {editingGroupName ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className={`${inputCls} max-w-xs text-sm font-semibold`}
+                value={groupNameDraft}
+                onChange={(e) => setGroupNameDraft(e.target.value)}
+                aria-label="Service group name"
+                autoFocus
+              />
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={groupRenameBusy}
+                onClick={() => void saveGroupRename()}
+              >
+                {groupRenameBusy ? 'Saving…' : 'Save name'}
+              </button>
+              <button
+                type="button"
+                className={btnSecondary}
+                disabled={groupRenameBusy}
+                onClick={() => {
+                  setEditingGroupName(false);
+                  setGroupError(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold text-[var(--ink)]">{category}</h3>
+              <span className="text-[11px] text-[var(--muted)]">
+                {items.length} item{items.length === 1 ? '' : 's'}
+              </span>
+              <button
+                type="button"
+                className="text-xs font-semibold text-[var(--teal)] hover:underline"
+                onClick={() => setEditingGroupName(true)}
+              >
+                Edit group name
+              </button>
+            </div>
+          )}
+          <ErrorNote message={groupError} />
+        </div>
+        <div className="flex flex-wrap gap-1.5 sm:shrink-0">
+          <button
+            type="button"
+            className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)] hover:bg-[var(--paper)]"
+            onClick={() => setAddKind('single')}
+          >
+            + Single session
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-2.5 py-1 text-[11px] font-semibold text-[var(--teal-strong)] hover:opacity-90"
+            onClick={() => setAddKind('package')}
+          >
+            + Package
+          </button>
+        </div>
+      </div>
+      <div className="divide-y divide-[var(--border)]">
+        {items.map((item) => (
+          <ServiceCatalogItemRow key={item.id} item={item} groupNames={groupNames} />
+        ))}
+      </div>
+      {addKind && (
+        <div className="border-t border-[var(--border)] bg-[var(--paper)] p-3">
+          <ServiceCatalogInlineAdd
+            category={category}
+            kind={addKind}
+            onDone={() => setAddKind(null)}
+            onCancel={() => setAddKind(null)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ServiceCatalogItemRow({ item }: { item: CatalogItem; groupNames: string[] }) {
   const [editing, setEditing] = useState(false);
   const [category, setCategory] = useState(item.category);
   const [name, setName] = useState(item.name);
@@ -227,9 +380,10 @@ function ServicePackageCard({ item }: { item: CatalogItem }) {
 
   async function save() {
     if (!name.trim() || !category.trim() || pricePaise == null) {
-      setError('Category, name, and price are required');
+      setError('Group, name, and price are required');
       return;
     }
+    const sessions = Math.max(1, Number(sessionCount) || 1);
     setSaving(true);
     setError(null);
     try {
@@ -237,7 +391,7 @@ function ServicePackageCard({ item }: { item: CatalogItem }) {
         ...item,
         category: category.trim(),
         name: name.trim(),
-        sessionCount: Math.max(1, Number(sessionCount) || 1),
+        sessionCount: sessions,
         basePricePaise: pricePaise,
         updatedAt: new Date().toISOString(),
       });
@@ -262,28 +416,21 @@ function ServicePackageCard({ item }: { item: CatalogItem }) {
 
   if (editing) {
     return (
-      <CatalogCardShell
-        active={item.active}
-        footer={
-          <>
-            <button type="button" className={btnPrimary} disabled={saving} onClick={() => void save()}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            <button type="button" className={btnSecondary} disabled={saving} onClick={() => setEditing(false)}>
-              Cancel
-            </button>
-          </>
-        }
-      >
-        <p className="text-sm font-semibold text-[var(--ink)]">Edit package</p>
-        <Field label="Category">
-          <input className={inputCls} list="catalog-categories" value={category} onChange={(e) => setCategory(e.target.value)} />
+      <div className={`space-y-2 p-3 ${item.active ? '' : 'opacity-60'}`}>
+        <p className="text-xs font-semibold text-[var(--ink)]">Edit service</p>
+        <Field label="Service group">
+          <input
+            className={inputCls}
+            list="catalog-service-groups"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          />
         </Field>
-        <Field label="Package name">
+        <Field label="Name on visits & invoices">
           <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </Field>
-        <div className="flex gap-2">
-          <Field label="Sessions">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Field label="Session count">
             <input
               type="number"
               min={1}
@@ -291,110 +438,221 @@ function ServicePackageCard({ item }: { item: CatalogItem }) {
               value={sessionCount}
               onChange={(e) => setSessionCount(e.target.value)}
             />
+            <p className="mt-1 text-[11px] text-[var(--muted)]">
+              Use <strong>1</strong> for a single visit. Use <strong>2+</strong> for a package (one line
+              item, sessions tracked on visits).
+            </p>
           </Field>
-          <Field label="Price">
+          <Field label="Total price">
             <RupeeInput valuePaise={pricePaise} onChange={setPricePaise} />
           </Field>
         </div>
         <p className="text-[11px] text-[var(--muted)]">New price applies to future visits only.</p>
         <ErrorNote message={error} />
-      </CatalogCardShell>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={btnPrimary} disabled={saving} onClick={() => void save()}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button type="button" className={btnSecondary} disabled={saving} onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        </div>
+      </div>
     );
   }
 
   return (
-    <CatalogCardShell
-      active={item.active}
-      footer={
-        <>
-          <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setEditing(true)}>
-            Edit
-          </button>
-          <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => void toggleActive()}>
-            {item.active ? 'Deactivate' : 'Reactivate'}
-          </button>
-          {savedFlash && <span className="text-[var(--moss)]">Saved</span>}
-        </>
-      }
+    <div
+      className={`flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between ${item.active ? '' : 'opacity-60'}`}
     >
-      <p className="font-display text-sm font-medium text-[var(--ink)]">{item.name}</p>
-      <ActivePill active={item.active} />
-      <p className="text-xs text-[var(--muted)]">
-        {item.sessionCount} session{item.sessionCount === 1 ? '' : 's'} · {formatINR(item.basePricePaise)} total
-      </p>
-      <p className="text-xs text-[var(--muted)]">
-        Per session: {formatINR(effectivePricePerSession(item))}
-      </p>
-    </CatalogCardShell>
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium text-[var(--ink)]">{item.name}</p>
+          <SessionKindPill sessionCount={item.sessionCount} />
+          <ActivePill active={item.active} />
+          {savedFlash && <span className="text-xs text-[var(--moss)]">Saved</span>}
+        </div>
+        <p className="text-xs text-[var(--muted)]">
+          {item.sessionCount} session{item.sessionCount === 1 ? '' : 's'} · {formatINR(item.basePricePaise)}{' '}
+          total
+          {item.sessionCount > 1 && (
+            <> · {formatINR(effectivePricePerSession(item))}/session</>
+          )}
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-3 text-xs font-medium">
+        <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setEditing(true)}>
+          Edit
+        </button>
+        <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => void toggleActive()}>
+          {item.active ? 'Deactivate' : 'Reactivate'}
+        </button>
+      </div>
+    </div>
   );
 }
 
-function ServicePackageAddForm({ categoryOptions }: { categoryOptions: string[] }) {
+function ServiceCatalogInlineAdd({
+  category,
+  kind,
+  onDone,
+  onCancel,
+}: {
+  category: string;
+  kind: CatalogAddKind;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
   const clinic = useClinic();
-  const [draft, setDraft] = useState({ category: categoryOptions[0] ?? '', name: '', sessionCount: '1' });
-  const [draftPrice, setDraftPrice] = useState<number | null>(null);
+  const defaultSessions = kind === 'package' ? '5' : '1';
+  const [name, setName] = useState('');
+  const [sessionCount, setSessionCount] = useState(defaultSessions);
+  const [pricePaise, setPricePaise] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function addItem() {
-    setError(null);
-    if (!draft.category.trim() || !draft.name.trim() || draftPrice == null) {
-      setError('Category, name, and price are required');
+  async function save() {
+    if (!name.trim() || pricePaise == null) {
+      setError('Name and price are required');
       return;
     }
-    const item: CatalogItem = {
-      id: crypto.randomUUID(),
-      clinicId: clinic.id,
-      category: draft.category.trim(),
-      name: draft.name.trim(),
-      sessionCount: Math.max(1, Number(draft.sessionCount) || 1),
-      basePricePaise: draftPrice,
-      active: true,
-      updatedAt: new Date().toISOString(),
-    };
-    await repos.catalog.put(item);
-    setDraft({ category: draft.category, name: '', sessionCount: '1' });
-    setDraftPrice(null);
+    const sessions = Math.max(1, Number(sessionCount) || 1);
+    if (kind === 'single' && sessions !== 1) {
+      setError('Single-session services must have session count 1 — use + Package for multi-session.');
+      return;
+    }
+    if (kind === 'package' && sessions < 2) {
+      setError('Packages need at least 2 sessions.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await repos.catalog.put({
+        id: crypto.randomUUID(),
+        clinicId: clinic.id,
+        category,
+        name: name.trim(),
+        sessionCount: sessions,
+        basePricePaise: pricePaise,
+        active: true,
+        updatedAt: new Date().toISOString(),
+      });
+      onDone();
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <CatalogAddCard title="Add a package" hint="Grouped by category on visits and invoices.">
-      <div className="space-y-2">
-        <Field label="Category">
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-[var(--ink)]">
+        {kind === 'package' ? 'Add package to this group' : 'Add single-session service'}
+      </p>
+      <Field label="Name">
+        <input
+          className={inputCls}
+          placeholder={kind === 'package' ? 'e.g. 5-session physio package' : 'e.g. Follow-up consultation'}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+        />
+      </Field>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Field label="Session count">
           <input
+            type="number"
+            min={kind === 'package' ? 2 : 1}
+            max={kind === 'single' ? 1 : undefined}
             className={inputCls}
-            list="catalog-categories"
-            placeholder="e.g. Physiotherapy"
-            value={draft.category}
-            onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+            value={sessionCount}
+            onChange={(e) => setSessionCount(e.target.value)}
+            readOnly={kind === 'single'}
           />
         </Field>
-        <Field label="Package name">
-          <input
-            className={inputCls}
-            placeholder="e.g. 5-session package"
-            value={draft.name}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-          />
+        <Field label="Total price">
+          <RupeeInput valuePaise={pricePaise} onChange={setPricePaise} />
         </Field>
-        <div className="flex gap-2">
-          <Field label="Sessions">
-            <input
-              type="number"
-              min={1}
-              className={inputCls}
-              value={draft.sessionCount}
-              onChange={(e) => setDraft({ ...draft, sessionCount: e.target.value })}
-            />
-          </Field>
-          <Field label="Price">
-            <RupeeInput valuePaise={draftPrice} onChange={setDraftPrice} />
-          </Field>
-        </div>
-        <button type="button" className={`${btnSecondary} w-full`} onClick={() => void addItem()}>
-          + Add package
-        </button>
-        <ErrorNote message={error} />
       </div>
+      <ErrorNote message={error} />
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={btnPrimary} disabled={saving} onClick={() => void save()}>
+          {saving ? 'Adding…' : 'Add'}
+        </button>
+        <button type="button" className={btnSecondary} disabled={saving} onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function NewServiceGroupForm({ existingGroupNames }: { existingGroupNames: string[] }) {
+  const [groupName, setGroupName] = useState('');
+  const [addKind, setAddKind] = useState<CatalogAddKind | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const trimmed = groupName.trim();
+  const duplicate = trimmed && existingGroupNames.some((g) => g.toLowerCase() === trimmed.toLowerCase());
+
+  function startAdd(kind: CatalogAddKind) {
+    if (!trimmed) {
+      setError('Enter a group name first');
+      return;
+    }
+    if (duplicate) {
+      setError('That group already exists — pick it from the list above or use a different name.');
+      return;
+    }
+    setError(null);
+    setAddKind(kind);
+  }
+
+  return (
+    <CatalogAddCard
+      title="Add a service group"
+      hint="Groups organize the visit picker (Consultation, Assessment, Treatment, …). Add at least one service or package in the group."
+    >
+      <Field label="Group name">
+        <input
+          className={inputCls}
+          list="catalog-service-groups"
+          placeholder="e.g. Treatment"
+          value={groupName}
+          onChange={(e) => {
+            setGroupName(e.target.value);
+            setAddKind(null);
+            setError(null);
+          }}
+        />
+      </Field>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={btnSecondary} onClick={() => startAdd('single')}>
+          + First single-session service
+        </button>
+        <button type="button" className={btnSecondary} onClick={() => startAdd('package')}>
+          + First package
+        </button>
+      </div>
+      {duplicate && (
+        <p className="text-xs text-[var(--amber)]">This group name is already in use.</p>
+      )}
+      {addKind && trimmed && !duplicate && (
+        <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+          <ServiceCatalogInlineAdd
+            category={trimmed}
+            kind={addKind}
+            onDone={() => {
+              setGroupName('');
+              setAddKind(null);
+            }}
+            onCancel={() => setAddKind(null)}
+          />
+        </div>
+      )}
+      <ErrorNote message={error} />
     </CatalogAddCard>
   );
 }

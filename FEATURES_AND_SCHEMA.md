@@ -527,15 +527,20 @@ queued with a visible error.
 - **Walk-in MRNO prefix** (configurable, defaults to 'W')
 
 #### Catalog (Settings → Catalog)
-Single settings section with three sub-tabs — **Billing packages**, **Treatments
+Single settings section with three sub-tabs — **Services & packages**, **Treatments
 performed**, and **Referral sources** — each using the same card + **Edit**
 (Save/Cancel) pattern as Team → Logins. Legacy `?tab=services|treatments|referrals`
 URLs redirect to `?tab=catalog&catalogView=…`.
 
-#### Service Catalog (Billing packages tab)
-- Category and name per item — category is free text (autocompleted from
-  existing categories via a datalist), grouped under category headings
-- Session count (1, 3, 5, etc. for package pricing) — editable after create
+#### Service Catalog (Services & packages tab)
+- **Service groups** — stored as `category` on each row; UI shows editable group
+  panels (rename rewrites all items in the group). New groups are created by name
+  when adding the first service or package in that group.
+- **Single-session services** (`session_count = 1`) and **packages** (`session_count ≥ 2`)
+  per group — add via **+ Single session** or **+ Package** on the group header; session
+  count and total price on each row (per-session rate derived for packages).
+- Name per item — autocompleted group names via datalist when moving a row between groups
+- Session count — editable after create; 1 = one visit, 2+ = package line on invoices
 - Base price (in paise) — price changes affect future visits only
 - Active toggle (deactivate, not delete)
 - Unique constraint per clinic
