@@ -6,7 +6,6 @@ import {
   backupService,
   therapistService,
   visitService,
-  whatsappBusinessService,
 } from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
@@ -18,7 +17,7 @@ import { getSupabase, publicTherapistPhotoUrl, publicLogoUrl } from '@/lib/supab
 import { resizeImageToBlob } from '@/lib/resizeImage';
 import { db } from '@/lib/db';
 import { MONTH_NAMES, formatDateDM } from '@/domain/fiscalYear';
-import { clinicShareLabels, type Clinic, type Therapist, type UUID } from '@/domain/types';
+import { clinicShareLabels, type Clinic, type Therapist } from '@/domain/types';
 import {
   memberOnboardingStatus,
   MEMBER_ONBOARDING_LABELS,
@@ -1454,12 +1453,14 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   );
 }
 
+/*
 type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' | 'bookingSlug'>;
 
 // Lowercase alphanumeric + hyphens, no leading/trailing/doubled hyphen —
 // the DB only enforces uniqueness, so this is the one place the "clean
 // URL segment" shape is actually checked.
 const BOOKING_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+*/
 
 /**
  * Patient Communications, Slice 1-5 — module on/off, the Google review
@@ -1469,7 +1470,9 @@ const BOOKING_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
  * "Optional modules" grid; the message-template/WhatsApp-number fields
  * the full spec describes arrive with later slices, not here.
  */
-function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  return null;
+  /*
   const clinic = useClinic();
   const { form, set, save, cancel, dirty, saved, busy, error } =
     useClinicSectionForm<PatientCommsFields>(
@@ -1482,7 +1485,7 @@ function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
     );
   const [slugCopied, setSlugCopied] = useState(false);
   const bookingUrl = form.bookingSlug ? `${window.location.origin}/book/${form.bookingSlug}` : '';
-  const slugInvalid = !!form.bookingSlug && !BOOKING_SLUG_PATTERN.test(form.bookingSlug);
+  const slugInvalid = !!form.bookingSlug && !BOOKING_SLUG_PATTERN.test(form.bookingSlug as string);
 
   async function copyBookingUrl() {
     if (!bookingUrl) return;
@@ -1578,6 +1581,7 @@ function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
       <WhatsAppBusinessSubsection clinicId={clinic.id} />
     </SectionCard>
   );
+  */
 }
 
 /**
@@ -1595,6 +1599,7 @@ function PatientCommsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
  * the client), so it doesn't fit the "read the clinic row, diff, save"
  * shape that hook is built for.
  */
+/*
 function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
   const [expanded, setExpanded] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -1705,10 +1710,10 @@ function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
             </>
           )}
         </div>
-      )}
     </div>
   );
 }
+*/
 
 
 
