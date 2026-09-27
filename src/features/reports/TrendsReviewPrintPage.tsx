@@ -43,7 +43,10 @@ export function TrendsReviewPrintPage() {
   const clinic = useClinic();
   const compact = useCompactChart();
   const search = useSearch({ from: '/insights/trends-print' });
-  const period = { year: search.year, month: search.month };
+  const period = useMemo(
+    () => ({ year: search.year, month: search.month }),
+    [search.year, search.month]
+  );
   const trendPeriodMode = parseInsightsTrendPeriodMode(search.period);
   const monthsInRange = useMemo(
     () =>
@@ -51,7 +54,7 @@ export function TrendsReviewPrintPage() {
         fyStartMonth: clinic.fyStartMonth,
         momFocus: period,
       }),
-    [trendPeriodMode, clinic.fyStartMonth, period.year, period.month]
+    [trendPeriodMode, clinic.fyStartMonth, period]
   );
   const trendPeriodCaption = trendPeriodLabel(trendPeriodMode, {
     fyStartMonth: clinic.fyStartMonth,

@@ -58,14 +58,14 @@ describe('minimumTierFor', () => {
 
 describe('currentMonthRange', () => {
   it('spans the first to the last day of the given month', () => {
-    expect(currentMonthRange(new Date(2026, 1, 15))).toEqual({ from: '2026-02-01', to: '2026-02-28' });
+    expect(currentMonthRange(new Date('2026-02-15T12:00:00Z'))).toEqual({ from: '2026-02-01', to: '2026-02-28' });
   });
 
   it('handles a 31-day month', () => {
-    expect(currentMonthRange(new Date(2026, 0, 1))).toEqual({ from: '2026-01-01', to: '2026-01-31' });
+    expect(currentMonthRange(new Date('2026-01-01T12:00:00Z'))).toEqual({ from: '2026-01-01', to: '2026-01-31' });
   });
 
   it('handles a leap-year February', () => {
-    expect(currentMonthRange(new Date(2028, 1, 1))).toEqual({ from: '2028-02-01', to: '2028-02-29' });
+    expect(currentMonthRange(new Date('2028-02-01T12:00:00Z'))).toEqual({ from: '2028-02-01', to: '2028-02-29' });
   });
 });

@@ -49,8 +49,14 @@ export function minimumTierFor(feature: PlanFeature): PlanTier {
  * count and the server boundary agree on what "this month" means.
  */
 export function currentMonthRange(now = new Date()): { from: string; to: string } {
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-  return { from: iso(from), to: iso(to) };
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  
+  const from = `${year}-${pad(month + 1)}-01`;
+  
+  const toDate = new Date(year, month + 1, 0);
+  const to = `${year}-${pad(month + 1)}-${pad(toDate.getDate())}`;
+  
+  return { from, to };
 }

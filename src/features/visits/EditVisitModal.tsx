@@ -120,8 +120,8 @@ export function EditVisitModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="modal-shell max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <div className="modal-header">
+      <div className="modal-shell max-w-md w-full max-h-[90vh] flex flex-col">
+        <div className="modal-header shrink-0">
           <h2>Edit visit</h2>
           <button
             className="modal-close"
@@ -133,7 +133,7 @@ export function EditVisitModal({
           </button>
         </div>
 
-        <div className="modal-body space-y-4">
+        <div className="modal-body space-y-4 overflow-y-auto">
           <div className="text-xs text-[var(--muted)]">
             {patient?.name ?? '—'} · {catalogItem?.name ?? '—'} · {formatDateDM(visit.visitDate)}
           </div>
@@ -215,7 +215,7 @@ export function EditVisitModal({
           )}
         </div>
 
-        <div className="modal-actions">
+        <div className="modal-actions shrink-0">
           <button
             type="button"
             className={btnSecondary}

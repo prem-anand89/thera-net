@@ -2,6 +2,7 @@ import {
   Suspense,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -252,6 +253,8 @@ export function Shell() {
     [role]
   );
 
+  const prevUserId = useRef<string | null>(null);
+
   useEffect(() => {
     // `loading` is true (and `session` is still its `null` initializer) for
     // one render on every mount, before the async getSession() call has
@@ -262,30 +265,27 @@ export function Shell() {
     // before the real session even had a chance to load, silently and
     // permanently discarding unsynced work.
     if (loading) return;
+
+    const currentUserId = session?.user?.id ?? null;
+    const isSwappingUsers = prevUserId.current != null && currentUserId !== prevUserId.current;
+
+    // Clear local Dexie data when user signs out OR when hot-swapping to a 
+    // different account (e.g. clicking a magic link while already logged in)
+    // to prevent leaking cached data from one account to another. 
+    if (!session || isSwappingUsers) {
+      for (const table of ALL_SYNCED_TABLES) void db.table(table).clear();
+      void db.outbox.clear();
+      void db.meta.clear();
+      syncStatus.reset();
+    }
+
     if (session) {
       syncEngine.start();
       syncEngine.schedule(0);
       setSyncKicked(true);
-    } else {
-      // Clear local Dexie data when user signs out to prevent leaking
-      // cached data from one account to another. Iterates every synced
-      // table (ALL_SYNCED_TABLES) rather than a hand-picked list, so a new
-      // table can't be added to the sync engine without also being cleared
-      // here — this list previously omitted consultation_notes,
-      // patient_module_enrollments, and expected_visits, leaving clinical
-      // notes readable in IndexedDB on a shared device after sign-out.
-      for (const table of ALL_SYNCED_TABLES) void db.table(table).clear();
-      void db.outbox.clear();
-      void db.meta.clear();
-      // syncStatus is a module-lifetime singleton, not scoped to this
-      // session — without resetting it, a second account signing in on the
-      // same device (no full page reload) would still see the PREVIOUS
-      // account's lastSyncAt, which the zero-clinics gate below reads as
-      // "this account's sync has already settled," possibly showing
-      // CreateClinicForm before the new account's real clinics have
-      // actually pulled.
-      syncStatus.reset();
     }
+
+    prevUserId.current = currentUserId;
   }, [session, loading]);
 
   // Default the active clinic to the first membership once data arrives,

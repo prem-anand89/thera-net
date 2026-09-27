@@ -47,9 +47,9 @@ export const PAYMENT_CHIP: Record<
   none: { tone: 'slate' },
 };
 
-/** Every visit-table `<td>` shares the row's `--visit-row-bg` (set on `<tr>`)
+/** Every visit-table `<td>` shares the row's `--td-bg` (set on `<tr>`)
  *  so sticky cells stripe and hover the same as the rest of the row. */
-const VISIT_ROW_CELL_BG = 'bg-[var(--visit-row-bg)] group-hover:bg-[var(--teal-light)]';
+const VISIT_ROW_CELL_BG = 'bg-[var(--td-bg)] group-hover:bg-[var(--teal-light)]';
 
 /** Combines catalog treatment picks with the free-text add-on into one
  *  display string for the single "Treatments" column/cell — e.g. "Manual
@@ -154,7 +154,7 @@ function PatientNameBlock({
           to="/patients/$patientId"
           params={{ patientId: data.patientId }}
           search={backTo ? { from: backTo } : undefined}
-          className="font-display text-sm font-medium text-[var(--ink)] hover:underline"
+          className="whitespace-nowrap font-display text-sm font-medium text-[var(--ink)] hover:underline"
         >
           {data.patientName}
         </Link>
@@ -1081,11 +1081,9 @@ function VisitTable({
             {rows.map((row, i) => (
               <tr
                 key={row.visitId}
-                className="group align-top"
+                className="group align-top bg-[var(--td-bg)] hover:bg-[var(--teal-light)]"
                 style={
-                  {
-                    '--visit-row-bg': i % 2 === 1 ? 'var(--paper)' : 'var(--surface)',
-                  } as CSSProperties
+                  { '--td-bg': i % 2 === 1 ? 'var(--paper)' : 'var(--surface)' } as CSSProperties
                 }
               >
                 {selection && (
@@ -1174,7 +1172,9 @@ function VisitTable({
                     case 'treatments':
                       return (
                         <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
-                          {treatmentsDisplayText(row.treatmentNames, row.treatmentNotes)}
+                          <div className="max-w-[200px]">
+                            {treatmentsDisplayText(row.treatmentNames, row.treatmentNotes)}
+                          </div>
                         </td>
                       );
                   }

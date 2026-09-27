@@ -133,7 +133,7 @@ export function ReportsOverviewPage() {
         fyStartMonth: clinic.fyStartMonth,
         momFocus: focusMonthRaw,
       }),
-    [trendPeriodMode, clinic.fyStartMonth, focusMonthRaw.year, focusMonthRaw.month]
+    [trendPeriodMode, clinic.fyStartMonth, focusMonthRaw]
   );
   const focusMonth = useMemo(
     () => clampFocusMonth(focusMonthRaw, monthsInRange),
