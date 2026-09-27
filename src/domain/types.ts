@@ -130,6 +130,8 @@ export interface Clinic {
    *  never advertised for this clinic. Lowercase alphanumeric + hyphens,
    *  validated client-side in Settings; the DB only enforces uniqueness. */
   bookingSlug?: string | null;
+  /** Set when the admin finishes the post–create-clinic setup wizard (team + catalog). */
+  onboardingCompletedAt?: string | null;
   updatedAt: string;
 }
 
@@ -213,6 +215,8 @@ export interface Therapist {
    *  Business API when configured; falls back to the share sheet when
    *  absent (see bookingService.shareTherapistNotify). */
   phone?: string | null;
+  /** Set when the linked login completes roster profile onboarding (invoice name, etc.). */
+  profileConfirmedAt?: string | null;
   updatedAt: string;
 }
 
