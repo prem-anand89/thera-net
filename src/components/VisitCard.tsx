@@ -47,6 +47,10 @@ export const PAYMENT_CHIP: Record<
   none: { tone: 'slate' },
 };
 
+/** Every visit-table `<td>` shares the row's `--td-bg` (set on `<tr>`)
+ *  so sticky cells stripe and hover the same as the rest of the row. */
+const VISIT_ROW_CELL_BG = 'bg-[var(--td-bg)] group-hover:bg-[var(--teal-light)]';
+
 /** Combines catalog treatment picks with the free-text add-on into one
  *  display string for the single "Treatments" column/cell — e.g. "Manual
  *  Therapy, Exercise Therapy — FM An/Re S,S". Either half can be absent. */
@@ -456,9 +460,7 @@ function PaymentStatusDisplay({
         {showCollect ? (
           <button
             type="button"
-            className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium text-white hover:opacity-90 ${
-              badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'
-            }`}
+            className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium text-white hover:opacity-90 ${badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'}`}
             onClick={onTakePayment}
             title={badge.title}
           >
@@ -475,7 +477,9 @@ function PaymentStatusDisplay({
       {hasSecondaryRow && (
         <div className="flex flex-wrap items-center gap-1">
           {!canInvoice && paymentActions(data.paymentState).length > 0 && (
-            <Pill tone="slate">Ask billing</Pill>
+            <Pill tone="slate">
+              <span className="whitespace-nowrap">Ask billing</span>
+            </Pill>
           )}
           {data.packageInvoicePending && (
             <Pill tone="amber">
@@ -1083,7 +1087,7 @@ function VisitTable({
                 }
               >
                 {selection && (
-                  <td className={td}>
+                  <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                     {selection.isSelectable(row) && (
                       <input
                         type="checkbox"
@@ -1096,7 +1100,7 @@ function VisitTable({
                   </td>
                 )}
                 {showDate && (
-                  <td className={td}>
+                  <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                     {formatDateDM(row.visitDate)}
                     {row.editedBy && (
                       <span
@@ -1117,7 +1121,7 @@ function VisitTable({
                   </td>
                 )}
                 {showPatient && (
-                  <td className={td}>
+                  <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                     <PatientNameBlock
                       data={row}
                       onEditPatient={onEditPatient ? () => onEditPatient(row) : undefined}
@@ -1130,7 +1134,7 @@ function VisitTable({
                   switch (key) {
                     case 'service':
                       return (
-                        <td key={key} className={td}>
+                        <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
                           <div>{row.serviceName}</div>
                           {row.sessionIndex && row.packageTotal && (
                             <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
@@ -1147,7 +1151,7 @@ function VisitTable({
                       );
                     case 'therapist':
                       return (
-                        <td key={key} className={td}>
+                        <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
                           <div className="flex min-w-0 flex-col gap-0.5">
                             <TherapistPill>{row.therapistName}</TherapistPill>
                             {row.hasSplit && row.sharedPct != null && (
@@ -1161,13 +1165,13 @@ function VisitTable({
                       );
                     case 'condition':
                       return (
-                        <td key={key} className={td}>
+                        <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
                           {row.condition ?? '—'}
                         </td>
                       );
                     case 'treatments':
                       return (
-                        <td key={key} className={td}>
+                        <td key={key} className={`${td} ${VISIT_ROW_CELL_BG}`}>
                           <div className="max-w-[200px]">
                             {treatmentsDisplayText(row.treatmentNames, row.treatmentNotes)}
                           </div>
@@ -1175,24 +1179,9 @@ function VisitTable({
                       );
                   }
                 })}
-                <td className={tdNum}>{formatINR(row.billPaise)}</td>
-                {/* The row-stripe background comes from the `--td-bg` custom
-                    property set once on the enclosing `<tr>` above and
-                    inherited here — not a class that swaps between
-                    `bg-[var(--paper)]`/`bg-[var(--surface)]` per row (that
-                    used to be computed a second time on this cell alone,
-                    which could drift out of sync with the row and paint
-                    this column the wrong shade). Safari also has a known
-                    bug where a `position: sticky` cell's background fails
-                    to paint (correctly on the never-scrolled first row,
-                    then not on the rest) when the class itself differs row
-                    to row; keeping the class identical and only inheriting
-                    the custom property paints reliably, and — unlike
-                    setting `backgroundColor` directly inline — still lets
-                    `group-hover:bg-[var(--teal-light)]` win on hover, since
-                    both stay class-vs-class in the cascade. */}
+                <td className={`${tdNum} ${VISIT_ROW_CELL_BG}`}>{formatINR(row.billPaise)}</td>
                 <td
-                  className={`sticky right-0 z-[1] border-l border-[var(--border)] bg-[var(--td-bg)] group-hover:bg-[var(--teal-light)] ${td}`}
+                  className={`sticky right-0 z-[1] border-l border-[var(--border)] align-top ${td} ${VISIT_ROW_CELL_BG}`}
                 >
                   <PaymentStatusDisplay
                     data={row}
@@ -1200,7 +1189,7 @@ function VisitTable({
                     canInvoice={canInvoice}
                   />
                 </td>
-                <td className={td}>
+                <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                   <NoteCell
                     data={row}
                     backTo={backTo}
@@ -1211,7 +1200,7 @@ function VisitTable({
                     }
                   />
                 </td>
-                <td className={td}>
+                <td className={`${td} ${VISIT_ROW_CELL_BG}`}>
                   <RowActionsMenu
                     data={row}
                     onEdit={onEdit ? () => onEdit(row) : undefined}

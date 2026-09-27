@@ -105,21 +105,37 @@ export function RupeeInput({
  *  — sized to sit three-plus across even on a phone, not one per row — so a
  *  strip of them reads as a glanceable stat bar instead of eating most of
  *  the screen before any actual content shows. */
-export function StatTile({ label, value }: { label: string; value: ReactNode }) {
+export function StatTile({
+  label,
+  value,
+  detail,
+  className = '',
+}: {
+  label: string;
+  value: ReactNode;
+  /** Optional secondary line (reports/print only — workspace strip stays label + value). */
+  detail?: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="min-w-[86px] flex-1 basis-[86px] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 shadow-sm">
-      <div className="truncate text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
+    <div
+      className={`min-w-0 flex-1 basis-[86px] rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 shadow-sm sm:px-2.5 sm:py-2 ${className}`.trim()}
+    >
+      <div className="line-clamp-2 text-[11px] font-medium leading-snug text-[var(--muted)] sm:line-clamp-1 sm:truncate sm:text-[10px] sm:uppercase sm:tracking-wide">
         {label}
       </div>
-      <div className="font-num mt-0.5 whitespace-nowrap text-lg font-semibold text-[var(--ink)] sm:text-2xl">
+      <div className="font-num mt-0.5 truncate text-base font-semibold tabular-nums text-[var(--ink)] sm:text-xl md:text-2xl">
         {value}
       </div>
+      {detail != null && detail !== '' && (
+        <div className="mt-0.5 text-[11px] font-normal leading-snug text-[var(--muted)]">{detail}</div>
+      )}
     </div>
   );
 }
 
 const PILL_TONES = {
-  green: 'bg-[var(--moss-light)] text-[var(--moss)]',
+  green: 'border border-[var(--border)] bg-[var(--moss-light)] text-[var(--moss-strong)]',
   // True amber (caution) — was aliased to the rust palette before the
   // Billing & Notes Rebuild Phase 1 badge collapse needed a genuinely
   // distinct, more urgent tone for Overdue than for Due/Partial. Callers
@@ -128,10 +144,12 @@ const PILL_TONES = {
   // deliberate, coherent fix, not incidental: it now matches how the rest
   // of the app already uses these two colors (screening-banner/flag-pill's
   // amber = caution vs. rust = alert distinction).
-  amber: 'bg-[var(--amber-light)] text-[var(--amber)]',
-  rust: 'bg-[var(--rust-light)] text-[var(--rust)]',
-  slate: 'bg-[var(--paper)] text-[var(--muted)]',
-  teal: 'bg-[var(--teal-light)] text-[var(--teal)]',
+  amber: 'border border-[var(--border)] bg-[var(--amber-light)] text-[var(--amber)]',
+  rust: 'border border-[var(--border)] bg-[var(--rust-light)] text-[var(--rust)]',
+  // `slate-light` + border — not `paper` fill, which vanished on striped visit rows.
+  slate:
+    'border border-[var(--border)] bg-[var(--slate-light)] text-[var(--slate)]',
+  teal: 'border border-[var(--border)] bg-[var(--teal-light)] text-[var(--teal-strong)]',
 } as const;
 
 /** Status badge. Pair color with words/icons — never color alone. */

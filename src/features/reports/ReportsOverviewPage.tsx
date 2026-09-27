@@ -1,26 +1,32 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { dashboardService, repos, feedbackService } from '@/services';
-import { CONDITION_TOP_N } from '@/services/dashboardService';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import {
   monthName,
   formatDateDMY,
-  fiscalYearOf,
-  monthsOfFiscalYear,
-  type FyMonth,
 } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
-import { SectionCard, StatTile, Pill, th, td, tdNum, thNum } from '@/components/ui';
+import { SectionCard, StatTile, Pill, th, td, tdNum, thNum, btnSecondary } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
-import { IndexedTrendChart } from '@/components/IndexedTrendChart';
+import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { SERIES_COLORS } from '@/components/chartColors';
+import { InsightsTrendPeriodBar } from './InsightsTrendPeriodBar';
+import {
+  buildTrendMonthsInRange,
+  clampFocusMonth,
+  focusMonthIndex,
+  parseFocusMonth,
+  parseInsightsTrendPeriodMode,
+  trendPeriodLabel,
+  type InsightsTrendPeriodMode,
+} from './insightsTrendPeriod';
 
 /** Jump-nav sections, in the order they appear on the page — the "Full page
  *  restructure" this became: a long undifferentiated scroll of 6 cards had
@@ -32,9 +38,7 @@ const DASHBOARD_SECTIONS: { key: string; label: string }[] = [
   { key: 'singleVisit', label: 'Single-visit patients' },
   { key: 'revenue', label: 'Revenue trend' },
   { key: 'therapistComparison', label: 'Therapist comparison' },
-  { key: 'serviceUsage', label: 'Frequently used services' },
   { key: 'modalityUsage', label: 'Treatment modalities' },
-  { key: 'conditionUsage', label: 'Conditions' },
   { key: 'referralSources', label: 'Referral sources' },
 ];
 
@@ -119,35 +123,69 @@ export function ReportsOverviewPage() {
   // ever read the final two entries, which stay the same regardless of how
   // far back the window extends, so one query serves both the KPI strip and
   // the trend chart below.
-  const [trendPeriod, setTrendPeriod] = useState<'6m' | 'ytd' | 'fy'>('6m');
-  const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
-  const trendMonthsArg = useMemo((): number | FyMonth[] => {
-    if (trendPeriod === 'ytd') {
-      const now = new Date();
-      const months: FyMonth[] = [];
-      for (let m = 1; m <= now.getMonth() + 1; m++)
-        months.push({ year: now.getFullYear(), month: m });
-      return months;
-    }
-    if (trendPeriod === 'fy') {
-      const now = new Date();
-      const nowKey = now.getFullYear() * 12 + now.getMonth() + 1;
-      return monthsOfFiscalYear(currentFy.startYear, clinic.fyStartMonth).filter(
-        (m) => m.year * 12 + m.month <= nowKey
-      );
-    }
-    return 6;
-  }, [trendPeriod, currentFy.startYear, clinic.fyStartMonth]);
-  const trendPeriodLabel =
-    trendPeriod === '6m'
-      ? 'last 6 months'
-      : trendPeriod === 'ytd'
-        ? `YTD ${new Date().getFullYear()}`
-        : `FY ${currentFy.label}`;
+  const navigate = useNavigate({ from: '/insights' });
+  const insightsSearch = useSearch({ from: '/insights' });
+  const trendPeriodMode = parseInsightsTrendPeriodMode(insightsSearch.period ?? '6m');
+  const focusMonthRaw = parseFocusMonth(insightsSearch as Record<string, unknown>);
+  const monthsInRange = useMemo(
+    () =>
+      buildTrendMonthsInRange(trendPeriodMode, {
+        fyStartMonth: clinic.fyStartMonth,
+        momFocus: focusMonthRaw,
+      }),
+    [trendPeriodMode, clinic.fyStartMonth, focusMonthRaw]
+  );
+  const focusMonth = useMemo(
+    () => clampFocusMonth(focusMonthRaw, monthsInRange),
+    [focusMonthRaw, monthsInRange]
+  );
+  const trendFocusIndex = focusMonthIndex(monthsInRange, focusMonth);
+  const trendPeriodCaption = trendPeriodLabel(trendPeriodMode, {
+    fyStartMonth: clinic.fyStartMonth,
+    momFocus: focusMonth,
+  });
+
+  useEffect(() => {
+    if (insightsSearch.period != null) return;
+    const now = new Date();
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        period: '6m',
+        year: now.getFullYear(),
+        month: now.getMonth() + 1,
+      }),
+      replace: true,
+    });
+  }, [insightsSearch.period, navigate]);
+
+  function updateTrendPeriod(
+    next: Partial<{ period: InsightsTrendPeriodMode; year: number; month: number }>
+  ) {
+    const mode = next.period ?? trendPeriodMode;
+    const momFocus =
+      next.year != null && next.month != null
+        ? { year: next.year, month: next.month }
+        : focusMonth;
+    const range = buildTrendMonthsInRange(mode, {
+      fyStartMonth: clinic.fyStartMonth,
+      momFocus,
+    });
+    const focus = clampFocusMonth(momFocus, range);
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        period: mode,
+        year: focus.year,
+        month: focus.month,
+      }),
+      replace: true,
+    });
+  }
 
   const trend = useLiveQuery(
-    () => dashboardService.revenueTrend(clinic.id, trendMonthsArg),
-    [clinic.id, trendMonthsArg]
+    () => dashboardService.revenueTrend(clinic.id, monthsInRange),
+    [clinic.id, monthsInRange]
   );
   const singleVisitPatients = useLiveQuery(
     () => dashboardService.singleVisitPatients(clinic.id),
@@ -157,24 +195,10 @@ export function ReportsOverviewPage() {
     () => dashboardService.referralSourceStats(clinic.id),
     [clinic.id]
   );
-  const serviceUsage = useLiveQuery(
-    () =>
-      dashboardService.serviceUsage(
-        clinic.id,
-        { year: new Date().getFullYear(), month: new Date().getMonth() + 1 },
-        scope.scopeTherapistId
-      ),
-    [clinic.id, scope.scopeTherapistId]
-  );
   const modalityUsage = useLiveQuery(
     () => (clinic.clinicalDocsEnabled ? dashboardService.modalityUsage(clinic.id) : undefined),
     [clinic.id, clinic.clinicalDocsEnabled]
   );
-  const conditionUsage = useLiveQuery(
-    () => dashboardService.conditionUsage(clinic.id),
-    [clinic.id]
-  );
-
   // KPI strip data — current calendar month, plus one month back for the
   // trend badges. now/prevMonth are recomputed each render (cheap, plain
   // Date math) rather than memoized; only their derived year/month numbers
@@ -234,6 +258,37 @@ export function ReportsOverviewPage() {
       therapistId: scope.myTherapistId ?? 'none',
       therapistName: '',
     };
+
+  const trendRevenuePaise = useMemo(
+    () =>
+      (trend ?? []).map((r) => {
+        if (scope.isClinicWideView) {
+          return partnerSplit ? r.total.postTaxPaise : r.total.billPaise;
+        }
+        const row = r.rows.find((t) => t.therapistId === scope.myTherapistId);
+        return row?.netPostTaxPaise ?? 0;
+      }),
+    [trend, scope.isClinicWideView, scope.myTherapistId, partnerSplit]
+  );
+
+  const trendVisitCounts = useMemo(
+    () =>
+      (trend ?? []).map((r) => {
+        if (scope.isClinicWideView) return r.total.visitCount;
+        const row = r.rows.find((t) => t.therapistId === scope.myTherapistId);
+        return row?.visitCount ?? 0;
+      }),
+    [trend, scope.isClinicWideView, scope.myTherapistId]
+  );
+
+  const trendInProgressIndices = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    return (trend ?? [])
+      .map((r, i) => (r.month.year === y && r.month.month === m ? i : -1))
+      .filter((i) => i >= 0);
+  }, [trend]);
 
   // Revenue and packages-this-month vs last month, from the 6-month trend
   // and monthlyNewCounts pair already being fetched for the chart/other
@@ -343,12 +398,6 @@ export function ReportsOverviewPage() {
     }
     return [...byDetail.entries()].sort((a, b) => b[1].revenuePaise - a[1].revenuePaise);
   }, [referralActive, referralNeedsDetail]);
-
-  // Conditions — unlike referral sources, no default slice: nothing is
-  // selected until clicked, since there's no one "always relevant" answer.
-  const [conditionSelectedIdx, setConditionSelectedIdx] = useState<number | null>(null);
-  const conditionActive =
-    conditionSelectedIdx != null ? conditionUsage?.[conditionSelectedIdx] : undefined;
 
   const [hideClosedReasons, setHideClosedReasons] = useState(false);
   const filteredSingleVisit = useMemo(() => {
@@ -475,6 +524,20 @@ export function ReportsOverviewPage() {
           value={newPatientsThisMonth?.newPackages ?? '—'}
           lastMonthValue={newPatientsLastMonth ? newPatientsLastMonth.newPackages : undefined}
         />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Link
+          to="/insights/trends-print"
+          search={{
+            year: focusMonth.year,
+            month: focusMonth.month,
+            period: trendPeriodMode,
+          }}
+          className={btnSecondary}
+        >
+          Print / PDF review
+        </Link>
       </div>
 
       {/* Jump-nav — sticky under Shell's own header, same pattern the note
@@ -690,74 +753,43 @@ export function ReportsOverviewPage() {
             if (el) sectionRefs.current.set('revenue', el);
             else sectionRefs.current.delete('revenue');
           }}
-          className="scroll-mt-28 md:scroll-mt-20"
+          className="scroll-mt-28 md:scroll-mt-20 space-y-4"
         >
+          <InsightsTrendPeriodBar
+            clinic={clinic}
+            mode={trendPeriodMode}
+            onModeChange={(mode) => {
+              const range = buildTrendMonthsInRange(mode, {
+                fyStartMonth: clinic.fyStartMonth,
+                momFocus: focusMonth,
+              });
+              const last = range[range.length - 1];
+              updateTrendPeriod({ period: mode, year: last.year, month: last.month });
+            }}
+            momFocus={focusMonth}
+            onMomFocusChange={(m) => updateTrendPeriod({ period: 'mom', year: m.year, month: m.month })}
+            periodCaption={`Applies to revenue trend and therapist comparison · ${trendPeriodCaption}`}
+          />
           <SectionCard
             title={
               scope.isClinicWideView
-                ? `Revenue trend — ${trendPeriodLabel} (${revenueLabel})`
-                : `My revenue trend — ${trendPeriodLabel} (${revenueLabel})`
+                ? `Revenue trend — ${trendPeriodCaption} (${revenueLabel})`
+                : `My revenue trend — ${trendPeriodCaption} (${revenueLabel})`
             }
           >
-            <div className="mb-3 flex gap-1.5">
-              {(
-                [
-                  { key: '6m', label: '6 months' },
-                  { key: 'ytd', label: 'YTD' },
-                  { key: 'fy', label: `FY ${currentFy.label}` },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => setTrendPeriod(opt.key)}
-                  className="rounded-full border px-3 py-1 text-xs font-medium"
-                  style={{
-                    background: trendPeriod === opt.key ? 'var(--teal-light)' : 'var(--surface)',
-                    borderColor: trendPeriod === opt.key ? 'transparent' : 'var(--border)',
-                    color: trendPeriod === opt.key ? 'var(--teal)' : 'var(--muted)',
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
             {trend && !hasEnoughTrendHistory && (
               <p className="py-8 text-center text-sm text-[var(--muted)]">
                 Not enough data yet — a trend needs at least two months of visits to be meaningful.
               </p>
             )}
             {trend && hasEnoughTrendHistory && (
-              <>
-                <IndexedTrendChart
-                  categories={categories}
-                  barLabel={revenueLabel}
-                  barColor={SERIES_COLORS[0]}
-                  formatBarValue={formatINR}
-                  barValues={
-                    scope.isClinicWideView
-                      ? trend.map((r) => (partnerSplit ? r.total.postTaxPaise : r.total.billPaise))
-                      : trend.map((r) => myMonthRow(r.rows).netPostTaxPaise)
-                  }
-                  lineLabel="Visits"
-                  lineColor={SERIES_COLORS[1]}
-                  lineValues={
-                    scope.isClinicWideView
-                      ? trend.map((r) => r.total.visitCount)
-                      : trend.map((r) => myMonthRow(r.rows).visitCount)
-                  }
-                />
-                <div className="mt-3 flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-3 text-xs text-[var(--muted)]">
-                  <span aria-hidden="true">ⓘ</span>
-                  <span>
-                    Both lines are indexed to the first active month = 100, not plotted in
-                    rupees/visits on two different scales. A true dual-axis chart lets you pick the
-                    scales, which can make any two lines look correlated whether or not they are —
-                    indexing keeps the comparison honest while still showing which moved more. Hover
-                    a point for the real rupee/visit figure.
-                  </span>
-                </div>
-              </>
+              <RevenueTrendPanel
+                categories={categories}
+                revenuePaise={trendRevenuePaise}
+                visitCounts={trendVisitCounts}
+                revenueColumnLabel={revenueLabel}
+                currentMonthIndices={trendInProgressIndices}
+              />
             )}
           </SectionCard>
         </div>
@@ -770,48 +802,17 @@ export function ReportsOverviewPage() {
             }}
             className="scroll-mt-28 md:scroll-mt-20"
           >
-            <TherapistComparisonCard />
+            <TherapistComparisonCard
+              controlledTrend
+              trendData={trend}
+              chartMonthIndex={trendFocusIndex}
+              onChartMonthIndexChange={(i) => {
+                const m = monthsInRange[i];
+                if (m) updateTrendPeriod({ year: m.year, month: m.month });
+              }}
+            />
           </div>
         )}
-
-        <div
-          ref={(el) => {
-            if (el) sectionRefs.current.set('serviceUsage', el);
-            else sectionRefs.current.delete('serviceUsage');
-          }}
-          className="scroll-mt-28 md:scroll-mt-20"
-        >
-          <SectionCard
-            title={
-              scope.isClinicWideView
-                ? 'Frequently used services — this month'
-                : 'My frequently used services — this month'
-            }
-          >
-            <p className="mb-3 text-xs text-[var(--muted)]">
-              Which billable services actually got used this month, most-visited first.
-            </p>
-            {serviceUsage === undefined ? null : serviceUsage.length === 0 ? (
-              <p className="py-6 text-center text-sm text-[var(--muted)]">
-                No visits logged yet this month.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {serviceUsage.slice(0, 5).map((s) => (
-                  <li key={s.serviceId} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="text-[var(--ink)]">{s.serviceName}</span>
-                    <span className="flex items-center gap-3">
-                      <span className="font-num text-[var(--muted)]">{s.visitCount} visits</span>
-                      <span className="font-num text-[var(--muted)]">
-                        {formatINR(s.totalBilledPaise)}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </SectionCard>
-        </div>
 
         {clinic.clinicalDocsEnabled && (
           <div
@@ -845,93 +846,6 @@ export function ReportsOverviewPage() {
             </SectionCard>
           </div>
         )}
-
-        <div
-          ref={(el) => {
-            if (el) sectionRefs.current.set('conditionUsage', el);
-            else sectionRefs.current.delete('conditionUsage');
-          }}
-          className="scroll-mt-28 md:scroll-mt-20"
-        >
-          <SectionCard title="Conditions">
-            <p className="mb-4 text-xs text-[var(--muted)]">
-              What you're actually treating, all-time — click a slice for the patient list.
-              Free-text conditions past the top {CONDITION_TOP_N} fold into "Other" rather than
-              fragmenting.
-            </p>
-            {conditionUsage === undefined ? null : conditionUsage.length === 0 ? (
-              <p className="py-6 text-center text-sm text-[var(--muted)]">No visits logged yet.</p>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <PieChart
-                  data={conditionUsage.map((c) => ({ label: c.condition, value: c.count }))}
-                  selectedIndex={conditionSelectedIdx}
-                  onSelect={setConditionSelectedIdx}
-                />
-                {conditionActive ? (
-                  <div>
-                    <div className="mb-2 flex items-baseline justify-between gap-2">
-                      <h3 className="text-sm font-medium text-[var(--ink)]">
-                        {conditionActive.condition}
-                      </h3>
-                      <span className="text-xs text-[var(--muted)]">
-                        {conditionActive.patients.length} patient
-                        {conditionActive.patients.length === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                    {/* Below tab: — boxed rows instead of a 3-column
-                          table too tight for patient name + mrno on a
-                          phone. */}
-                    <div className="tab:hidden max-h-72 space-y-1.5 overflow-y-auto">
-                      {conditionActive.patients.map((p) => (
-                        <div
-                          key={p.patientId}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-                        >
-                          <span className="min-w-0 truncate">
-                            {p.patientName}{' '}
-                            <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                          </span>
-                          <span className="font-num shrink-0 text-xs text-[var(--muted)]">
-                            {p.visitCount} visit{p.visitCount === 1 ? '' : 's'} ·{' '}
-                            {formatINR(p.revenuePaise)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="hidden tab:block max-h-72 overflow-y-auto rounded-lg border border-[var(--border)]">
-                      <table className="min-w-full divide-y divide-[var(--border)]">
-                        <thead className="sticky top-0 bg-[var(--paper)]">
-                          <tr>
-                            <th className={th}>Patient</th>
-                            <th className={thNum}>Visits</th>
-                            <th className={thNum}>Revenue</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--border)]">
-                          {conditionActive.patients.map((p) => (
-                            <tr key={p.patientId}>
-                              <td className={td}>
-                                {p.patientName}{' '}
-                                <span className="text-[var(--muted)]">{p.mrno}</span>
-                              </td>
-                              <td className={tdNum}>{p.visitCount}</td>
-                              <td className={tdNum}>{formatINR(p.revenuePaise)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="flex items-center justify-center py-8 text-center text-sm text-[var(--muted)]">
-                    Click a slice to see who's being treated for it.
-                  </p>
-                )}
-              </div>
-            )}
-          </SectionCard>
-        </div>
 
         <div
           ref={(el) => {
