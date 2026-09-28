@@ -116,7 +116,13 @@ export default async function handler(req: Request): Promise<Response> {
     // no per-action row-scoped check of its own, same coarser boundary
     // rotate_feedback_request_token relies on via RLS for the equivalent
     // client-side action.
-    const { data: memberData, error: memberError } = await userClient
+    const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Service role lookup — avoids false negatives when clinic_members RLS
+    // or a stale JWT would hide the caller's own membership row.
+    const { data: memberData, error: memberError } = await serviceClient
       .from('clinic_members')
       .select('role')
       .eq('clinic_id', clinicId)
@@ -128,10 +134,6 @@ export default async function handler(req: Request): Promise<Response> {
     if (!memberData) {
       return json({ error: 'Not a member of this clinic' }, 403);
     }
-
-    const serviceClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
 
     const { data: config } = await serviceClient
       .from('clinic_whatsapp_config')

@@ -19,6 +19,7 @@ import {
 } from '@/domain/types';
 import { noteForVisit } from '@/domain/noteLinks';
 import { toFriendlyMessage } from '@/lib/errors';
+import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
 import type { OpenPackageRow, TodayVisitRow } from '@/services/dashboardService';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import {
@@ -89,6 +90,7 @@ function todayRowToCardData(
   row: TodayVisitRow,
   openPackageGroupIds: Set<string>,
   isAdmin: boolean,
+  isFrontDesk: boolean,
   myTherapistId: string | undefined,
   canViewClinicalNotes: boolean,
   therapistSplit: boolean,
@@ -147,7 +149,13 @@ function todayRowToCardData(
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: linkedNote?.id ?? null,
     noteStatus: linkedNote?.status ?? null,
-    canAskForFeedback: enablePatientComms && canModify,
+    canAskForFeedback: canAskForFeedbackOnVisit({
+      enablePatientComms,
+      isAdmin,
+      isFrontDesk,
+      myTherapistId,
+      visitTherapistId: row.therapistId,
+    }),
     feedbackRequest: feedbackRequest
       ? {
           id: feedbackRequest.id,
@@ -726,6 +734,7 @@ export function WorkspacePage() {
                 row,
                 openPackageGroupIds,
                 scope.isAdmin,
+                scope.isFrontDesk,
                 scope.myTherapistId,
                 canViewClinicalNotes,
                 therapistSplit,

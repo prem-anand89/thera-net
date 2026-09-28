@@ -4,6 +4,7 @@ import { repos, bookingService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
 import type { UUID } from '@/domain/types';
+import { assertPatientInActiveClinic } from '@/domain/patientComms';
 
 /** `<input type="datetime-local">` needs local-time-no-offset — same
  *  reasoning as RequestsPage's own copy of this: a plain toISOString()
@@ -29,6 +30,7 @@ function defaultScheduledAt(): string {
  */
 export function BookAppointmentDialog({
   clinicId,
+  patientClinicId,
   patientId,
   patientName,
   patientPhone,
@@ -36,7 +38,9 @@ export function BookAppointmentDialog({
   onClose,
   onBooked,
 }: {
+  /** Active clinic from context — must match `patientClinicId`. */
   clinicId: UUID;
+  patientClinicId: UUID;
   /** Always known here — this dialog only ever opens from a clicked row
    *  in the Patients list, never from a typed name, so the appointment
    *  links to the real patient record from creation rather than waiting
@@ -64,8 +68,9 @@ export function BookAppointmentDialog({
     setBusy(true);
     setError(null);
     try {
+      assertPatientInActiveClinic(patientClinicId, clinicId);
       await bookingService.createAppointmentStaff(
-        clinicId,
+        patientClinicId,
         patientName,
         phone,
         therapistId || null,

@@ -86,14 +86,23 @@ export function createFeedbackService(repos: Repos) {
         updatedBy: row.updated_by ?? undefined,
       };
       await repos.feedbackRequests.putLocal(request);
-      await sendWhatsAppMessage({
-        clinicId: row.clinic_id,
-        kind: 'feedback_request',
-        toPhone: patientPhone,
-        bodyParams: [patientName, clinicName, feedbackLinkUrl(row.token)],
-        shareText: feedbackShareMessage(patientName, clinicName, row.token),
-        shareTitle: 'Ask for feedback',
-      });
+      try {
+        await sendWhatsAppMessage({
+          clinicId: row.clinic_id,
+          kind: 'feedback_request',
+          toPhone: patientPhone,
+          bodyParams: [patientName, clinicName, feedbackLinkUrl(row.token)],
+          shareText: feedbackShareMessage(patientName, clinicName, row.token),
+          shareTitle: 'Ask for feedback',
+        });
+      } catch {
+        // Business API misconfig should never block the manual share sheet.
+        const { shareTextViaWhatsApp } = await import('@/lib/pdfShare');
+        await shareTextViaWhatsApp(
+          feedbackShareMessage(patientName, clinicName, row.token),
+          'Ask for feedback'
+        );
+      }
       return request;
     },
 
@@ -127,14 +136,22 @@ export function createFeedbackService(repos: Repos) {
         updatedAt: new Date().toISOString(),
       };
       await repos.feedbackRequests.putLocal(updated);
-      await sendWhatsAppMessage({
-        clinicId: request.clinicId,
-        kind: 'feedback_request',
-        toPhone: patientPhone,
-        bodyParams: [patientName, clinicName, feedbackLinkUrl(token)],
-        shareText: feedbackShareMessage(patientName, clinicName, token),
-        shareTitle: 'Ask for feedback',
-      });
+      try {
+        await sendWhatsAppMessage({
+          clinicId: request.clinicId,
+          kind: 'feedback_request',
+          toPhone: patientPhone,
+          bodyParams: [patientName, clinicName, feedbackLinkUrl(token)],
+          shareText: feedbackShareMessage(patientName, clinicName, token),
+          shareTitle: 'Ask for feedback',
+        });
+      } catch {
+        const { shareTextViaWhatsApp } = await import('@/lib/pdfShare');
+        await shareTextViaWhatsApp(
+          feedbackShareMessage(patientName, clinicName, token),
+          'Ask for feedback'
+        );
+      }
       return updated;
     },
 
