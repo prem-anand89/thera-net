@@ -383,7 +383,7 @@ export function WorkspacePage() {
       })
     );
     return result;
-  }, [candidatePendingGroupIds]);
+  }, [candidatePendingGroupIds]) ?? new Set<string>();
 
   function openInvoiceFor(data: VisitCardData) {
     setInvoicing({

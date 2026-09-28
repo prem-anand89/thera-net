@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, paymentService, dashboardService, feedbackService } from '@/services';
+import { repos, paymentService, dashboardService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
@@ -55,9 +55,6 @@ export function InvoicesPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [takingPayment, setTakingPayment] = useState<Invoice | null>(null);
-  const [remindingId, setRemindingId] = useState<string | null>(null);
-
-  const initialWeek = currentWeekRange();
   const [from, setFrom] = useState(toIsoDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
   const [to, setTo] = useState(toIsoDate(new Date()));
   const [datePreset, setDatePreset] = useState<DatePreset>('month');
@@ -151,7 +148,7 @@ export function InvoicesPage() {
   }
 
   function balanceFor(inv: Invoice): { paidPaise: number; remainingPaise: number } {
-    const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+    const status = statusByInvoiceId.get(inv.id) ?? 'outstanding';
     if (status === 'paid') return { paidPaise: inv.totalPaise, remainingPaise: 0 };
     const paidPaise = paidByInvoiceId.get(inv.id) ?? 0;
     return { paidPaise, remainingPaise: Math.max(0, inv.totalPaise - paidPaise) };
@@ -163,7 +160,7 @@ export function InvoicesPage() {
     if (to) filtered = filtered.filter((i) => i.issuedAt.slice(0, 10) <= to);
     if (statusFilter === 'outstanding') {
       filtered = filtered.filter((i) => {
-        const status = statusByInvoiceId.get(i.id) ?? 'paid';
+        const status = statusByInvoiceId.get(i.id) ?? 'outstanding';
         if (status === 'paid') return false;
         const paidPaise = paidByInvoiceId.get(i.id) ?? 0;
         return i.totalPaise > paidPaise;
@@ -181,7 +178,7 @@ export function InvoicesPage() {
     let outstanding = 0;
     let collected = 0;
     for (const inv of filteredInvoices) {
-      const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+      const status = statusByInvoiceId.get(inv.id) ?? 'outstanding';
       if (status === 'paid') {
         collected += inv.totalPaise;
       } else {
@@ -210,13 +207,15 @@ export function InvoicesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 text-sm overflow-x-auto hide-scrollbar">
+          <div className="flex max-w-full flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
             {DATE_PRESETS.map((p) => (
               <button
                 key={p.key}
                 type="button"
-                className={`whitespace-nowrap rounded px-3 py-1 transition-colors ${
-                  datePreset === p.key ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+                className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                  datePreset === p.key
+                    ? 'bg-[var(--teal)] text-white'
+                    : 'text-[var(--muted)] hover:bg-[var(--surface)]'
                 }`}
                 onClick={() => applyDatePreset(p.key)}
               >
@@ -242,11 +241,13 @@ export function InvoicesPage() {
             </div>
           )}
         </div>
-        <div className="flex rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 text-sm">
+        <div className="flex max-w-full flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
           <button
             type="button"
-            className={`rounded px-3 py-1 transition-colors ${
-              statusFilter === 'all' ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+              statusFilter === 'all'
+                ? 'bg-[var(--teal)] text-white'
+                : 'text-[var(--muted)] hover:bg-[var(--surface)]'
             }`}
             onClick={() => setStatusFilter('all')}
           >
@@ -254,8 +255,10 @@ export function InvoicesPage() {
           </button>
           <button
             type="button"
-            className={`rounded px-3 py-1 transition-colors ${
-              statusFilter === 'outstanding' ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+              statusFilter === 'outstanding'
+                ? 'bg-[var(--teal)] text-white'
+                : 'text-[var(--muted)] hover:bg-[var(--surface)]'
             }`}
             onClick={() => setStatusFilter('outstanding')}
           >
@@ -336,18 +339,18 @@ export function InvoicesPage() {
               ))}
             </div>
 
-            <div className="hidden tab:block overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-              <table className="min-w-full divide-y divide-[var(--border)]">
-                <thead className="bg-[var(--paper)]">
-                  <tr>
+            <div className="hidden tab:block overflow-x-auto">
+              <table className="w-full min-w-[700px] text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
                     <th className={th}>Date</th>
                     <th className={th}>Patient</th>
                     <th className={th}>Service</th>
                     <th className={thNum}>Collected</th>
-                    <th className={th}></th>
+                    <th className={`${th} text-right`}>Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--border)]">
+                <tbody>
                   {needsReceipt.map((row) => (
                     <tr key={row.visitId} className="hover:bg-[var(--paper)]">
                       <td className={td}>{formatDateDM(row.visitDate)}</td>
@@ -357,10 +360,10 @@ export function InvoicesPage() {
                       </td>
                       <td className={td}>{row.serviceName}</td>
                       <td className={tdNum}>{formatINR(row.collectedPaise)}</td>
-                      <td className={td}>
+                      <td className={`${td} text-right`}>
                         <button
                           type="button"
-                          className={btnPrimary}
+                          className={`${btnPrimary} py-1.5 min-h-0 text-xs`}
                           onClick={() =>
                             setInvoicingNeedsReceipt({
                               visitId: row.visitId,
@@ -482,10 +485,10 @@ export function InvoicesPage() {
             )}
           </div>
 
-          <div className="hidden tab:block overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-            <table className="min-w-full divide-y divide-[var(--border)]">
-              <thead className="bg-[var(--paper)]">
-                <tr>
+          <div className="hidden tab:block overflow-x-auto">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border)]">
                   <SortHeader label="Invoice No" k="no" sort={sort} firstDir="desc" />
                   <SortHeader label="Date" k="date" sort={sort} firstDir="desc" />
                   <SortHeader label="Patient" k="patient" sort={sort} />
@@ -493,10 +496,10 @@ export function InvoicesPage() {
                   <SortHeader label="Total" k="total" sort={sort} numeric firstDir="desc" />
                   <th className={th}>Mode</th>
                   <SortHeader label="Status" k="status" sort={sort} />
-                  <th className={th}></th>
+                  <th className={`${th} text-right`}>Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--border)]">
+              <tbody>
                 {sortedInvoices.map((inv) => {
                   const status = statusByInvoiceId.get(inv.id) ?? 'paid';
                   const { paidPaise, remainingPaise } = balanceFor(inv);
@@ -551,7 +554,7 @@ export function InvoicesPage() {
                           Mark {status === 'paid' ? 'outstanding' : 'paid'}
                         </button>
                       </td>
-                      <td className={td}>
+                      <td className={`${td} text-right`}>
                         <Link
                           to="/invoices/$invoiceId/print"
                           params={{ invoiceId: inv.id }}

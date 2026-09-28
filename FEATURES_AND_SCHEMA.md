@@ -41,6 +41,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Multi-tab interface**:
   - Visits tab — all-time visit history, URL-addressable (`/ledger?tab=visits`)
   - Invoices tab — issued invoice records, billing-access-gated, URL-addressable (`/ledger?tab=invoices`)
+  - Daybook tab — end-of-day cash reconciliation log tracking payments, advances, and discounts (`/ledger?tab=daybook`)
 - **Filtering** — therapist dropdown, date range search
 - **Bulk actions** on individual rows — Invoice, Repeat, Split, Delete
 - **Only real visits can be invoiced** — no standalone "manual invoice" path
@@ -323,6 +324,13 @@ queued with a visible error.
   unapplied advance balance shows only in the two places above (the
   Patient Profile pill, `TakePaymentDialog`'s nudge), never in the
   needs-receipt queue, dashboard KPIs, or a visit's own badge.
+
+#### Daybook (End-of-Day Reconciliation)
+- **Ledger → Daybook tab**: a dedicated log for front desk and admins to reconcile cash and electronic payments at the end of the day.
+- **Role-gated**: Visible only to roles with billing access (admin and front desk, or governed by the clinic's billing access toggle).
+- **Payment tracking**: Shows physical collections for the selected day, explicitly excluding advance drawdowns (to prevent double-counting) while logging the initial advance deposit on the day it was received.
+- **Discount transparency**: Explicitly logs all discounts given that day, including the mandatory adjustment reason, to ensure staff accountability for lowered prices.
+- **Date presets**: Includes "Today", "Yesterday", "This week", and "This month" presets to quickly review the relevant reconciliation window.
 
 #### Billing Access Control
 - **Clinic-level toggle** restricts who is allowed to issue invoices
@@ -1211,7 +1219,7 @@ src/services/            Orchestration layer (no React imports)
 
 src/features/            UI pages and components (React + TanStack Router)
   ├── workspace/         WorkspacePage (Today, Recent, Open Packages, Pending)
-  ├── visits/            LedgerPage at /ledger (Visits/Invoices sub-tabs); NewVisitPage
+  ├── visits/            LedgerPage at /ledger (Visits/Invoices/Daybook sub-tabs); DaybookPage; NewVisitPage
   ├── patients/          PatientsPage, PatientProfilePage, NoteEditorPage
   ├── reports/           ReportsPage at /insights (Trends + monthly statement +
                          performance report), MonthlyLedgerPrintPage,

@@ -50,7 +50,7 @@ import { DaybookPage } from './DaybookPage';
 
 const PATIENT_SEARCH_LIMIT = 6;
 
-type RecordsView = 'visits' | 'invoices';
+type RecordsView = 'visits' | 'invoices' | 'daybook';
 
 type DatePreset = 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
 const DATE_PRESETS: { key: DatePreset; label: string }[] = [
@@ -214,7 +214,7 @@ export function LedgerPage() {
   // entitled admin off the Invoices tab on every page load.
   useEffect(() => {
     if (entitlementsLoading) return;
-    if (recordsView === 'invoices' && !canBill) setRecordsView('visits');
+    if ((recordsView === 'invoices' || recordsView === 'daybook') && !canBill) setRecordsView('visits');
   }, [recordsView, canBill, entitlementsLoading, setRecordsView]);
   const initialWeek = currentWeekRange();
   const [from, setFrom] = useState(initialWeek.from);
@@ -593,7 +593,7 @@ export function LedgerPage() {
         </Link>
       </div>
 
-      <div className="flex w-fit gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+      <div className="flex w-fit max-w-full gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] p-1 overflow-x-auto hide-scrollbar">
         {(
           [
             { key: 'visits', label: 'Visits' },
@@ -601,15 +601,15 @@ export function LedgerPage() {
             { key: 'daybook', label: 'Daybook' },
           ] as const
         )
-          .filter((v) => v.key !== 'invoices' || canBill || entitlementsLoading)
+          .filter((v) => (v.key !== 'invoices' && v.key !== 'daybook') || canBill || entitlementsLoading)
           .map((v) => (
             <button
               key={v.key}
               type="button"
-              className={`rounded-md px-3 py-1 text-xs font-medium ${
+              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                 recordsView === v.key
-                  ? 'bg-[var(--teal)] text-white'
-                  : 'text-[var(--muted)] hover:bg-[var(--surface)]'
+                  ? 'bg-[var(--teal)] text-white shadow-sm'
+                  : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
               }`}
               onClick={() => setRecordsView(v.key)}
             >

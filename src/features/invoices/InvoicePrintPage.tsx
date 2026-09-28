@@ -19,7 +19,7 @@ import {
 } from '@/domain/invoiceLine';
 import type { InvoiceLineItem, Therapist } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
-import { btnPrimary, btnSecondary, inputCls, ErrorNote } from '@/components/ui';
+import { btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
 import { AmendInvoiceDialog } from '@/components/AmendInvoiceDialog';
 import { EditInvoiceDetailsDialog } from '@/components/EditInvoiceDetailsDialog';
 import { renderElementToPdf, shareFileToWhatsApp } from '@/lib/pdfShare';
@@ -69,20 +69,23 @@ function LegacyLineItemsTable({
   lineItems,
   hasAdjustments,
   totalPaise,
+  paper,
 }: {
   lineItems: InvoiceLineItem[];
   hasAdjustments: boolean;
   totalPaise: number;
+  paper: 'A4' | 'A5';
 }) {
+  const isA5 = paper === 'A5';
   return (
     // Fixed columns squeeze/wrap unpredictably below their natural width —
     // scrolling the table on its own axis on a narrow phone keeps every
     // column readable instead of letting service names and rupee figures
     // fight each other for space.
-    <div className="mt-6 overflow-x-auto">
-      <table className="w-full min-w-[560px] text-sm">
+    <div className="mt-6 overflow-x-auto print:overflow-visible">
+      <table className={`w-full ${isA5 ? 'min-w-full text-xs' : 'min-w-[560px] text-sm'}`}>
         <thead>
-          <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--muted)]">
+          <tr className={`border-b border-[var(--border)] text-left uppercase tracking-wide text-[var(--muted)] ${isA5 ? 'text-[10px]' : 'text-xs'}`}>
             <th className="py-2">Service</th>
             <th className="py-2">Sessions</th>
             <th className="py-2 text-right">Catalog price</th>
@@ -114,9 +117,6 @@ function LegacyLineItemsTable({
                     {li.adjustmentPaise !== 0 ? (
                       <>
                         {formatINR(li.adjustmentPaise)}
-                        {li.adjustmentReason && (
-                          <div className="text-xs text-[var(--muted)]">{li.adjustmentReason}</div>
-                        )}
                       </>
                     ) : (
                       '—'
@@ -179,29 +179,30 @@ function LineItemsTable({
   lineItems,
   hasAdjustments,
   totalPaise,
+  paper,
 }: {
   lineItems: InvoiceLineItem[];
   hasAdjustments: boolean;
   totalPaise: number;
+  paper: 'A4' | 'A5';
 }) {
+  const isA5 = paper === 'A5';
   return (
-    <div className="mt-6 overflow-x-auto">
-      <table className="w-full min-w-[680px] text-sm">
+    <div className="mt-6 overflow-x-auto print:overflow-visible">
+      <table className={`w-full ${isA5 ? 'min-w-full text-xs' : 'min-w-[680px] text-sm'} table-fixed border-b-2 border-[var(--border)] pb-2`}>
         <thead>
-          <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--muted)]">
-            <th className="py-2">Service</th>
-            <th className="py-2">Dates of service</th>
-            <th className="py-2">Sessions</th>
-            <th className="py-2 text-right">Rate</th>
-            {hasAdjustments && <th className="py-2 text-right">Adjustment</th>}
-            <th className="py-2 text-right">Amount</th>
+          <tr className={`border-y-2 border-[var(--border)] bg-[var(--surface)] text-left uppercase tracking-wide text-[var(--muted)] ${isA5 ? 'text-[10px]' : 'text-xs'}`}>
+            <th className="py-2 px-2 w-[30%]">Service</th>
+            <th className="py-2 px-2 w-[20%]">Dates of service</th>
+            <th className="py-2 px-2 w-[15%]">Sessions</th>
+            <th className="py-2 px-2 w-[10%] text-right">Rate</th>
+            {hasAdjustments && <th className="py-2 px-2 w-[10%] text-right">Adjustment</th>}
+            <th className="py-2 px-2 w-[15%] text-right">Amount</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="align-top border-b border-[var(--border)]">
           {lineItems.map((li, i) => {
             const caption = lineCaption(li);
-            const reasons =
-              li.adjustmentReasons ?? (li.adjustmentReason ? [li.adjustmentReason] : []);
             return (
               <tr key={i} className="border-b border-[var(--border)] align-top">
                 <td className="py-2 font-medium text-[var(--ink)]">
@@ -221,9 +222,6 @@ function LineItemsTable({
                     {li.adjustmentPaise !== 0 ? (
                       <>
                         {formatINR(li.adjustmentPaise)}
-                        {reasons.length > 0 && (
-                          <div className="text-xs text-[var(--muted)]">{reasons.join(', ')}</div>
-                        )}
                       </>
                     ) : (
                       '—'
@@ -399,14 +397,22 @@ export function InvoicePrintPage() {
           ← Back
         </Link>
         <div className="ml-auto flex flex-wrap items-center gap-2 sm:gap-3">
-          <select
-            className={inputCls}
-            value={paper}
-            onChange={(e) => setPaper(e.target.value as 'A4' | 'A5')}
-          >
-            <option value="A4">A4</option>
-            <option value="A5">A5 (receipt)</option>
-          </select>
+          <div className="flex space-x-1 rounded-md bg-[var(--surface)] p-1 border border-[var(--border)] mr-2">
+            <button
+              type="button"
+              className={`rounded px-3 py-1 text-sm font-medium transition-colors ${paper === 'A4' ? 'bg-[var(--paper)] text-[var(--ink)] shadow-sm' : 'text-[var(--muted)] hover:text-[var(--ink)]'}`}
+              onClick={() => setPaper('A4')}
+            >
+              A4
+            </button>
+            <button
+              type="button"
+              className={`rounded px-3 py-1 text-sm font-medium transition-colors ${paper === 'A5' ? 'bg-[var(--paper)] text-[var(--ink)] shadow-sm' : 'text-[var(--muted)] hover:text-[var(--ink)]'}`}
+              onClick={() => setPaper('A5')}
+            >
+              A5 (Receipt)
+            </button>
+          </div>
           <button type="button" className={btnPrimary} onClick={() => window.print()}>
             Print / Save PDF
           </button>
@@ -538,52 +544,50 @@ export function InvoicePrintPage() {
         {/* Clinical details — only when set (old invoices predate the
             field; bulk-issued invoices carry no snapshot by design, see
             the Phase 1 plan's 1.4 section). */}
-        {invoice.clinicalSnapshot && (
-          <section className="mt-4 rounded-md border border-[var(--border)] bg-[var(--paper)] p-3 text-xs text-[var(--ink)]">
-            <p className="mb-1.5 font-semibold uppercase tracking-wide text-[var(--muted)]">
+        {(invoice.clinicalSnapshot || period) && (
+          <section className="mt-4 rounded-md border border-[var(--border)] p-3 text-xs text-[var(--ink)]">
+            <p className="mb-1.5 font-semibold uppercase tracking-wide text-[var(--muted)] border-b border-[var(--border)] pb-1">
               Clinical details
             </p>
-            <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
-              {invoice.clinicalSnapshot.diagnosis && (
+            <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2 mt-2">
+              {invoice.clinicalSnapshot?.diagnosis && (
                 <p className="sm:col-span-2">
-                  <span className="text-[var(--muted)]">Diagnosis: </span>
+                  <span className="text-[var(--muted)] font-medium">Diagnosis: </span>
                   {invoice.clinicalSnapshot.diagnosis}
                   {invoice.clinicalSnapshot.diagnosisIcdCode &&
                     ` (${invoice.clinicalSnapshot.diagnosisIcdCode})`}
                 </p>
               )}
-              {invoice.clinicalSnapshot.referringPhysician && (
+              {invoice.clinicalSnapshot?.referringPhysician && (
                 <p>
-                  <span className="text-[var(--muted)]">Referring physician: </span>
+                  <span className="text-[var(--muted)] font-medium">Referring physician: </span>
                   {invoice.clinicalSnapshot.referringPhysician}
                   {invoice.clinicalSnapshot.physicianRegistrationNo &&
                     ` (Reg. No. ${invoice.clinicalSnapshot.physicianRegistrationNo})`}
                 </p>
               )}
-              {invoice.clinicalSnapshot.placeOfService && (
+              {invoice.clinicalSnapshot?.placeOfService && (
                 <p>
-                  <span className="text-[var(--muted)]">Place of service: </span>
+                  <span className="text-[var(--muted)] font-medium">Place of service: </span>
                   {invoice.clinicalSnapshot.placeOfService === 'home'
                     ? 'Home (domiciliary)'
                     : 'Clinic'}
                 </p>
               )}
-              {invoice.clinicalSnapshot.treatmentPerformed && (
+              {invoice.clinicalSnapshot?.treatmentPerformed && (
                 <p className="sm:col-span-2">
-                  <span className="text-[var(--muted)]">Treatment performed: </span>
+                  <span className="text-[var(--muted)] font-medium">Treatment performed: </span>
                   {invoice.clinicalSnapshot.treatmentPerformed}
+                </p>
+              )}
+              {period && (
+                <p>
+                  <span className="text-[var(--muted)] font-medium">Treatment period: </span>
+                  <span className="font-num">{formatDateDMY(period.from)} – {formatDateDMY(period.to)}</span>
                 </p>
               )}
             </div>
           </section>
-        )}
-
-        {/* Treatment period — works off sessionDates for either line-item
-            shape, so it ships for legacy invoices too, not just v2. */}
-        {period && (
-          <p className="mt-4 text-xs text-[var(--muted)]">
-            Treatment period: {formatDateDMY(period.from)} – {formatDateDMY(period.to)}
-          </p>
         )}
 
         {/* Line items */}
@@ -592,12 +596,14 @@ export function InvoicePrintPage() {
             lineItems={invoice.lineItems}
             hasAdjustments={hasAdjustments}
             totalPaise={invoice.totalPaise}
+            paper={paper}
           />
         ) : (
           <LegacyLineItemsTable
             lineItems={invoice.lineItems}
             hasAdjustments={hasAdjustments}
             totalPaise={invoice.totalPaise}
+            paper={paper}
           />
         )}
 
