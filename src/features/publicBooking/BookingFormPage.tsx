@@ -8,13 +8,93 @@ import type { UUID } from '@/domain/types';
 const inputCls =
   'w-full rounded-[8px] border border-[var(--border)] bg-[var(--paper)] p-2.5 text-sm text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none';
 const labelCls = 'mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]';
-const chipCls =
-  'rounded-full border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]';
 
-function tomorrowDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
+function generateSlots(slotDurationMinutes: number) {
+  const slots: string[] = [];
+  const start = 9 * 60; // 9:00 AM
+  const end = 17 * 60; // 5:00 PM
+  for (let m = start; m < end; m += slotDurationMinutes) {
+    const hours = Math.floor(m / 60);
+    const mins = m % 60;
+    const isPM = hours >= 12;
+    const displayHour = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
+    const displayMins = mins.toString().padStart(2, '0');
+    slots.push(`${displayHour}:${displayMins} ${isPM ? 'PM' : 'AM'}`);
+  }
+  return slots;
+}
+
+function DaySelector({
+  selectedDate,
+  onSelect,
+}: {
+  selectedDate: string | null;
+  onSelect: (date: string) => void;
+}) {
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory">
+      {days.map((d) => {
+        const iso = d.toISOString().slice(0, 10);
+        const isSelected = selectedDate === iso;
+        const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+        const dateNum = d.getDate();
+        return (
+          <button
+            key={iso}
+            type="button"
+            onClick={() => onSelect(iso)}
+            className={`flex min-w-[60px] snap-center flex-col items-center justify-center rounded-lg border p-2 transition-colors ${
+              isSelected
+                ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal)]'
+                : 'border-[var(--border)] bg-[var(--paper)] text-[var(--ink)] hover:border-[var(--teal)]'
+            }`}
+          >
+            <span className="text-xs font-semibold uppercase">{dayName}</span>
+            <span className="text-lg font-bold">{dateNum}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TimeChipGrid({
+  slotDurationMinutes,
+  selectedTime,
+  onSelect,
+}: {
+  slotDurationMinutes: number;
+  selectedTime: string | null;
+  onSelect: (time: string) => void;
+}) {
+  const slots = generateSlots(slotDurationMinutes);
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {slots.map((time) => {
+        const isSelected = selectedTime === time;
+        return (
+          <button
+            key={time}
+            type="button"
+            onClick={() => onSelect(time)}
+            className={`rounded-md border py-2 text-xs font-medium transition-colors ${
+              isSelected
+                ? 'border-[var(--teal)] bg-[var(--teal)] text-white'
+                : 'border-[var(--border)] bg-[var(--paper)] text-[var(--ink)] hover:border-[var(--teal)]'
+            }`}
+          >
+            {time}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 /**
@@ -34,6 +114,8 @@ function tomorrowDate(): string {
 export function BookingFormPage() {
   const { clinicSlug } = useParams({ strict: false }) as { clinicSlug: string };
   const [clinicName, setClinicName] = useState<string | null>(null);
+  const [clinicLogo, setClinicLogo] = useState<string | null>(null);
+  const [slotDuration, setSlotDuration] = useState(30);
   const [therapists, setTherapists] = useState<{ id: UUID; name: string }[]>([]);
   const [checking, setChecking] = useState(true);
   const [invalid, setInvalid] = useState(false);
@@ -43,10 +125,8 @@ export function BookingFormPage() {
   const [email, setEmail] = useState('');
   const [preferredTherapistId, setPreferredTherapistId] = useState('');
   const [notes, setNotes] = useState('');
-  const [preferredDate, setPreferredDate] = useState('');
-  const [flexible, setFlexible] = useState(false);
-  const [preferredTimeText, setPreferredTimeText] = useState('');
-
+  const [preferredDate, setPreferredDate] = useState<string | null>(new Date().toISOString().slice(0, 10));
+  const [preferredTime, setPreferredTime] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -59,11 +139,13 @@ export function BookingFormPage() {
     }
     (async () => {
       try {
-        const [clinic, therapistList] = await Promise.all([
-          bookingService.getBookingClinicName(clinicSlug),
+        const [info, therapistList] = await Promise.all([
+          bookingService.getBookingClinicInfo(clinicSlug),
           bookingService.listBookingTherapists(clinicSlug),
         ]);
-        setClinicName(clinic);
+        setClinicName(info.name);
+        setClinicLogo(info.logoPath);
+        setSlotDuration(info.slotDurationMinutes);
         setTherapists(therapistList);
       } catch {
         setInvalid(true);
@@ -89,7 +171,7 @@ export function BookingFormPage() {
         preferredTherapistId || null,
         notes.trim() || null,
         preferredDate || null,
-        flexible ? 'Flexible' : preferredTimeText.trim() || null
+        preferredTime || null
       );
       setDone(true);
     } catch (e) {
@@ -128,6 +210,11 @@ export function BookingFormPage() {
   return (
     <div className="mx-auto mt-10 max-w-md px-4 pb-10">
       <div className="mb-6 text-center">
+        {clinicLogo && (
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-[var(--border)] bg-white shadow-sm">
+            <img src={clinicLogo} alt={clinicName || ''} className="h-full w-full object-cover" />
+          </div>
+        )}
         <h1 className="font-display text-xl font-semibold text-[var(--ink)]">
           Request an appointment
         </h1>
@@ -203,46 +290,23 @@ export function BookingFormPage() {
         </label>
 
         <div>
-          <div className="mb-1 flex items-center justify-between">
-            <span className={labelCls}>Preferred date · optional</span>
-            <button
-              type="button"
-              className={chipCls}
-              onClick={() => setPreferredDate(tomorrowDate())}
-            >
-              Tomorrow
-            </button>
-          </div>
-          <input
-            type="date"
-            className={inputCls}
-            value={preferredDate}
-            onChange={(e) => setPreferredDate(e.target.value)}
-            min={new Date().toISOString().slice(0, 10)}
+          <span className={labelCls}>Preferred date · optional</span>
+          <DaySelector
+            selectedDate={preferredDate}
+            onSelect={(d) => {
+              setPreferredDate(d);
+              setPreferredTime(null); // Reset time when date changes
+            }}
           />
         </div>
 
         <div>
-          <div className="mb-1 flex items-center justify-between">
-            <span className={labelCls}>Preferred time · optional</span>
-            <button
-              type="button"
-              className={chipCls}
-              style={flexible ? { background: 'var(--teal-light)' } : undefined}
-              onClick={() => setFlexible((v) => !v)}
-            >
-              I&rsquo;m flexible
-            </button>
-          </div>
-          {!flexible && (
-            <input
-              type="text"
-              placeholder="e.g. Weekday mornings, or Tue after 5pm"
-              className={inputCls}
-              value={preferredTimeText}
-              onChange={(e) => setPreferredTimeText(e.target.value)}
-            />
-          )}
+          <span className={labelCls}>Preferred time · optional</span>
+          <TimeChipGrid
+            slotDurationMinutes={slotDuration}
+            selectedTime={preferredTime}
+            onSelect={setPreferredTime}
+          />
         </div>
 
         {error && <p className="text-sm text-[var(--rust)]">{error}</p>}

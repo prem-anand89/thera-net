@@ -40,12 +40,12 @@ export const bookingService = {
 
   /** Validates the slug and the module flag; throws the RPC's own generic
    *  "not available" message otherwise. */
-  async getBookingClinicName(slug: string): Promise<string> {
+  async getBookingClinicInfo(slug: string): Promise<{ name: string; logoPath: string | null; slotDurationMinutes: number }> {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase is not configured');
-    const { data, error } = await supabase.rpc('get_booking_clinic_name', { p_slug: slug });
+    const { data, error } = await supabase.rpc('get_booking_clinic_info', { p_slug: slug });
     if (error) throw new Error(error.message);
-    return data as string;
+    return data as { name: string; logoPath: string | null; slotDurationMinutes: number };
   },
 
   async listBookingTherapists(slug: string): Promise<{ id: UUID; name: string }[]> {
