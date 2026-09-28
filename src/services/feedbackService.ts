@@ -42,8 +42,7 @@ export function createFeedbackService(repos: Repos) {
       visitId: UUID,
       patientName: string,
       patientPhone: string | null,
-      clinicName: string,
-      popup?: Window | null
+      clinicName: string
     ): Promise<FeedbackRequest> {
       const supabase = getSupabase();
       if (!supabase) throw new Error('Supabase is not configured');
@@ -88,11 +87,9 @@ export function createFeedbackService(repos: Repos) {
         updatedBy: row.updated_by ?? undefined,
       };
       await repos.feedbackRequests.putLocal(request);
-      openPatientWhatsAppChat(
-        feedbackShareMessage(patientName, clinicName, row.token),
-        patientPhone,
-        popup
-      );
+      openPatientWhatsAppChat(feedbackShareMessage(patientName, clinicName, row.token), patientPhone, {
+        navigateCurrentTabIfBlocked: true,
+      });
       return request;
     },
 
@@ -106,8 +103,7 @@ export function createFeedbackService(repos: Repos) {
       request: FeedbackRequest,
       patientName: string,
       patientPhone: string | null,
-      clinicName: string,
-      popup?: Window | null
+      clinicName: string
     ): Promise<FeedbackRequest> {
       const supabase = getSupabase();
       if (!supabase) throw new Error('Supabase is not configured');
@@ -127,11 +123,9 @@ export function createFeedbackService(repos: Repos) {
         updatedAt: new Date().toISOString(),
       };
       await repos.feedbackRequests.putLocal(updated);
-      openPatientWhatsAppChat(
-        feedbackShareMessage(patientName, clinicName, token),
-        patientPhone,
-        popup
-      );
+      openPatientWhatsAppChat(feedbackShareMessage(patientName, clinicName, token), patientPhone, {
+        navigateCurrentTabIfBlocked: true,
+      });
       return updated;
     },
 
@@ -147,18 +141,16 @@ export function createFeedbackService(repos: Repos) {
       patientName: string,
       patientPhone: string | null,
       clinicName: string,
-      googleReviewUrl: string,
-      popup?: Window | null
+      googleReviewUrl: string
     ): Promise<void> {
       const text = `Hi ${patientName}, so glad you had a great experience at ${clinicName}! Would you mind leaving us a quick Google review? ${googleReviewUrl}`;
-      await sendWhatsAppMessage({
+      sendWhatsAppMessage({
         clinicId,
         kind: 'google_review',
         toPhone: patientPhone,
         bodyParams: [patientName, clinicName, googleReviewUrl],
         shareText: text,
         shareTitle: 'Ask for a Google review',
-        popup,
       });
     },
 
@@ -175,18 +167,16 @@ export function createFeedbackService(repos: Repos) {
       patientName: string,
       patientPhone: string | null,
       clinicName: string,
-      serviceName: string,
-      popup?: Window | null
+      serviceName: string
     ): Promise<void> {
       const text = `Hi ${patientName}, we noticed it's been a while since your last ${serviceName} session at ${clinicName}. We'd love to see you again — reach out whenever you're ready to continue!`;
-      await sendWhatsAppMessage({
+      sendWhatsAppMessage({
         clinicId,
         kind: 'reminder_stale_package',
         toPhone: patientPhone,
         bodyParams: [patientName, serviceName, clinicName],
         shareText: text,
         shareTitle: 'Send reminder',
-        popup,
       });
     },
 
@@ -203,18 +193,16 @@ export function createFeedbackService(repos: Repos) {
       clinicId: UUID,
       patientName: string,
       patientPhone: string | null,
-      clinicName: string,
-      popup?: Window | null
+      clinicName: string
     ): Promise<void> {
       const text = `Hi ${patientName}, thanks for visiting ${clinicName}! We hope you're doing well — let us know if you'd like to schedule a follow-up visit.`;
-      await sendWhatsAppMessage({
+      sendWhatsAppMessage({
         clinicId,
         kind: 'reminder_single_visit',
         toPhone: patientPhone,
         bodyParams: [patientName, clinicName],
         shareText: text,
         shareTitle: 'Send reminder',
-        popup,
       });
     },
 
@@ -263,7 +251,7 @@ export function createFeedbackService(repos: Repos) {
     ): Promise<void> {
       const payLine = upiPayUri ? ` You can pay via UPI here: ${upiPayUri}` : '';
       const text = `Hi ${patientName}, this is a reminder that ${amountDueFormatted} is due on invoice ${invoiceNo} at ${clinicName}.${payLine}`;
-      await sendWhatsAppMessage({
+      sendWhatsAppMessage({
         clinicId,
         kind: 'payment_reminder',
         toPhone: patientPhone,

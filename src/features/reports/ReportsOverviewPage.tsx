@@ -17,7 +17,6 @@ import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { SERIES_COLORS } from '@/components/chartColors';
-import { openWhatsAppSharePopup } from '@/lib/pdfShare';
 import { InsightsTrendPeriodBar } from './InsightsTrendPeriodBar';
 import {
   buildTrendMonthsInRange,
@@ -724,19 +723,11 @@ export function ReportsOverviewPage() {
                             type="button"
                             className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
                             onClick={() => {
-                              const popup = openWhatsAppSharePopup();
                               void feedbackService
-                                .sendReturnReminder(
-                                  clinic.id,
-                                  p.patientName,
-                                  p.phone,
-                                  clinic.name,
-                                  popup
-                                )
-                                .catch((e) => {
-                                  popup?.close();
-                                  alert(e instanceof Error ? e.message : String(e));
-                                });
+                                .sendReturnReminder(clinic.id, p.patientName, p.phone, clinic.name)
+                                .catch((e) =>
+                                  alert(e instanceof Error ? e.message : String(e))
+                                );
                             }}
                           >
                             Send reminder

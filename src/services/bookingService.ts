@@ -206,15 +206,14 @@ export const bookingService = {
     patientName: string,
     patientPhone: string | null,
     clinicName: string,
-    scheduledAt: string,
-    popup?: Window | null
+    scheduledAt: string
   ): Promise<void> {
     const when = new Date(scheduledAt).toLocaleString('en-IN', {
       dateStyle: 'medium',
       timeStyle: 'short',
     });
     const text = `Hi ${patientName}, your appointment at ${clinicName} is confirmed for ${when}. See you then!`;
-    openPatientWhatsAppChat(text, patientPhone, popup);
+    openPatientWhatsAppChat(text, patientPhone);
   },
 
   /** Same `sendWhatsAppMessage` path as patient confirmation (wa.me by default;
@@ -224,14 +223,13 @@ export const bookingService = {
     therapistName: string,
     therapistPhone: string | null,
     patientName: string,
-    scheduledAt: string,
-    popup?: Window | null
+    scheduledAt: string
   ): Promise<void> {
     const when = new Date(scheduledAt).toLocaleString('en-IN', {
       dateStyle: 'medium',
       timeStyle: 'short',
     });
     const text = `Hi ${therapistName}, you have an appointment with ${patientName} confirmed for ${when}.`;
-    openPatientWhatsAppChat(text, therapistPhone, popup);
+    openPatientWhatsAppChat(text, therapistPhone);
   },
 };

@@ -3,10 +3,8 @@ import type { WhatsAppMessageKind } from '@/services/whatsappBusinessService';
 import { openPatientWhatsAppChat } from './pdfShare';
 
 /**
- * Staff-initiated patient WhatsApp (feedback, booking, reminders). Always
- * opens wa.me like visit-row payment reminders — identical UX for every
- * clinic. WhatsApp Business API credentials in Settings are stored for a
- * future automated-send path and are **not** invoked here.
+ * Staff-initiated patient WhatsApp (google review nudge, package reminders).
+ * Same wa.me path as visit-row payment reminders.
  */
 export function sendWhatsAppMessage(params: {
   clinicId: UUID;
@@ -15,7 +13,6 @@ export function sendWhatsAppMessage(params: {
   bodyParams: string[];
   shareText: string;
   shareTitle: string;
-  popup?: Window | null;
 }): void {
-  openPatientWhatsAppChat(params.shareText, params.toPhone, params.popup);
+  openPatientWhatsAppChat(params.shareText, params.toPhone);
 }
