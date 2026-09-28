@@ -41,7 +41,8 @@ export function createFeedbackService(repos: Repos) {
       visitId: UUID,
       patientName: string,
       patientPhone: string | null,
-      clinicName: string
+      clinicName: string,
+      popup?: Window | null
     ): Promise<FeedbackRequest> {
       const supabase = getSupabase();
       if (!supabase) throw new Error('Supabase is not configured');
@@ -86,23 +87,15 @@ export function createFeedbackService(repos: Repos) {
         updatedBy: row.updated_by ?? undefined,
       };
       await repos.feedbackRequests.putLocal(request);
-      try {
-        await sendWhatsAppMessage({
-          clinicId: row.clinic_id,
-          kind: 'feedback_request',
-          toPhone: patientPhone,
-          bodyParams: [patientName, clinicName, feedbackLinkUrl(row.token)],
-          shareText: feedbackShareMessage(patientName, clinicName, row.token),
-          shareTitle: 'Ask for feedback',
-        });
-      } catch {
-        // Business API misconfig should never block the manual share sheet.
-        const { shareTextViaWhatsApp } = await import('@/lib/pdfShare');
-        await shareTextViaWhatsApp(
-          feedbackShareMessage(patientName, clinicName, row.token),
-          'Ask for feedback'
-        );
-      }
+      await sendWhatsAppMessage({
+        clinicId: row.clinic_id,
+        kind: 'feedback_request',
+        toPhone: patientPhone,
+        bodyParams: [patientName, clinicName, feedbackLinkUrl(row.token)],
+        shareText: feedbackShareMessage(patientName, clinicName, row.token),
+        shareTitle: 'Ask for feedback',
+        popup,
+      });
       return request;
     },
 
@@ -116,7 +109,8 @@ export function createFeedbackService(repos: Repos) {
       request: FeedbackRequest,
       patientName: string,
       patientPhone: string | null,
-      clinicName: string
+      clinicName: string,
+      popup?: Window | null
     ): Promise<FeedbackRequest> {
       const supabase = getSupabase();
       if (!supabase) throw new Error('Supabase is not configured');
@@ -136,22 +130,15 @@ export function createFeedbackService(repos: Repos) {
         updatedAt: new Date().toISOString(),
       };
       await repos.feedbackRequests.putLocal(updated);
-      try {
-        await sendWhatsAppMessage({
-          clinicId: request.clinicId,
-          kind: 'feedback_request',
-          toPhone: patientPhone,
-          bodyParams: [patientName, clinicName, feedbackLinkUrl(token)],
-          shareText: feedbackShareMessage(patientName, clinicName, token),
-          shareTitle: 'Ask for feedback',
-        });
-      } catch {
-        const { shareTextViaWhatsApp } = await import('@/lib/pdfShare');
-        await shareTextViaWhatsApp(
-          feedbackShareMessage(patientName, clinicName, token),
-          'Ask for feedback'
-        );
-      }
+      await sendWhatsAppMessage({
+        clinicId: request.clinicId,
+        kind: 'feedback_request',
+        toPhone: patientPhone,
+        bodyParams: [patientName, clinicName, feedbackLinkUrl(token)],
+        shareText: feedbackShareMessage(patientName, clinicName, token),
+        shareTitle: 'Ask for feedback',
+        popup,
+      });
       return updated;
     },
 
@@ -167,7 +154,8 @@ export function createFeedbackService(repos: Repos) {
       patientName: string,
       patientPhone: string | null,
       clinicName: string,
-      googleReviewUrl: string
+      googleReviewUrl: string,
+      popup?: Window | null
     ): Promise<void> {
       const text = `Hi ${patientName}, so glad you had a great experience at ${clinicName}! Would you mind leaving us a quick Google review? ${googleReviewUrl}`;
       await sendWhatsAppMessage({
@@ -177,6 +165,7 @@ export function createFeedbackService(repos: Repos) {
         bodyParams: [patientName, clinicName, googleReviewUrl],
         shareText: text,
         shareTitle: 'Ask for a Google review',
+        popup,
       });
     },
 
