@@ -197,8 +197,8 @@ export function InvoicesPage() {
       if (to && v.visitDate > to) continue;
       
       const paid = directPaymentByVisitId.get(v.id) ?? 0;
-      if (v.billPaise > paid) {
-        unbilled += (v.billPaise - paid);
+      if (v.actualBillPaise > paid) {
+        unbilled += (v.actualBillPaise - paid);
       }
     }
 

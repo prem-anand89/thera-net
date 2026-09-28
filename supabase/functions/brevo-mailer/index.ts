@@ -15,6 +15,16 @@ interface WebhookPayload {
   category?: 'bug' | 'feature' | 'support';
 }
 
+function escapeHtml(unsafe: string | undefined): string {
+  if (!unsafe) return '';
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -34,16 +44,16 @@ serve(async (req) => {
     let htmlContent = '';
 
     if (payload.type === 'error') {
-      subject = `🚨 Thera.Net Error: [${payload.context}]`;
+      subject = `🚨 Thera.Net Error: [${escapeHtml(payload.context)}]`;
       htmlContent = `
         <h2>App Error Captured</h2>
-        <p><strong>Context:</strong> ${payload.context}</p>
-        <p><strong>Message:</strong> ${payload.message}</p>
-        <p><strong>URL:</strong> ${payload.url}</p>
-        <p><strong>Time:</strong> ${payload.time}</p>
-        <p><strong>User Agent:</strong> ${payload.userAgent}</p>
+        <p><strong>Context:</strong> ${escapeHtml(payload.context)}</p>
+        <p><strong>Message:</strong> ${escapeHtml(payload.message)}</p>
+        <p><strong>URL:</strong> ${escapeHtml(payload.url)}</p>
+        <p><strong>Time:</strong> ${escapeHtml(payload.time)}</p>
+        <p><strong>User Agent:</strong> ${escapeHtml(payload.userAgent)}</p>
         <hr />
-        <pre>${payload.stack || 'No stack trace provided'}</pre>
+        <pre>${escapeHtml(payload.stack) || 'No stack trace provided'}</pre>
       `;
     } else if (payload.type === 'feedback') {
       const categoryIcons = {
@@ -53,18 +63,18 @@ serve(async (req) => {
       };
       
       const categoryLabel = payload.category ? categoryIcons[payload.category] : 'Feedback';
-      subject = `${categoryLabel} from ${payload.userName || 'User'}`;
+      subject = `${categoryLabel} from ${escapeHtml(payload.userName) || 'User'}`;
       
       htmlContent = `
         <h2>${categoryLabel}</h2>
-        <p><strong>User:</strong> ${payload.userName || 'Unknown'} (ID: ${payload.userId || 'Unknown'})</p>
-        <p><strong>Clinic ID:</strong> ${payload.clinicId || 'Unknown'}</p>
+        <p><strong>User:</strong> ${escapeHtml(payload.userName) || 'Unknown'} (ID: ${escapeHtml(payload.userId) || 'Unknown'})</p>
+        <p><strong>Clinic ID:</strong> ${escapeHtml(payload.clinicId) || 'Unknown'}</p>
         <hr />
         <p><strong>Message:</strong></p>
-        <p>${payload.message.replace(/\n/g, '<br />')}</p>
+        <p>${escapeHtml(payload.message).replace(/\n/g, '<br />')}</p>
       `;
     } else {
-      throw new Response(JSON.stringify({ error: 'Invalid payload type' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ error: 'Invalid payload type' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const emailData = {

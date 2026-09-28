@@ -72,8 +72,8 @@ test.describe('RLS Boundaries', () => {
     // clientB tries to link appointmentB (Clinic B) with patientA (Clinic A)
     const { error: rpcError } = await clientB.rpc('link_appointment_visit', {
       p_appointment_id: appointmentB,
-      p_visit_id: visitB.id,
-      p_patient_id: patientA.id
+      p_visit_id: visitB!.id,
+      p_patient_id: patientA!.id
     });
     
     // Should fail because patientA does not belong to Clinic B

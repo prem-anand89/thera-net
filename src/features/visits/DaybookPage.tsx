@@ -1,6 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos } from '@/services';
 import { db } from '@/lib/db';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
@@ -48,33 +47,41 @@ export function DaybookPage() {
     }
   }, [preset, todayIso, yesterdayIso, weekRange, monthRange]);
   
-  const payments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
-  const advances = useLiveQuery(
-    () => db.patient_advances.where('clinicId').equals(clinic.id).filter((a) => !a.deleted).toArray(),
-    [clinic.id]
-  );
-  const visits = useLiveQuery(() => repos.visits.list({ clinicId: clinic.id }), [clinic.id]);
-  const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
+  const data = useLiveQuery(async () => {
+    const payments = await db.payments.where('clinicId').equals(clinic.id)
+      .filter(p => !!p.receivedDate && p.receivedDate.slice(0, 10) >= from && p.receivedDate.slice(0, 10) <= to)
+      .toArray();
+
+    const advances = await db.patient_advances.where('clinicId').equals(clinic.id)
+      .filter(a => !a.deleted && !!a.receivedDate && a.receivedDate.slice(0, 10) >= from && a.receivedDate.slice(0, 10) <= to)
+      .toArray();
+
+    const visitIds = [...new Set(payments.map(p => p.visitId).filter(Boolean))];
+    const visits = visitIds.length > 0 
+      ? await db.visits.where('id').anyOf(visitIds).toArray() 
+      : [];
+
+    const patientIds = [...new Set([
+      ...advances.map(a => a.patientId),
+      ...visits.map(v => v.patientId)
+    ].filter(Boolean))];
+    
+    const patients = patientIds.length > 0
+      ? await db.patients.where('id').anyOf(patientIds).toArray()
+      : [];
+
+    return { payments, advances, visits, patients };
+  }, [clinic.id, from, to], { payments: [], advances: [], visits: [], patients: [] });
 
   const { cash, upi, card, other, total, transactions } = useMemo(() => {
     let cash = 0, upi = 0, card = 0, other = 0;
     const transactions: { id: string; date: string; patientName: string; type: string; method: string; amount: number; notes: string }[] = [];
 
-    // Defensive: slice only if value is a non-empty string. A null/undefined
-    // receivedDate (possible in legacy rows before the field was made required
-    // in the DB constraint) would crash the entire memo otherwise.
-    const isInRange = (isoStr: string | null | undefined): boolean => {
-      if (!isoStr) return false;
-      const d = isoStr.slice(0, 10);
-      return d >= from && d <= to;
-    };
-
-    const patientNameById = new Map((patients ?? []).map((p) => [p.id, p.name]));
-    const visitById = new Map((visits ?? []).map((v) => [v.id, v]));
+    const patientNameById = new Map((data.patients ?? []).map((p) => [p.id, p.name]));
+    const visitById = new Map((data.visits ?? []).map((v) => [v.id, v]));
 
     // 1. Regular Payments
-    for (const p of payments ?? []) {
-      if (isInRange(p.receivedDate)) {
+    for (const p of data.payments ?? []) {
         if (p.advanceId) continue;
         const amt = p.amountPaise;
         if (p.method === 'cash') cash += amt;
@@ -107,12 +114,10 @@ export function DaybookPage() {
           amount: amt,
           notes: note
         });
-      }
     }
 
     // 2. New Advances collected
-    for (const a of advances ?? []) {
-      if (isInRange(a.receivedDate)) {
+    for (const a of data.advances ?? []) {
         const amt = a.amountPaise;
         if (a.method === 'cash') cash += amt;
         else if (a.method === 'upi') upi += amt;
@@ -129,7 +134,6 @@ export function DaybookPage() {
           amount: amt,
           notes: a.notes ?? ''
         });
-      }
     }
 
 
@@ -137,7 +141,7 @@ export function DaybookPage() {
     transactions.sort((a, b) => b.date.localeCompare(a.date));
 
     return { cash, upi, card, other, total: cash + upi + card + other, transactions };
-  }, [payments, advances, visits, patients, from, to]);
+  }, [data]);
 
   return (
     <div className="space-y-6 max-w-2xl">

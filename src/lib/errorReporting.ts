@@ -10,9 +10,23 @@
  */
 
 const WEBHOOK_URL = import.meta.env.VITE_ERROR_WEBHOOK_URL as string | undefined;
+const LAST_ERROR_TIME_KEY = 'thera_last_error_time';
 
 export function reportError(error: unknown, context: string): void {
   console.error(`[${context}]`, error);
+
+  const now = Date.now();
+  if (typeof sessionStorage !== 'undefined') {
+    const lastStr = sessionStorage.getItem(LAST_ERROR_TIME_KEY);
+    if (lastStr) {
+      const lastTime = parseInt(lastStr, 10);
+      if (now - lastTime < 5 * 60 * 1000) {
+        return; // Rate limit: max 1 report every 5 minutes per session
+      }
+    }
+    sessionStorage.setItem(LAST_ERROR_TIME_KEY, now.toString());
+  }
+
   const payload = {
     context,
     message: error instanceof Error ? error.message : String(error),
