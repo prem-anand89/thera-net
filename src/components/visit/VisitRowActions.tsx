@@ -4,7 +4,7 @@ import { clinicCanShowUpiQr, clinicUpiPayeeName, buildUpiPayUri } from '@/domain
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { paymentActions } from '@/domain/paymentState';
-import { openWhatsAppChat } from '@/lib/pdfShare';
+import { openPatientWhatsAppChat } from '@/lib/pdfShare';
 import { KebabMenu, menuItem, menuItemDestructive } from '@/components/ui';
 import type { VisitCardData } from './types';
 
@@ -61,13 +61,7 @@ export function RowActionsMenu({
       text += `\n\nYou can pay directly via UPI using this link:\n${upiPayUri}`;
     }
 
-    const phone = data.patientPhone;
-    if (!phone) {
-      alert('Patient has no phone number on file');
-      return;
-    }
-
-    openWhatsAppChat(text, phone);
+    openPatientWhatsAppChat(text, data.patientPhone);
   };
 
   return (

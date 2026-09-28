@@ -1,6 +1,6 @@
 import type { UUID } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
-import { sendWhatsAppMessage } from '@/lib/whatsappSend';
+import { openPatientWhatsAppChat } from '@/lib/pdfShare';
 import { syncEngine } from '@/sync/engine';
 
 /**
@@ -202,7 +202,7 @@ export const bookingService = {
    *  the plan's own "two independent share actions, not one combined
    *  message" note; a click sends one WhatsApp share sheet, not two. */
   async shareBookingConfirmation(
-    clinicId: UUID,
+    _clinicId: UUID,
     patientName: string,
     patientPhone: string | null,
     clinicName: string,
@@ -214,21 +214,13 @@ export const bookingService = {
       timeStyle: 'short',
     });
     const text = `Hi ${patientName}, your appointment at ${clinicName} is confirmed for ${when}. See you then!`;
-    await sendWhatsAppMessage({
-      clinicId,
-      kind: 'booking_confirmation',
-      toPhone: patientPhone,
-      bodyParams: [patientName, clinicName, when],
-      shareText: text,
-      shareTitle: 'Send confirmation',
-      popup,
-    });
+    openPatientWhatsAppChat(text, patientPhone, popup);
   },
 
   /** Same `sendWhatsAppMessage` path as patient confirmation (wa.me by default;
    *  optional Business API when enabled in Settings). */
   async shareTherapistNotify(
-    clinicId: UUID,
+    _clinicId: UUID,
     therapistName: string,
     therapistPhone: string | null,
     patientName: string,
@@ -240,14 +232,6 @@ export const bookingService = {
       timeStyle: 'short',
     });
     const text = `Hi ${therapistName}, you have an appointment with ${patientName} confirmed for ${when}.`;
-    await sendWhatsAppMessage({
-      clinicId,
-      kind: 'therapist_notify',
-      toPhone: therapistPhone,
-      bodyParams: [therapistName, patientName, when],
-      shareText: text,
-      shareTitle: 'Notify therapist',
-      popup,
-    });
+    openPatientWhatsAppChat(text, therapistPhone, popup);
   },
 };

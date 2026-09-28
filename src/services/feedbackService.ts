@@ -1,6 +1,7 @@
 import type { FeedbackRequest, FeedbackRequestStatus, UUID } from '@/domain/types';
 import type { Repos } from '@/repositories/types';
 import { getSupabase } from '@/lib/supabase';
+import { openPatientWhatsAppChat } from '@/lib/pdfShare';
 import { sendWhatsAppMessage } from '@/lib/whatsappSend';
 
 /** Public `/f/$token` URL for a feedback request's token. */
@@ -87,15 +88,11 @@ export function createFeedbackService(repos: Repos) {
         updatedBy: row.updated_by ?? undefined,
       };
       await repos.feedbackRequests.putLocal(request);
-      await sendWhatsAppMessage({
-        clinicId: row.clinic_id,
-        kind: 'feedback_request',
-        toPhone: patientPhone,
-        bodyParams: [patientName, clinicName, feedbackLinkUrl(row.token)],
-        shareText: feedbackShareMessage(patientName, clinicName, row.token),
-        shareTitle: 'Ask for feedback',
-        popup,
-      });
+      openPatientWhatsAppChat(
+        feedbackShareMessage(patientName, clinicName, row.token),
+        patientPhone,
+        popup
+      );
       return request;
     },
 
@@ -130,15 +127,11 @@ export function createFeedbackService(repos: Repos) {
         updatedAt: new Date().toISOString(),
       };
       await repos.feedbackRequests.putLocal(updated);
-      await sendWhatsAppMessage({
-        clinicId: request.clinicId,
-        kind: 'feedback_request',
-        toPhone: patientPhone,
-        bodyParams: [patientName, clinicName, feedbackLinkUrl(token)],
-        shareText: feedbackShareMessage(patientName, clinicName, token),
-        shareTitle: 'Ask for feedback',
-        popup,
-      });
+      openPatientWhatsAppChat(
+        feedbackShareMessage(patientName, clinicName, token),
+        patientPhone,
+        popup
+      );
       return updated;
     },
 

@@ -7,7 +7,7 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { toFriendlyMessage } from '@/lib/errors';
-import { openWhatsAppSharePopup } from '@/lib/pdfShare';
+import { openWhatsAppSharePopup, warnIfWhatsAppPopupBlocked } from '@/lib/pdfShare';
 import { SectionCard, Pill, th, td } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { requestsLastViewedKey } from './requestsSignals';
@@ -281,6 +281,7 @@ export function RequestsPage() {
     scheduledAt: string
   ) {
     const popup = openWhatsAppSharePopup();
+    warnIfWhatsAppPopupBlocked(popup);
     void bookingService
       .shareBookingConfirmation(
         clinic.id,

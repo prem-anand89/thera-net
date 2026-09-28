@@ -14,7 +14,7 @@ import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
 import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
-import { openWhatsAppSharePopup } from '@/lib/pdfShare';
+import { openWhatsAppSharePopup, warnIfWhatsAppPopupBlocked } from '@/lib/pdfShare';
 import { syncFreshnessCaption } from '@/domain/syncCopy';
 import {
   clinicBillingConfig,
@@ -883,6 +883,7 @@ export function LedgerPage() {
                 onAskForFeedback={(row) => {
                   setError(null);
                   const popup = openWhatsAppSharePopup();
+                  warnIfWhatsAppPopupBlocked(popup);
                   void feedbackService
                     .askForFeedback(
                       row.visitId,
@@ -901,6 +902,7 @@ export function LedgerPage() {
                   if (!request?.token) return;
                   setError(null);
                   const popup = openWhatsAppSharePopup();
+                  warnIfWhatsAppPopupBlocked(popup);
                   void feedbackService
                     .resend(request, row.patientName, row.patientPhone ?? null, clinic.name, popup)
                     .catch((e) => {
@@ -912,6 +914,7 @@ export function LedgerPage() {
                   if (!row.googleReviewUrl) return;
                   setError(null);
                   const popup = openWhatsAppSharePopup();
+                  warnIfWhatsAppPopupBlocked(popup);
                   void feedbackService
                     .askForGoogleReview(
                       clinic.id,

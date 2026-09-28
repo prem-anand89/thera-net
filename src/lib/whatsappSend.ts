@@ -1,51 +1,14 @@
 import type { UUID } from '@/domain/types';
-import {
-  whatsappBusinessService,
-  type WhatsAppMessageKind,
-} from '@/services/whatsappBusinessService';
-import { normalizePhoneForWaMe, openWhatsAppChat } from './pdfShare';
+import type { WhatsAppMessageKind } from '@/services/whatsappBusinessService';
+import { openPatientWhatsAppChat } from './pdfShare';
 
 /**
- * Placeholder Meta-approved template names — Meta rejects unknown names and
- * the edge function returns success: false, which falls back to wa.me.
+ * Staff-initiated patient WhatsApp (feedback, booking, reminders). Always
+ * opens wa.me like visit-row payment reminders — identical UX for every
+ * clinic. WhatsApp Business API credentials in Settings are stored for a
+ * future automated-send path and are **not** invoked here.
  */
-const WHATSAPP_TEMPLATES: Record<WhatsAppMessageKind, string> = {
-  feedback_request: 'feedback_request_v1',
-  booking_confirmation: 'booking_confirmation_v1',
-  therapist_notify: 'therapist_notify_v1',
-  google_review: 'google_review_nudge_v1',
-  reminder_stale_package: 'reminder_stale_package_v1',
-  reminder_single_visit: 'reminder_single_visit_v1',
-  payment_reminder: 'payment_reminder_v1',
-};
-
-const businessApiCache = new Map<string, { at: number; enabled: boolean }>();
-const BUSINESS_API_CACHE_MS = 60_000;
-
-/** Call after saving WhatsApp Business API settings so the next send re-checks. */
-export function invalidateWhatsappBusinessApiCache(clinicId?: UUID): void {
-  if (clinicId) businessApiCache.delete(clinicId);
-  else businessApiCache.clear();
-}
-
-async function shouldSendViaBusinessApi(clinicId: UUID): Promise<boolean> {
-  const cached = businessApiCache.get(clinicId);
-  if (cached && Date.now() - cached.at < BUSINESS_API_CACHE_MS) {
-    return cached.enabled;
-  }
-  const status = await whatsappBusinessService.getConfigStatus(clinicId);
-  const enabled = Boolean(status?.enabled && status.hasToken && status.phoneNumberId);
-  businessApiCache.set(clinicId, { at: Date.now(), enabled });
-  return enabled;
-}
-
-/**
- * Single entry point for staff-initiated WhatsApp (feedback, booking, reminders
- * that go through this helper). Default: open wa.me like pending-bill reminders.
- * When Settings → WhatsApp Business API is **enabled** with credentials, tries
- * the server send first; on failure or when off, falls back to wa.me.
- */
-export async function sendWhatsAppMessage(params: {
+export function sendWhatsAppMessage(params: {
   clinicId: UUID;
   kind: WhatsAppMessageKind;
   toPhone: string | null;
@@ -53,28 +16,6 @@ export async function sendWhatsAppMessage(params: {
   shareText: string;
   shareTitle: string;
   popup?: Window | null;
-}): Promise<void> {
-  if (!params.toPhone?.trim()) {
-    if (params.popup) params.popup.close();
-    alert('Patient has no phone number on file');
-    return;
-  }
-
-  if (await shouldSendViaBusinessApi(params.clinicId)) {
-    const { sent } = await whatsappBusinessService.sendViaBusinessApi({
-      clinicId: params.clinicId,
-      kind: params.kind,
-      toPhone: normalizePhoneForWaMe(params.toPhone),
-      templateName: WHATSAPP_TEMPLATES[params.kind],
-      languageCode: 'en',
-      bodyParams: params.bodyParams,
-    });
-    if (sent) {
-      if (params.popup) params.popup.close();
-      alert('Message sent to the patient on WhatsApp.');
-      return;
-    }
-  }
-
-  openWhatsAppChat(params.shareText, params.toPhone, params.popup);
+}): void {
+  openPatientWhatsAppChat(params.shareText, params.toPhone, params.popup);
 }
