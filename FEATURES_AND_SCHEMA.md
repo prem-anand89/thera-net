@@ -1320,6 +1320,7 @@ visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
 upi_vpa, upi_payee_name, upi_qr_path  text (NULLABLE)
 upi_qr_enabled               boolean (NULLABLE)
 signature_path               text (NULLABLE)
+slot_duration_minutes        integer NOT NULL (default 30) — 15|30|45|60
 onboarding_completed_at      timestamptz (NULLABLE) — set when admin finishes
                              the post–create-clinic wizard; NULL ⇒ Shell keeps
                              redirecting to `/onboarding`
