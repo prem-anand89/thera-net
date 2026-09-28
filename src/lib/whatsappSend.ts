@@ -80,5 +80,5 @@ export async function sendWhatsAppMessage(params: {
       return;
     }
   }
-  await shareTextViaWhatsApp(params.shareText, params.shareTitle, params.popup);
+  await shareTextViaWhatsApp(params.shareText, params.shareTitle, params.popup, params.toPhone);
 }
