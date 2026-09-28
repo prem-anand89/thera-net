@@ -82,6 +82,12 @@ export function Shell() {
     () => (clinic ? repos.therapists.list(clinic.id) : []),
     [clinic?.id]
   );
+  
+  const appointmentRequests = useLiveQuery(
+    () => clinic && (role === 'admin' || role === 'front_desk') ? repos.appointmentRequests.listByClinic(clinic.id) : undefined,
+    [clinic?.id, role]
+  );
+  const pendingRequestsCount = appointmentRequests?.filter(r => r.status === 'pending').length ?? 0;
   // Local-part of the email, not the full address — the account area used
   // to show the raw email everywhere; this is the fallback for anyone who
   // hasn't set a display name yet, not a full replacement for a real name.
@@ -366,6 +372,11 @@ export function Shell() {
                 >
                   <item.Icon className="shrink-0" />
                   <span className="hidden tab:inline">{item.label}</span>
+                  {item.to === '/requests' && pendingRequestsCount > 0 && (
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--rust)] px-1 text-[10px] font-bold text-white">
+                      {pendingRequestsCount}
+                    </span>
+                  )}
                 </Link>
               ))}
             </nav>
@@ -435,6 +446,7 @@ export function Shell() {
               pathname.startsWith('/insights') ||
               pathname.startsWith('/requests')
             }
+            badge={pendingRequestsCount}
           />
         </nav>
       </div>
@@ -447,21 +459,30 @@ function PhoneTab({
   label,
   Icon,
   active,
+  badge,
 }: {
   to: '/workspace' | '/patients' | '/ledger' | '/more';
   label: string;
   Icon: (props: { className?: string }) => ReactNode;
   active: boolean;
+  badge?: number;
 }) {
   return (
     <Link
       to={to}
       aria-current={active ? 'page' : undefined}
-      className={`flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium ${
+      className={`relative flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium ${
         active ? 'text-[var(--teal)]' : 'text-[var(--muted)]'
       }`}
     >
-      <Icon />
+      <div className="relative flex items-center justify-center">
+        <Icon />
+        {badge !== undefined && badge > 0 && (
+          <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-[var(--surface)] bg-[var(--rust)] px-0.5 text-[9px] font-bold text-white">
+            {badge}
+          </span>
+        )}
+      </div>
       {label}
     </Link>
   );
