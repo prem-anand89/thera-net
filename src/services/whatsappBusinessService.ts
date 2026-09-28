@@ -23,10 +23,8 @@ export type WhatsAppMessageKind =
  * on why `clinic_whatsapp_config` carries no SELECT policy for any
  * client role at all.
  *
- * `sendViaBusinessApi` is the one place any client code calls the
- * `send-whatsapp-template` Edge Function — see `src/lib/whatsappSend.ts`
- * for the shared "try Business API, fall back to the share sheet" wrapper
- * every send action actually calls; nothing calls this directly.
+ * `sendViaBusinessApi` is only called from `src/lib/whatsappSend.ts` when
+ * Settings has WhatsApp Business API enabled; otherwise sends use wa.me.
  */
 export const whatsappBusinessService = {
   async getConfigStatus(
