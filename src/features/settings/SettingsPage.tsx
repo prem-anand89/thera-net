@@ -1453,14 +1453,12 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   );
 }
 
-/*
 type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' | 'bookingSlug'>;
 
 // Lowercase alphanumeric + hyphens, no leading/trailing/doubled hyphen —
 // the DB only enforces uniqueness, so this is the one place the "clean
 // URL segment" shape is actually checked.
 const BOOKING_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-*/
 
 /**
  * Patient Communications, Slice 1-5 — module on/off, the Google review
@@ -1471,8 +1469,6 @@ const BOOKING_SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
  * the full spec describes arrive with later slices, not here.
  */
 function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
-  return null;
-  /*
   const clinic = useClinic();
   const { form, set, save, cancel, dirty, saved, busy, error } =
     useClinicSectionForm<PatientCommsFields>(
@@ -1481,7 +1477,7 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
         googleReviewUrl: c.googleReviewUrl ?? null,
         bookingSlug: c.bookingSlug ?? null,
       }),
-      onDirtyChange
+      _onDirtyChange
     );
   const [slugCopied, setSlugCopied] = useState(false);
   const bookingUrl = form.bookingSlug ? `${window.location.origin}/book/${form.bookingSlug}` : '';
@@ -1581,7 +1577,6 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
       <WhatsAppBusinessSubsection clinicId={clinic.id} />
     </SectionCard>
   );
-  */
 }
 
 /**
@@ -1599,7 +1594,6 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
  * the client), so it doesn't fit the "read the clinic row, diff, save"
  * shape that hook is built for.
  */
-/*
 function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
   const [expanded, setExpanded] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -1710,10 +1704,10 @@ function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
             </>
           )}
         </div>
+      )}
     </div>
   );
 }
-*/
 
 
 
