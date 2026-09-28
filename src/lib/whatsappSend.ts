@@ -77,6 +77,9 @@ export async function sendWhatsAppMessage(params: {
     });
     if (sent) {
       if (params.popup) params.popup.close();
+      // Business API sends silently — staff still need confirmation after the
+      // async path (no wa.me tab opened).
+      alert('Message sent to the patient on WhatsApp.');
       return;
     }
   }

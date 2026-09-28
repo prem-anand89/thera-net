@@ -25,6 +25,7 @@ import {
   type UUID,
 } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
+import { openWhatsAppSharePopup } from '@/lib/pdfShare';
 import {
   Field,
   inputCls,
@@ -672,8 +673,7 @@ export function NewVisitPage() {
                 disabled={feedbackRequested}
                 onClick={() => {
                   setFeedbackRequested(true);
-                  const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-                  const popup = !nav.share ? window.open('about:blank', '_blank') : null;
+                  const popup = openWhatsAppSharePopup();
                   void feedbackService
                     .askForFeedback(
                       justSaved.visitId,

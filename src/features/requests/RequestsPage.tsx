@@ -7,6 +7,7 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { toFriendlyMessage } from '@/lib/errors';
+import { openWhatsAppSharePopup } from '@/lib/pdfShare';
 import { SectionCard, Pill, th, td } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { requestsLastViewedKey } from './requestsSignals';
@@ -676,8 +677,7 @@ export function RequestsPage() {
                   type="button"
                   className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white"
                   onClick={() => {
-                    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-                    const popup = !nav.share ? window.open('about:blank', '_blank') : null;
+                    const popup = openWhatsAppSharePopup();
                     void bookingService
                       .shareBookingConfirmation(
                         clinic.id,
@@ -700,8 +700,7 @@ export function RequestsPage() {
                     type="button"
                     className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white"
                     onClick={() => {
-                      const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-                      const popup = !nav.share ? window.open('about:blank', '_blank') : null;
+                      const popup = openWhatsAppSharePopup();
                       void bookingService
                         .shareTherapistNotify(
                           clinic.id,
