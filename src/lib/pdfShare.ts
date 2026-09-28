@@ -103,37 +103,26 @@ export async function shareFileToWhatsApp(
   return 'fallback';
 }
 
-/**
- * Open a blank tab synchronously inside a click handler so later async work
- * (e.g. `create_feedback_request`) can navigate it to `wa.me` without popup
- * blockers. Callers must pass the returned window into `shareTextViaWhatsApp`.
- */
-export function openWhatsAppSharePopup(): Window | null {
-  return window.open('about:blank', '_blank');
-}
+export type OpenPatientWhatsAppOptions = {
+  /**
+   * Use after async work (e.g. `create_feedback_request`): if a new tab is
+   * blocked, open wa.me in this tab — same end result as payment reminders.
+   */
+  navigateCurrentTabIfBlocked?: boolean;
+};
 
-/** Call right after `openWhatsAppSharePopup` when async work (e.g. feedback RPC) follows. */
-export function warnIfWhatsAppPopupBlocked(popup: Window | null): void {
-  if (!popup) {
-    alert(
-      'Your browser blocked opening WhatsApp. Allow pop-ups for this site, then try again — ' +
-        'the same way pending-bill WhatsApp reminders work.'
-    );
-  }
-}
-
-/** Same entry as visit-row "Send WhatsApp reminder" — wa.me only, no Business API. */
+/** Same entry as visit-row "Send WhatsApp reminder" — direct wa.me, no blank tab. */
 export function openPatientWhatsAppChat(
   text: string,
   patientPhone: string | null | undefined,
-  popup?: Window | null
+  options?: OpenPatientWhatsAppOptions
 ): void {
   if (!patientPhone?.trim()) {
-    if (popup) popup.close();
     alert('Patient has no phone number on file');
     return;
   }
-  openWhatsAppChat(text, patientPhone, popup);
+  const url = buildWhatsAppSendUrl(text, patientPhone);
+  openWhatsAppUrl(url, text, options?.navigateCurrentTabIfBlocked ?? false);
 }
 
 /** Same normalization as visit-row payment reminders and Meta's `to` field. */
@@ -161,21 +150,39 @@ export function notifyWhatsAppOpenFailed(shareText: string): void {
   );
 }
 
-/**
- * Opens WhatsApp Web/app with a pre-filled message to a specific contact —
- * the same behaviour as "Send WhatsApp reminder" on a visit row.
- * @returns whether a wa.me navigation was started
- */
-export function openWhatsAppChat(
-  text: string,
-  toPhone?: string | null,
-  popup?: Window | null
-): boolean {
-  const url = buildWhatsAppSendUrl(text, toPhone);
-  if (popup && !popup.closed) {
-    popup.location.href = url;
-    return true;
+function openWhatsAppUrl(
+  url: string,
+  clipboardText: string,
+  navigateCurrentTabIfBlocked: boolean
+): void {
+  const opened = window.open(url, '_blank', 'noopener,noreferrer');
+  if (opened) return;
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  if (navigateCurrentTabIfBlocked) {
+    window.location.assign(url);
+    return;
   }
+
+  notifyWhatsAppOpenFailed(clipboardText);
+}
+
+/**
+ * Opens WhatsApp with a pre-filled message — identical to payment reminders.
+ */
+export function openWhatsAppChat(text: string, toPhone?: string | null): boolean {
+  if (!toPhone?.trim()) {
+    notifyWhatsAppOpenFailed(text);
+    return false;
+  }
+  const url = buildWhatsAppSendUrl(text, toPhone);
   const opened = window.open(url, '_blank', 'noopener,noreferrer');
   if (!opened) {
     notifyWhatsAppOpenFailed(text);
@@ -184,17 +191,11 @@ export function openWhatsAppChat(
   return true;
 }
 
-/**
- * Same Web-Share-API-with-`wa.me`-fallback shape as `shareFileToWhatsApp`,
- * for a plain link/text payload with no file involved (e.g. a patient
- * feedback link) — most of the app's "share this" actions have nothing to
- * attach, so this is the common case, not `shareFileToWhatsApp`'s.
- */
 export async function shareTextViaWhatsApp(
   text: string,
   _title: string,
-  popup?: Window | null,
+  _popup?: Window | null,
   toPhone?: string | null
 ): Promise<void> {
-  openWhatsAppChat(text, toPhone, popup);
+  openWhatsAppChat(text, toPhone);
 }

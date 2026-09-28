@@ -19,7 +19,6 @@ import {
 } from '@/domain/types';
 import { noteForVisit } from '@/domain/noteLinks';
 import { toFriendlyMessage } from '@/lib/errors';
-import { openWhatsAppSharePopup, warnIfWhatsAppPopupBlocked } from '@/lib/pdfShare';
 import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
 import type { OpenPackageRow, TodayVisitRow } from '@/services/dashboardService';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
@@ -771,44 +770,28 @@ export function WorkspacePage() {
               if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
             }}
             onAskForFeedback={(row) => {
-              const popup = openWhatsAppSharePopup();
-              warnIfWhatsAppPopupBlocked(popup);
               void feedbackService
-                .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name, popup)
-                .catch((e) => {
-                  popup?.close();
-                  alert(toFriendlyMessage(e));
-                });
+                .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name)
+                .catch((e) => alert(toFriendlyMessage(e)));
             }}
             onResendFeedback={(row) => {
               const request = feedbackRequestByVisitId.get(row.visitId);
               if (!request?.token) return;
-              const popup = openWhatsAppSharePopup();
-              warnIfWhatsAppPopupBlocked(popup);
               void feedbackService
-                .resend(request, row.patientName, row.patientPhone ?? null, clinic.name, popup)
-                .catch((e) => {
-                  popup?.close();
-                  alert(toFriendlyMessage(e));
-                });
+                .resend(request, row.patientName, row.patientPhone ?? null, clinic.name)
+                .catch((e) => alert(toFriendlyMessage(e)));
             }}
             onAskForGoogleReview={(row) => {
               if (!row.googleReviewUrl) return;
-              const popup = openWhatsAppSharePopup();
-              warnIfWhatsAppPopupBlocked(popup);
               void feedbackService
                 .askForGoogleReview(
                   clinic.id,
                   row.patientName,
                   row.patientPhone ?? null,
                   clinic.name,
-                  row.googleReviewUrl,
-                  popup
+                  row.googleReviewUrl
                 )
-                .catch((e) => {
-                  popup?.close();
-                  alert(toFriendlyMessage(e));
-                });
+                .catch((e) => alert(toFriendlyMessage(e)));
             }}
             canInvoice={canBill}
             backTo="/workspace"
@@ -912,20 +895,15 @@ export function WorkspacePage() {
                           type="button"
                           className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
                           onClick={() => {
-                            const popup = openWhatsAppSharePopup();
                             void feedbackService
                               .sendStalePackageReminder(
                                 clinic.id,
                                 p.patientName,
                                 p.phone,
                                 clinic.name,
-                                p.serviceName,
-                                popup
+                                p.serviceName
                               )
-                              .catch((e) => {
-                                popup?.close();
-                                alert(toFriendlyMessage(e));
-                              });
+                              .catch((e) => alert(toFriendlyMessage(e)));
                           }}
                         >
                           Send reminder
@@ -992,20 +970,15 @@ export function WorkspacePage() {
                               type="button"
                               className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
                               onClick={() => {
-                                const popup = openWhatsAppSharePopup();
                                 void feedbackService
                                   .sendStalePackageReminder(
                                     clinic.id,
                                     p.patientName,
                                     p.phone,
                                     clinic.name,
-                                    p.serviceName,
-                                    popup
+                                    p.serviceName
                                   )
-                                  .catch((e) => {
-                                    popup?.close();
-                                    alert(toFriendlyMessage(e));
-                                  });
+                                  .catch((e) => alert(toFriendlyMessage(e)));
                               }}
                             >
                               Send reminder

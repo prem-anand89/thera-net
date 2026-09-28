@@ -7,7 +7,6 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { toFriendlyMessage } from '@/lib/errors';
-import { openWhatsAppSharePopup, warnIfWhatsAppPopupBlocked } from '@/lib/pdfShare';
 import { SectionCard, Pill, th, td } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { requestsLastViewedKey } from './requestsSignals';
@@ -280,21 +279,15 @@ export function RequestsPage() {
     patientPhone: string | null | undefined,
     scheduledAt: string
   ) {
-    const popup = openWhatsAppSharePopup();
-    warnIfWhatsAppPopupBlocked(popup);
     void bookingService
       .shareBookingConfirmation(
         clinic.id,
         patientName,
         patientPhone ?? null,
         clinic.name,
-        scheduledAt,
-        popup
+        scheduledAt
       )
-      .catch((e) => {
-        popup?.close();
-        alert(toFriendlyMessage(e));
-      });
+      .catch((e) => alert(toFriendlyMessage(e)));
   }
 
   // Marks every response caught up as of this visit — Workspace's "new
@@ -713,20 +706,15 @@ export function RequestsPage() {
                     type="button"
                     className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white"
                     onClick={() => {
-                      const popup = openWhatsAppSharePopup();
                       void bookingService
                         .shareTherapistNotify(
                           clinic.id,
                           therapistNameById.get(justConfirmed.therapistId!) ?? 'the therapist',
                           therapistById.get(justConfirmed.therapistId!)?.phone ?? null,
                           justConfirmed.patientName,
-                          justConfirmed.scheduledAt,
-                          popup
+                          justConfirmed.scheduledAt
                         )
-                        .catch((e) => {
-                          popup?.close();
-                          alert(toFriendlyMessage(e));
-                        });
+                        .catch((e) => alert(toFriendlyMessage(e)));
                     }}
                   >
                     Notify therapist

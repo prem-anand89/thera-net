@@ -25,7 +25,6 @@ import {
   type UUID,
 } from '@/domain/types';
 import { toFriendlyMessage } from '@/lib/errors';
-import { openWhatsAppSharePopup, warnIfWhatsAppPopupBlocked } from '@/lib/pdfShare';
 import {
   Field,
   inputCls,
@@ -673,18 +672,14 @@ export function NewVisitPage() {
                 disabled={feedbackRequested}
                 onClick={() => {
                   setFeedbackRequested(true);
-                  const popup = openWhatsAppSharePopup();
-                  warnIfWhatsAppPopupBlocked(popup);
                   void feedbackService
                     .askForFeedback(
                       justSaved.visitId,
                       justSaved.patientName,
                       justSaved.patientPhone,
-                      clinic.name,
-                      popup
+                      clinic.name
                     )
                     .catch((e) => {
-                      popup?.close();
                       setFeedbackRequested(false);
                       setError(toFriendlyMessage(e));
                     });

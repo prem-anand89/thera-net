@@ -14,7 +14,6 @@ import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
 import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
-import { openWhatsAppSharePopup, warnIfWhatsAppPopupBlocked } from '@/lib/pdfShare';
 import { syncFreshnessCaption } from '@/domain/syncCopy';
 import {
   clinicBillingConfig,
@@ -882,52 +881,30 @@ export function LedgerPage() {
                 }}
                 onAskForFeedback={(row) => {
                   setError(null);
-                  const popup = openWhatsAppSharePopup();
-                  warnIfWhatsAppPopupBlocked(popup);
                   void feedbackService
-                    .askForFeedback(
-                      row.visitId,
-                      row.patientName,
-                      row.patientPhone ?? null,
-                      clinic.name,
-                      popup
-                    )
-                    .catch((e) => {
-                      popup?.close();
-                      setError(e instanceof Error ? e.message : String(e));
-                    });
+                    .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name)
+                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 onResendFeedback={(row) => {
                   const request = feedbackRequestByVisitId.get(row.visitId);
                   if (!request?.token) return;
                   setError(null);
-                  const popup = openWhatsAppSharePopup();
-                  warnIfWhatsAppPopupBlocked(popup);
                   void feedbackService
-                    .resend(request, row.patientName, row.patientPhone ?? null, clinic.name, popup)
-                    .catch((e) => {
-                      popup?.close();
-                      setError(e instanceof Error ? e.message : String(e));
-                    });
+                    .resend(request, row.patientName, row.patientPhone ?? null, clinic.name)
+                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 onAskForGoogleReview={(row) => {
                   if (!row.googleReviewUrl) return;
                   setError(null);
-                  const popup = openWhatsAppSharePopup();
-                  warnIfWhatsAppPopupBlocked(popup);
                   void feedbackService
                     .askForGoogleReview(
                       clinic.id,
                       row.patientName,
                       row.patientPhone ?? null,
                       clinic.name,
-                      row.googleReviewUrl,
-                      popup
+                      row.googleReviewUrl
                     )
-                    .catch((e) => {
-                      popup?.close();
-                      setError(e instanceof Error ? e.message : String(e));
-                    });
+                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 canInvoice={canBill}
                 backTo="/ledger"
