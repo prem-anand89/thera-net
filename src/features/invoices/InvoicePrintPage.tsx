@@ -115,12 +115,9 @@ function LegacyLineItemsTable({
                 {hasAdjustments && (
                   <td className="font-num py-2 text-right">
                     {li.adjustmentPaise !== 0 ? (
-                      <div className="flex flex-col items-end">
-                        <span>{formatINR(li.adjustmentPaise)}</span>
-                        {li.adjustmentReason && (
-                          <span className="text-xs text-[var(--muted)] font-normal">{li.adjustmentReason}</span>
-                        )}
-                      </div>
+                      <>
+                        {formatINR(li.adjustmentPaise)}
+                      </>
                     ) : (
                       '—'
                     )}
@@ -223,12 +220,9 @@ function LineItemsTable({
                 {hasAdjustments && (
                   <td className="font-num py-2 text-right">
                     {li.adjustmentPaise !== 0 ? (
-                      <div className="flex flex-col items-end">
-                        <span>{formatINR(li.adjustmentPaise)}</span>
-                        {li.adjustmentReason && (
-                          <span className="text-xs text-[var(--muted)] font-normal mt-0.5">{li.adjustmentReason}</span>
-                        )}
-                      </div>
+                      <>
+                        {formatINR(li.adjustmentPaise)}
+                      </>
                     ) : (
                       '—'
                     )}
