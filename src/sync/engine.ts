@@ -81,6 +81,15 @@ export class SyncEngine {
   private started = false;
   private channel: any = null;
   private fallbackTimer: ReturnType<typeof setInterval> | null = null;
+  
+  private handleOnline = () => {
+    syncStatus.set({ online: true });
+    this.schedule();
+  };
+
+  private handleOffline = () => {
+    syncStatus.set({ online: false });
+  };
 
   async stop(): Promise<void> {
     this.started = false;
@@ -92,6 +101,11 @@ export class SyncEngine {
     if (this.channel) {
       await this.supabase?.removeChannel(this.channel);
       this.channel = null;
+    }
+    
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', this.handleOnline);
+      window.removeEventListener('offline', this.handleOffline);
     }
     while (this.running) {
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -107,11 +121,8 @@ export class SyncEngine {
       this.schedule();
     });
 
-    window.addEventListener('online', () => {
-      syncStatus.set({ online: true });
-      this.schedule();
-    });
-    window.addEventListener('offline', () => syncStatus.set({ online: false }));
+    window.addEventListener('online', this.handleOnline);
+    window.addEventListener('offline', this.handleOffline);
 
     this.channel = this.supabase.channel('thera-net-sync');
     for (const table of SYNC_TABLES) {
