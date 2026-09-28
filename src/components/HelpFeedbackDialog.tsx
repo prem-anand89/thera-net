@@ -213,6 +213,43 @@ export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps)
 
                 {mode === 'support' && (
                   <>
+                    <div className="mb-2 max-h-52 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-3 text-sm">
+                      <h3 className="mb-2 font-medium text-[var(--ink)]">Quick Guides:</h3>
+                      
+                      <details className="mb-2 group">
+                        <summary className="cursor-pointer font-medium text-[var(--teal)] hover:underline">How do I set up my clinic?</summary>
+                        <p className="mt-1 pl-4 text-xs leading-relaxed text-[var(--muted)]">
+                          Open the <strong>Settings</strong> page from your Account Menu. 
+                          In the <strong>Profile</strong> tab, you can set your MRNO prefix.
+                          In the <strong>Catalog</strong> tab, define the services you offer.
+                          In the <strong>Team</strong> tab, you can invite other therapists or front desk staff.
+                        </p>
+                      </details>
+
+                      <details className="mb-2 group">
+                        <summary className="cursor-pointer font-medium text-[var(--teal)] hover:underline">How does offline mode work?</summary>
+                        <p className="mt-1 pl-4 text-xs leading-relaxed text-[var(--muted)]">
+                          Thera.Net works without internet! You can search patients, log visits, and write clinical notes entirely offline. They will securely save to your device and automatically sync the moment your internet returns. <em>(Note: Generating invoices requires an active connection to ensure sequential numbering).</em>
+                        </p>
+                      </details>
+
+                      <details className="mb-2 group">
+                        <summary className="cursor-pointer font-medium text-[var(--teal)] hover:underline">How do advances and daybook math work?</summary>
+                        <p className="mt-1 pl-4 text-xs leading-relaxed text-[var(--muted)]">
+                          When you record a Patient Advance, it shows up as cash collected on the Daybook <strong>today</strong>. When they use that advance for a visit later, the app automatically pays the visit but <strong>excludes</strong> it from that day's cash collection to prevent double-counting your revenue.
+                        </p>
+                      </details>
+
+                      <details className="group">
+                        <summary className="cursor-pointer font-medium text-[var(--teal)] hover:underline">How do I give billing access to staff?</summary>
+                        <p className="mt-1 pl-4 text-xs leading-relaxed text-[var(--muted)]">
+                          Go to <strong>Settings &rarr; Features</strong>. You can toggle whether "Everyone" or only "Billing Staff / Admins" are allowed to issue invoices. 
+                        </p>
+                      </details>
+                    </div>
+
+                    <h3 className="mt-4 mb-2 font-medium text-[var(--ink)] border-t border-[var(--border)] pt-4">Still need help? Send us a message:</h3>
+                    
                     <Field label="Topic">
                       <select value={supportTopic} onChange={(e) => setSupportTopic(e.target.value)} className={inputCls}>
                         <option value="General">General Question</option>
@@ -221,8 +258,8 @@ export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps)
                         <option value="Account">Account / Login</option>
                       </select>
                     </Field>
-                    <Field label="How can we help? (We will email you back)">
-                      <textarea required autoFocus disabled={busy} rows={4} value={message} onChange={(e) => setMessage(e.target.value)} className={inputCls} placeholder="Describe what you need help with..." />
+                    <Field label="How can we help?">
+                      <textarea required disabled={busy} rows={3} value={message} onChange={(e) => setMessage(e.target.value)} className={inputCls} placeholder="Describe what you need help with (we will email you back)..." />
                     </Field>
                   </>
                 )}
