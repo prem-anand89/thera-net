@@ -225,7 +225,7 @@ export function DaybookPage() {
 
       <SectionCard title={`Collections for ${from === to ? formatDateDMY(from) : `${formatDateDMY(from)} – ${formatDateDMY(to)}`}`}>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[400px] text-sm">
+          <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border)]">
                 <th className={th}>Payment Method</th>
@@ -264,7 +264,7 @@ export function DaybookPage() {
 
       <SectionCard title="Transaction Log">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[500px] text-sm">
+          <table className="hidden tab:table w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border)]">
                 <th className={th}>Date</th>
@@ -297,6 +297,32 @@ export function DaybookPage() {
               )}
             </tbody>
           </table>
+          
+          <div className="tab:hidden flex flex-col space-y-3">
+            {transactions.length === 0 && (
+              <div className="py-8 text-center text-[var(--muted)] text-sm">No transactions in this period.</div>
+            )}
+            {transactions.map((t) => (
+              <div key={t.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm text-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-display font-medium text-[var(--ink)]">{t.patientName}</div>
+                  <div className="font-num font-bold text-[var(--ink)]">{formatINR(t.amount)}</div>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">
+                  <Pill tone="slate">{formatDateDMY(t.date)}</Pill>
+                  <Pill tone="slate">{t.method === '—' ? '—' : t.method.toUpperCase()}</Pill>
+                  <Pill tone={t.type === 'Advance Deposit' ? 'amber' : t.type === 'Discount' ? 'rust' : t.type === 'Price Top-up' ? 'teal' : 'green'}>
+                    {t.type}
+                  </Pill>
+                </div>
+                {t.notes && (
+                  <div className="mt-2 text-xs text-[var(--muted)] italic bg-[var(--paper)] p-2 rounded border border-[var(--border)]">
+                    {t.notes}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </SectionCard>
     </div>
