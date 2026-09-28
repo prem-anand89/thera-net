@@ -4,6 +4,7 @@ import { clinicCanShowUpiQr, clinicUpiPayeeName, buildUpiPayUri } from '@/domain
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { paymentActions } from '@/domain/paymentState';
+import { openWhatsAppChat } from '@/lib/pdfShare';
 import { KebabMenu, menuItem, menuItemDestructive } from '@/components/ui';
 import type { VisitCardData } from './types';
 
@@ -66,11 +67,7 @@ export function RowActionsMenu({
       return;
     }
 
-    const cleanPhone = phone.replace(/\D/g, '');
-    const waPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    
-    const url = `https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+    openWhatsAppChat(text, phone);
   };
 
   return (

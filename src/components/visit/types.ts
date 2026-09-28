@@ -17,10 +17,8 @@ export interface VisitCardData {
   visitDate: string;
   patientId: UUID;
   patientName: string;
-  /** For the WhatsApp Business API send path (`sendWhatsAppMessage`) —
-   *  optional/nullable since not every builder of this type has bothered
-   *  to join it (e.g. a context where every feedback/reminder action is
-   *  already hidden). Absent, falls back to the manual share sheet. */
+  /** Pre-addresses `wa.me` sends (feedback, reminders). Optional when the
+   *  row builder has no phone join or comms actions are hidden. */
   patientPhone?: string | null;
   mrno: string;
   age?: number | null;

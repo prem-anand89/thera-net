@@ -112,12 +112,34 @@ export function openWhatsAppSharePopup(): Window | null {
   return window.open('about:blank', '_blank');
 }
 
-function whatsAppTextShareUrl(text: string, toPhone?: string | null): string {
-  const phoneSegment = toPhone ? toPhone.replace(/\D/g, '') : '';
-  const waPhone = phoneSegment.length === 10 ? `91${phoneSegment}` : phoneSegment;
+/** Same normalization as visit-row payment reminders and Meta's `to` field. */
+export function normalizePhoneForWaMe(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length === 10 ? `91${digits}` : digits;
+}
+
+export function buildWhatsAppSendUrl(text: string, toPhone?: string | null): string {
+  const waPhone = toPhone ? normalizePhoneForWaMe(toPhone) : '';
   return waPhone
     ? `https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`
     : `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+/**
+ * Opens WhatsApp Web/app with a pre-filled message to a specific contact —
+ * the same behaviour as "Send WhatsApp reminder" on a visit row.
+ */
+export function openWhatsAppChat(
+  text: string,
+  toPhone?: string | null,
+  popup?: Window | null
+): void {
+  const url = buildWhatsAppSendUrl(text, toPhone);
+  if (popup && !popup.closed) {
+    popup.location.href = url;
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 /**
@@ -128,30 +150,9 @@ function whatsAppTextShareUrl(text: string, toPhone?: string | null): string {
  */
 export async function shareTextViaWhatsApp(
   text: string,
-  title: string,
+  _title: string,
   popup?: Window | null,
   toPhone?: string | null
 ): Promise<void> {
-  const url = whatsAppTextShareUrl(text, toPhone);
-
-  // Tab opened on click survives async RPC/API work. `navigator.share` and a
-  // late `window.open` both need a fresh user gesture, so they fail after
-  // `create_feedback_request` — prefer navigating the pre-opened tab.
-  if (popup && !popup.closed) {
-    popup.location.href = url;
-    return;
-  }
-
-  const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-  if (nav.share) {
-    try {
-      await nav.share({ text, title });
-      return;
-    } catch (e) {
-      if (e instanceof Error && e.name === 'AbortError') return;
-      // Fall through to the wa.me link for any other Web Share failure —
-      // same reasoning shareFileToWhatsApp falls back rather than erroring.
-    }
-  }
-  window.open(url, '_blank', 'noopener,noreferrer');
+  openWhatsAppChat(text, toPhone, popup);
 }
