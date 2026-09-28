@@ -834,8 +834,8 @@ still falls through to the existing share sheet, unchanged.
     new, not a replacement.
   - **`clinics.booking_slug`** — nullable unique text, the public
     `/book/$slug` segment. Not a secret (meant to live on Google/the
-    clinic's own website), unlike a feedback token — `get_booking_clinic_
-    name`/`list_booking_therapists` just need the slug to exist and the
+    clinic's own website), unlike a feedback token — `get_booking_clinic_info`
+    and `list_booking_therapists` just need the slug to exist and the
     module to be on, no rate-limited-oracle concern beyond the same
     generic-error/IP-throttle discipline every public RPC in this module
     uses.
@@ -904,7 +904,7 @@ still falls through to the existing share sheet, unchanged.
     them, so any UPDATE (confirm, decline, reschedule, ...) failed with
     `record "new" has no field "updated_by"` until the columns were
     added, matching `feedback_requests`' own shape.
-  - **Ten RPCs**: three public (`get_booking_clinic_name`,
+  - **Ten RPCs**: three public (`get_booking_clinic_info`,
     `list_booking_therapists`,
     `submit_appointment_request` — anon + authenticated grants,
     rate-limited); seven staff-only
