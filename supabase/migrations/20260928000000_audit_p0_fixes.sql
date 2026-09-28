@@ -42,12 +42,15 @@ begin
 end $$;
 
 -- 2. create_appointment_staff
-create or replace function public.create_appointment_staff(
+drop function if exists public.create_appointment_staff(uuid, text, text, uuid, timestamptz, uuid);
+
+create function public.create_appointment_staff(
   p_clinic_id uuid,
   p_name text,
   p_phone text,
   p_therapist_id uuid,
-  p_scheduled_at timestamptz
+  p_scheduled_at timestamptz,
+  p_patient_id uuid default null
 ) returns uuid
 language plpgsql security definer set search_path = public as $$
 declare
@@ -62,6 +65,10 @@ begin
   if trim(p_phone) = '' then
     raise exception 'Phone is required.';
   end if;
+  if p_patient_id is not null
+     and not exists (select 1 from patients where id = p_patient_id and clinic_id = p_clinic_id) then
+    raise exception 'Patient not found in this clinic.';
+  end if;
   if p_therapist_id is not null then
     if not exists (select 1 from clinic_members where clinic_id = p_clinic_id and user_id = p_therapist_id) then
       raise exception 'Therapist is not a member of this clinic.';
@@ -69,19 +76,26 @@ begin
   end if;
 
   insert into appointments (
-    clinic_id, patient_name, patient_phone, therapist_id, scheduled_at
+    clinic_id, patient_id, patient_name, patient_phone, therapist_id, scheduled_at
   ) values (
-    p_clinic_id, trim(p_name), trim(p_phone), p_therapist_id, p_scheduled_at
+    p_clinic_id, p_patient_id, trim(p_name), trim(p_phone), p_therapist_id, p_scheduled_at
   ) returning id into v_appointment_id;
 
   return v_appointment_id;
 end $$;
 
+revoke execute on function public.create_appointment_staff(uuid, text, text, uuid, timestamptz, uuid) from public, anon;
+grant execute on function public.create_appointment_staff(uuid, text, text, uuid, timestamptz, uuid) to authenticated;
+
+
 -- 3. confirm_appointment_request
-create or replace function public.confirm_appointment_request(
+drop function if exists public.confirm_appointment_request(uuid, timestamptz, uuid, uuid);
+
+create function public.confirm_appointment_request(
   p_request_id uuid,
   p_scheduled_at timestamptz,
-  p_therapist_id uuid
+  p_therapist_id uuid,
+  p_patient_id uuid default null
 ) returns uuid
 language plpgsql security definer set search_path = public as $$
 declare
@@ -100,6 +114,10 @@ begin
   if v_req.status <> 'pending' then
     raise exception 'This request has already been actioned.';
   end if;
+  if p_patient_id is not null
+     and not exists (select 1 from patients where id = p_patient_id and clinic_id = v_req.clinic_id) then
+    raise exception 'Patient not found in this clinic.';
+  end if;
   if p_therapist_id is not null then
     if not exists (select 1 from clinic_members where clinic_id = v_req.clinic_id and user_id = p_therapist_id) then
       raise exception 'Therapist is not a member of this clinic.';
@@ -107,9 +125,9 @@ begin
   end if;
 
   insert into appointments (
-    clinic_id, patient_name, patient_phone, therapist_id, scheduled_at, request_id
+    clinic_id, patient_id, patient_name, patient_phone, therapist_id, scheduled_at, request_id
   ) values (
-    v_req.clinic_id, v_req.name, v_req.phone, p_therapist_id, p_scheduled_at, v_req.id
+    v_req.clinic_id, p_patient_id, v_req.name, v_req.phone, p_therapist_id, p_scheduled_at, v_req.id
   ) returning id into v_appointment_id;
 
   update appointment_requests
@@ -119,14 +137,19 @@ begin
   return v_appointment_id;
 end $$;
 
+revoke execute on function public.confirm_appointment_request(uuid, timestamptz, uuid, uuid) from public, anon;
+grant execute on function public.confirm_appointment_request(uuid, timestamptz, uuid, uuid) to authenticated;
+
+
 -- 4. submit_appointment_request
-create or replace function public.submit_appointment_request(
+drop function if exists public.submit_appointment_request(text, text, text, text, uuid, text, date, text);
+
+create function public.submit_appointment_request(
   p_slug text,
   p_name text,
   p_phone text,
   p_email text,
   p_preferred_therapist_id uuid,
-  p_service_catalog_id uuid,
   p_notes text,
   p_preferred_date date,
   p_preferred_time_text text
@@ -156,12 +179,19 @@ begin
   end if;
 
   insert into appointment_requests (
-    clinic_id, name, phone, email, preferred_therapist_id, service_catalog_id,
+    clinic_id, name, phone, email, preferred_therapist_id,
     notes, preferred_date, preferred_time_text
   ) values (
     v_clinic_id, trim(p_name), trim(p_phone), nullif(trim(p_email), ''),
-    p_preferred_therapist_id, p_service_catalog_id,
+    p_preferred_therapist_id,
     nullif(trim(both from p_notes), ''), p_preferred_date,
     nullif(trim(both from p_preferred_time_text), '')
   );
 end $$;
+
+revoke all on function public.submit_appointment_request(
+  text, text, text, text, uuid, text, date, text
+) from public, anon;
+grant execute on function public.submit_appointment_request(
+  text, text, text, text, uuid, text, date, text
+) to anon, authenticated;

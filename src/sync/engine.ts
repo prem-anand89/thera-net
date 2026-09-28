@@ -80,10 +80,15 @@ export class SyncEngine {
   private rerunRequested = false;
   private started = false;
   private channel: any = null;
+  private fallbackTimer: ReturnType<typeof setInterval> | null = null;
 
   async stop(): Promise<void> {
     this.started = false;
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    if (this.fallbackTimer) {
+      clearInterval(this.fallbackTimer);
+      this.fallbackTimer = null;
+    }
     if (this.channel) {
       await this.supabase?.removeChannel(this.channel);
       this.channel = null;
@@ -117,7 +122,7 @@ export class SyncEngine {
     this.channel.subscribe();
 
     // Fallback poll in case a realtime event is missed
-    setInterval(() => this.schedule(), 5 * 60 * 1000);
+    this.fallbackTimer = setInterval(() => this.schedule(), 5 * 60 * 1000);
 
     void this.updatePending();
     this.schedule();

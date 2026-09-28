@@ -415,7 +415,7 @@ export function InvoicesPage() {
               scroll sideways on a phone. */}
           <div className="tab:hidden space-y-2">
             {sortedInvoices.map((inv) => {
-              const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+              const status = statusByInvoiceId.get(inv.id) ?? 'outstanding';
               const { paidPaise, remainingPaise } = balanceFor(inv);
               const isPartial = status === 'outstanding' && paidPaise > 0;
               const initials = inv.patientSnapshot.name
@@ -522,7 +522,7 @@ export function InvoicesPage() {
               </thead>
               <tbody>
                 {sortedInvoices.map((inv) => {
-                  const status = statusByInvoiceId.get(inv.id) ?? 'paid';
+                  const status = statusByInvoiceId.get(inv.id) ?? 'outstanding';
                   const { paidPaise, remainingPaise } = balanceFor(inv);
                   const isPartial = status === 'outstanding' && paidPaise > 0;
                   return (
