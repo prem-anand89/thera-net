@@ -112,6 +112,30 @@ export function openWhatsAppSharePopup(): Window | null {
   return window.open('about:blank', '_blank');
 }
 
+/** Call right after `openWhatsAppSharePopup` when async work (e.g. feedback RPC) follows. */
+export function warnIfWhatsAppPopupBlocked(popup: Window | null): void {
+  if (!popup) {
+    alert(
+      'Your browser blocked opening WhatsApp. Allow pop-ups for this site, then try again — ' +
+        'the same way pending-bill WhatsApp reminders work.'
+    );
+  }
+}
+
+/** Same entry as visit-row "Send WhatsApp reminder" — wa.me only, no Business API. */
+export function openPatientWhatsAppChat(
+  text: string,
+  patientPhone: string | null | undefined,
+  popup?: Window | null
+): void {
+  if (!patientPhone?.trim()) {
+    if (popup) popup.close();
+    alert('Patient has no phone number on file');
+    return;
+  }
+  openWhatsAppChat(text, patientPhone, popup);
+}
+
 /** Same normalization as visit-row payment reminders and Meta's `to` field. */
 export function normalizePhoneForWaMe(phone: string): string {
   const digits = phone.replace(/\D/g, '');

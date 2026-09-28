@@ -19,7 +19,7 @@ import {
 } from '@/domain/types';
 import { noteForVisit } from '@/domain/noteLinks';
 import { toFriendlyMessage } from '@/lib/errors';
-import { openWhatsAppSharePopup } from '@/lib/pdfShare';
+import { openWhatsAppSharePopup, warnIfWhatsAppPopupBlocked } from '@/lib/pdfShare';
 import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
 import type { OpenPackageRow, TodayVisitRow } from '@/services/dashboardService';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
@@ -772,6 +772,7 @@ export function WorkspacePage() {
             }}
             onAskForFeedback={(row) => {
               const popup = openWhatsAppSharePopup();
+              warnIfWhatsAppPopupBlocked(popup);
               void feedbackService
                 .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name, popup)
                 .catch((e) => {
@@ -783,6 +784,7 @@ export function WorkspacePage() {
               const request = feedbackRequestByVisitId.get(row.visitId);
               if (!request?.token) return;
               const popup = openWhatsAppSharePopup();
+              warnIfWhatsAppPopupBlocked(popup);
               void feedbackService
                 .resend(request, row.patientName, row.patientPhone ?? null, clinic.name, popup)
                 .catch((e) => {
@@ -793,6 +795,7 @@ export function WorkspacePage() {
             onAskForGoogleReview={(row) => {
               if (!row.googleReviewUrl) return;
               const popup = openWhatsAppSharePopup();
+              warnIfWhatsAppPopupBlocked(popup);
               void feedbackService
                 .askForGoogleReview(
                   clinic.id,

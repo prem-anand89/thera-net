@@ -8,7 +8,6 @@ import {
   visitService,
   whatsappBusinessService,
 } from '@/services';
-import { invalidateWhatsappBusinessApiCache } from '@/lib/whatsappSend';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -1583,10 +1582,9 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
 
 /**
  * Patient Communications, Phase 9 — Meta credentials for automated sends.
- * When **Enable** is on (and phone number id + token are saved),
- * `sendWhatsAppMessage` uses `send-whatsapp-template` before falling back
- * to the default wa.me flow. Pending-bill reminders on visit rows always
- * use wa.me directly unless routed through this helper later.
+ * Patient-facing sends (feedback, booking, reminders) always use wa.me
+ * today. Credentials are stored here for a future automated Business API
+ * path and are not called from feedback or booking actions.
  *
  * A standalone mini-form, not part of `PatientCommsFields`/
  * `useClinicSectionForm` — `clinic_whatsapp_config` is a separate table
@@ -1632,7 +1630,6 @@ function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
       );
       if (accessTokenInput.trim()) setHasToken(true);
       setAccessTokenInput('');
-      invalidateWhatsappBusinessApiCache(clinicId);
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
     } catch (e) {
