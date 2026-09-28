@@ -13,6 +13,7 @@ import { formatDateDMY, formatDateDM, currentWeekRange } from '@/domain/fiscalYe
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
+import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
 import { syncFreshnessCaption } from '@/domain/syncCopy';
 import {
   clinicBillingConfig,
@@ -80,6 +81,7 @@ function visitToCardData(
   directPaymentByVisitId: Map<UUID, number>,
   issuedAtByInvoiceId: Map<UUID, string>,
   isAdmin: boolean,
+  isFrontDesk: boolean,
   myTherapistId: UUID | undefined,
   canViewClinicalNotes: boolean,
   invoicedSiblingGroupIds: Set<UUID>,
@@ -153,7 +155,13 @@ function visitToCardData(
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: linkedNote?.id ?? null,
     noteStatus: linkedNote?.status ?? null,
-    canAskForFeedback: enablePatientComms && canModify,
+    canAskForFeedback: canAskForFeedbackOnVisit({
+      enablePatientComms,
+      isAdmin,
+      isFrontDesk,
+      myTherapistId,
+      visitTherapistId: v.therapistId,
+    }),
     feedbackRequest: feedbackRequest
       ? {
           id: feedbackRequest.id,
@@ -185,7 +193,8 @@ export function LedgerPage() {
   const clinic = useClinic();
   const { canBill, isAdmin, canViewClinicalNotes, canViewPayouts, entitlementsLoading } =
     usePermissions();
-  const { myTherapistId } = useWorkspaceScope();
+  const scope = useWorkspaceScope();
+  const { myTherapistId } = scope;
   const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView };
@@ -451,6 +460,7 @@ export function LedgerPage() {
           directPaymentByVisitId,
           issuedAtByInvoiceId,
           isAdmin,
+          scope.isFrontDesk,
           myTherapistId,
           canViewClinicalNotes,
           invoicedSiblingGroupIds ?? new Set(),
@@ -476,6 +486,7 @@ export function LedgerPage() {
       directPaymentByVisitId,
       issuedAtByInvoiceId,
       isAdmin,
+      scope.isFrontDesk,
       myTherapistId,
       canViewClinicalNotes,
       invoicedSiblingGroupIds,

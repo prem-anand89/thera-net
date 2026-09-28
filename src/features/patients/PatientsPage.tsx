@@ -704,6 +704,7 @@ function AllPatientsSection() {
       {booking && (
         <BookAppointmentDialog
           clinicId={clinic.id}
+          patientClinicId={booking.clinicId}
           patientId={booking.id}
           patientName={booking.name}
           patientPhone={booking.phone}

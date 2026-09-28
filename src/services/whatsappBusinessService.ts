@@ -86,8 +86,10 @@ export const whatsappBusinessService = {
       const { data, error } = await supabase.functions.invoke('send-whatsapp-template', {
         body: params,
       });
+      // Non-2xx responses set `error` (e.g. membership check) — fall back to share sheet.
       if (error) return { sent: false };
-      const result = data as { configured?: boolean; success?: boolean } | null;
+      const result = data as { configured?: boolean; success?: boolean; error?: string } | null;
+      if (result?.error) return { sent: false };
       return { sent: !!result?.configured && !!result?.success };
     } catch {
       return { sent: false };
