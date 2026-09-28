@@ -206,7 +206,8 @@ export const bookingService = {
     patientName: string,
     patientPhone: string | null,
     clinicName: string,
-    scheduledAt: string
+    scheduledAt: string,
+    popup?: Window | null
   ): Promise<void> {
     const when = new Date(scheduledAt).toLocaleString('en-IN', {
       dateStyle: 'medium',
@@ -220,6 +221,7 @@ export const bookingService = {
       bodyParams: [patientName, clinicName, when],
       shareText: text,
       shareTitle: 'Send confirmation',
+      popup,
     });
   },
 
@@ -232,7 +234,8 @@ export const bookingService = {
     therapistName: string,
     therapistPhone: string | null,
     patientName: string,
-    scheduledAt: string
+    scheduledAt: string,
+    popup?: Window | null
   ): Promise<void> {
     const when = new Date(scheduledAt).toLocaleString('en-IN', {
       dateStyle: 'medium',
@@ -246,6 +249,7 @@ export const bookingService = {
       bodyParams: [therapistName, patientName, when],
       shareText: text,
       shareTitle: 'Notify therapist',
+      popup,
     });
   },
 };
