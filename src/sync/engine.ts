@@ -79,6 +79,19 @@ export class SyncEngine {
   private running = false;
   private rerunRequested = false;
   private started = false;
+  private channel: any = null;
+
+  async stop(): Promise<void> {
+    this.started = false;
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    if (this.channel) {
+      await this.supabase?.removeChannel(this.channel);
+      this.channel = null;
+    }
+    while (this.running) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
 
   start() {
     if (this.started || !this.supabase) return;
@@ -95,13 +108,13 @@ export class SyncEngine {
     });
     window.addEventListener('offline', () => syncStatus.set({ online: false }));
 
-    const channel = this.supabase.channel('thera-net-sync');
+    this.channel = this.supabase.channel('thera-net-sync');
     for (const table of SYNC_TABLES) {
-      channel.on('postgres_changes', { event: '*', schema: 'public', table }, () =>
+      this.channel.on('postgres_changes', { event: '*', schema: 'public', table }, () =>
         this.schedule()
       );
     }
-    channel.subscribe();
+    this.channel.subscribe();
 
     // Fallback poll in case a realtime event is missed
     setInterval(() => this.schedule(), 5 * 60 * 1000);
@@ -200,6 +213,7 @@ export class SyncEngine {
   }
 
   private async push() {
+    if (!this.started) return;
     const supabase = this.supabase!;
     const entries = await db.outbox.orderBy('seq').toArray();
     if (!entries.length) return;
@@ -297,6 +311,7 @@ export class SyncEngine {
   }
 
   private async pull() {
+    if (!this.started) return;
     // One table's pages are still fetched in order (a page's cursor depends
     // on the previous page), but the tables themselves have no dependency on
     // each other — pulling them one after another only serializes their
@@ -311,6 +326,7 @@ export class SyncEngine {
     const supabase = this.supabase!;
     let cursor = (await db.meta.get(`cursor:${table}`))?.value ?? EPOCH;
     for (;;) {
+      if (!this.started) break;
       const { data, error } = await supabase
         .from(table)
         .select('*')

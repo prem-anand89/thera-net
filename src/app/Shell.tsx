@@ -123,10 +123,13 @@ export function Shell() {
     // different account (e.g. clicking a magic link while already logged in)
     // to prevent leaking cached data from one account to another. 
     if (!session || isSwappingUsers) {
-      for (const table of ALL_SYNCED_TABLES) void db.table(table).clear();
-      void db.outbox.clear();
-      void db.meta.clear();
-      syncStatus.reset();
+      void (async () => {
+        await syncEngine.stop();
+        for (const table of ALL_SYNCED_TABLES) await db.table(table).clear();
+        await db.outbox.clear();
+        await db.meta.clear();
+        syncStatus.reset();
+      })();
     }
 
     if (session) {
