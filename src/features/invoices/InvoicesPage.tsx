@@ -174,10 +174,12 @@ export function InvoicesPage() {
     [filteredInvoices, sort]
   );
 
-  const { totalOutstanding, totalCollected } = useMemo(() => {
+  const { totalOutstanding, totalCollected, totalInvoiced, unbilledTotal } = useMemo(() => {
     let outstanding = 0;
     let collected = 0;
+    let invoiced = 0;
     for (const inv of filteredInvoices) {
+      invoiced += inv.totalPaise;
       const status = statusByInvoiceId.get(inv.id) ?? 'outstanding';
       if (status === 'paid') {
         collected += inv.totalPaise;
@@ -187,8 +189,21 @@ export function InvoicesPage() {
         outstanding += Math.max(0, inv.totalPaise - paidPaise);
       }
     }
-    return { totalOutstanding: outstanding, totalCollected: collected };
-  }, [filteredInvoices, statusByInvoiceId, paidByInvoiceId]);
+
+    let unbilled = 0;
+    for (const v of visits ?? []) {
+      if (v.deleted || v.invoiceId) continue;
+      if (from && v.visitDate < from) continue;
+      if (to && v.visitDate > to) continue;
+      
+      const paid = directPaymentByVisitId.get(v.id) ?? 0;
+      if (v.billPaise > paid) {
+        unbilled += (v.billPaise - paid);
+      }
+    }
+
+    return { totalOutstanding: outstanding, totalCollected: collected, totalInvoiced: invoiced, unbilledTotal: unbilled };
+  }, [filteredInvoices, statusByInvoiceId, paidByInvoiceId, visits, from, to, directPaymentByVisitId]);
 
   async function toggleInvoiceStatus(invoiceId: string, currentStatus: string) {
     setError(null);
@@ -268,22 +283,28 @@ export function InvoicesPage() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <div className="flex-1 min-w-64 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-          <div className="text-xs text-[var(--muted)] mb-1">Total Collected</div>
+        <div className="flex-1 min-w-48 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <div className="text-xs text-[var(--muted)] mb-1">Invoice Collections</div>
           <div className="text-2xl font-display font-semibold text-[var(--ink)]">
             {formatINR(totalCollected)}
           </div>
         </div>
-        <div className="flex-1 min-w-64 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-          <div className="text-xs text-[var(--muted)] mb-1">Outstanding</div>
+        <div className="flex-1 min-w-48 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+          <div className="text-xs text-[var(--muted)] mb-1">Outstanding Invoices</div>
           <div className="text-2xl font-display font-semibold text-[var(--rust)]">
             {formatINR(totalOutstanding)}
           </div>
         </div>
-        <div className="flex-1 min-w-64 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div className="flex-1 min-w-48 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="text-xs text-[var(--muted)] mb-1">Total Invoiced</div>
           <div className="text-2xl font-display font-semibold text-[var(--ink)]">
-            {formatINR(totalCollected + totalOutstanding)}
+            {formatINR(totalInvoiced)}
+          </div>
+        </div>
+        <div className="flex-1 min-w-48 rounded-xl border border-[var(--teal-light)] bg-[var(--teal-light)] p-4">
+          <div className="text-xs text-[var(--teal-strong)] mb-1">Unbilled Visits</div>
+          <div className="text-2xl font-display font-semibold text-[var(--teal-strong)]">
+            {formatINR(unbilledTotal)}
           </div>
         </div>
       </div>
