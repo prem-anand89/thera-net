@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, feedbackService } from '@/services';
 import { db } from '@/lib/db';
-import { toFriendlyMessage } from '@/lib/errors';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -14,7 +13,6 @@ import { formatDateDMY, formatDateDM, currentWeekRange } from '@/domain/fiscalYe
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
-import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
 import { syncFreshnessCaption } from '@/domain/syncCopy';
 import {
   clinicBillingConfig,
@@ -82,7 +80,6 @@ function visitToCardData(
   directPaymentByVisitId: Map<UUID, number>,
   issuedAtByInvoiceId: Map<UUID, string>,
   isAdmin: boolean,
-  isFrontDesk: boolean,
   myTherapistId: UUID | undefined,
   canViewClinicalNotes: boolean,
   invoicedSiblingGroupIds: Set<UUID>,
@@ -156,26 +153,20 @@ function visitToCardData(
     canViewNotes: canViewClinicalNotes,
     consultationNoteId: linkedNote?.id ?? null,
     noteStatus: linkedNote?.status ?? null,
-    canAskForFeedback: canAskForFeedbackOnVisit({
-      enablePatientComms,
-      isAdmin,
-      isFrontDesk,
-      myTherapistId,
-      visitTherapistId: v.therapistId,
-    }),
+    canAskForFeedback: enablePatientComms && canModify,
     feedbackRequest: feedbackRequest
       ? {
-          id: feedbackRequest.id,
-          status: feedbackRequest.status,
-          token: feedbackRequest.token,
-          updatedAt: feedbackRequest.updatedAt,
-          // Admin gets it for free off the synced rating; front_desk (no
-          // rating available at all, see feedbackRequest field's own doc
-          // comment) falls back to the role-blind eligibility RPC result.
-          googleReviewEligible: isAdmin
-            ? (responseByRequestId.get(feedbackRequest.id)?.rating ?? 0) >= 4
-            : googleReviewEligibleIds.has(feedbackRequest.id),
-        }
+        id: feedbackRequest.id,
+        status: feedbackRequest.status,
+        token: feedbackRequest.token,
+        updatedAt: feedbackRequest.updatedAt,
+        // Admin gets it for free off the synced rating; front_desk (no
+        // rating available at all, see feedbackRequest field's own doc
+        // comment) falls back to the role-blind eligibility RPC result.
+        googleReviewEligible: isAdmin
+          ? (responseByRequestId.get(feedbackRequest.id)?.rating ?? 0) >= 4
+          : googleReviewEligibleIds.has(feedbackRequest.id),
+      }
       : null,
     googleReviewUrl,
     packageInvoicePending:
@@ -194,8 +185,7 @@ export function LedgerPage() {
   const clinic = useClinic();
   const { canBill, isAdmin, canViewClinicalNotes, canViewPayouts, entitlementsLoading } =
     usePermissions();
-  const scope = useWorkspaceScope();
-  const { myTherapistId } = scope;
+  const { myTherapistId } = useWorkspaceScope();
   const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView };
@@ -461,7 +451,6 @@ export function LedgerPage() {
           directPaymentByVisitId,
           issuedAtByInvoiceId,
           isAdmin,
-          scope.isFrontDesk,
           myTherapistId,
           canViewClinicalNotes,
           invoicedSiblingGroupIds ?? new Set(),
@@ -487,7 +476,6 @@ export function LedgerPage() {
       directPaymentByVisitId,
       issuedAtByInvoiceId,
       isAdmin,
-      scope.isFrontDesk,
       myTherapistId,
       canViewClinicalNotes,
       invoicedSiblingGroupIds,
@@ -618,11 +606,10 @@ export function LedgerPage() {
             <button
               key={v.key}
               type="button"
-              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                recordsView === v.key
+              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${recordsView === v.key
                   ? 'bg-[var(--teal)] text-white shadow-sm'
                   : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
-              }`}
+                }`}
               onClick={() => setRecordsView(v.key)}
             >
               {v.label}
@@ -712,11 +699,10 @@ export function LedgerPage() {
                   <button
                     key={p.key}
                     type="button"
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                      datePreset === p.key
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${datePreset === p.key
                         ? 'bg-[var(--teal)] text-white'
                         : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-                    }`}
+                      }`}
                     onClick={() => applyDatePreset(p.key)}
                   >
                     {p.label}
@@ -870,30 +856,41 @@ export function LedgerPage() {
                 onSplit={
                   therapistSplit
                     ? (row) => {
-                        const v = visitById.get(row.visitId);
-                        if (!v) return;
-                        setError(null);
-                        setSplitting(v);
-                      }
+                      const v = visitById.get(row.visitId);
+                      if (!v) return;
+                      setError(null);
+                      setSplitting(v);
+                    }
                     : undefined
                 }
                 onDelete={(row) => {
                   if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
                 }}
                 onAskForFeedback={(row) => {
+                  setError(null);
                   void feedbackService
-                    .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name)
-                    .catch((e) => alert(toFriendlyMessage(e)));
+                    .askForFeedback(
+                      row.visitId,
+                      row.patientName,
+                      row.patientPhone ?? null,
+                      clinic.name
+                    )
+                    .catch((e) => {
+                      console.error("Feedback error:", e);
+                      setError(e instanceof Error ? e.message : String(e));
+                    });
                 }}
                 onResendFeedback={(row) => {
                   const request = feedbackRequestByVisitId.get(row.visitId);
                   if (!request?.token) return;
+                  setError(null);
                   void feedbackService
                     .resend(request, row.patientName, row.patientPhone ?? null, clinic.name)
-                    .catch((e) => alert(toFriendlyMessage(e)));
+                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 onAskForGoogleReview={(row) => {
                   if (!row.googleReviewUrl) return;
+                  setError(null);
                   void feedbackService
                     .askForGoogleReview(
                       clinic.id,
@@ -902,7 +899,7 @@ export function LedgerPage() {
                       clinic.name,
                       row.googleReviewUrl
                     )
-                    .catch((e) => alert(toFriendlyMessage(e)));
+                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
                 }}
                 canInvoice={canBill}
                 backTo="/ledger"

@@ -1593,6 +1593,10 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
  * shape that hook is built for.
  */
 function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
+  // HIDDEN: The Meta API integration is currently too complex for average users to setup (requires Meta Business Verification). 
+  // We are hiding this UI to prevent confusion and sticking to wa.me deep links.
+  return null;
+  
   const [expanded, setExpanded] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [enabled, setEnabled] = useState(false);

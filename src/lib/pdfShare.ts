@@ -155,17 +155,6 @@ function openWhatsAppUrl(
   clipboardText: string,
   navigateCurrentTabIfBlocked: boolean
 ): void {
-  // Chrome returns a non-null Window reference even for blocked popups
-  // (with .closed === true immediately). Only treat it as "actually opened"
-  // when the tab is still alive. If navigateCurrentTabIfBlocked is set
-  // (feedback, booking — anything that runs after an async RPC) we skip
-  // window.open entirely and just redirect this tab, matching the payment
-  // reminder's single-tab behaviour and bypassing the blocker entirely.
-  if (navigateCurrentTabIfBlocked) {
-    window.location.assign(url);
-    return;
-  }
-
   const opened = window.open(url, '_blank', 'noopener,noreferrer');
   if (opened && !opened.closed) return;
 

@@ -49,7 +49,7 @@ export function createFeedbackService(repos: Repos) {
       if (!navigator.onLine) {
         throw new Error('Asking for feedback needs a connection — reconnect and try again.');
       }
-      const { data, error } = await supabase.rpc('create_feedback_request', {
+      const { data, error } = await supabase.rpc('create_feedback_request_v2', {
         p_visit_id: visitId,
       });
       if (error) throw new Error(`Could not ask for feedback: ${error.message}`);
