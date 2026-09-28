@@ -182,7 +182,8 @@ export function createFeedbackService(repos: Repos) {
       patientName: string,
       patientPhone: string | null,
       clinicName: string,
-      serviceName: string
+      serviceName: string,
+      popup?: Window | null
     ): Promise<void> {
       const text = `Hi ${patientName}, we noticed it's been a while since your last ${serviceName} session at ${clinicName}. We'd love to see you again — reach out whenever you're ready to continue!`;
       await sendWhatsAppMessage({
@@ -192,6 +193,7 @@ export function createFeedbackService(repos: Repos) {
         bodyParams: [patientName, serviceName, clinicName],
         shareText: text,
         shareTitle: 'Send reminder',
+        popup,
       });
     },
 
@@ -208,7 +210,8 @@ export function createFeedbackService(repos: Repos) {
       clinicId: UUID,
       patientName: string,
       patientPhone: string | null,
-      clinicName: string
+      clinicName: string,
+      popup?: Window | null
     ): Promise<void> {
       const text = `Hi ${patientName}, thanks for visiting ${clinicName}! We hope you're doing well — let us know if you'd like to schedule a follow-up visit.`;
       await sendWhatsAppMessage({
@@ -218,6 +221,7 @@ export function createFeedbackService(repos: Repos) {
         bodyParams: [patientName, clinicName],
         shareText: text,
         shareTitle: 'Send reminder',
+        popup,
       });
     },
 

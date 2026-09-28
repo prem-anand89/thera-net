@@ -125,21 +125,39 @@ export function buildWhatsAppSendUrl(text: string, toPhone?: string | null): str
     : `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
 
+/** When wa.me cannot open (popup blocker or tab closed), copy text for manual paste. */
+export function notifyWhatsAppOpenFailed(shareText: string): void {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    void navigator.clipboard.writeText(shareText).catch(() => {});
+  }
+  alert(
+    'Could not open WhatsApp automatically — your browser may be blocking pop-ups. ' +
+      'The message was copied to your clipboard; open WhatsApp, pick the patient, and paste. ' +
+      'Or allow pop-ups for this site and try again.'
+  );
+}
+
 /**
  * Opens WhatsApp Web/app with a pre-filled message to a specific contact —
  * the same behaviour as "Send WhatsApp reminder" on a visit row.
+ * @returns whether a wa.me navigation was started
  */
 export function openWhatsAppChat(
   text: string,
   toPhone?: string | null,
   popup?: Window | null
-): void {
+): boolean {
   const url = buildWhatsAppSendUrl(text, toPhone);
   if (popup && !popup.closed) {
     popup.location.href = url;
-    return;
+    return true;
   }
-  window.open(url, '_blank', 'noopener,noreferrer');
+  const opened = window.open(url, '_blank', 'noopener,noreferrer');
+  if (!opened) {
+    notifyWhatsAppOpenFailed(text);
+    return false;
+  }
+  return true;
 }
 
 /**

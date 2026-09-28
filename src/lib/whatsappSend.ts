@@ -19,9 +19,24 @@ const WHATSAPP_TEMPLATES: Record<WhatsAppMessageKind, string> = {
   payment_reminder: 'payment_reminder_v1',
 };
 
+const businessApiCache = new Map<string, { at: number; enabled: boolean }>();
+const BUSINESS_API_CACHE_MS = 60_000;
+
+/** Call after saving WhatsApp Business API settings so the next send re-checks. */
+export function invalidateWhatsappBusinessApiCache(clinicId?: UUID): void {
+  if (clinicId) businessApiCache.delete(clinicId);
+  else businessApiCache.clear();
+}
+
 async function shouldSendViaBusinessApi(clinicId: UUID): Promise<boolean> {
+  const cached = businessApiCache.get(clinicId);
+  if (cached && Date.now() - cached.at < BUSINESS_API_CACHE_MS) {
+    return cached.enabled;
+  }
   const status = await whatsappBusinessService.getConfigStatus(clinicId);
-  return Boolean(status?.enabled && status.hasToken && status.phoneNumberId);
+  const enabled = Boolean(status?.enabled && status.hasToken && status.phoneNumberId);
+  businessApiCache.set(clinicId, { at: Date.now(), enabled });
+  return enabled;
 }
 
 /**

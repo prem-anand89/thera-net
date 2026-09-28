@@ -25,13 +25,23 @@ describe('shareTextViaWhatsApp', () => {
 
 describe('openWhatsAppChat', () => {
   it('opens a new tab when no popup is passed', () => {
-    const open = vi.fn();
+    const open = vi.fn().mockReturnValue({} as Window);
     vi.stubGlobal('window', { open });
-    openWhatsAppChat('Pay now', '8127312730');
+    expect(openWhatsAppChat('Pay now', '8127312730')).toBe(true);
     expect(open).toHaveBeenCalledWith(
       expect.stringContaining('https://wa.me/918127312730'),
       '_blank',
       'noopener,noreferrer'
     );
+  });
+
+  it('returns false when pop-up is blocked', () => {
+    const open = vi.fn().mockReturnValue(null);
+    const alert = vi.fn();
+    vi.stubGlobal('window', { open });
+    vi.stubGlobal('alert', alert);
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    expect(openWhatsAppChat('Pay now', '9876543210')).toBe(false);
+    expect(alert).toHaveBeenCalled();
   });
 });

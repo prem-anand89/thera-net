@@ -225,10 +225,8 @@ export const bookingService = {
     });
   },
 
-  /** Uses the Business API when the therapist has a phone on file and the
-   *  clinic has one configured; falls back to the share sheet otherwise —
-   *  same as every other send action in this file, now that `Therapist`
-   *  carries a `phone` field. */
+  /** Same `sendWhatsAppMessage` path as patient confirmation (wa.me by default;
+   *  optional Business API when enabled in Settings). */
   async shareTherapistNotify(
     clinicId: UUID,
     therapistName: string,

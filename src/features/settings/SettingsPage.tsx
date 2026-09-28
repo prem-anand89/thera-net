@@ -8,6 +8,7 @@ import {
   visitService,
   whatsappBusinessService,
 } from '@/services';
+import { invalidateWhatsappBusinessApiCache } from '@/lib/whatsappSend';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -1631,6 +1632,7 @@ function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
       );
       if (accessTokenInput.trim()) setHasToken(true);
       setAccessTokenInput('');
+      invalidateWhatsappBusinessApiCache(clinicId);
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
     } catch (e) {
