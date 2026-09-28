@@ -13,8 +13,6 @@ const WEBHOOK_URL = import.meta.env.VITE_ERROR_WEBHOOK_URL as string | undefined
 
 export function reportError(error: unknown, context: string): void {
   console.error(`[${context}]`, error);
-  if (!WEBHOOK_URL) return;
-
   const payload = {
     context,
     message: error instanceof Error ? error.message : String(error),
@@ -24,11 +22,23 @@ export function reportError(error: unknown, context: string): void {
     time: new Date().toISOString(),
   };
 
-  // Best-effort — a failed error report must never itself throw or block.
-  void fetch(WEBHOOK_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  // Use Supabase Edge Function if available
+  import('@/lib/supabase').then(({ getSupabase }) => {
+    const supabase = getSupabase();
+    if (supabase) {
+      supabase.functions.invoke('brevo-mailer', {
+        body: { type: 'error', ...payload }
+      }).catch(() => {});
+      return;
+    }
+    
+    // Fallback to webhook if Supabase isn't ready or configured
+    if (!WEBHOOK_URL) return;
+    fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
   }).catch(() => {});
 }
 

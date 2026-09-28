@@ -18,3 +18,14 @@ site_url = "http://localhost:5173"
 # runs (stuck "Sending…" or a CORS error, no invite email).
 [functions.invite-therapist]
 verify_jwt = false
+
+[functions.brevo-mailer]
+enabled = true
+verify_jwt = false
+import_map = "./functions/brevo-mailer/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/brevo-mailer/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/brevo-mailer/*.html" ]

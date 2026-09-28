@@ -6,6 +6,7 @@ import { signOutSafely } from './signOut';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { AddClinicDialog } from '@/components/AddClinicDialog';
+import { HelpFeedbackDialog } from '@/components/HelpFeedbackDialog';
 import { IconSettings } from '@/components/NavIcons';
 import { useFirstWeekChecklistSummary } from '@/features/settings/FirstWeekChecklist';
 import type { Clinic } from '@/domain/types';
@@ -232,6 +233,7 @@ export function AccountMenu({
   const [open, setOpen] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [addingClinic, setAddingClinic] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const navigate = useNavigate();
   const name = displayName ?? fallbackName;
   const roleLabel = role !== 'unknown' ? CLINIC_ROLE_LABELS[role] : '';
@@ -376,9 +378,6 @@ export function AccountMenu({
               <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
                 Account
               </p>
-              {/* Settings' only desktop entry point, since it left the
-                  header nav (see NAV) — same `role === 'admin'` gate the
-                  nav filter applied, so who can reach it is unchanged. */}
               {role === 'admin' && (
                 <Link
                   to="/settings"
@@ -398,6 +397,17 @@ export function AccountMenu({
                 }}
               >
                 {hasPasswordIdentity ? 'Change password' : 'Set a password'}
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
+                onClick={() => {
+                  closeMenu();
+                  setHelpOpen(true);
+                }}
+              >
+                <svg className="h-4 w-4 shrink-0 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                Help & Feedback
               </button>
             </div>
 
@@ -430,6 +440,10 @@ export function AccountMenu({
           }}
         />
       )}
+      <HelpFeedbackDialog
+        isOpen={helpOpen}
+        onClose={() => setHelpOpen(false)}
+      />
     </div>
   );
 }

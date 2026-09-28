@@ -1,0 +1,191 @@
+import { useState } from 'react';
+import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
+import { getSupabase } from '@/lib/supabase';
+import { useSession } from '@/app/useSession';
+import { useClinic } from '@/app/clinicContext';
+
+export interface HelpFeedbackDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+type Mode = 'menu' | 'bug' | 'feature' | 'support';
+
+export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps) {
+  const [mode, setMode] = useState<Mode>('menu');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const { session } = useSession();
+  const clinic = useClinic();
+
+  if (!isOpen) return null;
+
+  const handleClose = () => {
+    if (!busy) {
+      setMode('menu');
+      setMessage('');
+      setError(null);
+      setSuccess(false);
+      onClose();
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim()) return;
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('Supabase client not found');
+
+      const { error: invokeError } = await supabase.functions.invoke('brevo-mailer', {
+        body: {
+          type: 'feedback',
+          category: mode,
+          message: message.trim(),
+          userId: session?.user.id,
+          userName: session?.user.user_metadata?.display_name || session?.user.email,
+          clinicId: clinic?.id,
+        },
+      });
+
+      if (invokeError) throw invokeError;
+
+      setSuccess(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while sending your message.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/40 p-3 sm:p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-md rounded-2xl bg-[var(--surface)] p-6 shadow-xl"
+      >
+          {success ? (
+            <div className="text-center py-6">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="mb-2 text-lg font-semibold text-[var(--ink)]">Message Sent!</h2>
+              <p className="mb-6 text-sm text-[var(--muted)]">Thank you! We've received your message and will review it shortly.</p>
+              <button type="button" onClick={handleClose} className={btnSecondary}>
+                Close
+              </button>
+            </div>
+          ) : mode === 'menu' ? (
+            <>
+              <h2 className="mb-4 text-lg font-semibold text-[var(--ink)]">Help & Feedback</h2>
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setMode('bug')}
+                  className="flex w-full items-center gap-4 rounded-lg border border-[var(--border)] p-4 text-left transition hover:bg-[var(--surface-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--rust)]"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-[var(--ink)]">Report a Bug</h3>
+                    <p className="text-xs text-[var(--muted)]">Something isn't working right.</p>
+                  </div>
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => setMode('feature')}
+                  className="flex w-full items-center gap-4 rounded-lg border border-[var(--border)] p-4 text-left transition hover:bg-[var(--surface-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--rust)]"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-[var(--ink)]">Suggest a Feature</h3>
+                    <p className="text-xs text-[var(--muted)]">I have an idea to make Thera.Net better.</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMode('support')}
+                  className="flex w-full items-center gap-4 rounded-lg border border-[var(--border)] p-4 text-left transition hover:bg-[var(--surface-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--rust)]"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-[var(--ink)]">Get Support</h3>
+                    <p className="text-xs text-[var(--muted)]">I need help using the app.</p>
+                  </div>
+                </button>
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button type="button" onClick={handleClose} className={btnSecondary}>Cancel</button>
+              </div>
+            </>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-[var(--ink)]">
+                  {mode === 'bug' && 'Report a Bug'}
+                  {mode === 'feature' && 'Suggest a Feature'}
+                  {mode === 'support' && 'Get Support'}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => { setMode('menu'); setError(null); }}
+                  className="text-sm font-medium text-[var(--rust)] hover:underline"
+                >
+                  &larr; Back
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <Field 
+                  label={
+                    mode === 'bug' ? 'What went wrong? What did you expect to happen?' :
+                    mode === 'feature' ? 'How could we improve the app for you?' :
+                    'How can we help? (We will email you back)'
+                  }
+                >
+                  <textarea
+                    required
+                    autoFocus
+                    disabled={busy}
+                    rows={5}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    className={inputCls}
+                    placeholder="Type your message here..."
+                  />
+                </Field>
+
+                <ErrorNote message={error} />
+
+                <div className="mt-6 flex justify-end gap-3">
+                  <button type="button" onClick={handleClose} disabled={busy} className={btnSecondary}>
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={busy || !message.trim()} className={btnPrimary}>
+                    {busy ? 'Sending...' : 'Send Message'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+      </div>
+    </div>
+  );
+}
