@@ -19,6 +19,7 @@ import {
 } from '@/domain/types';
 import { noteForVisit } from '@/domain/noteLinks';
 import { toFriendlyMessage } from '@/lib/errors';
+import { openWhatsAppSharePopup } from '@/lib/pdfShare';
 import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
 import type { OpenPackageRow, TodayVisitRow } from '@/services/dashboardService';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
@@ -770,8 +771,7 @@ export function WorkspacePage() {
               if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
             }}
             onAskForFeedback={(row) => {
-              const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-              const popup = !nav.share ? window.open('about:blank', '_blank') : null;
+              const popup = openWhatsAppSharePopup();
               void feedbackService
                 .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name, popup)
                 .catch((e) => {
@@ -782,8 +782,7 @@ export function WorkspacePage() {
             onResendFeedback={(row) => {
               const request = feedbackRequestByVisitId.get(row.visitId);
               if (!request?.token) return;
-              const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-              const popup = !nav.share ? window.open('about:blank', '_blank') : null;
+              const popup = openWhatsAppSharePopup();
               void feedbackService
                 .resend(request, row.patientName, row.patientPhone ?? null, clinic.name, popup)
                 .catch((e) => {
@@ -793,8 +792,7 @@ export function WorkspacePage() {
             }}
             onAskForGoogleReview={(row) => {
               if (!row.googleReviewUrl) return;
-              const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-              const popup = !nav.share ? window.open('about:blank', '_blank') : null;
+              const popup = openWhatsAppSharePopup();
               void feedbackService
                 .askForGoogleReview(
                   clinic.id,

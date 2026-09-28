@@ -104,6 +104,23 @@ export async function shareFileToWhatsApp(
 }
 
 /**
+ * Open a blank tab synchronously inside a click handler so later async work
+ * (e.g. `create_feedback_request`) can navigate it to `wa.me` without popup
+ * blockers. Callers must pass the returned window into `shareTextViaWhatsApp`.
+ */
+export function openWhatsAppSharePopup(): Window | null {
+  return window.open('about:blank', '_blank');
+}
+
+function whatsAppTextShareUrl(text: string, toPhone?: string | null): string {
+  const phoneSegment = toPhone ? toPhone.replace(/\D/g, '') : '';
+  const waPhone = phoneSegment.length === 10 ? `91${phoneSegment}` : phoneSegment;
+  return waPhone
+    ? `https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`
+    : `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+/**
  * Same Web-Share-API-with-`wa.me`-fallback shape as `shareFileToWhatsApp`,
  * for a plain link/text payload with no file involved (e.g. a patient
  * feedback link) — most of the app's "share this" actions have nothing to
@@ -115,10 +132,19 @@ export async function shareTextViaWhatsApp(
   popup?: Window | null,
   toPhone?: string | null
 ): Promise<void> {
+  const url = whatsAppTextShareUrl(text, toPhone);
+
+  // Tab opened on click survives async RPC/API work. `navigator.share` and a
+  // late `window.open` both need a fresh user gesture, so they fail after
+  // `create_feedback_request` — prefer navigating the pre-opened tab.
+  if (popup && !popup.closed) {
+    popup.location.href = url;
+    return;
+  }
+
   const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
   if (nav.share) {
     try {
-      if (popup) popup.close();
       await nav.share({ text, title });
       return;
     } catch (e) {
@@ -127,17 +153,5 @@ export async function shareTextViaWhatsApp(
       // same reasoning shareFileToWhatsApp falls back rather than erroring.
     }
   }
-  // Include the phone number in the wa.me URL when available, so WhatsApp
-  // opens a pre-addressed chat rather than requiring the user to pick a
-  // contact manually — same behaviour as the invoice "Remind to pay" action.
-  const phoneSegment = toPhone ? toPhone.replace(/\D/g, '') : '';
-  const waPhone = phoneSegment.length === 10 ? `91${phoneSegment}` : phoneSegment;
-  const url = waPhone
-    ? `https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`
-    : `https://wa.me/?text=${encodeURIComponent(text)}`;
-  if (popup) {
-    popup.location.href = url;
-  } else {
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
+  window.open(url, '_blank', 'noopener,noreferrer');
 }

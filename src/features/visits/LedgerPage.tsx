@@ -14,6 +14,7 @@ import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
 import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
 import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
+import { openWhatsAppSharePopup } from '@/lib/pdfShare';
 import { syncFreshnessCaption } from '@/domain/syncCopy';
 import {
   clinicBillingConfig,
@@ -881,8 +882,7 @@ export function LedgerPage() {
                 }}
                 onAskForFeedback={(row) => {
                   setError(null);
-                  const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-                  const popup = !nav.share ? window.open('about:blank', '_blank') : null;
+                  const popup = openWhatsAppSharePopup();
                   void feedbackService
                     .askForFeedback(
                       row.visitId,
@@ -900,8 +900,7 @@ export function LedgerPage() {
                   const request = feedbackRequestByVisitId.get(row.visitId);
                   if (!request?.token) return;
                   setError(null);
-                  const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-                  const popup = !nav.share ? window.open('about:blank', '_blank') : null;
+                  const popup = openWhatsAppSharePopup();
                   void feedbackService
                     .resend(request, row.patientName, row.patientPhone ?? null, clinic.name, popup)
                     .catch((e) => {
@@ -912,8 +911,7 @@ export function LedgerPage() {
                 onAskForGoogleReview={(row) => {
                   if (!row.googleReviewUrl) return;
                   setError(null);
-                  const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
-                  const popup = !nav.share ? window.open('about:blank', '_blank') : null;
+                  const popup = openWhatsAppSharePopup();
                   void feedbackService
                     .askForGoogleReview(
                       clinic.id,
