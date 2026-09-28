@@ -58,7 +58,6 @@ export function InvoicesPage() {
   const [from, setFrom] = useState(toIsoDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
   const [to, setTo] = useState(toIsoDate(new Date()));
   const [datePreset, setDatePreset] = useState<DatePreset>('month');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'outstanding'>('all');
 
   function applyDatePreset(preset: DatePreset) {
     setDatePreset(preset);
@@ -158,16 +157,8 @@ export function InvoicesPage() {
     let filtered = invoices ?? [];
     if (from) filtered = filtered.filter((i) => i.issuedAt.slice(0, 10) >= from);
     if (to) filtered = filtered.filter((i) => i.issuedAt.slice(0, 10) <= to);
-    if (statusFilter === 'outstanding') {
-      filtered = filtered.filter((i) => {
-        const status = statusByInvoiceId.get(i.id) ?? 'outstanding';
-        if (status === 'paid') return false;
-        const paidPaise = paidByInvoiceId.get(i.id) ?? 0;
-        return i.totalPaise > paidPaise;
-      });
-    }
     return filtered;
-  }, [invoices, from, to, statusFilter, statusByInvoiceId, paidByInvoiceId]);
+  }, [invoices, from, to]);
 
   const sortedInvoices = useMemo(
     () => applySort(filteredInvoices, INVOICE_COMPARATORS, sort),
@@ -255,30 +246,6 @@ export function InvoicesPage() {
               />
             </div>
           )}
-        </div>
-        <div className="flex max-w-full flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
-          <button
-            type="button"
-            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-              statusFilter === 'all'
-                ? 'bg-[var(--teal)] text-white'
-                : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-            }`}
-            onClick={() => setStatusFilter('all')}
-          >
-            All
-          </button>
-          <button
-            type="button"
-            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-              statusFilter === 'outstanding'
-                ? 'bg-[var(--teal)] text-white'
-                : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-            }`}
-            onClick={() => setStatusFilter('outstanding')}
-          >
-            Outstanding
-          </button>
         </div>
       </div>
 
