@@ -87,9 +87,7 @@ export function createFeedbackService(repos: Repos) {
         updatedBy: row.updated_by ?? undefined,
       };
       await repos.feedbackRequests.putLocal(request);
-      openPatientWhatsAppChat(feedbackShareMessage(patientName, clinicName, row.token), patientPhone, {
-        navigateCurrentTabIfBlocked: true,
-      });
+      openPatientWhatsAppChat(feedbackShareMessage(patientName, clinicName, row.token), patientPhone);
       return request;
     },
 
@@ -123,9 +121,7 @@ export function createFeedbackService(repos: Repos) {
         updatedAt: new Date().toISOString(),
       };
       await repos.feedbackRequests.putLocal(updated);
-      openPatientWhatsAppChat(feedbackShareMessage(patientName, clinicName, token), patientPhone, {
-        navigateCurrentTabIfBlocked: true,
-      });
+      openPatientWhatsAppChat(feedbackShareMessage(patientName, clinicName, token), patientPhone);
       return updated;
     },
 

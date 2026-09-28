@@ -103,26 +103,18 @@ export async function shareFileToWhatsApp(
   return 'fallback';
 }
 
-export type OpenPatientWhatsAppOptions = {
-  /**
-   * Use after async work (e.g. `create_feedback_request`): if a new tab is
-   * blocked, open wa.me in this tab — same end result as payment reminders.
-   */
-  navigateCurrentTabIfBlocked?: boolean;
-};
 
 /** Same entry as visit-row "Send WhatsApp reminder" — direct wa.me, no blank tab. */
 export function openPatientWhatsAppChat(
   text: string,
-  patientPhone: string | null | undefined,
-  options?: OpenPatientWhatsAppOptions
+  patientPhone: string | null | undefined
 ): void {
   if (!patientPhone?.trim()) {
     alert('Patient has no phone number on file');
     return;
   }
   const url = buildWhatsAppSendUrl(text, patientPhone);
-  openWhatsAppUrl(url, text, options?.navigateCurrentTabIfBlocked ?? false);
+  openWhatsAppUrl(url, text);
 }
 
 /** Same normalization as visit-row payment reminders and Meta's `to` field. */
@@ -152,8 +144,7 @@ export function notifyWhatsAppOpenFailed(shareText: string): void {
 
 function openWhatsAppUrl(
   url: string,
-  clipboardText: string,
-  navigateCurrentTabIfBlocked: boolean
+  clipboardText: string
 ): void {
   const opened = window.open(url, '_blank', 'noopener,noreferrer');
   if (opened && !opened.closed) return;

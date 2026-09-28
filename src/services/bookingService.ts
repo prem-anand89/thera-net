@@ -213,7 +213,7 @@ export const bookingService = {
       timeStyle: 'short',
     });
     const text = `Hi ${patientName}, your appointment at ${clinicName} is confirmed for ${when}. See you then!`;
-    openPatientWhatsAppChat(text, patientPhone, { navigateCurrentTabIfBlocked: true });
+    openPatientWhatsAppChat(text, patientPhone);
   },
 
   /** Same `sendWhatsAppMessage` path as patient confirmation (wa.me by default;
@@ -230,6 +230,6 @@ export const bookingService = {
       timeStyle: 'short',
     });
     const text = `Hi ${therapistName}, you have an appointment with ${patientName} confirmed for ${when}.`;
-    openPatientWhatsAppChat(text, therapistPhone, { navigateCurrentTabIfBlocked: true });
+    openPatientWhatsAppChat(text, therapistPhone);
   },
 };

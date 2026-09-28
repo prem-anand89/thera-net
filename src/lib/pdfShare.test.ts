@@ -33,7 +33,7 @@ describe('openPatientWhatsAppChat', () => {
       body: { appendChild: vi.fn(), removeChild: vi.fn() },
       createElement: () => ({ click: vi.fn(), remove: vi.fn() }),
     });
-    openPatientWhatsAppChat('Hello', '9876543210', { navigateCurrentTabIfBlocked: true });
+    openPatientWhatsAppChat('Hello', '9876543210');
     expect(assign).toHaveBeenCalledWith(expect.stringContaining('https://wa.me/919876543210'));
   });
 });
