@@ -12,6 +12,7 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
   const clinic: Clinic = {
     id: 'clinic-1',
     name: 'Beyond Mechanics',
+    slotDurationMinutes: clinicOverrides.slotDurationMinutes ?? 30,
     address: null,
     phone: null,
     email: null,

@@ -795,6 +795,7 @@ type ProfileFields = Pick<
   | 'clinicalDocsEnabled'
   | 'showTherapistComparison'
   | 'lastSplitChangeAt'
+  | 'slotDurationMinutes'
 >;
 
 function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
@@ -810,6 +811,7 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         clinicType: c.clinicType,
         clinicalDocsEnabled: c.clinicalDocsEnabled ?? false,
         showTherapistComparison: c.showTherapistComparison ?? false,
+        slotDurationMinutes: c.slotDurationMinutes ?? 30,
       }),
       onDirtyChange
     );
@@ -966,6 +968,29 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
             value={form.showTherapistComparison ?? false}
             onChange={(v) => set({ showTherapistComparison: v })}
           />
+        </Field>
+      </div>
+
+      <h3 className="mb-3 mt-8 text-sm font-semibold text-[var(--ink)]">Scheduling Preferences</h3>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Field
+          label={
+            <>
+              Appointment Slot Duration
+              <InfoTip text="The length of a standard appointment. This controls the time blocks shown on the schedule and public booking page." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.slotDurationMinutes}
+            onChange={(e) => set({ slotDurationMinutes: Number(e.target.value) })}
+          >
+            <option value={15}>15 minutes</option>
+            <option value={30}>30 minutes</option>
+            <option value={45}>45 minutes</option>
+            <option value={60}>60 minutes</option>
+          </select>
         </Field>
       </div>
 

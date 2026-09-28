@@ -10,6 +10,7 @@ function makeFakeRepos() {
   const clinic: Clinic = {
     id: 'clinic-1',
     name: 'Beyond Mechanics',
+    slotDurationMinutes: 30,
     address: null,
     phone: null,
     email: null,

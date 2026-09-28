@@ -119,6 +119,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
       const clinic: Clinic = {
         id: row.id,
         name: row.name,
+        slotDurationMinutes: 30,
         email: row.email,
         phone: row.phone,
         address: row.address,

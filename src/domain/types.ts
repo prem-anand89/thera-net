@@ -109,10 +109,10 @@ export interface Clinic {
   upiQrEnabled?: boolean;
   /**
    * Path into `clinic-assets` (same pattern as logoPath) for a one-time
-   * uploaded signature image, printed on invoices in place of the blank
    * "Authorised signature" line. Not a cryptographic e-signature.
    */
   signaturePath?: string | null;
+  slotDurationMinutes: number;
   /**
    * Patient communications module (booking requests, feedback capture,
    * Google review nudges, re-engagement reminders). Off by default — see
