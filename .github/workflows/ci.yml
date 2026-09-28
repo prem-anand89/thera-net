@@ -41,6 +41,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test
+      # Typecheck already ran above — `npm run build` would re-run it
+      # (it's `typecheck && vite build`), so just run the build directly.
       - run: npx vite build
 
   e2e:

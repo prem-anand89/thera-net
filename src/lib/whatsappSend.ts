@@ -64,6 +64,7 @@ export async function sendWhatsAppMessage(params: {
   bodyParams: string[];
   shareText: string;
   shareTitle: string;
+  popup?: Window | null;
 }): Promise<void> {
   if (params.toPhone) {
     const { sent } = await whatsappBusinessService.sendViaBusinessApi({
@@ -74,7 +75,10 @@ export async function sendWhatsAppMessage(params: {
       languageCode: 'en',
       bodyParams: params.bodyParams,
     });
-    if (sent) return;
+    if (sent) {
+      if (params.popup) params.popup.close();
+      return;
+    }
   }
-  await shareTextViaWhatsApp(params.shareText, params.shareTitle);
+  await shareTextViaWhatsApp(params.shareText, params.shareTitle, params.popup, params.toPhone);
 }

@@ -22,7 +22,11 @@ const MESSAGE_PATTERNS: Array<[RegExp, string]> = [
     'This visit is on an issued invoice, so its billing details are locked. Create an amendment instead.',
   ],
   [
-    /not a member of this clinic/i,
+    /Therapist is not a member of this clinic/i,
+    'The selected therapist is not a member of this clinic. Please select a valid therapist.',
+  ],
+  [
+    /(?<!Therapist is )not a member of this clinic/i,
     "You don't have access to this clinic. Try signing out and back in, or ask your admin.",
   ],
   [

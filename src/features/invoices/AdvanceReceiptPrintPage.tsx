@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { Link, useParams, useSearch } from '@tanstack/react-router';
 import type { PatientProfileBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos } from '@/services';
+import { repos, advanceService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { amountInWords } from '@/domain/amountInWords';
@@ -28,6 +28,11 @@ export function AdvanceReceiptPrintPage() {
   const { from: backTo } = useSearch({ strict: false }) as { from?: PatientProfileBackTarget };
   const advance = useLiveQuery(() => repos.patientAdvances.get(advanceId), [advanceId]);
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
+  const openAdvances = useLiveQuery(
+    () => advanceService.openAdvancesWithBalance(clinic.id, patientId),
+    [clinic.id, patientId]
+  );
+  const advanceBalancePaise = (openAdvances ?? []).reduce((sum, a) => sum + a.remainingPaise, 0);
 
   const logoUrl = useMemo(() => publicLogoUrl(clinic.logoPath), [clinic.logoPath]);
   const partnerLogoUrl = useMemo(
@@ -102,7 +107,13 @@ export function AdvanceReceiptPrintPage() {
           {advance.notes && <p className="mt-1 text-sm text-[var(--muted)]">{advance.notes}</p>}
         </div>
 
-        <p className="mt-4 text-sm text-[var(--muted)]">
+        {advanceBalancePaise > 0 && (
+          <p className="mt-6 text-sm font-medium text-[var(--ink)]">
+            Total Advance Balance Available: <span className="font-semibold">{formatINR(advanceBalancePaise)}</span>
+          </p>
+        )}
+
+        <p className={`${advanceBalancePaise > 0 ? 'mt-1' : 'mt-4'} text-sm text-[var(--muted)]`}>
           Adjustable against future treatment. This is not a bill for services rendered — a dated,
           itemised invoice is issued separately as sessions are delivered.
         </p>

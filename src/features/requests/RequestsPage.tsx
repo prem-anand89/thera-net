@@ -675,17 +675,23 @@ export function RequestsPage() {
                 <button
                   type="button"
                   className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white"
-                  onClick={() =>
+                  onClick={() => {
+                    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+                    const popup = !nav.share ? window.open('about:blank', '_blank') : null;
                     void bookingService
                       .shareBookingConfirmation(
                         clinic.id,
                         justConfirmed.patientName,
                         justConfirmed.patientPhone,
                         clinic.name,
-                        justConfirmed.scheduledAt
+                        justConfirmed.scheduledAt,
+                        popup
                       )
-                      .catch((e) => alert(toFriendlyMessage(e)))
-                  }
+                      .catch((e) => {
+                        popup?.close();
+                        alert(toFriendlyMessage(e));
+                      });
+                  }}
                 >
                   Send confirmation
                 </button>
@@ -693,17 +699,23 @@ export function RequestsPage() {
                   <button
                     type="button"
                     className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white"
-                    onClick={() =>
+                    onClick={() => {
+                      const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+                      const popup = !nav.share ? window.open('about:blank', '_blank') : null;
                       void bookingService
                         .shareTherapistNotify(
                           clinic.id,
                           therapistNameById.get(justConfirmed.therapistId!) ?? 'the therapist',
                           therapistById.get(justConfirmed.therapistId!)?.phone ?? null,
                           justConfirmed.patientName,
-                          justConfirmed.scheduledAt
+                          justConfirmed.scheduledAt,
+                          popup
                         )
-                        .catch((e) => alert(toFriendlyMessage(e)))
-                    }
+                        .catch((e) => {
+                          popup?.close();
+                          alert(toFriendlyMessage(e));
+                        });
+                    }}
                   >
                     Notify therapist
                   </button>

@@ -35,5 +35,6 @@ export async function signOutSafely(): Promise<void> {
     if (!proceed) return;
   }
 
+  await syncEngine.stop();
   await supabase.auth.signOut();
 }

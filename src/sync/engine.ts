@@ -1,4 +1,5 @@
 import { db, ALL_SYNCED_TABLES, CLIENT_WRITABLE_TABLES, type SyncedTable } from '@/lib/db';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase';
 import { domainToRow, rowToDomain } from '@/repositories/rowMapping';
 import { onLocalWrite } from '@/repositories/local';
@@ -79,6 +80,38 @@ export class SyncEngine {
   private running = false;
   private rerunRequested = false;
   private started = false;
+  private channel: RealtimeChannel | null = null;
+  private fallbackTimer: ReturnType<typeof setInterval> | null = null;
+  
+  private handleOnline = () => {
+    syncStatus.set({ online: true });
+    this.schedule();
+  };
+
+  private handleOffline = () => {
+    syncStatus.set({ online: false });
+  };
+
+  async stop(): Promise<void> {
+    this.started = false;
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    if (this.fallbackTimer) {
+      clearInterval(this.fallbackTimer);
+      this.fallbackTimer = null;
+    }
+    if (this.channel) {
+      await this.supabase?.removeChannel(this.channel);
+      this.channel = null;
+    }
+    
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', this.handleOnline);
+      window.removeEventListener('offline', this.handleOffline);
+    }
+    while (this.running) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
 
   start() {
     if (this.started || !this.supabase) return;
@@ -89,22 +122,19 @@ export class SyncEngine {
       this.schedule();
     });
 
-    window.addEventListener('online', () => {
-      syncStatus.set({ online: true });
-      this.schedule();
-    });
-    window.addEventListener('offline', () => syncStatus.set({ online: false }));
+    window.addEventListener('online', this.handleOnline);
+    window.addEventListener('offline', this.handleOffline);
 
-    const channel = this.supabase.channel('thera-net-sync');
+    this.channel = this.supabase.channel('thera-net-sync');
     for (const table of SYNC_TABLES) {
-      channel.on('postgres_changes', { event: '*', schema: 'public', table }, () =>
+      this.channel.on('postgres_changes', { event: '*', schema: 'public', table }, () =>
         this.schedule()
       );
     }
-    channel.subscribe();
+    this.channel.subscribe();
 
     // Fallback poll in case a realtime event is missed
-    setInterval(() => this.schedule(), 5 * 60 * 1000);
+    this.fallbackTimer = setInterval(() => this.schedule(), 5 * 60 * 1000);
 
     void this.updatePending();
     this.schedule();
@@ -200,6 +230,7 @@ export class SyncEngine {
   }
 
   private async push() {
+    if (!this.started) return;
     const supabase = this.supabase!;
     const entries = await db.outbox.orderBy('seq').toArray();
     if (!entries.length) return;
@@ -297,6 +328,7 @@ export class SyncEngine {
   }
 
   private async pull() {
+    if (!this.started) return;
     // One table's pages are still fetched in order (a page's cursor depends
     // on the previous page), but the tables themselves have no dependency on
     // each other — pulling them one after another only serializes their
@@ -311,6 +343,7 @@ export class SyncEngine {
     const supabase = this.supabase!;
     let cursor = (await db.meta.get(`cursor:${table}`))?.value ?? EPOCH;
     for (;;) {
+      if (!this.started) break;
       const { data, error } = await supabase
         .from(table)
         .select('*')

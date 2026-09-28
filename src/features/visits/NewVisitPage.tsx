@@ -672,14 +672,18 @@ export function NewVisitPage() {
                 disabled={feedbackRequested}
                 onClick={() => {
                   setFeedbackRequested(true);
+                  const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+                  const popup = !nav.share ? window.open('about:blank', '_blank') : null;
                   void feedbackService
                     .askForFeedback(
                       justSaved.visitId,
                       justSaved.patientName,
                       justSaved.patientPhone,
-                      clinic.name
+                      clinic.name,
+                      popup
                     )
                     .catch((e) => {
+                      popup?.close();
                       setFeedbackRequested(false);
                       setError(toFriendlyMessage(e));
                     });

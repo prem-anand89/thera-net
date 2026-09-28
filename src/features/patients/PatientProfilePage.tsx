@@ -58,6 +58,11 @@ export function PatientProfilePage() {
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
   const [selectedVisitIds, setSelectedVisitIds] = useState<Set<string>>(new Set());
   const [issuingInvoice, setIssuingInvoice] = useState(false);
+
+  const referringSources = useLiveQuery(
+    () => repos.referringSourceCatalog.list(clinic.id),
+    [clinic.id]
+  ) ?? [];
   const [issueError, setIssueError] = useState<string | null>(null);
   // Package sessions already billed as part of the package's own invoice
   // show up here as ₹0 visits — real activity, but noise when someone just
@@ -402,8 +407,14 @@ export function PatientProfilePage() {
     patient.phone,
   ].filter(Boolean);
 
-  const referral = patient.referringSource
-    ? [REFERRING_SOURCE_LABELS[patient.referringSource], patient.referringSourceDetail]
+  const matchedReferralName = patient.referringSourceId
+    ? referringSources.find((s) => s.id === patient.referringSourceId)?.name
+    : patient.referringSource
+      ? REFERRING_SOURCE_LABELS[patient.referringSource]
+      : null;
+
+  const referral = matchedReferralName
+    ? [matchedReferralName, patient.referringSourceDetail]
         .filter(Boolean)
         .join(' — ')
     : null;

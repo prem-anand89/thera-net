@@ -123,7 +123,7 @@ const workspaceRoute = createRoute({
   component: WorkspacePage,
 });
 
-const LEDGER_TABS = ['visits', 'invoices'] as const;
+const LEDGER_TABS = ['visits', 'invoices', 'daybook'] as const;
 
 const ledgerRoute = createRoute({
   getParentRoute: () => rootRoute,

@@ -109,10 +109,16 @@ export async function shareFileToWhatsApp(
  * feedback link) — most of the app's "share this" actions have nothing to
  * attach, so this is the common case, not `shareFileToWhatsApp`'s.
  */
-export async function shareTextViaWhatsApp(text: string, title: string): Promise<void> {
+export async function shareTextViaWhatsApp(
+  text: string,
+  title: string,
+  popup?: Window | null,
+  toPhone?: string | null
+): Promise<void> {
   const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
   if (nav.share) {
     try {
+      if (popup) popup.close();
       await nav.share({ text, title });
       return;
     } catch (e) {
@@ -121,5 +127,17 @@ export async function shareTextViaWhatsApp(text: string, title: string): Promise
       // same reasoning shareFileToWhatsApp falls back rather than erroring.
     }
   }
-  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  // Include the phone number in the wa.me URL when available, so WhatsApp
+  // opens a pre-addressed chat rather than requiring the user to pick a
+  // contact manually — same behaviour as the invoice "Remind to pay" action.
+  const phoneSegment = toPhone ? toPhone.replace(/\D/g, '') : '';
+  const waPhone = phoneSegment.length === 10 ? `91${phoneSegment}` : phoneSegment;
+  const url = waPhone
+    ? `https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`
+    : `https://wa.me/?text=${encodeURIComponent(text)}`;
+  if (popup) {
+    popup.location.href = url;
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
 }

@@ -1,5 +1,8 @@
 import { Link } from '@tanstack/react-router';
 import { usePermissions } from '@/app/usePermissions';
+import { useClinic } from '@/app/clinicContext';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { repos } from '@/services';
 
 export function MorePage() {
   const { canEditSettings, isAdmin, role } = usePermissions();
@@ -8,6 +11,13 @@ export function MorePage() {
   // front_desk's primary surface too — same gate as the desktop nav's
   // /requests item in Shell.tsx.
   const showRequests = isAdmin || role === 'front_desk';
+  const clinic = useClinic();
+  
+  const appointmentRequests = useLiveQuery(
+    () => clinic && showRequests ? repos.appointmentRequests.listByClinic(clinic.id) : undefined,
+    [clinic?.id, showRequests]
+  );
+  const pendingRequestsCount = appointmentRequests?.filter(r => r.status === 'pending').length ?? 0;
 
   return (
     <div className="space-y-4">
@@ -37,9 +47,14 @@ export function MorePage() {
           <li>
             <Link
               to="/requests"
-              className="block min-h-11 px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+              className="flex items-center justify-between min-h-11 px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
             >
-              Requests
+              <span>Requests</span>
+              {pendingRequestsCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--rust)] px-1.5 text-[11px] font-bold text-white">
+                  {pendingRequestsCount}
+                </span>
+              )}
             </Link>
           </li>
         )}

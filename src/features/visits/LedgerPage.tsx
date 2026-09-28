@@ -46,10 +46,11 @@ import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { InvoicesPage } from '@/features/invoices/InvoicesPage';
+import { DaybookPage } from './DaybookPage';
 
 const PATIENT_SEARCH_LIMIT = 6;
 
-type RecordsView = 'visits' | 'invoices';
+type RecordsView = 'visits' | 'invoices' | 'daybook';
 
 type DatePreset = 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
 const DATE_PRESETS: { key: DatePreset; label: string }[] = [
@@ -213,7 +214,7 @@ export function LedgerPage() {
   // entitled admin off the Invoices tab on every page load.
   useEffect(() => {
     if (entitlementsLoading) return;
-    if (recordsView === 'invoices' && !canBill) setRecordsView('visits');
+    if ((recordsView === 'invoices' || recordsView === 'daybook') && !canBill) setRecordsView('visits');
   }, [recordsView, canBill, entitlementsLoading, setRecordsView]);
   const initialWeek = currentWeekRange();
   const [from, setFrom] = useState(initialWeek.from);
@@ -553,6 +554,7 @@ export function LedgerPage() {
     const csv = visitsToCsv(rows, {
       filterDescription,
       partnerSplit,
+      showPostTax: partnerSplit && (clinic.taxPct ?? 0) > 0,
       ownShareLabel: clinicShareLabels(clinic).own,
     });
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -591,22 +593,23 @@ export function LedgerPage() {
         </Link>
       </div>
 
-      <div className="flex w-fit gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+      <div className="flex w-fit max-w-full gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] p-1 overflow-x-auto hide-scrollbar">
         {(
           [
             { key: 'visits', label: 'Visits' },
             { key: 'invoices', label: 'Invoices' },
+            { key: 'daybook', label: 'Daybook' },
           ] as const
         )
-          .filter((v) => v.key !== 'invoices' || canBill || entitlementsLoading)
+          .filter((v) => (v.key !== 'invoices' && v.key !== 'daybook') || canBill || entitlementsLoading)
           .map((v) => (
             <button
               key={v.key}
               type="button"
-              className={`rounded-md px-3 py-1 text-xs font-medium ${
+              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                 recordsView === v.key
-                  ? 'bg-[var(--teal)] text-white'
-                  : 'text-[var(--muted)] hover:bg-[var(--surface)]'
+                  ? 'bg-[var(--teal)] text-white shadow-sm'
+                  : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
               }`}
               onClick={() => setRecordsView(v.key)}
             >
@@ -867,35 +870,52 @@ export function LedgerPage() {
                 }}
                 onAskForFeedback={(row) => {
                   setError(null);
+                  const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+                  const popup = !nav.share ? window.open('about:blank', '_blank') : null;
                   void feedbackService
                     .askForFeedback(
                       row.visitId,
                       row.patientName,
                       row.patientPhone ?? null,
-                      clinic.name
+                      clinic.name,
+                      popup
                     )
-                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                    .catch((e) => {
+                      popup?.close();
+                      setError(e instanceof Error ? e.message : String(e));
+                    });
                 }}
                 onResendFeedback={(row) => {
                   const request = feedbackRequestByVisitId.get(row.visitId);
                   if (!request?.token) return;
                   setError(null);
+                  const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+                  const popup = !nav.share ? window.open('about:blank', '_blank') : null;
                   void feedbackService
-                    .resend(request, row.patientName, row.patientPhone ?? null, clinic.name)
-                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                    .resend(request, row.patientName, row.patientPhone ?? null, clinic.name, popup)
+                    .catch((e) => {
+                      popup?.close();
+                      setError(e instanceof Error ? e.message : String(e));
+                    });
                 }}
                 onAskForGoogleReview={(row) => {
                   if (!row.googleReviewUrl) return;
                   setError(null);
+                  const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+                  const popup = !nav.share ? window.open('about:blank', '_blank') : null;
                   void feedbackService
                     .askForGoogleReview(
                       clinic.id,
                       row.patientName,
                       row.patientPhone ?? null,
                       clinic.name,
-                      row.googleReviewUrl
+                      row.googleReviewUrl,
+                      popup
                     )
-                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                    .catch((e) => {
+                      popup?.close();
+                      setError(e instanceof Error ? e.message : String(e));
+                    });
                 }}
                 canInvoice={canBill}
                 backTo="/ledger"
@@ -921,6 +941,7 @@ export function LedgerPage() {
       )}
 
       {recordsView === 'invoices' && <InvoicesPage />}
+      {recordsView === 'daybook' && <DaybookPage />}
 
       {invoicing && (
         <IssueInvoiceDialog

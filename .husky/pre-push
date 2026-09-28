@@ -1,0 +1,4 @@
+#!/bin/sh
+# Catch type errors before they reach the remote — CI would catch them too,
+# but a failed push is faster feedback than a failed pipeline 10 minutes later.
+npm run typecheck

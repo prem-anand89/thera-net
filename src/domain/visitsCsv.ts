@@ -30,8 +30,17 @@ function csvLine(cells: unknown[]): string {
  */
 export function visitsToCsv(
   rows: VisitsCsvRow[],
-  opts: { filterDescription: string; partnerSplit: boolean; ownShareLabel: string }
+  opts: {
+    filterDescription: string;
+    partnerSplit: boolean;
+    ownShareLabel: string;
+    /** At 0% TDS nothing is actually withheld, so Post Tax would just repeat
+     *  Own Share — pass false to drop the redundant column. Defaults to
+     *  `partnerSplit` for backward compatibility. */
+    showPostTax?: boolean;
+  }
 ): string {
+  const showPostTax = opts.showPostTax ?? opts.partnerSplit;
   const header = [
     'Date',
     'Patient',
@@ -40,7 +49,8 @@ export function visitsToCsv(
     'Service',
     'Condition',
     'Bill',
-    ...(opts.partnerSplit ? [`${opts.ownShareLabel} Share`, 'Post Tax'] : []),
+    ...(opts.partnerSplit ? [`${opts.ownShareLabel} Share`] : []),
+    ...(showPostTax ? ['Post Tax'] : []),
     'Invoiced',
   ];
   const line = (r: VisitsCsvRow) => [
@@ -51,7 +61,8 @@ export function visitsToCsv(
     r.serviceName,
     r.condition ?? '',
     paiseToRupees(r.billPaise),
-    ...(opts.partnerSplit ? [paiseToRupees(r.bmSharePaise), paiseToRupees(r.postTaxPaise)] : []),
+    ...(opts.partnerSplit ? [paiseToRupees(r.bmSharePaise)] : []),
+    ...(showPostTax ? [paiseToRupees(r.postTaxPaise)] : []),
     r.invoiced ? 'Yes' : 'No',
   ];
   const totals = rows.reduce(
@@ -70,7 +81,8 @@ export function visitsToCsv(
     '',
     `Total (${rows.length} visit${rows.length === 1 ? '' : 's'})`,
     paiseToRupees(totals.billPaise),
-    ...(opts.partnerSplit ? [paiseToRupees(totals.bmSharePaise), paiseToRupees(totals.postTaxPaise)] : []),
+    ...(opts.partnerSplit ? [paiseToRupees(totals.bmSharePaise)] : []),
+    ...(showPostTax ? [paiseToRupees(totals.postTaxPaise)] : []),
     '',
   ];
   return [
