@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, feedbackService } from '@/services';
 import { db } from '@/lib/db';
+import { toFriendlyMessage } from '@/lib/errors';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -880,22 +881,19 @@ export function LedgerPage() {
                   if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
                 }}
                 onAskForFeedback={(row) => {
-                  setError(null);
                   void feedbackService
                     .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name)
-                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                    .catch((e) => alert(toFriendlyMessage(e)));
                 }}
                 onResendFeedback={(row) => {
                   const request = feedbackRequestByVisitId.get(row.visitId);
                   if (!request?.token) return;
-                  setError(null);
                   void feedbackService
                     .resend(request, row.patientName, row.patientPhone ?? null, clinic.name)
-                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                    .catch((e) => alert(toFriendlyMessage(e)));
                 }}
                 onAskForGoogleReview={(row) => {
                   if (!row.googleReviewUrl) return;
-                  setError(null);
                   void feedbackService
                     .askForGoogleReview(
                       clinic.id,
@@ -904,7 +902,7 @@ export function LedgerPage() {
                       clinic.name,
                       row.googleReviewUrl
                     )
-                    .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                    .catch((e) => alert(toFriendlyMessage(e)));
                 }}
                 canInvoice={canBill}
                 backTo="/ledger"
