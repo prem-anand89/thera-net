@@ -36,6 +36,7 @@ returns table (
   updated_by uuid
 )
 language plpgsql as $$
+#variable_conflict use_column
 declare
   v_clinic_id uuid;
   v_patient_id uuid;
@@ -52,7 +53,7 @@ begin
   return query
   insert into feedback_requests (clinic_id, visit_id, patient_id, therapist_id)
   values (v_clinic_id, p_visit_id, v_patient_id, v_therapist_id)
-  on conflict (visit_id) where status = 'pending'
+  on conflict (visit_id) where feedback_requests.status = 'pending'
     do update set token = public.generate_url_safe_token(),
                   expires_at = now() + interval '21 days',
                   status = 'pending',
