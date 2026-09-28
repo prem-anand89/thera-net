@@ -18,6 +18,13 @@ export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps)
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // Structured fields
+  const [severity, setSeverity] = useState('Medium');
+  const [bugSteps, setBugSteps] = useState('');
+  const [featureCategory, setFeatureCategory] = useState('Workflow');
+  const [featureWhy, setFeatureWhy] = useState('');
+  const [supportTopic, setSupportTopic] = useState('General');
+
   const { session } = useSession();
   const clinic = useClinic();
 
@@ -27,6 +34,8 @@ export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps)
     if (!busy) {
       setMode('menu');
       setMessage('');
+      setBugSteps('');
+      setFeatureWhy('');
       setError(null);
       setSuccess(false);
       onClose();
@@ -40,6 +49,17 @@ export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps)
     setBusy(true);
     setError(null);
 
+    let finalMessage = '';
+    if (mode === 'bug') {
+      finalMessage = `Severity: ${severity}\n\nWhat went wrong:\n${message.trim()}`;
+      if (bugSteps.trim()) finalMessage += `\n\nSteps to reproduce:\n${bugSteps.trim()}`;
+    } else if (mode === 'feature') {
+      finalMessage = `Category: ${featureCategory}\n\nThe Idea:\n${message.trim()}`;
+      if (featureWhy.trim()) finalMessage += `\n\nWhy it's important:\n${featureWhy.trim()}`;
+    } else {
+      finalMessage = `Topic: ${supportTopic}\n\nMessage:\n${message.trim()}`;
+    }
+
     try {
       const supabase = getSupabase();
       if (!supabase) throw new Error('Supabase client not found');
@@ -48,7 +68,7 @@ export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps)
         body: {
           type: 'feedback',
           category: mode,
-          message: message.trim(),
+          message: finalMessage,
           userId: session?.user.id,
           userName: session?.user.user_metadata?.display_name || session?.user.email,
           clinicId: clinic?.id,
@@ -153,24 +173,59 @@ export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps)
               </div>
               
               <div className="space-y-4">
-                <Field 
-                  label={
-                    mode === 'bug' ? 'What went wrong? What did you expect to happen?' :
-                    mode === 'feature' ? 'How could we improve the app for you?' :
-                    'How can we help? (We will email you back)'
-                  }
-                >
-                  <textarea
-                    required
-                    autoFocus
-                    disabled={busy}
-                    rows={5}
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    className={inputCls}
-                    placeholder="Type your message here..."
-                  />
-                </Field>
+                {mode === 'bug' && (
+                  <>
+                    <Field label="Severity">
+                      <select value={severity} onChange={(e) => setSeverity(e.target.value)} className={inputCls}>
+                        <option value="Low">Low - Minor annoyance</option>
+                        <option value="Medium">Medium - Feature isn't working right</option>
+                        <option value="High">High - Completely blocked / Crashing</option>
+                      </select>
+                    </Field>
+                    <Field label="What went wrong?">
+                      <textarea required autoFocus disabled={busy} rows={3} value={message} onChange={(e) => setMessage(e.target.value)} className={inputCls} placeholder="Expected X, but Y happened..." />
+                    </Field>
+                    <Field label="Steps to reproduce (optional)">
+                      <textarea disabled={busy} rows={2} value={bugSteps} onChange={(e) => setBugSteps(e.target.value)} className={inputCls} placeholder="1. Go to... 2. Click..." />
+                    </Field>
+                  </>
+                )}
+
+                {mode === 'feature' && (
+                  <>
+                    <Field label="Category">
+                      <select value={featureCategory} onChange={(e) => setFeatureCategory(e.target.value)} className={inputCls}>
+                        <option value="Workflow">Workflow / Day-to-day use</option>
+                        <option value="Billing">Billing & Revenue</option>
+                        <option value="Patients">Patients & Notes</option>
+                        <option value="UI">UI / Design</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </Field>
+                    <Field label="The Idea">
+                      <textarea required autoFocus disabled={busy} rows={3} value={message} onChange={(e) => setMessage(e.target.value)} className={inputCls} placeholder="What should we build?" />
+                    </Field>
+                    <Field label="Why is this important? (optional)">
+                      <textarea disabled={busy} rows={2} value={featureWhy} onChange={(e) => setFeatureWhy(e.target.value)} className={inputCls} placeholder="How would this help your clinic?" />
+                    </Field>
+                  </>
+                )}
+
+                {mode === 'support' && (
+                  <>
+                    <Field label="Topic">
+                      <select value={supportTopic} onChange={(e) => setSupportTopic(e.target.value)} className={inputCls}>
+                        <option value="General">General Question</option>
+                        <option value="Billing">Billing issue</option>
+                        <option value="Sync">Sync / Offline issue</option>
+                        <option value="Account">Account / Login</option>
+                      </select>
+                    </Field>
+                    <Field label="How can we help? (We will email you back)">
+                      <textarea required autoFocus disabled={busy} rows={4} value={message} onChange={(e) => setMessage(e.target.value)} className={inputCls} placeholder="Describe what you need help with..." />
+                    </Field>
+                  </>
+                )}
 
                 <ErrorNote message={error} />
 
