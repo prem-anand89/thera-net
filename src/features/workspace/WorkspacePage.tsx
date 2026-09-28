@@ -761,28 +761,44 @@ export function WorkspacePage() {
               if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
             }}
             onAskForFeedback={(row) => {
+              const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+              const popup = !nav.share ? window.open('about:blank', '_blank') : null;
               void feedbackService
-                .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name)
-                .catch((e) => alert(toFriendlyMessage(e)));
+                .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name, popup)
+                .catch((e) => {
+                  popup?.close();
+                  alert(toFriendlyMessage(e));
+                });
             }}
             onResendFeedback={(row) => {
               const request = feedbackRequestByVisitId.get(row.visitId);
               if (!request?.token) return;
+              const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+              const popup = !nav.share ? window.open('about:blank', '_blank') : null;
               void feedbackService
-                .resend(request, row.patientName, row.patientPhone ?? null, clinic.name)
-                .catch((e) => alert(toFriendlyMessage(e)));
+                .resend(request, row.patientName, row.patientPhone ?? null, clinic.name, popup)
+                .catch((e) => {
+                  popup?.close();
+                  alert(toFriendlyMessage(e));
+                });
             }}
             onAskForGoogleReview={(row) => {
               if (!row.googleReviewUrl) return;
+              const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+              const popup = !nav.share ? window.open('about:blank', '_blank') : null;
               void feedbackService
                 .askForGoogleReview(
                   clinic.id,
                   row.patientName,
                   row.patientPhone ?? null,
                   clinic.name,
-                  row.googleReviewUrl
+                  row.googleReviewUrl,
+                  popup
                 )
-                .catch((e) => alert(toFriendlyMessage(e)));
+                .catch((e) => {
+                  popup?.close();
+                  alert(toFriendlyMessage(e));
+                });
             }}
             canInvoice={canBill}
             backTo="/workspace"

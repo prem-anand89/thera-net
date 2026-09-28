@@ -109,10 +109,11 @@ export async function shareFileToWhatsApp(
  * feedback link) — most of the app's "share this" actions have nothing to
  * attach, so this is the common case, not `shareFileToWhatsApp`'s.
  */
-export async function shareTextViaWhatsApp(text: string, title: string): Promise<void> {
+export async function shareTextViaWhatsApp(text: string, title: string, popup?: Window | null): Promise<void> {
   const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
   if (nav.share) {
     try {
+      if (popup) popup.close();
       await nav.share({ text, title });
       return;
     } catch (e) {
@@ -121,5 +122,10 @@ export async function shareTextViaWhatsApp(text: string, title: string): Promise
       // same reasoning shareFileToWhatsApp falls back rather than erroring.
     }
   }
-  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  if (popup) {
+    popup.location.href = url;
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
 }
