@@ -1,4 +1,5 @@
 import { db, ALL_SYNCED_TABLES, CLIENT_WRITABLE_TABLES, type SyncedTable } from '@/lib/db';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase';
 import { domainToRow, rowToDomain } from '@/repositories/rowMapping';
 import { onLocalWrite } from '@/repositories/local';
@@ -79,7 +80,7 @@ export class SyncEngine {
   private running = false;
   private rerunRequested = false;
   private started = false;
-  private channel: any = null;
+  private channel: RealtimeChannel | null = null;
   private fallbackTimer: ReturnType<typeof setInterval> | null = null;
   
   private handleOnline = () => {
