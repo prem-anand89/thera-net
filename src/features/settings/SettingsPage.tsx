@@ -6,6 +6,7 @@ import {
   backupService,
   therapistService,
   visitService,
+  whatsappBusinessService,
 } from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
@@ -17,7 +18,7 @@ import { getSupabase, publicTherapistPhotoUrl, publicLogoUrl } from '@/lib/supab
 import { resizeImageToBlob } from '@/lib/resizeImage';
 import { db } from '@/lib/db';
 import { MONTH_NAMES, formatDateDM } from '@/domain/fiscalYear';
-import { clinicShareLabels, type Clinic, type Therapist } from '@/domain/types';
+import { clinicShareLabels, type Clinic, type Therapist, type UUID } from '@/domain/types';
 import {
   memberOnboardingStatus,
   MEMBER_ONBOARDING_LABELS,
