@@ -246,6 +246,13 @@ export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps)
                           Go to <strong>Settings &rarr; Features</strong>. You can toggle whether "Everyone" or only "Billing Staff / Admins" are allowed to issue invoices. 
                         </p>
                       </details>
+
+                      <details className="mt-2 group">
+                        <summary className="cursor-pointer font-medium text-[var(--teal)] hover:underline">How do I add a second clinic?</summary>
+                        <p className="mt-1 pl-4 text-xs leading-relaxed text-[var(--muted)]">
+                          Click your profile icon in the top right. If you are an admin, you will see an <strong>+ Add another clinic</strong> button in the menu. Once created, you can seamlessly switch between clinics from that same menu.
+                        </p>
+                      </details>
                     </div>
 
                     <h3 className="mt-4 mb-2 font-medium text-[var(--ink)] border-t border-[var(--border)] pt-4">Still need help? Send us a message:</h3>
