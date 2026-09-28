@@ -8,6 +8,7 @@ import {
   visitService,
   whatsappBusinessService,
 } from '@/services';
+import { invalidateWhatsappBusinessApiCache } from '@/lib/whatsappSend';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -1581,13 +1582,11 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
 }
 
 /**
- * Patient Communications, Phase 9 (scaffold) — credential storage for a
- * later, real WhatsApp Business Cloud API send path. Every send action in
- * this module still opens the staff member's own WhatsApp via a share
- * sheet today; nothing in the app calls the new `send-whatsapp-template`
- * Edge Function yet (see that function's own doc comment). This just lets
- * an admin park real Meta credentials here ahead of that wiring, so
- * turning sending on later is a config step, not a code change.
+ * Patient Communications, Phase 9 — Meta credentials for automated sends.
+ * When **Enable** is on (and phone number id + token are saved),
+ * `sendWhatsAppMessage` uses `send-whatsapp-template` before falling back
+ * to the default wa.me flow. Pending-bill reminders on visit rows always
+ * use wa.me directly unless routed through this helper later.
  *
  * A standalone mini-form, not part of `PatientCommsFields`/
  * `useClinicSectionForm` — `clinic_whatsapp_config` is a separate table
@@ -1633,6 +1632,7 @@ function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
       );
       if (accessTokenInput.trim()) setHasToken(true);
       setAccessTokenInput('');
+      invalidateWhatsappBusinessApiCache(clinicId);
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
     } catch (e) {

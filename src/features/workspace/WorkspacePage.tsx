@@ -908,15 +908,22 @@ export function WorkspacePage() {
                         <button
                           type="button"
                           className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
-                          onClick={() =>
-                            void feedbackService.sendStalePackageReminder(
-                              clinic.id,
-                              p.patientName,
-                              p.phone,
-                              clinic.name,
-                              p.serviceName
-                            )
-                          }
+                          onClick={() => {
+                            const popup = openWhatsAppSharePopup();
+                            void feedbackService
+                              .sendStalePackageReminder(
+                                clinic.id,
+                                p.patientName,
+                                p.phone,
+                                clinic.name,
+                                p.serviceName,
+                                popup
+                              )
+                              .catch((e) => {
+                                popup?.close();
+                                alert(toFriendlyMessage(e));
+                              });
+                          }}
                         >
                           Send reminder
                         </button>
@@ -981,15 +988,22 @@ export function WorkspacePage() {
                             <button
                               type="button"
                               className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
-                              onClick={() =>
-                                void feedbackService.sendStalePackageReminder(
-                                  clinic.id,
-                                  p.patientName,
-                                  p.phone,
-                                  clinic.name,
-                                  p.serviceName
-                                )
-                              }
+                              onClick={() => {
+                                const popup = openWhatsAppSharePopup();
+                                void feedbackService
+                                  .sendStalePackageReminder(
+                                    clinic.id,
+                                    p.patientName,
+                                    p.phone,
+                                    clinic.name,
+                                    p.serviceName,
+                                    popup
+                                  )
+                                  .catch((e) => {
+                                    popup?.close();
+                                    alert(toFriendlyMessage(e));
+                                  });
+                              }}
                             >
                               Send reminder
                             </button>

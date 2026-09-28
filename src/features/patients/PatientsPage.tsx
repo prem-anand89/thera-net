@@ -35,6 +35,7 @@ import {
 import { patientIdentityLine, CardDetailRow } from '@/components/VisitCard';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
+import { openWhatsAppSharePopup } from '@/lib/pdfShare';
 
 /** Just the source label ("Doctor referral"), not the "— Dr. Mehta" detail
  *  PatientProfilePage's own `referral` line adds — this is a roster-glance
@@ -453,13 +454,15 @@ function AllPatientsSection() {
                     p.phone &&
                     visitStatsByPatient.get(p.id) &&
                     isStale(visitStatsByPatient.get(p.id)!.lastVisitOn)
-                      ? () =>
-                          void feedbackService.sendReturnReminder(
-                            clinic.id,
-                            p.name,
-                            p.phone,
-                            clinic.name
-                          )
+                      ? () => {
+                          const popup = openWhatsAppSharePopup();
+                          void feedbackService
+                            .sendReturnReminder(clinic.id, p.name, p.phone, clinic.name, popup)
+                            .catch((e) => {
+                              popup?.close();
+                              alert(toFriendlyMessage(e));
+                            });
+                        }
                       : undefined
                   }
                   referringSources={referringSources}
@@ -615,14 +618,21 @@ function AllPatientsSection() {
                               <button
                                 type="button"
                                 className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
-                                onClick={() =>
-                                  void feedbackService.sendReturnReminder(
-                                    clinic.id,
-                                    p.name,
-                                    p.phone,
-                                    clinic.name
-                                  )
-                                }
+                                onClick={() => {
+                                  const popup = openWhatsAppSharePopup();
+                                  void feedbackService
+                                    .sendReturnReminder(
+                                      clinic.id,
+                                      p.name,
+                                      p.phone,
+                                      clinic.name,
+                                      popup
+                                    )
+                                    .catch((e) => {
+                                      popup?.close();
+                                      alert(toFriendlyMessage(e));
+                                    });
+                                }}
                               >
                                 Remind
                               </button>

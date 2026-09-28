@@ -275,6 +275,27 @@ export function RequestsPage() {
     }
   }
 
+  function sendPatientBookingWhatsApp(
+    patientName: string,
+    patientPhone: string | null | undefined,
+    scheduledAt: string
+  ) {
+    const popup = openWhatsAppSharePopup();
+    void bookingService
+      .shareBookingConfirmation(
+        clinic.id,
+        patientName,
+        patientPhone ?? null,
+        clinic.name,
+        scheduledAt,
+        popup
+      )
+      .catch((e) => {
+        popup?.close();
+        alert(toFriendlyMessage(e));
+      });
+  }
+
   // Marks every response caught up as of this visit — Workspace's "new
   // response" count reads this same key, so opening this page is what
   // clears it, not a separate per-row acknowledgement (there's no
@@ -676,22 +697,13 @@ export function RequestsPage() {
                 <button
                   type="button"
                   className="whitespace-nowrap rounded-full border border-[var(--teal)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-white"
-                  onClick={() => {
-                    const popup = openWhatsAppSharePopup();
-                    void bookingService
-                      .shareBookingConfirmation(
-                        clinic.id,
-                        justConfirmed.patientName,
-                        justConfirmed.patientPhone,
-                        clinic.name,
-                        justConfirmed.scheduledAt,
-                        popup
-                      )
-                      .catch((e) => {
-                        popup?.close();
-                        alert(toFriendlyMessage(e));
-                      });
-                  }}
+                  onClick={() =>
+                    sendPatientBookingWhatsApp(
+                      justConfirmed.patientName,
+                      justConfirmed.patientPhone,
+                      justConfirmed.scheduledAt
+                    )
+                  }
                 >
                   Send confirmation
                 </button>
@@ -812,6 +824,21 @@ export function RequestsPage() {
                           <div className="mt-3 flex flex-wrap items-center gap-2">
                             {(a.status === 'confirmed' || a.status === 'rescheduled') && (
                               <>
+                                {a.patientPhone && (
+                                  <button
+                                    type="button"
+                                    className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                                    onClick={() =>
+                                      sendPatientBookingWhatsApp(
+                                        a.patientName,
+                                        a.patientPhone,
+                                        a.scheduledAt
+                                      )
+                                    }
+                                  >
+                                    WhatsApp
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
@@ -958,6 +985,21 @@ export function RequestsPage() {
                                 <div className="flex flex-wrap items-center justify-end gap-2">
                                   {(a.status === 'confirmed' || a.status === 'rescheduled') && (
                                     <>
+                                      {a.patientPhone && (
+                                        <button
+                                          type="button"
+                                          className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                                          onClick={() =>
+                                            sendPatientBookingWhatsApp(
+                                              a.patientName,
+                                              a.patientPhone,
+                                              a.scheduledAt
+                                            )
+                                          }
+                                        >
+                                          WhatsApp
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"

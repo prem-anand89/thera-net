@@ -22,6 +22,7 @@ import { buildUpiPayUri, clinicCanShowUpiQr, clinicUpiPayeeName } from '@/domain
 import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
+import { openWhatsAppChat } from '@/lib/pdfShare';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 
@@ -139,11 +140,7 @@ export function InvoicesPage() {
       text += `\n\nYou can pay directly via UPI using this link:\n${upiPayUri}`;
     }
 
-    const cleanPhone = phone.replace(/\D/g, '');
-    const waPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    
-    const url = `https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+    openWhatsAppChat(text, phone);
   }
 
   function balanceFor(inv: Invoice): { paidPaise: number; remainingPaise: number } {
