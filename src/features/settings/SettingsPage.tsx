@@ -1650,9 +1650,10 @@ function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
       {expanded && (
         <div className="mt-3 space-y-3">
           <p className="text-xs text-[var(--muted)]">
-            Sends every message from this clinic&rsquo;s own WhatsApp number instead of a staff
-            member&rsquo;s phone — needs a Meta Business App, a verified phone number, and
-            Meta-approved message templates set up outside this app first.
+            Reserved for future automated sends from the clinic&rsquo;s WhatsApp Business number.
+            Feedback, booking confirmations, and bill reminders always open the staff
+            member&rsquo;s WhatsApp via wa.me today — this toggle does not change those actions
+            yet.
           </p>
           {!loaded ? (
             <p className="text-xs text-[var(--muted)]">Loading…</p>
