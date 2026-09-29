@@ -97,7 +97,7 @@ const SECTIONS: { key: SectionKey; label: string; description: string; accent: A
   },
   {
     key: 'patientComms',
-    label: 'Patient communications',
+    label: 'Online Booking',
     description: 'Ask patients for feedback after a visit, with a link to a public feedback form.',
     accent: 'teal',
   },
@@ -1499,7 +1499,7 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
   }
 
   return (
-    <SectionCard title="Patient communications">
+    <SectionCard title="Online Booking">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field
           label={

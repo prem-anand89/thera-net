@@ -515,17 +515,20 @@ export function BookingFormPage() {
 
                 {/* Calendar overlays content below — position absolute, z-index high */}
                 {calendarOpen && (
-                  <div className="absolute left-0 right-0 bottom-full mb-2 z-50 rounded-[12px] border border-[var(--border)] bg-white p-4 shadow-2xl">
-                    <MiniCalendar
-                      selectedDate={preferredDate}
-                      availability={availability}
-                      onSelect={(d) => {
-                        setPreferredDate(d);
-                        setPreferredTime(null);
-                        setCalendarOpen(false);
-                      }}
-                    />
-                  </div>
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setCalendarOpen(false)} />
+                    <div className="absolute left-0 right-0 bottom-full mb-2 z-50 rounded-[12px] border border-[var(--border)] bg-white p-4 shadow-2xl">
+                      <MiniCalendar
+                        selectedDate={preferredDate}
+                        availability={availability}
+                        onSelect={(d) => {
+                          setPreferredDate(d);
+                          setPreferredTime(null);
+                          setCalendarOpen(false);
+                        }}
+                      />
+                    </div>
+                  </>
                 )}
               </div>
 
