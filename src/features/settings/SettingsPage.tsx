@@ -795,7 +795,6 @@ type ProfileFields = Pick<
   | 'clinicalDocsEnabled'
   | 'showTherapistComparison'
   | 'lastSplitChangeAt'
-  | 'slotDurationMinutes'
 >;
 
 function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
@@ -811,7 +810,6 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         clinicType: c.clinicType,
         clinicalDocsEnabled: c.clinicalDocsEnabled ?? false,
         showTherapistComparison: c.showTherapistComparison ?? false,
-        slotDurationMinutes: c.slotDurationMinutes ?? 30,
       }),
       onDirtyChange
     );
@@ -970,30 +968,6 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
           />
         </Field>
       </div>
-
-      <h3 className="mb-3 mt-8 text-sm font-semibold text-[var(--ink)]">Scheduling Preferences</h3>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Field
-          label={
-            <>
-              Appointment Slot Duration
-              <InfoTip text="The length of a standard appointment. This controls the time blocks shown on the schedule and public booking page." />
-            </>
-          }
-        >
-          <select
-            className={inputCls}
-            value={form.slotDurationMinutes}
-            onChange={(e) => set({ slotDurationMinutes: Number(e.target.value) })}
-          >
-            <option value={15}>15 minutes</option>
-            <option value={30}>30 minutes</option>
-            <option value={45}>45 minutes</option>
-            <option value={60}>60 minutes</option>
-          </select>
-        </Field>
-      </div>
-
       {recomputeMsg && <p className="mt-2 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
       <SectionSaveBar
         dirty={dirty}
@@ -1479,7 +1453,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   );
 }
 
-type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' | 'bookingSlug' | 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays'>;
+type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' | 'bookingSlug' | 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays' | 'slotDurationMinutes'>;
 
 // Lowercase alphanumeric + hyphens, no leading/trailing/doubled hyphen —
 // the DB only enforces uniqueness, so this is the one place the "clean
@@ -1505,6 +1479,7 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
         bookingStartHour: c.bookingStartHour ?? 9,
         bookingEndHour: c.bookingEndHour ?? 17,
         closedWeekdays: c.closedWeekdays ?? [],
+        slotDurationMinutes: c.slotDurationMinutes ?? 30,
       }),
       _onDirtyChange
     );
@@ -1628,6 +1603,26 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
               ))}
             </select>
           </div>
+        </Field>
+
+        <Field
+          label={
+            <>
+              Appointment duration
+              <InfoTip text="The length of a standard appointment. This controls the time blocks shown on the schedule and public booking page." />
+            </>
+          }
+        >
+          <select
+            className={inputCls}
+            value={form.slotDurationMinutes ?? 30}
+            onChange={(e) => set({ slotDurationMinutes: Number(e.target.value) })}
+          >
+            <option value={15}>15 minutes</option>
+            <option value={30}>30 minutes</option>
+            <option value={45}>45 minutes</option>
+            <option value={60}>60 minutes</option>
+          </select>
         </Field>
         
         <Field
