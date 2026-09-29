@@ -29,6 +29,17 @@ function generateSlots(slotDurationMinutes: number) {
 
 // ─── Mini Calendar ────────────────────────────────────────────────────────────
 
+// Mock availability logic for UI demonstration
+function getDayStatus(d: Date, today: Date) {
+  const iso = isoDate(d);
+  const isPast = iso < isoDate(today);
+  if (isPast) return 'past';
+  if (d.getDay() === 0) return 'closed'; // Sunday
+  if (d.getDate() === 14 || d.getDate() === 20) return 'holiday';
+  if (d.getDate() === 15 || d.getDate() === 22) return 'booked';
+  return 'available';
+}
+
 function MiniCalendar({
   selectedDate,
   onSelect,
@@ -68,25 +79,29 @@ function MiniCalendar({
   // Pad to complete last row
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const todayIso = isoDate(today);
+  // Custom hatched pattern for holidays
+  const hatchedStyle = {
+    background: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(251, 146, 60, 0.1) 4px, rgba(251, 146, 60, 0.1) 8px)',
+    border: '1px solid rgba(251, 146, 60, 0.3)'
+  };
 
   return (
     <div>
       {/* Month nav */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-6">
         <button
           type="button"
           onClick={prevMonth}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--muted)] hover:bg-[var(--paper)] transition-colors"
+          className="flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
           aria-label="Previous month"
         >
           ‹
         </button>
-        <span className="text-sm font-semibold text-[var(--ink)]">{monthLabel}</span>
+        <span className="text-xl font-bold font-serif text-[var(--ink)]">{monthLabel}</span>
         <button
           type="button"
           onClick={nextMonth}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--muted)] hover:bg-[var(--paper)] transition-colors"
+          className="flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--ink)] hover:bg-[var(--paper)] transition-colors"
           aria-label="Next month"
         >
           ›
@@ -94,45 +109,70 @@ function MiniCalendar({
       </div>
 
       {/* Day headers */}
-      <div className="grid grid-cols-7 mb-1">
-        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-          <div key={i} className="text-center text-[10px] font-semibold uppercase text-[var(--muted)] py-1">
+      <div className="grid grid-cols-7 mb-3 gap-2">
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
+          <div key={i} className="text-center text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
             {d}
           </div>
         ))}
       </div>
 
       {/* Date grid */}
-      <div className="grid grid-cols-7 gap-y-1">
+      <div className="grid grid-cols-7 gap-2">
         {cells.map((day, i) => {
-          if (!day) return <div key={i} />;
+          if (!day) return <div key={i} className="h-12 w-full" />;
 
           const cellDate = new Date(viewYear, viewMonth, day);
           const iso = isoDate(cellDate);
-          const isPast = cellDate < today;
-          const isToday = iso === todayIso;
+          const status = getDayStatus(cellDate, today);
           const isSelected = iso === selectedDate;
+
+          let btnCls = "h-12 w-full rounded-xl font-semibold text-base flex items-center justify-center transition-all ";
+          let extraStyle = {};
+          let title = "";
+
+          if (isSelected) {
+            btnCls += "bg-[var(--teal)] text-white shadow-md border border-transparent";
+          } else if (status === 'past') {
+            btnCls += "opacity-0 cursor-default";
+            return <div key={i} className={btnCls} />;
+          } else if (status === 'closed') {
+            btnCls += "bg-[#F9FAFB] text-[var(--muted)] opacity-50 cursor-not-allowed";
+            title = "Closed";
+          } else if (status === 'holiday') {
+            extraStyle = hatchedStyle;
+            btnCls += "text-orange-800 hover:opacity-80";
+            title = "Holiday / Clinic Closure";
+          } else if (status === 'booked') {
+            btnCls += "border border-dashed border-[var(--muted)] text-[var(--ink)] hover:border-[var(--teal)]";
+            title = "Fully booked";
+          } else {
+            btnCls += "bg-teal-50/40 text-[var(--ink)] hover:bg-teal-50";
+            title = "Available";
+          }
 
           return (
             <button
               key={i}
               type="button"
-              disabled={isPast}
+              title={title}
+              style={extraStyle}
+              disabled={status === 'past' || status === 'closed' || status === 'holiday' || status === 'booked'}
               onClick={() => onSelect(iso)}
-              className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition-all ${
-                isSelected
-                  ? 'bg-[var(--teal)] text-white shadow-sm'
-                  : isToday
-                    ? 'border border-[var(--teal)] text-[var(--teal)]'
-                    : isPast
-                      ? 'text-[var(--muted)] opacity-40 cursor-not-allowed'
-                      : 'text-[var(--ink)] hover:bg-[var(--teal-light)] hover:text-[var(--teal)]'
-              }`}
+              className={btnCls}
             >
               {day}
             </button>
           );
         })}
+      </div>
+
+      {/* Legend */}
+      <div className="mt-8 flex flex-wrap gap-4 text-xs font-medium text-[var(--muted)] border-t border-[var(--border)] pt-5">
+        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-teal-50/40"></div> Available</div>
+        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded border border-dashed border-[var(--muted)]"></div> Fully booked</div>
+        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-[#F9FAFB]"></div> Closed</div>
+        <div className="flex items-center gap-2" title="Gandhi Jayanti (Oct 2)"><div className="w-4 h-4 rounded border border-orange-200" style={{background: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(251, 146, 60, 0.15) 3px, rgba(251, 146, 60, 0.15) 6px)'}}></div> Holiday</div>
       </div>
     </div>
   );
