@@ -204,52 +204,6 @@ function TimeGroup({
   );
 }
 
-// ─── Step Indicator ───────────────────────────────────────────────────────────
-
-function StepBar({ step }: { step: 1 | 2 }) {
-  return (
-    <div className="mb-8 flex items-center justify-center gap-0">
-      {[
-        { n: 1, label: 'Your info' },
-        { n: 2, label: 'When to come' },
-      ].map(({ n, label }, idx) => {
-        const done = step > n;
-        const active = step === n;
-        return (
-          <div key={n} className="flex items-center">
-            <div className="flex flex-col items-center">
-              <div
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold transition-all ${
-                  done
-                    ? 'bg-[var(--teal)] text-white'
-                    : active
-                      ? 'bg-[var(--teal)] text-white shadow-md'
-                      : 'bg-[var(--paper)] text-[var(--muted)] border border-[var(--border)]'
-                }`}
-              >
-                {done ? '✓' : n}
-              </div>
-              <span
-                className={`mt-1 text-[10px] font-semibold uppercase tracking-wide ${
-                  active ? 'text-[var(--teal)]' : 'text-[var(--muted)]'
-                }`}
-              >
-                {label}
-              </span>
-            </div>
-            {idx < 1 && (
-              <div
-                className={`mx-2 mb-5 h-px w-16 transition-colors ${
-                  done ? 'bg-[var(--teal)]' : 'bg-[var(--border)]'
-                }`}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -276,17 +230,14 @@ export function BookingFormPage() {
   const [checking, setChecking] = useState(true);
   const [invalid, setInvalid] = useState(false);
 
-  // Step state
-  const [step, setStep] = useState<1 | 2>(1);
-
-  // Form fields – step 1
+  // Form fields
   const [name, setName] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [preferredTherapistId, setPreferredTherapistId] = useState('');
   const [notes, setNotes] = useState('');
-  const [step1Error, setStep1Error] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   // Form fields – step 2
   const [preferredDate, setPreferredDate] = useState<string | null>(null);
@@ -320,19 +271,12 @@ export function BookingFormPage() {
     })();
   }, [clinicSlug]);
 
-  function goToStep2(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim() || !phone.trim()) {
-      setStep1Error('Full name and phone number are required.');
-      return;
-    }
-    setStep1Error(null);
-    setStep(2);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!name.trim() || !phone.trim()) {
+      setSubmitError('Full name and phone number are required.');
+      return;
+    }
     setBusy(true);
     setSubmitError(null);
     try {
@@ -403,13 +347,13 @@ export function BookingFormPage() {
   // ── Layout ────────────────────────────────────────────────────────────────
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-[#f0f9ff] via-[#f8fafc] to-[#f1f5f9]"
+      className="min-h-screen"
+      style={{ background: 'linear-gradient(135deg, #e8f4f8 0%, #f0f4f8 50%, #edf2f7 100%)' }}
     >
-      {/* Header */}
-      <header
-        className="sticky top-0 z-10 border-b border-[var(--border)] bg-white/90 px-4 py-3 backdrop-blur-sm"
-      >
-        <div className="mx-auto flex max-w-lg items-center gap-3">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-10 border-b border-[var(--border)] bg-white/90 px-4 py-3 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-md items-center gap-3">
+          {/* Logo or fallback icon */}
           {clinicLogo ? (
             <div className="h-8 w-8 overflow-hidden rounded-full border border-[var(--border)] bg-white shadow-sm flex-shrink-0">
               <img src={clinicLogo} alt={clinicName || ''} className="h-full w-full object-cover" />
@@ -426,207 +370,156 @@ export function BookingFormPage() {
         </div>
       </header>
 
-      {/* Content */}
-      {/* Content */}
-      <main className="mx-auto max-w-5xl px-4 py-8">
-        <div className="rounded-[20px] border border-[var(--border)] bg-white p-6 shadow-sm md:p-10">
-          {step === 1 && (
-            <form onSubmit={goToStep2} noValidate>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-8">
-                {/* Left Column: Personal Details */}
-                <div>
-                  <h2 className="mb-6 text-2xl font-bold text-[var(--ink)]">Patient details</h2>
-                  <Field label="Full name *">
-                    <input
-                      type="text"
-                      autoComplete="name"
-                      placeholder="John Doe"
-                      className={inputCls}
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                    />
-                  </Field>
+      {/* Main Content */}
+      <main className="mx-auto max-w-md px-4 py-8">
+        {/* The single form card */}
+        <div className="rounded-[20px] border border-[var(--border)] bg-white shadow-lg overflow-hidden">
+          {/* Card header */}
+          <div className="px-6 pt-8 pb-6 border-b border-[var(--border)]">
+            <h1 className="text-2xl font-bold text-[var(--ink)]">Book an appointment</h1>
+            {clinicName && (
+              <p className="mt-1 text-sm text-[var(--muted)]">at {clinicName}</p>
+            )}
+          </div>
 
-                  <Field label="Phone number *">
-                    <div className="flex">
-                      <select
-                        className="flex items-center rounded-l-[10px] border border-r-0 border-[var(--border)] bg-[var(--paper)] px-3 text-sm text-[var(--muted)] font-medium focus:outline-none"
-                        value={countryCode}
-                        onChange={(e) => setCountryCode(e.target.value)}
-                      >
-                        <option value="+91">🇮🇳 +91</option>
-                        <option value="+1">🇺🇸 +1</option>
-                        <option value="+44">🇬🇧 +44</option>
-                        <option value="+61">🇦🇺 +61</option>
-                        <option value="+971">🇦🇪 +971</option>
-                      </select>
-                      <input
-                        type="tel"
-                        autoComplete="tel"
-                        placeholder="9876543210"
-                        className={`${inputCls} rounded-l-none`}
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                      />
-                    </div>
-                  </Field>
+          {/* Form body */}
+          <form onSubmit={onSubmit} noValidate className="px-6 py-6 space-y-4">
+            {/* --- Required fields --- */}
+            <Field label="Full name *">
+              <input
+                type="text"
+                autoComplete="name"
+                placeholder="John Doe"
+                className={inputCls}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </Field>
 
-                  <Field label="Email address (optional)">
-                    <input
-                      type="email"
-                      autoComplete="email"
-                      placeholder="you@example.com"
-                      className={inputCls}
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                    />
-                  </Field>
-                </div>
-
-                {/* Right Column: Preferences */}
-                <div>
-                  <h2
-                    className="mb-6 hidden text-2xl font-bold text-transparent md:block select-none"
-                    aria-hidden="true"
-                  >
-                    Optional
-                  </h2>
-
-                  {therapists.length > 0 && (
-                    <Field label="Preferred clinician (optional)">
-                      <select
-                        className={inputCls}
-                        value={preferredTherapistId}
-                        onChange={(e) => setPreferredTherapistId(e.target.value)}
-                      >
-                        <option value="">No preference — any available clinician</option>
-                        {therapists.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                  )}
-
-                  <Field label="Reason for visit (optional)">
-                    <textarea
-                      rows={4}
-                      placeholder="Briefly describe what's bothering you…"
-                      className={inputCls}
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                    />
-                  </Field>
-                  {step1Error && <p className="mt-2 text-sm font-medium text-[var(--rust)]">{step1Error}</p>}
-                </div>
-              </div>
-
-              {/* Footer Actions */}
-              <div className="mt-12 flex flex-col-reverse items-center justify-between gap-6 border-t border-[var(--border)] pt-8 md:flex-row">
-                <StepBar step={step} />
-                <button
-                  type="submit"
-                  className="w-full rounded-full bg-[var(--teal)] px-8 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 md:w-auto"
+            <Field label="Phone number *">
+              <div className="flex h-[46px]">
+                <select
+                  className={selectCls}
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
                 >
-                  Continue
-                </button>
+                  <option value="+91">🇮🇳 +91</option>
+                  <option value="+1">🇺🇸 +1</option>
+                  <option value="+44">🇬🇧 +44</option>
+                  <option value="+61">🇦🇺 +61</option>
+                  <option value="+971">🇦🇪 +971</option>
+                </select>
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="9876543210"
+                  className={`${inputCls} h-full rounded-l-none border-l-0`}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
               </div>
-            </form>
-          )}
+            </Field>
 
-          {step === 2 && (
-            <form onSubmit={onSubmit} noValidate>
-              <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] gap-x-12 gap-y-12 items-start">
-                {/* Left Column: Calendar Component */}
-                <div>
-                  <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-xl shadow-teal-900/5">
-                    <h3 className="text-xl font-bold font-serif mb-6 text-[var(--ink)]">
-                      {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                    </h3>
-                    <MiniCalendar
-                      selectedDate={preferredDate}
-                      onSelect={(d) => {
-                        setPreferredDate(d);
-                        setPreferredTime(null);
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Right Column: Time Selection */}
-                <div>
-                  <h2 className="text-3xl font-bold text-[var(--ink)] mb-2">Book Your Appointment</h2>
-                  
-                  {!preferredDate ? (
-                    <p className="text-[var(--muted)] text-base mb-8">
-                      Select a date on the left to see available times.
-                    </p>
-                  ) : (
-                    <>
-                      <p className="text-[var(--muted)] text-base mb-8">
-                        Select an available time slot for{' '}
-                        <strong className="text-[var(--ink)] font-semibold">
-                          {new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', {
-                            weekday: 'long',
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                        </strong>
-                      </p>
-
-                      <div className="space-y-6">
-                        <TimeGroup
-                          label="Morning"
-                          icon="☀️"
-                          slots={morning}
-                          selectedTime={preferredTime}
-                          onSelect={setPreferredTime}
-                        />
-                        <TimeGroup
-                          label="Afternoon"
-                          icon="🌤️"
-                          slots={afternoon}
-                          selectedTime={preferredTime}
-                          onSelect={setPreferredTime}
-                        />
-                      </div>
-                    </>
-                  )}
-                  {submitError && <p className="mt-4 text-sm font-medium text-[var(--rust)]">{submitError}</p>}
-                </div>
+            {/* --- Optional fields --- */}
+            <div className="border-t border-[var(--border)] pt-4 mt-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-3">Optional</p>
+              <div className="space-y-4">
+                <Field label="Email address">
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    className={inputCls}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </Field>
+                {/* Conditionally render clinician dropdown only if therapists.length > 0 */}
+                {therapists.length > 0 && (
+                  <Field label="Preferred clinician">
+                    <select
+                      className={inputCls}
+                      value={preferredTherapistId}
+                      onChange={(e) => setPreferredTherapistId(e.target.value)}
+                    >
+                      <option value="">No preference — any available clinician</option>
+                      {therapists.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                <Field label="Reason for visit">
+                  <textarea
+                    rows={3}
+                    placeholder="Briefly describe what's bothering you…"
+                    className={inputCls}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </Field>
               </div>
+            </div>
 
-              {/* Footer Actions */}
-              <div className="mt-12 flex flex-col items-center justify-between gap-6 border-t border-[var(--border)] pt-8 md:flex-row">
-                <div className="flex w-full items-center justify-between gap-6 md:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className="text-sm font-semibold text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
-                  >
-                    ← Back
-                  </button>
-                  <div className="hidden md:block">
-                    <StepBar step={step} />
-                  </div>
-                </div>
-                
-                <div className="md:hidden">
-                  <StepBar step={step} />
-                </div>
+            {/* --- Date Picker --- */}
+            <div className="border-t border-[var(--border)] pt-4 mt-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-3">Preferred date & time</p>
+              {/* Date trigger button */}
+              <button
+                type="button"
+                onClick={() => setCalendarOpen(prev => !prev)}
+                className="w-full flex items-center justify-between rounded-[10px] border border-[var(--border)] bg-white p-3 text-sm text-left transition-colors hover:border-[var(--teal)]"
+              >
+                <span className={preferredDate ? 'text-[var(--ink)] font-medium' : 'text-[var(--muted)]'}>
+                  {preferredDate
+                    ? new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                    : '📅 Select a date (optional)'}
+                </span>
+                <span className="text-[var(--muted)] text-xs">{calendarOpen ? '▲' : '▼'}</span>
+              </button>
 
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="w-full rounded-full bg-[var(--teal)] px-8 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60 md:w-auto"
-                >
-                  {busy ? 'Sending…' : 'Continue'}
-                </button>
-              </div>
-            </form>
-          )}
+              {/* Inline calendar (not a modal — just expands below the button) */}
+              {calendarOpen && (
+                <div className="mt-2 rounded-[12px] border border-[var(--border)] bg-white p-4 shadow-lg">
+                  <MiniCalendar
+                    selectedDate={preferredDate}
+                    onSelect={(d) => {
+                      setPreferredDate(d);
+                      setPreferredTime(null);
+                      setCalendarOpen(false); // auto-close after selection
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Time slots — appear below only after a date is selected */}
+              {preferredDate && (
+                <div className="mt-4 space-y-4">
+                  <TimeGroup label="Morning" icon="☀️" slots={morning} selectedTime={preferredTime} onSelect={setPreferredTime} />
+                  <TimeGroup label="Afternoon" icon="🌤️" slots={afternoon} selectedTime={preferredTime} onSelect={setPreferredTime} />
+                </div>
+              )}
+            </div>
+
+            {/* Error + Submit */}
+            <div className="pt-2">
+              {submitError && (
+                <p className="mb-3 text-sm font-medium text-[var(--rust)]">{submitError}</p>
+              )}
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full rounded-full bg-[var(--teal)] py-3.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                {busy ? 'Sending…' : 'Request Appointment →'}
+              </button>
+              <p className="mt-3 text-center text-xs text-[var(--muted)]">
+                {clinicName} will confirm your appointment by phone or email.
+              </p>
+            </div>
+          </form>
         </div>
       </main>
     </div>
@@ -637,6 +530,8 @@ export function BookingFormPage() {
 
 const inputCls =
   'w-full rounded-[10px] border border-[var(--border)] bg-white p-3 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:border-[var(--teal)] focus:outline-none transition-colors';
+
+const selectCls = 'h-full rounded-l-[10px] border border-r-0 border-[var(--border)] bg-[var(--paper)] px-3 text-sm text-[var(--muted)] font-medium focus:outline-none';
 
 
 
