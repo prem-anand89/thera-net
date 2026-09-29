@@ -3,6 +3,7 @@ import { useParams } from '@tanstack/react-router';
 import { hasSupabaseConfig } from '@/lib/env';
 import { bookingService } from '@/services';
 import type { UUID } from '@/domain/types';
+import { publicLogoUrl } from '@/lib/supabase';
 
 type AvailabilityData = {
   closedWeekdays: number[];
@@ -280,7 +281,7 @@ export function BookingFormPage() {
           )
         ]);
         setClinicName(info.name);
-        setClinicLogo(info.logoPath);
+        setClinicLogo(publicLogoUrl(info.logoPath) ?? null);
         setSlotDuration(info.slotDurationMinutes);
         setStartHour(info.bookingStartHour);
         setEndHour(info.bookingEndHour);
