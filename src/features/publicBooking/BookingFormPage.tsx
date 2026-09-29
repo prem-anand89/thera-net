@@ -431,7 +431,7 @@ export function BookingFormPage() {
             <Field label="Phone number *">
               <div className="flex h-[46px]">
                 <select
-                  className={selectCls}
+                  className={`${selectCls} max-w-[100px] shrink-0 text-ellipsis overflow-hidden`}
                   value={countryCode}
                   onChange={(e) => setCountryCode(e.target.value)}
                 >
@@ -440,6 +440,7 @@ export function BookingFormPage() {
                   <option value="+44">🇬🇧 +44</option>
                   <option value="+61">🇦🇺 +61</option>
                   <option value="+971">🇦🇪 +971</option>
+                  <option value="">🌍 Other</option>
                 </select>
                 <input
                   type="tel"
