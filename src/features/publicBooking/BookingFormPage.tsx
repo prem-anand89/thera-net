@@ -27,222 +27,19 @@ function generateSlots(slotDurationMinutes: number) {
   return { morning, afternoon };
 }
 
-// ─── Mini Calendar ────────────────────────────────────────────────────────────
-
-function MiniCalendar({
-  selectedDate,
-  onSelect,
-}: {
-  selectedDate: string | null;
-  onSelect: (date: string) => void;
-}) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
-
-  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  });
-
-  const firstDay = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  // Shift so Mon=0
-  const startOffset = (firstDay + 6) % 7;
-
-  function prevMonth() {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
-    else setViewMonth(m => m - 1);
-  }
-  function nextMonth() {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
-    else setViewMonth(m => m + 1);
-  }
-
-  const cells: (number | null)[] = [
-    ...Array(startOffset).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-  // Pad to complete last row
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  const todayIso = isoDate(today);
-
-  return (
-    <div>
-      {/* Month nav */}
-      <div className="flex items-center justify-between mb-4">
-        <button
-          type="button"
-          onClick={prevMonth}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--muted)] hover:bg-[var(--paper)] transition-colors"
-          aria-label="Previous month"
-        >
-          ‹
-        </button>
-        <span className="text-sm font-semibold text-[var(--ink)]">{monthLabel}</span>
-        <button
-          type="button"
-          onClick={nextMonth}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--muted)] hover:bg-[var(--paper)] transition-colors"
-          aria-label="Next month"
-        >
-          ›
-        </button>
-      </div>
-
-      {/* Day headers */}
-      <div className="grid grid-cols-7 mb-1">
-        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-          <div key={i} className="text-center text-[10px] font-semibold uppercase text-[var(--muted)] py-1">
-            {d}
-          </div>
-        ))}
-      </div>
-
-      {/* Date grid */}
-      <div className="grid grid-cols-7 gap-y-1">
-        {cells.map((day, i) => {
-          if (!day) return <div key={i} />;
-
-          const cellDate = new Date(viewYear, viewMonth, day);
-          const iso = isoDate(cellDate);
-          const isPast = cellDate < today;
-          const isToday = iso === todayIso;
-          const isSelected = iso === selectedDate;
-
-          return (
-            <button
-              key={i}
-              type="button"
-              disabled={isPast}
-              onClick={() => onSelect(iso)}
-              className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition-all ${
-                isSelected
-                  ? 'bg-[var(--teal)] text-white shadow-sm'
-                  : isToday
-                    ? 'border border-[var(--teal)] text-[var(--teal)]'
-                    : isPast
-                      ? 'text-[var(--muted)] opacity-40 cursor-not-allowed'
-                      : 'text-[var(--ink)] hover:bg-[var(--teal-light)] hover:text-[var(--teal)]'
-              }`}
-            >
-              {day}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Time Slot Group ──────────────────────────────────────────────────────────
-
-function TimeGroup({
-  label,
-  icon,
-  slots,
-  selectedTime,
-  onSelect,
-}: {
-  label: string;
-  icon: string;
-  slots: string[];
-  selectedTime: string | null;
-  onSelect: (t: string) => void;
-}) {
-  if (slots.length === 0) return null;
-  return (
-    <div className="mb-4">
-      <p className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-        <span>{icon}</span> {label}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {slots.map((t) => {
-          const sel = t === selectedTime;
-          return (
-            <button
-              key={t}
-              type="button"
-              onClick={() => onSelect(t)}
-              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${
-                sel
-                  ? 'border-[var(--teal)] bg-[var(--teal)] text-white shadow-sm'
-                  : 'border-[var(--border)] bg-white text-[var(--ink)] hover:border-[var(--teal)] hover:text-[var(--teal)]'
-              }`}
-            >
-              {t}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Step Indicator ───────────────────────────────────────────────────────────
-
-function StepBar({ step }: { step: 1 | 2 }) {
-  return (
-    <div className="mb-8 flex items-center justify-center gap-0">
-      {[
-        { n: 1, label: 'Your info' },
-        { n: 2, label: 'When to come' },
-      ].map(({ n, label }, idx) => {
-        const done = step > n;
-        const active = step === n;
-        return (
-          <div key={n} className="flex items-center">
-            <div className="flex flex-col items-center">
-              <div
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold transition-all ${
-                  done
-                    ? 'bg-[var(--teal)] text-white'
-                    : active
-                      ? 'bg-[var(--teal)] text-white shadow-md'
-                      : 'bg-[var(--paper)] text-[var(--muted)] border border-[var(--border)]'
-                }`}
-              >
-                {done ? '✓' : n}
-              </div>
-              <span
-                className={`mt-1 text-[10px] font-semibold uppercase tracking-wide ${
-                  active ? 'text-[var(--teal)]' : 'text-[var(--muted)]'
-                }`}
-              >
-                {label}
-              </span>
-            </div>
-            {idx < 1 && (
-              <div
-                className={`mx-2 mb-5 h-px w-16 transition-colors ${
-                  done ? 'bg-[var(--teal)]' : 'bg-[var(--border)]'
-                }`}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
+// Mock availability logic for UI demonstration
+function getDayStatus(d: Date, today: Date) {
+  const iso = isoDate(d);
+  const isPast = iso < isoDate(today);
+  if (isPast) return 'past';
+  if (d.getDay() === 0) return 'closed'; // Sunday
+  if (d.getDate() === 14 || d.getDate() === 20) return 'holiday';
+  if (d.getDate() === 15 || d.getDate() === 22) return 'booked';
+  return 'available';
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-/**
- * Public, unauthenticated patient booking request form — /book/$clinicSlug.
- * No login, no Shell chrome (see Shell.tsx's early-return for this path,
- * shared with `/f/`).
- *
- * Two-step flow:
- *   Step 1 — Patient details (name, phone+91, email, clinician, reason)
- *   Step 2 — Preferred date (mini calendar) + preferred time (grouped chips)
- *
- * Still a preference-based request, not a real slot blocker — front desk
- * confirms every request by hand.
- */
 export function BookingFormPage() {
   const { clinicSlug } = useParams({ strict: false }) as { clinicSlug: string };
 
@@ -254,25 +51,21 @@ export function BookingFormPage() {
   const [checking, setChecking] = useState(true);
   const [invalid, setInvalid] = useState(false);
 
-  // Step state
-  const [step, setStep] = useState<1 | 2>(1);
+  // Step state: 'visit' -> 'time' -> 'details' -> 'done'
+  const [step, setStep] = useState<'visit' | 'time' | 'details' | 'done'>('visit');
 
-  // Form fields – step 1
+  // Form fields
+  const [visitType, setVisitType] = useState<'First visit' | 'Follow-up' | null>(null);
+  const [preferredDate, setPreferredDate] = useState<string | null>(null);
+  const [preferredTime, setPreferredTime] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [preferredTherapistId, setPreferredTherapistId] = useState('');
   const [notes, setNotes] = useState('');
-  const [step1Error, setStep1Error] = useState<string | null>(null);
-
-  // Form fields – step 2
-  const [preferredDate, setPreferredDate] = useState<string | null>(null);
-  const [preferredTime, setPreferredTime] = useState<string | null>(null);
-
-  // Submit state
+  
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -297,324 +90,400 @@ export function BookingFormPage() {
     })();
   }, [clinicSlug]);
 
-  function goToStep2(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim() || !phone.trim()) {
-      setStep1Error('Full name and phone number are required.');
-      return;
-    }
-    setStep1Error(null);
-    setStep(2);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!name.trim() || !phone.trim()) {
+      setDetailsError('Full name and phone number are required.');
+      return;
+    }
     setBusy(true);
-    setSubmitError(null);
+    setDetailsError(null);
     try {
+      const fullNotes = `[${visitType}] ${notes}`.trim();
       await bookingService.submitAppointmentRequest(
         clinicSlug,
         name.trim(),
         phone.trim(),
         email.trim() || null,
         preferredTherapistId || null,
-        notes.trim() || null,
+        fullNotes || null,
         preferredDate || null,
         preferredTime || null
       );
-      setDone(true);
+      setStep('done');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setDetailsError(err instanceof Error ? err.message : 'Something went wrong.');
     }
     setBusy(false);
   }
 
-  // ── Loading / error / done states ────────────────────────────────────────
+  // ── Loading / error states ────────────────────────────────────────
 
-  if (checking) {
-    return (
-      <Centered>
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--border)] border-t-[var(--teal)]" />
-          <p className="text-sm text-[var(--muted)]">Loading…</p>
-        </div>
-      </Centered>
-    );
-  }
+  if (checking) return <Centered><div className="h-8 w-8 animate-spin rounded-full border-2 border-t-[var(--teal)]" /></Centered>;
+  if (invalid) return <Centered><p className="text-[var(--muted)]">Booking not available.</p></Centered>;
 
-  if (invalid) {
-    return (
-      <Centered>
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--paper)] text-2xl">🔒</div>
-          <p className="text-sm text-[var(--muted)]">
-            This booking page is not available. Please contact the clinic directly.
-          </p>
-        </div>
-      </Centered>
-    );
-  }
-
-  if (done) {
-    return (
-      <Centered>
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--teal-light)] text-3xl">
-            ✓
-          </div>
-          <div>
-            <p className="text-base font-semibold text-[var(--ink)]">Request sent!</p>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Thanks! {clinicName} will confirm your appointment shortly.
-            </p>
-          </div>
-        </div>
-      </Centered>
-    );
-  }
-
-  // ── Slot grouping ─────────────────────────────────────────────────────────
-  const { morning, afternoon } = generateSlots(slotDuration);
-
-  // ── Layout ────────────────────────────────────────────────────────────────
+  // ── Render Steps ────────────────────────────────────────────────────────
+  
   return (
-    <div
-      className="min-h-screen"
-      style={{ background: 'var(--paper, #f5f7fa)' }}
-    >
-      {/* Header */}
-      <header
-        className="sticky top-0 z-10 border-b border-[var(--border)] bg-white/90 px-4 py-3 backdrop-blur-sm"
-      >
-        <div className="mx-auto flex max-w-lg items-center gap-3">
-          {clinicLogo ? (
-            <div className="h-8 w-8 overflow-hidden rounded-full border border-[var(--border)] bg-white shadow-sm flex-shrink-0">
-              <img src={clinicLogo} alt={clinicName || ''} className="h-full w-full object-cover" />
+    <div className="min-h-screen bg-[#F9FAFB] text-[var(--ink)] font-sans pb-24">
+      {/* Contact Block & Header */}
+      <header className="bg-white border-b border-[var(--border)] px-4 py-4 mb-6 sticky top-0 z-20 shadow-sm">
+        <div className="mx-auto max-w-4xl flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-3">
+            {clinicLogo ? (
+              <img src={clinicLogo} alt="" className="h-10 w-10 rounded-full border shadow-sm" />
+            ) : (
+              <div className="h-10 w-10 rounded-full bg-[var(--teal-light)] text-[var(--teal)] flex items-center justify-center text-lg">🏥</div>
+            )}
+            <div>
+              <h1 className="text-lg font-bold">{clinicName}</h1>
+              <p className="text-xs text-[var(--muted)]">Book an appointment online</p>
             </div>
-          ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--teal-light)] flex-shrink-0">
-              <span className="text-[var(--teal)] text-sm">🏥</span>
-            </div>
-          )}
-          <div>
-            <p className="text-xs text-[var(--muted)]">Book an appointment</p>
-            <p className="text-sm font-semibold text-[var(--ink)] leading-tight">{clinicName}</p>
+          </div>
+          <div className="text-sm text-right hidden sm:block text-[var(--muted)]">
+            <p>123 Clinic Street, Suite 100 <a href="#" className="text-[var(--teal)] ml-1 hover:underline">Get directions</a></p>
+            <p>Mon-Sat, 9am - 5pm · <a href="#" className="font-medium hover:underline">WhatsApp us</a></p>
           </div>
         </div>
       </header>
 
-      {/* Content */}
-      <main className="mx-auto max-w-lg px-4 py-8">
-        <StepBar step={step} />
+      <main className="mx-auto max-w-4xl px-4">
+        
+        {/* Breadcrumb Steps */}
+        {step !== 'done' && (
+          <div className="flex items-center gap-2 text-sm font-medium mb-8 overflow-x-auto whitespace-nowrap">
+            <StepButton label="1. Visit type" active={step === 'visit'} done={step !== 'visit' && visitType !== null} onClick={() => setStep('visit')} />
+            <span className="text-[var(--border)]">›</span>
+            <StepButton label="2. Date and time" active={step === 'time'} done={step === 'details'} onClick={() => visitType && setStep('time')} />
+            <span className="text-[var(--border)]">›</span>
+            <StepButton label="3. Details" active={step === 'details'} done={false} onClick={() => preferredTime && setStep('details')} />
+          </div>
+        )}
 
-        {step === 1 && (
-          <form onSubmit={goToStep2} noValidate>
-            <Card>
-              <CardTitle>Patient information</CardTitle>
+        {/* STEP 1: VISIT TYPE */}
+        {step === 'visit' && (
+          <div className="max-w-lg">
+            <h2 className="text-2xl font-serif font-bold mb-6">What type of visit do you need?</h2>
+            <div className="space-y-4">
+              <button onClick={() => { setVisitType('First visit'); setStep('time'); }} className="w-full text-left p-6 rounded-2xl border border-[var(--border)] bg-white hover:border-[var(--teal)] hover:shadow-md transition-all group">
+                <h3 className="font-semibold text-lg group-hover:text-[var(--teal)]">First visit</h3>
+                <p className="text-sm text-[var(--muted)] mt-1">I haven't been to this clinic before, or it's a new injury.</p>
+              </button>
+              <button onClick={() => { setVisitType('Follow-up'); setStep('time'); }} className="w-full text-left p-6 rounded-2xl border border-[var(--border)] bg-white hover:border-[var(--teal)] hover:shadow-md transition-all group">
+                <h3 className="font-semibold text-lg group-hover:text-[var(--teal)]">Follow-up</h3>
+                <p className="text-sm text-[var(--muted)] mt-1">Continuing treatment for an existing condition.</p>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: DATE AND TIME */}
+        {step === 'time' && (
+          <div>
+            {/* Next Available Shortcut */}
+            <div className="mb-6 inline-flex items-center gap-3 bg-teal-50 border border-teal-100 text-[var(--teal)] px-4 py-2 rounded-full text-sm font-medium cursor-pointer hover:bg-teal-100 transition-colors shadow-sm"
+                 onClick={() => {
+                   setPreferredDate(isoDate(new Date(Date.now() + 86400000))); // Just a dummy next day for demo
+                   setPreferredTime('10:00 AM');
+                   setStep('details');
+                 }}>
+              <span>Next available: Tomorrow</span>
+              <div className="flex gap-2">
+                <span className="bg-white px-2 py-0.5 rounded shadow-sm text-xs font-semibold">10:00 AM</span>
+                <span className="bg-white px-2 py-0.5 rounded shadow-sm text-xs font-semibold">11:30 AM</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row gap-8 items-start">
+              {/* Left Column: Calendar */}
+              <div className="w-full lg:w-[420px] shrink-0 bg-white p-6 rounded-2xl border border-[var(--border)] shadow-sm">
+                <MiniCalendar
+                  selectedDate={preferredDate}
+                  onSelect={(d) => {
+                    setPreferredDate(d);
+                    setPreferredTime(null);
+                  }}
+                />
+              </div>
+
+              {/* Right Column: Times / Waitlist */}
+              <div className="w-full flex-1 lg:sticky lg:top-24">
+                {preferredDate ? (
+                  <TimePanel 
+                    date={preferredDate} 
+                    slotDuration={slotDuration} 
+                    selectedTime={preferredTime}
+                    onSelectTime={(t) => {
+                      setPreferredTime(t);
+                      setStep('details');
+                    }}
+                  />
+                ) : (
+                  <div className="h-full min-h-[300px] flex items-center justify-center border-2 border-dashed border-[var(--border)] rounded-2xl text-[var(--muted)] bg-white">
+                    Select a date to see available times
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: DETAILS */}
+        {step === 'details' && (
+          <div className="max-w-xl">
+            <h2 className="text-2xl font-serif font-bold mb-6">Enter your details</h2>
+            <form onSubmit={onSubmit} className="bg-white p-6 sm:p-8 rounded-2xl border border-[var(--border)] shadow-sm space-y-5">
+              
+              <div className="bg-[#F9FAFB] p-5 rounded-xl mb-2 border border-[var(--border)]">
+                <p className="text-xs font-bold uppercase text-[var(--muted)] tracking-wider mb-2">Appointment Summary</p>
+                <p className="font-semibold text-lg">{visitType}</p>
+                <p className="text-[var(--teal)] font-medium">
+                  {new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' })} at {preferredTime}
+                </p>
+                <button type="button" onClick={() => setStep('time')} className="text-sm underline mt-3 text-[var(--muted)] hover:text-black">Change date or time</button>
+              </div>
 
               <Field label="Full name *">
-                <input
-                  type="text"
-                  autoComplete="name"
-                  placeholder="John Doe"
-                  className={inputCls}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
+                <input type="text" required className={inputCls} value={name} onChange={e => setName(e.target.value)} />
               </Field>
 
               <Field label="Phone number *">
-                <div className="flex">
-                  <div className="flex items-center rounded-l-[10px] border border-r-0 border-[var(--border)] bg-[var(--paper)] px-3 text-sm text-[var(--muted)]">
-                    🇮🇳 +91
-                  </div>
-                  <input
-                    type="tel"
-                    autoComplete="tel"
-                    placeholder="9876543210"
-                    className={`${inputCls} rounded-l-none`}
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                  />
+                <div className="flex shadow-sm rounded-xl">
+                  <span className="flex items-center px-4 border border-r-0 border-[var(--border)] rounded-l-xl bg-[#F9FAFB] text-[var(--muted)] font-medium">🇮🇳 +91</span>
+                  <input type="tel" required className={`${inputCls} rounded-l-none shadow-none`} value={phone} onChange={e => setPhone(e.target.value)} />
                 </div>
               </Field>
 
-              <Field label="Email address · optional">
-                <input
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  className={inputCls}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+              <Field label="Email address (optional)">
+                <input type="email" className={inputCls} value={email} onChange={e => setEmail(e.target.value)} />
               </Field>
 
               {therapists.length > 0 && (
-                <Field label="Preferred clinician · optional">
-                  <select
-                    className={inputCls}
-                    value={preferredTherapistId}
-                    onChange={(e) => setPreferredTherapistId(e.target.value)}
-                  >
-                    <option value="">No preference — any available clinician</option>
-                    {therapists.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
+                <Field label="Practitioner preference (optional)">
+                  <select className={inputCls} value={preferredTherapistId} onChange={e => setPreferredTherapistId(e.target.value)}>
+                    <option value="">Any available</option>
+                    {therapists.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </Field>
               )}
 
-              <Field label="Reason for visit · optional">
-                <textarea
-                  rows={2}
-                  placeholder="Briefly describe what's bothering you…"
-                  className={inputCls}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
+              <Field label="Notes (optional)">
+                <textarea rows={3} className={inputCls} placeholder="Anything we should know?" value={notes} onChange={e => setNotes(e.target.value)} />
               </Field>
 
-              {step1Error && <p className="text-sm text-[var(--rust)]">{step1Error}</p>}
+              {detailsError && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100">{detailsError}</p>}
 
-              <button
-                type="submit"
-                className="mt-2 w-full rounded-[10px] bg-[var(--teal)] py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
-              >
-                Next →
+              <button type="submit" disabled={busy} className="w-full bg-[var(--teal)] text-white py-4 rounded-xl font-bold text-lg shadow-sm hover:opacity-90 disabled:opacity-50 mt-6 transition-opacity">
+                {busy ? 'Submitting...' : 'Confirm Request'}
               </button>
-            </Card>
-          </form>
+            </form>
+          </div>
         )}
 
-        {step === 2 && (
-          <form onSubmit={onSubmit} noValidate>
-            {/* Back link */}
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="mb-4 flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
-            >
-              ← Back
-            </button>
-
-            <Card>
-              <CardTitle>Choose a preferred date</CardTitle>
-              <p className="mb-4 text-xs text-[var(--muted)]">
-                We'll try our best to accommodate your preference.
+        {/* STEP 4: DONE */}
+        {step === 'done' && (
+          <div className="max-w-xl mx-auto bg-white p-8 sm:p-12 rounded-2xl border border-[var(--border)] shadow-sm text-center">
+            <div className="h-20 w-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">✓</div>
+            <h2 className="text-3xl font-serif font-bold mb-3">Request received!</h2>
+            <p className="text-[var(--muted)] mb-8 text-lg">Your request is <strong className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded">awaiting confirmation</strong>. We will review it and confirm shortly via WhatsApp or email.</p>
+            
+            <div className="bg-[#F9FAFB] p-6 rounded-2xl text-left mb-8 border border-[var(--border)]">
+              <p className="font-semibold text-xl mb-1">{visitType}</p>
+              <p className="text-[var(--teal)] font-medium text-lg">
+                {new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' })} at {preferredTime}
               </p>
-              <MiniCalendar
-                selectedDate={preferredDate}
-                onSelect={(d) => {
-                  setPreferredDate(d);
-                  setPreferredTime(null);
-                }}
-              />
-            </Card>
-
-            {preferredDate && (
-              <Card className="mt-4">
-                <CardTitle>Preferred time · optional</CardTitle>
-                <p className="mb-4 text-xs text-[var(--muted)]">
-                  {new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                  })}
-                </p>
-                <TimeGroup
-                  label="Morning"
-                  icon="☀️"
-                  slots={morning}
-                  selectedTime={preferredTime}
-                  onSelect={setPreferredTime}
-                />
-                <TimeGroup
-                  label="Afternoon"
-                  icon="🌤️"
-                  slots={afternoon}
-                  selectedTime={preferredTime}
-                  onSelect={setPreferredTime}
-                />
-              </Card>
-            )}
-
-            <div className="mt-4 space-y-3">
-              {/* Summary pill */}
-              <div className="rounded-[10px] border border-[var(--border)] bg-white px-4 py-3 text-sm">
-                <p className="font-medium text-[var(--ink)]">{name}</p>
-                <p className="text-[var(--muted)]">+91 {phone}</p>
-                {preferredDate && (
-                  <p className="mt-1 text-xs text-[var(--teal)]">
-                    📅{' '}
-                    {new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                    })}
-                    {preferredTime && ` · ${preferredTime}`}
-                  </p>
-                )}
-              </div>
-
-              {submitError && <p className="text-sm text-[var(--rust)]">{submitError}</p>}
-
-              <button
-                type="submit"
-                disabled={busy}
-                className="w-full rounded-[10px] bg-[var(--teal)] py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
-              >
-                {busy ? 'Sending…' : 'Submit request'}
-              </button>
-
-              <p className="text-center text-xs text-[var(--muted)]">
-                {clinicName} will confirm your appointment by phone or email.
-              </p>
+              <p className="text-sm text-[var(--muted)] mt-4">123 Clinic Street, Suite 100</p>
             </div>
-          </form>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button className="px-6 py-3 border border-[var(--border)] rounded-xl font-semibold hover:bg-[#F9FAFB] shadow-sm transition-colors">Add to Calendar (.ics)</button>
+              <button className="px-6 py-3 border border-[var(--border)] rounded-xl font-semibold hover:bg-[#F9FAFB] shadow-sm transition-colors">Get Directions</button>
+            </div>
+            <div className="mt-10 pt-6 border-t border-[var(--border)] text-sm text-[var(--muted)]">
+              Need to make a change? <a href="#" className="underline hover:text-black">Request changes</a>
+            </div>
+          </div>
         )}
+
       </main>
+      
+      {/* Footer Branding */}
+      <footer className="mt-20 text-center text-sm text-[var(--muted)]">
+        Powered by <span className="font-bold">Thera.Net</span>
+      </footer>
     </div>
   );
 }
 
-// ─── Small reusable primitives ────────────────────────────────────────────────
+// ─── Subcomponents ────────────────────────────────────────────────────────────
 
-const inputCls =
-  'w-full rounded-[10px] border border-[var(--border)] bg-white p-3 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:border-[var(--teal)] focus:outline-none transition-colors';
-
-function Card({ children, className }: { children: ReactNode; className?: string }) {
+function StepButton({ label, active, done, onClick }: { label: string, active: boolean, done: boolean, onClick: () => void }) {
   return (
-    <div
-      className={`rounded-[14px] border border-[var(--border)] bg-white p-5 shadow-sm ${className ?? ''}`}
+    <button 
+      onClick={onClick}
+      disabled={!active && !done}
+      className={`px-1 py-1 text-base transition-colors ${active ? 'text-[var(--teal)] font-bold border-b-2 border-[var(--teal)]' : done ? 'text-[var(--ink)] font-semibold hover:text-[var(--teal)] cursor-pointer' : 'text-[var(--muted)] font-medium opacity-50 cursor-not-allowed'}`}
     >
-      {children}
+      {label}
+    </button>
+  );
+}
+
+function MiniCalendar({ selectedDate, onSelect }: { selectedDate: string | null, onSelect: (d: string) => void }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [viewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const startOffset = (firstDay + 6) % 7; // Mon=0
+
+  const cells: (number | null)[] = [...Array(startOffset).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  // Custom hatched pattern for holidays
+  const hatchedStyle = {
+    background: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(251, 146, 60, 0.1) 4px, rgba(251, 146, 60, 0.1) 8px)',
+    border: '1px solid rgba(251, 146, 60, 0.3)'
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-8">
+        <button onClick={() => setViewMonth(m => m - 1)} className="h-10 w-10 flex items-center justify-center rounded-lg border border-[var(--border)] hover:bg-[#F9FAFB]">‹</button>
+        <span className="font-bold text-xl font-serif">{monthLabel}</span>
+        <button onClick={() => setViewMonth(m => m + 1)} className="h-10 w-10 flex items-center justify-center rounded-lg border border-[var(--border)] hover:bg-[#F9FAFB]">›</button>
+      </div>
+
+      <div className="grid grid-cols-7 mb-3 gap-2">
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+          <div key={d} className="text-center text-xs font-bold uppercase tracking-wider text-[var(--muted)]">{d}</div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-2">
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} className="h-12 w-full" />;
+          const cellDate = new Date(viewYear, viewMonth, day);
+          const status = getDayStatus(cellDate, today);
+          const iso = isoDate(cellDate);
+          const isSel = iso === selectedDate;
+
+          let btnCls = "h-12 w-full rounded-xl font-semibold text-base flex items-center justify-center transition-all ";
+          let extraStyle = {};
+          let title = "";
+
+          if (isSel) {
+            btnCls += "bg-[var(--teal)] text-white shadow-md border border-transparent";
+          } else if (status === 'past') {
+            btnCls += "opacity-0 cursor-default";
+            return <div key={i} className={btnCls} />;
+          } else if (status === 'closed') {
+            btnCls += "bg-[#F9FAFB] text-[var(--muted)] opacity-50 cursor-not-allowed";
+            title = "Closed";
+          } else if (status === 'holiday') {
+            extraStyle = hatchedStyle;
+            btnCls += "text-orange-800 hover:opacity-80";
+            title = "Holiday / Clinic Closure";
+          } else if (status === 'booked') {
+            btnCls += "border border-dashed border-[var(--muted)] text-[var(--ink)] hover:border-[var(--teal)]";
+            title = "Fully booked";
+          } else {
+            btnCls += "bg-teal-50/40 text-[var(--ink)] hover:bg-teal-50";
+            title = "Available";
+          }
+
+          return (
+            <button key={i} style={extraStyle} title={title} onClick={() => onSelect(iso)} className={btnCls}>
+              {day}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="mt-8 flex flex-wrap gap-4 text-xs font-medium text-[var(--muted)] border-t border-[var(--border)] pt-5">
+        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-teal-50/40"></div> Available</div>
+        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded border border-dashed border-[var(--muted)]"></div> Fully booked</div>
+        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-[#F9FAFB]"></div> Closed</div>
+        <div className="flex items-center gap-2" title="Gandhi Jayanti (Oct 2)"><div className="w-4 h-4 rounded border border-orange-200" style={{background: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(251, 146, 60, 0.15) 3px, rgba(251, 146, 60, 0.15) 6px)'}}></div> Holiday</div>
+      </div>
     </div>
   );
 }
 
-function CardTitle({ children }: { children: ReactNode }) {
-  return <h2 className="mb-4 text-base font-semibold text-[var(--ink)]">{children}</h2>;
+function TimePanel({ date, slotDuration, selectedTime, onSelectTime }: { date: string, slotDuration: number, selectedTime: string | null, onSelectTime: (t: string) => void }) {
+  const d = new Date(date + 'T00:00:00');
+  const status = getDayStatus(d, new Date());
+  const dateStr = d.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  if (status === 'closed' || status === 'holiday') {
+    return (
+      <div className="bg-white p-8 rounded-2xl border border-[var(--border)] shadow-sm text-center">
+        <h3 className="font-serif text-2xl font-bold mb-3">{dateStr}</h3>
+        <p className="text-[var(--muted)] mb-6 text-lg">The clinic is closed on this day.</p>
+        <button className="text-[var(--teal)] font-semibold hover:underline">See next available day</button>
+      </div>
+    );
+  }
+
+  if (status === 'booked') {
+    return (
+      <div className="bg-white p-8 rounded-2xl border border-[var(--border)] shadow-sm text-center">
+        <h3 className="font-serif text-2xl font-bold mb-3">{dateStr}</h3>
+        <p className="text-[var(--muted)] mb-8 text-lg">This day is fully booked.</p>
+        <button className="w-full bg-[var(--ink)] text-white py-4 rounded-xl font-bold hover:bg-black transition-colors shadow-sm">
+          Notify me if a slot opens
+        </button>
+        <button className="mt-6 text-[var(--teal)] font-semibold hover:underline">See next available day</button>
+      </div>
+    );
+  }
+
+  const { morning, afternoon } = generateSlots(slotDuration);
+
+  return (
+    <div className="bg-white p-6 sm:p-8 rounded-2xl border border-[var(--border)] shadow-sm">
+      <h3 className="font-serif text-2xl font-bold mb-8 pb-4 border-b border-[var(--border)]">{dateStr}</h3>
+      
+      <div className="mb-8">
+        <p className="text-sm font-bold uppercase text-[var(--muted)] mb-4 tracking-wide">Morning</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {morning.map(t => (
+            <button key={t} onClick={() => onSelectTime(t)} className={`py-3.5 rounded-xl border text-sm font-bold transition-all shadow-sm ${selectedTime === t ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] hover:border-[var(--teal)] bg-white text-[var(--ink)]'}`}>
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-sm font-bold uppercase text-[var(--muted)] mb-4 tracking-wide">Afternoon</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {afternoon.map(t => (
+            <button key={t} onClick={() => onSelectTime(t)} className={`py-3.5 rounded-xl border text-sm font-bold transition-all shadow-sm ${selectedTime === t ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] hover:border-[var(--teal)] bg-white text-[var(--ink)]'}`}>
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+const inputCls = "w-full p-4 bg-white border border-[var(--border)] rounded-xl focus:outline-none focus:border-[var(--teal)] transition-colors shadow-sm text-base";
+function Field({ label, children }: { label: string, children: ReactNode }) {
   return (
-    <label className="mb-3 block last:mb-0">
-      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-        {label}
-      </span>
+    <label className="block">
+      <span className="block text-sm font-bold mb-2 text-[var(--ink)]">{label}</span>
       {children}
     </label>
   );
 }
-
 function Centered({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex min-h-[80vh] items-center justify-center px-6 text-center">
-      {children}
-    </div>
-  );
+  return <div className="min-h-screen flex items-center justify-center">{children}</div>;
 }
