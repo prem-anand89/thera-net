@@ -286,17 +286,16 @@ function ScheduleSurface({
           {slots.map((slot) => <Fragment key={`time-${slot.time}`}>
             <div className="sticky left-0 z-[1] border-b border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-xs text-[var(--muted)]">{slot.label}</div>
             {gridTherapists.map((therapist) => {
+              const matchesTherapist = (appointment: Appointment) => therapist.id ? appointment.therapistId === therapist.id : (!appointment.therapistId || !therapistNameById.has(appointment.therapistId));
               const slotStart = localDateTime(date, slot.time).getTime();
               const slotEnd = slotStart + slotDuration * 60_000;
               const startsInSlot = dayAppointments.filter((appointment) => {
-                const isMatch = therapist.id ? appointment.therapistId === therapist.id : (!appointment.therapistId || !therapistNameById.has(appointment.therapistId));
-                if (!isMatch) return false;
+                if (!matchesTherapist(appointment)) return false;
                 const start = new Date(appointment.scheduledAt).getTime();
                 return start >= slotStart && start < slotEnd;
               });
               const isOccupied = startsInSlot.length > 0 || dayAppointments.some((appointment) => {
-                const isMatch = therapist.id ? appointment.therapistId === therapist.id : (!appointment.therapistId || !therapistNameById.has(appointment.therapistId));
-                if (!isMatch || appointment.status === 'cancelled') return false;
+                if (!matchesTherapist(appointment) || appointment.status === 'cancelled') return false;
                 const start = new Date(appointment.scheduledAt).getTime();
                 const end = start + slotDuration * 60_000;
                 return start < slotEnd && end > slotStart;
@@ -309,7 +308,6 @@ function ScheduleSurface({
           </Fragment>)}
         </div>
       </div>}
-      {findTime && <SectionCard title="Available times"><p className="mb-3 text-sm text-[var(--muted)]">Choose a therapist and time in the booking sheet. Occupied slots are disabled automatically.</p><button type="button" className={btnPrimary} onClick={() => onBook({ date })}>Find availability</button></SectionCard>}
     </>}
   </div>;
 }
@@ -386,7 +384,7 @@ function AppointmentCard({ appointment, therapistName, compact = false }: { appo
                     new Date(rescheduleValue).toISOString()
                   );
                   setIsRescheduling(false);
-                } catch (err: any) {
+                } catch (err) {
                   alert(toFriendlyMessage(err));
                 } finally {
                   setRescheduleBusy(false);

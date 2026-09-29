@@ -184,7 +184,7 @@ export function BookSlotSheet({
               {quickDates.map((date, index) => <button key={date} type="button" onClick={() => { setSelectedDate(date); setSelectedTime(null); }} className={`min-h-11 shrink-0 rounded-lg border px-3 text-xs font-medium ${selectedDate === date ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]'}`}>{index === 0 ? 'Today' : index === 1 ? 'Tomorrow' : displayDate(date)}</button>)}
               <button type="button" onClick={() => setShowLater(true)} className="min-h-11 shrink-0 rounded-lg border border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)]">Later…</button>
             </div>
-            {showLater && <input type="date" className={`${inputCls} mt-3`} value={selectedDate} min={today} onChange={(event) => { setSelectedDate(event.target.value); setSelectedTime(null); }} />}
+            {showLater && <input type="date" className={`${inputCls} mt-3`} value={selectedDate} onChange={(event) => { setSelectedDate(event.target.value); setSelectedTime(null); }} />}
           </div>
 
           <div>

@@ -965,20 +965,11 @@ still falls through to the existing share sheet, unchanged.
     drives surfaces likely-existing-patient candidates for free; staff
     still explicitly pick or create, never auto-selected (no silent
     find-or-create by phone, per the doc's explicit-scope list).
-  - **Requests → Bookings tab** (`RequestsPage.tsx`) — A unified `BookSlotSheet`
-    powers all booking entry points (the "New booking" button, the Daily Timeline empty slot click, and the pending-request "Confirm" button) using a single `confirm_booking_slot` RPC that handles server-side double-booking validation based on clinic `slot_duration_minutes`. It writes straight to a confirmed `appointments` row (and handles updating any pending `request_id`). Reuses the same
-    post-confirm `justConfirmed` banner ("Send confirmation"/"Notify
-    therapist") as before. Below that: a pending-requests list (Confirm opens the unified sheet; Decline is a plain confirm-then-RPC) and an appointments list
-    (Reschedule/No-show/Cancel inline, status shown via a shared
-    `Pill`-tone map in `src/domain/appointmentStatus.ts` — kept in its own
-    tiny module, not defined in either page, because importing one
-    route-code-split page's export from the other would leak that page's
-    whole bundle into the importer's chunk, the same reason
-    `requestsSignals.ts` exists). Confirming shows two independent
-    "Send confirmation"/"Notify therapist" share buttons afterward — two
-    explicit clicks, not one auto-fired double share-sheet — matching the
-    rest of the module's per-action-button convention rather than the
-    doc's plainer "sends a confirmation" phrasing.
+  - **Schedule & Requests View (`ScheduleBookingsView.tsx`)** — The unified booking interface at `/schedule`, merging the legacy Requests tab and the old grid view. Driven by URL params (`?view=schedule|requests|history`, `?mode=day|week`, `?date=YYYY-MM-DD`, `?therapist=UUID`) for native deep-linking.
+    - **Schedule Surface**: A toggleable Day/Week mode. The Day view defaults to a clean, compact vertical list of `AppointmentCard`s for all therapists, making mobile viewing excellent. The ‹ Today › date navigator drives it.
+    - **Find a Time (Grid)**: Hiding behind a toggle button is the full therapist-by-slot timetable grid, used to visually locate an empty slot.
+    - **BookSlotSheet**: A unified bottom-sheet replacing the mini-form. Powers all booking entry points (the "+ Book" button, the pending-request "Confirm" button, and direct grid clicks) using a single `confirm_booking_slot` RPC that handles server-side double-booking validation (`20260930110000_schedule_overlap_guards.sql`). It writes straight to a confirmed `appointments` row (and handles updating any pending `request_id`).
+    - **History Tab**: Integrates `HistorySurface`, featuring an independent `therapistId` filter state and infinite-scroll pagination (`hasMore` tracking) to explore past appointments.
   - **Workspace "Expected today"** — a new section (not a replacement of
     anything, per the point above), sourced from
     `dashboardService.todayAppointments`, scoped the same way "Seen
@@ -986,17 +977,15 @@ still falls through to the existing share sheet, unchanged.
     otherwise). Row actions: "Mark arrived" (any clinic member, matching
     the RPC's own membership check), "No-show"/"Cancel"
     (admin/front_desk only), "Create visit" (once `visit_id` is still
-    unset). Reschedule is deliberately Requests-only, not offered inline
+    unset). Reschedule is deliberately Schedule-only, not offered inline
     on Workspace — a more deliberate action than a single click, better
-    suited to the dedicated management surface. Requests → Bookings'
-    Appointments table carries the same "Create visit" condition (found
+    suited to the dedicated management surface. The Schedule's History table carries the same "Create visit" condition (found
     missing in review — an appointment manually marked arrived without a
     visit yet had no way back to New Visit once it wasn't "today" anymore
-    and had dropped off Workspace's list; Requests' table has no
-    date-scoping, so it's the recovery path for that case). A second banner (same
-    shape as Phase 2's "new feedback response" one) surfaces the pending-
-    booking-request count for admin/front_desk, linking to
-    `/requests?tab=bookings`.
+    and had dropped off Workspace's list; History's table has no
+    date-scoping, so it's the recovery path for that case). A second banner
+    surfaces the pending-booking-request count for admin/front_desk, linking to
+    `/schedule?view=requests`.
   - **Settings** gained a booking-link field in the same Patient
     communications section (client-validated lowercase-alphanumeric-plus-
     hyphens pattern; the DB only enforces uniqueness) with a "Copy link"
