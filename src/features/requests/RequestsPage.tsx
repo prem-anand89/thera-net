@@ -55,14 +55,14 @@ export function RequestsPage() {
   const navigate = useNavigate();
   const { isAdmin, role } = usePermissions();
   const canSeeBookings = isAdmin || role === 'front_desk';
-  const search = useSearch({ from: '/requests' });
+  const search = useSearch({ from: '/schedule' });
   const tab = search.tab ?? 'bookings';
 
   // Per the doc's own resolved note: front_desk hitting ?tab=feedback
   // lands on Bookings instead, not a disabled/hidden state.
   useEffect(() => {
     if (!isAdmin && tab === 'feedback') {
-      void navigate({ to: '/requests', search: { tab: 'bookings' }, replace: true });
+      void navigate({ to: '/schedule', search: { tab: 'bookings' }, replace: true });
     }
   }, [isAdmin, tab, navigate]);
 
@@ -314,7 +314,7 @@ export function RequestsPage() {
 
       <div className="flex gap-2 border-b border-[var(--border)]">
         <Link
-          to="/requests"
+          to="/schedule"
           search={{ tab: 'bookings' }}
           className={
             tab === 'bookings'
@@ -326,7 +326,7 @@ export function RequestsPage() {
         </Link>
         {isAdmin ? (
           <Link
-            to="/requests"
+            to="/schedule"
             search={{ tab: 'feedback' }}
             className={
               tab === 'feedback'

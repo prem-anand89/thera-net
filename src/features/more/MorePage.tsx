@@ -46,7 +46,7 @@ export function MorePage() {
         {showRequests && (
           <li>
             <Link
-              to="/requests"
+              to="/schedule"
               className="flex items-center justify-between min-h-11 px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
             >
               <span>Requests</span>

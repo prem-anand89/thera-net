@@ -440,7 +440,7 @@ export function WorkspacePage() {
             {newFeedbackCount} new feedback response{newFeedbackCount === 1 ? '' : 's'}.
           </p>
           <Link
-            to="/requests"
+            to="/schedule"
             search={{ tab: 'feedback' }}
             className="whitespace-nowrap text-sm font-medium text-[var(--teal)] hover:underline"
           >
@@ -455,7 +455,7 @@ export function WorkspacePage() {
             {pendingRequestCount} new booking request{pendingRequestCount === 1 ? '' : 's'}.
           </p>
           <Link
-            to="/requests"
+            to="/schedule"
             search={{ tab: 'bookings' }}
             className="whitespace-nowrap text-sm font-medium text-[var(--teal)] hover:underline"
           >
