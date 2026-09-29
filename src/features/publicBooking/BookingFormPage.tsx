@@ -135,7 +135,7 @@ function MiniCalendar({
             btnCls += "bg-orange-50/50 text-orange-800/80 cursor-not-allowed";
             title = "Holiday / Clinic Closure";
           } else if (status === 'booked') {
-            btnCls += "text-[var(--muted)] line-through cursor-not-allowed";
+            btnCls += "bg-[var(--paper)] text-[var(--muted)] opacity-50 cursor-not-allowed border border-dashed border-[var(--border)]";
             title = "Fully booked";
           } else {
             btnCls += "hover:bg-[var(--paper)] text-[var(--ink)]";
@@ -427,184 +427,199 @@ export function BookingFormPage() {
       </header>
 
       {/* Content */}
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        <div className="max-w-lg mx-auto">
-          <StepBar step={step} />
-        </div>
+      {/* Content */}
+      <main className="mx-auto max-w-5xl px-4 py-8">
+        <div className="rounded-[20px] border border-[var(--border)] bg-white p-6 shadow-sm md:p-10">
+          {step === 1 && (
+            <form onSubmit={goToStep2} noValidate>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-8">
+                {/* Left Column: Personal Details */}
+                <div>
+                  <h2 className="mb-6 text-2xl font-bold text-[var(--ink)]">Patient details</h2>
+                  <Field label="Full name *">
+                    <input
+                      type="text"
+                      autoComplete="name"
+                      placeholder="John Doe"
+                      className={inputCls}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </Field>
 
-        {step === 1 && (
-          <form onSubmit={goToStep2} noValidate className="max-w-lg mx-auto">
-            <Card>
-              <CardTitle>Patient information</CardTitle>
-
-              <Field label="Full name *">
-                <input
-                  type="text"
-                  autoComplete="name"
-                  placeholder="John Doe"
-                  className={inputCls}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </Field>
-
-              <Field label="Phone number *">
-                <div className="flex">
-                  <div className="flex items-center rounded-l-[10px] border border-r-0 border-[var(--border)] bg-[var(--paper)] px-3 text-sm text-[var(--muted)]">
-                    🇮🇳 +91
-                  </div>
-                  <input
-                    type="tel"
-                    autoComplete="tel"
-                    placeholder="9876543210"
-                    className={`${inputCls} rounded-l-none`}
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                  />
-                </div>
-              </Field>
-
-              <Field label="Email address · optional">
-                <input
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  className={inputCls}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </Field>
-
-              {therapists.length > 0 && (
-                <Field label="Preferred clinician · optional">
-                  <select
-                    className={inputCls}
-                    value={preferredTherapistId}
-                    onChange={(e) => setPreferredTherapistId(e.target.value)}
-                  >
-                    <option value="">No preference — any available clinician</option>
-                    {therapists.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              )}
-
-              <Field label="Reason for visit · optional">
-                <textarea
-                  rows={2}
-                  placeholder="Briefly describe what's bothering you…"
-                  className={inputCls}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </Field>
-
-              {step1Error && <p className="text-sm text-[var(--rust)]">{step1Error}</p>}
-
-              <button
-                type="submit"
-                className="mt-2 w-full rounded-[10px] bg-[var(--teal)] py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
-              >
-                Next →
-              </button>
-            </Card>
-          </form>
-        )}
-
-        {step === 2 && (
-          <form onSubmit={onSubmit} noValidate>
-            <div className="max-w-lg mx-auto mb-4">
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
-              >
-                ← Back
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-              {/* Left Column: Calendar */}
-              <Card>
-                <CardTitle>Choose a preferred date</CardTitle>
-                <p className="mb-6 text-xs text-[var(--muted)]">
-                  Select a date to see available times.
-                </p>
-                <MiniCalendar
-                  selectedDate={preferredDate}
-                  onSelect={(d) => {
-                    setPreferredDate(d);
-                    setPreferredTime(null);
-                  }}
-                />
-              </Card>
-
-              {/* Right Column: Times */}
-              <div>
-                {!preferredDate ? (
-                  <div className="hidden md:flex h-full min-h-[300px] items-center justify-center rounded-[14px] border border-dashed border-[var(--border)] text-sm text-[var(--muted)]">
-                    Select a date on the left
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <Card>
-                      <CardTitle>Preferred time · optional</CardTitle>
-                      <p className="mb-6 text-xs text-[var(--muted)]">
-                        {new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', {
-                          weekday: 'long',
-                          day: 'numeric',
-                          month: 'long',
-                        })}
-                      </p>
-                      <TimeGroup
-                        label="Morning"
-                        icon="☀️"
-                        slots={morning}
-                        selectedTime={preferredTime}
-                        onSelect={setPreferredTime}
+                  <Field label="Phone number *">
+                    <div className="flex">
+                      <div className="flex items-center rounded-l-[10px] border border-r-0 border-[var(--border)] bg-[var(--paper)] px-4 text-sm text-[var(--muted)] font-medium">
+                        🇮🇳 +91
+                      </div>
+                      <input
+                        type="tel"
+                        autoComplete="tel"
+                        placeholder="9876543210"
+                        className={`${inputCls} rounded-l-none`}
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
                       />
-                      <TimeGroup
-                        label="Afternoon"
-                        icon="🌤️"
-                        slots={afternoon}
-                        selectedTime={preferredTime}
-                        onSelect={setPreferredTime}
-                      />
-                    </Card>
-
-                    {/* Summary pill */}
-                    <div className="rounded-[10px] border border-[var(--border)] bg-white px-4 py-3 text-sm shadow-sm">
-                      <p className="font-medium text-[var(--ink)]">{name}</p>
-                      <p className="text-[var(--muted)]">+91 {phone}</p>
-                      <p className="mt-2 text-xs font-semibold text-[var(--teal)]">
-                        📅{' '}
-                        {new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', {
-                          weekday: 'short',
-                          day: 'numeric',
-                          month: 'short',
-                        })}
-                        {preferredTime && ` · ${preferredTime}`}
-                      </p>
                     </div>
+                  </Field>
 
-                    {submitError && <p className="text-sm text-[var(--rust)]">{submitError}</p>}
+                  <Field label="Email address (optional)">
+                    <input
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@example.com"
+                      className={inputCls}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </Field>
+                </div>
 
-                    <button
-                      type="submit"
-                      disabled={busy}
-                      className="w-full rounded-[10px] bg-[var(--teal)] py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
-                    >
-                      {busy ? 'Sending…' : 'Submit request'}
-                    </button>
-                  </div>
-                )}
+                {/* Right Column: Preferences */}
+                <div>
+                  <h2
+                    className="mb-6 hidden text-2xl font-bold text-transparent md:block select-none"
+                    aria-hidden="true"
+                  >
+                    Optional
+                  </h2>
+
+                  {therapists.length > 0 && (
+                    <Field label="Preferred clinician (optional)">
+                      <select
+                        className={inputCls}
+                        value={preferredTherapistId}
+                        onChange={(e) => setPreferredTherapistId(e.target.value)}
+                      >
+                        <option value="">No preference — any available clinician</option>
+                        {therapists.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  )}
+
+                  <Field label="Reason for visit (optional)">
+                    <textarea
+                      rows={4}
+                      placeholder="Briefly describe what's bothering you…"
+                      className={inputCls}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                    />
+                  </Field>
+                  {step1Error && <p className="mt-2 text-sm font-medium text-[var(--rust)]">{step1Error}</p>}
+                </div>
               </div>
-            </div>
-          </form>
-        )}
+
+              {/* Footer Actions */}
+              <div className="mt-12 flex flex-col-reverse items-center justify-between gap-6 border-t border-[var(--border)] pt-8 md:flex-row">
+                <StepBar step={step} />
+                <button
+                  type="submit"
+                  className="w-full rounded-full bg-[var(--teal)] px-8 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 md:w-auto"
+                >
+                  Continue
+                </button>
+              </div>
+            </form>
+          )}
+
+          {step === 2 && (
+            <form onSubmit={onSubmit} noValidate>
+              <div className="grid grid-cols-1 md:grid-cols-[400px_1fr] gap-x-12 gap-y-12 items-start">
+                {/* Left Column: Calendar Component */}
+                <div>
+                  <div className="rounded-2xl border border-[var(--border)] bg-white p-6 shadow-xl shadow-teal-900/5">
+                    <h3 className="text-xl font-bold font-serif mb-6 text-[var(--ink)]">
+                      {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </h3>
+                    <MiniCalendar
+                      selectedDate={preferredDate}
+                      onSelect={(d) => {
+                        setPreferredDate(d);
+                        setPreferredTime(null);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Right Column: Time Selection */}
+                <div>
+                  <h2 className="text-3xl font-bold text-[var(--ink)] mb-2">Book Your Appointment</h2>
+                  
+                  {!preferredDate ? (
+                    <p className="text-[var(--muted)] text-base mb-8">
+                      Select a date on the left to see available times.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-[var(--muted)] text-base mb-8">
+                        Select an available time slot for{' '}
+                        <strong className="text-[var(--ink)] font-semibold">
+                          {new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', {
+                            weekday: 'long',
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </strong>
+                      </p>
+
+                      <div className="space-y-6">
+                        <TimeGroup
+                          label="Morning"
+                          icon="☀️"
+                          slots={morning}
+                          selectedTime={preferredTime}
+                          onSelect={setPreferredTime}
+                        />
+                        <TimeGroup
+                          label="Afternoon"
+                          icon="🌤️"
+                          slots={afternoon}
+                          selectedTime={preferredTime}
+                          onSelect={setPreferredTime}
+                        />
+                      </div>
+                    </>
+                  )}
+                  {submitError && <p className="mt-4 text-sm font-medium text-[var(--rust)]">{submitError}</p>}
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="mt-12 flex flex-col items-center justify-between gap-6 border-t border-[var(--border)] pt-8 md:flex-row">
+                <div className="flex w-full items-center justify-between gap-6 md:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="text-sm font-semibold text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
+                  >
+                    ← Back
+                  </button>
+                  <div className="hidden md:block">
+                    <StepBar step={step} />
+                  </div>
+                </div>
+                
+                <div className="md:hidden">
+                  <StepBar step={step} />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="w-full rounded-full bg-[var(--teal)] px-8 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60 md:w-auto"
+                >
+                  {busy ? 'Sending…' : 'Continue'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </main>
     </div>
   );
@@ -615,19 +630,7 @@ export function BookingFormPage() {
 const inputCls =
   'w-full rounded-[10px] border border-[var(--border)] bg-white p-3 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:border-[var(--teal)] focus:outline-none transition-colors';
 
-function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <div
-      className={`rounded-[14px] border border-[var(--border)] bg-white p-5 shadow-sm ${className ?? ''}`}
-    >
-      {children}
-    </div>
-  );
-}
 
-function CardTitle({ children }: { children: ReactNode }) {
-  return <h2 className="mb-4 text-base font-semibold text-[var(--ink)]">{children}</h2>;
-}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
