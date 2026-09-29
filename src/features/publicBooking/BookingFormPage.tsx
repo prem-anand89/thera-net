@@ -121,7 +121,7 @@ function MiniCalendar({
           const status = getDayStatus(cellDate, today);
           const isSelected = iso === selectedDate;
 
-          let btnCls = "h-12 w-full rounded-xl font-semibold text-base flex items-center justify-center transition-all ";
+          let btnCls = "h-10 w-full rounded-xl font-semibold text-sm flex items-center justify-center transition-all ";
           let title = "";
 
           if (isSelected) {
@@ -281,6 +281,7 @@ export function BookingFormPage() {
 
   // Form fields – step 1
   const [name, setName] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [preferredTherapistId, setPreferredTherapistId] = useState('');
@@ -338,7 +339,7 @@ export function BookingFormPage() {
       await bookingService.submitAppointmentRequest(
         clinicSlug,
         name.trim(),
-        phone.trim(),
+        `${countryCode} ${phone.trim()}`,
         email.trim() || null,
         preferredTherapistId || null,
         notes.trim() || null,
@@ -448,9 +449,17 @@ export function BookingFormPage() {
 
                   <Field label="Phone number *">
                     <div className="flex">
-                      <div className="flex items-center rounded-l-[10px] border border-r-0 border-[var(--border)] bg-[var(--paper)] px-4 text-sm text-[var(--muted)] font-medium">
-                        🇮🇳 +91
-                      </div>
+                      <select
+                        className="flex items-center rounded-l-[10px] border border-r-0 border-[var(--border)] bg-[var(--paper)] px-3 text-sm text-[var(--muted)] font-medium focus:outline-none"
+                        value={countryCode}
+                        onChange={(e) => setCountryCode(e.target.value)}
+                      >
+                        <option value="+91">🇮🇳 +91</option>
+                        <option value="+1">🇺🇸 +1</option>
+                        <option value="+44">🇬🇧 +44</option>
+                        <option value="+61">🇦🇺 +61</option>
+                        <option value="+971">🇦🇪 +971</option>
+                      </select>
                       <input
                         type="tel"
                         autoComplete="tel"
@@ -528,10 +537,10 @@ export function BookingFormPage() {
 
           {step === 2 && (
             <form onSubmit={onSubmit} noValidate>
-              <div className="grid grid-cols-1 md:grid-cols-[400px_1fr] gap-x-12 gap-y-12 items-start">
+              <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] gap-x-12 gap-y-12 items-start">
                 {/* Left Column: Calendar Component */}
                 <div>
-                  <div className="rounded-2xl border border-[var(--border)] bg-white p-6 shadow-xl shadow-teal-900/5">
+                  <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-xl shadow-teal-900/5">
                     <h3 className="text-xl font-bold font-serif mb-6 text-[var(--ink)]">
                       {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                     </h3>
