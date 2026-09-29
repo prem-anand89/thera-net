@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
@@ -37,6 +37,8 @@ type SheetState = {
   requestId?: UUID;
   patientName?: string;
   patientPhone?: string;
+  requestNotes?: string;
+  requestPreferredTimeText?: string;
 };
 
 function timeLabel(iso: string) {
@@ -94,6 +96,7 @@ export function ScheduleBookingsView() {
   const [historyFrom, setHistoryFrom] = useState(() => addDays(today, -30));
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyStatus, setHistoryStatus] = useState('');
+  const [historyTherapist, setHistoryTherapist] = useState('');
   const [confirmed, setConfirmed] = useState<BookedSlot | null>(null);
 
   function setSchedule(next: Partial<ScheduleSearch>) {
@@ -188,7 +191,7 @@ export function ScheduleBookingsView() {
                     {request.notes && <p className="mt-1 text-sm text-[var(--ink)]">{request.notes}</p>}
                   </div>
                   <div className="flex gap-2">
-                    <button type="button" className={btnPrimary} onClick={() => openBooking({ date: request.preferredDate ?? date, requestId: request.id, patientName: request.name, patientPhone: request.phone, therapistId: request.preferredTherapistId ?? undefined })}>Confirm</button>
+                    <button type="button" className={btnPrimary} onClick={() => openBooking({ date: request.preferredDate ?? date, requestId: request.id, patientName: request.name, patientPhone: request.phone, therapistId: request.preferredTherapistId ?? undefined, requestNotes: request.notes ?? undefined, requestPreferredTimeText: request.preferredTimeText ?? undefined })}>Confirm</button>
                     <button type="button" className={btnSecondary} onClick={() => void decline(request.id)}>Decline</button>
                   </div>
                 </div>
@@ -206,15 +209,20 @@ export function ScheduleBookingsView() {
           from={historyFrom}
           query={historyQuery}
           status={historyStatus}
+          therapistFilter={historyTherapist}
           onQueryChange={setHistoryQuery}
           onStatusChange={setHistoryStatus}
+          onTherapistChange={setHistoryTherapist}
           onLoadMore={() => setHistoryFrom((current) => addDays(current, -30))}
         />
       )}
 
       {confirmed && <div className="fixed inset-x-4 bottom-4 z-20 flex items-center justify-between gap-3 rounded-xl border border-[var(--teal)] bg-[var(--surface)] p-3 shadow-lg">
         <p className="text-sm text-[var(--ink)]"><strong>{confirmed.patientName}</strong> booked for {timeLabel(confirmed.scheduledAt)}.</p>
-        <button type="button" className="text-xs font-medium text-[var(--teal)]" onClick={() => setConfirmed(null)}>Dismiss</button>
+        <div className="flex items-center gap-2">
+          {confirmed.patientPhone && <button type="button" className="text-xs font-medium text-[var(--teal)]" onClick={() => { void bookingService.shareBookingConfirmation(clinic.id, confirmed.patientName, confirmed.patientPhone ?? null, clinic.name, confirmed.scheduledAt).catch((e) => alert(toFriendlyMessage(e))); }}>WhatsApp</button>}
+          <button type="button" className="text-xs font-medium text-[var(--muted)]" onClick={() => setConfirmed(null)}>Dismiss</button>
+        </div>
       </div>}
       <BookSlotSheet
         isOpen={sheet !== null}
@@ -226,8 +234,9 @@ export function ScheduleBookingsView() {
         prefilledPatientName={sheet?.patientName}
         prefilledPatientPhone={sheet?.patientPhone}
         requestId={sheet?.requestId}
+        requestNotes={sheet?.requestNotes}
+        requestPreferredTimeText={sheet?.requestPreferredTimeText}
         onBooked={(result) => {
-          setSheet(null);
           setConfirmed(result);
           setSchedule({ view: 'schedule', mode: 'day', date: dateForAppointment({ scheduledAt: result.scheduledAt } as Appointment) });
         }}
@@ -246,10 +255,18 @@ function ScheduleSurface({
   const slots = generateScheduleSlots(slotDuration, startHour, endHour);
   const appointmentCounts = new Map<string, number>();
   for (const appointment of appointments) {
+    if (therapistFilter && appointment.therapistId !== therapistFilter) continue;
     const appointmentDate = dateForAppointment(appointment);
     appointmentCounts.set(appointmentDate, (appointmentCounts.get(appointmentDate) ?? 0) + 1);
   }
   const isWeek = mode === 'week';
+  const gridTherapists = displayedTherapists.length ? [...displayedTherapists] : [];
+  if (dayAppointments.some((a) => !a.therapistId || !therapistNameById.has(a.therapistId)) && !therapistFilter) {
+    gridTherapists.push({ id: '' as UUID, name: 'Unassigned' });
+  }
+  if (gridTherapists.length === 0) {
+    gridTherapists.push({ id: '' as UUID, name: 'No therapist' });
+  }
 
   return <div className="space-y-4">
     <div className="flex items-center gap-2 overflow-x-auto">
@@ -258,48 +275,50 @@ function ScheduleSurface({
       {!isWeek && <button type="button" className="ml-auto shrink-0 text-sm font-medium text-[var(--teal)]" onClick={onFindTime}>{findTime ? 'Hide times' : 'Find a time'}</button>}
     </div>
 
-    {isWeek ? <WeekBoard date={date} appointments={appointments} therapistNameById={therapistNameById} counts={appointmentCounts} onSelectDate={onSelectDate} /> : <>
-      <div className="tab:hidden space-y-3">
+    {isWeek ? <WeekBoard date={date} appointments={appointments} therapistFilter={therapistFilter} therapistNameById={therapistNameById} counts={appointmentCounts} onSelectDate={onSelectDate} /> : <>
+      {!findTime && <div className="space-y-3">
         {dayAppointments.length === 0 ? <EmptyDay onBook={() => onBook({ date })} onFindTime={onFindTime} /> : dayAppointments.map((appointment) => <AppointmentCard key={appointment.id} appointment={appointment} therapistName={appointment.therapistId ? therapistNameById.get(appointment.therapistId) ?? 'Unknown' : 'Unassigned'} />)}
-      </div>
-      <div className="hidden tab:block overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-        <div className="min-w-[680px]" style={{ display: 'grid', gridTemplateColumns: `72px repeat(${Math.max(displayedTherapists.length, 1)}, minmax(180px, 1fr))` }}>
+      </div>}
+      {findTime && <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+        <div className="min-w-[680px]" style={{ display: 'grid', gridTemplateColumns: `72px repeat(${Math.max(gridTherapists.length, 1)}, minmax(180px, 1fr))` }}>
           <div className="sticky left-0 z-[1] border-b border-[var(--border)] bg-[var(--surface)] p-3 text-xs font-medium text-[var(--muted)]">Time</div>
-          {(displayedTherapists.length ? displayedTherapists : [{ id: '' as UUID, name: 'No therapist' }]).map((therapist) => <div key={therapist.id} className="border-b border-l border-[var(--border)] bg-[var(--surface)] p-3 text-sm font-medium text-[var(--ink)]">{therapist.name}</div>)}
-          {slots.map((slot) => <>
-            <div key={`time-${slot.time}`} className="sticky left-0 z-[1] border-b border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-xs text-[var(--muted)]">{slot.label}</div>
-            {(displayedTherapists.length ? displayedTherapists : [{ id: '' as UUID, name: 'No therapist' }]).map((therapist) => {
+          {gridTherapists.map((therapist) => <div key={therapist.id} className="border-b border-l border-[var(--border)] bg-[var(--surface)] p-3 text-sm font-medium text-[var(--ink)]">{therapist.name}</div>)}
+          {slots.map((slot) => <Fragment key={`time-${slot.time}`}>
+            <div className="sticky left-0 z-[1] border-b border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-xs text-[var(--muted)]">{slot.label}</div>
+            {gridTherapists.map((therapist) => {
               const slotStart = localDateTime(date, slot.time).getTime();
               const slotEnd = slotStart + slotDuration * 60_000;
               const startsInSlot = dayAppointments.filter((appointment) => {
-                if (appointment.therapistId !== therapist.id) return false;
+                const isMatch = therapist.id ? appointment.therapistId === therapist.id : (!appointment.therapistId || !therapistNameById.has(appointment.therapistId));
+                if (!isMatch) return false;
                 const start = new Date(appointment.scheduledAt).getTime();
                 return start >= slotStart && start < slotEnd;
               });
               const isOccupied = startsInSlot.length > 0 || dayAppointments.some((appointment) => {
-                if (appointment.therapistId !== therapist.id || appointment.status === 'cancelled') return false;
+                const isMatch = therapist.id ? appointment.therapistId === therapist.id : (!appointment.therapistId || !therapistNameById.has(appointment.therapistId));
+                if (!isMatch || appointment.status === 'cancelled') return false;
                 const start = new Date(appointment.scheduledAt).getTime();
                 const end = start + slotDuration * 60_000;
                 return start < slotEnd && end > slotStart;
               });
               return <div key={`${slot.time}-${therapist.id}`} className="min-h-16 border-b border-l border-[var(--border)] p-1.5">
                 {startsInSlot.map((appointment) => <AppointmentCard key={appointment.id} appointment={appointment} therapistName={therapist.name} compact />)}
-                {!isOccupied && <button type="button" onClick={() => onBook({ date, time: slot.time, therapistId: therapist.id })} className="h-full min-h-12 w-full rounded-lg text-left text-xs text-[var(--muted)] hover:bg-[var(--paper)] hover:px-2 hover:text-[var(--teal)]">+ Book</button>}
+                {!isOccupied && <button type="button" onClick={() => onBook({ date, time: slot.time, therapistId: therapist.id || undefined })} className="h-full min-h-12 w-full rounded-lg text-left text-xs text-[var(--muted)] hover:bg-[var(--paper)] hover:px-2 hover:text-[var(--teal)]">+ Book</button>}
               </div>;
             })}
-          </>)}
+          </Fragment>)}
         </div>
-      </div>
+      </div>}
       {findTime && <SectionCard title="Available times"><p className="mb-3 text-sm text-[var(--muted)]">Choose a therapist and time in the booking sheet. Occupied slots are disabled automatically.</p><button type="button" className={btnPrimary} onClick={() => onBook({ date })}>Find availability</button></SectionCard>}
     </>}
   </div>;
 }
 
-function WeekBoard({ date, appointments, therapistNameById, counts, onSelectDate }: { date: string; appointments: Appointment[]; therapistNameById: Map<string, string>; counts: Map<string, number>; onSelectDate: (date: string) => void }) {
+function WeekBoard({ date, appointments, therapistFilter, therapistNameById, counts, onSelectDate }: { date: string; appointments: Appointment[]; therapistFilter: string; therapistNameById: Map<string, string>; counts: Map<string, number>; onSelectDate: (date: string) => void }) {
   const days = weekDays(date);
   return <div className="grid gap-2 tab:grid-cols-7">
     {days.map((day) => {
-      const dayAppointments = appointments.filter((appointment) => appointmentStartsOnDate(appointment, day)).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+      const dayAppointments = appointments.filter((appointment) => appointmentStartsOnDate(appointment, day) && (!therapistFilter || appointment.therapistId === therapistFilter)).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
       return <button key={day} type="button" onClick={() => onSelectDate(day)} className="min-h-20 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left hover:border-[var(--teal)]">
         <div className="flex items-center justify-between"><span className="text-sm font-semibold text-[var(--ink)]">{new Date(`${day}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' })}</span><span className="text-xs text-[var(--muted)]">{counts.get(day) ?? 0}</span></div>
         {dayAppointments.slice(0, 3).map((appointment) => <p key={appointment.id} className="mt-1 truncate text-xs text-[var(--muted)]">{timeLabel(appointment.scheduledAt)} · {appointment.patientName}{appointment.therapistId ? ` · ${therapistNameById.get(appointment.therapistId) ?? 'Staff'}` : ''}</p>)}
@@ -318,21 +337,150 @@ function EmptyDay({ onBook, onFindTime }: { onBook: () => void; onFindTime: () =
 }
 
 function AppointmentCard({ appointment, therapistName, compact = false }: { appointment: Appointment; therapistName: string; compact?: boolean }) {
+  const clinic = useClinic();
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [rescheduleValue, setRescheduleValue] = useState(() => {
+    const d = new Date(appointment.scheduledAt);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
+  const [rescheduleBusy, setRescheduleBusy] = useState(false);
+
+  function sendPatientBookingWhatsApp() {
+    void bookingService
+      .shareBookingConfirmation(
+        clinic.id,
+        appointment.patientName,
+        appointment.patientPhone ?? null,
+        clinic.name,
+        appointment.scheduledAt
+      )
+      .catch((e) => alert(toFriendlyMessage(e)));
+  }
+
   return <div className={compact ? 'rounded-lg border border-[var(--teal)]/20 bg-[var(--teal-light)] p-2' : 'rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3'}>
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0"><p className="font-medium text-[var(--ink)]">{appointment.patientName}</p><p className="text-xs text-[var(--muted)]">{timeLabel(appointment.scheduledAt)} · {therapistName}</p></div>
       {!compact && <Pill tone={APPOINTMENT_STATUS_TONE[appointment.status]}>{APPOINTMENT_STATUS_LABEL[appointment.status]}</Pill>}
     </div>
-    {!compact && appointment.patientId && <Link to="/patients/$patientId" params={{ patientId: appointment.patientId }} className="mt-2 inline-block text-xs font-medium text-[var(--teal)]">Open patient</Link>}
+    
+    {!compact && (
+      <>
+        {isRescheduling ? (
+          <div className="mt-3 flex items-center gap-2 border-t border-[var(--border)] pt-3">
+            <input
+              type="datetime-local"
+              className={inputCls}
+              value={rescheduleValue}
+              onChange={(e) => setRescheduleValue(e.target.value)}
+            />
+            <button
+              type="button"
+              disabled={rescheduleBusy}
+              className={btnPrimary + ' text-xs py-1.5 px-3'}
+              onClick={async () => {
+                setRescheduleBusy(true);
+                try {
+                  await bookingService.rescheduleAppointment(
+                    appointment.id,
+                    new Date(rescheduleValue).toISOString()
+                  );
+                  setIsRescheduling(false);
+                } catch (err: any) {
+                  alert(toFriendlyMessage(err));
+                } finally {
+                  setRescheduleBusy(false);
+                }
+              }}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
+              onClick={() => setIsRescheduling(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">
+            {(appointment.status === 'confirmed' || appointment.status === 'rescheduled') && (
+              <>
+                {appointment.patientPhone && (
+                  <button
+                    type="button"
+                    className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                    onClick={sendPatientBookingWhatsApp}
+                  >
+                    WhatsApp
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                  onClick={() => setIsRescheduling(true)}
+                >
+                  Reschedule
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
+                  onClick={() =>
+                    void bookingService
+                      .markAppointmentNoShow(appointment.id)
+                      .catch((e) => alert(toFriendlyMessage(e)))
+                  }
+                >
+                  No-show
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:bg-[var(--paper)]"
+                  onClick={() => {
+                    if (!confirm('Cancel this appointment?')) return;
+                    void bookingService
+                      .cancelAppointment(appointment.id)
+                      .catch((e) => alert(toFriendlyMessage(e)));
+                  }}
+                >
+                  Cancel
+                </button>
+              </>
+            )}
+            {!appointment.visitId && appointment.status !== 'cancelled' && appointment.status !== 'no_show' && (
+              <Link
+                to="/visits/new"
+                search={{
+                  appointmentId: appointment.id,
+                  prefillName: appointment.patientName,
+                  prefillPhone: appointment.patientPhone,
+                  ...(appointment.patientId ? { patientId: appointment.patientId } : {}),
+                }}
+                className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+              >
+                Create visit
+              </Link>
+            )}
+            {appointment.patientId && (
+              <Link to="/patients/$patientId" params={{ patientId: appointment.patientId }} className="text-xs font-medium text-[var(--teal)] hover:underline ml-auto">
+                Patient profile
+              </Link>
+            )}
+          </div>
+        )}
+      </>
+    )}
   </div>;
 }
 
-function HistorySurface({ appointments, therapists, therapistNameById, from, query, status, onQueryChange, onStatusChange, onLoadMore }: { appointments: Appointment[]; therapists: { id: UUID; name: string }[]; therapistNameById: Map<string, string>; from: string; query: string; status: string; onQueryChange: (value: string) => void; onStatusChange: (value: string) => void; onLoadMore: () => void }) {
+function HistorySurface({ appointments, therapists, therapistNameById, from, query, status, therapistFilter, onQueryChange, onStatusChange, onTherapistChange, onLoadMore }: { appointments: Appointment[]; therapists: { id: UUID; name: string }[]; therapistNameById: Map<string, string>; from: string; query: string; status: string; therapistFilter: string; onQueryChange: (value: string) => void; onStatusChange: (value: string) => void; onTherapistChange: (value: string) => void; onLoadMore: () => void }) {
   const normalizedQuery = query.trim().toLowerCase();
-  const rows = appointments.filter((appointment) => dateForAppointment(appointment) >= from).filter((appointment) => !status || appointment.status === status).filter((appointment) => !normalizedQuery || appointment.patientName.toLowerCase().includes(normalizedQuery) || appointment.patientPhone.toLowerCase().includes(normalizedQuery)).sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt));
+  const rows = appointments.filter((appointment) => dateForAppointment(appointment) >= from).filter((appointment) => !status || appointment.status === status).filter((appointment) => !therapistFilter || appointment.therapistId === therapistFilter).filter((appointment) => !normalizedQuery || appointment.patientName.toLowerCase().includes(normalizedQuery) || appointment.patientPhone.toLowerCase().includes(normalizedQuery)).sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt));
+  const hasMore = appointments.some((a) => dateForAppointment(a) < from);
   return <SectionCard title={`History (${rows.length})`}>
-    <div className="mb-4 grid gap-2 sm:grid-cols-3"><input className={inputCls} placeholder="Search name or phone" value={query} onChange={(event) => onQueryChange(event.target.value)} /><select className={inputCls} value={status} onChange={(event) => onStatusChange(event.target.value)}><option value="">All statuses</option>{['confirmed', 'rescheduled', 'arrived', 'no_show', 'cancelled'].map((candidate) => <option key={candidate} value={candidate}>{APPOINTMENT_STATUS_LABEL[candidate as Appointment['status']]}</option>)}</select><select className={inputCls} defaultValue="" onChange={(event) => { const therapist = therapists.find((candidate) => candidate.id === event.target.value); onQueryChange(therapist ? therapist.name : ''); }}><option value="">All therapists</option>{therapists.map((therapist) => <option key={therapist.id} value={therapist.id}>{therapist.name}</option>)}</select></div>
+    <div className="mb-4 grid gap-2 sm:grid-cols-3"><input className={inputCls} placeholder="Search name or phone" value={query} onChange={(event) => onQueryChange(event.target.value)} /><select className={inputCls} value={status} onChange={(event) => onStatusChange(event.target.value)}><option value="">All statuses</option>{['confirmed', 'rescheduled', 'arrived', 'no_show', 'cancelled'].map((candidate) => <option key={candidate} value={candidate}>{APPOINTMENT_STATUS_LABEL[candidate as Appointment['status']]}</option>)}</select><select className={inputCls} value={therapistFilter} onChange={(event) => onTherapistChange(event.target.value)}><option value="">All therapists</option>{therapists.map((therapist) => <option key={therapist.id} value={therapist.id}>{therapist.name}</option>)}</select></div>
     <div className="space-y-2">{rows.length ? rows.map((appointment) => <AppointmentCard key={appointment.id} appointment={appointment} therapistName={appointment.therapistId ? therapistNameById.get(appointment.therapistId) ?? 'Staff' : 'Unassigned'} />) : <p className="py-6 text-center text-sm text-[var(--muted)]">No appointments in this range.</p>}</div>
-    <button type="button" className={`${btnSecondary} mt-4`} onClick={onLoadMore}>Load previous 30 days</button>
+    {hasMore && <button type="button" className={`${btnSecondary} mt-4`} onClick={onLoadMore}>Load previous 30 days</button>}
   </SectionCard>;
 }

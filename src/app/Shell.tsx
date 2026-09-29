@@ -30,7 +30,7 @@ import {
   IconLedger,
   IconPatients,
   IconReports,
-  IconRequests,
+  IconCalendar,
   IconMore,
 } from '@/components/NavIcons';
 import { AccountMenu } from './AccountMenu';
@@ -39,14 +39,10 @@ import { AccountMenu } from './AccountMenu';
 
 const NAV = [
   { to: '/workspace', label: 'Workspace', Icon: IconWorkspace },
+  { to: '/schedule', label: 'Schedule', Icon: IconCalendar },
   { to: '/ledger', label: 'Ledger', Icon: IconLedger },
   { to: '/patients', label: 'Patients', Icon: IconPatients },
   { to: '/insights', label: 'Reports', Icon: IconReports },
-  // Desktop-only — the mobile bottom tab bar is its own hand-built 5-item
-  // row (Workspace/Patients/+New/Ledger/More), not driven by this array,
-  // so adding an entry here never adds a phone tab (per the locked spec's
-  // "no sixth phone tab" decision). Mobile reaches it via More.
-  { to: '/requests', label: 'Requests', Icon: IconRequests },
   // Settings deliberately isn't in this array — it sits in the account
   // menu's Account section instead, under the same `role === 'admin'` gate
   // this array's filter used to apply. Five labelled items is what the
@@ -100,10 +96,10 @@ export function Shell() {
     () =>
       NAV.filter(
         (item) =>
-          // Requests → Feedback is admin-only, but Bookings (Slice 5) is
+          // Schedule → Feedback is admin-only, but Bookings (Slice 5) is
           // front_desk's primary surface too — matching /insights' gate
           // just below, and the doc's "front desk + admin" nav rule.
-          (item.to !== '/requests' || role === 'admin' || role === 'front_desk') &&
+          (item.to !== '/schedule' || role === 'admin' || role === 'front_desk') &&
           (item.to !== '/insights' || role === 'admin' || role === 'front_desk')
       ),
     [role]
@@ -372,7 +368,7 @@ export function Shell() {
                 >
                   <item.Icon className="shrink-0" />
                   <span className="hidden tab:inline">{item.label}</span>
-                  {item.to === '/requests' && pendingRequestsCount > 0 && (
+                  {item.to === '/schedule' && pendingRequestsCount > 0 && (
                     <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--rust)] px-1 text-[10px] font-bold text-white">
                       {pendingRequestsCount}
                     </span>
@@ -415,10 +411,11 @@ export function Shell() {
             active={pathname.startsWith('/workspace')}
           />
           <PhoneTab
-            to="/patients"
-            label="Patients"
-            Icon={IconPatients}
-            active={pathname.startsWith('/patients')}
+            to="/schedule"
+            label="Schedule"
+            Icon={IconCalendar}
+            active={pathname.startsWith('/schedule')}
+            badge={pendingRequestsCount}
           />
           <Link
             to="/visits/new"
@@ -444,9 +441,8 @@ export function Shell() {
               pathname.startsWith('/more') ||
               pathname.startsWith('/settings') ||
               pathname.startsWith('/insights') ||
-              pathname.startsWith('/requests')
+              pathname.startsWith('/patients')
             }
-            badge={pendingRequestsCount}
           />
         </nav>
       </div>
@@ -461,7 +457,7 @@ function PhoneTab({
   active,
   badge,
 }: {
-  to: '/workspace' | '/patients' | '/ledger' | '/more';
+  to: '/workspace' | '/patients' | '/ledger' | '/more' | '/schedule';
   label: string;
   Icon: (props: { className?: string }) => ReactNode;
   active: boolean;

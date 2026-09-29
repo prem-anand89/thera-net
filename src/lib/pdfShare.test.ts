@@ -25,16 +25,16 @@ describe('openPatientWhatsAppChat', () => {
     );
   });
 
-  it('navigates the current tab when blocked after async feedback work', () => {
-    const assign = vi.fn();
+  it('shows an alert when blocked after async feedback work', () => {
+    const alert = vi.fn();
     const open = vi.fn().mockReturnValue(null);
-    vi.stubGlobal('window', { open, location: { assign } });
+    vi.stubGlobal('window', { open, alert });
     vi.stubGlobal('document', {
       body: { appendChild: vi.fn(), removeChild: vi.fn() },
       createElement: () => ({ click: vi.fn(), remove: vi.fn() }),
     });
     openPatientWhatsAppChat('Hello', '9876543210');
-    expect(assign).toHaveBeenCalledWith(expect.stringContaining('https://wa.me/919876543210'));
+    expect(alert).toHaveBeenCalledWith(expect.stringContaining('blocking pop-ups'));
   });
 });
 

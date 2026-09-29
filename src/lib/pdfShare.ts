@@ -110,7 +110,7 @@ export function openPatientWhatsAppChat(
   patientPhone: string | null | undefined
 ): void {
   if (!patientPhone?.trim()) {
-    alert('Patient has no phone number on file');
+    window.alert('Patient has no phone number on file');
     return;
   }
   const url = buildWhatsAppSendUrl(text, patientPhone);
@@ -135,7 +135,7 @@ export function notifyWhatsAppOpenFailed(shareText: string): void {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     void navigator.clipboard.writeText(shareText).catch(() => {});
   }
-  alert(
+  window.alert(
     'Could not open WhatsApp automatically — your browser may be blocking pop-ups. ' +
       'The message was copied to your clipboard; open WhatsApp, pick the patient, and paste. ' +
       'Or allow pop-ups for this site and try again.'

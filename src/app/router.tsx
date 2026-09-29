@@ -103,7 +103,7 @@ const BookingFormPage = lazy(() =>
     default: m.BookingFormPage,
   }))
 );
-const RequestsPage = lazy(() =>
+const SchedulePage = lazy(() =>
   import('@/features/requests/RequestsPage').then((m) => ({ default: m.RequestsPage }))
 );
 
@@ -432,16 +432,37 @@ const settingsRoute = createRoute({
 // shape doesn't need another route change to add it — RequestsPage just
 // doesn't render anything for it today, same as the Bookings tab itself
 // showing "coming later" rather than being absent.
-const REQUESTS_TABS = ['feedback', 'bookings'] as const;
+const SCHEDULE_TABS = ['feedback', 'bookings'] as const;
+const SCHEDULE_VIEWS = ['schedule', 'requests', 'history'] as const;
+const SCHEDULE_MODES = ['day', 'week'] as const;
 
-const requestsRoute = createRoute({
+const scheduleRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/requests',
-  validateSearch: (search: Record<string, unknown>): { tab?: (typeof REQUESTS_TABS)[number] } =>
-    typeof search.tab === 'string' && (REQUESTS_TABS as readonly string[]).includes(search.tab)
-      ? { tab: search.tab as (typeof REQUESTS_TABS)[number] }
-      : {},
-  component: RequestsPage,
+  path: '/schedule',
+  validateSearch: (
+    search: Record<string, unknown>
+  ): {
+    tab?: (typeof SCHEDULE_TABS)[number];
+    view?: (typeof SCHEDULE_VIEWS)[number];
+    mode?: (typeof SCHEDULE_MODES)[number];
+    date?: string;
+    therapist?: string;
+  } => ({
+    ...(typeof search.tab === 'string' && (SCHEDULE_TABS as readonly string[]).includes(search.tab)
+      ? { tab: search.tab as (typeof SCHEDULE_TABS)[number] }
+      : {}),
+    ...(typeof search.view === 'string' && (SCHEDULE_VIEWS as readonly string[]).includes(search.view)
+      ? { view: search.view as (typeof SCHEDULE_VIEWS)[number] }
+      : {}),
+    ...(typeof search.mode === 'string' && (SCHEDULE_MODES as readonly string[]).includes(search.mode)
+      ? { mode: search.mode as (typeof SCHEDULE_MODES)[number] }
+      : {}),
+    ...(typeof search.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(search.date)
+      ? { date: search.date }
+      : {}),
+    ...(typeof search.therapist === 'string' && search.therapist ? { therapist: search.therapist } : {}),
+  }),
+  component: SchedulePage,
 });
 
 const setupRedirectRoute = createRoute({
@@ -561,7 +582,7 @@ const routeTree = rootRoute.addChildren([
   invoicePrintRoute,
   invoicesRedirectRoute,
   settingsRoute,
-  requestsRoute,
+  scheduleRoute,
   setupRedirectRoute,
   importVisitsRoute,
   importVisitsRedirectRoute,

@@ -965,21 +965,10 @@ still falls through to the existing share sheet, unchanged.
     drives surfaces likely-existing-patient candidates for free; staff
     still explicitly pick or create, never auto-selected (no silent
     find-or-create by phone, per the doc's explicit-scope list).
-  - **Requests → Bookings tab** (`RequestsPage.tsx`) — a "New booking" card
-    at the top (`create_appointment_staff(clinic_id, name, phone,
-    therapist_id, scheduled_at)`, security-definer, same admin-or-
-    front_desk check as every other staff booking RPC) lets staff enter a
-    booking taken by phone or walk-in directly, alongside the public
-    patient-facing `/book/$slug` link — it writes straight to a confirmed
-    `appointments` row with `request_id` left null rather than going
-    through the pending-request queue first, since staff already know the
-    date/time/therapist when entering one by hand. Reuses the same
+  - **Requests → Bookings tab** (`RequestsPage.tsx`) — A unified `BookSlotSheet`
+    powers all booking entry points (the "New booking" button, the Daily Timeline empty slot click, and the pending-request "Confirm" button) using a single `confirm_booking_slot` RPC that handles server-side double-booking validation based on clinic `slot_duration_minutes`. It writes straight to a confirmed `appointments` row (and handles updating any pending `request_id`). Reuses the same
     post-confirm `justConfirmed` banner ("Send confirmation"/"Notify
-    therapist") as a request that was confirmed through the queue, since a
-    manually-created booking is functionally identical to a freshly-
-    confirmed one. Below that: a pending-requests list (Confirm opens an
-    inline scheduled-datetime + therapist mini-form; Decline is a plain
-    confirm-then-RPC) and an appointments list
+    therapist") as before. Below that: a pending-requests list (Confirm opens the unified sheet; Decline is a plain confirm-then-RPC) and an appointments list
     (Reschedule/No-show/Cancel inline, status shown via a shared
     `Pill`-tone map in `src/domain/appointmentStatus.ts` — kept in its own
     tiny module, not defined in either page, because importing one

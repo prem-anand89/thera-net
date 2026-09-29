@@ -130,7 +130,7 @@ export function IconSettings({ className }: { className?: string }) {
     </svg>
   );
 }
-export function IconRequests({ className }: { className?: string }) {
+export function IconCalendar({ className }: { className?: string }) {
   return (
     <svg
       width="20"
@@ -140,12 +140,8 @@ export function IconRequests({ className }: { className?: string }) {
       aria-hidden="true"
       className={className}
     >
-      <path
-        d="M3 5.5h14v9a1 1 0 01-1 1H4a1 1 0 01-1-1v-9zM3 5.5l3.5 4.2h7L17 5.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
+      <rect x="4" y="5" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M4 9h12M7 4v3M13 4v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }

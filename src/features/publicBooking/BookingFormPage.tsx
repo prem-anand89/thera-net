@@ -4,6 +4,7 @@ import { hasSupabaseConfig } from '@/lib/env';
 import { bookingService } from '@/services';
 import type { UUID } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
+import { addDays, generateScheduleSlots, toLocalDateStr } from '@/domain/schedule';
 
 type AvailabilityData = {
   closedWeekdays: number[];
@@ -14,24 +15,7 @@ type AvailabilityData = {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
-function generateSlots(slotDurationMinutes: number, startHour: number, endHour: number) {
-  const morning: string[] = [];
-  const afternoon: string[] = [];
-  const start = startHour * 60;
-  const end = endHour * 60;
-  for (let m = start; m < end; m += slotDurationMinutes) {
-    const hours = Math.floor(m / 60);
-    const mins = m % 60;
-    const isPM = hours >= 12;
-    const displayHour = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
-    const label = `${displayHour}:${mins.toString().padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
-    if (hours < 12) morning.push(label);
-    else afternoon.push(label);
-  }
-  return { morning, afternoon };
+  return toLocalDateStr(d);
 }
 
 // ─── Mini Calendar ────────────────────────────────────────────────────────────
@@ -365,7 +349,10 @@ export function BookingFormPage() {
   }
 
   // ── Slot grouping ─────────────────────────────────────────────────────────
-  let { morning, afternoon } = generateSlots(slotDuration, startHour, endHour);
+  const allSlots = generateScheduleSlots(slotDuration, startHour, endHour);
+  let morning = allSlots.filter((slot) => slot.minutes < 12 * 60).map((slot) => slot.label);
+  let afternoon = allSlots.filter((slot) => slot.minutes >= 12 * 60).map((slot) => slot.label);
+  const quickDates = Array.from({ length: 7 }, (_, index) => addDays(isoDate(new Date()), index));
 
   if (preferredDate && availability) {
     const bookedTimes = availability.appointments
@@ -499,6 +486,23 @@ export function BookingFormPage() {
             {/* --- Date Picker --- */}
             <div className="border-t border-[var(--border)] pt-4 mt-4">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-3">Preferred date & time</p>
+              <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+                {quickDates.map((date, index) => (
+                  <button
+                    key={date}
+                    type="button"
+                    onClick={() => {
+                      setPreferredDate(date);
+                      setPreferredTime(null);
+                      setCalendarOpen(false);
+                    }}
+                    className={`min-h-11 shrink-0 rounded-lg border px-3 text-xs font-medium ${preferredDate === date ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] bg-white text-[var(--ink)]'}`}
+                  >
+                    {index === 0 ? 'Today' : index === 1 ? 'Tomorrow' : new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' })}
+                  </button>
+                ))}
+                <button type="button" onClick={() => setCalendarOpen(true)} className="min-h-11 shrink-0 rounded-lg border border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)]">Later…</button>
+              </div>
               {/* Date trigger + popover wrapper — relative so the calendar overlays content below */}
               <div className="relative">
                 <button
@@ -508,8 +512,8 @@ export function BookingFormPage() {
                 >
                   <span className={preferredDate ? 'text-[var(--ink)] font-medium' : 'text-[var(--muted)]'}>
                     {preferredDate
-                      ? new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-                      : '📅 Select a date (optional)'}
+                      ? new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })
+                      : 'Choose another date'}
                   </span>
                   <span className="text-[var(--muted)] text-xs">{calendarOpen ? '▲' : '▼'}</span>
                 </button>

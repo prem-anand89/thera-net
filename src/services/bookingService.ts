@@ -65,6 +65,7 @@ export const bookingService = {
       p_end_date: endDate
     });
     if (error) throw new Error(error.message);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return data as any;
   },
 
@@ -97,34 +98,11 @@ export const bookingService = {
 
   /** Returns the new `appointments.id`. `patientId` is optional and stays
    *  undefined by default — deferring identity resolution to New Visit's
-   *  own search-or-create typeahead, same as before. Pass it only when
-   *  staff have explicitly matched the request to an existing patient
-   *  (a real human confirming identity, not a name-string guess) via the
-   *  Confirm form's own patient picker. */
-  async confirmAppointmentRequest(
-    requestId: UUID,
-    scheduledAt: string,
-    therapistId: UUID | null,
-    patientId?: UUID | null
-  ): Promise<UUID> {
-    const supabase = supabaseOrThrow();
-    const { data, error } = await supabase.rpc('confirm_appointment_request', {
-      p_request_id: requestId,
-      p_scheduled_at: scheduledAt,
-      p_therapist_id: therapistId,
-      p_patient_id: patientId ?? null,
-    });
-    if (error) throw new Error(`Could not confirm: ${error.message}`);
-    syncEngine.schedule(0);
-    return data as UUID;
-  },
-
   /** Manual/staff-entered booking, alongside the public patient-facing
    *  link — goes straight to a confirmed appointment (no pending request
    *  row) since staff already know the date/time/therapist when entering
-   *  one by hand. Returns the new `appointments.id`, same as
-   *  `confirmAppointmentRequest`, so callers can reuse the same
-   *  post-confirm banner either way. `patientId` is optional — pass it
+   *  one by hand. Returns the new `appointments.id`.
+   *  `patientId` is optional — pass it
    *  when the caller already knows exactly which patient this is (e.g.
    *  the Patients list's own "Book" action, starting from a clicked row,
    *  not a typed name), so the appointment is linked from creation
@@ -147,6 +125,30 @@ export const bookingService = {
       p_patient_id: patientId ?? null,
     });
     if (error) throw new Error(`Could not create booking: ${error.message}`);
+    syncEngine.schedule(0);
+    return data as UUID;
+  },
+
+  async confirmBookingSlot(params: {
+    clinicId: UUID;
+    patientId: UUID | null;
+    patientName: string;
+    patientPhone: string;
+    therapistId: UUID;
+    scheduledAt: string;
+    requestId: UUID | null;
+  }): Promise<UUID> {
+    const supabase = supabaseOrThrow();
+    const { data, error } = await supabase.rpc('confirm_booking_slot', {
+      p_clinic_id: params.clinicId,
+      p_patient_id: params.patientId,
+      p_name: params.patientName,
+      p_phone: params.patientPhone,
+      p_therapist_id: params.therapistId,
+      p_scheduled_at: params.scheduledAt,
+      p_request_id: params.requestId,
+    });
+    if (error) throw new Error(`Could not confirm booking: ${error.message}`);
     syncEngine.schedule(0);
     return data as UUID;
   },
