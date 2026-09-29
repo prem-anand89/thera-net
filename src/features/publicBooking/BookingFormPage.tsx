@@ -79,12 +79,6 @@ function MiniCalendar({
   // Pad to complete last row
   while (cells.length % 7 !== 0) cells.push(null);
 
-  // Custom hatched pattern for holidays
-  const hatchedStyle = {
-    background: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(251, 146, 60, 0.1) 4px, rgba(251, 146, 60, 0.1) 8px)',
-    border: '1px solid rgba(251, 146, 60, 0.3)'
-  };
-
   return (
     <div>
       {/* Month nav */}
@@ -128,26 +122,23 @@ function MiniCalendar({
           const isSelected = iso === selectedDate;
 
           let btnCls = "h-12 w-full rounded-xl font-semibold text-base flex items-center justify-center transition-all ";
-          let extraStyle = {};
           let title = "";
 
           if (isSelected) {
-            btnCls += "bg-[var(--teal)] text-white shadow-md border border-transparent";
+            btnCls += "bg-[var(--teal)] text-white shadow-md";
           } else if (status === 'past') {
-            btnCls += "opacity-0 cursor-default";
-            return <div key={i} className={btnCls} />;
+            btnCls += "text-[var(--muted)] opacity-30 cursor-not-allowed";
           } else if (status === 'closed') {
-            btnCls += "bg-[#F9FAFB] text-[var(--muted)] opacity-50 cursor-not-allowed";
+            btnCls += "bg-[#F9FAFB] text-[var(--muted)] opacity-60 cursor-not-allowed";
             title = "Closed";
           } else if (status === 'holiday') {
-            extraStyle = hatchedStyle;
-            btnCls += "text-orange-800 hover:opacity-80";
+            btnCls += "bg-orange-50/50 text-orange-800/80 cursor-not-allowed";
             title = "Holiday / Clinic Closure";
           } else if (status === 'booked') {
-            btnCls += "border border-dashed border-[var(--muted)] text-[var(--ink)] hover:border-[var(--teal)]";
+            btnCls += "text-[var(--muted)] line-through cursor-not-allowed";
             title = "Fully booked";
           } else {
-            btnCls += "bg-teal-50/40 text-[var(--ink)] hover:bg-teal-50";
+            btnCls += "hover:bg-[var(--paper)] text-[var(--ink)]";
             title = "Available";
           }
 
@@ -156,7 +147,6 @@ function MiniCalendar({
               key={i}
               type="button"
               title={title}
-              style={extraStyle}
               disabled={status === 'past' || status === 'closed' || status === 'holiday' || status === 'booked'}
               onClick={() => onSelect(iso)}
               className={btnCls}
@@ -165,14 +155,6 @@ function MiniCalendar({
             </button>
           );
         })}
-      </div>
-
-      {/* Legend */}
-      <div className="mt-8 flex flex-wrap gap-4 text-xs font-medium text-[var(--muted)] border-t border-[var(--border)] pt-5">
-        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-teal-50/40"></div> Available</div>
-        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded border border-dashed border-[var(--muted)]"></div> Fully booked</div>
-        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-[#F9FAFB]"></div> Closed</div>
-        <div className="flex items-center gap-2" title="Gandhi Jayanti (Oct 2)"><div className="w-4 h-4 rounded border border-orange-200" style={{background: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(251, 146, 60, 0.15) 3px, rgba(251, 146, 60, 0.15) 6px)'}}></div> Holiday</div>
       </div>
     </div>
   );
@@ -445,11 +427,13 @@ export function BookingFormPage() {
       </header>
 
       {/* Content */}
-      <main className="mx-auto max-w-lg px-4 py-8">
-        <StepBar step={step} />
+      <main className="mx-auto max-w-4xl px-4 py-8">
+        <div className="max-w-lg mx-auto">
+          <StepBar step={step} />
+        </div>
 
         {step === 1 && (
-          <form onSubmit={goToStep2} noValidate>
+          <form onSubmit={goToStep2} noValidate className="max-w-lg mx-auto">
             <Card>
               <CardTitle>Patient information</CardTitle>
 
@@ -532,87 +516,92 @@ export function BookingFormPage() {
 
         {step === 2 && (
           <form onSubmit={onSubmit} noValidate>
-            {/* Back link */}
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="mb-4 flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
-            >
-              ← Back
-            </button>
+            <div className="max-w-lg mx-auto mb-4">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
+              >
+                ← Back
+              </button>
+            </div>
 
-            <Card>
-              <CardTitle>Choose a preferred date</CardTitle>
-              <p className="mb-4 text-xs text-[var(--muted)]">
-                We'll try our best to accommodate your preference.
-              </p>
-              <MiniCalendar
-                selectedDate={preferredDate}
-                onSelect={(d) => {
-                  setPreferredDate(d);
-                  setPreferredTime(null);
-                }}
-              />
-            </Card>
-
-            {preferredDate && (
-              <Card className="mt-4">
-                <CardTitle>Preferred time · optional</CardTitle>
-                <p className="mb-4 text-xs text-[var(--muted)]">
-                  {new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                  })}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+              {/* Left Column: Calendar */}
+              <Card>
+                <CardTitle>Choose a preferred date</CardTitle>
+                <p className="mb-6 text-xs text-[var(--muted)]">
+                  Select a date to see available times.
                 </p>
-                <TimeGroup
-                  label="Morning"
-                  icon="☀️"
-                  slots={morning}
-                  selectedTime={preferredTime}
-                  onSelect={setPreferredTime}
-                />
-                <TimeGroup
-                  label="Afternoon"
-                  icon="🌤️"
-                  slots={afternoon}
-                  selectedTime={preferredTime}
-                  onSelect={setPreferredTime}
+                <MiniCalendar
+                  selectedDate={preferredDate}
+                  onSelect={(d) => {
+                    setPreferredDate(d);
+                    setPreferredTime(null);
+                  }}
                 />
               </Card>
-            )}
 
-            <div className="mt-4 space-y-3">
-              {/* Summary pill */}
-              <div className="rounded-[10px] border border-[var(--border)] bg-white px-4 py-3 text-sm">
-                <p className="font-medium text-[var(--ink)]">{name}</p>
-                <p className="text-[var(--muted)]">+91 {phone}</p>
-                {preferredDate && (
-                  <p className="mt-1 text-xs text-[var(--teal)]">
-                    📅{' '}
-                    {new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                    })}
-                    {preferredTime && ` · ${preferredTime}`}
-                  </p>
+              {/* Right Column: Times */}
+              <div>
+                {!preferredDate ? (
+                  <div className="hidden md:flex h-full min-h-[300px] items-center justify-center rounded-[14px] border border-dashed border-[var(--border)] text-sm text-[var(--muted)]">
+                    Select a date on the left
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <Card>
+                      <CardTitle>Preferred time · optional</CardTitle>
+                      <p className="mb-6 text-xs text-[var(--muted)]">
+                        {new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                        })}
+                      </p>
+                      <TimeGroup
+                        label="Morning"
+                        icon="☀️"
+                        slots={morning}
+                        selectedTime={preferredTime}
+                        onSelect={setPreferredTime}
+                      />
+                      <TimeGroup
+                        label="Afternoon"
+                        icon="🌤️"
+                        slots={afternoon}
+                        selectedTime={preferredTime}
+                        onSelect={setPreferredTime}
+                      />
+                    </Card>
+
+                    {/* Summary pill */}
+                    <div className="rounded-[10px] border border-[var(--border)] bg-white px-4 py-3 text-sm shadow-sm">
+                      <p className="font-medium text-[var(--ink)]">{name}</p>
+                      <p className="text-[var(--muted)]">+91 {phone}</p>
+                      <p className="mt-2 text-xs font-semibold text-[var(--teal)]">
+                        📅{' '}
+                        {new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', {
+                          weekday: 'short',
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                        {preferredTime && ` · ${preferredTime}`}
+                      </p>
+                    </div>
+
+                    {submitError && <p className="text-sm text-[var(--rust)]">{submitError}</p>}
+
+                    <button
+                      type="submit"
+                      disabled={busy}
+                      className="w-full rounded-[10px] bg-[var(--teal)] py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+                    >
+                      {busy ? 'Sending…' : 'Submit request'}
+                    </button>
+                  </div>
                 )}
               </div>
-
-              {submitError && <p className="text-sm text-[var(--rust)]">{submitError}</p>}
-
-              <button
-                type="submit"
-                disabled={busy}
-                className="w-full rounded-[10px] bg-[var(--teal)] py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
-              >
-                {busy ? 'Sending…' : 'Submit request'}
-              </button>
-
-              <p className="text-center text-xs text-[var(--muted)]">
-                {clinicName} will confirm your appointment by phone or email.
-              </p>
             </div>
           </form>
         )}
