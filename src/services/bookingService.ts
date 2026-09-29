@@ -56,6 +56,18 @@ export const bookingService = {
     return (data as { id: UUID; name: string }[] | null) ?? [];
   },
 
+  async getBookingAvailability(slug: string, startDate: string, endDate: string): Promise<{ closedWeekdays: number[], closedDates: { date: string, label: string }[], appointments: { scheduled_at: string, therapist_id: UUID }[] }> {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase is not configured');
+    const { data, error } = await supabase.rpc('get_booking_availability', { 
+      p_slug: slug,
+      p_start_date: startDate,
+      p_end_date: endDate
+    });
+    if (error) throw new Error(error.message);
+    return data as any;
+  },
+
   async submitAppointmentRequest(
     slug: string,
     name: string,

@@ -4,6 +4,12 @@ import { hasSupabaseConfig } from '@/lib/env';
 import { bookingService } from '@/services';
 import type { UUID } from '@/domain/types';
 
+type AvailabilityData = {
+  closedWeekdays: number[];
+  closedDates: { date: string; label: string }[];
+  appointments: { scheduled_at: string; therapist_id: UUID }[];
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function isoDate(d: Date) {
@@ -30,22 +36,30 @@ function generateSlots(slotDurationMinutes: number, startHour: number, endHour: 
 // ─── Mini Calendar ────────────────────────────────────────────────────────────
 
 // Mock availability logic for UI demonstration
-function getDayStatus(d: Date, today: Date) {
+function getDayStatus(d: Date, today: Date, availability: AvailabilityData | null) {
   const iso = isoDate(d);
   const isPast = iso < isoDate(today);
   if (isPast) return 'past';
-  if (d.getDay() === 0) return 'closed'; // Sunday
-  if (d.getDate() === 14 || d.getDate() === 20) return 'holiday';
-  if (d.getDate() === 15 || d.getDate() === 22) return 'booked';
+  
+  if (!availability) return 'available'; // Default while loading
+
+  if (availability.closedWeekdays.includes(d.getDay())) return 'closed';
+  
+  const closedDate = availability.closedDates.find(cd => cd.date === iso);
+  if (closedDate) return 'holiday';
+
+  // For fully booked days, we'll let the user click it and see empty slots.
   return 'available';
 }
 
 function MiniCalendar({
   selectedDate,
   onSelect,
+  availability,
 }: {
   selectedDate: string | null;
   onSelect: (date: string) => void;
+  availability: AvailabilityData | null;
 }) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -118,7 +132,7 @@ function MiniCalendar({
 
           const cellDate = new Date(viewYear, viewMonth, day);
           const iso = isoDate(cellDate);
-          const status = getDayStatus(cellDate, today);
+          const status = getDayStatus(cellDate, today, availability);
           const isSelected = iso === selectedDate;
 
           let btnCls = "h-10 w-full rounded-xl font-semibold text-sm flex items-center justify-center transition-all ";
@@ -134,9 +148,6 @@ function MiniCalendar({
           } else if (status === 'holiday') {
             btnCls += "bg-orange-50/50 text-orange-800/80 cursor-not-allowed";
             title = "Holiday / Clinic Closure";
-          } else if (status === 'booked') {
-            btnCls += "text-[var(--muted)] cursor-not-allowed border-2 border-dotted border-gray-300 bg-white opacity-80";
-            title = "Fully booked";
           } else {
             btnCls += "hover:bg-[var(--paper)] text-[var(--ink)]";
             title = "Available";
@@ -147,7 +158,7 @@ function MiniCalendar({
               key={i}
               type="button"
               title={title}
-              disabled={status === 'past' || status === 'closed' || status === 'holiday' || status === 'booked'}
+              disabled={status === 'past' || status === 'closed' || status === 'holiday'}
               onClick={() => onSelect(iso)}
               className={btnCls}
             >
@@ -229,6 +240,7 @@ export function BookingFormPage() {
   const [startHour, setStartHour] = useState(9);
   const [endHour, setEndHour] = useState(17);
   const [therapists, setTherapists] = useState<{ id: UUID; name: string }[]>([]);
+  const [availability, setAvailability] = useState<AvailabilityData | null>(null);
   const [checking, setChecking] = useState(true);
   const [invalid, setInvalid] = useState(false);
 
@@ -258,9 +270,14 @@ export function BookingFormPage() {
     }
     (async () => {
       try {
-        const [info, therapistList] = await Promise.all([
+        const [info, therapistList, avail] = await Promise.all([
           bookingService.getBookingClinicInfo(clinicSlug),
           bookingService.listBookingTherapists(clinicSlug),
+          bookingService.getBookingAvailability(
+            clinicSlug,
+            isoDate(new Date()),
+            isoDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)) // fetch next 90 days
+          )
         ]);
         setClinicName(info.name);
         setClinicLogo(info.logoPath);
@@ -268,6 +285,7 @@ export function BookingFormPage() {
         setStartHour(info.bookingStartHour);
         setEndHour(info.bookingEndHour);
         setTherapists(therapistList);
+        setAvailability(avail);
       } catch {
         setInvalid(true);
       }
@@ -346,7 +364,24 @@ export function BookingFormPage() {
   }
 
   // ── Slot grouping ─────────────────────────────────────────────────────────
-  const { morning, afternoon } = generateSlots(slotDuration, startHour, endHour);
+  let { morning, afternoon } = generateSlots(slotDuration, startHour, endHour);
+
+  if (preferredDate && availability) {
+    const bookedTimes = availability.appointments
+      .filter(a => !preferredTherapistId || a.therapist_id === preferredTherapistId)
+      .map(a => new Date(a.scheduled_at))
+      .filter(d => isoDate(d) === preferredDate)
+      .map(d => {
+        let h = d.getHours();
+        const m = d.getMinutes();
+        const isPM = h >= 12;
+        h = h > 12 ? h - 12 : h === 0 ? 12 : h;
+        return `${h}:${m.toString().padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
+      });
+
+    morning = morning.filter(t => !bookedTimes.includes(t));
+    afternoon = afternoon.filter(t => !bookedTimes.includes(t));
+  }
 
   // ── Layout ────────────────────────────────────────────────────────────────
   return (
@@ -482,6 +517,7 @@ export function BookingFormPage() {
                   <div className="absolute left-0 right-0 bottom-full mb-2 z-50 rounded-[12px] border border-[var(--border)] bg-white p-4 shadow-2xl">
                     <MiniCalendar
                       selectedDate={preferredDate}
+                      availability={availability}
                       onSelect={(d) => {
                         setPreferredDate(d);
                         setPreferredTime(null);
