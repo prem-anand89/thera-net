@@ -147,18 +147,9 @@ function openWhatsAppUrl(
   clipboardText: string
 ): void {
   const opened = window.open(url, '_blank', 'noopener,noreferrer');
-  if (opened && !opened.closed) return;
-
-  // Fallback: synthesised click on an anchor, sometimes clears the blocker
-  const link = document.createElement('a');
-  link.href = url;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-
-  notifyWhatsAppOpenFailed(clipboardText);
+  if (!opened) {
+    notifyWhatsAppOpenFailed(clipboardText);
+  }
 }
 
 /**
