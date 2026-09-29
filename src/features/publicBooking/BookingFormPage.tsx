@@ -10,11 +10,11 @@ function isoDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-function generateSlots(slotDurationMinutes: number) {
+function generateSlots(slotDurationMinutes: number, startHour: number, endHour: number) {
   const morning: string[] = [];
   const afternoon: string[] = [];
-  const start = 9 * 60;
-  const end = 17 * 60;
+  const start = startHour * 60;
+  const end = endHour * 60;
   for (let m = start; m < end; m += slotDurationMinutes) {
     const hours = Math.floor(m / 60);
     const mins = m % 60;
@@ -226,6 +226,8 @@ export function BookingFormPage() {
   const [clinicName, setClinicName] = useState<string | null>(null);
   const [clinicLogo, setClinicLogo] = useState<string | null>(null);
   const [slotDuration, setSlotDuration] = useState(30);
+  const [startHour, setStartHour] = useState(9);
+  const [endHour, setEndHour] = useState(17);
   const [therapists, setTherapists] = useState<{ id: UUID; name: string }[]>([]);
   const [checking, setChecking] = useState(true);
   const [invalid, setInvalid] = useState(false);
@@ -263,6 +265,8 @@ export function BookingFormPage() {
         setClinicName(info.name);
         setClinicLogo(info.logoPath);
         setSlotDuration(info.slotDurationMinutes);
+        setStartHour(info.bookingStartHour);
+        setEndHour(info.bookingEndHour);
         setTherapists(therapistList);
       } catch {
         setInvalid(true);
@@ -342,7 +346,7 @@ export function BookingFormPage() {
   }
 
   // ── Slot grouping ─────────────────────────────────────────────────────────
-  const { morning, afternoon } = generateSlots(slotDuration);
+  const { morning, afternoon } = generateSlots(slotDuration, startHour, endHour);
 
   // ── Layout ────────────────────────────────────────────────────────────────
   return (
