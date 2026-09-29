@@ -353,7 +353,7 @@ export function BookingFormPage() {
       {/* Main Content — no sticky header, logo is inside the card */}
       <main className="mx-auto max-w-md px-4 py-10">
         {/* The single form card */}
-        <div className="rounded-[20px] border border-[var(--border)] bg-white shadow-lg overflow-hidden">
+        <div className="rounded-[20px] border border-[var(--border)] bg-white shadow-lg">
           {/* Card header — logo + title in one row */}
           <div className="px-6 pt-8 pb-6 border-b border-[var(--border)] flex items-center gap-4">
             {/* Logo / fallback */}
