@@ -1479,7 +1479,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   );
 }
 
-type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' | 'bookingSlug'>;
+type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' | 'bookingSlug' | 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays'>;
 
 // Lowercase alphanumeric + hyphens, no leading/trailing/doubled hyphen —
 // the DB only enforces uniqueness, so this is the one place the "clean
@@ -1502,6 +1502,9 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
         enablePatientComms: c.enablePatientComms ?? false,
         googleReviewUrl: c.googleReviewUrl ?? null,
         bookingSlug: c.bookingSlug ?? null,
+        bookingStartHour: c.bookingStartHour ?? 9,
+        bookingEndHour: c.bookingEndHour ?? 17,
+        closedWeekdays: c.closedWeekdays ?? [],
       }),
       _onDirtyChange
     );
@@ -1590,6 +1593,78 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
             </div>
           </div>
         )}
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 pt-4 border-t border-[var(--border)]">
+        <Field
+          label={
+            <>
+              Booking hours
+              <InfoTip text="The earliest and latest times patients can request an appointment." />
+            </>
+          }
+        >
+          <div className="flex items-center gap-2">
+            <select
+              className={inputCls}
+              value={form.bookingStartHour ?? 9}
+              onChange={(e) => set({ bookingStartHour: parseInt(e.target.value, 10) })}
+            >
+              {Array.from({ length: 24 }).map((_, i) => (
+                <option key={`start-${i}`} value={i}>
+                  {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
+                </option>
+              ))}
+            </select>
+            <span className="text-[var(--muted)]">to</span>
+            <select
+              className={inputCls}
+              value={form.bookingEndHour ?? 17}
+              onChange={(e) => set({ bookingEndHour: parseInt(e.target.value, 10) })}
+            >
+              {Array.from({ length: 24 }).map((_, i) => (
+                <option key={`end-${i}`} value={i}>
+                  {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
+                </option>
+              ))}
+            </select>
+          </div>
+        </Field>
+        
+        <Field
+          label={
+            <>
+              Closed days
+              <InfoTip text="Select the days of the week your clinic is regularly closed." />
+            </>
+          }
+        >
+          <div className="flex flex-wrap gap-2">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, idx) => {
+              const isClosed = form.closedWeekdays?.includes(idx);
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    isClosed
+                      ? 'bg-[var(--rust)] border-[var(--rust)] text-white'
+                      : 'bg-white border-[var(--border)] text-[var(--ink)] hover:border-[var(--rust)]'
+                  }`}
+                  onClick={() => {
+                    const current = form.closedWeekdays || [];
+                    if (isClosed) {
+                      set({ closedWeekdays: current.filter((d) => d !== idx) });
+                    } else {
+                      set({ closedWeekdays: [...current, idx].sort() });
+                    }
+                  }}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+        </Field>
       </div>
       <SectionSaveBar
         dirty={dirty}

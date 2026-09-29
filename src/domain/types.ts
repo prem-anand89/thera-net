@@ -130,6 +130,9 @@ export interface Clinic {
    *  never advertised for this clinic. Lowercase alphanumeric + hyphens,
    *  validated client-side in Settings; the DB only enforces uniqueness. */
   bookingSlug?: string | null;
+  bookingStartHour?: number;
+  bookingEndHour?: number;
+  closedWeekdays?: number[];
   /** Set when the admin finishes the post–create-clinic setup wizard (team + catalog). */
   onboardingCompletedAt?: string | null;
   updatedAt: string;
