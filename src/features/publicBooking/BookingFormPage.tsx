@@ -135,7 +135,7 @@ function MiniCalendar({
             btnCls += "bg-orange-50/50 text-orange-800/80 cursor-not-allowed";
             title = "Holiday / Clinic Closure";
           } else if (status === 'booked') {
-            btnCls += "bg-[var(--paper)] text-[var(--muted)] opacity-50 cursor-not-allowed border border-dashed border-[var(--border)]";
+            btnCls += "text-[var(--muted)] cursor-not-allowed border-2 border-dotted border-gray-300 bg-white opacity-80";
             title = "Fully booked";
           } else {
             btnCls += "hover:bg-[var(--paper)] text-[var(--ink)]";
@@ -402,8 +402,7 @@ export function BookingFormPage() {
   // ── Layout ────────────────────────────────────────────────────────────────
   return (
     <div
-      className="min-h-screen"
-      style={{ background: 'var(--paper, #f5f7fa)' }}
+      className="min-h-screen bg-gradient-to-br from-[#f0f9ff] via-[#f8fafc] to-[#f1f5f9]"
     >
       {/* Header */}
       <header
