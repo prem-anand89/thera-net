@@ -350,36 +350,28 @@ export function BookingFormPage() {
       className="min-h-screen"
       style={{ background: 'linear-gradient(135deg, #e8f4f8 0%, #f0f4f8 50%, #edf2f7 100%)' }}
     >
-      {/* Sticky Header */}
-      <header className="sticky top-0 z-10 border-b border-[var(--border)] bg-white/90 px-4 py-3 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-md items-center gap-3">
-          {/* Logo or fallback icon */}
-          {clinicLogo ? (
-            <div className="h-8 w-8 overflow-hidden rounded-full border border-[var(--border)] bg-white shadow-sm flex-shrink-0">
-              <img src={clinicLogo} alt={clinicName || ''} className="h-full w-full object-cover" />
-            </div>
-          ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--teal-light)] flex-shrink-0">
-              <span className="text-[var(--teal)] text-sm">🏥</span>
-            </div>
-          )}
-          <div>
-            <p className="text-xs text-[var(--muted)]">Book an appointment</p>
-            <p className="text-sm font-semibold text-[var(--ink)] leading-tight">{clinicName}</p>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="mx-auto max-w-md px-4 py-8">
+      {/* Main Content — no sticky header, logo is inside the card */}
+      <main className="mx-auto max-w-md px-4 py-10">
         {/* The single form card */}
         <div className="rounded-[20px] border border-[var(--border)] bg-white shadow-lg overflow-hidden">
-          {/* Card header */}
-          <div className="px-6 pt-8 pb-6 border-b border-[var(--border)]">
-            <h1 className="text-2xl font-bold text-[var(--ink)]">Book an appointment</h1>
-            {clinicName && (
-              <p className="mt-1 text-sm text-[var(--muted)]">at {clinicName}</p>
+          {/* Card header — logo + title in one row */}
+          <div className="px-6 pt-8 pb-6 border-b border-[var(--border)] flex items-center gap-4">
+            {/* Logo / fallback */}
+            {clinicLogo ? (
+              <div className="h-12 w-12 overflow-hidden rounded-full border border-[var(--border)] bg-white shadow-sm flex-shrink-0">
+                <img src={clinicLogo} alt={clinicName || ''} className="h-full w-full object-cover" />
+              </div>
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--teal-light)] flex-shrink-0">
+                <span className="text-2xl">🏥</span>
+              </div>
             )}
+            <div>
+              <h1 className="text-xl font-bold text-[var(--ink)] leading-tight">Book an appointment</h1>
+              {clinicName && (
+                <p className="mt-0.5 text-sm text-[var(--muted)]">{clinicName}</p>
+              )}
+            </div>
           </div>
 
           {/* Form body */}
@@ -466,33 +458,35 @@ export function BookingFormPage() {
             {/* --- Date Picker --- */}
             <div className="border-t border-[var(--border)] pt-4 mt-4">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-3">Preferred date & time</p>
-              {/* Date trigger button */}
-              <button
-                type="button"
-                onClick={() => setCalendarOpen(prev => !prev)}
-                className="w-full flex items-center justify-between rounded-[10px] border border-[var(--border)] bg-white p-3 text-sm text-left transition-colors hover:border-[var(--teal)]"
-              >
-                <span className={preferredDate ? 'text-[var(--ink)] font-medium' : 'text-[var(--muted)]'}>
-                  {preferredDate
-                    ? new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-                    : '📅 Select a date (optional)'}
-                </span>
-                <span className="text-[var(--muted)] text-xs">{calendarOpen ? '▲' : '▼'}</span>
-              </button>
+              {/* Date trigger + popover wrapper — relative so the calendar overlays content below */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setCalendarOpen(prev => !prev)}
+                  className="w-full flex items-center justify-between rounded-[10px] border border-[var(--border)] bg-white p-3 text-sm text-left transition-colors hover:border-[var(--teal)]"
+                >
+                  <span className={preferredDate ? 'text-[var(--ink)] font-medium' : 'text-[var(--muted)]'}>
+                    {preferredDate
+                      ? new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                      : '📅 Select a date (optional)'}
+                  </span>
+                  <span className="text-[var(--muted)] text-xs">{calendarOpen ? '▲' : '▼'}</span>
+                </button>
 
-              {/* Inline calendar (not a modal — just expands below the button) */}
-              {calendarOpen && (
-                <div className="mt-2 rounded-[12px] border border-[var(--border)] bg-white p-4 shadow-lg">
-                  <MiniCalendar
-                    selectedDate={preferredDate}
-                    onSelect={(d) => {
-                      setPreferredDate(d);
-                      setPreferredTime(null);
-                      setCalendarOpen(false); // auto-close after selection
-                    }}
-                  />
-                </div>
-              )}
+                {/* Calendar overlays content below — position absolute, z-index high */}
+                {calendarOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-[12px] border border-[var(--border)] bg-white p-4 shadow-2xl">
+                    <MiniCalendar
+                      selectedDate={preferredDate}
+                      onSelect={(d) => {
+                        setPreferredDate(d);
+                        setPreferredTime(null);
+                        setCalendarOpen(false);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
 
               {/* Time slots — appear below only after a date is selected */}
               {preferredDate && (
