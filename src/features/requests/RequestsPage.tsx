@@ -10,6 +10,8 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { SectionCard, Pill, th, td } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { requestsLastViewedKey } from './requestsSignals';
+import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
+import { DailyAgendaTimeline } from '@/components/DailyAgendaTimeline';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import type { UUID } from '@/domain/types';
 
@@ -153,6 +155,24 @@ export function RequestsPage() {
     () => [...(appointments ?? [])].sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt)),
     [appointments]
   );
+
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [showPending, setShowPending] = useState(false);
+  const appointmentDates = useMemo(() => {
+    if (!appointments) return [];
+    return appointments
+      .filter((a) => a.scheduledAt && a.status !== 'cancelled')
+      .map((a) => {
+        const d = new Date(a.scheduledAt);
+        return (
+          d.getFullYear() +
+          '-' +
+          String(d.getMonth() + 1).padStart(2, '0') +
+          '-' +
+          String(d.getDate()).padStart(2, '0')
+        );
+      });
+  }, [appointments]);
 
   // Confirm mini-form (one open at a time)
   const [confirmingId, setConfirmingId] = useState<UUID | null>(null);
@@ -465,6 +485,40 @@ export function RequestsPage() {
           </p>
         ) : (
           <div className="space-y-4">
+            {pendingRequests.length > 0 && (
+              <div
+                className="flex items-center justify-between rounded-xl border border-[var(--teal)]/20 bg-[var(--teal)]/5 px-4 py-3 cursor-pointer hover:bg-[var(--teal)]/10 transition-colors"
+                onClick={() => setShowPending(!showPending)}
+              >
+                <div className="flex items-center gap-2 text-sm font-medium text-[var(--teal-strong)]">
+                  <span className="text-lg">🔔</span> {pendingRequests.length} New Booking Request{pendingRequests.length === 1 ? '' : 's'}
+                </div>
+                <div className="text-xs font-semibold text-[var(--teal)] underline">
+                  {showPending ? 'Hide' : 'View & Confirm'}
+                </div>
+              </div>
+            )}
+
+            <div className="-mx-4 border-y border-[var(--border)] bg-white tab:mx-0 tab:rounded-2xl tab:border shadow-sm">
+              <MiniCalendarStrip
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                appointmentDates={appointmentDates}
+              />
+              <DailyAgendaTimeline
+                date={selectedDate}
+                appointments={appointments ?? []}
+                slotDurationMinutes={clinic.slotDurationMinutes || 30}
+                therapistNameById={therapistNameById}
+                onBookSlot={(d, t) => {
+                  alert(`Phase 5: Book slot at ${d} ${t}`);
+                  // Fallback for now until Phase 5 is built:
+                  startNewBooking();
+                  setNewBookingScheduledAt(`${d}T${t.slice(0, 5)}`);
+                }}
+              />
+            </div>
+
             <SectionCard
               title="New booking"
               action={
@@ -549,7 +603,8 @@ export function RequestsPage() {
               )}
             </SectionCard>
 
-            <SectionCard title={`Pending requests (${pendingRequests.length})`}>
+            {showPending && (
+              <SectionCard title={`Pending requests (${pendingRequests.length})`}>
               {pendingRequests.length === 0 ? (
                 <p className="py-6 text-center text-sm text-[var(--muted)]">
                   No pending booking requests.
@@ -682,6 +737,7 @@ export function RequestsPage() {
                 </div>
               )}
             </SectionCard>
+            )}
 
             {justConfirmed && (
               <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--teal)] bg-[var(--teal-light)] px-4 py-3">
