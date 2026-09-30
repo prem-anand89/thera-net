@@ -253,8 +253,9 @@ export function NoteEditorPage() {
   // profile below so its own "← Back" still has somewhere real to return
   // to (Ledger/Workspace/Patients) instead of falling back to the bare
   // patient list.
-  const { visitId: promptedVisitId, from: backTo } = useSearch({ strict: false }) as {
+  const { visitId: promptedVisitId, appointmentId: promptedAppointmentId, from: backTo } = useSearch({ strict: false }) as {
     visitId?: string;
+    appointmentId?: string;
     from?: PatientProfileBackTarget;
   };
 
@@ -497,6 +498,7 @@ export function NoteEditorPage() {
           replace: true,
           search: {
             ...(promptedVisitId ? { visitId: promptedVisitId } : {}),
+            ...(promptedAppointmentId ? { appointmentId: promptedAppointmentId } : {}),
             ...(backTo ? { from: backTo } : {}),
           },
         });
@@ -548,7 +550,7 @@ export function NoteEditorPage() {
     return () => {
       cancelled = true;
     };
-  }, [noteId, existingNote, clinic.id, patientId, navigate, promptedVisitId, backTo]);
+  }, [noteId, existingNote, clinic.id, patientId, navigate, promptedVisitId, promptedAppointmentId, backTo]);
 
   const derived = computeDerivedFields(payload);
   const psfsImproving = payload.functionalStatus.activities.filter(
@@ -664,6 +666,7 @@ export function NoteEditorPage() {
             patientId,
             therapistId,
             visitId: existingNote?.visitId ?? promptedVisitId ?? null,
+            appointmentId: existingNote?.appointmentId ?? promptedAppointmentId ?? null,
             enrollmentId,
             noteMode,
             authorizedSessionCount: null,
@@ -683,6 +686,7 @@ export function NoteEditorPage() {
             replace: true,
             search: {
               ...(promptedVisitId ? { visitId: promptedVisitId } : {}),
+              ...(promptedAppointmentId ? { appointmentId: promptedAppointmentId } : {}),
               ...(backTo ? { from: backTo } : {}),
             },
           });
@@ -718,9 +722,11 @@ export function NoteEditorPage() {
       persistedNoteId,
       existingNote?.id,
       existingNote?.visitId,
+      existingNote?.appointmentId,
       clinic.id,
       patientId,
       promptedVisitId,
+      promptedAppointmentId,
       noteMode,
       noteId,
       navigate,

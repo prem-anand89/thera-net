@@ -364,6 +364,9 @@ export interface Patient {
   age: number | null;
   sex: 'M' | 'F' | 'Other' | null;
   phone: string | null;
+  /** Optional contact details (Patients form → More details). */
+  email?: string | null;
+  altPhone?: string | null;
   primaryCondition: string | null;
   /** How the patient found the clinic, from the clinic's own editable
    *  ReferringSourceItem list — the current source of truth going forward.
@@ -742,6 +745,8 @@ export interface Appointment {
   durationMinutes?: number;
   /** Shared by the sessions of one repeat booking; null for single bookings. */
   seriesId?: UUID | null;
+  /** 'walk_in' = started at the desk (Start note / walk-in), not booked ahead. */
+  source?: 'booking' | 'walk_in';
   status: AppointmentStatus;
   requestId: UUID | null;
   visitId: UUID | null;
@@ -889,6 +894,8 @@ export interface ConsultationNote {
   patientId: UUID;
   therapistId: UUID;
   visitId: UUID | null;
+  /** Appointment / walk-in the note was started from before a visit existed. */
+  appointmentId?: UUID | null;
   enrollmentId: UUID | null;
   authorizedSessionCount: number | null;
   notesText: string | null;

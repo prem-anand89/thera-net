@@ -411,4 +411,32 @@ describe('consultationNoteService', () => {
       expect(fake.visits.size).toBe(0);
     });
   });
+
+  it('attaches notes started from a walk-in to the visit once it is logged', async () => {
+    const svc = createConsultationNoteService(fake.repos);
+    const enrollment = await svc.getOrCreateActiveEnrollment('clinic-1', 'pat-1');
+    const base = {
+      clinicId: 'clinic-1',
+      patientId: 'pat-1',
+      therapistId: 'ther-1',
+      visitId: null,
+      enrollmentId: enrollment.id,
+      noteMode: 'initial' as const,
+      authorizedSessionCount: null,
+    };
+    const fromWalkIn = await svc.saveAssessment({ ...base, appointmentId: 'appt-1' }, emptyPayload(), 'completed');
+    const otherAppointment = await svc.saveAssessment({ ...base, appointmentId: 'appt-2' }, emptyPayload(), 'draft');
+    expect(fromWalkIn.appointmentId).toBe('appt-1');
+    seedVisit(fake.visits, 'visit-1');
+
+    const linked = await svc.linkAppointmentNotesToVisit('clinic-1', 'pat-1', 'appt-1', 'visit-1');
+
+    expect(linked).toBe(1);
+    expect(fake.notes.get(fromWalkIn.id)?.visitId).toBe('visit-1');
+    expect(fake.notes.get(otherAppointment.id)?.visitId).toBeNull();
+    // A completed note clears the visit's "needs a note" flag.
+    expect(fake.visits.get('visit-1')).toMatchObject({ clinicalStatus: 'documented', consultationNoteId: fromWalkIn.id });
+    // Running it again does nothing (already linked).
+    expect(await svc.linkAppointmentNotesToVisit('clinic-1', 'pat-1', 'appt-1', 'visit-1')).toBe(0);
+  });
 });

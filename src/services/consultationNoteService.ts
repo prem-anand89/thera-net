@@ -76,6 +76,37 @@ export function createConsultationNoteService(repos: Repos) {
 
     heavyModeFor,
 
+    /**
+     * Notes written before the visit existed (started from an appointment or
+     * walk-in) get the visit once it's logged. A completed one also clears
+     * the visit's "needs a note" flag, same as saving it against the visit.
+     */
+    async linkAppointmentNotesToVisit(
+      clinicId: UUID,
+      patientId: UUID,
+      appointmentId: UUID,
+      visitId: UUID
+    ): Promise<number> {
+      const notes = (await repos.consultationNotes.listByPatient(clinicId, patientId)).filter(
+        (n) => n.appointmentId === appointmentId && !n.visitId
+      );
+      for (const note of notes) {
+        await repos.consultationNotes.put({ ...note, visitId, updatedAt: new Date().toISOString() });
+        if (note.status === 'completed') {
+          const visit = await repos.visits.get(visitId);
+          if (visit) {
+            await repos.visits.put({
+              ...visit,
+              clinicalStatus: 'documented',
+              consultationNoteId: note.id,
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        }
+      }
+      return notes.length;
+    },
+
     /** Payload-aware save for a Core Assessment note — draft or completed. */
     async saveAssessment(
       note: {
@@ -84,6 +115,8 @@ export function createConsultationNoteService(repos: Repos) {
         patientId: UUID;
         therapistId: UUID;
         visitId: UUID | null;
+        /** Walk-in / appointment the note was started from before a visit existed. */
+        appointmentId?: UUID | null;
         enrollmentId: UUID;
         noteMode: 'initial' | 'followup';
         authorizedSessionCount: number | null;
@@ -98,6 +131,7 @@ export function createConsultationNoteService(repos: Repos) {
         patientId: note.patientId,
         therapistId: note.therapistId,
         visitId: note.visitId,
+        appointmentId: note.appointmentId ?? null,
         enrollmentId: note.enrollmentId,
         authorizedSessionCount: note.authorizedSessionCount,
         notesText: payload.freeNotes || null,

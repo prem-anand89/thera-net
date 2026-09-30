@@ -77,7 +77,7 @@ export function SyncBadge() {
         onClick={() => setOpen((o) => !o)}
         title={status.error ?? 'Sync status'}
         aria-label={`Sync: ${label}`}
-        className={`flex min-h-11 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 text-xs text-[var(--muted)] hover:bg-[var(--paper)] ${quiet ? 'px-2 tab:px-3' : 'px-3'}`}
+        className={`flex min-h-11 items-center gap-2 rounded-full text-xs text-[var(--muted)] hover:bg-[var(--paper)] ${quiet ? 'min-w-11 justify-center px-2' : 'border border-[var(--border)] bg-[var(--surface)] px-3 py-1'}`}
       >
         <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
         {/* Quiet: text shows tab:-and-up only, same room-sharing as the
@@ -85,7 +85,10 @@ export function SyncBadge() {
             the color alone ("all good") is enough. Anything else: text
             shows at every width, phone included, since it's the one
             thing this badge exists to surface. */}
-        <span className={quiet ? 'hidden tab:inline' : 'inline'}>{label}</span>
+        {/* Quiet (synced): just the green dot at every width — the label is in
+            the tooltip / aria-label. Anything else expands with text so it's
+            impossible to miss. */}
+        <span className={quiet ? 'sr-only' : 'inline'}>{label}</span>
       </button>
 
       {open && (

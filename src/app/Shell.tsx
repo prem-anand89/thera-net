@@ -34,6 +34,7 @@ import {
   IconMore,
 } from '@/components/NavIcons';
 import { AccountMenu } from './AccountMenu';
+import { ClinicSwitcher } from './ClinicSwitcher';
 
 
 
@@ -334,21 +335,8 @@ export function Shell() {
               here — the account trigger's dropdown names the current
               clinic too, and switches between them — so hiding it first
               costs the least. */}
-          <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <img
-                src={logoUrl || '/apple-touch-icon.png'}
-                alt=""
-                className={
-                  logoUrl
-                    ? 'h-8 w-auto shrink-0 object-contain'
-                    : 'h-8 w-8 shrink-0 rounded-[8px] object-contain'
-                }
-              />
-              <div className="font-display hidden max-w-[11rem] truncate text-lg font-semibold text-[var(--ink)] desktop:block">
-                {clinic.name}
-              </div>
-            </div>
+          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5 tab:gap-4">
+            <ClinicSwitcher clinic={clinic} clinics={clinics ?? []} logoUrl={logoUrl} />
             {/* The same items reappear as the bottom tab bar below sm:, so
                 this one only renders at sm: and up. shrink-0 (not the
                 overflow-x-auto scroller this briefly was) is the point:
@@ -377,7 +365,10 @@ export function Shell() {
                 </Link>
               ))}
             </nav>
-            <div className="ml-auto flex shrink-0 items-center gap-3">
+            <div className="ml-auto flex shrink-0 items-center gap-2 tab:gap-3">
+              <span className="hidden whitespace-nowrap text-xs text-[var(--muted)] tab:inline" title="Today">
+                {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+              </span>
               <SyncBadge />
               <AccountMenu
                 displayName={displayName}

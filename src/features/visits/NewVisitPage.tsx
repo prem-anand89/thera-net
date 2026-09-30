@@ -1,3 +1,4 @@
+import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -9,6 +10,7 @@ import {
   dashboardService,
   feedbackService,
   bookingService,
+  consultationNoteService,
 } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
@@ -127,7 +129,7 @@ function SegmentedToggle<T extends string>({
 
 export function NewVisitPage() {
   const clinic = useClinic();
-  const { canBill, role } = usePermissions();
+  const { canBill, role, canViewClinicalNotes: canWriteNotes } = usePermissions();
   const navigate = useNavigate();
   const { session } = useSession();
   const entitlements = useEntitlements(clinic.id);
@@ -159,12 +161,15 @@ export function NewVisitPage() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [creatingPatient, setCreatingPatient] = useState(false);
   const [editingPatient, setEditingPatient] = useState(false);
+  const [startNoteOpen, setStartNoteOpen] = useState(false);
   const [newPatient, setNewPatient] = useState({
     name: search.prefillName ?? '',
     mrno: '',
     age: '',
     sex: '',
     phone: search.prefillPhone ?? '',
+    email: '',
+    altPhone: '',
     primaryCondition: '',
     referringSourceId: '',
     referringSourceDetail: '',
@@ -528,6 +533,8 @@ export function NewVisitPage() {
         age: newPatient.age ? Number(newPatient.age) : null,
         sex: (newPatient.sex || null) as Patient['sex'],
         phone: newPatient.phone || null,
+        email: newPatient.email || null,
+        altPhone: newPatient.altPhone || null,
         primaryCondition: newPatient.primaryCondition || null,
         referringSourceId: newPatient.referringSourceId || null,
         referringSourceDetail: newPatient.referringSourceDetail || null,
@@ -612,6 +619,10 @@ export function NewVisitPage() {
         void bookingService
           .linkAppointmentVisit(search.appointmentId, visit.id, patient.id)
           .catch((e) => console.error('Could not link this visit to its appointment', e));
+        // Notes written before the service was chosen join this visit.
+        void consultationNoteService
+          .linkAppointmentNotesToVisit(clinic.id, patient.id, search.appointmentId, visit.id)
+          .catch((e) => console.error('Could not attach earlier notes to this visit', e));
       }
 
       setJustSaved({
@@ -747,6 +758,32 @@ export function NewVisitPage() {
             </button>
           </div>
 
+          {clinic.clinicalDocsEnabled && canWriteNotes && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--ink)]">
+              <span>Not ready to pick a service?</span>
+              <button
+                type="button"
+                className="font-medium text-[var(--teal)] hover:underline"
+                onClick={() => {
+                  if (search.appointmentId) {
+                    const appointmentId = search.appointmentId;
+                    void bookingService.markAppointmentArrived(appointmentId).catch(() => undefined);
+                    void navigate({
+                      to: '/patients/$patientId/notes/new',
+                      params: { patientId: patient.id },
+                      search: { appointmentId },
+                    });
+                  } else {
+                    setStartNoteOpen(true);
+                  }
+                }}
+              >
+                Start a note first — add the service later →
+              </button>
+            </div>
+          )}
+          <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} onClose={() => setStartNoteOpen(false)} />
+
           {patientVisits !== undefined && (
             <SummaryTile label="Last visit">
               {lastVisit ? (
@@ -872,14 +909,6 @@ export function NewVisitPage() {
                 duplicate checks.
               </p>
             )}
-            <Field label="ID (optional)">
-              <input
-                className={inputCls}
-                placeholder="Leave blank to auto-generate"
-                value={newPatient.mrno}
-                onChange={(e) => setNewPatient({ ...newPatient, mrno: e.target.value })}
-              />
-            </Field>
             <Field label="Age">
               <input
                 type="number"
@@ -944,6 +973,39 @@ export function NewVisitPage() {
                 />
               </Field>
             )}
+            <details className="rounded-lg border border-[var(--border)] px-3 py-2" open={Boolean(newPatient.email || newPatient.altPhone || newPatient.mrno)}>
+              <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">
+                More details <span className="font-normal text-[var(--muted)]">(optional)</span>
+              </summary>
+              <div className="mt-3 grid grid-cols-1 gap-3">
+                <Field label="Email">
+                  <input
+                    type="email"
+                    className={inputCls}
+                    value={newPatient.email}
+                    onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
+                  />
+                </Field>
+                <Field label="Alternate phone">
+                  <input
+                    type="tel"
+                    className={inputCls}
+                    placeholder="Family member, landline…"
+                    value={newPatient.altPhone}
+                    onChange={(e) => setNewPatient({ ...newPatient, altPhone: e.target.value })}
+                  />
+                </Field>
+                <Field label="Patient ID">
+                  <input
+                    className={inputCls}
+                    placeholder="Leave blank to auto-generate"
+                    value={newPatient.mrno}
+                    onChange={(e) => setNewPatient({ ...newPatient, mrno: e.target.value })}
+                  />
+                </Field>
+                <p className="text-xs text-[var(--muted)]">Use Patient ID only to keep a number from old records.</p>
+              </div>
+            </details>
           </div>
           <p className="text-xs text-[var(--muted)]">
             You can complete the rest of these later from the profile.

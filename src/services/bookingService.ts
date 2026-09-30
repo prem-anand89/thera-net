@@ -172,6 +172,28 @@ export const bookingService = {
     return (data as number) ?? 0;
   },
 
+  /** Starts a walk-in: an arrived appointment now, no visit yet (service and
+   *  payment come later via New Visit). No overlap check — they're here. */
+  async startWalkIn(input: {
+    clinicId: UUID;
+    therapistId: UUID;
+    patientName: string;
+    patientPhone: string | null;
+    patientId: UUID | null;
+  }): Promise<UUID> {
+    const supabase = supabaseOrThrow();
+    const { data, error } = await supabase.rpc('start_walk_in', {
+      p_clinic_id: input.clinicId,
+      p_therapist_id: input.therapistId,
+      p_name: input.patientName,
+      p_phone: input.patientPhone,
+      p_patient_id: input.patientId,
+    });
+    if (error) throw new Error(`Could not start the visit: ${error.message}`);
+    syncEngine.schedule(0);
+    return data as UUID;
+  },
+
   async declineAppointmentRequest(requestId: UUID): Promise<void> {
     const supabase = supabaseOrThrow();
     const { error } = await supabase.rpc('decline_appointment_request', {

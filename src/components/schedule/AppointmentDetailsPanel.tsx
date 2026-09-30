@@ -52,6 +52,7 @@ export function AppointmentDetailsPanel({
   onClose,
   onReschedule,
   onCancelSeries,
+  onStartNote,
 }: {
   appointment: Appointment | null;
   therapistName: string;
@@ -69,6 +70,8 @@ export function AppointmentDetailsPanel({
   onReschedule: (appointment: Appointment) => void;
   /** Cancels this and the following sessions of its series. */
   onCancelSeries?: (appointment: Appointment) => void;
+  /** Opens "Start note" — notes now, service and payment later. */
+  onStartNote?: (appointment: Appointment) => void;
 }) {
   const clinic = useClinic();
   const [busy, setBusy] = useState(false);
@@ -213,6 +216,16 @@ export function AppointmentDetailsPanel({
               ✓ Mark arrived
             </button>
           )}
+          {appointment.status === 'arrived' && !appointment.visitId && (
+            <p className="col-span-2 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber)]">
+              In progress — add the service and payment with Complete visit.
+            </p>
+          )}
+          {onStartNote && !appointment.visitId && appointment.status !== 'cancelled' && appointment.status !== 'no_show' && (
+            <button type="button" className={`${actionCls} col-span-2 text-[var(--teal)]`} onClick={() => onStartNote(appointment)}>
+              Start note — service later
+            </button>
+          )}
           {!appointment.visitId && appointment.status !== 'cancelled' && appointment.status !== 'no_show' && (
             <Link
               to="/visits/new"
@@ -224,7 +237,7 @@ export function AppointmentDetailsPanel({
               }}
               className="col-span-2 flex min-h-11 items-center justify-center rounded-lg bg-[var(--teal)] px-3 text-sm font-medium text-white hover:bg-[var(--teal-strong)]"
             >
-              Create visit
+              {appointment.status === 'arrived' ? 'Complete visit' : 'Create visit'}
             </Link>
           )}
           {active && appointment.patientPhone && (

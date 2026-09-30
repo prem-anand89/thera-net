@@ -9,6 +9,8 @@ export interface NewPatientInput {
   age?: number | null;
   sex?: 'M' | 'F' | 'Other' | null;
   phone?: string | null;
+  email?: string | null;
+  altPhone?: string | null;
   primaryCondition?: string | null;
   referringSourceId?: UUID | null;
   referringSourceDetail?: string | null;
@@ -20,6 +22,8 @@ export interface UpdatePatientInput {
   age?: number | null;
   sex?: 'M' | 'F' | 'Other' | null;
   phone?: string | null;
+  email?: string | null;
+  altPhone?: string | null;
   primaryCondition?: string | null;
   referringSourceId?: UUID | null;
   referringSourceDetail?: string | null;
@@ -90,6 +94,8 @@ export function createPatientService(repos: Repos) {
         age: input.age ?? null,
         sex: input.sex ?? null,
         phone: input.phone?.trim() || null,
+        email: input.email?.trim() || null,
+        altPhone: input.altPhone?.trim() || null,
         primaryCondition: input.primaryCondition?.trim() || null,
         referringSourceId: input.referringSourceId ?? null,
         referringSourceDetail: input.referringSourceDetail?.trim() || null,
@@ -131,6 +137,8 @@ export function createPatientService(repos: Repos) {
         age: patch.age !== undefined ? patch.age : patient.age,
         sex: patch.sex !== undefined ? patch.sex : patient.sex,
         phone: patch.phone !== undefined ? patch.phone?.trim() || null : patient.phone,
+        email: patch.email !== undefined ? patch.email?.trim() || null : patient.email ?? null,
+        altPhone: patch.altPhone !== undefined ? patch.altPhone?.trim() || null : patient.altPhone ?? null,
         primaryCondition:
           patch.primaryCondition !== undefined
             ? patch.primaryCondition?.trim() || null

@@ -29,6 +29,8 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
     age: patient.age ?? '',
     sex: patient.sex ?? '',
     phone: patient.phone ?? '',
+    email: patient.email ?? '',
+    altPhone: patient.altPhone ?? '',
     referringSourceId: patient.referringSourceId ?? '',
     referringSourceDetail: patient.referringSourceDetail ?? '',
   });
@@ -68,6 +70,8 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
       age: patient.age ?? '',
       sex: patient.sex ?? '',
       phone: patient.phone ?? '',
+      email: patient.email ?? '',
+      altPhone: patient.altPhone ?? '',
       referringSourceId: matchedLegacyId,
       referringSourceDetail: patient.referringSourceDetail ?? '',
     });
@@ -84,6 +88,8 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
         age: formData.age === '' ? null : Number(formData.age),
         sex: (formData.sex as Patient['sex']) || null,
         phone: formData.phone || null,
+        email: formData.email || null,
+        altPhone: formData.altPhone || null,
         referringSourceId: formData.referringSourceId || null,
         referringSourceDetail: formData.referringSourceDetail || null,
       });
@@ -136,14 +142,14 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
           </div>
 
           <div className="field-block">
-            <label className="field-label">Patient ID</label>
+            <label className="field-label">Phone</label>
             <input
-              type="text"
-              value={formData.mrno}
-              onChange={(e) => setFormData({ ...formData, mrno: e.target.value })}
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               className="field-input"
               disabled={saving}
-              aria-label="Patient ID"
+              aria-label="Phone"
             />
           </div>
 
@@ -186,18 +192,6 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
           </div>
 
           <div className="field-block">
-            <label className="field-label">Phone</label>
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className="field-input"
-              disabled={saving}
-              aria-label="Phone"
-            />
-          </div>
-
-          <div className="field-block">
             <label className="field-label">Referral source</label>
             <select
               value={formData.referringSourceId}
@@ -235,6 +229,47 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
               />
             </div>
           )}
+
+          <details className="field-block rounded-lg border border-[var(--border)] px-3 py-2" open={Boolean(patient.email || patient.altPhone)}>
+            <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">
+              More details <span className="font-normal text-[var(--muted)]">(optional)</span>
+            </summary>
+            <div className="mt-3 grid grid-cols-1 gap-3">
+              <div className="field-block">
+                <label className="field-label">Email</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="field-input"
+                  disabled={saving}
+                  aria-label="Email"
+                />
+              </div>
+              <div className="field-block">
+                <label className="field-label">Alternate phone</label>
+                <input
+                  type="tel"
+                  value={formData.altPhone}
+                  onChange={(e) => setFormData({ ...formData, altPhone: e.target.value })}
+                  className="field-input"
+                  disabled={saving}
+                  aria-label="Alternate phone"
+                />
+              </div>
+              <div className="field-block">
+                <label className="field-label">Patient ID</label>
+                <input
+                  type="text"
+                  value={formData.mrno}
+                  onChange={(e) => setFormData({ ...formData, mrno: e.target.value })}
+                  className="field-input"
+                  disabled={saving}
+                  aria-label="Patient ID"
+                />
+              </div>
+            </div>
+          </details>
         </div>
 
         <div className="modal-actions">

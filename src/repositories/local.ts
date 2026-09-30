@@ -151,7 +151,8 @@ const patients: PatientRepo = {
         (p) =>
           p.mrno.toLowerCase().startsWith(q) ||
           p.name.toLowerCase().includes(q) ||
-          (qDigits.length >= 3 && (p.phone ?? '').replace(/\D/g, '').includes(qDigits))
+          (qDigits.length >= 3 &&
+            [p.phone, p.altPhone].some((phone) => (phone ?? '').replace(/\D/g, '').includes(qDigits)))
       )
       .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, limit);

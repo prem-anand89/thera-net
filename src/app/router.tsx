@@ -217,8 +217,9 @@ const validateFromSearch = (
 // not just newNoteRoute.
 const validateNoteSearch = (
   search: Record<string, unknown>
-): { visitId?: string; from?: PatientProfileBackTarget } => ({
+): { visitId?: string; appointmentId?: string; from?: PatientProfileBackTarget } => ({
   ...(typeof search.visitId === 'string' ? { visitId: search.visitId } : {}),
+  ...(typeof search.appointmentId === 'string' ? { appointmentId: search.appointmentId } : {}),
   ...validateFromSearch(search),
 });
 

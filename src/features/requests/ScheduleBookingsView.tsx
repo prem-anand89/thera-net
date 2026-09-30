@@ -34,6 +34,8 @@ import {
 } from '@/domain/appointmentStatus';
 import type { Appointment, AppointmentRequest, UUID } from '@/domain/types';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
+import { StartVisitSheet } from '@/components/StartVisitSheet';
+import { usePermissions } from '@/app/usePermissions';
 import { ReminderSheet } from '@/components/schedule/ReminderSheet';
 import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
 import { RequestsInbox } from '@/components/schedule/RequestsInbox';
@@ -102,6 +104,7 @@ export function ScheduleBookingsView() {
   const clinic = useClinic();
   const navigate = useNavigate();
   const scope = useWorkspaceScope();
+  const { canViewClinicalNotes } = usePermissions();
   const search = useSearch({ from: '/schedule' }) as ScheduleSearch;
   const now = useNowMinutes();
   const today = now.today;
@@ -232,6 +235,7 @@ export function ScheduleBookingsView() {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [hoursTherapistId, setHoursTherapistId] = useState<UUID | null>(null);
+  const [startNoteFor, setStartNoteFor] = useState<Appointment | null>(null);
   const [pendingMove, setPendingMove] = useState<{ appointment: Appointment; target: MoveTarget } | null>(null);
   const [undo, setUndo] = useState<{ message: string; run: () => Promise<void> } | null>(null);
   useEffect(() => {
@@ -808,6 +812,14 @@ export function ScheduleBookingsView() {
           setConfirmed(null);
           setSheet({ reschedule: appointment });
         }}
+        onStartNote={
+          clinic.clinicalDocsEnabled && canViewClinicalNotes
+            ? (appointment) => {
+                setSelectedId(null);
+                setStartNoteFor(appointment);
+              }
+            : undefined
+        }
       />
 
       <BookSlotSheet
@@ -829,6 +841,8 @@ export function ScheduleBookingsView() {
           setSchedule({ view: 'schedule', date: toLocalDateStr(new Date(result.scheduledAt)) });
         }}
       />
+
+      <StartVisitSheet open={startNoteFor !== null} appointment={startNoteFor} onClose={() => setStartNoteFor(null)} />
 
       <ReminderSheet
         open={reminderOpen}

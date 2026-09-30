@@ -986,7 +986,11 @@ still falls through to the existing share sheet, unchanged.
     - **`BookSlotSheet`**: one sheet for "+ Book", grid/agenda/free-time clicks, request confirmation, and **reschedule** (`rescheduleAppointment` prop: patient and therapist fixed, the moved appointment is ignored when checking occupied time, submits `reschedule_appointment`). A length picker (15/30/45/60/90 plus the clinic slot) drives the occupied check; times that already passed, overlap the therapist's bookings for the chosen length, or would run past closing are disabled. Therapist defaults to the logged-in therapist or the only therapist, and is locked for therapist logins. Closed weekdays and holidays show a warning but can still be booked. A patient with no phone must have one entered. State resets on every open; the reschedule snapshot is taken at open time so a sync mid-edit can't reset the form. `onBooked` returns `{ kind: 'booked' | 'rescheduled', appointmentId, scheduledAt, durationMinutes, … }`; the toast offers WhatsApp and auto-dismisses after 15s.
     - **Clinic closures**: weekly closed days stay in Settings (`clinics.closed_weekdays`); one-off dates and ranges (holidays) are set from the calendar (`ClosedDaysSheet`, admin / front desk) and shown in the rail, strip, grid, booking sheet and the public `/book/$slug` form. Existing appointments on a newly closed day are kept. `isClosedDay` (holiday wins over weekday) and `groupClosedRanges` live in `src/domain/schedule.ts`.
     - **Public form layout**: time first, then details — header (clinic initial/logo, visit length, hours), step 1 "Choose a time" (clinician chips "Anyone available" / each therapist, a scrollable 14-day strip with uniform day cards and "Closed" days, "More dates" inline month, time grid), step 2 "Your details" (name, phone with compact country picker, optional email and reason), and a summary + "Request appointment" bar pinned to the bottom on phones (safe-area padded).
-    - **Workspace header**: date + greeting (therapist's first name when linked), "+ Book" (opens `BookSlotSheet`; therapist-locked for therapists) and "+ New visit", a "N appointments today · Next: …" card opening the details panel, and compact chips for pending booking requests and new feedback (replacing the two stacked banners).
+    - **Workspace header**: date + greeting (therapist's first name when linked), "+ Note" (clinical docs on + can view notes), "+ Book" (opens `BookSlotSheet`; therapist-locked for therapists) and "+ New visit", a "N appointments today · Next: …" card opening the details panel, and compact chips: visits to complete, the therapist's own notes to finish (opens the oldest draft), pending booking requests, new feedback.
+    - **Workspace Today card**: one card with tabs "Appointments (n) | Visits (n)" (tab remembered per device) instead of separate "Expected today" and "Today's visits" cards. Appointments (`TodayAppointments`): in-progress visits first (arrived, no visit yet — today's plus any left open in the last 7 days) with "Complete visit", then the next 5 upcoming with "Show all", finished ones (visit logged / no-show) folded under "Done (n)". Stat tile "My packages this month" (packages started this month, scoped like the other "My" tiles) replaced "My open packages". The Packages panel opens on "Needs attention" (stale or renew soon).
+    - **Visit in progress (notes before the service)**: a "draft visit" is an **arrived appointment with no `visit_id`**, never a row in `visits` (whose service/price/split snapshots feed invoices, payouts and reports). `StartVisitSheet` (Workspace "+ Note", appointment panel "Start note — service later", New Visit's "Start a note first") finds or creates the patient, then either **Start note** — for a booked appointment it marks it arrived; for a walk-in it calls `start_walk_in` (arrived appointment now, `source = 'walk_in'`, no overlap check, accepts a not-yet-synced patient by name/phone) — and opens the Core Assessment with `?appointmentId=`, or **Log visit now** (normal New Visit). The note stores `appointment_id`; when New Visit later saves with that `appointmentId`, `consultationNoteService.linkAppointmentNotesToVisit` sets the notes' `visit_id` (and marks the visit documented if a note is completed). "Mark arrived" stays optional — logging a visit marks arrival anyway.
+    - **Patient form**: Name, Phone, Age, Sex, Primary condition, Referring source, then a collapsed "More details (optional)" with Email, Alternate phone and Patient ID (blank = auto-generated; fill only to keep an old record's number) — in New Visit's create-patient step and the Edit patient modal. Search matches the alternate phone too.
+    - **App header**: `ClinicSwitcher` — logo + clinic name on every width (switcher ▾ with 2+ clinics; the account menu keeps its list and "Add another clinic"), nav labels from `tab:`, today's date from `tab:`, and `SyncBadge` as a quiet green dot when synced (label in the tooltip / screen-reader text), expanding with text only when offline / syncing / pending / failed.
     - **Public form** (`BookingFormPage.tsx`): dates more than 90 days out aren't offered (availability is only fetched that far), and a failed availability fetch no longer blocks the whole form. A start time is hidden when it overlaps the preferred therapist's bookings for their full length; with no preference, only when every therapist is busy (`isPublicSlotTaken`). Past times today are hidden.
     - **History**: `HistorySurface` — search by name/phone, status and therapist filters (therapist filter hidden for therapist logins), 30-day paging; rows open the same details panel.
   - **Workspace "Expected today"** — a new section (not a replacement of
@@ -1387,6 +1391,8 @@ age                   int (NULLABLE)
 sex                   text (NULLABLE) — 'M' | 'F' | 'Other'
 phone                 text (NULLABLE) — searchable everywhere, but only
                        *displayed* on Patient Profile, not the Patients list
+email                 text (NULLABLE) — "More details" section
+alt_phone             text (NULLABLE) — alternate phone; also matched by search
 primary_condition     text (NULLABLE)
 referring_source      text (NULLABLE) — legacy fixed enum, kept only so
                        patients tagged before referring_source_catalog
@@ -1722,6 +1728,9 @@ clinic_id                 uuid NOT NULL (FOREIGN KEY → clinics.id)
 patient_id                uuid NOT NULL (FOREIGN KEY → patients.id)
 therapist_id              uuid NOT NULL (FOREIGN KEY → therapists.id)
 visit_id                  uuid (FOREIGN KEY → visits.id, NULLABLE)
+appointment_id            uuid (FOREIGN KEY → appointments.id, NULLABLE) — note
+                           started from an appointment / walk-in before the
+                           visit existed; visit_id is filled in when it's logged
 enrollment_id             uuid (FOREIGN KEY → patient_module_enrollments.id, NULLABLE)
 note_mode                 text (NULLABLE) — 'initial' | 'followup' | 'session'
                            ('session' = light SOAP note, everything else is
@@ -1954,6 +1963,8 @@ patient_id             uuid (NULLABLE, FOREIGN KEY → patients.id) — resolved
 patient_name, patient_phone  text NOT NULL — raw values, kept after patient_id resolves
 therapist_id           uuid (NULLABLE, FOREIGN KEY → therapists.id)
 scheduled_at           timestamptz NOT NULL
+source                 text NOT NULL (default 'booking') — 'booking' | 'walk_in'
+                        (start_walk_in: a visit in progress started at the desk)
 series_id              uuid (NULLABLE, indexed) — shared by the sessions of one
                         repeat booking (confirm_booking_series)
 duration_minutes       integer NOT NULL (default 30, CHECK 5–240) — Schedule MVP;
@@ -1985,7 +1996,9 @@ three has a write policy — every write is a SECURITY DEFINER RPC:
 row's `duration_minutes`), `mark_appointment_arrived` / `link_appointment_visit`
 (any clinic member), `confirm_booking_series` (same rules as a single booking,
 all-or-nothing; clashes listed as UTC ISO times the client localises) /
-`cancel_appointment_series(series, from)`, `set_therapist_working_hours`, and
+`cancel_appointment_series(series, from)`, `set_therapist_working_hours`,
+`start_walk_in(clinic, therapist, name, phone?, patient?)` (arrived walk-in, no
+overlap check, own therapist or admin/front desk), and
 `set_clinic_closed_dates` /
 `remove_clinic_closed_dates` (admin/front_desk, ranges up to 366 days). The
 public `get_booking_availability(slug, start, end)` returns weekly closed

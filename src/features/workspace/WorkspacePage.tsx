@@ -19,7 +19,8 @@ import {
   type Visit,
 } from '@/domain/types';
 import { appointmentStartsOnDate, minutesLabel, minutesOfDay, patientAttendance, toLocalDateStr } from '@/domain/schedule';
-import { AgendaList } from '@/components/schedule/AgendaList';
+import { TodayAppointments } from '@/components/schedule/TodayAppointments';
+import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
 import { BookSlotSheet } from '@/components/BookSlotSheet';
@@ -263,6 +264,36 @@ export function WorkspacePage() {
       )
       .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
   }, [workspaceAppointments, scope.scopeTherapistId]);
+  // Visits started (arrived / walk-in) but not completed with a service yet —
+  // today's plus any left open in the last week, so none are forgotten.
+  const todayAppointments = useMemo(() => {
+    const weekAgo = toLocalDateStr(new Date(Date.now() - 7 * 86_400_000));
+    const todayStr = toLocalDateStr(new Date());
+    const olderOpen = (workspaceAppointments ?? []).filter((a) => {
+      const day = toLocalDateStr(new Date(a.scheduledAt));
+      return (
+        a.status === 'arrived' && !a.visitId && day < todayStr && day >= weekAgo &&
+        (!scope.scopeTherapistId || a.therapistId === scope.scopeTherapistId)
+      );
+    });
+    return [...olderOpen, ...expectedToday];
+  }, [workspaceAppointments, expectedToday, scope.scopeTherapistId]);
+  const toCompleteCount = todayAppointments.filter((a) => a.status === 'arrived' && !a.visitId).length;
+  const [todayTab, setTodayTabState] = useState<'appointments' | 'visits'>(() => {
+    try {
+      return (window.localStorage.getItem('thera-net:workspace-today-tab') as 'appointments' | 'visits') ?? 'appointments';
+    } catch {
+      return 'appointments';
+    }
+  });
+  const setTodayTab = (tab: 'appointments' | 'visits') => {
+    setTodayTabState(tab);
+    try {
+      window.localStorage.setItem('thera-net:workspace-today-tab', tab);
+    } catch {
+      // Private mode: the tab just isn't remembered.
+    }
+  };
   // "Next up": the first still-to-come appointment (15 minutes' grace for late arrivals).
   const nextUpId = expectedToday.find(
     (a) => (a.status === 'confirmed' || a.status === 'rescheduled') && minutesOfDay(a.scheduledAt) >= nowMinutes - 15
@@ -277,6 +308,7 @@ export function WorkspacePage() {
   );
   const [openAppointmentId, setOpenAppointmentId] = useState<string | null>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [startVisit, setStartVisit] = useState<{ appointment?: Appointment } | null>(null);
   const nextUp = nextUpId ? expectedToday.find((a) => a.id === nextUpId) ?? null : null;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -308,7 +340,8 @@ export function WorkspacePage() {
   const [, setVisitEditError] = useState<string | null>(null);
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
   const [splitting, setSplitting] = useState<Visit | null>(null);
-  const [pkgStatusFilter, setPkgStatusFilter] = useState<'open' | 'stale' | 'all'>('open');
+  // Defaults to the packages that need a call: gone quiet, or nearly used up.
+  const [pkgStatusFilter, setPkgStatusFilter] = useState<'attention' | 'open' | 'stale' | 'all'>('attention');
   // Defaults on for anyone with a linked therapist record — admin included,
   // since in most solo/small clinics the admin *is* the primary therapist.
   // Role plays no part here: only whether this login has a `therapists` row
@@ -331,13 +364,8 @@ export function WorkspacePage() {
     () => dashboardService.monthlyNewCounts(clinic.id, new Date(), scope.scopeTherapistId),
     [clinic.id, scope.scopeTherapistId]
   );
-  // Clinic-wide open-packages list — feeds both the "My open packages" stat
-  // tile and the Packages panel below, so fetched once regardless of role.
+  // Clinic-wide open-packages list — feeds the Packages panel below.
   const openPackages = useLiveQuery(() => dashboardService.openPackages(clinic.id), [clinic.id]);
-  const myOpenPackageCount = useMemo(
-    () => (openPackages ?? []).filter((p) => p.startedByTherapistId === scope.myTherapistId).length,
-    [openPackages, scope.myTherapistId]
-  );
   const openPackageGroupIds = useMemo(
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
@@ -346,8 +374,8 @@ export function WorkspacePage() {
     let rows = openPackages ?? [];
     if (pkgMineOnly && scope.myTherapistId)
       rows = rows.filter((p) => p.startedByTherapistId === scope.myTherapistId);
-    if (pkgStatusFilter !== 'all')
-      rows = rows.filter((p) => p.stale === (pkgStatusFilter === 'stale'));
+    if (pkgStatusFilter === 'attention') rows = rows.filter((p) => p.stale || p.nearingCompletion);
+    else if (pkgStatusFilter !== 'all') rows = rows.filter((p) => p.stale === (pkgStatusFilter === 'stale'));
     return rows;
   }, [openPackages, pkgMineOnly, scope.myTherapistId, pkgStatusFilter]);
 
@@ -386,6 +414,14 @@ export function WorkspacePage() {
   const consultationNotes = useLiveQuery(
     () => (canViewClinicalNotes ? repos.consultationNotes.listByClinic(clinic.id) : undefined),
     [clinic.id, canViewClinicalNotes]
+  );
+  // This therapist's unfinished notes, oldest first — the header chip opens the oldest.
+  const myDraftNotes = useMemo(
+    () =>
+      (consultationNotes ?? [])
+        .filter((n) => n.status === 'draft' && scope.myTherapistId && n.therapistId === scope.myTherapistId)
+        .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)),
+    [consultationNotes, scope.myTherapistId]
   );
   // Patient Communications, Slice 1 — same bulk-fetch-and-map shape as
   // consultationNotes above, see the identical note in LedgerPage.tsx.
@@ -481,7 +517,16 @@ export function WorkspacePage() {
           setOpenAppointmentId(null);
           setReschedulingAppointment(appointment);
         }}
+        onStartNote={
+          clinic.clinicalDocsEnabled && canViewClinicalNotes
+            ? (appointment) => {
+                setOpenAppointmentId(null);
+                setStartVisit({ appointment });
+              }
+            : undefined
+        }
       />
+      <StartVisitSheet open={startVisit !== null} appointment={startVisit?.appointment} onClose={() => setStartVisit(null)} />
       <BookSlotSheet
         isOpen={bookingOpen}
         onClose={() => setBookingOpen(false)}
@@ -508,6 +553,11 @@ export function WorkspacePage() {
             {canEditSettings && <FirstWeekSetupLink clinicId={clinic.id} />}
           </div>
           <div className="flex shrink-0 gap-2">
+            {clinic.clinicalDocsEnabled && canViewClinicalNotes && (
+              <button type="button" className={`${btnSecondary} inline-flex items-center`} onClick={() => setStartVisit({})}>
+                + Note
+              </button>
+            )}
             {clinic.enablePatientComms && (canManageBookings || scope.myTherapistId) && (
               <button type="button" className={`${btnSecondary} hidden sm:inline-flex sm:items-center`} onClick={() => setBookingOpen(true)}>
                 + Book
@@ -519,7 +569,7 @@ export function WorkspacePage() {
           </div>
         </div>
 
-        {(nextUp || expectedToday.length > 0 || newFeedbackCount > 0 || (pendingRequestCount ?? 0) > 0) && (
+        {(nextUp || expectedToday.length > 0 || newFeedbackCount > 0 || (pendingRequestCount ?? 0) > 0 || toCompleteCount > 0 || myDraftNotes.length > 0) && (
           <div className="mt-4 flex flex-col gap-2 tab:flex-row tab:items-stretch">
             {clinic.enablePatientComms && (
               <button
@@ -544,6 +594,31 @@ export function WorkspacePage() {
                   </span>
                 </span>
               </button>
+            )}
+            {toCompleteCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setTodayTab('appointments')}
+                className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--amber)]/30 bg-[var(--amber-light)] px-3.5 py-2.5 text-left text-sm text-[var(--ink)] tab:min-w-52"
+              >
+                <span>
+                  <strong>{toCompleteCount}</strong> visit{toCompleteCount === 1 ? '' : 's'} to complete
+                </span>
+                <span className="font-medium text-[var(--teal)]">Add service →</span>
+              </button>
+            )}
+            {myDraftNotes.length > 0 && (
+              <Link
+                to="/patients/$patientId/notes/$noteId"
+                params={{ patientId: myDraftNotes[0].patientId, noteId: myDraftNotes[0].id }}
+                search={{ from: '/workspace' }}
+                className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3.5 py-2.5 text-sm text-[var(--ink)] tab:min-w-52"
+              >
+                <span>
+                  <strong>{myDraftNotes.length}</strong> note{myDraftNotes.length === 1 ? '' : 's'} to finish
+                </span>
+                <span className="font-medium text-[var(--teal)]">Open →</span>
+              </Link>
             )}
             {(pendingRequestCount ?? 0) > 0 && (
               <Link
@@ -601,10 +676,7 @@ export function WorkspacePage() {
               label="My visits this month"
               value={myMonthReport ? (myMonthRow?.visitCount ?? 0) : '—'}
             />
-            <StatTile
-              label="My open packages"
-              value={openPackages === undefined ? '—' : myOpenPackageCount}
-            />
+            <StatTile label="My packages this month" value={monthlyNew?.newPackages ?? '—'} />
           </>
         ) : (
           <>
@@ -616,35 +688,44 @@ export function WorkspacePage() {
       </div>
       {syncCaption && <p className="text-xs text-[var(--slate)]">{syncCaption}</p>}
 
-      {clinic.enablePatientComms && (
-        <SectionCard
-          title={`Expected today (${expectedToday.length})`}
-          action={
-            <Link to="/schedule" className="text-sm font-medium text-[var(--teal)] hover:underline">
-              Open schedule
-            </Link>
-          }
-        >
-          {expectedToday.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">No appointments confirmed for today.</p>
-          ) : (
-            <AgendaList
-              appointments={expectedToday}
+      <SectionCard
+        title="Today"
+        action={
+          clinic.enablePatientComms ? (
+            <div className="flex rounded-lg border border-[var(--border)] p-0.5" role="tablist" aria-label="Today">
+              {(['appointments', 'visits'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={todayTab === tab}
+                  onClick={() => setTodayTab(tab)}
+                  className={`min-h-9 rounded-md px-3 text-xs font-medium ${todayTab === tab ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}
+                >
+                  {tab === 'appointments' ? `Appointments (${todayAppointments.length})` : `Visits (${today?.visits.length ?? 0})`}
+                </button>
+              ))}
+            </div>
+          ) : undefined
+        }
+      >
+        {clinic.enablePatientComms && todayTab === 'appointments' ? (
+          <>
+            <TodayAppointments
+              appointments={todayAppointments}
               slotMinutes={clinic.slotDurationMinutes || 30}
+              nowMinutes={nowMinutes}
+              nextUpId={nextUpId}
               colorFor={appointmentColor}
               therapistNameFor={appointmentTherapistName}
               showTherapist={canManageBookings}
-              gaps={[]}
-              nowMinutes={nowMinutes}
-              highlightId={nextUpId}
               onSelect={(a) => setOpenAppointmentId(a.id)}
             />
-          )}
-        </SectionCard>
-      )}
-
-      <SectionCard title={today && today.visits.length === 1 ? "Today's visit" : "Today's visits"}>
-        {!today || today.visits.length === 0 ? (
+            <Link to="/schedule" className="mt-3 inline-block text-sm font-medium text-[var(--teal)] hover:underline">
+              Open schedule →
+            </Link>
+          </>
+        ) : !today || today.visits.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">
             No visits logged today — log one with &ldquo;+ New visit&rdquo;.
           </p>
@@ -731,6 +812,7 @@ export function WorkspacePage() {
           <div className="flex items-center gap-1.5">
             {(
               [
+                { key: 'attention', label: 'Needs attention' },
                 { key: 'open', label: 'Open' },
                 { key: 'stale', label: 'Stale' },
                 { key: 'all', label: 'All' },
