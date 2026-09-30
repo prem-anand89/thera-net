@@ -174,7 +174,7 @@ function TimeGroup({
   onSelect,
 }: {
   label: string;
-  slots: string[];
+  slots: { label: string; open: boolean }[];
   selectedTime: string | null;
   onSelect: (t: string) => void;
 }) {
@@ -183,18 +183,22 @@ function TimeGroup({
     <div className="mb-4 last:mb-0">
       <p className="mb-2 text-xs font-medium text-[var(--muted)]">{label}</p>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-        {slots.map((t) => {
+        {slots.map(({ label: t, open }) => {
           const sel = t === selectedTime;
           return (
             <button
               key={t}
               type="button"
               aria-pressed={sel}
+              disabled={!open}
+              aria-label={open ? t : `${t}, unavailable`}
               onClick={() => onSelect(t)}
               className={`min-h-11 rounded-xl border text-sm font-medium transition-colors ${
                 sel
                   ? 'border-[var(--teal)] bg-[var(--teal)] text-white shadow-sm'
-                  : 'border-[var(--border)] bg-white text-[var(--ink)] hover:border-[var(--teal)] hover:text-[var(--teal)]'
+                  : open
+                    ? 'border-[var(--border)] bg-white text-[var(--ink)] hover:border-[var(--teal)] hover:text-[var(--teal)]'
+                    : 'cursor-not-allowed border-transparent bg-[var(--paper)] text-[var(--muted)]/70 line-through'
               }`}
             >
               {t}
@@ -376,10 +380,17 @@ export function BookingFormPage() {
       return !isPublicSlotTaken(date, slot.minutes, slotDuration, booked, therapists.map((t) => t.id), preferredTherapistId || null, availability?.therapistHours ?? {}, { startHour, endHour });
     });
   const openSlots = preferredDate ? openSlotsOn(preferredDate) : [];
+  const openLabels = new Set(openSlots.map((slot) => slot.label));
+  // Every time still ahead on the chosen day; booked / off-hours ones are shown greyed.
+  const daySlots = preferredDate
+    ? allSlots
+        .filter((slot) => !(preferredDate === todayIso && slot.minutes <= nowTime.getHours() * 60 + nowTime.getMinutes()))
+        .map((slot) => ({ ...slot, open: openLabels.has(slot.label) }))
+    : [];
   const groups = [
-    { label: 'Morning', slots: openSlots.filter((slot) => slot.minutes < 12 * 60) },
-    { label: 'Afternoon', slots: openSlots.filter((slot) => slot.minutes >= 12 * 60 && slot.minutes < 17 * 60) },
-    { label: 'Evening', slots: openSlots.filter((slot) => slot.minutes >= 17 * 60) },
+    { label: 'Morning', slots: daySlots.filter((slot) => slot.minutes < 12 * 60) },
+    { label: 'Afternoon', slots: daySlots.filter((slot) => slot.minutes >= 12 * 60 && slot.minutes < 17 * 60) },
+    { label: 'Evening', slots: daySlots.filter((slot) => slot.minutes >= 17 * 60) },
   ];
   const todayDate = new Date(`${todayIso}T00:00:00`);
   const dayOpen = (date: string) => getDayStatus(new Date(`${date}T00:00:00`), todayDate, availability) === 'available';
@@ -413,7 +424,7 @@ export function BookingFormPage() {
             {clinicLogo ? (
               <img src={clinicLogo} alt="" className="h-12 w-12 shrink-0 rounded-2xl border border-[var(--border)] object-cover" />
             ) : (
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--teal-light)] text-lg font-semibold text-[var(--teal)]">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--teal-light)] text-lg font-semibold text-[var(--teal)]" aria-hidden>
                 {(clinicName ?? '?').trim().charAt(0).toUpperCase()}
               </div>
             )}
@@ -429,11 +440,10 @@ export function BookingFormPage() {
 
           {/* 1 — When */}
           <section className="space-y-4 px-5 py-5 sm:px-6" aria-labelledby="when-heading">
-            <SectionTitle id="when-heading" step={1} title="Choose a time" hint="Optional" />
-
             {therapists.length > 0 && (
               <div>
-                <p className="mb-2 text-sm font-medium text-[var(--ink)]">With</p>
+                <SectionTitle id="clinician-heading" step={1} title="Clinician" hint="optional" />
+                <p className="mb-2 mt-1 text-sm text-[var(--muted)]">Pick someone to see only their free times.</p>
                 <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6" role="radiogroup" aria-label="Clinician">
                   {[{ id: '', name: 'Anyone available' }, ...therapists].map((t) => {
                     const on = preferredTherapistId === t.id;
@@ -459,6 +469,7 @@ export function BookingFormPage() {
               </div>
             )}
 
+            <SectionTitle id="when-heading" step={therapists.length > 0 ? 2 : 1} title="Day & time" hint="optional" />
             <div>
               <div className="mb-2 flex items-baseline justify-between">
                 <p className="text-sm font-medium text-[var(--ink)]">Day</p>
@@ -520,7 +531,16 @@ export function BookingFormPage() {
 
             {preferredDate && (
               <div>
-                <p className="mb-2 text-sm font-medium text-[var(--ink)]">Time</p>
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3">
+                  <p className="text-sm font-medium text-[var(--ink)]">
+                    Available times{therapistName ? ` with ${therapistName}` : ''}
+                  </p>
+                  {daySlots.some((slot) => !slot.open) && (
+                    <p className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                      <span className="inline-block h-3 w-5 rounded border border-[var(--border)] bg-[var(--paper)]" aria-hidden /> greyed = booked or unavailable
+                    </p>
+                  )}
+                </div>
                 {openSlots.length === 0 ? (
                   <div className="rounded-2xl bg-[var(--paper)] p-4 text-center text-sm text-[var(--muted)]">
                     <p>No times left {therapistName ? `with ${therapistName} ` : ''}on this day.</p>
@@ -535,7 +555,7 @@ export function BookingFormPage() {
                     <TimeGroup
                       key={group.label}
                       label={group.label}
-                      slots={group.slots.map((slot) => slot.label)}
+                      slots={group.slots.map((slot) => ({ label: slot.label, open: slot.open }))}
                       selectedTime={preferredTime}
                       onSelect={(time) => setPreferredTime(time === preferredTime ? null : time)}
                     />
@@ -547,7 +567,7 @@ export function BookingFormPage() {
 
           {/* 2 — Details */}
           <section className="space-y-4 border-t border-[var(--border)] px-5 py-5 sm:px-6" aria-labelledby="details-heading">
-            <SectionTitle id="details-heading" step={2} title="Your details" />
+            <SectionTitle id="details-heading" step={therapists.length > 0 ? 3 : 2} title="Your details" />
             <Field label="Full name">
               <input type="text" autoComplete="name" placeholder="Your name" className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
@@ -595,7 +615,7 @@ export function BookingFormPage() {
             {submitError && <p className="mb-2 text-sm font-medium text-[var(--rust)]">{submitError}</p>}
             <p className="mb-2 flex items-center justify-between gap-3 text-sm" aria-live="polite">
               <span className="truncate text-[var(--ink)]">{summary}</span>
-              {therapistName && <span className="shrink-0 truncate text-[var(--muted)]">{therapistName}</span>}
+              <span className="shrink-0 truncate text-[var(--muted)]">{therapistName ?? 'Anyone available'}</span>
             </p>
             <button
               type="submit"
