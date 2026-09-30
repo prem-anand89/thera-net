@@ -9,6 +9,9 @@ import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import {
   addDays,
   appointmentMinutes,
+  firstAvailableSlot,
+  nextAppointmentFor,
+  patientAttendance,
   formatMinutes,
   generateScheduleSlots,
   isClosedDay,
@@ -20,6 +23,7 @@ import {
   toLocalDateStr,
 } from '@/domain/schedule';
 import type { Appointment, UUID, Patient } from '@/domain/types';
+import { AttendanceNote } from '@/components/schedule/AppointmentDetailsPanel';
 
 export type BookedSlot = {
   kind: 'booked' | 'rescheduled';
@@ -172,6 +176,38 @@ export function BookSlotSheet({
     });
   const therapistName = (therapists ?? []).find((t) => t.id === therapistId)?.name;
   const therapistLocked = isReschedule || (lockTherapist && Boolean(therapistId));
+  const now = new Date();
+  const chosenPatient = patientId ? patients?.find((p) => p.id === patientId) : undefined;
+  const who = rescheduleAppointment
+    ? { patientId: rescheduleAppointment.patientId, phone: rescheduleAppointment.patientPhone }
+    : patientMode === 'find'
+      ? chosenPatient ? { patientId: chosenPatient.id, phone: chosenPatient.phone } : null
+      : patientPhone.replace(/\D/g, '').length >= 10 ? { phone: patientPhone } : null;
+  const attendance = who ? patientAttendance(appointments, who, now, { excludeId: rescheduleAppointment?.id }) : null;
+  const alreadyBooked = who && !rescheduleAppointment ? nextAppointmentFor(appointments, who, now) : null;
+
+  function pickFirstAvailable() {
+    const candidates = therapistLocked || therapistId ? [therapistId].filter(Boolean) : (therapists ?? []).map((t) => t.id);
+    const found = firstAvailableSlot({
+      appointments,
+      therapistIds: candidates as string[],
+      fromDate: selectedDate < today ? today : selectedDate,
+      days: 21,
+      hours: { startHour, endHour },
+      slotMinutes,
+      lengthMinutes,
+      now,
+      isClosed: (date) => isClosedDay(date, clinic.closedWeekdays, closedDates ?? []).closed,
+      ignoreAppointmentId: rescheduleAppointment?.id,
+    });
+    if (!found) return setError('No free time in the next 3 weeks for this length.');
+    setError(null);
+    setSelectedDate(found.date);
+    setShowLater(found.date > addDays(today, 6));
+    setTherapistId(found.therapistId as UUID);
+    setTherapistTouched(true);
+    setSelectedTime(found.time);
+  }
 
   async function submit() {
     if (!therapistId) return setError('Choose a therapist first.');
@@ -288,6 +324,17 @@ export function BookSlotSheet({
             </div>
           )}
 
+          {(attendance || alreadyBooked) && (
+            <div className="space-y-2">
+              <AttendanceNote attendance={attendance} />
+              {alreadyBooked && (
+                <p className="rounded-lg bg-[var(--teal-light)] px-3 py-2 text-xs text-[var(--ink)]">
+                  Already booked: {displayDate(toLocalDateStr(new Date(alreadyBooked.scheduledAt)))}, {minutesLabel(minutesOfDay(alreadyBooked.scheduledAt))}.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
             {therapistLocked ? (
               <div>
@@ -322,7 +369,12 @@ export function BookSlotSheet({
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-[var(--muted)]">Available time</p>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-medium text-[var(--muted)]">Available time</p>
+              <button type="button" className="min-h-9 text-xs font-medium text-[var(--teal)] hover:underline" onClick={pickFirstAvailable}>
+                First available →
+              </button>
+            </div>
             {closed.closed && (
               <p role="status" className="mb-2 rounded-lg bg-[var(--slate-light)] p-3 text-sm text-[var(--slate)]">
                 {closed.kind === 'holiday'
@@ -341,9 +393,11 @@ export function BookSlotSheet({
             )}
           </div>
           <ErrorNote message={error} />
-          <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
+          <div className="sticky -bottom-4 -mx-4 flex justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3 sm:-bottom-6 sm:-mx-6 sm:px-6">
             <button type="button" className={btnSecondary} onClick={onClose} disabled={busy}>Cancel</button>
-            <button type="button" className={btnPrimary} onClick={() => void submit()} disabled={busy}>{busy ? 'Saving…' : submitLabel}</button>
+            <button type="button" className={`${btnPrimary} min-w-0 flex-1 sm:flex-none`} onClick={() => void submit()} disabled={busy}>
+              {busy ? 'Saving…' : selectedTime ? `${submitLabel} · ${displayDate(selectedDate)}, ${minutesLabel(Number(selectedTime.slice(0, 2)) * 60 + Number(selectedTime.slice(3, 5)))} · ${formatMinutes(lengthMinutes)}` : submitLabel}
+            </button>
           </div>
         </div>
       </div>

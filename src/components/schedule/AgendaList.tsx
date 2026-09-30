@@ -28,6 +28,7 @@ export function AgendaList({
   nowMinutes,
   onSelect,
   onBookGap,
+  highlightId,
 }: {
   appointments: Appointment[];
   slotMinutes: number;
@@ -40,6 +41,8 @@ export function AgendaList({
   nowMinutes: number | null;
   onSelect: (appointment: Appointment) => void;
   onBookGap?: (time: string) => void;
+  /** Marks one row as "Next up". */
+  highlightId?: string | null;
 }) {
   const rows: Row[] = [
     ...appointments.map((appointment) => ({
@@ -88,7 +91,7 @@ export function AgendaList({
             <button
               type="button"
               onClick={() => onSelect(appointment)}
-              className={`flex w-full items-stretch gap-3 rounded-xl border-l-4 p-3 text-left ${style.fill}`}
+              className={`flex w-full items-stretch gap-3 rounded-xl border-l-4 p-3 text-left ${style.fill} ${highlightId === appointment.id ? 'ring-2 ring-[var(--teal)]' : ''}`}
               style={{ borderLeftColor: colorFor(appointment) }}
             >
               <span className="w-16 shrink-0 text-xs text-[var(--muted)]">
@@ -97,7 +100,12 @@ export function AgendaList({
                 {formatMinutes(minutes)}
               </span>
               <span className="min-w-0 flex-1">
-                <span className={`block truncate font-medium ${style.text}`}>{appointment.patientName}</span>
+                <span className={`block truncate font-medium ${style.text}`}>
+                  {appointment.patientName}
+                  {highlightId === appointment.id && (
+                    <span className="ml-2 rounded bg-[var(--teal)] px-1.5 py-0.5 text-[10px] font-medium text-white">Next up</span>
+                  )}
+                </span>
                 <span className="block truncate text-xs text-[var(--muted)]">
                   {showTherapist && `${therapistNameFor(appointment)} · `}
                   {style.mark && <span aria-hidden>{style.mark} </span>}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
@@ -18,6 +18,7 @@ import {
   getWeekStart,
   groupClosedRanges,
   isClosedDay,
+  patientAttendance,
   minutesLabel,
   minutesOfDay,
   toLocalDateStr,
@@ -28,14 +29,17 @@ import {
   APPOINTMENT_BLOCK_STYLE,
   APPOINTMENT_STATUS_LABEL,
 } from '@/domain/appointmentStatus';
-import type { Appointment, UUID } from '@/domain/types';
-import { AgendaList } from './schedule/AgendaList';
-import { AppointmentDetailsPanel } from './schedule/AppointmentDetailsPanel';
-import { ClosedDaysSheet } from './schedule/ClosedDaysSheet';
-import { FindTimePanel } from './schedule/FindTimePanel';
-import { ScheduleRail, rangeLabel } from './schedule/ScheduleRail';
-import { ResourceDayGrid, WeekTimeGrid, type GridTherapist } from './schedule/TimeGrid';
-import { UNASSIGNED_COLOR, therapistColor } from './schedule/scheduleColors';
+import type { Appointment, AppointmentRequest, UUID } from '@/domain/types';
+import { InstallAppBanner } from '@/components/InstallAppBanner';
+import { ReminderSheet } from '@/components/schedule/ReminderSheet';
+import { RequestsInbox, timeAgo } from '@/components/schedule/RequestsInbox';
+import { AgendaList } from '@/components/schedule/AgendaList';
+import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
+import { ClosedDaysSheet } from '@/components/schedule/ClosedDaysSheet';
+import { FindTimePanel } from '@/components/schedule/FindTimePanel';
+import { ScheduleRail, rangeLabel } from '@/components/schedule/ScheduleRail';
+import { ResourceDayGrid, WeekTimeGrid, type GridTherapist } from '@/components/schedule/TimeGrid';
+import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
 
 type BookingView = 'schedule' | 'requests' | 'history';
 type ScheduleMode = 'day' | 'week';
@@ -65,13 +69,6 @@ function longDate(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
-}
-
-function timeAgo(iso: string) {
-  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
-  if (minutes < 60) return `${minutes || 1}m ago`;
-  if (minutes < 60 * 24) return `${Math.floor(minutes / 60)}h ago`;
-  return `${Math.floor(minutes / (60 * 24))}d ago`;
 }
 
 function dateForAppointment(appointment: Appointment) {
@@ -128,7 +125,7 @@ export function ScheduleBookingsView() {
     () =>
       [...(therapists ?? [])]
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((therapist, index) => ({ id: therapist.id, name: therapist.name, color: therapistColor(index) })),
+        .map((therapist, index) => ({ id: therapist.id, name: therapist.name, phone: therapist.phone ?? null, color: therapistColor(index) })),
     [therapists]
   );
   const rosterById = useMemo(() => new Map(roster.map((t) => [t.id, t])), [roster]);
@@ -216,6 +213,7 @@ export function ScheduleBookingsView() {
     () => (requests ?? []).filter((r) => r.status === 'pending').sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [requests]
   );
+  const requestById = useMemo(() => new Map((requests ?? []).map((r) => [r.id, r])), [requests]);
 
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -223,10 +221,8 @@ export function ScheduleBookingsView() {
   const [closedSheetOpen, setClosedSheetOpen] = useState(false);
   const [removing, setRemoving] = useState<ClosedRange | null>(null);
   const [declining, setDeclining] = useState<{ id: UUID; name: string } | null>(null);
-  const [historyFrom, setHistoryFrom] = useState(() => addDays(today, -30));
-  const [historyQuery, setHistoryQuery] = useState('');
-  const [historyStatus, setHistoryStatus] = useState('');
-  const [historyTherapist, setHistoryTherapist] = useState('');
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [confirmed, setConfirmed] = useState<BookedSlot | null>(null);
   useEffect(() => {
     if (!confirmed) return;
@@ -235,6 +231,13 @@ export function ScheduleBookingsView() {
   }, [confirmed]);
 
   const selectedAppointment = selectedId ? scopedAppointments.find((a) => a.id === selectedId) ?? null : null;
+  const selectedAttendance = useMemo(
+    () =>
+      selectedAppointment
+        ? patientAttendance(allAppointments ?? [], { patientId: selectedAppointment.patientId, phone: selectedAppointment.patientPhone }, new Date(), { excludeId: selectedAppointment.id })
+        : null,
+    [selectedAppointment, allAppointments]
+  );
 
   const setSchedule = useCallback(
     (next: Partial<ScheduleSearch>) => {
@@ -279,6 +282,18 @@ export function ScheduleBookingsView() {
     });
   }
 
+  function confirmRequest(request: AppointmentRequest) {
+    openBooking({
+      date: request.preferredDate && request.preferredDate >= today ? request.preferredDate : date,
+      requestId: request.id,
+      patientName: request.name,
+      patientPhone: request.phone,
+      therapistId: request.preferredTherapistId ?? undefined,
+      requestNotes: request.notes ?? undefined,
+      requestPreferredTimeText: request.preferredTimeText ?? undefined,
+    });
+  }
+
   const canManageAppointment = (appointment: Appointment) =>
     canManageAll || (Boolean(myTherapistId) && appointment.therapistId === myTherapistId);
   const canBookFor = (therapistId: string) => canManageAll || therapistId === myTherapistId;
@@ -288,7 +303,12 @@ export function ScheduleBookingsView() {
     if (view !== 'schedule') return;
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return;
-      if (sheet || selectedId || closedSheetOpen) return;
+      if (sheet || selectedId || closedSheetOpen || reminderOpen) return;
+      if (event.key === '?') {
+        setShortcutsOpen((current) => !current);
+        event.preventDefault();
+        return;
+      }
       if (event.key === 't') setSchedule({ date: toLocalDateStr(new Date()) });
       else if (event.key === 'd') setSchedule({ mode: 'day' });
       else if (event.key === 'w') setSchedule({ mode: 'week' });
@@ -299,7 +319,7 @@ export function ScheduleBookingsView() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [view, sheet, selectedId, closedSheetOpen, setSchedule, step]);
+  }, [view, sheet, selectedId, closedSheetOpen, reminderOpen, setSchedule, step]);
 
   async function decline(requestId: UUID) {
     try {
@@ -324,7 +344,7 @@ export function ScheduleBookingsView() {
   );
 
   if (scope.role === 'unknown') {
-    return <p className="py-10 text-center text-sm text-[var(--muted)]">Loading schedule…</p>;
+    return <ScheduleSkeleton />;
   }
   if (isTherapist && scope.isUnlinkedTherapist) {
     return (
@@ -371,8 +391,27 @@ export function ScheduleBookingsView() {
               </button>
             ))}
           </div>
+          {canManageAll && (
+            <button type="button" className={`${btnSecondary} hidden desktop:inline-flex desktop:items-center`} onClick={() => setReminderOpen(true)}>
+              Reminders
+            </button>
+          )}
+          <button
+            type="button"
+            className="hidden min-h-11 min-w-11 rounded-lg text-sm text-[var(--muted)] hover:bg-[var(--paper)] desktop:inline"
+            aria-label="Keyboard shortcuts"
+            aria-expanded={shortcutsOpen}
+            onClick={() => setShortcutsOpen((current) => !current)}
+          >
+            ?
+          </button>
           <button type="button" className={btnPrimary} onClick={() => openBooking()}>+ Book</button>
         </div>
+        {shortcutsOpen && (
+          <div role="note" className="w-full rounded-lg bg-[var(--paper)] px-3 py-2 text-xs text-[var(--muted)]">
+            <strong className="text-[var(--ink)]">Shortcuts:</strong> <kbd>t</kbd> today · <kbd>d</kbd> day · <kbd>w</kbd> week · <kbd>←</kbd>/<kbd>→</kbd> previous/next · <kbd>Esc</kbd> close · <kbd>?</kbd> this help
+          </div>
+        )}
       </header>
 
       <nav aria-label="Booking views" className="flex gap-4 border-b border-[var(--border)]">
@@ -400,10 +439,37 @@ export function ScheduleBookingsView() {
               canEditClosures={canManageAll}
               onAddClosure={() => setClosedSheetOpen(true)}
               onRemoveClosure={setRemoving}
+              onOnlyTherapist={(id) => setTherapists([id])}
+              requests={
+                canManageAll ? (
+                  <RequestsInbox
+                    variant="rail"
+                    requests={pendingRequests}
+                    therapistNameFor={(id) => (id ? rosterById.get(id)?.name ?? null : null)}
+                    onConfirm={confirmRequest}
+                    onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
+                    onSeeAll={() => setSchedule({ view: 'requests' })}
+                    limit={3}
+                  />
+                ) : null
+              }
             />
           </div>
 
           <div className="min-w-0 space-y-3">
+            <InstallAppBanner message={isTherapist ? 'Open My schedule in one tap — add Thera.Net to your home screen.' : undefined} />
+            {canManageAll && (
+              <div className="desktop:hidden">
+                <RequestsInbox
+                  variant="strip"
+                  requests={pendingRequests}
+                  therapistNameFor={(id) => (id ? rosterById.get(id)?.name ?? null : null)}
+                  onConfirm={confirmRequest}
+                  onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
+                  onSeeAll={() => setSchedule({ view: 'requests' })}
+                />
+              </div>
+            )}
             <div className="desktop:hidden">
               <MiniCalendarStrip
                 selectedDate={date}
@@ -467,6 +533,11 @@ export function ScheduleBookingsView() {
                         <button type="button" className={menuItem} onClick={() => { setShowCancelled((current) => !current); close(); }}>
                           {showCancelled ? 'Hide cancelled' : 'Show cancelled'}
                         </button>
+                        {canManageAll && (
+                          <button type="button" className={menuItem} onClick={() => { setReminderOpen(true); close(); }}>
+                            Send reminders
+                          </button>
+                        )}
                         {canManageAll && (
                           <button type="button" className={menuItem} onClick={() => { setClosedSheetOpen(true); close(); }}>
                             Set closed days
@@ -574,7 +645,7 @@ export function ScheduleBookingsView() {
                       {request.notes && <p className="mt-1 text-sm text-[var(--ink)]">{request.notes}</p>}
                     </div>
                     <div className="flex gap-2">
-                      <button type="button" className={btnPrimary} onClick={() => openBooking({ date: request.preferredDate ?? date, requestId: request.id, patientName: request.name, patientPhone: request.phone, therapistId: request.preferredTherapistId ?? undefined, requestNotes: request.notes ?? undefined, requestPreferredTimeText: request.preferredTimeText ?? undefined })}>Confirm</button>
+                      <button type="button" className={btnPrimary} onClick={() => confirmRequest(request)}>Confirm</button>
                       <button type="button" className={btnSecondary} onClick={() => setDeclining({ id: request.id, name: request.name })}>Decline</button>
                     </div>
                   </div>
@@ -589,31 +660,52 @@ export function ScheduleBookingsView() {
         <HistorySurface
           appointments={scopedAppointments}
           therapists={canManageAll ? roster : []}
+          today={today}
           slotMinutes={slotMinutes}
           colorFor={colorFor}
           therapistNameFor={therapistNameFor}
-          from={historyFrom}
-          query={historyQuery}
-          status={historyStatus}
-          therapistFilter={historyTherapist}
-          onQueryChange={setHistoryQuery}
-          onStatusChange={setHistoryStatus}
-          onTherapistChange={setHistoryTherapist}
-          onLoadMore={() => setHistoryFrom((current) => addDays(current, -30))}
           onSelect={(a) => setSelectedId(a.id)}
         />
       )}
 
       {confirmed && (
-        <div role="status" className="fixed inset-x-4 bottom-20 z-20 flex items-center justify-between gap-3 rounded-xl border border-[var(--teal)] bg-[var(--surface)] p-3 shadow-lg sm:bottom-4 sm:left-auto sm:max-w-md">
+        <div role="status" className="fixed inset-x-4 bottom-20 z-20 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-[var(--teal)] bg-[var(--surface)] p-3 shadow-lg sm:bottom-4 sm:left-auto sm:max-w-md">
           <p className="text-sm text-[var(--ink)]">
             <strong>{confirmed.patientName}</strong> {confirmed.kind === 'rescheduled' ? 'moved to' : 'booked for'}{' '}
             {new Date(confirmed.scheduledAt).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}.
           </p>
           <div className="flex items-center gap-2">
             {confirmed.patientPhone && (
-              <button type="button" className="text-xs font-medium text-[var(--teal)]" onClick={() => { void bookingService.shareBookingConfirmation(clinic.id, confirmed.patientName, confirmed.patientPhone, clinic.name, confirmed.scheduledAt).catch((e) => alert(toFriendlyMessage(e))); }}>
-                WhatsApp
+              <button
+                type="button"
+                className="min-h-9 text-xs font-medium text-[var(--teal)]"
+                onClick={() =>
+                  bookingService.messagePatient(confirmed.kind, {
+                    patientName: confirmed.patientName,
+                    patientPhone: confirmed.patientPhone,
+                    clinicName: clinic.name,
+                    scheduledAt: confirmed.scheduledAt,
+                    therapistName: rosterById.get(confirmed.therapistId)?.name,
+                  })
+                }
+              >
+                WhatsApp patient
+              </button>
+            )}
+            {rosterById.get(confirmed.therapistId)?.phone && (
+              <button
+                type="button"
+                className="min-h-9 text-xs font-medium text-[var(--teal)]"
+                onClick={() =>
+                  bookingService.messageTherapist(confirmed.kind, {
+                    therapistName: rosterById.get(confirmed.therapistId)!.name,
+                    therapistPhone: rosterById.get(confirmed.therapistId)!.phone,
+                    patientName: confirmed.patientName,
+                    scheduledAt: confirmed.scheduledAt,
+                  })
+                }
+              >
+                Notify therapist
               </button>
             )}
             <button type="button" className="text-xs font-medium text-[var(--muted)]" onClick={() => setConfirmed(null)}>Dismiss</button>
@@ -625,6 +717,9 @@ export function ScheduleBookingsView() {
         appointment={selectedAppointment}
         therapistName={selectedAppointment ? therapistNameFor(selectedAppointment) : ''}
         therapistColor={selectedAppointment ? colorFor(selectedAppointment) : UNASSIGNED_COLOR}
+        therapistPhone={selectedAppointment?.therapistId ? rosterById.get(selectedAppointment.therapistId)?.phone ?? null : null}
+        attendance={selectedAttendance}
+        requestNotes={selectedAppointment?.requestId ? requestById.get(selectedAppointment.requestId)?.notes ?? null : null}
         slotMinutes={slotMinutes}
         canManage={selectedAppointment ? canManageAppointment(selectedAppointment) : false}
         onClose={() => setSelectedId(null)}
@@ -655,6 +750,16 @@ export function ScheduleBookingsView() {
         }}
       />
 
+      <ReminderSheet
+        open={reminderOpen}
+        initialDate={addDays(today, 1)}
+        clinicName={clinic.name}
+        appointments={allAppointments ?? []}
+        therapists={roster}
+        slotMinutes={slotMinutes}
+        onClose={() => setReminderOpen(false)}
+      />
+
       <ClosedDaysSheet open={closedSheetOpen} clinicId={clinic.id} initialDate={date < today ? today : date} onClose={() => setClosedSheetOpen(false)} />
 
       <ConfirmDialog
@@ -683,6 +788,18 @@ export function ScheduleBookingsView() {
           if (range) void bookingService.removeClosedDates(clinic.id, range.from, range.to).catch((e) => alert(toFriendlyMessage(e)));
         }}
       />
+    </div>
+  );
+}
+
+function ScheduleSkeleton() {
+  return (
+    <div className="animate-pulse space-y-3" aria-busy="true" aria-label="Loading schedule">
+      <div className="h-10 rounded-lg bg-[var(--border)]/60" />
+      <div className="h-16 rounded-xl bg-[var(--border)]/50" />
+      {Array.from({ length: 5 }, (_, index) => (
+        <div key={index} className="h-14 rounded-xl bg-[var(--border)]/40" />
+      ))}
     </div>
   );
 }
@@ -755,100 +872,156 @@ function WeekBoard({
   );
 }
 
+/** Appointment history: Upcoming / Past, a date range, grouped by day, with outcome counts. */
 function HistorySurface({
   appointments,
   therapists,
+  today,
   slotMinutes,
   colorFor,
   therapistNameFor,
-  from,
-  query,
-  status,
-  therapistFilter,
-  onQueryChange,
-  onStatusChange,
-  onTherapistChange,
-  onLoadMore,
   onSelect,
 }: {
   appointments: Appointment[];
   /** Empty hides the therapist filter (therapist logins see only their own). */
   therapists: { id: UUID; name: string }[];
+  today: string;
   slotMinutes: number;
   colorFor: (appointment: Appointment) => string;
   therapistNameFor: (appointment: Appointment) => string;
-  from: string;
-  query: string;
-  status: string;
-  therapistFilter: string;
-  onQueryChange: (value: string) => void;
-  onStatusChange: (value: string) => void;
-  onTherapistChange: (value: string) => void;
-  onLoadMore: () => void;
   onSelect: (appointment: Appointment) => void;
 }) {
-  const rows = filterHistory(appointments, { from, query, status, therapistId: therapistFilter });
-  const hasMore = appointments.some((a) => dateForAppointment(a) < from);
+  const [when, setWhen] = useState<'past' | 'upcoming'>('past');
+  const [from, setFrom] = useState(() => addDays(today, -30));
+  const [to, setTo] = useState(() => addDays(today, 30));
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('');
+  const [therapistFilter, setTherapistFilter] = useState('');
+
+  const noShowsByPatient = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const a of appointments) {
+      if (a.status !== 'no_show') continue;
+      const key = a.patientId ?? a.patientPhone.replace(/\D/g, '').slice(-10);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [appointments]);
+
+  const range = when === 'past' ? { from, to: addDays(today, -1) } : { from: today, to };
+  const rows = filterHistory(appointments, { from: range.from, query, status, therapistId: therapistFilter })
+    .filter((a) => dateForAppointment(a) <= range.to)
+    .sort((a, b) => (when === 'past' ? b.scheduledAt.localeCompare(a.scheduledAt) : a.scheduledAt.localeCompare(b.scheduledAt)));
+  const groups: { date: string; rows: Appointment[] }[] = [];
+  for (const row of rows) {
+    const key = dateForAppointment(row);
+    const last = groups[groups.length - 1];
+    if (last && last.date === key) last.rows.push(row);
+    else groups.push({ date: key, rows: [row] });
+  }
+  const counts = {
+    attended: rows.filter((a) => a.status === 'arrived').length,
+    noShow: rows.filter((a) => a.status === 'no_show').length,
+    cancelled: rows.filter((a) => a.status === 'cancelled').length,
+  };
+
   return (
-    <SectionCard title={`History (${rows.length})`}>
-      <div className={`mb-4 grid gap-2 ${therapists.length ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
-        <input className={inputCls} placeholder="Search name or phone" value={query} onChange={(event) => onQueryChange(event.target.value)} />
-        <select className={inputCls} value={status} onChange={(event) => onStatusChange(event.target.value)}>
+    <SectionCard title="History">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="flex rounded-lg border border-[var(--border)] p-0.5" role="tablist" aria-label="Upcoming or past">
+          {(['past', 'upcoming'] as const).map((candidate) => (
+            <button
+              key={candidate}
+              type="button"
+              role="tab"
+              aria-selected={when === candidate}
+              onClick={() => setWhen(candidate)}
+              className={`min-h-9 rounded-md px-3 text-xs font-medium ${when === candidate ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}
+            >
+              {candidate === 'past' ? 'Past' : 'Upcoming'}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+          {when === 'past' ? 'Since' : 'Until'}
+          <input
+            type="date"
+            className={`${inputCls} w-auto py-1.5`}
+            value={when === 'past' ? from : to}
+            max={when === 'past' ? today : undefined}
+            min={when === 'upcoming' ? today : undefined}
+            onChange={(event) => (when === 'past' ? setFrom(event.target.value) : setTo(event.target.value))}
+          />
+        </label>
+      </div>
+      <div className={`mb-3 grid gap-2 ${therapists.length ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+        <input className={inputCls} placeholder="Search name or phone" aria-label="Search name or phone" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <select className={inputCls} aria-label="Status" value={status} onChange={(event) => setStatus(event.target.value)}>
           <option value="">All statuses</option>
           {(['confirmed', 'rescheduled', 'arrived', 'no_show', 'cancelled'] as const).map((candidate) => (
             <option key={candidate} value={candidate}>{APPOINTMENT_STATUS_LABEL[candidate]}</option>
           ))}
         </select>
         {therapists.length > 0 && (
-          <select className={inputCls} value={therapistFilter} onChange={(event) => onTherapistChange(event.target.value)}>
+          <select className={inputCls} aria-label="Therapist" value={therapistFilter} onChange={(event) => setTherapistFilter(event.target.value)}>
             <option value="">All therapists</option>
             {therapists.map((therapist) => <option key={therapist.id} value={therapist.id}>{therapist.name}</option>)}
           </select>
         )}
       </div>
-      {rows.length ? (
-        <ul className="space-y-2">
-          {rows.map((appointment) => {
-            const style = APPOINTMENT_BLOCK_STYLE[appointment.status];
-            return (
-              <li key={appointment.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(appointment)}
-                  className={`flex w-full items-center gap-3 rounded-xl border-l-4 p-3 text-left ${style.fill}`}
-                  style={{ borderLeftColor: colorFor(appointment) }}
-                >
-                  <span className="w-24 shrink-0 text-xs text-[var(--muted)]">
-                    {new Date(appointment.scheduledAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })}
-                    <br />
-                    {minutesLabel(minutesOfDay(appointment.scheduledAt))} · {formatMinutes(appointmentMinutes(appointment, slotMinutes))}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className={`block truncate font-medium ${style.text}`}>{appointment.patientName}</span>
-                    <span className="block truncate text-xs text-[var(--muted)]">
-                      {therapistNameFor(appointment)} · {style.mark && <span aria-hidden>{style.mark} </span>}{APPOINTMENT_STATUS_LABEL[appointment.status]}
-                    </span>
-                  </span>
-                  {appointment.patientId && (
-                    <Link
-                      to="/patients/$patientId"
-                      params={{ patientId: appointment.patientId }}
-                      onClick={(event) => event.stopPropagation()}
-                      className="shrink-0 text-xs font-medium text-[var(--teal)] hover:underline"
-                    >
-                      Profile
-                    </Link>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        {rows.length} appointment{rows.length === 1 ? '' : 's'}
+        {when === 'past' && rows.length > 0 && ` · ${counts.attended} attended · ${counts.noShow} no-show · ${counts.cancelled} cancelled`}
+      </p>
+      {groups.length ? (
+        <div className="space-y-4">
+          {groups.map((group) => (
+            <section key={group.date} aria-label={longDate(group.date)}>
+              <h3 className="sticky top-0 mb-1.5 bg-[var(--surface)] py-1 text-xs font-semibold text-[var(--muted)]">
+                {longDate(group.date)}
+              </h3>
+              <ul className="space-y-2">
+                {group.rows.map((appointment) => {
+                  const style = APPOINTMENT_BLOCK_STYLE[appointment.status];
+                  const key = appointment.patientId ?? appointment.patientPhone.replace(/\D/g, '').slice(-10);
+                  const noShows = noShowsByPatient.get(key) ?? 0;
+                  return (
+                    <li key={appointment.id}>
+                      <button
+                        type="button"
+                        onClick={() => onSelect(appointment)}
+                        className={`flex w-full items-center gap-3 rounded-xl border-l-4 p-3 text-left ${style.fill}`}
+                        style={{ borderLeftColor: colorFor(appointment) }}
+                      >
+                        <span className="w-16 shrink-0 text-xs text-[var(--muted)]">
+                          {minutesLabel(minutesOfDay(appointment.scheduledAt))}
+                          <br />
+                          {formatMinutes(appointmentMinutes(appointment, slotMinutes))}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className={`block truncate font-medium ${style.text}`}>
+                            {appointment.patientName}
+                            {noShows >= 2 && (
+                              <span className="ml-1.5 rounded bg-[var(--rust-light)] px-1 text-[10px] font-medium text-[var(--rust)]" title={`${noShows} no-shows`}>
+                                {noShows} no-shows
+                              </span>
+                            )}
+                          </span>
+                          <span className="block truncate text-xs text-[var(--muted)]">
+                            {therapistNameFor(appointment)} · {style.mark && <span aria-hidden>{style.mark} </span>}{APPOINTMENT_STATUS_LABEL[appointment.status]}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
       ) : (
-        <p className="py-6 text-center text-sm text-[var(--muted)]">No appointments in this range.</p>
+        <p className="py-6 text-center text-sm text-[var(--muted)]">No appointments match.</p>
       )}
-      {hasMore && <button type="button" className={`${btnSecondary} mt-4`} onClick={onLoadMore}>Load previous 30 days</button>}
     </SectionCard>
   );
 }
-

@@ -128,7 +128,7 @@ describe('BookSlotSheet', () => {
     fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '9820000002' } });
     fireEvent.change(screen.getByLabelText('Length'), { target: { value: '45' } });
     fireEvent.click(slot('9:00 AM'));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
 
     await waitFor(() => expect(onBooked).toHaveBeenCalled());
     const scheduledAt = localDateTime('2026-10-01', '09:00').toISOString();
@@ -150,12 +150,12 @@ describe('BookSlotSheet', () => {
     render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
     fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p2' } });
     fireEvent.click(slot('9:00 AM'));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
     expect(await screen.findByText(/no phone on file/)).toBeInTheDocument();
     expect(confirmBookingSlot).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText('Phone (none on file)'), { target: { value: '9820000003' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
     await waitFor(() =>
       expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ patientId: 'p2', patientPhone: '9820000003' }))
     );
@@ -205,11 +205,39 @@ describe('BookSlotSheet', () => {
     expect(slot('11:00 AM')).toBeEnabled(); // its own current slot is not "occupied"
 
     fireEvent.click(slot('11:30 AM'));
-    fireEvent.click(screen.getByRole('button', { name: 'Move appointment' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Move appointment/ }));
     await waitFor(() =>
       expect(rescheduleAppointment).toHaveBeenCalledWith('a1', localDateTime('2026-10-01', '11:30').toISOString(), 30)
     );
     expect(confirmBookingSlot).not.toHaveBeenCalled();
     expect(onBooked).toHaveBeenCalledWith(expect.objectContaining({ kind: 'rescheduled', appointmentId: 'a1' }));
+  });
+  it('summarises the choice on the submit button', () => {
+    render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+    fireEvent.click(slot('10:30 AM'));
+    expect(screen.getByRole('button', { name: /^Confirm booking · Thu, 1 Oct, 10:30 AM · 30m$/ })).toBeInTheDocument();
+  });
+
+  it('jumps to the first available time', () => {
+    const busy = [
+      appointment({ id: 'b1', scheduledAt: localDateTime('2026-09-30', '10:00').toISOString() }),
+      appointment({ id: 'b2', scheduledAt: localDateTime('2026-09-30', '10:30').toISOString() }),
+    ];
+    render(<BookSlotSheet isOpen onClose={() => {}} appointments={busy} />);
+    fireEvent.click(screen.getByRole('button', { name: 'First available →' }));
+    // Now is 10:00 today; 10:00 and 10:30 are taken for t1 -> 11:00.
+    expect(slot('11:00 AM')).toHaveClass('bg-[var(--teal)]');
+  });
+
+  it("shows the patient's no-show history and an existing booking", () => {
+    const history = [
+      appointment({ id: 'n1', patientId: 'p1', status: 'no_show', scheduledAt: localDateTime('2026-09-01', '10:00').toISOString() }),
+      appointment({ id: 'n2', patientId: 'p1', status: 'no_show', scheduledAt: localDateTime('2026-09-10', '10:00').toISOString() }),
+      appointment({ id: 'u1', patientId: 'p1', scheduledAt: localDateTime('2026-10-05', '09:00').toISOString() }),
+    ];
+    render(<BookSlotSheet isOpen onClose={() => {}} appointments={history} />);
+    fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p1' } });
+    expect(screen.getByText(/2 no-shows in the last 6 months/)).toBeInTheDocument();
+    expect(screen.getByText(/Already booked: Mon, 5 Oct, 9:00 AM/)).toBeInTheDocument();
   });
 });

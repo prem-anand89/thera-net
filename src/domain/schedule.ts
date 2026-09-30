@@ -315,3 +315,96 @@ export function isPublicSlotTaken(
   if (therapistIds.length === 0) return booked.some((b) => busy(b.therapistId));
   return therapistIds.every((id) => busy(id));
 }
+
+export type Attendance = { attended: number; noShows: number; cancelled: number };
+
+const phoneDigits = (phone: string | null | undefined) => (phone ?? '').replace(/\D/g, '').slice(-10);
+
+/**
+ * A patient's recent track record, for the "2 no-shows in 6 months" badge.
+ * Matches by patient id when known, otherwise by the last 10 phone digits
+ * (appointments from public requests have no patient id until arrival).
+ * Only appointments already in the past count; `excludeId` skips the one
+ * being viewed.
+ */
+export function patientAttendance(
+  appointments: Appointment[],
+  who: { patientId?: string | null; phone?: string | null },
+  now: Date,
+  options: { sinceMonths?: number; excludeId?: string } = {}
+): Attendance {
+  const since = new Date(now);
+  since.setMonth(since.getMonth() - (options.sinceMonths ?? 6));
+  const digits = phoneDigits(who.phone);
+  const result: Attendance = { attended: 0, noShows: 0, cancelled: 0 };
+  for (const a of appointments) {
+    if (a.id === options.excludeId) continue;
+    const same = who.patientId
+      ? a.patientId === who.patientId || (!a.patientId && digits.length === 10 && phoneDigits(a.patientPhone) === digits)
+      : digits.length === 10 && phoneDigits(a.patientPhone) === digits;
+    if (!same) continue;
+    const at = new Date(a.scheduledAt);
+    if (at >= now || at < since) continue;
+    if (a.status === 'no_show') result.noShows += 1;
+    else if (a.status === 'cancelled') result.cancelled += 1;
+    else if (a.status === 'arrived' || a.visitId) result.attended += 1;
+  }
+  return result;
+}
+
+/** Earliest upcoming live appointment for the same patient, to avoid double-booking them. */
+export function nextAppointmentFor(
+  appointments: Appointment[],
+  who: { patientId?: string | null; phone?: string | null },
+  now: Date
+): Appointment | null {
+  const digits = phoneDigits(who.phone);
+  return (
+    appointments
+      .filter(
+        (a) =>
+          (a.status === 'confirmed' || a.status === 'rescheduled') &&
+          new Date(a.scheduledAt) >= now &&
+          ((who.patientId && a.patientId === who.patientId) ||
+            (digits.length === 10 && phoneDigits(a.patientPhone) === digits))
+      )
+      .sort((x, y) => x.scheduledAt.localeCompare(y.scheduledAt))[0] ?? null
+  );
+}
+
+/**
+ * Earliest bookable start across the given therapists, searching forward
+ * from `fromDate` for up to `days` days. Skips closed days, times that have
+ * passed, times that would run past closing, and anything overlapping an
+ * existing (non-cancelled) appointment for the chosen length.
+ */
+export function firstAvailableSlot(input: {
+  appointments: Appointment[];
+  therapistIds: string[];
+  fromDate: string;
+  days: number;
+  hours: { startHour: number; endHour: number };
+  slotMinutes: number;
+  lengthMinutes: number;
+  now: Date;
+  isClosed: (date: string) => boolean;
+  ignoreAppointmentId?: string;
+}): { date: string; time: string; therapistId: string } | null {
+  const slots = generateScheduleSlots(input.slotMinutes, input.hours.startHour, input.hours.endHour);
+  for (let offset = 0; offset < input.days; offset += 1) {
+    const date = addDays(input.fromDate, offset);
+    if (input.isClosed(date)) continue;
+    for (const slot of slots) {
+      if (slot.minutes + input.lengthMinutes > input.hours.endHour * 60) continue;
+      if (localDateTime(date, slot.time).getTime() < input.now.getTime()) continue;
+      for (const therapistId of input.therapistIds) {
+        const busy = isTherapistSlotOccupied(input.appointments, therapistId, date, slot.time, input.lengthMinutes, {
+          fallbackMinutes: input.slotMinutes,
+          ignoreAppointmentId: input.ignoreAppointmentId,
+        });
+        if (!busy) return { date, time: slot.time, therapistId };
+      }
+    }
+  }
+  return null;
+}

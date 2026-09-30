@@ -167,32 +167,29 @@ function MiniCalendar({
 
 function TimeGroup({
   label,
-  icon,
   slots,
   selectedTime,
   onSelect,
 }: {
   label: string;
-  icon: string;
   slots: string[];
   selectedTime: string | null;
   onSelect: (t: string) => void;
 }) {
   if (slots.length === 0) return null;
   return (
-    <div className="mb-4">
-      <p className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-        <span>{icon}</span> {label}
-      </p>
-      <div className="flex flex-wrap gap-2">
+    <div className="mb-4 last:mb-0">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">{label}</p>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {slots.map((t) => {
           const sel = t === selectedTime;
           return (
             <button
               key={t}
               type="button"
+              aria-pressed={sel}
               onClick={() => onSelect(t)}
-              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${
+              className={`min-h-11 rounded-xl border text-sm font-medium transition-colors ${
                 sel
                   ? 'border-[var(--teal)] bg-[var(--teal)] text-white shadow-sm'
                   : 'border-[var(--border)] bg-white text-[var(--ink)] hover:border-[var(--teal)] hover:text-[var(--teal)]'
@@ -207,6 +204,14 @@ function TimeGroup({
   );
 }
 
+const COUNTRY_CODES = [
+  { code: '+91', flag: '🇮🇳', name: 'India' },
+  { code: '+1', flag: '🇺🇸', name: 'US / Canada' },
+  { code: '+44', flag: '🇬🇧', name: 'UK' },
+  { code: '+61', flag: '🇦🇺', name: 'Australia' },
+  { code: '+971', flag: '🇦🇪', name: 'UAE' },
+  { code: '', flag: '🌍', name: 'Other (type full number)' },
+];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -296,7 +301,7 @@ export function BookingFormPage() {
       await bookingService.submitAppointmentRequest(
         clinicSlug,
         name.trim(),
-        `${countryCode} ${phone.trim()}`,
+        [countryCode, phone.trim()].filter(Boolean).join(' '),
         email.trim() || null,
         preferredTherapistId || null,
         notes.trim() || null,
@@ -362,21 +367,35 @@ export function BookingFormPage() {
     durationMinutes: a.duration_minutes,
   }));
   const nowTime = new Date();
-  const openSlots = allSlots.filter((slot) => {
-    if (!preferredDate) return true;
-    if (preferredDate === isoDate(nowTime) && slot.minutes <= nowTime.getHours() * 60 + nowTime.getMinutes()) return false;
-    return !isPublicSlotTaken(
-      preferredDate,
-      slot.minutes,
-      slotDuration,
-      booked,
-      therapists.map((t) => t.id),
-      preferredTherapistId || null
-    );
-  });
-  const morning = openSlots.filter((slot) => slot.minutes < 12 * 60).map((slot) => slot.label);
-  const afternoon = openSlots.filter((slot) => slot.minutes >= 12 * 60).map((slot) => slot.label);
-  const quickDates = Array.from({ length: 7 }, (_, index) => addDays(isoDate(new Date()), index));
+  const todayIso = isoDate(nowTime);
+  const openSlotsOn = (date: string) =>
+    allSlots.filter((slot) => {
+      if (date === todayIso && slot.minutes <= nowTime.getHours() * 60 + nowTime.getMinutes()) return false;
+      return !isPublicSlotTaken(date, slot.minutes, slotDuration, booked, therapists.map((t) => t.id), preferredTherapistId || null);
+    });
+  const openSlots = preferredDate ? openSlotsOn(preferredDate) : [];
+  const groups = [
+    { label: 'Morning', slots: openSlots.filter((slot) => slot.minutes < 12 * 60) },
+    { label: 'Afternoon', slots: openSlots.filter((slot) => slot.minutes >= 12 * 60 && slot.minutes < 17 * 60) },
+    { label: 'Evening', slots: openSlots.filter((slot) => slot.minutes >= 17 * 60) },
+  ];
+  const todayDate = new Date(`${todayIso}T00:00:00`);
+  const dayOpen = (date: string) => getDayStatus(new Date(`${date}T00:00:00`), todayDate, availability) === 'available';
+  const quickDates = Array.from({ length: 7 }, (_, index) => addDays(todayIso, index));
+  // When the chosen day is full, offer the next day that still has a time.
+  const nextOpenDay =
+    preferredDate && openSlots.length === 0
+      ? Array.from({ length: 30 }, (_, index) => addDays(preferredDate, index + 1)).find(
+          (date) => dayOpen(date) && openSlotsOn(date).length > 0
+        ) ?? null
+      : null;
+  const pickDate = (date: string) => {
+    setPreferredDate(date);
+    setPreferredTime(null);
+    setCalendarOpen(false);
+  };
+  const dayChipLabel = (date: string, index: number) =>
+    index === 0 ? 'Today' : index === 1 ? 'Tomorrow' : new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' });
 
   // ── Layout ────────────────────────────────────────────────────────────────
   return (
@@ -423,24 +442,33 @@ export function BookingFormPage() {
             </Field>
 
             <Field label="Phone number *">
-              <div className="flex h-[46px]">
-                <select
-                  className={`${selectCls} max-w-[100px] shrink-0 text-ellipsis overflow-hidden`}
-                  value={countryCode}
-                  onChange={(e) => setCountryCode(e.target.value)}
-                >
-                  <option value="+91">🇮🇳 +91</option>
-                  <option value="+1">🇺🇸 +1</option>
-                  <option value="+44">🇬🇧 +44</option>
-                  <option value="+61">🇦🇺 +61</option>
-                  <option value="+971">🇦🇪 +971</option>
-                  <option value="">🌍 Other</option>
-                </select>
+              <div className="flex h-[46px] rounded-[10px] border border-[var(--border)] bg-white focus-within:border-[var(--teal)]">
+                {/* The visible label sizes the box to its content; the native
+                    select sits on top, invisible, so the phone's own picker opens. */}
+                <div className="relative flex shrink-0 items-center gap-1 rounded-l-[10px] border-r border-[var(--border)] bg-[var(--paper)] px-2.5 text-sm font-medium text-[var(--ink)]">
+                  <span aria-hidden>{COUNTRY_CODES.find((c) => c.code === countryCode)?.flag ?? '🌍'}</span>
+                  <span aria-hidden>{countryCode || '+'}</span>
+                  <span aria-hidden className="text-[10px] text-[var(--muted)]">▾</span>
+                  <select
+                    aria-label="Country code"
+                    className="absolute inset-0 cursor-pointer opacity-0"
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
+                  >
+                    {COUNTRY_CODES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.flag} {c.name} {c.code}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <input
                   type="tel"
-                  autoComplete="tel"
-                  placeholder="9876543210"
-                  className={`${inputCls} h-full rounded-l-none border-l-0`}
+                  inputMode="tel"
+                  autoComplete="tel-national"
+                  aria-label="Phone number"
+                  placeholder={countryCode === '+91' ? '98765 43210' : countryCode ? 'Phone number' : 'Full number with country code'}
+                  className="min-w-0 flex-1 rounded-r-[10px] bg-transparent px-3 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                 />
@@ -490,67 +518,94 @@ export function BookingFormPage() {
               </div>
             </div>
 
-            {/* --- Date Picker --- */}
-            <div className="border-t border-[var(--border)] pt-4 mt-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-3">Preferred date & time</p>
-              <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-                {quickDates.map((date, index) => (
-                  <button
-                    key={date}
-                    type="button"
-                    onClick={() => {
-                      setPreferredDate(date);
-                      setPreferredTime(null);
-                      setCalendarOpen(false);
-                    }}
-                    className={`min-h-11 shrink-0 rounded-lg border px-3 text-xs font-medium ${preferredDate === date ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] bg-white text-[var(--ink)]'}`}
-                  >
-                    {index === 0 ? 'Today' : index === 1 ? 'Tomorrow' : new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' })}
+            {/* --- Preferred date & time --- */}
+            <div className="mt-4 border-t border-[var(--border)] pt-4">
+              <div className="mb-3 flex items-baseline justify-between">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Preferred date & time</p>
+                {preferredDate && (
+                  <button type="button" className="text-xs text-[var(--muted)] hover:text-[var(--ink)]" onClick={() => { setPreferredDate(null); setPreferredTime(null); }}>
+                    Clear
                   </button>
-                ))}
-                <button type="button" onClick={() => setCalendarOpen(true)} className="min-h-11 shrink-0 rounded-lg border border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)]">Later…</button>
-              </div>
-              {/* Date trigger + popover wrapper — relative so the calendar overlays content below */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setCalendarOpen(prev => !prev)}
-                  className="w-full flex items-center justify-between rounded-[10px] border border-[var(--border)] bg-white p-3 text-sm text-left transition-colors hover:border-[var(--teal)]"
-                >
-                  <span className={preferredDate ? 'text-[var(--ink)] font-medium' : 'text-[var(--muted)]'}>
-                    {preferredDate
-                      ? new Date(preferredDate + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })
-                      : 'Choose another date'}
-                  </span>
-                  <span className="text-[var(--muted)] text-xs">{calendarOpen ? '▲' : '▼'}</span>
-                </button>
-
-                {/* Calendar overlays content below — position absolute, z-index high */}
-                {calendarOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setCalendarOpen(false)} />
-                    <div className="absolute left-0 right-0 bottom-full mb-2 z-50 rounded-[12px] border border-[var(--border)] bg-white p-4 shadow-2xl">
-                      <MiniCalendar
-                        selectedDate={preferredDate}
-                        availability={availability}
-                        onSelect={(d) => {
-                          setPreferredDate(d);
-                          setPreferredTime(null);
-                          setCalendarOpen(false);
-                        }}
-                      />
-                    </div>
-                  </>
                 )}
               </div>
 
-              {/* Time slots — appear below only after a date is selected */}
-              {preferredDate && (
-                <div className="mt-4 space-y-4">
-                  <TimeGroup label="Morning" icon="☀️" slots={morning} selectedTime={preferredTime} onSelect={setPreferredTime} />
-                  <TimeGroup label="Afternoon" icon="🌤️" slots={afternoon} selectedTime={preferredTime} onSelect={setPreferredTime} />
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-8" role="group" aria-label="Choose a day">
+                {quickDates.map((date, index) => {
+                  const open = dayOpen(date);
+                  const selected = preferredDate === date;
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      disabled={!open}
+                      onClick={() => pickDate(date)}
+                      aria-pressed={selected}
+                      className={`flex min-h-12 flex-col items-center justify-center rounded-xl border px-1 text-xs font-medium ${
+                        selected
+                          ? 'border-[var(--teal)] bg-[var(--teal)] text-white'
+                          : open
+                            ? 'border-[var(--border)] bg-white text-[var(--ink)] hover:border-[var(--teal)]'
+                            : 'border-transparent bg-[var(--paper)] text-[var(--muted)] line-through opacity-60'
+                      }`}
+                    >
+                      {dayChipLabel(date, index)}
+                      {!open && <span className="text-[9px] font-normal no-underline">closed</span>}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  aria-expanded={calendarOpen}
+                  onClick={() => setCalendarOpen((prev) => !prev)}
+                  className={`min-h-12 rounded-xl border px-1 text-xs font-medium ${
+                    preferredDate && !quickDates.includes(preferredDate)
+                      ? 'border-[var(--teal)] bg-[var(--teal)] text-white'
+                      : 'border-[var(--border)] bg-white text-[var(--teal)]'
+                  }`}
+                >
+                  {preferredDate && !quickDates.includes(preferredDate)
+                    ? new Date(`${preferredDate}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                    : 'Later…'}
+                </button>
+              </div>
+
+              {/* Opens in place (no pop-over), so it never clips on a phone. */}
+              {calendarOpen && (
+                <div className="mt-3 rounded-xl border border-[var(--border)] bg-white p-3">
+                  <MiniCalendar selectedDate={preferredDate} availability={availability} onSelect={pickDate} />
                 </div>
               )}
+
+              {preferredDate && (
+                <div className="mt-4">
+                  {openSlots.length === 0 ? (
+                    <div className="rounded-xl bg-[var(--paper)] p-4 text-center text-sm text-[var(--muted)]">
+                      <p>No times left on this day.</p>
+                      {nextOpenDay && (
+                        <button type="button" onClick={() => pickDate(nextOpenDay)} className="mt-2 min-h-10 rounded-full border border-[var(--teal)] px-4 text-sm font-medium text-[var(--teal)]">
+                          Try {new Date(`${nextOpenDay}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} →
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    groups.map((group) => (
+                      <TimeGroup
+                        key={group.label}
+                        label={group.label}
+                        slots={group.slots.map((slot) => slot.label)}
+                        selectedTime={preferredTime}
+                        onSelect={(time) => setPreferredTime(time === preferredTime ? null : time)}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
+
+              <p className="mt-3 rounded-lg bg-[var(--paper)] px-3 py-2 text-sm text-[var(--ink)]" aria-live="polite">
+                {preferredDate
+                  ? `${new Date(`${preferredDate}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}${preferredTime ? ` · ${preferredTime}` : ' · any time'}`
+                  : 'No preference — the clinic will suggest a time.'}
+              </p>
             </div>
 
             {/* Error + Submit */}
@@ -580,8 +635,6 @@ export function BookingFormPage() {
 
 const inputCls =
   'w-full rounded-[10px] border border-[var(--border)] bg-white p-3 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:border-[var(--teal)] focus:outline-none transition-colors';
-
-const selectCls = 'h-full rounded-l-[10px] border border-r-0 border-[var(--border)] bg-[var(--paper)] px-3 text-sm text-[var(--muted)] font-medium focus:outline-none';
 
 
 

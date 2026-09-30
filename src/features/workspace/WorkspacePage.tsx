@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService, reportService, feedbackService, bookingService } from '@/services';
+import { repos, dashboardService, reportService, feedbackService } from '@/services';
 import { db } from '@/lib/db';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
@@ -15,13 +15,19 @@ import {
   type ConsultationNote,
   type FeedbackRequest,
   type FeedbackResponse,
+  type Appointment,
   type Visit,
 } from '@/domain/types';
+import { appointmentStartsOnDate, minutesOfDay, patientAttendance, toLocalDateStr } from '@/domain/schedule';
+import { AgendaList } from '@/components/schedule/AgendaList';
+import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
+import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
+import { BookSlotSheet } from '@/components/BookSlotSheet';
+import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { noteForVisit } from '@/domain/noteLinks';
 import { toFriendlyMessage } from '@/lib/errors';
 import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
 import type { OpenPackageRow, TodayVisitRow } from '@/services/dashboardService';
-import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import {
   btnPrimary,
   SectionCard,
@@ -223,14 +229,56 @@ export function WorkspacePage() {
   // already is: clinic-wide for admin/front_desk, own-therapist otherwise
   // (scope.scopeTherapistId already resolves to undefined for the
   // clinic-wide roles — see useWorkspaceScope's own doc comment).
-  const todayAppointmentsList = useLiveQuery(
-    () =>
-      clinic.enablePatientComms
-        ? dashboardService.todayAppointments(clinic.id, new Date(), scope.scopeTherapistId)
-        : undefined,
-    [clinic.id, clinic.enablePatientComms, scope.scopeTherapistId]
+  const workspaceAppointments = useLiveQuery(
+    () => (clinic.enablePatientComms ? repos.appointments.listByClinic(clinic.id) : undefined),
+    [clinic.id, clinic.enablePatientComms]
   );
+  const workspaceTherapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const canManageBookings = scope.isClinicWideView;
+  const [nowMinutes, setNowMinutes] = useState(() => new Date().getHours() * 60 + new Date().getMinutes());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMinutes(new Date().getHours() * 60 + new Date().getMinutes()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  const therapistRoster = useMemo(
+    () =>
+      new Map(
+        [...(workspaceTherapists ?? [])]
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((t, index) => [t.id, { name: t.name, phone: t.phone ?? null, color: therapistColor(index) }] as const)
+      ),
+    [workspaceTherapists]
+  );
+  // Same scoping as "Seen today": clinic-wide for admin/front desk, own column
+  // for a therapist (scopeTherapistId is undefined for the clinic-wide roles).
+  const expectedToday = useMemo(() => {
+    const todayStr = toLocalDateStr(new Date());
+    return (workspaceAppointments ?? [])
+      .filter(
+        (a) =>
+          a.status !== 'cancelled' &&
+          appointmentStartsOnDate(a, todayStr) &&
+          (!scope.scopeTherapistId || a.therapistId === scope.scopeTherapistId)
+      )
+      .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+  }, [workspaceAppointments, scope.scopeTherapistId]);
+  // "Next up": the first still-to-come appointment (15 minutes' grace for late arrivals).
+  const nextUpId = expectedToday.find(
+    (a) => (a.status === 'confirmed' || a.status === 'rescheduled') && minutesOfDay(a.scheduledAt) >= nowMinutes - 15
+  )?.id ?? null;
+  const appointmentColor = useCallback(
+    (a: Appointment) => (a.therapistId && therapistRoster.get(a.therapistId)?.color) || UNASSIGNED_COLOR,
+    [therapistRoster]
+  );
+  const appointmentTherapistName = useCallback(
+    (a: Appointment) => (a.therapistId ? therapistRoster.get(a.therapistId)?.name ?? 'Former therapist' : 'Unassigned'),
+    [therapistRoster]
+  );
+  const [openAppointmentId, setOpenAppointmentId] = useState<string | null>(null);
+  const [reschedulingAppointment, setReschedulingAppointment] = useState<Appointment | null>(null);
+  const openAppointment = openAppointmentId
+    ? (workspaceAppointments ?? []).find((a) => a.id === openAppointmentId) ?? null
+    : null;
   // Same caveat as Ledger's totals, and arguably more time-sensitive here —
   // "Collected today" is the number staff actually watch through the day.
   // See LedgerPage's own comment on why unsynced changes take priority
@@ -408,6 +456,31 @@ export function WorkspacePage() {
 
   return (
     <div className="space-y-5">
+      <InstallAppBanner />
+      <AppointmentDetailsPanel
+        appointment={openAppointment}
+        therapistName={openAppointment ? appointmentTherapistName(openAppointment) : ''}
+        therapistColor={openAppointment ? appointmentColor(openAppointment) : UNASSIGNED_COLOR}
+        therapistPhone={openAppointment?.therapistId ? therapistRoster.get(openAppointment.therapistId)?.phone ?? null : null}
+        attendance={
+          openAppointment
+            ? patientAttendance(workspaceAppointments ?? [], { patientId: openAppointment.patientId, phone: openAppointment.patientPhone }, new Date(), { excludeId: openAppointment.id })
+            : null
+        }
+        slotMinutes={clinic.slotDurationMinutes || 30}
+        canManage={Boolean(openAppointment) && (canManageBookings || openAppointment?.therapistId === scope.myTherapistId)}
+        onClose={() => setOpenAppointmentId(null)}
+        onReschedule={(appointment) => {
+          setOpenAppointmentId(null);
+          setReschedulingAppointment(appointment);
+        }}
+      />
+      <BookSlotSheet
+        isOpen={reschedulingAppointment !== null}
+        onClose={() => setReschedulingAppointment(null)}
+        appointments={workspaceAppointments ?? []}
+        rescheduleAppointment={reschedulingAppointment ?? undefined}
+      />
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Workspace</h1>
@@ -456,10 +529,10 @@ export function WorkspacePage() {
           </p>
           <Link
             to="/schedule"
-            search={{ tab: 'bookings' }}
+            search={{ tab: 'bookings', view: 'requests' }}
             className="whitespace-nowrap text-sm font-medium text-[var(--teal)] hover:underline"
           >
-            See all →
+            Review →
           </Link>
         </div>
       )}
@@ -493,236 +566,27 @@ export function WorkspacePage() {
 
       {clinic.enablePatientComms && (
         <SectionCard
-          title={
-            todayAppointmentsList && todayAppointmentsList.length === 1
-              ? 'Expected today (1)'
-              : `Expected today (${todayAppointmentsList?.length ?? 0})`
-          }
+          title={`Expected today (${expectedToday.length})`}
           action={
             <Link to="/schedule" className="text-sm font-medium text-[var(--teal)] hover:underline">
               Open schedule
             </Link>
           }
         >
-          {!todayAppointmentsList || todayAppointmentsList.length === 0 ? (
+          {expectedToday.length === 0 ? (
             <p className="text-sm text-[var(--muted)]">No appointments confirmed for today.</p>
           ) : (
-            <>
-              {/* Below tab: pill cards on phone; table from iPad portrait up. */}
-              <div className="tab:hidden space-y-2">
-                {todayAppointmentsList.map((a) => (
-                  <div
-                    key={a.id}
-                    className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="font-display text-sm font-medium text-[var(--ink)]">
-                          {a.patientId ? (
-                            <Link
-                              to="/patients/$patientId"
-                              params={{ patientId: a.patientId }}
-                              search={{ from: '/workspace' }}
-                              className="text-[var(--teal)] hover:underline"
-                            >
-                              {a.patientName}
-                            </Link>
-                          ) : (
-                            a.patientName
-                          )}
-                        </div>
-                        <div className="text-xs text-[var(--muted)]">
-                          {new Date(a.scheduledAt).toLocaleTimeString('en-IN', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                          {a.therapistName && <> · {a.therapistName}</>}
-                        </div>
-                      </div>
-                      <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>
-                        {APPOINTMENT_STATUS_LABEL[a.status]}
-                      </Pill>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {(a.status === 'confirmed' || a.status === 'rescheduled') && (
-                        <button
-                          type="button"
-                          className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
-                          onClick={() =>
-                            void bookingService
-                              .markAppointmentArrived(a.id)
-                              .catch((e) => alert(toFriendlyMessage(e)))
-                          }
-                        >
-                          Mark arrived
-                        </button>
-                      )}
-                      {canManageBookings &&
-                        (a.status === 'confirmed' || a.status === 'rescheduled') && (
-                          <button
-                            type="button"
-                            className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
-                            onClick={() =>
-                              void bookingService
-                                .markAppointmentNoShow(a.id)
-                                .catch((e) => alert(toFriendlyMessage(e)))
-                            }
-                          >
-                            No-show
-                          </button>
-                        )}
-                      {canManageBookings &&
-                        (a.status === 'confirmed' || a.status === 'rescheduled') && (
-                          <button
-                            type="button"
-                            className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--rust)] hover:bg-[var(--paper)]"
-                            onClick={() => {
-                              if (!confirm('Cancel this appointment?')) return;
-                              void bookingService
-                                .cancelAppointment(a.id)
-                                .catch((e) => alert(toFriendlyMessage(e)));
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      {!a.visitId && a.status !== 'cancelled' && a.status !== 'no_show' && (
-                        <Link
-                          to="/visits/new"
-                          search={{
-                            appointmentId: a.id,
-                            prefillName: a.patientName,
-                            prefillPhone: a.patientPhone,
-                            // Set when this appointment was booked via the
-                            // Patients-list "Book" action or an explicit
-                            // Confirm-step pick — identity is already
-                            // known, so New Visit pre-selects that patient
-                            // instead of re-running the typeahead.
-                            ...(a.patientId ? { patientId: a.patientId } : {}),
-                          }}
-                          className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
-                        >
-                          Create visit
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="hidden tab:block overflow-x-auto">
-                <table className="min-w-full divide-y divide-[var(--border)]">
-                  <thead className="bg-[var(--paper)]">
-                    <tr>
-                      <th className={th}>Time</th>
-                      <th className={th}>Patient</th>
-                      <th className={th}>Therapist</th>
-                      <th className={th}>Status</th>
-                      <th className={th}></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--border)]">
-                    {todayAppointmentsList.map((a) => (
-                      <tr key={a.id}>
-                        <td className={td}>
-                          {new Date(a.scheduledAt).toLocaleTimeString('en-IN', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </td>
-                        <td className={td}>
-                          {a.patientId ? (
-                            <Link
-                              to="/patients/$patientId"
-                              params={{ patientId: a.patientId }}
-                              search={{ from: '/workspace' }}
-                              className="font-medium text-[var(--teal)] hover:underline"
-                            >
-                              {a.patientName}
-                            </Link>
-                          ) : (
-                            a.patientName
-                          )}
-                        </td>
-                        <td className={td}>{a.therapistName ?? '—'}</td>
-                        <td className={td}>
-                          <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>
-                            {APPOINTMENT_STATUS_LABEL[a.status]}
-                          </Pill>
-                        </td>
-                        <td className={td}>
-                          <div className="flex flex-wrap items-center justify-end gap-2">
-                            {(a.status === 'confirmed' || a.status === 'rescheduled') && (
-                              <button
-                                type="button"
-                                className="whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
-                                onClick={() =>
-                                  void bookingService
-                                    .markAppointmentArrived(a.id)
-                                    .catch((e) => alert(toFriendlyMessage(e)))
-                                }
-                              >
-                                Mark arrived
-                              </button>
-                            )}
-                            {canManageBookings &&
-                              (a.status === 'confirmed' || a.status === 'rescheduled') && (
-                                <button
-                                  type="button"
-                                  className="whitespace-nowrap text-xs font-medium text-[var(--muted)] hover:underline"
-                                  onClick={() =>
-                                    void bookingService
-                                      .markAppointmentNoShow(a.id)
-                                      .catch((e) => alert(toFriendlyMessage(e)))
-                                  }
-                                >
-                                  No-show
-                                </button>
-                              )}
-                            {canManageBookings &&
-                              (a.status === 'confirmed' || a.status === 'rescheduled') && (
-                                <button
-                                  type="button"
-                                  className="whitespace-nowrap text-xs font-medium text-[var(--rust)] hover:underline"
-                                  onClick={() => {
-                                    if (!confirm('Cancel this appointment?')) return;
-                                    void bookingService
-                                      .cancelAppointment(a.id)
-                                      .catch((e) => alert(toFriendlyMessage(e)));
-                                  }}
-                                >
-                                  Cancel
-                                </button>
-                              )}
-                            {/* patientId can now be set before visitId too —
-                              the Patients-list "Book" action and an
-                              explicit Confirm-step pick both link identity
-                              at booking time (see the patient_id-linking
-                              migration). When it's set, pass it through so
-                              New Visit pre-selects that patient instead of
-                              re-running the name/phone typeahead. */}
-                            {!a.visitId && a.status !== 'cancelled' && a.status !== 'no_show' && (
-                              <Link
-                                to="/visits/new"
-                                search={{
-                                  appointmentId: a.id,
-                                  prefillName: a.patientName,
-                                  prefillPhone: a.patientPhone,
-                                  ...(a.patientId ? { patientId: a.patientId } : {}),
-                                }}
-                                className="whitespace-nowrap rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
-                              >
-                                Create visit
-                              </Link>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+            <AgendaList
+              appointments={expectedToday}
+              slotMinutes={clinic.slotDurationMinutes || 30}
+              colorFor={appointmentColor}
+              therapistNameFor={appointmentTherapistName}
+              showTherapist={canManageBookings}
+              gaps={[]}
+              nowMinutes={nowMinutes}
+              highlightId={nextUpId}
+              onSelect={(a) => setOpenAppointmentId(a.id)}
+            />
           )}
         </SectionCard>
       )}

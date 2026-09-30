@@ -1,6 +1,12 @@
 import type { UUID } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
 import { openPatientWhatsAppChat } from '@/lib/pdfShare';
+import {
+  patientMessage,
+  therapistMessage,
+  type PatientMessageKind,
+  type TherapistMessageKind,
+} from '@/domain/bookingMessages';
 import { syncEngine } from '@/sync/engine';
 
 /**
@@ -211,9 +217,29 @@ export const bookingService = {
     syncEngine.schedule(0);
   },
 
-  /** Explicit, separate share action from `shareTherapistNotify` — see
-   *  the plan's own "two independent share actions, not one combined
-   *  message" note; a click sends one WhatsApp share sheet, not two. */
+  /** Opens WhatsApp with the patient message (booked / moved / cancelled /
+   *  reminder). One tap per recipient — wa.me can't send in bulk. */
+  messagePatient(
+    kind: PatientMessageKind,
+    input: { patientName: string; patientPhone: string | null; clinicName: string; scheduledAt: string; therapistName?: string | null }
+  ): void {
+    openPatientWhatsAppChat(patientMessage(kind, input), input.patientPhone);
+  },
+
+  /** Opens WhatsApp to the therapist; patient shown as first name + initial. */
+  messageTherapist(
+    kind: TherapistMessageKind,
+    input: { therapistName: string; therapistPhone: string | null; patientName: string; scheduledAt: string }
+  ): void {
+    openPatientWhatsAppChat(therapistMessage(kind, input), input.therapistPhone);
+  },
+
+  /** Opens WhatsApp with arbitrary prepared text (e.g. a therapist's day list). */
+  sendText(text: string, phone: string | null): void {
+    openPatientWhatsAppChat(text, phone);
+  },
+
+  /** Kept for existing callers: the "booked" patient message. */
   async shareBookingConfirmation(
     _clinicId: UUID,
     patientName: string,
@@ -221,28 +247,6 @@ export const bookingService = {
     clinicName: string,
     scheduledAt: string
   ): Promise<void> {
-    const when = new Date(scheduledAt).toLocaleString('en-IN', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
-    const text = `Hi ${patientName}, your appointment at ${clinicName} is confirmed for ${when}. See you then!`;
-    openPatientWhatsAppChat(text, patientPhone);
-  },
-
-  /** Same `sendWhatsAppMessage` path as patient confirmation (wa.me by default;
-   *  optional Business API when enabled in Settings). */
-  async shareTherapistNotify(
-    _clinicId: UUID,
-    therapistName: string,
-    therapistPhone: string | null,
-    patientName: string,
-    scheduledAt: string
-  ): Promise<void> {
-    const when = new Date(scheduledAt).toLocaleString('en-IN', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
-    const text = `Hi ${therapistName}, you have an appointment with ${patientName} confirmed for ${when}.`;
-    openPatientWhatsAppChat(text, therapistPhone);
+    openPatientWhatsAppChat(patientMessage('booked', { patientName, clinicName, scheduledAt }), patientPhone);
   },
 };

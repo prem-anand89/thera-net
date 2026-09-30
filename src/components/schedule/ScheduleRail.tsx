@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { UUID } from '@/domain/types';
 import { addDays, toLocalDateStr, type ClosedDayInfo, type ClosedRange } from '@/domain/schedule';
 import { CLOSED_HATCH_STYLE } from './scheduleColors';
@@ -23,6 +23,8 @@ export function ScheduleRail({
   canEditClosures,
   onAddClosure,
   onRemoveClosure,
+  onOnlyTherapist,
+  requests,
 }: {
   date: string;
   today: string;
@@ -39,10 +41,15 @@ export function ScheduleRail({
   canEditClosures: boolean;
   onAddClosure: () => void;
   onRemoveClosure: (range: ClosedRange) => void;
+  /** Shows only this therapist. */
+  onOnlyTherapist?: (id: UUID) => void;
+  /** Pending booking requests section (admin / front desk). */
+  requests?: ReactNode;
 }) {
   return (
     <aside className="space-y-5" aria-label="Calendar sidebar">
       <MiniMonth date={date} today={today} onSelectDate={onSelectDate} dayState={dayState} />
+      {requests}
 
       {showTherapistToggles && (
         <section>
@@ -58,7 +65,7 @@ export function ScheduleRail({
             {therapists.map((therapist) => {
               const on = visibleIds.length === 0 || visibleIds.includes(therapist.id);
               return (
-                <li key={therapist.id}>
+                <li key={therapist.id} className="group relative">
                   <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2 hover:bg-[var(--paper)]">
                     <input
                       type="checkbox"
@@ -68,8 +75,18 @@ export function ScheduleRail({
                       style={{ accentColor: therapist.color }}
                     />
                     <span className="min-w-0 flex-1 truncate text-sm text-[var(--ink)]">{therapist.name}</span>
-                    <span className="shrink-0 text-[11px] text-[var(--muted)]">{therapist.summary}</span>
+                    <span className="shrink-0 text-[11px] text-[var(--muted)] group-hover:invisible group-focus-within:invisible">{therapist.summary}</span>
                   </label>
+                  {onOnlyTherapist && (
+                    <button
+                      type="button"
+                      className="invisible absolute right-2 top-1/2 -translate-y-1/2 rounded px-1.5 text-[11px] font-medium text-[var(--teal)] hover:underline group-hover:visible group-focus-within:visible"
+                      onClick={() => onOnlyTherapist(therapist.id)}
+                      aria-label={`Show only ${therapist.name}`}
+                    >
+                      only
+                    </button>
+                  )}
                 </li>
               );
             })}

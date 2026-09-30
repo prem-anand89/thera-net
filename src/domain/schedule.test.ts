@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -232,5 +232,50 @@ describe('slot-aligned free time', () => {
       { start: 570, end: 600 }, // 9:10 -> 9:30
       { start: 660, end: 720 },
     ]);
+  });
+});
+
+describe('patient history helpers', () => {
+  const now = localDateTime('2026-10-01', '12:00');
+  const rows = [
+    appt({ id: 'a1', patientId: 'p1', status: 'no_show', scheduledAt: at('2026-09-01', '10:00') }),
+    appt({ id: 'a2', patientId: null, patientPhone: '+91 98200 00001', status: 'no_show', scheduledAt: at('2026-09-10', '10:00') }),
+    appt({ id: 'a3', patientId: 'p1', status: 'cancelled', scheduledAt: at('2026-09-12', '10:00') }),
+    appt({ id: 'a4', patientId: 'p1', status: 'arrived', scheduledAt: at('2026-09-20', '10:00') }),
+    appt({ id: 'a5', patientId: 'p1', status: 'no_show', scheduledAt: at('2026-01-01', '10:00') }), // too old
+    appt({ id: 'a6', patientId: 'p1', status: 'confirmed', scheduledAt: at('2026-10-03', '10:00') }),
+    appt({ id: 'a7', patientId: 'p2', status: 'no_show', scheduledAt: at('2026-09-05', '10:00') }),
+  ];
+
+  it('counts recent outcomes by patient id, falling back to phone', () => {
+    expect(patientAttendance(rows, { patientId: 'p1', phone: '9820000001' }, now)).toEqual({ attended: 1, noShows: 2, cancelled: 1 });
+    expect(patientAttendance(rows, { phone: '98200-00001' }, now)).toEqual({ attended: 0, noShows: 1, cancelled: 0 });
+    expect(patientAttendance(rows, { patientId: 'p1' }, now, { excludeId: 'a1' }).noShows).toBe(0);
+  });
+
+  it('finds the patient’s next upcoming appointment', () => {
+    expect(nextAppointmentFor(rows, { patientId: 'p1' }, now)?.id).toBe('a6');
+    expect(nextAppointmentFor(rows, { patientId: 'p2' }, now)).toBeNull();
+  });
+
+  it('finds the first available slot across therapists, skipping closed days and busy time', () => {
+    const busy = [
+      appt({ id: 'b1', therapistId: 't1', scheduledAt: at('2026-10-02', '09:00'), durationMinutes: 60 }),
+      appt({ id: 'b2', therapistId: 't2', scheduledAt: at('2026-10-02', '09:00'), durationMinutes: 30 }),
+    ];
+    const base = {
+      appointments: busy,
+      fromDate: '2026-10-02',
+      days: 7,
+      hours: { startHour: 9, endHour: 12 },
+      slotMinutes: 30,
+      lengthMinutes: 30,
+      now,
+      isClosed: () => false,
+    };
+    expect(firstAvailableSlot({ ...base, therapistIds: ['t1', 't2'] })).toEqual({ date: '2026-10-02', time: '09:30', therapistId: 't2' });
+    expect(firstAvailableSlot({ ...base, therapistIds: ['t1'] })).toEqual({ date: '2026-10-02', time: '10:00', therapistId: 't1' });
+    expect(firstAvailableSlot({ ...base, therapistIds: ['t1'], isClosed: (d) => d === '2026-10-02' })?.date).toBe('2026-10-03');
+    expect(firstAvailableSlot({ ...base, therapistIds: ['t1'], ignoreAppointmentId: 'b1' })?.time).toBe('09:00');
   });
 });
