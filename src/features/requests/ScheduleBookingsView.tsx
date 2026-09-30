@@ -238,6 +238,13 @@ export function ScheduleBookingsView() {
   }, [confirmed]);
 
   const selectedAppointment = selectedId ? scopedAppointments.find((a) => a.id === selectedId) ?? null : null;
+  const seriesLabel = useMemo(() => {
+    if (!selectedAppointment?.seriesId) return null;
+    const members = (allAppointments ?? [])
+      .filter((a) => a.seriesId === selectedAppointment.seriesId)
+      .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+    return `Session ${members.findIndex((a) => a.id === selectedAppointment.id) + 1} of ${members.length}`;
+  }, [selectedAppointment, allAppointments]);
   const selectedAttendance = useMemo(
     () =>
       selectedAppointment
@@ -693,7 +700,8 @@ export function ScheduleBookingsView() {
       {confirmed && (
         <div role="status" className="fixed inset-x-4 bottom-20 z-20 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-[var(--teal)] bg-[var(--surface)] p-3 shadow-lg sm:bottom-4 sm:left-auto sm:max-w-md">
           <p className="text-sm text-[var(--ink)]">
-            <strong>{confirmed.patientName}</strong> {confirmed.kind === 'rescheduled' ? 'moved to' : 'booked for'}{' '}
+            <strong>{confirmed.patientName}</strong>{' '}
+            {confirmed.kind === 'rescheduled' ? 'moved to' : confirmed.sessions ? `— ${confirmed.sessions} sessions booked, first on` : 'booked for'}{' '}
             {new Date(confirmed.scheduledAt).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}.
           </p>
           <div className="flex items-center gap-2">
@@ -708,6 +716,7 @@ export function ScheduleBookingsView() {
                     clinicName: clinic.name,
                     scheduledAt: confirmed.scheduledAt,
                     therapistName: rosterById.get(confirmed.therapistId)?.name,
+                    sessions: confirmed.sessions,
                   })
                 }
               >
@@ -724,6 +733,7 @@ export function ScheduleBookingsView() {
                     therapistPhone: rosterById.get(confirmed.therapistId)!.phone,
                     patientName: confirmed.patientName,
                     scheduledAt: confirmed.scheduledAt,
+                    sessions: confirmed.sessions,
                   })
                 }
               >
@@ -742,6 +752,15 @@ export function ScheduleBookingsView() {
         therapistPhone={selectedAppointment?.therapistId ? rosterById.get(selectedAppointment.therapistId)?.phone ?? null : null}
         attendance={selectedAttendance}
         requestNotes={selectedAppointment?.requestId ? requestById.get(selectedAppointment.requestId)?.notes ?? null : null}
+        seriesLabel={seriesLabel}
+        onCancelSeries={
+          selectedAppointment?.seriesId
+            ? (appointment) =>
+                void bookingService
+                  .cancelAppointmentSeries(appointment.seriesId!, appointment.scheduledAt)
+                  .catch((error) => alert(toFriendlyMessage(error)))
+            : undefined
+        }
         slotMinutes={slotMinutes}
         canManage={selectedAppointment ? canManageAppointment(selectedAppointment) : false}
         onClose={() => setSelectedId(null)}

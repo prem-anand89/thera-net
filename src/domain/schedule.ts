@@ -480,3 +480,55 @@ export function describeDayHours(intervals: Interval[]): string {
   if (intervals.length === 0) return 'Off';
   return intervals.map((i) => `${minutesLabel(i.start)}–${minutesLabel(i.end)}`).join(', ');
 }
+
+// ---------------------------------------------------------------------------
+// Repeat bookings
+// ---------------------------------------------------------------------------
+
+/**
+ * The next `count` dates from `startDate` (inclusive) that fall on one of
+ * `weekdays` (0 = Sunday), skipping closed days. Capped at a year of looking.
+ */
+export function seriesDates(input: {
+  startDate: string;
+  weekdays: number[];
+  count: number;
+  isClosed?: (date: string) => boolean;
+}): string[] {
+  const days = new Set(input.weekdays);
+  const result: string[] = [];
+  if (days.size === 0) return result;
+  for (let offset = 0; result.length < input.count && offset < 366; offset += 1) {
+    const date = addDays(input.startDate, offset);
+    if (!days.has(localDateTime(date, '00:00').getDay())) continue;
+    if (input.isClosed?.(date)) continue;
+    result.push(date);
+  }
+  return result;
+}
+
+export type SeriesProblem = 'clash' | 'past' | 'off-hours' | null;
+
+/** Why one planned session can't be booked as-is (null = fine). */
+export function seriesProblem(input: {
+  appointments: Appointment[];
+  therapistId: string;
+  date: string;
+  time: string;
+  lengthMinutes: number;
+  slotMinutes: number;
+  now: Date;
+  working: Interval[];
+}): SeriesProblem {
+  if (localDateTime(input.date, input.time).getTime() < input.now.getTime()) return 'past';
+  const [h, m] = input.time.split(':').map(Number);
+  if (!withinWorking(input.working, h * 60 + m, input.lengthMinutes)) return 'off-hours';
+  if (
+    isTherapistSlotOccupied(input.appointments, input.therapistId, input.date, input.time, input.lengthMinutes, {
+      fallbackMinutes: input.slotMinutes,
+    })
+  ) {
+    return 'clash';
+  }
+  return null;
+}

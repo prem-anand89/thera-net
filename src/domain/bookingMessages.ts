@@ -32,13 +32,14 @@ export type PatientMessageKind = 'booked' | 'rescheduled' | 'cancelled' | 'remin
 
 export function patientMessage(
   kind: PatientMessageKind,
-  input: { patientName: string; clinicName: string; scheduledAt: string; therapistName?: string | null }
+  input: { patientName: string; clinicName: string; scheduledAt: string; therapistName?: string | null; sessions?: number }
 ): string {
+  const series = input.sessions && input.sessions > 1 ? ` — the first of your ${input.sessions} sessions` : '';
   const who = input.therapistName ? ` with ${input.therapistName}` : '';
   const when = whenLabel(input.scheduledAt);
   switch (kind) {
     case 'booked':
-      return `Hi ${input.patientName}, your appointment at ${input.clinicName}${who} is confirmed for ${when}. See you then!`;
+      return `Hi ${input.patientName}, your appointment at ${input.clinicName}${who} is confirmed for ${when}${series}. See you then!`;
     case 'rescheduled':
       return `Hi ${input.patientName}, your appointment at ${input.clinicName}${who} has been moved to ${when}. Reply here if that doesn't work for you.`;
     case 'cancelled':
@@ -52,13 +53,14 @@ export type TherapistMessageKind = 'booked' | 'rescheduled' | 'cancelled';
 
 export function therapistMessage(
   kind: TherapistMessageKind,
-  input: { therapistName: string; patientName: string; scheduledAt: string }
+  input: { therapistName: string; patientName: string; scheduledAt: string; sessions?: number }
 ): string {
   const patient = shortPatientName(input.patientName);
+  const series = input.sessions && input.sessions > 1 ? ` (first of ${input.sessions} sessions)` : '';
   const when = whenLabel(input.scheduledAt);
   switch (kind) {
     case 'booked':
-      return `Hi ${input.therapistName}, new appointment: ${patient}, ${when}.`;
+      return `Hi ${input.therapistName}, new appointment: ${patient}, ${when}${series}.`;
     case 'rescheduled':
       return `Hi ${input.therapistName}, ${patient}'s appointment has moved to ${when}.`;
     case 'cancelled':

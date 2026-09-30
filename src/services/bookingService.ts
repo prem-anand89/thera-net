@@ -2,6 +2,7 @@ import type { UUID, WorkingHours } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
 import { openPatientWhatsAppChat } from '@/lib/pdfShare';
 import {
+  whenLabel,
   patientMessage,
   therapistMessage,
   type PatientMessageKind,
@@ -31,6 +32,11 @@ import { syncEngine } from '@/sync/engine';
  * near-immediate pull the manual "Sync now" button and post-clinic-create
  * refresh already use — right after each successful staff mutation.
  */
+
+/** The series RPC lists clashing starts as UTC ISO times; show them locally. */
+function localiseIsoTimes(message: string): string {
+  return message.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z/g, (iso) => whenLabel(iso));
+}
 
 function supabaseOrThrow() {
   const supabase = getSupabase();
@@ -127,6 +133,43 @@ export const bookingService = {
     if (error) throw new Error(`Could not confirm booking: ${error.message}`);
     syncEngine.schedule(0);
     return data as UUID;
+  },
+
+  /** Books several sessions at once; all-or-nothing. Returns the series id. */
+  async confirmBookingSeries(params: {
+    clinicId: UUID;
+    patientId: UUID | null;
+    patientName: string;
+    patientPhone: string;
+    therapistId: UUID;
+    starts: string[];
+    durationMinutes: number;
+  }): Promise<UUID> {
+    const supabase = supabaseOrThrow();
+    const { data, error } = await supabase.rpc('confirm_booking_series', {
+      p_clinic_id: params.clinicId,
+      p_name: params.patientName,
+      p_phone: params.patientPhone,
+      p_therapist_id: params.therapistId,
+      p_starts: params.starts,
+      p_patient_id: params.patientId,
+      p_duration_minutes: params.durationMinutes,
+    });
+    if (error) throw new Error(`Could not book the sessions: ${localiseIsoTimes(error.message)}`);
+    syncEngine.schedule(0);
+    return data as UUID;
+  },
+
+  /** Cancels this session and every later open session of its series. */
+  async cancelAppointmentSeries(seriesId: UUID, fromScheduledAt: string): Promise<number> {
+    const supabase = supabaseOrThrow();
+    const { data, error } = await supabase.rpc('cancel_appointment_series', {
+      p_series_id: seriesId,
+      p_from: fromScheduledAt,
+    });
+    if (error) throw new Error(`Could not cancel the sessions: ${error.message}`);
+    syncEngine.schedule(0);
+    return (data as number) ?? 0;
   },
 
   async declineAppointmentRequest(requestId: UUID): Promise<void> {
@@ -232,7 +275,7 @@ export const bookingService = {
    *  reminder). One tap per recipient — wa.me can't send in bulk. */
   messagePatient(
     kind: PatientMessageKind,
-    input: { patientName: string; patientPhone: string | null; clinicName: string; scheduledAt: string; therapistName?: string | null }
+    input: { patientName: string; patientPhone: string | null; clinicName: string; scheduledAt: string; therapistName?: string | null; sessions?: number }
   ): void {
     openPatientWhatsAppChat(patientMessage(kind, input), input.patientPhone);
   },
@@ -240,7 +283,7 @@ export const bookingService = {
   /** Opens WhatsApp to the therapist; patient shown as first name + initial. */
   messageTherapist(
     kind: TherapistMessageKind,
-    input: { therapistName: string; therapistPhone: string | null; patientName: string; scheduledAt: string }
+    input: { therapistName: string; therapistPhone: string | null; patientName: string; scheduledAt: string; sessions?: number }
   ): void {
     openPatientWhatsAppChat(therapistMessage(kind, input), input.therapistPhone);
   },

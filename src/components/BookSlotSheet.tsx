@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, bookingService } from '@/services';
+import { repos, bookingService, dashboardService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import { ErrorNote, Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -21,6 +21,9 @@ import {
   minutesLabel,
   minutesOfDay,
   toLocalDateStr,
+  seriesDates,
+  seriesProblem,
+  WEEKDAY_NAMES,
   withinWorking,
   workingIntervals,
 } from '@/domain/schedule';
@@ -29,6 +32,8 @@ import { AttendanceNote } from '@/components/schedule/AppointmentDetailsPanel';
 
 export type BookedSlot = {
   kind: 'booked' | 'rescheduled';
+  /** Set when a repeat booking created several sessions. */
+  sessions?: number;
   appointmentId: UUID;
   scheduledAt: string;
   durationMinutes: number;
@@ -102,6 +107,11 @@ export function BookSlotSheet({
   const [patientPhone, setPatientPhone] = useState('');
   const [showLater, setShowLater] = useState(false);
   const [showOffHours, setShowOffHours] = useState(false);
+  const [repeat, setRepeat] = useState(false);
+  const [repeatDays, setRepeatDays] = useState<number[]>([]);
+  const [repeatCount, setRepeatCount] = useState(6);
+  const [repeatCountTouched, setRepeatCountTouched] = useState(false);
+  const [rowOverrides, setRowOverrides] = useState<Record<string, { time?: string; skipped?: boolean }>>({});
   const [therapistTouched, setTherapistTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +119,17 @@ export function BookSlotSheet({
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
   const closedDates = useLiveQuery(() => repos.clinicClosedDates.listByClinic(clinic.id), [clinic.id]);
+  const openPackages = useLiveQuery(
+    () => (isOpen && repeat && patientId ? dashboardService.openPackages(clinic.id) : undefined),
+    [isOpen, repeat, patientId, clinic.id]
+  );
+  const packageLeft = useMemo(() => {
+    const row = (openPackages ?? []).find((p) => p.patientId === patientId);
+    return row ? Math.max(row.packageTotal - row.sessionsLogged, 0) : null;
+  }, [openPackages, patientId]);
+  useEffect(() => {
+    if (repeat && !repeatCountTouched && packageLeft && packageLeft >= 2) setRepeatCount(Math.min(packageLeft, 52));
+  }, [repeat, repeatCountTouched, packageLeft]);
   const patientOptions = useMemo(
     () =>
       [...(patients ?? [])]
@@ -148,6 +169,11 @@ export function BookSlotSheet({
     setPatientPhone(prefilledPatientPhone ?? '');
     setPatientMode(prefilledPatientName && !prefilledPatientId ? 'new' : 'find');
     setShowOffHours(false);
+    setRepeat(false);
+    setRepeatDays([]);
+    setRepeatCount(6);
+    setRepeatCountTouched(false);
+    setRowOverrides({});
     setBusy(false);
     setError(null);
   }, [isOpen, rescheduleAppointment, prefilledDate, prefilledPatientId, prefilledPatientName, prefilledPatientPhone, prefilledTherapistId, prefilledTime, today, slotMinutes]);
@@ -235,6 +261,40 @@ export function BookSlotSheet({
     setSelectedTime(found.time);
   }
 
+  const isClosedDate = (date: string) => isClosedDay(date, clinic.closedWeekdays, closedDates ?? []).closed;
+  const workingOn = (date: string) => workingIntervals(therapistRow?.workingHours, date, { startHour, endHour });
+  const plannedRows =
+    repeat && selectedTime && therapistId
+      ? seriesDates({ startDate: selectedDate, weekdays: repeatDays, count: repeatCount, isClosed: isClosedDate }).map((date) => {
+          const override = rowOverrides[date] ?? {};
+          const time = override.time ?? selectedTime;
+          return {
+            date,
+            time,
+            skipped: Boolean(override.skipped),
+            problem: seriesProblem({ appointments, therapistId, date, time, lengthMinutes, slotMinutes, now, working: workingOn(date) }),
+          };
+        })
+      : [];
+  const activeRows = plannedRows.filter((row) => !row.skipped);
+  const unresolved = activeRows.filter((row) => row.problem !== null).length;
+
+  function findTimeFor(date: string) {
+    const found = firstAvailableSlot({
+      appointments,
+      therapistIds: [therapistId],
+      fromDate: date,
+      days: 1,
+      hours: { startHour, endHour },
+      slotMinutes,
+      lengthMinutes,
+      now,
+      isClosed: () => false,
+      workingFor: (_id, day) => workingOn(day),
+    });
+    setRowOverrides((current) => ({ ...current, [date]: found ? { time: found.time } : { skipped: true } }));
+  }
+
   async function submit() {
     if (!therapistId) return setError('Choose a therapist first.');
     if (!selectedTime) return setError('Choose an available time.');
@@ -270,6 +330,41 @@ export function BookSlotSheet({
     if (!finalName) return setError('Enter the patient name.');
     if (!finalPhone) return setError('This patient has no phone on file — enter one so the booking can be confirmed.');
 
+    if (repeat) {
+      if (activeRows.length < 2) return setError('A repeat booking needs at least two sessions.');
+      if (unresolved > 0) return setError('Some sessions clash — pick another time or skip them.');
+      setBusy(true);
+      setError(null);
+      try {
+        const starts = activeRows.map((row) => localDateTimeToIso(row.date, row.time));
+        const seriesId = await bookingService.confirmBookingSeries({
+          clinicId: clinic.id,
+          patientId: patientMode === 'find' ? patientId || null : null,
+          patientName: finalName,
+          patientPhone: finalPhone,
+          therapistId,
+          starts,
+          durationMinutes: lengthMinutes,
+        });
+        onBooked?.({
+          kind: 'booked',
+          appointmentId: seriesId,
+          scheduledAt: starts[0],
+          durationMinutes: lengthMinutes,
+          patientName: finalName,
+          patientPhone: finalPhone,
+          therapistId,
+          sessions: starts.length,
+        });
+        onClose();
+      } catch (submitError) {
+        setError(toFriendlyMessage(submitError));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -301,7 +396,7 @@ export function BookSlotSheet({
   }
 
   const title = isReschedule ? 'Reschedule' : requestId ? 'Confirm request' : 'New booking';
-  const submitLabel = isReschedule ? 'Move appointment' : 'Confirm booking';
+  const submitLabel = isReschedule ? 'Move appointment' : repeat && activeRows.length > 1 ? `Book ${activeRows.length} sessions` : 'Confirm booking';
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4">
@@ -435,6 +530,108 @@ export function BookSlotSheet({
               </>
             )}
           </div>
+          {!isReschedule && !requestId && (
+            <div className="rounded-xl border border-[var(--border)] p-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-[var(--ink)]">
+                <input
+                  type="checkbox"
+                  checked={repeat}
+                  onChange={(event) => {
+                    setRepeat(event.target.checked);
+                    if (event.target.checked && repeatDays.length === 0) {
+                      setRepeatDays([localDateTime(selectedDate, '00:00').getDay()]);
+                    }
+                  }}
+                />
+                Repeat this booking
+              </label>
+              {repeat && (
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-[var(--muted)]">On</p>
+                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Repeat on">
+                      {[1, 2, 3, 4, 5, 6, 0].map((day) => {
+                        const on = repeatDays.includes(day);
+                        return (
+                          <button
+                            key={day}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => setRepeatDays((current) => (on ? current.filter((d) => d !== day) : [...current, day]))}
+                            className={`min-h-9 min-w-11 rounded-lg border px-2 text-xs font-medium ${on ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] text-[var(--ink)]'}`}
+                          >
+                            {WEEKDAY_NAMES[day].slice(0, 3)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-3">
+                    <Field label="Sessions">
+                      <input
+                        type="number"
+                        min={2}
+                        max={52}
+                        className={`${inputCls} w-24`}
+                        value={repeatCount}
+                        onChange={(event) => {
+                          setRepeatCountTouched(true);
+                          setRepeatCount(Math.max(2, Math.min(52, Number(event.target.value) || 2)));
+                        }}
+                      />
+                    </Field>
+                    {packageLeft !== null && packageLeft >= 2 && (
+                      <p className="pb-2 text-xs text-[var(--muted)]">{packageLeft} sessions left in their package</p>
+                    )}
+                  </div>
+                  {!selectedTime ? (
+                    <p className="text-xs text-[var(--muted)]">Pick a time above to see the dates.</p>
+                  ) : (
+                    <ul className="max-h-64 space-y-1.5 overflow-y-auto" aria-label="Planned sessions">
+                      {plannedRows.map((row, index) => (
+                        <li
+                          key={row.date}
+                          className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs ${
+                            row.skipped ? 'bg-[var(--paper)] text-[var(--muted)] line-through' : row.problem ? 'bg-[var(--rust-light)] text-[var(--rust)]' : 'bg-[var(--moss-light)] text-[var(--ink)]'
+                          }`}
+                        >
+                          <span>
+                            {index + 1}. {displayDate(row.date)}, {minutesLabel(Number(row.time.slice(0, 2)) * 60 + Number(row.time.slice(3, 5)))}
+                            {!row.skipped && row.problem === 'clash' && ' — clashes'}
+                            {!row.skipped && row.problem === 'off-hours' && ' — outside hours'}
+                            {!row.skipped && row.problem === 'past' && ' — in the past'}
+                          </span>
+                          <span className="flex shrink-0 gap-2">
+                            {!row.skipped && row.problem && (
+                              <button type="button" className="font-medium underline" onClick={() => findTimeFor(row.date)}>
+                                Find a time
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="font-medium underline"
+                              onClick={() =>
+                                setRowOverrides((current) => ({ ...current, [row.date]: { ...current[row.date], skipped: !row.skipped } }))
+                              }
+                            >
+                              {row.skipped ? 'Undo' : 'Skip'}
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {selectedTime && (
+                    <p className="text-xs text-[var(--muted)]">
+                      {activeRows.length} session{activeRows.length === 1 ? '' : 's'}
+                      {unresolved > 0 ? ` · ${unresolved} need a new time or skip` : ' · all free'}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <ErrorNote message={error} />
           <div className="sticky -bottom-4 -mx-4 flex justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3 sm:-bottom-6 sm:-mx-6 sm:px-6">
             <button type="button" className={btnSecondary} onClick={onClose} disabled={busy}>Cancel</button>

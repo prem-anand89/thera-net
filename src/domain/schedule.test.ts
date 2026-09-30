@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, seriesDates, seriesProblem, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -309,5 +309,30 @@ describe('working hours', () => {
     expect(isPublicSlotTaken('2026-10-01', 810, 30, [], ['t1', 't2'], null, custom, clinic)).toBe(false);
     expect(isPublicSlotTaken('2026-10-01', 810, 30, [], ['t1', 't2'], 't1', custom, clinic)).toBe(true);
     expect(isPublicSlotTaken('2026-10-01', 810, 30, [], ['t1'], null, custom, clinic)).toBe(true);
+  });
+});
+
+describe('repeat bookings', () => {
+  it('plans sessions on the chosen weekdays, skipping closed days', () => {
+    // Thu 1 Oct 2026; Mon/Wed/Fri, 5 sessions, Fri 2 Oct closed.
+    expect(
+      seriesDates({ startDate: '2026-10-01', weekdays: [1, 3, 5], count: 5, isClosed: (d) => d === '2026-10-02' })
+    ).toEqual(['2026-10-05', '2026-10-07', '2026-10-09', '2026-10-12', '2026-10-14']);
+    expect(seriesDates({ startDate: '2026-10-01', weekdays: [], count: 3 })).toEqual([]);
+  });
+
+  it('flags clashes, past times and off-hours per session', () => {
+    const base = {
+      appointments: [appt({ therapistId: 't1', scheduledAt: at('2026-10-05', '10:00'), durationMinutes: 30 })],
+      therapistId: 't1',
+      lengthMinutes: 30,
+      slotMinutes: 30,
+      now: localDateTime('2026-10-01', '12:00'),
+      working: [{ start: 540, end: 780 }],
+    };
+    expect(seriesProblem({ ...base, date: '2026-10-05', time: '10:00' })).toBe('clash');
+    expect(seriesProblem({ ...base, date: '2026-10-05', time: '10:30' })).toBeNull();
+    expect(seriesProblem({ ...base, date: '2026-10-05', time: '13:00' })).toBe('off-hours');
+    expect(seriesProblem({ ...base, date: '2026-10-01', time: '09:00' })).toBe('past');
   });
 });

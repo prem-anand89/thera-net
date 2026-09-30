@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Appointment } from '@/domain/types';
 import { localDateTime } from '@/domain/schedule';
 
@@ -20,6 +20,8 @@ const data = {
 };
 const confirmBookingSlot = vi.fn(async () => 'new-id');
 const rescheduleAppointment = vi.fn(async () => undefined);
+const confirmBookingSeries = vi.fn(async () => 'series-1');
+const openPackages = vi.fn(() => [{ patientId: 'p1', packageTotal: 10, sessionsLogged: 6 }]);
 
 vi.mock('@/app/clinicContext', () => ({
   useClinic: () => ({
@@ -43,7 +45,9 @@ vi.mock('@/services', () => ({
   bookingService: {
     confirmBookingSlot: (...args: unknown[]) => confirmBookingSlot(...(args as [])),
     rescheduleAppointment: (...args: unknown[]) => rescheduleAppointment(...(args as [])),
+    confirmBookingSeries: (...args: unknown[]) => confirmBookingSeries(...(args as [])),
   },
+  dashboardService: { openPackages: () => openPackages() },
 }));
 vi.mock('@/components/SearchableSelect', () => ({
   SearchableSelect: ({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) => (
@@ -87,6 +91,7 @@ describe('BookSlotSheet', () => {
     data.closed = [];
     confirmBookingSlot.mockClear();
     rescheduleAppointment.mockClear();
+    confirmBookingSeries.mockClear();
   });
   afterEach(() => {
     cleanup();
@@ -261,5 +266,32 @@ describe('BookSlotSheet', () => {
     fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p1' } });
     expect(screen.getByText(/2 no-shows in the last 6 months/)).toBeInTheDocument();
     expect(screen.getByText(/Already booked: Mon, 5 Oct, 9:00 AM/)).toBeInTheDocument();
+  });
+  it('books a repeat series, defaulting the count to sessions left in the package', async () => {
+    const busy = [appointment({ id: 'x', scheduledAt: localDateTime('2026-10-08', '10:00').toISOString() })];
+    const onBooked = vi.fn();
+    render(<BookSlotSheet isOpen onClose={() => {}} onBooked={onBooked} appointments={busy} prefilledDate="2026-10-01" />);
+    fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p1' } });
+    fireEvent.click(slot('10:00 AM'));
+    fireEvent.click(screen.getByLabelText('Repeat this booking'));
+    expect(screen.getByLabelText('Sessions')).toHaveValue(4); // 10 - 6 left in package
+    const rows = within(screen.getByRole('list', { name: 'Planned sessions' })).getAllByRole('listitem');
+    expect(rows).toHaveLength(4); // Thursdays from 1 Oct
+    expect(rows[1]).toHaveTextContent('Thu, 8 Oct, 10:00 AM — clashes');
+    expect(screen.getByText(/1 need a new time or skip/)).toBeInTheDocument();
+
+    fireEvent.click(within(rows[1]).getByRole('button', { name: 'Find a time' }));
+    expect(within(screen.getByRole('list', { name: 'Planned sessions' })).getAllByRole('listitem')[1]).toHaveTextContent('Thu, 8 Oct, 9:00 AM');
+    fireEvent.click(screen.getByRole('button', { name: /^Book 4 sessions/ }));
+    await waitFor(() => expect(confirmBookingSeries).toHaveBeenCalled());
+    const call = (confirmBookingSeries.mock.calls[0] as unknown[])[0] as { starts: string[]; patientId: string };
+    expect(call.patientId).toBe('p1');
+    expect(call.starts).toEqual([
+      localDateTime('2026-10-01', '10:00').toISOString(),
+      localDateTime('2026-10-08', '09:00').toISOString(),
+      localDateTime('2026-10-15', '10:00').toISOString(),
+      localDateTime('2026-10-22', '10:00').toISOString(),
+    ]);
+    expect(onBooked).toHaveBeenCalledWith(expect.objectContaining({ sessions: 4, appointmentId: 'series-1' }));
   });
 });

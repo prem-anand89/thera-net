@@ -740,6 +740,8 @@ export interface Appointment {
   /** Length in minutes. Optional only because rows cached before the
    *  column existed lack it — read via `appointmentMinutes()`. */
   durationMinutes?: number;
+  /** Shared by the sessions of one repeat booking; null for single bookings. */
+  seriesId?: UUID | null;
   status: AppointmentStatus;
   requestId: UUID | null;
   visitId: UUID | null;
