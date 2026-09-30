@@ -220,8 +220,14 @@ export interface Therapist {
   phone?: string | null;
   /** Set when the linked login completes roster profile onboarding (invoice name, etc.). */
   profileConfirmedAt?: string | null;
+  /** Weekly working hours (weekday "0"–"6" -> [start, end] minutes after
+   *  midnight; gaps are breaks, a missing day is a day off). Null/absent =
+   *  the clinic's booking hours. Written only via set_therapist_working_hours. */
+  workingHours?: WorkingHours | null;
   updatedAt: string;
 }
+
+export type WorkingHours = Partial<Record<'0' | '1' | '2' | '3' | '4' | '5' | '6', [number, number][]>>;
 
 export interface CatalogItem {
   id: UUID;

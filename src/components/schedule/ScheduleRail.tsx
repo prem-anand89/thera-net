@@ -24,6 +24,7 @@ export function ScheduleRail({
   onAddClosure,
   onRemoveClosure,
   onOnlyTherapist,
+  onEditHours,
   requests,
 }: {
   date: string;
@@ -43,6 +44,8 @@ export function ScheduleRail({
   onRemoveClosure: (range: ClosedRange) => void;
   /** Shows only this therapist. */
   onOnlyTherapist?: (id: UUID) => void;
+  /** Opens the working-hours editor (admin / front desk). */
+  onEditHours?: (id: UUID) => void;
   /** Pending booking requests section (admin / front desk). */
   requests?: ReactNode;
 }) {
@@ -77,16 +80,28 @@ export function ScheduleRail({
                     <span className="min-w-0 flex-1 truncate text-sm text-[var(--ink)]">{therapist.name}</span>
                     <span className="shrink-0 text-[11px] text-[var(--muted)] group-hover:invisible group-focus-within:invisible">{therapist.summary}</span>
                   </label>
-                  {onOnlyTherapist && (
-                    <button
-                      type="button"
-                      className="invisible absolute right-2 top-1/2 -translate-y-1/2 rounded px-1.5 text-[11px] font-medium text-[var(--teal)] hover:underline group-hover:visible group-focus-within:visible"
-                      onClick={() => onOnlyTherapist(therapist.id)}
-                      aria-label={`Show only ${therapist.name}`}
-                    >
-                      only
-                    </button>
-                  )}
+                  <span className="invisible absolute right-2 top-1/2 flex -translate-y-1/2 gap-1 group-hover:visible group-focus-within:visible">
+                    {onEditHours && (
+                      <button
+                        type="button"
+                        className="rounded px-1.5 text-[11px] font-medium text-[var(--teal)] hover:underline"
+                        onClick={() => onEditHours(therapist.id)}
+                        aria-label={`Working hours for ${therapist.name}`}
+                      >
+                        hours
+                      </button>
+                    )}
+                    {onOnlyTherapist && (
+                      <button
+                        type="button"
+                        className="rounded px-1.5 text-[11px] font-medium text-[var(--teal)] hover:underline"
+                        onClick={() => onOnlyTherapist(therapist.id)}
+                        aria-label={`Show only ${therapist.name}`}
+                      >
+                        only
+                      </button>
+                    )}
+                  </span>
                 </li>
               );
             })}

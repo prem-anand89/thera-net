@@ -1,4 +1,4 @@
-import type { UUID } from '@/domain/types';
+import type { UUID, WorkingHours } from '@/domain/types';
 import { getSupabase } from '@/lib/supabase';
 import { openPatientWhatsAppChat } from '@/lib/pdfShare';
 import {
@@ -62,7 +62,7 @@ export const bookingService = {
     return (data as { id: UUID; name: string }[] | null) ?? [];
   },
 
-  async getBookingAvailability(slug: string, startDate: string, endDate: string): Promise<{ closedWeekdays: number[], closedDates: { date: string, label: string }[], appointments: { scheduled_at: string, therapist_id: UUID, duration_minutes?: number }[] }> {
+  async getBookingAvailability(slug: string, startDate: string, endDate: string): Promise<{ closedWeekdays: number[], closedDates: { date: string, label: string }[], appointments: { scheduled_at: string, therapist_id: UUID, duration_minutes?: number }[], therapistHours?: Record<string, WorkingHours> }> {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase is not configured');
     const { data, error } = await supabase.rpc('get_booking_availability', { 
@@ -168,6 +168,17 @@ export const bookingService = {
       p_appointment_id: appointmentId,
     });
     if (error) throw new Error(`Could not cancel: ${error.message}`);
+    syncEngine.schedule(0);
+  },
+
+  /** Saves a therapist's weekly hours (null = back to clinic hours). */
+  async setWorkingHours(therapistId: UUID, hours: WorkingHours | null): Promise<void> {
+    const supabase = supabaseOrThrow();
+    const { error } = await supabase.rpc('set_therapist_working_hours', {
+      p_therapist_id: therapistId,
+      p_hours: hours,
+    });
+    if (error) throw new Error(`Could not save working hours: ${error.message}`);
     syncEngine.schedule(0);
   },
 

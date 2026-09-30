@@ -1,4 +1,4 @@
-import type { Appointment } from './types';
+import type { Appointment, WorkingHours } from './types';
 
 export type ScheduleSlot = {
   minutes: number;
@@ -144,7 +144,7 @@ export function freeGaps(
   date: string,
   hours: { startHour: number; endHour: number },
   fallbackMinutes: number,
-  options: { minMinutes?: number; notBefore?: number; alignToSlots?: boolean } = {}
+  options: { minMinutes?: number; notBefore?: number; alignToSlots?: boolean; working?: Interval[] } = {}
 ): Interval[] {
   const open = hours.startHour * 60;
   // Round a start up onto the clinic's slot grid (09:00, 09:30, …), so free
@@ -160,16 +160,18 @@ export function freeGaps(
       return { start, end: start + appointmentMinutes(a, fallbackMinutes) };
     })
     .sort((x, y) => x.start - y.start);
-  const gaps: Interval[] = [];
+  let gaps: Interval[] = [];
   let cursor = dayStart;
   for (const block of busy) {
-    const start = align(cursor);
-    if (block.start > start) gaps.push({ start, end: Math.min(block.start, dayEnd) });
+    if (block.start > cursor) gaps.push({ start: cursor, end: Math.min(block.start, dayEnd) });
     cursor = Math.max(cursor, block.end);
   }
-  if (align(cursor) < dayEnd) gaps.push({ start: align(cursor), end: dayEnd });
+  if (cursor < dayEnd) gaps.push({ start: cursor, end: dayEnd });
+  if (options.working) gaps = clipToWorking(gaps, options.working);
   const min = options.minMinutes ?? fallbackMinutes;
-  return gaps.filter((gap) => gap.end - gap.start >= min);
+  return gaps
+    .map((gap) => ({ start: align(gap.start), end: gap.end }))
+    .filter((gap) => gap.end - gap.start >= min);
 }
 
 /** Pixel placement of a block in a day column that starts at `dayStartHour`. */
@@ -300,11 +302,20 @@ export function isPublicSlotTaken(
   lengthMinutes: number,
   booked: { scheduledAt: string; therapistId: string | null; durationMinutes?: number }[],
   therapistIds: string[],
-  preferredTherapistId: string | null
+  preferredTherapistId: string | null,
+  /** Therapists with custom hours; others use the clinic's hours. */
+  therapistHours: Record<string, WorkingHours> = {},
+  clinicHours?: { startHour: number; endHour: number }
 ): boolean {
   const start = slotMinutes;
   const end = slotMinutes + lengthMinutes;
+  const off = (therapistId: string | null) =>
+    therapistId !== null &&
+    clinicHours !== undefined &&
+    therapistHours[therapistId] !== undefined &&
+    !withinWorking(workingIntervals(therapistHours[therapistId], date, clinicHours), start, lengthMinutes);
   const busy = (therapistId: string | null) =>
+    off(therapistId) ||
     booked.some((b) => {
       if (b.therapistId !== therapistId) return false;
       if (toLocalDateStr(new Date(b.scheduledAt)) !== date) return false;
@@ -389,6 +400,8 @@ export function firstAvailableSlot(input: {
   now: Date;
   isClosed: (date: string) => boolean;
   ignoreAppointmentId?: string;
+  /** Working intervals per therapist and date; omit to use booking hours. */
+  workingFor?: (therapistId: string, date: string) => Interval[];
 }): { date: string; time: string; therapistId: string } | null {
   const slots = generateScheduleSlots(input.slotMinutes, input.hours.startHour, input.hours.endHour);
   for (let offset = 0; offset < input.days; offset += 1) {
@@ -398,6 +411,7 @@ export function firstAvailableSlot(input: {
       if (slot.minutes + input.lengthMinutes > input.hours.endHour * 60) continue;
       if (localDateTime(date, slot.time).getTime() < input.now.getTime()) continue;
       for (const therapistId of input.therapistIds) {
+        if (input.workingFor && !withinWorking(input.workingFor(therapistId, date), slot.minutes, input.lengthMinutes)) continue;
         const busy = isTherapistSlotOccupied(input.appointments, therapistId, date, slot.time, input.lengthMinutes, {
           fallbackMinutes: input.slotMinutes,
           ignoreAppointmentId: input.ignoreAppointmentId,
@@ -407,4 +421,62 @@ export function firstAvailableSlot(input: {
     }
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Therapist working hours
+// ---------------------------------------------------------------------------
+
+/**
+ * A therapist's working intervals on a date (minutes after midnight). No
+ * custom hours = the clinic's booking hours. A weekday missing from custom
+ * hours is a day off. Clinic closures are handled separately (isClosedDay).
+ */
+export function workingIntervals(
+  workingHours: WorkingHours | null | undefined,
+  date: string,
+  clinicHours: { startHour: number; endHour: number }
+): Interval[] {
+  if (!workingHours) return [{ start: clinicHours.startHour * 60, end: clinicHours.endHour * 60 }];
+  const weekday = String(localDateTime(date, '00:00').getDay()) as keyof WorkingHours;
+  return (workingHours[weekday] ?? []).map(([start, end]) => ({ start, end }));
+}
+
+/** Does [start, start + length) sit entirely inside one working interval? */
+export function withinWorking(intervals: Interval[], start: number, length: number): boolean {
+  return intervals.some((interval) => start >= interval.start && start + length <= interval.end);
+}
+
+/** Intersects free gaps with working intervals (drops breaks and off-hours). */
+export function clipToWorking(gaps: Interval[], working: Interval[], minMinutes = 1): Interval[] {
+  const result: Interval[] = [];
+  for (const gap of gaps) {
+    for (const interval of working) {
+      const start = Math.max(gap.start, interval.start);
+      const end = Math.min(gap.end, interval.end);
+      if (end - start >= minMinutes) result.push({ start, end });
+    }
+  }
+  return result.sort((a, b) => a.start - b.start);
+}
+
+/** Validates the editor's value the same way the server does. */
+export function workingHoursProblem(hours: WorkingHours): string | null {
+  for (const [day, intervals] of Object.entries(hours)) {
+    let previousEnd = -1;
+    for (const [start, end] of intervals ?? []) {
+      if (start < 0 || end > 1440 || start >= end) return `${WEEKDAY_NAMES[Number(day)]}: each start must be before its end.`;
+      if (start < previousEnd) return `${WEEKDAY_NAMES[Number(day)]}: times overlap — keep them in order without overlaps.`;
+      previousEnd = end;
+    }
+  }
+  return null;
+}
+
+export const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** "9:00 AM–1:00 PM, 2:00 PM–6:00 PM" or "Off". */
+export function describeDayHours(intervals: Interval[]): string {
+  if (intervals.length === 0) return 'Off';
+  return intervals.map((i) => `${minutesLabel(i.start)}–${minutesLabel(i.end)}`).join(', ');
 }

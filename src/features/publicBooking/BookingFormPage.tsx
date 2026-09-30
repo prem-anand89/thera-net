@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { hasSupabaseConfig } from '@/lib/env';
 import { bookingService } from '@/services';
-import type { UUID } from '@/domain/types';
+import type { UUID, WorkingHours } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
 import { addDays, generateScheduleSlots, isPublicSlotTaken, toLocalDateStr } from '@/domain/schedule';
 
@@ -10,6 +10,8 @@ type AvailabilityData = {
   closedWeekdays: number[];
   closedDates: { date: string; label: string }[];
   appointments: { scheduled_at: string; therapist_id: UUID; duration_minutes?: number }[];
+  /** Therapists with custom working hours (others use the clinic's). */
+  therapistHours?: Record<string, WorkingHours>;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -371,7 +373,7 @@ export function BookingFormPage() {
   const openSlotsOn = (date: string) =>
     allSlots.filter((slot) => {
       if (date === todayIso && slot.minutes <= nowTime.getHours() * 60 + nowTime.getMinutes()) return false;
-      return !isPublicSlotTaken(date, slot.minutes, slotDuration, booked, therapists.map((t) => t.id), preferredTherapistId || null);
+      return !isPublicSlotTaken(date, slot.minutes, slotDuration, booked, therapists.map((t) => t.id), preferredTherapistId || null, availability?.therapistHours ?? {}, { startHour, endHour });
     });
   const openSlots = preferredDate ? openSlotsOn(preferredDate) : [];
   const groups = [

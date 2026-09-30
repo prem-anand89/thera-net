@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -277,5 +277,37 @@ describe('patient history helpers', () => {
     expect(firstAvailableSlot({ ...base, therapistIds: ['t1'] })).toEqual({ date: '2026-10-02', time: '10:00', therapistId: 't1' });
     expect(firstAvailableSlot({ ...base, therapistIds: ['t1'], isClosed: (d) => d === '2026-10-02' })?.date).toBe('2026-10-03');
     expect(firstAvailableSlot({ ...base, therapistIds: ['t1'], ignoreAppointmentId: 'b1' })?.time).toBe('09:00');
+  });
+});
+
+describe('working hours', () => {
+  const clinic = { startHour: 9, endHour: 18 };
+  const hours = { '4': [[540, 780], [840, 1080]] as [number, number][] }; // Thu 9–1, 2–6
+
+  it('falls back to clinic hours, and treats a missing weekday as a day off', () => {
+    expect(workingIntervals(null, '2026-10-01', clinic)).toEqual([{ start: 540, end: 1080 }]);
+    expect(workingIntervals(hours, '2026-10-01', clinic)).toEqual([{ start: 540, end: 780 }, { start: 840, end: 1080 }]);
+    expect(workingIntervals(hours, '2026-10-02', clinic)).toEqual([]);
+  });
+
+  it('keeps free time inside working hours only (the gap is the break)', () => {
+    const gaps = freeGaps([], 't1', '2026-10-01', clinic, 30, { working: workingIntervals(hours, '2026-10-01', clinic) });
+    expect(gaps).toEqual([{ start: 540, end: 780 }, { start: 840, end: 1080 }]);
+    expect(withinWorking([{ start: 540, end: 780 }], 750, 30)).toBe(true);
+    expect(withinWorking([{ start: 540, end: 780 }], 760, 30)).toBe(false);
+  });
+
+  it('validates the editor value like the server', () => {
+    expect(workingHoursProblem(hours)).toBeNull();
+    expect(workingHoursProblem({ '1': [[600, 540]] })).toMatch(/Monday: each start/);
+    expect(workingHoursProblem({ '1': [[540, 700], [650, 800]] })).toMatch(/overlap/);
+  });
+
+  it('public form: a therapist outside their hours counts as unavailable', () => {
+    const custom = { t1: hours };
+    // 13:30 Thursday: t1 on break, t2 (clinic hours) free -> not taken without preference.
+    expect(isPublicSlotTaken('2026-10-01', 810, 30, [], ['t1', 't2'], null, custom, clinic)).toBe(false);
+    expect(isPublicSlotTaken('2026-10-01', 810, 30, [], ['t1', 't2'], 't1', custom, clinic)).toBe(true);
+    expect(isPublicSlotTaken('2026-10-01', 810, 30, [], ['t1'], null, custom, clinic)).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import type { Appointment, UUID } from '@/domain/types';
-import { freeGaps, minutesLabel, minutesToTime, type ClosedDayInfo } from '@/domain/schedule';
+import { freeGaps, minutesLabel, minutesToTime, type ClosedDayInfo, type Interval } from '@/domain/schedule';
 
 /**
  * Calendly-style: free start times as buttons, grouped by therapist, for one
@@ -14,6 +14,7 @@ export function FindTimePanel({
   closed,
   nowMinutes,
   onPick,
+  workingFor,
 }: {
   date: string;
   therapists: { id: UUID; name: string; color: string }[];
@@ -24,6 +25,7 @@ export function FindTimePanel({
   /** Minutes after midnight when `date` is today; past times are skipped. */
   nowMinutes: number | null;
   onPick: (input: { therapistId: UUID; time: string }) => void;
+  workingFor?: (therapistId: string) => Interval[];
 }) {
   return (
     <section className="space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4" aria-label="Free times">
@@ -36,6 +38,7 @@ export function FindTimePanel({
         const starts = freeGaps(appointments, therapist.id, date, hours, slotMinutes, {
           notBefore: nowMinutes ?? undefined,
           alignToSlots: true,
+          working: workingFor?.(therapist.id),
         }).flatMap((gap) => {
           const result: number[] = [];
           for (let at = gap.start; at + slotMinutes <= gap.end; at += slotMinutes) result.push(at);

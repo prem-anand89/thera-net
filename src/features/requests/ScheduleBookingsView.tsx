@@ -19,6 +19,7 @@ import {
   groupClosedRanges,
   isClosedDay,
   patientAttendance,
+  workingIntervals,
   minutesLabel,
   minutesOfDay,
   toLocalDateStr,
@@ -32,6 +33,7 @@ import {
 import type { Appointment, AppointmentRequest, UUID } from '@/domain/types';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { ReminderSheet } from '@/components/schedule/ReminderSheet';
+import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
 import { RequestsInbox, timeAgo } from '@/components/schedule/RequestsInbox';
 import { AgendaList } from '@/components/schedule/AgendaList';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
@@ -125,10 +127,14 @@ export function ScheduleBookingsView() {
     () =>
       [...(therapists ?? [])]
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((therapist, index) => ({ id: therapist.id, name: therapist.name, phone: therapist.phone ?? null, color: therapistColor(index) })),
+        .map((therapist, index) => ({ id: therapist.id, name: therapist.name, phone: therapist.phone ?? null, workingHours: therapist.workingHours ?? null, color: therapistColor(index) })),
     [therapists]
   );
   const rosterById = useMemo(() => new Map(roster.map((t) => [t.id, t])), [roster]);
+  const workingFor = useCallback(
+    (therapistId: string, day: string) => workingIntervals(rosterById.get(therapistId)?.workingHours, day, hours),
+    [rosterById, hours]
+  );
   const colorFor = useCallback(
     (appointment: Appointment) =>
       (appointment.therapistId && rosterById.get(appointment.therapistId)?.color) || UNASSIGNED_COLOR,
@@ -223,6 +229,7 @@ export function ScheduleBookingsView() {
   const [declining, setDeclining] = useState<{ id: UUID; name: string } | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [hoursTherapistId, setHoursTherapistId] = useState<UUID | null>(null);
   const [confirmed, setConfirmed] = useState<BookedSlot | null>(null);
   useEffect(() => {
     if (!confirmed) return;
@@ -303,7 +310,7 @@ export function ScheduleBookingsView() {
     if (view !== 'schedule') return;
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return;
-      if (sheet || selectedId || closedSheetOpen || reminderOpen) return;
+      if (sheet || selectedId || closedSheetOpen || reminderOpen || hoursTherapistId) return;
       if (event.key === '?') {
         setShortcutsOpen((current) => !current);
         event.preventDefault();
@@ -319,7 +326,7 @@ export function ScheduleBookingsView() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [view, sheet, selectedId, closedSheetOpen, reminderOpen, setSchedule, step]);
+  }, [view, sheet, selectedId, closedSheetOpen, reminderOpen, hoursTherapistId, setSchedule, step]);
 
   async function decline(requestId: UUID) {
     try {
@@ -336,11 +343,11 @@ export function ScheduleBookingsView() {
       const list = byDate.get(day) ?? [];
       const notBefore = day === today ? now.minutes : undefined;
       const hasFreeTime = visibleRoster.some(
-        (t) => freeGaps(list, t.id, day, hours, slotMinutes, { notBefore }).length > 0
+        (t) => freeGaps(list, t.id, day, hours, slotMinutes, { notBefore, working: workingFor(t.id, day) }).length > 0
       );
       return { closed, hasFreeTime };
     },
-    [closedFor, today, byDate, now.minutes, visibleRoster, hours, slotMinutes]
+    [closedFor, today, byDate, now.minutes, visibleRoster, hours, slotMinutes, workingFor]
   );
 
   if (scope.role === 'unknown') {
@@ -361,7 +368,7 @@ export function ScheduleBookingsView() {
   const activeView = !canManageAll && view === 'requests' ? 'schedule' : view;
   const dayNow = date === today ? now.minutes : null;
   const dayGaps = singleTherapist && !closedToday.closed && date >= today
-    ? freeGaps(dayAppointments, singleTherapist.id, date, hours, slotMinutes, { notBefore: dayNow ?? undefined, alignToSlots: true })
+    ? freeGaps(dayAppointments, singleTherapist.id, date, hours, slotMinutes, { notBefore: dayNow ?? undefined, alignToSlots: true, working: workingFor(singleTherapist.id, date) })
     : [];
   const liveDay = dayAppointments.filter((a) => a.status !== 'cancelled');
   const upcoming = liveDay.filter((a) => (a.status === 'confirmed' || a.status === 'rescheduled') && (date > today || (date === today && minutesOfDay(a.scheduledAt) >= now.minutes))).length;
@@ -405,6 +412,11 @@ export function ScheduleBookingsView() {
           >
             ?
           </button>
+          {isTherapist && myTherapistId && (
+            <button type="button" className={btnSecondary} onClick={() => setHoursTherapistId(myTherapistId)}>
+              My hours
+            </button>
+          )}
           <button type="button" className={btnPrimary} onClick={() => openBooking()}>+ Book</button>
         </div>
         {shortcutsOpen && (
@@ -440,6 +452,7 @@ export function ScheduleBookingsView() {
               onAddClosure={() => setClosedSheetOpen(true)}
               onRemoveClosure={setRemoving}
               onOnlyTherapist={(id) => setTherapists([id])}
+              onEditHours={canManageAll ? (id) => setHoursTherapistId(id) : undefined}
               requests={
                 canManageAll ? (
                   <RequestsInbox
@@ -543,6 +556,12 @@ export function ScheduleBookingsView() {
                             Set closed days
                           </button>
                         )}
+                        {canManageAll &&
+                          roster.map((t) => (
+                            <button key={t.id} type="button" className={menuItem} onClick={() => { setHoursTherapistId(t.id); close(); }}>
+                              Hours · {t.name}
+                            </button>
+                          ))}
                       </>
                     )}
                   </KebabMenu>
@@ -568,6 +587,7 @@ export function ScheduleBookingsView() {
                     canBookFor={canBookFor}
                     onBook={({ time, therapistId }) => openBooking({ date, time, therapistId })}
                     summaryFor={summaryFor}
+                    workingFor={(therapistId) => workingFor(therapistId, date)}
                   />
                 </div>
                 <div className="tab:hidden">
@@ -581,6 +601,7 @@ export function ScheduleBookingsView() {
                       closed={closedToday}
                       nowMinutes={dayNow}
                       onPick={({ therapistId, time }) => { setFindTime(false); openBooking({ date, time, therapistId }); }}
+                      workingFor={(therapistId) => workingFor(therapistId, date)}
                     />
                   ) : dayAppointments.length === 0 && dayGaps.length === 0 ? (
                     <EmptyDay closed={closedToday.closed} onBook={() => openBooking({ date })} onFindTime={() => setFindTime(true)} />
@@ -615,6 +636,7 @@ export function ScheduleBookingsView() {
                     onSelect={(a) => setSelectedId(a.id)}
                     onBook={canBookFor(singleTherapist.id) ? ({ date: day, time }) => openBooking({ date: day, time, therapistId: singleTherapist.id }) : undefined}
                     onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
+                    workingFor={(day) => workingFor(singleTherapist.id, day)}
                   />
                 </div>
                 <div className="tab:hidden">
@@ -758,6 +780,15 @@ export function ScheduleBookingsView() {
         therapists={roster}
         slotMinutes={slotMinutes}
         onClose={() => setReminderOpen(false)}
+      />
+
+      <WorkingHoursSheet
+        open={hoursTherapistId !== null}
+        therapistName={hoursTherapistId ? rosterById.get(hoursTherapistId)?.name ?? '' : ''}
+        value={hoursTherapistId ? rosterById.get(hoursTherapistId)?.workingHours : null}
+        clinic={{ ...hours, closedWeekdays: clinic.closedWeekdays }}
+        onSave={(value) => bookingService.setWorkingHours(hoursTherapistId!, value)}
+        onClose={() => setHoursTherapistId(null)}
       />
 
       <ClosedDaysSheet open={closedSheetOpen} clinicId={clinic.id} initialDate={date < today ? today : date} onClose={() => setClosedSheetOpen(false)} />

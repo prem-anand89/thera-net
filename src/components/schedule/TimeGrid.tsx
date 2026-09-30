@@ -10,7 +10,9 @@ import {
   generateScheduleSlots,
   minutesLabel,
   minutesOfDay,
+  withinWorking,
   type ClosedDayInfo,
+  type Interval,
 } from '@/domain/schedule';
 import { CLOSED_HATCH_STYLE } from './scheduleColors';
 
@@ -36,6 +38,8 @@ type DayColumnProps = {
   onBook?: (time: string) => void;
   /** Narrow columns (week view) show start time + length instead of a range. */
   dense?: boolean;
+  /** Working intervals; time outside them is shaded and not offered. */
+  working?: Interval[];
 };
 
 /** One vertical day column: free slots tinted and bookable, blocks sized by length. */
@@ -53,6 +57,7 @@ export function DayColumn({
   onSelect,
   onBook,
   dense = false,
+  working,
 }: DayColumnProps) {
   const height = (hours.endHour - hours.startHour) * 60 * PX_PER_MINUTE;
   const blocks = useMemo(
@@ -71,13 +76,27 @@ export function DayColumn({
     if (!onBook || closed.closed || isPastDay) return [];
     return generateScheduleSlots(slotMinutes, hours.startHour, hours.endHour).filter((slot) => {
       if (nowMinutes !== null && slot.minutes < nowMinutes) return false;
+      if (working && !withinWorking(working, slot.minutes, slotMinutes)) return false;
       const end = slot.minutes + slotMinutes;
       // Same rule as the server: every non-cancelled appointment holds its time.
       return !blocks.some(
         (b) => b.appointment.status !== 'cancelled' && b.start < end && b.end > slot.minutes
       );
     });
-  }, [onBook, closed.closed, isPastDay, slotMinutes, hours.startHour, hours.endHour, nowMinutes, blocks]);
+  }, [onBook, closed.closed, isPastDay, slotMinutes, hours.startHour, hours.endHour, nowMinutes, blocks, working]);
+  const offHours = useMemo(() => {
+    if (!working || closed.closed) return [];
+    const open = hours.startHour * 60;
+    const close = hours.endHour * 60;
+    const result: Interval[] = [];
+    let cursor = open;
+    for (const interval of [...working].sort((a, b) => a.start - b.start)) {
+      if (interval.start > cursor) result.push({ start: cursor, end: Math.min(interval.start, close) });
+      cursor = Math.max(cursor, interval.end);
+    }
+    if (cursor < close) result.push({ start: cursor, end: close });
+    return result.filter((r) => r.end > r.start);
+  }, [working, closed.closed, hours.startHour, hours.endHour]);
 
   return (
     <div
@@ -90,6 +109,15 @@ export function DayColumn({
           key={index}
           className="pointer-events-none absolute inset-x-0 border-t border-[var(--border)]"
           style={{ top: index * 60 * PX_PER_MINUTE }}
+        />
+      ))}
+      {offHours.map((range) => (
+        <div
+          key={range.start}
+          className="pointer-events-none absolute inset-x-0 bg-[var(--paper)]"
+          style={{ top: (range.start - hours.startHour * 60) * PX_PER_MINUTE, height: (range.end - range.start) * PX_PER_MINUTE }}
+          aria-hidden
+          data-off-hours
         />
       ))}
       {closed.closed && (
@@ -238,6 +266,7 @@ type GridColumn = {
   appointments: Appointment[];
   closed: ClosedDayInfo;
   onBook?: (time: string) => void;
+  working?: Interval[];
 };
 
 function GridFrame({
@@ -312,6 +341,7 @@ function GridFrame({
             onSelect={onSelect}
             onBook={column.onBook}
             dense={minColumnWidth < 150}
+            working={column.working}
           />
         ))}
       </div>
@@ -337,6 +367,7 @@ export function ResourceDayGrid({
   canBookFor,
   onBook,
   summaryFor,
+  workingFor,
 }: {
   date: string;
   today: string;
@@ -352,8 +383,11 @@ export function ResourceDayGrid({
   canBookFor: (therapistId: string) => boolean;
   onBook: (input: { time: string; therapistId: string }) => void;
   summaryFor: (therapistId: string) => string;
+  /** Working intervals for a therapist on this date; omit = booking hours. */
+  workingFor?: (therapistId: string) => Interval[];
 }) {
   const columns: GridColumn[] = therapists.map((therapist) => ({
+    working: therapist.id && workingFor ? workingFor(therapist.id) : undefined,
     key: therapist.id || 'unassigned',
     label: therapist.name,
     date,
@@ -410,6 +444,7 @@ export function WeekTimeGrid({
   onSelect,
   onBook,
   onOpenDay,
+  workingFor,
 }: {
   days: string[];
   today: string;
@@ -423,6 +458,7 @@ export function WeekTimeGrid({
   onSelect: (appointment: Appointment) => void;
   onBook?: (input: { date: string; time: string }) => void;
   onOpenDay: (date: string) => void;
+  workingFor?: (date: string) => Interval[];
 }) {
   const columns: GridColumn[] = days.map((day) => {
     const value = new Date(`${day}T00:00:00`);
@@ -451,6 +487,7 @@ export function WeekTimeGrid({
         </button>
       ),
       onBook: onBook ? (time: string) => onBook({ date: day, time }) : undefined,
+      working: workingFor ? workingFor(day) : undefined,
     };
   });
 

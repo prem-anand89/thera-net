@@ -21,6 +21,8 @@ import {
   minutesLabel,
   minutesOfDay,
   toLocalDateStr,
+  withinWorking,
+  workingIntervals,
 } from '@/domain/schedule';
 import type { Appointment, UUID, Patient } from '@/domain/types';
 import { AttendanceNote } from '@/components/schedule/AppointmentDetailsPanel';
@@ -99,6 +101,7 @@ export function BookSlotSheet({
   const [patientName, setPatientName] = useState('');
   const [patientPhone, setPatientPhone] = useState('');
   const [showLater, setShowLater] = useState(false);
+  const [showOffHours, setShowOffHours] = useState(false);
   const [therapistTouched, setTherapistTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +147,7 @@ export function BookSlotSheet({
     setPatientName(prefilledPatientId ? '' : prefilledPatientName ?? '');
     setPatientPhone(prefilledPatientPhone ?? '');
     setPatientMode(prefilledPatientName && !prefilledPatientId ? 'new' : 'find');
+    setShowOffHours(false);
     setBusy(false);
     setError(null);
   }, [isOpen, rescheduleAppointment, prefilledDate, prefilledPatientId, prefilledPatientName, prefilledPatientPhone, prefilledTherapistId, prefilledTime, today, slotMinutes]);
@@ -174,7 +178,27 @@ export function BookSlotSheet({
       fallbackMinutes: slotMinutes,
       ignoreAppointmentId: rescheduleAppointment?.id,
     });
-  const therapistName = (therapists ?? []).find((t) => t.id === therapistId)?.name;
+  const therapistRow = (therapists ?? []).find((t) => t.id === therapistId);
+  const therapistName = therapistRow?.name;
+  const workingNow = workingIntervals(therapistRow?.workingHours, selectedDate, { startHour, endHour });
+  const workingSlots = slots.filter((slot) => withinWorking(workingNow, slot.minutes, lengthMinutes));
+  const offSlots = slots.filter((slot) => !withinWorking(workingNow, slot.minutes, lengthMinutes));
+  const renderSlot = (slot: (typeof slots)[number]) => {
+    const unavailable = occupied(slot.time) || isPast(slot.time) || runsPastClose(slot.minutes);
+    const selected = selectedTime === slot.time;
+    return (
+      <button
+        key={slot.time}
+        type="button"
+        disabled={unavailable}
+        aria-pressed={selected}
+        onClick={() => setSelectedTime(slot.time)}
+        className={`min-h-11 rounded-lg border px-2 text-xs font-medium ${selected ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : unavailable ? 'cursor-not-allowed border-[var(--border)] bg-[var(--paper)] text-[var(--muted)] line-through' : 'border-[var(--moss)]/40 bg-[var(--moss-light)] text-[var(--ink)] hover:border-[var(--moss)]'}`}
+      >
+        {slot.label}
+      </button>
+    );
+  };
   const therapistLocked = isReschedule || (lockTherapist && Boolean(therapistId));
   const now = new Date();
   const chosenPatient = patientId ? patients?.find((p) => p.id === patientId) : undefined;
@@ -199,6 +223,8 @@ export function BookSlotSheet({
       now,
       isClosed: (date) => isClosedDay(date, clinic.closedWeekdays, closedDates ?? []).closed,
       ignoreAppointmentId: rescheduleAppointment?.id,
+      workingFor: (id, date) =>
+        workingIntervals((therapists ?? []).find((t) => t.id === id)?.workingHours, date, { startHour, endHour }),
     });
     if (!found) return setError('No free time in the next 3 weeks for this length.');
     setError(null);
@@ -384,12 +410,29 @@ export function BookSlotSheet({
               </p>
             )}
             {!therapistId ? <p className="rounded-lg bg-[var(--paper)] p-3 text-sm text-[var(--muted)]">Choose a therapist to see their available times.</p> : (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {slots.map((slot) => {
-                  const unavailable = occupied(slot.time) || isPast(slot.time) || runsPastClose(slot.minutes);
-                  return <button key={slot.time} type="button" disabled={unavailable} onClick={() => setSelectedTime(slot.time)} className={`min-h-11 rounded-lg border px-2 text-xs font-medium ${selectedTime === slot.time ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : unavailable ? 'cursor-not-allowed border-[var(--border)] bg-[var(--paper)] text-[var(--muted)] line-through' : 'border-[var(--moss)]/40 bg-[var(--moss-light)] text-[var(--ink)] hover:border-[var(--moss)]'}`}>{slot.label}</button>;
-                })}
-              </div>
+              <>
+                {workingSlots.length === 0 && (
+                  <p className="mb-2 rounded-lg bg-[var(--paper)] p-3 text-sm text-[var(--muted)]">{therapistName ?? 'This therapist'} isn't working this day.</p>
+                )}
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {workingSlots.map(renderSlot)}
+                </div>
+                {offSlots.length > 0 && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      aria-expanded={showOffHours || offSlots.some((slot) => slot.time === selectedTime)}
+                      className="min-h-9 text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]"
+                      onClick={() => setShowOffHours((current) => !current)}
+                    >
+                      {showOffHours || offSlots.some((slot) => slot.time === selectedTime) ? '▾' : '▸'} Outside working hours ({offSlots.length})
+                    </button>
+                    {(showOffHours || offSlots.some((slot) => slot.time === selectedTime)) && (
+                      <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">{offSlots.map(renderSlot)}</div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
           <ErrorNote message={error} />

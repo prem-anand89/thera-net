@@ -7,7 +7,9 @@ import {
   therapistService,
   visitService,
   whatsappBusinessService,
+  bookingService,
 } from '@/services';
+import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
@@ -2819,6 +2821,8 @@ function RosterCard({
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [hoursOpen, setHoursOpen] = useState(false);
+  const clinic = useClinic();
   const [nameDraft, setNameDraft] = useState(therapist.name);
   const [regDraft, setRegDraft] = useState(therapist.registrationNo ?? '');
   const [phoneDraft, setPhoneDraft] = useState(therapist.phone ?? '');
@@ -2960,6 +2964,14 @@ function RosterCard({
 
   return (
     <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+      <WorkingHoursSheet
+        open={hoursOpen}
+        therapistName={therapist.name}
+        value={therapist.workingHours}
+        clinic={{ startHour: clinic.bookingStartHour ?? 9, endHour: clinic.bookingEndHour ?? 17, closedWeekdays: clinic.closedWeekdays }}
+        onSave={(hours) => bookingService.setWorkingHours(therapist.id, hours)}
+        onClose={() => setHoursOpen(false)}
+      />
       <div className="flex items-center gap-2.5">
         {photo}
         <div className="min-w-0">
@@ -2986,6 +2998,9 @@ function RosterCard({
       ) : (
         <p className="text-[11.5px] text-[var(--amber-strong)]">No login linked</p>
       )}
+      <p className="truncate text-[11.5px] text-[var(--muted)]">
+        Hours: <span className="text-[var(--ink)]">{therapist.workingHours ? 'Custom' : 'Clinic hours'}</span>
+      </p>
       <div className="mt-auto flex flex-wrap gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
         <button
           type="button"
@@ -2993,6 +3008,9 @@ function RosterCard({
           onClick={() => setEditing(true)}
         >
           Edit
+        </button>
+        <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setHoursOpen(true)}>
+          Working hours
         </button>
         <button
           type="button"
