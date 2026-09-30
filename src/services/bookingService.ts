@@ -56,7 +56,7 @@ export const bookingService = {
     return (data as { id: UUID; name: string }[] | null) ?? [];
   },
 
-  async getBookingAvailability(slug: string, startDate: string, endDate: string): Promise<{ closedWeekdays: number[], closedDates: { date: string, label: string }[], appointments: { scheduled_at: string, therapist_id: UUID }[] }> {
+  async getBookingAvailability(slug: string, startDate: string, endDate: string): Promise<{ closedWeekdays: number[], closedDates: { date: string, label: string }[], appointments: { scheduled_at: string, therapist_id: UUID, duration_minutes?: number }[] }> {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase is not configured');
     const { data, error } = await supabase.rpc('get_booking_availability', { 
@@ -137,6 +137,8 @@ export const bookingService = {
     therapistId: UUID;
     scheduledAt: string;
     requestId: UUID | null;
+    /** Omit to use the clinic's slot length. */
+    durationMinutes?: number;
   }): Promise<UUID> {
     const supabase = supabaseOrThrow();
     const { data, error } = await supabase.rpc('confirm_booking_slot', {
@@ -147,6 +149,7 @@ export const bookingService = {
       p_therapist_id: params.therapistId,
       p_scheduled_at: params.scheduledAt,
       p_request_id: params.requestId,
+      p_duration_minutes: params.durationMinutes ?? null,
     });
     if (error) throw new Error(`Could not confirm booking: ${error.message}`);
     syncEngine.schedule(0);
@@ -162,11 +165,16 @@ export const bookingService = {
     syncEngine.schedule(0);
   },
 
-  async rescheduleAppointment(appointmentId: UUID, newScheduledAt: string): Promise<void> {
+  async rescheduleAppointment(
+    appointmentId: UUID,
+    newScheduledAt: string,
+    durationMinutes?: number
+  ): Promise<void> {
     const supabase = supabaseOrThrow();
     const { error } = await supabase.rpc('reschedule_appointment', {
       p_appointment_id: appointmentId,
       p_new_scheduled_at: newScheduledAt,
+      p_duration_minutes: durationMinutes ?? null,
     });
     if (error) throw new Error(`Could not reschedule: ${error.message}`);
     syncEngine.schedule(0);
@@ -187,6 +195,30 @@ export const bookingService = {
       p_appointment_id: appointmentId,
     });
     if (error) throw new Error(`Could not cancel: ${error.message}`);
+    syncEngine.schedule(0);
+  },
+
+  /** Marks every day in [from, to] closed (holiday / one-off closure). */
+  async setClosedDates(clinicId: UUID, from: string, to: string, label: string | null): Promise<void> {
+    const supabase = supabaseOrThrow();
+    const { error } = await supabase.rpc('set_clinic_closed_dates', {
+      p_clinic_id: clinicId,
+      p_from: from,
+      p_to: to,
+      p_label: label,
+    });
+    if (error) throw new Error(`Could not save closed days: ${error.message}`);
+    syncEngine.schedule(0);
+  },
+
+  async removeClosedDates(clinicId: UUID, from: string, to: string): Promise<void> {
+    const supabase = supabaseOrThrow();
+    const { error } = await supabase.rpc('remove_clinic_closed_dates', {
+      p_clinic_id: clinicId,
+      p_from: from,
+      p_to: to,
+    });
+    if (error) throw new Error(`Could not reopen those days: ${error.message}`);
     syncEngine.schedule(0);
   },
 

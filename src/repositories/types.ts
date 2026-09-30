@@ -19,6 +19,7 @@ import type {
   FeedbackResponse,
   AppointmentRequest,
   Appointment,
+  ClinicClosedDate,
   NoteMode,
   UUID,
 } from '@/domain/types';
@@ -237,6 +238,11 @@ export interface AppointmentRepo {
   listByClinic(clinicId: UUID): Promise<Appointment[]>;
 }
 
+/** Read-only; live rows only (soft-deleted closures are filtered out). */
+export interface ClinicClosedDateRepo {
+  listByClinic(clinicId: UUID): Promise<ClinicClosedDate[]>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -258,4 +264,5 @@ export interface Repos {
   feedbackResponses: FeedbackResponseRepo;
   appointmentRequests: AppointmentRequestRepo;
   appointments: AppointmentRepo;
+  clinicClosedDates: ClinicClosedDateRepo;
 }

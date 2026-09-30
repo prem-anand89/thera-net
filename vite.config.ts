@@ -50,7 +50,8 @@ export default defineConfig({
     host: true,
   },
   test: {
+    // Node by default; component tests opt in with `// @vitest-environment jsdom`.
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 });

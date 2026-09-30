@@ -1,0 +1,215 @@
+// @vitest-environment jsdom
+import '@testing-library/jest-dom/vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { Appointment } from '@/domain/types';
+import { localDateTime } from '@/domain/schedule';
+
+// ---- mocks -----------------------------------------------------------------
+const scope = { myTherapistId: 't1' as string | undefined };
+const data = {
+  therapists: [
+    { id: 't1', name: 'Dr Asha' },
+    { id: 't2', name: 'Dr Ravi' },
+  ],
+  patients: [
+    { id: 'p1', name: 'Priya', phone: '9820000001' },
+    { id: 'p2', name: 'Noor', phone: null },
+  ],
+  closed: [] as { closedDate: string; label: string | null }[],
+};
+const confirmBookingSlot = vi.fn(async () => 'new-id');
+const rescheduleAppointment = vi.fn(async () => undefined);
+
+vi.mock('@/app/clinicContext', () => ({
+  useClinic: () => ({
+    id: 'c1',
+    name: 'Clinic',
+    slotDurationMinutes: 30,
+    bookingStartHour: 9,
+    bookingEndHour: 12,
+    closedWeekdays: [0],
+  }),
+}));
+vi.mock('@/app/useWorkspaceScope', () => ({ useWorkspaceScope: () => scope }));
+// Repos below return plain arrays, so the live query can resolve synchronously.
+vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (query: () => unknown) => query() }));
+vi.mock('@/services', () => ({
+  repos: {
+    therapists: { list: () => data.therapists },
+    patients: { list: () => data.patients },
+    clinicClosedDates: { listByClinic: () => data.closed },
+  },
+  bookingService: {
+    confirmBookingSlot: (...args: unknown[]) => confirmBookingSlot(...(args as [])),
+    rescheduleAppointment: (...args: unknown[]) => rescheduleAppointment(...(args as [])),
+  },
+}));
+vi.mock('@/components/SearchableSelect', () => ({
+  SearchableSelect: ({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) => (
+    <select aria-label="Patient search" value={value} onChange={(event) => onChange(event.target.value)}>
+      <option value="">—</option>
+      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  ),
+}));
+
+import { BookSlotSheet } from './BookSlotSheet';
+
+function appointment(overrides: Partial<Appointment>): Appointment {
+  return {
+    id: 'a1',
+    clinicId: 'c1',
+    patientId: null,
+    patientName: 'Kiran',
+    patientPhone: '9820000009',
+    therapistId: 't1',
+    scheduledAt: localDateTime('2026-10-01', '11:00').toISOString(),
+    durationMinutes: 30,
+    status: 'confirmed',
+    requestId: null,
+    visitId: null,
+    rescheduleCount: 0,
+    previousScheduledAt: null,
+    createdAt: '',
+    updatedAt: '',
+    ...overrides,
+  };
+}
+
+const slot = (label: string) => screen.getByRole('button', { name: label });
+
+describe('BookSlotSheet', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 8, 30, 10, 0)); // Wed 30 Sep 2026, 10:00 local
+    scope.myTherapistId = 't1';
+    data.closed = [];
+    confirmBookingSlot.mockClear();
+    rescheduleAppointment.mockClear();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('defaults the therapist to the logged-in therapist', () => {
+    render(<BookSlotSheet isOpen onClose={() => {}} />);
+    expect(screen.getByLabelText('Therapist')).toHaveValue('t1');
+  });
+
+  it('disables times that have already passed today', () => {
+    render(<BookSlotSheet isOpen onClose={() => {}} />);
+    expect(slot('9:30 AM')).toBeDisabled();
+    expect(slot('10:30 AM')).toBeEnabled();
+  });
+
+  it('disables occupied time for the chosen length, and time that runs past closing', () => {
+    render(<BookSlotSheet isOpen onClose={() => {}} appointments={[appointment({})]} prefilledDate="2026-10-01" />);
+    expect(slot('11:00 AM')).toBeDisabled();
+    expect(slot('10:30 AM')).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('Length'), { target: { value: '60' } });
+    expect(slot('10:30 AM')).toBeDisabled(); // 10:30–11:30 hits the 11:00 booking
+    expect(slot('11:30 AM')).toBeDisabled(); // would end after 12:00 close
+    expect(slot('9:00 AM')).toBeEnabled();
+  });
+
+  it("ignores other therapists' bookings", () => {
+    render(<BookSlotSheet isOpen onClose={() => {}} appointments={[appointment({ therapistId: 't2' })]} prefilledDate="2026-10-01" />);
+    expect(slot('11:00 AM')).toBeEnabled();
+  });
+
+  it('books a new patient and reports the result', async () => {
+    const onBooked = vi.fn();
+    const onClose = vi.fn();
+    render(<BookSlotSheet isOpen onClose={onClose} onBooked={onBooked} prefilledDate="2026-10-01" />);
+    fireEvent.click(screen.getByRole('button', { name: 'New patient' }));
+    fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Meera' } });
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '9820000002' } });
+    fireEvent.change(screen.getByLabelText('Length'), { target: { value: '45' } });
+    fireEvent.click(slot('9:00 AM'));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm booking' }));
+
+    await waitFor(() => expect(onBooked).toHaveBeenCalled());
+    const scheduledAt = localDateTime('2026-10-01', '09:00').toISOString();
+    expect(confirmBookingSlot).toHaveBeenCalledWith({
+      clinicId: 'c1',
+      patientId: null,
+      patientName: 'Meera',
+      patientPhone: '9820000002',
+      therapistId: 't1',
+      scheduledAt,
+      requestId: null,
+      durationMinutes: 45,
+    });
+    expect(onBooked).toHaveBeenCalledWith(expect.objectContaining({ kind: 'booked', appointmentId: 'new-id', durationMinutes: 45 }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('asks for a phone when the chosen patient has none on file', async () => {
+    render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+    fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p2' } });
+    fireEvent.click(slot('9:00 AM'));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    expect(await screen.findByText(/no phone on file/)).toBeInTheDocument();
+    expect(confirmBookingSlot).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText('Phone (none on file)'), { target: { value: '9820000003' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm booking' }));
+    await waitFor(() =>
+      expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ patientId: 'p2', patientPhone: '9820000003' }))
+    );
+  });
+
+  it('closes on Escape', () => {
+    const onClose = vi.fn();
+    render(<BookSlotSheet isOpen onClose={onClose} />);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('resets everything when reopened with different prefill', () => {
+    const { rerender } = render(<BookSlotSheet isOpen onClose={() => {}} prefilledPatientName="Old" prefilledTherapistId="t2" />);
+    expect(screen.getByLabelText('Patient name')).toHaveValue('Old');
+    fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Edited' } });
+
+    rerender(<BookSlotSheet isOpen={false} onClose={() => {}} />);
+    rerender(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+    // Back to "find" mode with no leftover name, and the therapist default re-applied.
+    expect(screen.queryByLabelText('Patient name')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Therapist')).toHaveValue('t1');
+  });
+
+  it('warns on a closed day but still allows booking', () => {
+    data.closed = [{ closedDate: '2026-10-02', label: 'Gandhi Jayanti' }];
+    render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-02" />);
+    expect(screen.getByRole('status')).toHaveTextContent('closed this day (Gandhi Jayanti)');
+    expect(slot('9:00 AM')).toBeEnabled();
+  });
+
+  it('locks the therapist for a therapist login', () => {
+    render(<BookSlotSheet isOpen onClose={() => {}} lockTherapist prefilledTherapistId="t1" />);
+    expect(screen.queryByLabelText('Therapist')).not.toBeInTheDocument();
+    expect(screen.getByText('Dr Asha')).toBeInTheDocument();
+  });
+
+  it('reschedules: patient and therapist fixed, own slot free, calls reschedule', async () => {
+    const moving = appointment({});
+    const onBooked = vi.fn();
+    render(
+      <BookSlotSheet isOpen onClose={() => {}} onBooked={onBooked} appointments={[moving]} rescheduleAppointment={moving} />
+    );
+    expect(screen.getByRole('heading', { name: 'Reschedule' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New patient' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Therapist')).not.toBeInTheDocument();
+    expect(slot('11:00 AM')).toBeEnabled(); // its own current slot is not "occupied"
+
+    fireEvent.click(slot('11:30 AM'));
+    fireEvent.click(screen.getByRole('button', { name: 'Move appointment' }));
+    await waitFor(() =>
+      expect(rescheduleAppointment).toHaveBeenCalledWith('a1', localDateTime('2026-10-01', '11:30').toISOString(), 30)
+    );
+    expect(confirmBookingSlot).not.toHaveBeenCalled();
+    expect(onBooked).toHaveBeenCalledWith(expect.objectContaining({ kind: 'rescheduled', appointmentId: 'a1' }));
+  });
+});

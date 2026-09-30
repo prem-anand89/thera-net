@@ -498,6 +498,11 @@ export function WorkspacePage() {
               ? 'Expected today (1)'
               : `Expected today (${todayAppointmentsList?.length ?? 0})`
           }
+          action={
+            <Link to="/schedule" className="text-sm font-medium text-[var(--teal)] hover:underline">
+              Open schedule
+            </Link>
+          }
         >
           {!todayAppointmentsList || todayAppointmentsList.length === 0 ? (
             <p className="text-sm text-[var(--muted)]">No appointments confirmed for today.</p>

@@ -199,6 +199,9 @@ function makeFakeRepos() {
     appointments: {
       listByClinic: async () => [],
     },
+    clinicClosedDates: {
+      listByClinic: async () => [],
+    },
   };
   return {
     repos,

@@ -118,11 +118,12 @@ export function RequestsPage() {
     void db.meta.put({ key: requestsLastViewedKey(clinic.id), value: new Date().toISOString() });
   }, [clinic.id, isAdmin]);
 
+  // Therapists get their own schedule only — no Feedback / Bookings tab row.
   if (!isAdmin && !canSeeBookings) {
     return (
       <div className="space-y-4">
         <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Schedule</h1>
-        <p className="text-sm text-[var(--muted)]">Requests are managed by your clinic admin.</p>
+        <ScheduleBookingsView />
       </div>
     );
   }

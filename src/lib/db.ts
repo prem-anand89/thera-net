@@ -20,6 +20,7 @@ import type {
   FeedbackResponse,
   AppointmentRequest,
   Appointment,
+  ClinicClosedDate,
 } from '@/domain/types';
 
 /**
@@ -69,7 +70,8 @@ export type SyncedTable =
   | 'feedback_requests'
   | 'feedback_responses'
   | 'appointment_requests'
-  | 'appointments';
+  | 'appointments'
+  | 'clinic_closed_dates';
 
 /**
  * Every table the sync engine pushes/pulls — the single source of truth
@@ -101,6 +103,7 @@ export const ALL_SYNCED_TABLES = [
   'feedback_responses',
   'appointment_requests',
   'appointments',
+  'clinic_closed_dates',
 ] as const satisfies readonly SyncedTable[];
 type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number]
   ? true
@@ -166,6 +169,7 @@ export class ClinicDB extends Dexie {
   feedback_responses!: Table<FeedbackResponse, string>;
   appointment_requests!: Table<AppointmentRequest, string>;
   appointments!: Table<Appointment, string>;
+  clinic_closed_dates!: Table<ClinicClosedDate, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 
@@ -262,6 +266,10 @@ export class ClinicDB extends Dexie {
       // Same compound index as settlements — multiple rows per
       // [clinicId+year+month] now (one per payment tranche), not one.
       settlement_payments: 'id, clinicId, [clinicId+year+month]',
+    });
+    this.version(20).stores({
+      // Pull-only, like appointments — writes go through RPCs.
+      clinic_closed_dates: 'id, clinicId, closedDate',
     });
   }
 }

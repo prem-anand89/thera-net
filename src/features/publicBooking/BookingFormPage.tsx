@@ -4,12 +4,12 @@ import { hasSupabaseConfig } from '@/lib/env';
 import { bookingService } from '@/services';
 import type { UUID } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
-import { addDays, generateScheduleSlots, toLocalDateStr } from '@/domain/schedule';
+import { addDays, generateScheduleSlots, isPublicSlotTaken, toLocalDateStr } from '@/domain/schedule';
 
 type AvailabilityData = {
   closedWeekdays: number[];
   closedDates: { date: string; label: string }[];
-  appointments: { scheduled_at: string; therapist_id: UUID }[];
+  appointments: { scheduled_at: string; therapist_id: UUID; duration_minutes?: number }[];
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -350,26 +350,27 @@ export function BookingFormPage() {
 
   // ── Slot grouping ─────────────────────────────────────────────────────────
   const allSlots = generateScheduleSlots(slotDuration, startHour, endHour);
-  let morning = allSlots.filter((slot) => slot.minutes < 12 * 60).map((slot) => slot.label);
-  let afternoon = allSlots.filter((slot) => slot.minutes >= 12 * 60).map((slot) => slot.label);
+  const booked = (availability?.appointments ?? []).map((a) => ({
+    scheduledAt: a.scheduled_at,
+    therapistId: a.therapist_id,
+    durationMinutes: a.duration_minutes,
+  }));
+  const nowTime = new Date();
+  const openSlots = allSlots.filter((slot) => {
+    if (!preferredDate) return true;
+    if (preferredDate === isoDate(nowTime) && slot.minutes <= nowTime.getHours() * 60 + nowTime.getMinutes()) return false;
+    return !isPublicSlotTaken(
+      preferredDate,
+      slot.minutes,
+      slotDuration,
+      booked,
+      therapists.map((t) => t.id),
+      preferredTherapistId || null
+    );
+  });
+  const morning = openSlots.filter((slot) => slot.minutes < 12 * 60).map((slot) => slot.label);
+  const afternoon = openSlots.filter((slot) => slot.minutes >= 12 * 60).map((slot) => slot.label);
   const quickDates = Array.from({ length: 7 }, (_, index) => addDays(isoDate(new Date()), index));
-
-  if (preferredDate && availability) {
-    const bookedTimes = availability.appointments
-      .filter(a => !preferredTherapistId || a.therapist_id === preferredTherapistId)
-      .map(a => new Date(a.scheduled_at))
-      .filter(d => isoDate(d) === preferredDate)
-      .map(d => {
-        let h = d.getHours();
-        const m = d.getMinutes();
-        const isPM = h >= 12;
-        h = h > 12 ? h - 12 : h === 0 ? 12 : h;
-        return `${h}:${m.toString().padStart(2, '0')} ${isPM ? 'PM' : 'AM'}`;
-      });
-
-    morning = morning.filter(t => !bookedTimes.includes(t));
-    afternoon = afternoon.filter(t => !bookedTimes.includes(t));
-  }
 
   // ── Layout ────────────────────────────────────────────────────────────────
   return (

@@ -925,6 +925,7 @@ still falls through to the existing share sheet, unchanged.
     stays null): a staff member entering a booking by hand already knows
     the confirmed date/time/therapist, so there's no "pending" state to
     pass through first.
+  - **Schedule MVP permission and duration rules** (`20261001100000_schedule_mvp.sql`): `appointments.duration_minutes` (5–240, backfilled from the clinic slot length) — every overlap check, client (`appointmentsOverlap`) and server (`therapist_has_overlap`), uses **each row's own length**, ignoring cancelled rows. `can_manage_appointment(clinic, therapist_id)` = admin OR front desk OR `is_own_therapist`; `confirm_booking_slot` (now with `p_duration_minutes`), `reschedule_appointment` (now with optional `p_duration_minutes`), `cancel_appointment` and `mark_appointment_no_show` all use it, and only admin / front desk may pass a `p_request_id`. Both RPCs were drop-and-recreated per pattern 3c. **Fixed**: `confirm_booking_slot` / `create_appointment_staff` used to check `p_therapist_id` (a `therapists.id`) against `clinic_members.user_id`, which rejected every booking; they now check `therapists` (same clinic, active). `create_appointment_staff` now delegates to `confirm_booking_slot`.
   - **`bookingService.ts`'s eight staff-mutation wrappers all call
     `syncEngine.schedule(0)` right after their RPC succeeds** — found
     missing in the same post-ship workflow review, not present originally.
@@ -965,14 +966,16 @@ still falls through to the existing share sheet, unchanged.
     drives surfaces likely-existing-patient candidates for free; staff
     still explicitly pick or create, never auto-selected (no silent
     find-or-create by phone, per the doc's explicit-scope list).
-  - **Schedule & Requests View (`ScheduleBookingsView.tsx`)** — The unified booking interface at `/schedule`, merging the legacy Requests tab and the old grid view. Driven by URL params (`?view=schedule|requests|history`, `?mode=day|week`, `?date=YYYY-MM-DD`, `?therapist=UUID`) for native deep-linking.
-    - **Week strip (`MiniCalendarStrip`)**: a non-scrolling Monday–Sunday 7-cell navigator at the top of the Schedule view (prev/next week, Today, per-day appointment count, arrow-key navigation). Week math lives in `src/domain/schedule.ts` (`getWeekStart`, `weekDays`, `addWeeks`); the count honours the therapist filter. Dates are always local-day strings, never UTC.
-    - **Schedule Surface**: A toggleable Day/Week mode. The Day view defaults to a clean, compact vertical list of `AppointmentCard`s for all therapists, making mobile viewing excellent. The ‹ Today › date navigator drives it.
-    - **Booking-sheet defaults & guards**: therapist defaults to the logged-in therapist (or the only therapist); past slots today and occupied slots are disabled; a closed weekday (`clinics.closed_weekdays`) shows a warning but can still be booked; a patient with no phone must have one entered. Esc closes the sheet. Appointment cards offer Mark arrived / WhatsApp / Reschedule / No-show / Cancel / Create visit, and a day summary line. The post-booking toast auto-dismisses after 15s. Schedule URL changes use `replace` so Back leaves the page rather than stepping through dates.
-    - **Public availability** (`get_booking_availability`) ignores cancelled appointments (`20260930140000_availability_ignores_cancelled.sql`) so cancelled slots reopen on `/book/$slug`.
-    - **Find a Time (Grid)**: Hiding behind a toggle button is the full therapist-by-slot timetable grid, used to visually locate an empty slot.
-    - **BookSlotSheet**: A unified bottom-sheet replacing the mini-form. Powers all booking entry points (the "+ Book" button, the pending-request "Confirm" button, and direct grid clicks) using a single `confirm_booking_slot` RPC that handles server-side double-booking validation (`20260930110000_schedule_overlap_guards.sql`). It writes straight to a confirmed `appointments` row (and handles updating any pending `request_id`).
-    - **History Tab**: Integrates `HistorySurface`, featuring an independent `therapistId` filter state and infinite-scroll pagination (`hasMore` tracking) to explore past appointments.
+  - **Schedule (`/schedule`, `ScheduleBookingsView.tsx` + `features/requests/schedule/`)** — the clinic calendar. Tablet/desktop-first for the front desk (Athena-style therapist columns, Google-Calendar details panel, Calendly-style free times); phones get an agenda list. The nav item stays "Schedule". URL state: `?view=schedule|requests|history`, `?mode=day|week`, `?date=YYYY-MM-DD`, `?therapist=<id>[,<id>…]` (empty = everyone); every change uses `replace`, so Back leaves the page.
+    - **Who sees what**: admin / front desk see every therapist plus Requests and History. A **therapist** sees "My schedule" (their own column only) and History scoped to themselves; they can book for themselves for any clinic patient or a new patient, and reschedule / cancel / mark no-show their own appointments. Requests stay admin / front desk. An unlinked therapist login gets a "ask your admin to link your login" message. The server enforces all of this (`can_manage_appointment`, below); the UI only mirrors it.
+    - **Layout by width**: from `desktop:` (1000px) a left rail (`ScheduleRail`) holds a mini month (days with free time tinted, closed days hatched, today ringed), therapist toggles with the day's load ("6 · 4h30"), and upcoming closures. Below `desktop:` the Monday–Sunday `MiniCalendarStrip` replaces the month, and therapist chips replace the toggles. From `tab:` (744px) the Day view is `ResourceDayGrid` — one column per therapist, blocks absolutely positioned and sized by `duration_minutes` (`blockGeometry`, 1.6px/min), free slots tinted and clickable (opens the booking sheet prefilled with date, time and therapist), a current-time line on today, closed days hatched with their label, overlapping blocks side by side (`assignLanes`; only the synthetic Unassigned column can overlap). Below `tab:` the Day view is `AgendaList` (time-ordered rows, now divider, free gaps inline when one therapist is in view) and "Find a time" shows `FindTimePanel` (free start times as buttons per therapist). Week view: with one therapist in view, `WeekTimeGrid` (7 day columns, tab+); otherwise a compact 7-card board.
+    - **Colours** (existing tokens only, never colour alone): block left bar = therapist (`therapistColor`, the `chartColors.ts` palette by roster order); fill = status (`APPOINTMENT_BLOCK_STYLE`: confirmed teal-light, rescheduled teal-light + ↻, arrived moss-light + ✓, no-show rust-light + ✕, cancelled slate-light struck through and hidden unless "Show cancelled"); free time moss-light; closed = slate hatch + label; now line rust.
+    - **`AppointmentDetailsPanel`**: tapping a block/row opens a right-side panel (tab+) or bottom sheet (phone) holding every action — Mark arrived, Create visit, WhatsApp, Reschedule, No-show, Cancel (via `ConfirmDialog`), tap-to-call, patient profile link. Blocks and rows themselves only show name, time, length and status.
+    - **Keyboard (tab+)**: `t` today, `d` / `w` day/week, ←/→ previous/next, Esc closes panels and sheets.
+    - **`BookSlotSheet`**: one sheet for "+ Book", grid/agenda/free-time clicks, request confirmation, and **reschedule** (`rescheduleAppointment` prop: patient and therapist fixed, the moved appointment is ignored when checking occupied time, submits `reschedule_appointment`). A length picker (15/30/45/60/90 plus the clinic slot) drives the occupied check; times that already passed, overlap the therapist's bookings for the chosen length, or would run past closing are disabled. Therapist defaults to the logged-in therapist or the only therapist, and is locked for therapist logins. Closed weekdays and holidays show a warning but can still be booked. A patient with no phone must have one entered. State resets on every open; the reschedule snapshot is taken at open time so a sync mid-edit can't reset the form. `onBooked` returns `{ kind: 'booked' | 'rescheduled', appointmentId, scheduledAt, durationMinutes, … }`; the toast offers WhatsApp and auto-dismisses after 15s.
+    - **Clinic closures**: weekly closed days stay in Settings (`clinics.closed_weekdays`); one-off dates and ranges (holidays) are set from the calendar (`ClosedDaysSheet`, admin / front desk) and shown in the rail, strip, grid, booking sheet and the public `/book/$slug` form. Existing appointments on a newly closed day are kept. `isClosedDay` (holiday wins over weekday) and `groupClosedRanges` live in `src/domain/schedule.ts`.
+    - **Public form** (`BookingFormPage.tsx`): a start time is hidden when it overlaps the preferred therapist's bookings for their full length; with no preference, only when every therapist is busy (`isPublicSlotTaken`). Past times today are hidden.
+    - **History**: `HistorySurface` — search by name/phone, status and therapist filters (therapist filter hidden for therapist logins), 30-day paging; rows open the same details panel.
   - **Workspace "Expected today"** — a new section (not a replacement of
     anything, per the point above), sourced from
     `dashboardService.todayAppointments`, scoped the same way "Seen
@@ -1252,8 +1255,8 @@ supabase/                SQL migrations, RLS policies, RPCs, realtime
 | `/invoices/$invoiceId/print` | Printable Bill/Bill Cum Receipt (A4/A5) | Anyone who can reach the invoice |
 | `/settings` | Clinic configuration, MRNO settings, billing mode, rate setup, feature toggles | Admins only |
 | `/settings/import-visits` | Historical Excel visit import | Admins only |
-| `/more` | Mobile-only overflow nav (Settings/Reports/Requests on narrow screens) | All roles |
-| `/requests` (`?tab=feedback\|bookings`) | Feedback: every response with rating + comment (Phase 2). Bookings: pending requests → confirm/decline, appointments → reschedule/no-show/cancel (Phase 5) | Feedback tab: admins only. Bookings tab: admins + front_desk |
+| `/more` | Mobile-only overflow nav (Settings/Reports on narrow screens) | All roles |
+| `/schedule` (`?tab=feedback\|bookings`, `?view=schedule\|requests\|history`, `?mode=day\|week`, `?date=`, `?therapist=`) | Clinic calendar (see Patient Communications → Schedule), booking requests, appointment history; Feedback tab | Calendar + History: all roles (therapists scoped to their own appointments). Requests: admins + front_desk. Feedback: admins only |
 | `/reset-password` | Password reset | Unauthenticated |
 | `/f/$token` | Public patient feedback form (Patient Communications, Phase 0) | Unauthenticated — token-scoped, no clinic membership |
 | `/book/$clinicSlug` | Public booking request form (Patient Communications, Phase 5) | Unauthenticated — slug-scoped, no clinic membership |
@@ -1302,6 +1305,10 @@ upi_vpa, upi_payee_name, upi_qr_path  text (NULLABLE)
 upi_qr_enabled               boolean (NULLABLE)
 signature_path               text (NULLABLE)
 slot_duration_minutes        integer NOT NULL (default 30) — 15|30|45|60
+booking_start_hour, booking_end_hour  integer NOT NULL (default 9, 17) — the
+                             Schedule grid and every slot picker (staff + public)
+closed_weekdays              integer[] NOT NULL (default '{}') — 0 = Sunday;
+                             weekly closed days (Settings → Online Booking)
 onboarding_completed_at      timestamptz (NULLABLE) — set when admin finishes
                              the post–create-clinic wizard; NULL ⇒ Shell keeps
                              redirecting to `/onboarding`
@@ -1919,6 +1926,53 @@ without the function ever returning a rating or a comment, just bare
 `request_id`s where `rating >= 4`. The function body re-implements its own
 narrower check (`is_clinic_member`) rather than relying on RLS, since RLS
 itself is what's being deliberately bypassed here.
+
+#### `appointments` / `appointment_requests` / `clinic_closed_dates` (Patient Communications, Phase 5 + Schedule MVP)
+```sql
+-- appointments: one confirmed expected attendance (not a billed visit)
+id                     uuid PRIMARY KEY
+clinic_id              uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id             uuid (NULLABLE, FOREIGN KEY → patients.id) — resolved at arrival
+patient_name, patient_phone  text NOT NULL — raw values, kept after patient_id resolves
+therapist_id           uuid (NULLABLE, FOREIGN KEY → therapists.id)
+scheduled_at           timestamptz NOT NULL
+duration_minutes       integer NOT NULL (default 30, CHECK 5–240) — Schedule MVP;
+                        backfilled from clinics.slot_duration_minutes
+status                 text NOT NULL — 'confirmed'|'rescheduled'|'no_show'|'cancelled'|'arrived'
+request_id             uuid (NULLABLE, FOREIGN KEY → appointment_requests.id)
+visit_id               uuid (NULLABLE, FOREIGN KEY → visits.id)
+reschedule_count       integer NOT NULL (default 0)
+previous_scheduled_at  timestamptz (NULLABLE)
+created_by, updated_by uuid (NULLABLE)
+created_at, updated_at timestamptz NOT NULL
+
+-- clinic_closed_dates: one row per closed calendar day (holiday / one-off closure)
+id           uuid PRIMARY KEY
+clinic_id    uuid NOT NULL (FOREIGN KEY → clinics.id)
+closed_date  date NOT NULL — UNIQUE (clinic_id, closed_date)
+label        text (NULLABLE) — "Diwali", "Staff training"
+removed_at   timestamptz (NULLABLE) — soft delete: the sync pull only sees
+             upserts, so "reopen" sets this instead of deleting the row
+created_at, updated_at  timestamptz NOT NULL (set_updated_at trigger)
+```
+RLS: `appointments` SELECT is clinic-member-wide; `appointment_requests`
+SELECT is admin/front_desk; `clinic_closed_dates` SELECT is clinic-member-wide
+(RLS was missing entirely on this table until `20261001100000`). None of the
+three has a write policy — every write is a SECURITY DEFINER RPC:
+`confirm_booking_slot`, `create_appointment_staff`, `reschedule_appointment`,
+`cancel_appointment`, `mark_appointment_no_show` (all gated by
+`can_manage_appointment`, overlap checked by `therapist_has_overlap` using each
+row's `duration_minutes`), `mark_appointment_arrived` / `link_appointment_visit`
+(any clinic member), and `set_clinic_closed_dates` /
+`remove_clinic_closed_dates` (admin/front_desk, ranges up to 366 days). The
+public `get_booking_availability(slug, start, end)` returns weekly closed
+days, live (`removed_at is null`) closed dates, and non-cancelled
+appointments with their `duration_minutes`.
+All three are synced, read-only Dexie tables (`ALL_SYNCED_TABLES` without
+`CLIENT_WRITABLE_TABLES`); `clinic_closed_dates` arrived in Dexie `version(20)`,
+and `repos.clinicClosedDates.listByClinic` filters out soft-deleted rows.
+**Deploy order**: apply the migration before shipping the client — the sync
+pull of `clinic_closed_dates` needs its `updated_at` column.
 
 #### `audit_log`
 ```sql

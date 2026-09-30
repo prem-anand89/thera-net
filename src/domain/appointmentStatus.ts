@@ -27,3 +27,26 @@ export const APPOINTMENT_STATUS_TONE: Record<
   cancelled: 'slate',
   arrived: 'green',
 };
+
+/**
+ * Calendar block styling (Schedule grid, agenda, week views). The fill is
+ * the status; the left bar is the therapist colour (see
+ * `therapistColor` in `src/features/requests/schedule/scheduleColors.ts`).
+ * Every status also carries a mark or word, so colour is never the only
+ * signal.
+ */
+export const APPOINTMENT_BLOCK_STYLE: Record<
+  AppointmentStatus,
+  { fill: string; text: string; mark: string }
+> = {
+  confirmed: { fill: 'bg-[var(--teal-light)]', text: 'text-[var(--ink)]', mark: '' },
+  rescheduled: { fill: 'bg-[var(--teal-light)]', text: 'text-[var(--ink)]', mark: '↻' },
+  arrived: { fill: 'bg-[var(--moss-light)]', text: 'text-[var(--ink)]', mark: '✓' },
+  no_show: { fill: 'bg-[var(--rust-light)]', text: 'text-[var(--rust)]', mark: '✕' },
+  cancelled: { fill: 'bg-[var(--slate-light)]', text: 'text-[var(--muted)] line-through', mark: '' },
+};
+
+/** Statuses that still hold the therapist's time and can be acted on. */
+export function isActiveAppointmentStatus(status: AppointmentStatus): boolean {
+  return status === 'confirmed' || status === 'rescheduled';
+}

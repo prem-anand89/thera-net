@@ -1,6 +1,112 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, appointmentsOverlap, belongsToColumn, countByDate, filterHistory, generateScheduleSlots, getWeekStart, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
+
+const at = (date: string, time: string) => localDateTime(date, time).toISOString();
+
+function appt(over: Partial<Appointment>): Appointment {
+  return {
+    id: 'a', clinicId: 'c', patientId: null, patientName: 'P', patientPhone: '1', therapistId: 't1',
+    scheduledAt: at('2026-10-01', '10:00'), status: 'confirmed', requestId: null, visitId: null,
+    rescheduleCount: 0, previousScheduledAt: null, createdAt: '', updatedAt: '', ...over,
+  } as Appointment;
+}
+
+describe('duration-aware scheduling', () => {
+  it('uses each appointment’s own length for overlap', () => {
+    const long = appt({ durationMinutes: 60 }); // 10:00–11:00
+    expect(appointmentsOverlap(long, localDateTime('2026-10-01', '10:30'), 30)).toBe(true);
+    expect(appointmentsOverlap(long, localDateTime('2026-10-01', '11:00'), 30)).toBe(false);
+    // A cached row without a length falls back to the clinic slot.
+    expect(appointmentsOverlap(appt({}), localDateTime('2026-10-01', '10:30'), 30, 30)).toBe(false);
+    expect(appointmentsOverlap(appt({}), localDateTime('2026-10-01', '10:30'), 30, 45)).toBe(true);
+  });
+
+  it('can ignore the appointment being rescheduled', () => {
+    const rows = [appt({ id: 'move-me', durationMinutes: 30 })];
+    expect(isTherapistSlotOccupied(rows, 't1', '2026-10-01', '10:00', 30)).toBe(true);
+    expect(isTherapistSlotOccupied(rows, 't1', '2026-10-01', '10:00', 30, { ignoreAppointmentId: 'move-me' })).toBe(false);
+  });
+
+  it('finds free gaps inside booking hours, skipping cancelled and past time', () => {
+    const rows = [
+      appt({ id: '1', scheduledAt: at('2026-10-01', '10:00'), durationMinutes: 45 }),
+      appt({ id: '2', scheduledAt: at('2026-10-01', '11:30'), durationMinutes: 30, status: 'cancelled' }),
+      appt({ id: '3', scheduledAt: at('2026-10-01', '09:00'), therapistId: 't2' as UUID }),
+    ];
+    const hours = { startHour: 9, endHour: 12 };
+    expect(freeGaps(rows, 't1', '2026-10-01', hours, 30)).toEqual([
+      { start: 540, end: 600 },
+      { start: 645, end: 720 },
+    ]);
+    expect(freeGaps(rows, 't1', '2026-10-01', hours, 30, { notBefore: 690 })).toEqual([{ start: 690, end: 720 }]);
+    expect(freeGaps(rows, 't1', '2026-10-01', hours, 30, { minMinutes: 70 })).toEqual([{ start: 645, end: 720 }]);
+  });
+
+  it('computes block geometry with a minimum height', () => {
+    expect(blockGeometry(600, 45, 9, 1.6)).toEqual({ top: 96, height: 72 });
+    expect(blockGeometry(540, 5, 9, 1.6)).toEqual({ top: 0, height: 18 });
+  });
+
+  it('assigns side-by-side lanes only to overlapping blocks', () => {
+    const lanes = assignLanes([
+      { id: 'a', start: 600, end: 660 },
+      { id: 'b', start: 630, end: 690 },
+      { id: 'c', start: 700, end: 730 },
+    ]);
+    expect(lanes.get('a')).toEqual({ lane: 0, lanes: 2 });
+    expect(lanes.get('b')).toEqual({ lane: 1, lanes: 2 });
+    expect(lanes.get('c')).toEqual({ lane: 0, lanes: 1 });
+  });
+
+  it('formats minute totals', () => {
+    expect(formatMinutes(45)).toBe('45m');
+    expect(formatMinutes(120)).toBe('2h');
+    expect(formatMinutes(270)).toBe('4h30');
+  });
+});
+
+describe('closures', () => {
+  it('detects holidays before weekly closed days', () => {
+    const holidays = [{ closedDate: '2026-10-04', label: 'Event' }];
+    expect(isClosedDay('2026-10-04', [0], holidays)).toEqual({ closed: true, kind: 'holiday', label: 'Event' });
+    expect(isClosedDay('2026-10-11', [0], holidays)).toEqual({ closed: true, kind: 'weekday', label: null });
+    expect(isClosedDay('2026-10-05', [0], holidays).closed).toBe(false);
+    expect(isClosedDay('2026-10-05', undefined, []).closed).toBe(false);
+  });
+
+  it('groups consecutive same-label dates into ranges', () => {
+    expect(
+      groupClosedRanges([
+        { closedDate: '2026-11-02', label: 'Diwali' },
+        { closedDate: '2026-11-01', label: 'Diwali' },
+        { closedDate: '2026-11-03', label: 'Diwali' },
+        { closedDate: '2026-11-04', label: null },
+        { closedDate: '2026-12-25', label: 'Christmas' },
+      ])
+    ).toEqual([
+      { from: '2026-11-01', to: '2026-11-03', label: 'Diwali' },
+      { from: '2026-11-04', to: '2026-11-04', label: null },
+      { from: '2026-12-25', to: '2026-12-25', label: 'Christmas' },
+    ]);
+  });
+});
+
+describe('public booking availability', () => {
+  const booked = [
+    { scheduledAt: at('2026-10-01', '10:00'), therapistId: 't1', durationMinutes: 60 },
+    { scheduledAt: at('2026-10-01', '10:00'), therapistId: 't2', durationMinutes: 30 },
+  ];
+  it('blocks a time for a preferred therapist across the booking’s whole length', () => {
+    expect(isPublicSlotTaken('2026-10-01', 630, 30, booked, ['t1', 't2'], 't1')).toBe(true);
+    expect(isPublicSlotTaken('2026-10-01', 630, 30, booked, ['t1', 't2'], 't2')).toBe(false);
+  });
+  it('without a preference, a time is taken only when every therapist is busy', () => {
+    expect(isPublicSlotTaken('2026-10-01', 600, 30, booked, ['t1', 't2'], null)).toBe(true);
+    expect(isPublicSlotTaken('2026-10-01', 630, 30, booked, ['t1', 't2'], null)).toBe(false);
+    expect(isPublicSlotTaken('2026-10-02', 600, 30, booked, ['t1', 't2'], null)).toBe(false);
+  });
+});
 
 describe('schedule helpers', () => {
   it('uses local calendar dates', () => {

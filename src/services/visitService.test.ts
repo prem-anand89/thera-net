@@ -179,6 +179,9 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
     appointments: {
       listByClinic: async () => [],
     },
+    clinicClosedDates: {
+      listByClinic: async () => [],
+    },
   };
   return { repos, visits };
 }

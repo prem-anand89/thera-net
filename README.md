@@ -56,7 +56,8 @@ client-side implementation yet — no UI, no Dexie/sync integration. See
 ### Patient Communications (optional module, off by default)
 - **Feedback** — staff ask a patient for feedback from a visit row; a one-time link takes them to a public, no-login star-rating + comment form. Admin sees every response with its rating and comment on Requests → Feedback; a 4-5★ response can be nudged toward a Google review.
 - **Re-engagement reminders** — one-click "Send reminder" on stale packages and single-visit patients, reusing the existing dashboard lists.
-- **Public booking, no slots** — a public form (`/book/$clinicSlug`) collects a patient's name, phone, optional preferred therapist, and preferred day/time as free text; front desk confirms it by hand into a scheduled appointment on Requests → Bookings, which becomes Workspace's "Expected today". Patient identity is resolved once, at arrival, via the existing New Visit search. No live availability/slot picker yet.
+- **Schedule** — the clinic calendar at `/schedule`: therapist columns with appointments sized by length, a current-time line, click-to-book free time, a mini month, closed days and holidays, and a details panel for arrive / reschedule / cancel / no-show / create visit. Phones get an agenda list and free-time buttons. Therapists see and book their own schedule. Front desk confirms public booking requests from the Requests tab.
+- **Public booking** — a public form (`/book/$clinicSlug`) where patients pick a day and a free time (closed days and booked times are hidden); front desk confirms each request into an appointment.
 - All sends go through the staff member's own WhatsApp (copy link / share sheet) — no WhatsApp Business API integration in v1.
 
 ## Architecture
@@ -72,7 +73,7 @@ src/features/          UI pages and components (React + TanStack Router)
   ├── patients/        PatientsPage, PatientProfilePage, NoteEditorPage (Core Assessment)
   ├── reports/         ReportsPage at /insights (Trends + monthly statement; nav label is "Reports")
   ├── settings/        SettingsPage at /settings; CreateClinicForm for first-time clinic setup
-  ├── requests/        RequestsPage at /requests — Feedback (admin) and Bookings (admin + front_desk) tabs
+  ├── requests/        /schedule — the calendar (schedule/), Requests, History, and Feedback (admin)
   ├── publicFeedback/  Public, no-login feedback form at /f/$token
   └── publicBooking/   Public, no-login booking request form at /book/$clinicSlug
 src/components/        Shared UI components (BodyChart, ScaleWidget, TreatmentNote, ColumnsPicker, etc.)
@@ -86,7 +87,7 @@ supabase/              SQL migrations (schema, RLS, RPCs, realtime publications)
 - `/patients/$patientId/notes/$noteId` — Core Assessment note editor (Initial/Follow-up consultation notes)
 - `/insights` — Dashboard + monthly per-therapist statement (nav label: "Reports"; `?tab=monthly` for the statement). Hidden from plain therapists — a colleague's individual earnings stay admin/front_desk-only, same as the monthly statement always has been. The one exception, the therapist comparison chart, surfaces on `/workspace` instead so therapists can still reach it.
 - `/settings` — clinic configuration, MRNO settings, billing mode, rate setup, feature toggles (nav label: "Settings")
-- `/requests` (`?tab=feedback|bookings`) — Patient Communications module: Feedback (admin) and Bookings (admin + front_desk)
+- `/schedule` — clinic calendar for every role (therapists see their own), booking requests (admin + front_desk), Feedback (admin)
 - `/f/$token`, `/book/$clinicSlug` — public, no-login, no-Shell forms for patient feedback and booking requests
 - `/archive`, `/setup`, `/invoices`, `/reports` — legacy paths, kept as redirects to the routes above for old bookmarks
 

@@ -731,6 +731,9 @@ export interface Appointment {
   patientPhone: string;
   therapistId: UUID | null;
   scheduledAt: string;
+  /** Length in minutes. Optional only because rows cached before the
+   *  column existed lack it — read via `appointmentMinutes()`. */
+  durationMinutes?: number;
   status: AppointmentStatus;
   requestId: UUID | null;
   visitId: UUID | null;
@@ -740,6 +743,19 @@ export interface Appointment {
   updatedAt: string;
   createdBy?: UUID | null;
   updatedBy?: UUID | null;
+}
+
+/** One closed calendar day (holiday / one-off closure). Written only via the
+ *  `set_clinic_closed_dates` / `remove_clinic_closed_dates` RPCs; `removedAt`
+ *  is a soft delete because the sync pull only ever sees upserts. */
+export interface ClinicClosedDate {
+  id: UUID;
+  clinicId: UUID;
+  closedDate: string; // YYYY-MM-DD
+  label: string | null;
+  removedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** What Health Valley actually paid Beyond Mechanics for one fiscal month. */

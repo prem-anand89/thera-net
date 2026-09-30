@@ -1,10 +1,16 @@
 import { useMemo } from 'react';
-import { addDays, addWeeks, toLocalDateStr, weekDays } from '@/domain/schedule';
+import { addDays, addWeeks, toLocalDateStr, weekDays, type ClosedDayInfo } from '@/domain/schedule';
+
+const CLOSED_HATCH = {
+  backgroundImage: 'repeating-linear-gradient(135deg, var(--slate-light) 0 6px, transparent 6px 12px)',
+} as const;
 
 interface MiniCalendarStripProps {
   selectedDate: string; // YYYY-MM-DD
   onSelectDate: (date: string) => void;
   appointmentDates: string[]; // YYYY-MM-DD, one entry per appointment
+  /** Marks weekly closed days and holidays with a hatch. */
+  closedFor?: (date: string) => ClosedDayInfo;
 }
 
 /** Compact, non-scrolling Monday–Sunday week navigator. */
@@ -12,6 +18,7 @@ export function MiniCalendarStrip({
   selectedDate,
   onSelectDate,
   appointmentDates,
+  closedFor,
 }: MiniCalendarStripProps) {
   const days = useMemo(() => weekDays(selectedDate), [selectedDate]);
   const counts = useMemo(() => {
@@ -64,6 +71,7 @@ export function MiniCalendarStrip({
           const value = new Date(`${date}T00:00:00`);
           const selected = date === selectedDate;
           const count = counts.get(date) ?? 0;
+          const closed = closedFor?.(date);
           const tone = selected
             ? 'bg-[var(--teal)] text-white'
             : date === today
@@ -75,10 +83,11 @@ export function MiniCalendarStrip({
               type="button"
               role="tab"
               aria-selected={selected}
-              aria-label={`${value.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}, ${count} appointments`}
+              aria-label={`${value.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}, ${closed?.closed ? `closed${closed.label ? ` (${closed.label})` : ''}, ` : ''}${count} appointments`}
               tabIndex={selected ? 0 : -1}
               onClick={() => onSelectDate(date)}
               className={`flex min-h-14 flex-col items-center justify-center rounded-lg text-xs ${tone}`}
+              style={closed?.closed && !selected ? CLOSED_HATCH : undefined}
             >
               <span className="text-[10px] font-medium uppercase">
                 {value.toLocaleDateString('en-IN', { weekday: 'short' })}

@@ -96,10 +96,11 @@ export function Shell() {
     () =>
       NAV.filter(
         (item) =>
-          // Schedule → Feedback is admin-only, but Bookings (Slice 5) is
-          // front_desk's primary surface too — matching /insights' gate
-          // just below, and the doc's "front desk + admin" nav rule.
-          (item.to !== '/schedule' || role === 'admin' || role === 'front_desk') &&
+          // Schedule is for every role: admin / front desk see the whole
+          // clinic, a therapist sees and books their own column (the page
+          // scopes itself; the booking RPCs enforce it). Hidden only while
+          // the role is still resolving.
+          (item.to !== '/schedule' || role !== 'unknown') &&
           (item.to !== '/insights' || role === 'admin' || role === 'front_desk')
       ),
     [role]

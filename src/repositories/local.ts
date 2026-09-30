@@ -39,6 +39,7 @@ import type {
   FeedbackResponseRepo,
   AppointmentRequestRepo,
   AppointmentRepo,
+  ClinicClosedDateRepo,
   Repos,
 } from './types';
 
@@ -369,6 +370,13 @@ const appointments: AppointmentRepo = {
   listByClinic: (clinicId) => db.appointments.where('clinicId').equals(clinicId).toArray(),
 };
 
+const clinicClosedDates: ClinicClosedDateRepo = {
+  listByClinic: async (clinicId) =>
+    (await db.clinic_closed_dates.where('clinicId').equals(clinicId).toArray()).filter(
+      (row) => !row.removedAt
+    ),
+};
+
 export const repos: Repos = {
   clinics,
   therapists,
@@ -390,6 +398,7 @@ export const repos: Repos = {
   feedbackResponses,
   appointmentRequests,
   appointments,
+  clinicClosedDates,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers
