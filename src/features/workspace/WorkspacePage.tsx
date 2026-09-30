@@ -192,7 +192,7 @@ function todayRowToCardData(
 }
 
 const chip =
-  'inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 text-sm text-[var(--ink)] hover:shadow-sm';
+  'inline-flex min-h-10 items-center gap-1.5 rounded-full border px-2.5 text-[13px] sm:px-3 sm:text-sm text-[var(--ink)] hover:shadow-sm';
 const chipAmber = 'border-[var(--amber)]/30 bg-[var(--amber-light)]';
 const chipNeutral = 'border-[var(--border)] bg-[var(--paper)]';
 
@@ -526,25 +526,25 @@ export function WorkspacePage() {
       caption: 'Today',
       cells: [
         {
-          label: 'Collected',
+          label: 'collected',
           value: formatINR(today?.collectedPaise ?? 0),
           onClick: canBill ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } }) : undefined,
         },
-        { label: 'Visits', value: visitsTodayCount, onClick: () => setTodayTab('visits') },
+        { label: visitsTodayCount === 1 ? 'visit' : 'visits', value: visitsTodayCount, onClick: () => setTodayTab('visits') },
       ],
     },
     {
       caption: monthCaption,
       cells: scope.myTherapistId
         ? [
-            { label: 'My net', value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—' },
-            { label: 'My visits', value: monthReport ? myMonthRow?.visitCount ?? 0 : '—' },
-            { label: 'New packages', value: monthlyNew?.newPackages ?? '—' },
+            { label: 'my net', value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—' },
+            { label: 'my visits', value: monthReport ? myMonthRow?.visitCount ?? 0 : '—' },
+            { label: 'new packages', value: monthlyNew?.newPackages ?? '—' },
           ]
         : [
-            { label: 'New patients', value: monthlyNew?.newPatients ?? '—' },
-            { label: 'New packages', value: monthlyNew?.newPackages ?? '—' },
-            { label: 'Visits', value: monthReport ? monthReport.total.visitCount : '—' },
+            { label: 'new patients', value: monthlyNew?.newPatients ?? '—' },
+            { label: 'new packages', value: monthlyNew?.newPackages ?? '—' },
+            { label: 'visits', value: monthReport ? monthReport.total.visitCount : '—' },
           ],
     },
   ];
@@ -623,13 +623,13 @@ export function WorkspacePage() {
         appointments={workspaceAppointments ?? []}
         rescheduleAppointment={reschedulingAppointment ?? undefined}
       />
-      <header className="space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <header className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm text-[var(--muted)]">
+            <p className="text-xs text-[var(--muted)]">
               {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
-            <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">
+            <h1 className="font-display text-lg font-semibold leading-snug text-[var(--ink)]">
               {greeting}
               {firstName ? `, ${firstName}` : ''}
             </h1>
@@ -647,7 +647,7 @@ export function WorkspacePage() {
           </div>
         </div>
 
-        <div>
+        <div className="border-t border-[var(--border)] pt-3">
           <StatStrip groups={statGroups} />
           {syncCaption && <p className="mt-1.5 text-xs text-[var(--slate)]">{syncCaption}</p>}
         </div>

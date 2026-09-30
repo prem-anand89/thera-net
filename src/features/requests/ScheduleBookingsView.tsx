@@ -417,10 +417,9 @@ export function ScheduleBookingsView() {
     );
   }
 
-  // Requests live in the inline inbox / "All requests" panel, not a tab;
-  // ?view=requests (old links, Workspace's banner) opens that panel.
-  const views: [BookingView, string][] = [[
-    'schedule', canManageAll ? 'Schedule' : 'My schedule'], ['history', 'History']];
+  // Schedule / History tabs live in the page's one tab row (RequestsPage's
+  // ScheduleTabs). Requests live in the inline inbox / "All requests" panel,
+  // not a tab; ?view=requests (old links) opens that panel.
   const activeView = view === 'requests' ? 'schedule' : view;
   const requestsPanelOpen = canManageAll && view === 'requests';
   const dayNow = date === today ? now.minutes : null;
@@ -439,16 +438,16 @@ export function ScheduleBookingsView() {
       <header className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] pb-3">
         {/* Below desktop the week strip carries Today / previous / next, so the
             header doesn't repeat them. */}
-        <div className="hidden items-center gap-1 desktop:flex">
+        <div className={`hidden items-center gap-1 ${activeView === 'schedule' ? 'desktop:flex' : ''}`}>
           <button type="button" className={btnSecondary} onClick={() => setSchedule({ date: today })}>Today</button>
           <button type="button" className="min-h-11 min-w-11 rounded-lg text-lg text-[var(--teal)] hover:bg-[var(--paper)]" aria-label={mode === 'day' ? 'Previous day' : 'Previous week'} onClick={() => step(-1)}>‹</button>
           <button type="button" className="min-h-11 min-w-11 rounded-lg text-lg text-[var(--teal)] hover:bg-[var(--paper)]" aria-label={mode === 'day' ? 'Next day' : 'Next week'} onClick={() => step(1)}>›</button>
         </div>
         <h2 className="min-w-0 flex-1 truncate font-display text-base font-semibold text-[var(--ink)]">
-          {mode === 'day' ? longDate(date) : `Week of ${longDate(getWeekStart(date))}`}
+          {activeView === 'history' ? '' : mode === 'day' ? longDate(date) : `Week of ${longDate(getWeekStart(date))}`}
         </h2>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5" role="group" aria-label="View">
+          <div className={`${activeView === 'schedule' ? 'flex' : 'hidden'} rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5`} role="group" aria-label="View">
             {(['day', 'week'] as const).map((candidate) => (
               <button key={candidate} type="button" aria-pressed={mode === candidate} onClick={() => setSchedule({ mode: candidate })} className={`min-h-9 rounded-md px-3 text-xs font-medium ${mode === candidate ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}>
                 {candidate === 'day' ? 'Day' : 'Week'}
@@ -483,13 +482,6 @@ export function ScheduleBookingsView() {
         )}
       </header>
 
-      <nav aria-label="Booking views" className="flex gap-4 border-b border-[var(--border)]">
-        {views.map(([candidate, label]) => (
-          <button key={candidate} type="button" onClick={() => setSchedule({ view: candidate })} className={`min-h-11 border-b-2 px-1 text-sm font-medium ${activeView === candidate ? 'border-[var(--teal)] text-[var(--teal)]' : 'border-transparent text-[var(--muted)]'}`}>
-            {label}
-          </button>
-        ))}
-      </nav>
 
       {activeView === 'schedule' && (
         <div className="desktop:grid desktop:grid-cols-[240px_minmax(0,1fr)] desktop:gap-6">

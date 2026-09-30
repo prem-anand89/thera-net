@@ -41,6 +41,7 @@ export function RequestsPage() {
   const canSeeBookings = isAdmin || role === 'front_desk';
   const search = useSearch({ from: '/schedule' });
   const tab = search.tab ?? 'bookings';
+  const activeTab: ScheduleTab = tab === 'feedback' ? 'feedback' : search.view === 'history' ? 'history' : 'schedule';
 
   // Per the doc's own resolved note: front_desk hitting ?tab=feedback
   // lands on Bookings instead, not a disabled/hidden state.
@@ -121,47 +122,16 @@ export function RequestsPage() {
   // Therapists get their own schedule only — no Feedback / Bookings tab row.
   if (!isAdmin && !canSeeBookings) {
     return (
-      <div className="space-y-4">
-        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Schedule</h1>
+      <div className="space-y-3">
+        <ScheduleTabs active={activeTab} showFeedback={false} scheduleLabel="My schedule" />
         <ScheduleBookingsView />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Schedule</h1>
-
-      <div className="flex gap-2 border-b border-[var(--border)]">
-        <Link
-          to="/schedule"
-          search={{ tab: 'bookings' }}
-          className={
-            tab === 'bookings'
-              ? 'border-b-2 border-[var(--teal)] px-1 pb-2 text-sm font-medium text-[var(--teal)]'
-              : 'px-1 pb-2 text-sm text-[var(--muted)] hover:text-[var(--ink)]'
-          }
-        >
-          Bookings
-        </Link>
-        {isAdmin ? (
-          <Link
-            to="/schedule"
-            search={{ tab: 'feedback' }}
-            className={
-              tab === 'feedback'
-                ? 'border-b-2 border-[var(--teal)] px-1 pb-2 text-sm font-medium text-[var(--teal)]'
-                : 'px-1 pb-2 text-sm text-[var(--muted)] hover:text-[var(--ink)]'
-            }
-          >
-            Feedback
-          </Link>
-        ) : (
-          <span className="px-1 pb-2 text-sm text-[var(--muted)]" title="Admin only">
-            Feedback
-          </span>
-        )}
-      </div>
+    <div className="space-y-3">
+      <ScheduleTabs active={activeTab} showFeedback={isAdmin} scheduleLabel="Schedule" />
 
       {tab === 'feedback' &&
         isAdmin &&
@@ -280,5 +250,48 @@ export function RequestsPage() {
 
       {tab === 'bookings' && <ScheduleBookingsView />}
     </div>
+  );
+}
+
+type ScheduleTab = 'schedule' | 'history' | 'feedback';
+
+/**
+ * The page's one tab row — Schedule · History · Feedback. It replaced three
+ * stacked rows (a "Schedule" title, Bookings | Feedback, then Schedule |
+ * History inside Bookings) that pushed the calendar down. The page title
+ * stays for screen readers only; the header nav already says Schedule.
+ * URLs are unchanged: Schedule/History are `?tab=bookings&view=…`,
+ * Feedback is `?tab=feedback` (admins only).
+ */
+function ScheduleTabs({
+  active,
+  showFeedback,
+  scheduleLabel,
+}: {
+  active: ScheduleTab;
+  showFeedback: boolean;
+  scheduleLabel: string;
+}) {
+  const cls = (tab: ScheduleTab) =>
+    `-mb-px flex min-h-11 items-center border-b-2 px-1 text-sm font-medium ${
+      active === tab ? 'border-[var(--teal)] text-[var(--teal)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--ink)]'
+    }`;
+  return (
+    <>
+      <h1 className="sr-only">Schedule</h1>
+      <nav aria-label="Schedule views" className="flex gap-5 border-b border-[var(--border)]">
+        <Link to="/schedule" search={{ tab: 'bookings', view: 'schedule' }} className={cls('schedule')} aria-current={active === 'schedule' ? 'page' : undefined}>
+          {scheduleLabel}
+        </Link>
+        <Link to="/schedule" search={{ tab: 'bookings', view: 'history' }} className={cls('history')} aria-current={active === 'history' ? 'page' : undefined}>
+          History
+        </Link>
+        {showFeedback && (
+          <Link to="/schedule" search={{ tab: 'feedback' }} className={cls('feedback')} aria-current={active === 'feedback' ? 'page' : undefined}>
+            Feedback
+          </Link>
+        )}
+      </nav>
+    </>
   );
 }

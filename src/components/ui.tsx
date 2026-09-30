@@ -114,43 +114,48 @@ export type StatCell = {
 };
 
 /**
- * One strip of headline numbers, grouped under small captions ("Today",
- * "October") — hairline dividers instead of a bordered tile per number.
- * Each group lays its cells out side by side at every width; the groups
- * stack on phones and sit in one row from `sm:`. Workspace uses it; Reports
- * and print keep `StatTile`.
+ * Headline numbers as one compact line per period — "TODAY ₹4,500 collected
+ * · 6 visits", "OCTOBER ₹38,200 my net · 41 my visits · 3 new packages".
+ * Each number sits inline with a lowercase label (no box per number, no
+ * label-over-value stacking), so the whole strip is one line on desktop and
+ * two short lines on a phone. Workspace uses it; Reports and print keep
+ * `StatTile`.
  */
 export function StatStrip({ groups }: { groups: { caption: string; cells: StatCell[] }[] }) {
   return (
-    <div className="flex flex-col divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] bg-[var(--paper)] sm:flex-row sm:divide-x sm:divide-y-0">
-      {groups.map((group) => (
-        <section key={group.caption} aria-label={group.caption} className="min-w-0 px-1.5 py-2" style={{ flex: group.cells.length }}>
-          <h3 className="px-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">{group.caption}</h3>
-          <div className="grid" style={{ gridTemplateColumns: `repeat(${group.cells.length}, minmax(0, 1fr))` }}>
-            {group.cells.map((cell) => {
-              const body = (
-                <>
-                  <span className="block truncate text-xs text-[var(--muted)]">{cell.label}</span>
-                  <span className="font-num block truncate text-lg font-semibold tabular-nums text-[var(--ink)] sm:text-xl">
-                    {cell.value}
-                  </span>
-                </>
-              );
-              return cell.onClick ? (
-                <button
-                  key={cell.label}
-                  type="button"
-                  onClick={cell.onClick}
-                  className="min-w-0 rounded-lg px-2 py-1 text-left hover:bg-[var(--surface)] focus-visible:bg-[var(--surface)]"
-                >
-                  {body}
-                </button>
-              ) : (
-                <div key={cell.label} className="min-w-0 px-2 py-1">
-                  {body}
-                </div>
-              );
-            })}
+    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1.5">
+      {groups.map((group, index) => (
+        <section
+          key={group.caption}
+          aria-label={group.caption}
+          className={`flex min-w-0 items-baseline gap-x-3 ${index > 0 ? 'sm:border-l sm:border-[var(--border)] sm:pl-6' : ''}`}
+        >
+          <h3 className="w-16 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)] sm:w-auto">{group.caption}</h3>
+          {/* Cells wrap inside their own box, so a wrapped number lines up
+              under the first one rather than under the caption. */}
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+          {group.cells.map((cell) => {
+            const body = (
+              <>
+                <span className="font-num text-base font-semibold tabular-nums text-[var(--ink)]">{cell.value}</span>{' '}
+                <span className="text-xs text-[var(--muted)]">{cell.label}</span>
+              </>
+            );
+            return cell.onClick ? (
+              <button
+                key={cell.label}
+                type="button"
+                onClick={cell.onClick}
+                className="whitespace-nowrap rounded text-left decoration-[var(--teal)] underline-offset-4 hover:underline focus-visible:underline"
+              >
+                {body}
+              </button>
+            ) : (
+              <span key={cell.label} className="whitespace-nowrap">
+                {body}
+              </span>
+            );
+          })}
           </div>
         </section>
       ))}
