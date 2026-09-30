@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, seriesDates, seriesProblem, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, dragTarget, dropAllowed, resizeTarget, snapMinutes, seriesDates, seriesProblem, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -334,5 +334,33 @@ describe('repeat bookings', () => {
     expect(seriesProblem({ ...base, date: '2026-10-05', time: '10:30' })).toBeNull();
     expect(seriesProblem({ ...base, date: '2026-10-05', time: '13:00' })).toBe('off-hours');
     expect(seriesProblem({ ...base, date: '2026-10-01', time: '09:00' })).toBe('past');
+  });
+});
+
+describe('drag helpers', () => {
+  const hours = { startHour: 9, endHour: 12 };
+  it('snaps drags to 15-minute steps and keeps blocks inside the day', () => {
+    expect(snapMinutes(24, 1.6)).toBe(15);
+    expect(snapMinutes(-50, 1.6)).toBe(-30);
+    expect(dragTarget({ originalStart: 600, duration: 30, deltaPx: 48, pxPerMinute: 1.6, hours })).toBe(630);
+    expect(dragTarget({ originalStart: 600, duration: 30, deltaPx: -500, pxPerMinute: 1.6, hours })).toBe(540);
+    expect(dragTarget({ originalStart: 600, duration: 60, deltaPx: 500, pxPerMinute: 1.6, hours })).toBe(660);
+  });
+
+  it('resizes in steps, at least 15 minutes, not past closing', () => {
+    expect(resizeTarget({ start: 600, originalDuration: 30, deltaPx: 24, pxPerMinute: 1.6, hours })).toBe(45);
+    expect(resizeTarget({ start: 600, originalDuration: 30, deltaPx: -200, pxPerMinute: 1.6, hours })).toBe(15);
+    expect(resizeTarget({ start: 690, originalDuration: 30, deltaPx: 400, pxPerMinute: 1.6, hours })).toBe(30);
+  });
+
+  it('allows a drop only into free, open, working, future time', () => {
+    const column = [appt({ id: 'other', scheduledAt: at('2026-10-01', '10:00'), durationMinutes: 30 }), appt({ id: 'me', scheduledAt: at('2026-10-01', '09:00') })];
+    const base = { columnAppointments: column, movingId: 'me', duration: 30, slotMinutes: 30, closed: false, isPast: false };
+    expect(dropAllowed({ ...base, start: 570 })).toBe(true);
+    expect(dropAllowed({ ...base, start: 585 })).toBe(false); // runs into 10:00
+    expect(dropAllowed({ ...base, start: 540 })).toBe(true); // its own old slot
+    expect(dropAllowed({ ...base, start: 630, working: [{ start: 540, end: 600 }] })).toBe(false);
+    expect(dropAllowed({ ...base, start: 630, closed: true })).toBe(false);
+    expect(dropAllowed({ ...base, start: 630, isPast: true })).toBe(false);
   });
 });

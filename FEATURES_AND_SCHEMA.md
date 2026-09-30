@@ -973,7 +973,16 @@ still falls through to the existing share sheet, unchanged.
     - **`AppointmentDetailsPanel`**: tapping a block/row opens a right-side panel (tab+) or bottom sheet (phone) holding every action — Mark arrived, Create visit, WhatsApp, Reschedule, No-show, Cancel (via `ConfirmDialog`), tap-to-call, patient profile link. Blocks and rows themselves only show name, time, length and status.
     - **Grid behaviour**: free time is blank until hovered (a faint "+" on touch screens); the grid opens at the top and only auto-scrolls when "now" (today, within booking hours) or the first appointment would be off-screen (`initialScrollTop`), and only once per date — never while the user is scrolling. Free-time offers (agenda gaps, Find a time) start on the clinic slot grid (`freeGaps(…, { alignToSlots: true })`), not at "now" or right after a 45-minute booking. Below `desktop:` the header drops Today/‹/› (the week strip has them) and Show cancelled / Set closed days move into a ⋮ menu. Declining a request uses `ConfirmDialog`.
     - **Patients list "Book"** opens the same `BookSlotSheet` with the patient pre-selected (`prefilledPatientId`) and their last therapist pre-picked; the old `BookAppointmentDialog` (free datetime field, "No preference" therapist the server now rejects) was removed, along with the unused `bookingService.createAppointmentStaff` wrapper — the RPC remains for older clients.
-    - **Keyboard (tab+)**: `t` today, `d` / `w` day/week, ←/→ previous/next, Esc closes panels and sheets.
+    - **Keyboard (tab+)**: `t` today, `d` / `w` day/week, ←/→ previous/next, `?` shortcuts help, Esc closes panels and sheets.
+    - **Notifications (in-app, no calendar feed)**: WhatsApp via wa.me, one tap per recipient. Wording lives in `src/domain/bookingMessages.ts` (tested); therapist messages use the patient's first name + surname initial only. The booking/reschedule toast offers "WhatsApp patient" and "Notify therapist" (needs `therapists.phone`); the details panel has "Remind patient", "Notify therapist", and after a cancel "Tell patient" / "Tell therapist". `ReminderSheet` (header "Reminders" on desktop, ⋮ → Send reminders elsewhere; admin/front desk) lists a day's live appointments with a Send per patient and a "Send list" day summary per therapist, ticking to Sent for the session.
+    - **Install nudge**: `useInstallPrompt` + `InstallAppBanner` on Schedule and Workspace — phones only, not already installed (standalone), from the second visit, "Not now" snoozes 14 days (localStorage, per device). Android/Chrome uses the captured `beforeinstallprompt`; iPhone shows Share → Add to Home Screen.
+    - **No-show history**: `patientAttendance` (last 6 months, by patient id, else last 10 phone digits; past appointments only) feeds `AttendanceNote` in the details panel and booking sheet ("2 no-shows, 1 cancelled… consider calling to confirm"); History rows badge patients with ≥2 no-shows. The booking sheet also warns when the patient already has an upcoming appointment (`nextAppointmentFor`).
+    - **Requests inbox**: `RequestsInbox` — a collapsible "N booking requests waiting · oldest 2h" strip above the calendar below `desktop:`, and a Requests section in the rail on desktop; Confirm opens the booking sheet on the requested date (if not past) with the preferred therapist; Decline uses `ConfirmDialog`. The Requests tab remains the full list.
+    - **History**: Past / Upcoming toggle, a since/until date, day headings, outcome counts (attended / no-show / cancelled), search, status and therapist filters.
+    - **Booking sheet extras**: "First available →" (`firstAvailableSlot`, next 21 days, respects closures, working hours and length); the submit button carries the summary ("Confirm booking · Thu, 1 Oct, 10:30 AM · 30m"); sticky footer on phones.
+    - **Working hours** (`therapists.working_hours`, see schema): the grid shades non-working time (paper) and offers free slots only inside it; agenda gaps, Find a time, the mini month's free-day tint and First available use it; the booking sheet puts outside-hours times under a collapsed "Outside working hours (N)" (staff may still book). Edited in `WorkingHoursSheet` — several times per day, the gap is the break, "Copy to Tue–Fri" — from Settings → Team (admin), the rail's per-therapist "hours" / ⋮ menu (admin, front desk), and "My hours" (therapist, own).
+    - **Repeat bookings**: booking sheet "Repeat this booking" — weekday chips + session count (defaults to sessions left in the patient's open package via `dashboardService.openPackages`), a per-date preview (`seriesDates`, `seriesProblem`) marking clashes / outside hours / past with "Find a time" or "Skip" per date; submits via `confirm_booking_series` (all-or-nothing). The details panel shows "Session k of n" and offers "Cancel this and all following sessions" (`cancel_appointment_series`).
+    - **Drag (tab+)**: mouse/pen drag a block to move it (15-minute snaps, across therapist columns in Day view, across days in the single-therapist Week view) or drag its bottom edge to resize; a dashed ghost shows the target and turns red when it isn't free / is outside hours / closed / past (`dropAllowed`). Touch: a 450 ms long-press enters "Tap a free time to move …" mode (dragging would fight scrolling). Same-therapist drops save at once with a 10 s Undo toast; dropping on another therapist asks to confirm. Only confirmed/rescheduled appointments the viewer can manage are draggable; therapists can't reassign (server-enforced).
     - **`BookSlotSheet`**: one sheet for "+ Book", grid/agenda/free-time clicks, request confirmation, and **reschedule** (`rescheduleAppointment` prop: patient and therapist fixed, the moved appointment is ignored when checking occupied time, submits `reschedule_appointment`). A length picker (15/30/45/60/90 plus the clinic slot) drives the occupied check; times that already passed, overlap the therapist's bookings for the chosen length, or would run past closing are disabled. Therapist defaults to the logged-in therapist or the only therapist, and is locked for therapist logins. Closed weekdays and holidays show a warning but can still be booked. A patient with no phone must have one entered. State resets on every open; the reschedule snapshot is taken at open time so a sync mid-edit can't reset the form. `onBooked` returns `{ kind: 'booked' | 'rescheduled', appointmentId, scheduledAt, durationMinutes, … }`; the toast offers WhatsApp and auto-dismisses after 15s.
     - **Clinic closures**: weekly closed days stay in Settings (`clinics.closed_weekdays`); one-off dates and ranges (holidays) are set from the calendar (`ClosedDaysSheet`, admin / front desk) and shown in the rail, strip, grid, booking sheet and the public `/book/$slug` form. Existing appointments on a newly closed day are kept. `isClosedDay` (holiday wins over weekday) and `groupClosedRanges` live in `src/domain/schedule.ts`.
     - **Public form** (`BookingFormPage.tsx`): dates more than 90 days out aren't offered (availability is only fetched that far), and a failed availability fetch no longer blocks the whole form. A start time is hidden when it overlaps the preferred therapist's bookings for their full length; with no preference, only when every therapist is busy (`isPublicSlotTaken`). Past times today are hidden.
@@ -1343,6 +1352,11 @@ phone           text (NULLABLE) — lets `shareTherapistNotify` use the WhatsApp
                 Business API instead of always falling back to the share sheet
 profile_confirmed_at timestamptz (NULLABLE) — set when linked login finishes
                 `/onboarding/profile`; NULL triggers profile onboarding
+working_hours   jsonb (NULLABLE) — weekly hours: {"0"–"6": [[startMin, endMin], …]},
+                gaps are breaks, a missing weekday is a day off, NULL = clinic
+                booking hours. Written only via set_therapist_working_hours
+                (admin / front desk for anyone, the therapist for themselves;
+                validated by working_hours_valid)
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 ```
@@ -1938,6 +1952,8 @@ patient_id             uuid (NULLABLE, FOREIGN KEY → patients.id) — resolved
 patient_name, patient_phone  text NOT NULL — raw values, kept after patient_id resolves
 therapist_id           uuid (NULLABLE, FOREIGN KEY → therapists.id)
 scheduled_at           timestamptz NOT NULL
+series_id              uuid (NULLABLE, indexed) — shared by the sessions of one
+                        repeat booking (confirm_booking_series)
 duration_minutes       integer NOT NULL (default 30, CHECK 5–240) — Schedule MVP;
                         backfilled from clinics.slot_duration_minutes
 status                 text NOT NULL — 'confirmed'|'rescheduled'|'no_show'|'cancelled'|'arrived'
@@ -1965,11 +1981,18 @@ three has a write policy — every write is a SECURITY DEFINER RPC:
 `cancel_appointment`, `mark_appointment_no_show` (all gated by
 `can_manage_appointment`, overlap checked by `therapist_has_overlap` using each
 row's `duration_minutes`), `mark_appointment_arrived` / `link_appointment_visit`
-(any clinic member), and `set_clinic_closed_dates` /
+(any clinic member), `confirm_booking_series` (same rules as a single booking,
+all-or-nothing; clashes listed as UTC ISO times the client localises) /
+`cancel_appointment_series(series, from)`, `set_therapist_working_hours`, and
+`set_clinic_closed_dates` /
 `remove_clinic_closed_dates` (admin/front_desk, ranges up to 366 days). The
 public `get_booking_availability(slug, start, end)` returns weekly closed
 days, live (`removed_at is null`) closed dates, and non-cancelled
-appointments with their `duration_minutes`.
+appointments with their `duration_minutes`, plus `therapistHours` (id → working_hours
+for active therapists with custom hours). `reschedule_appointment(id, at, duration?, therapist?)`
+(drop-and-recreate, pattern 3c): reassigning needs `can_manage_appointment` for both the
+current and the new therapist; a pure resize (same start and therapist) doesn't bump
+`reschedule_count` or the status.
 All three are synced, read-only Dexie tables (`ALL_SYNCED_TABLES` without
 `CLIENT_WRITABLE_TABLES`); `clinic_closed_dates` arrived in Dexie `version(20)`,
 and `repos.clinicClosedDates.listByClinic` filters out soft-deleted rows.

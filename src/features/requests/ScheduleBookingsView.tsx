@@ -18,6 +18,8 @@ import {
   getWeekStart,
   groupClosedRanges,
   isClosedDay,
+  localDateTimeToIso,
+  minutesToTime,
   patientAttendance,
   workingIntervals,
   minutesLabel,
@@ -40,7 +42,7 @@ import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetail
 import { ClosedDaysSheet } from '@/components/schedule/ClosedDaysSheet';
 import { FindTimePanel } from '@/components/schedule/FindTimePanel';
 import { ScheduleRail, rangeLabel } from '@/components/schedule/ScheduleRail';
-import { ResourceDayGrid, WeekTimeGrid, type GridTherapist } from '@/components/schedule/TimeGrid';
+import { ResourceDayGrid, WeekTimeGrid, type GridDragOptions, type GridTherapist, type MoveTarget } from '@/components/schedule/TimeGrid';
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
 
 type BookingView = 'schedule' | 'requests' | 'history';
@@ -230,6 +232,13 @@ export function ScheduleBookingsView() {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [hoursTherapistId, setHoursTherapistId] = useState<UUID | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ appointment: Appointment; target: MoveTarget } | null>(null);
+  const [undo, setUndo] = useState<{ message: string; run: () => Promise<void> } | null>(null);
+  useEffect(() => {
+    if (!undo) return;
+    const timer = setTimeout(() => setUndo(null), 10_000);
+    return () => clearTimeout(timer);
+  }, [undo]);
   const [confirmed, setConfirmed] = useState<BookedSlot | null>(null);
   useEffect(() => {
     if (!confirmed) return;
@@ -311,6 +320,41 @@ export function ScheduleBookingsView() {
   const canManageAppointment = (appointment: Appointment) =>
     canManageAll || (Boolean(myTherapistId) && appointment.therapistId === myTherapistId);
   const canBookFor = (therapistId: string) => canManageAll || therapistId === myTherapistId;
+
+  async function commitMove(appointment: Appointment, target: MoveTarget) {
+    const previous = {
+      at: appointment.scheduledAt,
+      duration: appointmentMinutes(appointment, slotMinutes),
+      therapistId: appointment.therapistId,
+    };
+    const reassign = target.therapistId && target.therapistId !== appointment.therapistId ? target.therapistId : undefined;
+    try {
+      await bookingService.rescheduleAppointment(appointment.id, localDateTimeToIso(target.date, minutesToTime(target.start)), target.duration, reassign);
+      const resized = target.start === minutesOfDay(appointment.scheduledAt) && target.date === dateForAppointment(appointment) && !reassign;
+      setUndo({
+        message: resized
+          ? `${appointment.patientName} is now ${formatMinutes(target.duration)}.`
+          : `${appointment.patientName} moved to ${minutesLabel(target.start)}${reassign ? ` with ${rosterById.get(reassign)?.name ?? 'another therapist'}` : ''}.`,
+        run: () =>
+          bookingService.rescheduleAppointment(appointment.id, previous.at, previous.duration, reassign ? previous.therapistId ?? undefined : undefined),
+      });
+    } catch (error) {
+      alert(toFriendlyMessage(error));
+    }
+  }
+
+  const dragOptions: GridDragOptions = {
+    canDrag: (appointment) =>
+      (appointment.status === 'confirmed' || appointment.status === 'rescheduled') && canManageAppointment(appointment),
+    onMove: (appointment, target) => {
+      if (target.therapistId && target.therapistId !== appointment.therapistId) {
+        if (!canManageAll) return;
+        setPendingMove({ appointment, target });
+      } else {
+        void commitMove(appointment, target);
+      }
+    },
+  };
 
   // Keyboard shortcuts (Google Calendar's): t today, d / w view, arrows move.
   useEffect(() => {
@@ -595,6 +639,7 @@ export function ScheduleBookingsView() {
                     onBook={({ time, therapistId }) => openBooking({ date, time, therapistId })}
                     summaryFor={summaryFor}
                     workingFor={(therapistId) => workingFor(therapistId, date)}
+                    drag={dragOptions}
                   />
                 </div>
                 <div className="tab:hidden">
@@ -644,6 +689,7 @@ export function ScheduleBookingsView() {
                     onBook={canBookFor(singleTherapist.id) ? ({ date: day, time }) => openBooking({ date: day, time, therapistId: singleTherapist.id }) : undefined}
                     onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
                     workingFor={(day) => workingFor(singleTherapist.id, day)}
+                    drag={dragOptions}
                   />
                 </div>
                 <div className="tab:hidden">
@@ -811,6 +857,40 @@ export function ScheduleBookingsView() {
       />
 
       <ClosedDaysSheet open={closedSheetOpen} clinicId={clinic.id} initialDate={date < today ? today : date} onClose={() => setClosedSheetOpen(false)} />
+
+      {undo && (
+        <div role="status" className="fixed inset-x-4 bottom-20 z-20 flex items-center justify-between gap-3 rounded-xl bg-[var(--ink)] p-3 text-sm text-white shadow-lg sm:bottom-4 sm:left-auto sm:max-w-md">
+          <span>{undo.message}</span>
+          <button
+            type="button"
+            className="min-h-9 shrink-0 text-xs font-semibold uppercase tracking-wide text-[var(--teal-light)]"
+            onClick={() => {
+              const action = undo;
+              setUndo(null);
+              void action.run().catch((error) => alert(toFriendlyMessage(error)));
+            }}
+          >
+            Undo
+          </button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={pendingMove !== null}
+        title="Move to another therapist?"
+        message={
+          pendingMove
+            ? `${pendingMove.appointment.patientName} → ${rosterById.get(pendingMove.target.therapistId ?? '')?.name ?? 'another therapist'}, ${longDate(pendingMove.target.date)} at ${minutesLabel(pendingMove.target.start)}.`
+            : ''
+        }
+        confirmLabel="Move"
+        onCancel={() => setPendingMove(null)}
+        onConfirm={() => {
+          const move = pendingMove;
+          setPendingMove(null);
+          if (move) void commitMove(move.appointment, move.target);
+        }}
+      />
 
       <ConfirmDialog
         open={declining !== null}

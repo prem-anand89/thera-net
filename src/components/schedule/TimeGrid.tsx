@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Appointment, UUID } from '@/domain/types';
 import { APPOINTMENT_BLOCK_STYLE } from '@/domain/appointmentStatus';
 import {
@@ -6,6 +6,9 @@ import {
   appointmentStartsOnDate,
   assignLanes,
   blockGeometry,
+  dragTarget,
+  dropAllowed,
+  resizeTarget,
   formatMinutes,
   generateScheduleSlots,
   minutesLabel,
@@ -40,6 +43,24 @@ type DayColumnProps = {
   dense?: boolean;
   /** Working intervals; time outside them is shaded and not offered. */
   working?: Interval[];
+  /** Drag / move wiring from GridFrame (tablet + desktop only). */
+  drag?: ColumnDrag;
+};
+
+export type DragGhost = { columnKey: string; appointmentId: string; start: number; duration: number; valid: boolean };
+
+type ColumnDrag = {
+  columnKey: string;
+  register: (element: HTMLDivElement | null) => void;
+  canDrag: (appointment: Appointment) => boolean;
+  onPointerDown: (event: React.PointerEvent, appointment: Appointment, mode: 'move' | 'resize') => void;
+  /** True right after a drag, so the block's click doesn't also open details. */
+  consumeClick: () => boolean;
+  ghost: DragGhost | null;
+  draggingId: string | null;
+  /** Touch "tap a free time to move" mode. */
+  placing: boolean;
+  onPlace: (start: number) => void;
 };
 
 /** One vertical day column: free slots tinted and bookable, blocks sized by length. */
@@ -58,6 +79,7 @@ export function DayColumn({
   onBook,
   dense = false,
   working,
+  drag,
 }: DayColumnProps) {
   const height = (hours.endHour - hours.startHour) * 60 * PX_PER_MINUTE;
   const blocks = useMemo(
@@ -73,7 +95,7 @@ export function DayColumn({
     [blocks]
   );
   const freeSlots = useMemo(() => {
-    if (!onBook || closed.closed || isPastDay) return [];
+    if ((!onBook && !drag?.placing) || closed.closed || isPastDay) return [];
     return generateScheduleSlots(slotMinutes, hours.startHour, hours.endHour).filter((slot) => {
       if (nowMinutes !== null && slot.minutes < nowMinutes) return false;
       if (working && !withinWorking(working, slot.minutes, slotMinutes)) return false;
@@ -83,7 +105,7 @@ export function DayColumn({
         (b) => b.appointment.status !== 'cancelled' && b.start < end && b.end > slot.minutes
       );
     });
-  }, [onBook, closed.closed, isPastDay, slotMinutes, hours.startHour, hours.endHour, nowMinutes, blocks, working]);
+  }, [onBook, drag?.placing, closed.closed, isPastDay, slotMinutes, hours.startHour, hours.endHour, nowMinutes, blocks, working]);
   const offHours = useMemo(() => {
     if (!working || closed.closed) return [];
     const open = hours.startHour * 60;
@@ -100,6 +122,7 @@ export function DayColumn({
 
   return (
     <div
+      ref={drag?.register}
       className="relative border-l border-[var(--border)]"
       style={{ height, ...(closed.closed ? CLOSED_HATCH_STYLE : {}) }}
       aria-label={`${label}, ${date}`}
@@ -131,9 +154,11 @@ export function DayColumn({
           <button
             key={slot.time}
             type="button"
-            onClick={() => onBook?.(slot.time)}
-            aria-label={`Book ${label} at ${slot.label}`}
-            className="group absolute inset-x-0.5 rounded-md text-left text-[11px] text-[var(--moss-strong)] hover:bg-[var(--moss-light)] focus-visible:bg-[var(--moss-light)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)]"
+            onClick={() => (drag?.placing ? drag.onPlace(slot.minutes) : onBook?.(slot.time))}
+            aria-label={drag?.placing ? `Move here: ${label} at ${slot.label}` : `Book ${label} at ${slot.label}`}
+            className={`group absolute inset-x-0.5 rounded-md text-left text-[11px] text-[var(--moss-strong)] hover:bg-[var(--moss-light)] focus-visible:bg-[var(--moss-light)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)] ${
+              drag?.placing ? 'border border-dashed border-[var(--moss)]/60 bg-[var(--moss-light)]/60' : ''
+            }`}
             style={{ top: geometry.top + 1, height: geometry.height - 2 }}
           >
             {/* Free time stays blank so bookings stand out; touch screens (no
@@ -148,15 +173,21 @@ export function DayColumn({
         const lane = lanes.get(appointment.id) ?? { lane: 0, lanes: 1 };
         const style = APPOINTMENT_BLOCK_STYLE[appointment.status];
         const compact = geometry.height < 34;
+        const draggable = Boolean(drag?.canDrag(appointment)) && !isPastDay;
         return (
           <button
             key={appointment.id}
             type="button"
-            onClick={() => onSelect(appointment)}
-            title={`${appointment.patientName} · ${minutesLabel(start)}–${minutesLabel(end)}`}
-            className={`absolute z-[2] overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-left text-xs shadow-sm ${style.fill} ${style.text} ${
+            onClick={() => {
+              if (drag?.consumeClick()) return;
+              onSelect(appointment);
+            }}
+            onPointerDown={draggable ? (event) => drag!.onPointerDown(event, appointment, 'move') : undefined}
+            onContextMenu={draggable ? (event) => event.preventDefault() : undefined}
+            title={`${appointment.patientName} · ${minutesLabel(start)}–${minutesLabel(end)}${draggable ? ' · drag to move' : ''}`}
+            className={`group/block absolute z-[2] overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-left text-xs shadow-sm ${style.fill} ${style.text} ${
               selectedId === appointment.id ? 'outline outline-2 outline-[var(--teal)]' : ''
-            }`}
+            } ${draggable ? 'pointer-fine:cursor-grab' : ''} ${drag?.draggingId === appointment.id ? 'opacity-40' : ''}`}
             style={{
               top: geometry.top,
               height: geometry.height - 1,
@@ -165,6 +196,16 @@ export function DayColumn({
               borderLeftColor: colorFor(appointment),
             }}
           >
+            {draggable && (
+              <span
+                aria-hidden
+                className="absolute inset-x-0 bottom-0 hidden h-2 cursor-ns-resize pointer-fine:block group-hover/block:bg-[var(--ink)]/10"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  drag!.onPointerDown(event, appointment, 'resize');
+                }}
+              />
+            )}
             {compact ? (
               <span className="block truncate">
                 {style.mark && <span aria-hidden>{style.mark} </span>}
@@ -184,6 +225,21 @@ export function DayColumn({
           </button>
         );
       })}
+      {drag?.ghost && drag.ghost.columnKey === drag.columnKey && (
+        <div
+          className={`pointer-events-none absolute inset-x-1 z-[4] rounded-md border-2 border-dashed px-1.5 py-0.5 text-[11px] font-medium ${
+            drag.ghost.valid ? 'border-[var(--teal)] bg-[var(--teal-light)]/70 text-[var(--teal)]' : 'border-[var(--rust)] bg-[var(--rust-light)]/70 text-[var(--rust)]'
+          }`}
+          style={{
+            top: (drag.ghost.start - hours.startHour * 60) * PX_PER_MINUTE,
+            height: Math.max(drag.ghost.duration * PX_PER_MINUTE, 18),
+          }}
+          data-drag-ghost
+        >
+          {minutesLabel(drag.ghost.start)} · {formatMinutes(drag.ghost.duration)}
+          {!drag.ghost.valid && ' · not free'}
+        </div>
+      )}
       {nowMinutes !== null && nowMinutes >= hours.startHour * 60 && nowMinutes <= hours.endHour * 60 && (
         <div
           className="pointer-events-none absolute inset-x-0 z-[3] border-t-2 border-[var(--rust)]"
@@ -267,7 +323,196 @@ type GridColumn = {
   closed: ClosedDayInfo;
   onBook?: (time: string) => void;
   working?: Interval[];
+  /** Resource grid: the column's therapist ('' = Unassigned, not a drop target). */
+  therapistId?: string;
 };
+
+export type MoveTarget = { date: string; therapistId: string | null; start: number; duration: number };
+
+export type GridDragOptions = {
+  canDrag: (appointment: Appointment) => boolean;
+  onMove: (appointment: Appointment, target: MoveTarget) => void;
+};
+
+const LONG_PRESS_MS = 450;
+
+/**
+ * Drag state for one grid. Mouse / pen: press a block and drag (to another
+ * column too), or drag its bottom edge to resize. Touch: dragging would fight
+ * scrolling, so a long-press enters "tap a free time to move it" mode.
+ */
+function useGridDrag(input: {
+  columns: GridColumn[];
+  hours: GridHours;
+  slotMinutes: number;
+  today: string;
+  nowMinutes: number;
+  options?: GridDragOptions;
+}) {
+  const { columns, hours, slotMinutes, today, nowMinutes, options } = input;
+  const elements = useRef(new Map<string, HTMLDivElement>());
+  const [ghost, setGhost] = useState<DragGhost | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [placing, setPlacing] = useState<{ appointment: Appointment; duration: number } | null>(null);
+  const suppressClick = useRef(false);
+  const latest = useRef({ columns, hours, slotMinutes, today, nowMinutes, options });
+  latest.current = { columns, hours, slotMinutes, today, nowMinutes, options };
+
+  const validate = useCallback((columnKey: string, appointmentId: string, start: number, duration: number) => {
+    const { columns: cols, slotMinutes: slot, today: day, nowMinutes: now } = latest.current;
+    const column = cols.find((c) => c.key === columnKey);
+    if (!column || column.therapistId === '') return false;
+    return dropAllowed({
+      columnAppointments: column.appointments,
+      movingId: appointmentId,
+      start,
+      duration,
+      slotMinutes: slot,
+      working: column.working,
+      closed: column.closed.closed,
+      isPast: column.date < day || (column.date === day && start < now),
+    });
+  }, []);
+
+  const finish = useCallback((appointment: Appointment, target: DragGhost) => {
+    const column = latest.current.columns.find((c) => c.key === target.columnKey);
+    if (!column || !target.valid) return;
+    latest.current.options?.onMove(appointment, {
+      date: column.date,
+      therapistId: column.therapistId === undefined ? appointment.therapistId : column.therapistId || null,
+      start: target.start,
+      duration: target.duration,
+    });
+  }, []);
+
+  const onPointerDown = useCallback(
+    (event: React.PointerEvent, appointment: Appointment, mode: 'move' | 'resize') => {
+      if (!latest.current.options) return;
+      const originStart = minutesOfDay(appointment.scheduledAt);
+      const duration = appointmentMinutes(appointment, latest.current.slotMinutes);
+      const originColumn = latest.current.columns.find((c) => c.appointments.some((a) => a.id === appointment.id));
+      if (!originColumn) return;
+
+      if (event.pointerType === 'touch') {
+        const timer = window.setTimeout(() => {
+          suppressClick.current = true;
+          setPlacing({ appointment, duration });
+          navigator.vibrate?.(15);
+        }, LONG_PRESS_MS);
+        const cancel = () => {
+          window.clearTimeout(timer);
+          window.removeEventListener('pointerup', cancel);
+          window.removeEventListener('pointercancel', cancel);
+          window.removeEventListener('pointermove', onMoveCheck);
+        };
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const onMoveCheck = (move: PointerEvent) => {
+          if (Math.hypot(move.clientX - startX, move.clientY - startY) > 8) cancel();
+        };
+        window.addEventListener('pointerup', cancel);
+        window.addEventListener('pointercancel', cancel);
+        window.addEventListener('pointermove', onMoveCheck);
+        return;
+      }
+      if (event.button !== 0) return;
+
+      const startX = event.clientX;
+      const startY = event.clientY;
+      let active = false;
+      let current: DragGhost | null = null;
+
+      const onMove = (move: PointerEvent) => {
+        if (!active && Math.hypot(move.clientX - startX, move.clientY - startY) < 5) return;
+        if (!active) {
+          active = true;
+          setDraggingId(appointment.id);
+          document.body.style.userSelect = 'none';
+        }
+        const { hours: h } = latest.current;
+        let columnKey = originColumn.key;
+        let start = originStart;
+        let length = duration;
+        if (mode === 'move') {
+          for (const [key, element] of elements.current) {
+            const rect = element.getBoundingClientRect();
+            if (move.clientX >= rect.left && move.clientX <= rect.right) columnKey = key;
+          }
+          start = dragTarget({ originalStart: originStart, duration, deltaPx: move.clientY - startY, pxPerMinute: PX_PER_MINUTE, hours: h });
+        } else {
+          length = resizeTarget({ start: originStart, originalDuration: duration, deltaPx: move.clientY - startY, pxPerMinute: PX_PER_MINUTE, hours: h });
+        }
+        current = { columnKey, appointmentId: appointment.id, start, duration: length, valid: validate(columnKey, appointment.id, start, length) };
+        setGhost(current);
+      };
+      const stop = (commit: boolean) => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('keydown', onKey);
+        document.body.style.userSelect = '';
+        if (active) {
+          suppressClick.current = true;
+          const unchanged = current && current.columnKey === originColumn.key && current.start === originStart && current.duration === duration;
+          if (commit && current && !unchanged) finish(appointment, current);
+        }
+        setGhost(null);
+        setDraggingId(null);
+      };
+      const onUp = () => stop(true);
+      const onKey = (key: KeyboardEvent) => {
+        if (key.key === 'Escape') stop(false);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('keydown', onKey);
+    },
+    [finish, validate]
+  );
+
+  const place = useCallback(
+    (columnKey: string, start: number) => {
+      if (!placing) return;
+      const target: DragGhost = {
+        columnKey,
+        appointmentId: placing.appointment.id,
+        start,
+        duration: placing.duration,
+        valid: validate(columnKey, placing.appointment.id, start, placing.duration),
+      };
+      if (!target.valid) {
+        alert('That time is not free for the whole appointment.');
+        return;
+      }
+      setPlacing(null);
+      finish(placing.appointment, target);
+    },
+    [placing, validate, finish]
+  );
+
+  const columnDrag = (column: GridColumn): ColumnDrag | undefined =>
+    options
+      ? {
+          columnKey: column.key,
+          register: (element) => {
+            if (element) elements.current.set(column.key, element);
+            else elements.current.delete(column.key);
+          },
+          canDrag: options.canDrag,
+          onPointerDown,
+          consumeClick: () => {
+            const value = suppressClick.current;
+            suppressClick.current = false;
+            return value;
+          },
+          ghost,
+          draggingId: draggingId ?? placing?.appointment.id ?? null,
+          placing: Boolean(placing) && column.therapistId !== '',
+          onPlace: (start) => place(column.key, start),
+        }
+      : undefined;
+
+  return { columnDrag, placing, cancelPlacing: () => setPlacing(null) };
+}
 
 function GridFrame({
   columns,
@@ -280,6 +525,7 @@ function GridFrame({
   onSelect,
   scrollKey,
   minColumnWidth,
+  drag,
 }: {
   columns: GridColumn[];
   hours: GridHours;
@@ -291,6 +537,7 @@ function GridFrame({
   onSelect: (appointment: Appointment) => void;
   scrollKey: string;
   minColumnWidth: number;
+  drag?: GridDragOptions;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const showsToday = columns.some((column) => column.date === today);
@@ -305,8 +552,20 @@ function GridFrame({
   );
   useInitialScroll(scrollRef, scrollKey, computeScroll);
   const template = `56px repeat(${columns.length}, minmax(${minColumnWidth}px, 1fr))`;
+  const { columnDrag, placing, cancelPlacing } = useGridDrag({ columns, hours, slotMinutes, today, nowMinutes, options: drag });
 
   return (
+    <>
+    {placing && (
+      <div role="status" className="mb-2 flex items-center justify-between gap-3 rounded-xl bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--ink)]">
+        <span>
+          Tap a free time to move <strong>{placing.appointment.patientName}</strong>.
+        </span>
+        <button type="button" className="min-h-9 text-xs font-medium text-[var(--teal)]" onClick={cancelPlacing}>
+          Cancel
+        </button>
+      </div>
+    )}
     <div
       ref={scrollRef}
       className="max-h-[calc(100vh-240px)] min-h-[420px] overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)]"
@@ -342,10 +601,12 @@ function GridFrame({
             onBook={column.onBook}
             dense={minColumnWidth < 150}
             working={column.working}
+            drag={columnDrag(column)}
           />
         ))}
       </div>
     </div>
+    </>
   );
 }
 
@@ -368,6 +629,7 @@ export function ResourceDayGrid({
   onBook,
   summaryFor,
   workingFor,
+  drag,
 }: {
   date: string;
   today: string;
@@ -385,8 +647,10 @@ export function ResourceDayGrid({
   summaryFor: (therapistId: string) => string;
   /** Working intervals for a therapist on this date; omit = booking hours. */
   workingFor?: (therapistId: string) => Interval[];
+  drag?: GridDragOptions;
 }) {
   const columns: GridColumn[] = therapists.map((therapist) => ({
+    therapistId: therapist.id,
     working: therapist.id && workingFor ? workingFor(therapist.id) : undefined,
     key: therapist.id || 'unassigned',
     label: therapist.name,
@@ -426,6 +690,7 @@ export function ResourceDayGrid({
       onSelect={onSelect}
       scrollKey={date}
       minColumnWidth={170}
+      drag={drag}
     />
   );
 }
@@ -445,6 +710,7 @@ export function WeekTimeGrid({
   onBook,
   onOpenDay,
   workingFor,
+  drag,
 }: {
   days: string[];
   today: string;
@@ -459,6 +725,7 @@ export function WeekTimeGrid({
   onBook?: (input: { date: string; time: string }) => void;
   onOpenDay: (date: string) => void;
   workingFor?: (date: string) => Interval[];
+  drag?: GridDragOptions;
 }) {
   const columns: GridColumn[] = days.map((day) => {
     const value = new Date(`${day}T00:00:00`);
@@ -503,6 +770,7 @@ export function WeekTimeGrid({
       onSelect={onSelect}
       scrollKey={days[0]}
       minColumnWidth={110}
+      drag={drag}
     />
   );
 }

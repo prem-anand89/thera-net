@@ -181,16 +181,20 @@ export const bookingService = {
     syncEngine.schedule(0);
   },
 
+  /** Moves and/or resizes an appointment; `therapistId` reassigns it
+   *  (admin / front desk only — the RPC checks both therapists). */
   async rescheduleAppointment(
     appointmentId: UUID,
     newScheduledAt: string,
-    durationMinutes?: number
+    durationMinutes?: number,
+    therapistId?: UUID
   ): Promise<void> {
     const supabase = supabaseOrThrow();
     const { error } = await supabase.rpc('reschedule_appointment', {
       p_appointment_id: appointmentId,
       p_new_scheduled_at: newScheduledAt,
       p_duration_minutes: durationMinutes ?? null,
+      p_therapist_id: therapistId ?? null,
     });
     if (error) throw new Error(`Could not reschedule: ${error.message}`);
     syncEngine.schedule(0);

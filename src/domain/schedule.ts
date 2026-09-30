@@ -532,3 +532,65 @@ export function seriesProblem(input: {
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Drag to move / resize
+// ---------------------------------------------------------------------------
+
+/** Rounds a pixel offset to whole `step`-minute moves. */
+export function snapMinutes(deltaPx: number, pxPerMinute: number, step = 15): number {
+  return Math.round(deltaPx / pxPerMinute / step) * step;
+}
+
+/**
+ * Where a dragged block lands: start clamped so the whole block stays inside
+ * the day (booking hours), duration unchanged.
+ */
+export function dragTarget(input: {
+  originalStart: number;
+  duration: number;
+  deltaPx: number;
+  pxPerMinute: number;
+  hours: { startHour: number; endHour: number };
+  step?: number;
+}): number {
+  const moved = input.originalStart + snapMinutes(input.deltaPx, input.pxPerMinute, input.step);
+  const earliest = input.hours.startHour * 60;
+  const latest = input.hours.endHour * 60 - input.duration;
+  return Math.min(Math.max(moved, earliest), latest);
+}
+
+/** New length when the bottom edge is dragged: snapped, at least one step, inside the day. */
+export function resizeTarget(input: {
+  start: number;
+  originalDuration: number;
+  deltaPx: number;
+  pxPerMinute: number;
+  hours: { startHour: number; endHour: number };
+  step?: number;
+}): number {
+  const step = input.step ?? 15;
+  const next = input.originalDuration + snapMinutes(input.deltaPx, input.pxPerMinute, step);
+  return Math.min(Math.max(next, step), Math.min(240, input.hours.endHour * 60 - input.start));
+}
+
+/** Can this block go to [start, start + duration) in a column? */
+export function dropAllowed(input: {
+  columnAppointments: Appointment[];
+  movingId: string;
+  start: number;
+  duration: number;
+  slotMinutes: number;
+  working?: Interval[];
+  closed: boolean;
+  isPast: boolean;
+}): boolean {
+  if (input.closed || input.isPast) return false;
+  if (input.working && !withinWorking(input.working, input.start, input.duration)) return false;
+  return !input.columnAppointments.some((a) => {
+    if (a.id === input.movingId || a.status === 'cancelled') return false;
+    const s = minutesOfDay(a.scheduledAt);
+    const e = s + appointmentMinutes(a, input.slotMinutes);
+    return s < input.start + input.duration && e > input.start;
+  });
+}
