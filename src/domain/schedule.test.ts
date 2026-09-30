@@ -219,3 +219,18 @@ describe('schedule grouping and history', () => {
     expect(filterHistory(rows, { ...base, query: 'ben' }).map((r) => r.id)).toEqual(['2']);
   });
 });
+
+describe('slot-aligned free time', () => {
+  it('rounds gap starts after odd-length bookings and "now" onto the slot grid', () => {
+    const rows = [appt({ id: '1', scheduledAt: at('2026-10-01', '10:00'), durationMinutes: 45 })];
+    const hours = { startHour: 9, endHour: 12 };
+    expect(freeGaps(rows, 't1', '2026-10-01', hours, 30, { alignToSlots: true })).toEqual([
+      { start: 540, end: 600 },
+      { start: 660, end: 720 }, // 10:45 -> 11:00
+    ]);
+    expect(freeGaps(rows, 't1', '2026-10-01', hours, 30, { alignToSlots: true, notBefore: 550 })).toEqual([
+      { start: 570, end: 600 }, // 9:10 -> 9:30
+      { start: 660, end: 720 },
+    ]);
+  });
+});

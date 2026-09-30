@@ -41,6 +41,8 @@ type BookSlotSheetProps = {
   prefilledTherapistId?: UUID;
   prefilledPatientName?: string;
   prefilledPatientPhone?: string;
+  /** An existing patient to book (e.g. from the Patients list). */
+  prefilledPatientId?: UUID;
   requestId?: UUID;
   requestNotes?: string;
   requestPreferredTimeText?: string;
@@ -69,6 +71,7 @@ export function BookSlotSheet({
   prefilledTherapistId,
   prefilledPatientName,
   prefilledPatientPhone,
+  prefilledPatientId,
   requestId,
   requestNotes,
   requestPreferredTimeText,
@@ -133,13 +136,13 @@ export function BookSlotSheet({
       setTherapistTouched(Boolean(prefilledTherapistId));
       setShowLater(date < today || date > addDays(today, 6));
     }
-    setPatientId('');
-    setPatientName(prefilledPatientName ?? '');
+    setPatientId(prefilledPatientId ?? '');
+    setPatientName(prefilledPatientId ? '' : prefilledPatientName ?? '');
     setPatientPhone(prefilledPatientPhone ?? '');
-    setPatientMode(prefilledPatientName ? 'new' : 'find');
+    setPatientMode(prefilledPatientName && !prefilledPatientId ? 'new' : 'find');
     setBusy(false);
     setError(null);
-  }, [isOpen, rescheduleAppointment, prefilledDate, prefilledPatientName, prefilledPatientPhone, prefilledTherapistId, prefilledTime, today, slotMinutes]);
+  }, [isOpen, rescheduleAppointment, prefilledDate, prefilledPatientId, prefilledPatientName, prefilledPatientPhone, prefilledTherapistId, prefilledTime, today, slotMinutes]);
 
   // Solo clinics and therapist logins shouldn't have to pick themselves.
   useEffect(() => {

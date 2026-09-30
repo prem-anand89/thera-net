@@ -20,12 +20,16 @@ function isoDate(d: Date) {
 
 // ─── Mini Calendar ────────────────────────────────────────────────────────────
 
-// Mock availability logic for UI demonstration
+/** Availability is fetched for this many days ahead; later dates can't be
+ *  checked for closures, so they aren't offered. */
+const BOOKING_WINDOW_DAYS = 90;
+
 function getDayStatus(d: Date, today: Date, availability: AvailabilityData | null) {
   const iso = isoDate(d);
   const isPast = iso < isoDate(today);
   if (isPast) return 'past';
-  
+  if (iso > addDays(isoDate(today), BOOKING_WINDOW_DAYS)) return 'far';
+
   if (!availability) return 'available'; // Default while loading
 
   if (availability.closedWeekdays.includes(d.getDay())) return 'closed';
@@ -127,6 +131,9 @@ function MiniCalendar({
             btnCls += "bg-[var(--teal)] text-white shadow-md";
           } else if (status === 'past') {
             btnCls += "text-[var(--muted)] opacity-30 cursor-not-allowed";
+          } else if (status === 'far') {
+            btnCls += "text-[var(--muted)] opacity-30 cursor-not-allowed";
+            title = "Not open for booking yet";
           } else if (status === 'closed') {
             btnCls += "bg-[#F9FAFB] text-[var(--muted)] opacity-60 cursor-not-allowed";
             title = "Closed";
@@ -143,7 +150,7 @@ function MiniCalendar({
               key={i}
               type="button"
               title={title}
-              disabled={status === 'past' || status === 'closed' || status === 'holiday'}
+              disabled={status !== 'available'}
               onClick={() => onSelect(iso)}
               className={btnCls}
             >
@@ -258,11 +265,10 @@ export function BookingFormPage() {
         const [info, therapistList, avail] = await Promise.all([
           bookingService.getBookingClinicInfo(clinicSlug),
           bookingService.listBookingTherapists(clinicSlug),
-          bookingService.getBookingAvailability(
-            clinicSlug,
-            isoDate(new Date()),
-            isoDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)) // fetch next 90 days
-          )
+          // Availability only refines the picker; if it fails the form still works.
+          bookingService
+            .getBookingAvailability(clinicSlug, isoDate(new Date()), addDays(isoDate(new Date()), BOOKING_WINDOW_DAYS))
+            .catch(() => null),
         ]);
         setClinicName(info.name);
         setClinicLogo(publicLogoUrl(info.logoPath) ?? null);

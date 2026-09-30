@@ -8,7 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { computeVisitPaymentState, isCollected, paymentActions } from '@/domain/paymentState';
 import { EditPatientModal } from './EditPatientModal';
-import { BookAppointmentDialog } from '@/components/BookAppointmentDialog';
+import { BookSlotSheet } from '@/components/BookSlotSheet';
 import {
   fiscalYearOf,
   monthsOfFiscalYear,
@@ -130,6 +130,10 @@ function AllPatientsSection() {
   const all = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
   const allVisits = useLiveQuery(() => repos.visits.list({ clinicId: clinic.id }), [clinic.id]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const appointments = useLiveQuery(
+    () => (canBook ? repos.appointments.listByClinic(clinic.id) : undefined),
+    [canBook, clinic.id]
+  );
   const invoicePayments = useLiveQuery(() => repos.invoicePayments.list(clinic.id), [clinic.id]);
   const directPayments = useLiveQuery(() => repos.payments.list(clinic.id), [clinic.id]);
 
@@ -696,18 +700,15 @@ function AllPatientsSection() {
         />
       )}
 
-      {booking && (
-        <BookAppointmentDialog
-          clinicId={clinic.id}
-          patientClinicId={booking.clinicId}
-          patientId={booking.id}
-          patientName={booking.name}
-          patientPhone={booking.phone}
-          defaultTherapistId={visitStatsByPatient.get(booking.id)?.latestVisit.therapistId}
-          onClose={() => setBooking(null)}
-          onBooked={() => setBooking(null)}
-        />
-      )}
+      {/* Same sheet as the Schedule page; the therapist who saw them last is
+          pre-picked, since front desk usually wants "same as before". */}
+      <BookSlotSheet
+        isOpen={booking !== null}
+        onClose={() => setBooking(null)}
+        appointments={appointments ?? []}
+        prefilledPatientId={booking?.id}
+        prefilledTherapistId={booking ? visitStatsByPatient.get(booking.id)?.latestVisit.therapistId ?? undefined : undefined}
+      />
     </SectionCard>
   );
 }

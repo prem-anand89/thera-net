@@ -35,6 +35,7 @@ export function FindTimePanel({
       {therapists.map((therapist) => {
         const starts = freeGaps(appointments, therapist.id, date, hours, slotMinutes, {
           notBefore: nowMinutes ?? undefined,
+          alignToSlots: true,
         }).flatMap((gap) => {
           const result: number[] = [];
           for (let at = gap.start; at + slotMinutes <= gap.end; at += slotMinutes) result.push(at);

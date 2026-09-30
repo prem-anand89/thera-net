@@ -144,9 +144,14 @@ export function freeGaps(
   date: string,
   hours: { startHour: number; endHour: number },
   fallbackMinutes: number,
-  options: { minMinutes?: number; notBefore?: number } = {}
+  options: { minMinutes?: number; notBefore?: number; alignToSlots?: boolean } = {}
 ): Interval[] {
-  const dayStart = Math.max(hours.startHour * 60, options.notBefore ?? 0);
+  const open = hours.startHour * 60;
+  // Round a start up onto the clinic's slot grid (09:00, 09:30, …), so free
+  // time after a 45-minute booking or "now" is offered at a bookable time.
+  const align = (minutes: number) =>
+    options.alignToSlots ? open + Math.ceil((minutes - open) / fallbackMinutes) * fallbackMinutes : minutes;
+  const dayStart = Math.max(open, options.notBefore ?? 0);
   const dayEnd = hours.endHour * 60;
   const busy = appointments
     .filter((a) => a.therapistId === therapistId && a.status !== 'cancelled' && appointmentStartsOnDate(a, date))
@@ -158,10 +163,11 @@ export function freeGaps(
   const gaps: Interval[] = [];
   let cursor = dayStart;
   for (const block of busy) {
-    if (block.start > cursor) gaps.push({ start: cursor, end: Math.min(block.start, dayEnd) });
+    const start = align(cursor);
+    if (block.start > start) gaps.push({ start, end: Math.min(block.start, dayEnd) });
     cursor = Math.max(cursor, block.end);
   }
-  if (cursor < dayEnd) gaps.push({ start: cursor, end: dayEnd });
+  if (align(cursor) < dayEnd) gaps.push({ start: align(cursor), end: dayEnd });
   const min = options.minMinutes ?? fallbackMinutes;
   return gaps.filter((gap) => gap.end - gap.start >= min);
 }

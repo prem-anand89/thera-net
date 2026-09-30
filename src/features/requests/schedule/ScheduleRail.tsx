@@ -212,10 +212,10 @@ function MiniMonth({
       </div>
       <p className="mt-2 flex items-center gap-3 text-[10px] text-[var(--muted)]">
         <span className="flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-full bg-[var(--moss-light)]" aria-hidden /> Free time
+          <span className="h-2.5 w-2.5 rounded-full border border-[var(--moss)]/40 bg-[var(--moss-light)]" aria-hidden /> Free time
         </span>
         <span className="flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-sm" style={CLOSED_HATCH_STYLE} aria-hidden /> Closed
+          <span className="h-2.5 w-2.5 rounded-sm border border-[var(--border)]" style={CLOSED_HATCH_STYLE} aria-hidden /> Closed
         </span>
       </p>
     </section>

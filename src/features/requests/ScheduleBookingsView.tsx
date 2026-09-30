@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
-import { ConfirmDialog, SectionCard, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
+import { ConfirmDialog, KebabMenu, SectionCard, btnPrimary, btnSecondary, inputCls, menuItem } from '@/components/ui';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -222,6 +222,7 @@ export function ScheduleBookingsView() {
   const [findTime, setFindTime] = useState(false);
   const [closedSheetOpen, setClosedSheetOpen] = useState(false);
   const [removing, setRemoving] = useState<ClosedRange | null>(null);
+  const [declining, setDeclining] = useState<{ id: UUID; name: string } | null>(null);
   const [historyFrom, setHistoryFrom] = useState(() => addDays(today, -30));
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyStatus, setHistoryStatus] = useState('');
@@ -301,7 +302,6 @@ export function ScheduleBookingsView() {
   }, [view, sheet, selectedId, closedSheetOpen, setSchedule, step]);
 
   async function decline(requestId: UUID) {
-    if (!confirm('Decline this booking request?')) return;
     try {
       await bookingService.declineAppointmentRequest(requestId);
     } catch (error) {
@@ -341,7 +341,7 @@ export function ScheduleBookingsView() {
   const activeView = !canManageAll && view === 'requests' ? 'schedule' : view;
   const dayNow = date === today ? now.minutes : null;
   const dayGaps = singleTherapist && !closedToday.closed && date >= today
-    ? freeGaps(dayAppointments, singleTherapist.id, date, hours, slotMinutes, { notBefore: dayNow ?? undefined })
+    ? freeGaps(dayAppointments, singleTherapist.id, date, hours, slotMinutes, { notBefore: dayNow ?? undefined, alignToSlots: true })
     : [];
   const liveDay = dayAppointments.filter((a) => a.status !== 'cancelled');
   const upcoming = liveDay.filter((a) => (a.status === 'confirmed' || a.status === 'rescheduled') && (date > today || (date === today && minutesOfDay(a.scheduledAt) >= now.minutes))).length;
@@ -353,7 +353,9 @@ export function ScheduleBookingsView() {
   return (
     <div className="space-y-4 pb-20">
       <header className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] pb-3">
-        <div className="flex items-center gap-1">
+        {/* Below desktop the week strip carries Today / previous / next, so the
+            header doesn't repeat them. */}
+        <div className="hidden items-center gap-1 desktop:flex">
           <button type="button" className={btnSecondary} onClick={() => setSchedule({ date: today })}>Today</button>
           <button type="button" className="min-h-11 min-w-11 rounded-lg text-lg text-[var(--teal)] hover:bg-[var(--paper)]" aria-label={mode === 'day' ? 'Previous day' : 'Previous week'} onClick={() => step(-1)}>‹</button>
           <button type="button" className="min-h-11 min-w-11 rounded-lg text-lg text-[var(--teal)] hover:bg-[var(--paper)]" aria-label={mode === 'day' ? 'Next day' : 'Next week'} onClick={() => step(1)}>›</button>
@@ -447,21 +449,33 @@ export function ScheduleBookingsView() {
                     : 'No appointments'
                   : null}
               </p>
-              <div className="ml-auto flex items-center gap-3">
-                <label className="flex min-h-11 items-center gap-1.5 text-xs text-[var(--muted)]">
-                  <input type="checkbox" checked={showCancelled} onChange={(event) => setShowCancelled(event.target.checked)} />
-                  Show cancelled
-                </label>
+              <div className="ml-auto flex items-center gap-1">
                 {mode === 'day' && (
-                  <button type="button" className="min-h-11 text-sm font-medium text-[var(--teal)] tab:hidden" onClick={() => setFindTime((current) => !current)}>
+                  <button type="button" className="min-h-11 px-2 text-sm font-medium text-[var(--teal)] tab:hidden" onClick={() => setFindTime((current) => !current)}>
                     {findTime ? 'Back to day' : 'Find a time'}
                   </button>
                 )}
-                {canManageAll && (
-                  <button type="button" className="min-h-11 text-sm font-medium text-[var(--teal)] desktop:hidden" onClick={() => setClosedSheetOpen(true)}>
-                    Closed days
-                  </button>
-                )}
+                <label className="hidden min-h-11 items-center gap-1.5 text-xs text-[var(--muted)] desktop:flex">
+                  <input type="checkbox" checked={showCancelled} onChange={(event) => setShowCancelled(event.target.checked)} />
+                  Show cancelled
+                </label>
+                {/* Below desktop, the secondary controls live in one menu. */}
+                <div className="desktop:hidden">
+                  <KebabMenu ariaLabel="More schedule options">
+                    {(close) => (
+                      <>
+                        <button type="button" className={menuItem} onClick={() => { setShowCancelled((current) => !current); close(); }}>
+                          {showCancelled ? 'Hide cancelled' : 'Show cancelled'}
+                        </button>
+                        {canManageAll && (
+                          <button type="button" className={menuItem} onClick={() => { setClosedSheetOpen(true); close(); }}>
+                            Set closed days
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </KebabMenu>
+                </div>
               </div>
             </div>
 
@@ -561,7 +575,7 @@ export function ScheduleBookingsView() {
                     </div>
                     <div className="flex gap-2">
                       <button type="button" className={btnPrimary} onClick={() => openBooking({ date: request.preferredDate ?? date, requestId: request.id, patientName: request.name, patientPhone: request.phone, therapistId: request.preferredTherapistId ?? undefined, requestNotes: request.notes ?? undefined, requestPreferredTimeText: request.preferredTimeText ?? undefined })}>Confirm</button>
-                      <button type="button" className={btnSecondary} onClick={() => void decline(request.id)}>Decline</button>
+                      <button type="button" className={btnSecondary} onClick={() => setDeclining({ id: request.id, name: request.name })}>Decline</button>
                     </div>
                   </div>
                 </div>
@@ -642,6 +656,20 @@ export function ScheduleBookingsView() {
       />
 
       <ClosedDaysSheet open={closedSheetOpen} clinicId={clinic.id} initialDate={date < today ? today : date} onClose={() => setClosedSheetOpen(false)} />
+
+      <ConfirmDialog
+        open={declining !== null}
+        title="Decline this request?"
+        message={declining ? `${declining.name}'s request will be removed from the list. Let them know separately if needed.` : ''}
+        confirmLabel="Decline"
+        destructive
+        onCancel={() => setDeclining(null)}
+        onConfirm={() => {
+          const request = declining;
+          setDeclining(null);
+          if (request) void decline(request.id);
+        }}
+      />
 
       <ConfirmDialog
         open={removing !== null}

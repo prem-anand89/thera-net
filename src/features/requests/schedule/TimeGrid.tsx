@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { Appointment, UUID } from '@/domain/types';
 import { APPOINTMENT_BLOCK_STYLE } from '@/domain/appointmentStatus';
 import {
@@ -34,6 +34,8 @@ type DayColumnProps = {
   onSelect: (appointment: Appointment) => void;
   /** Omit to make free time non-bookable (e.g. a therapist viewing a colleague). */
   onBook?: (time: string) => void;
+  /** Narrow columns (week view) show start time + length instead of a range. */
+  dense?: boolean;
 };
 
 /** One vertical day column: free slots tinted and bookable, blocks sized by length. */
@@ -50,6 +52,7 @@ export function DayColumn({
   selectedId,
   onSelect,
   onBook,
+  dense = false,
 }: DayColumnProps) {
   const height = (hours.endHour - hours.startHour) * 60 * PX_PER_MINUTE;
   const blocks = useMemo(
@@ -90,7 +93,7 @@ export function DayColumn({
         />
       ))}
       {closed.closed && (
-        <div className="pointer-events-none absolute inset-x-1 top-1 z-[1] rounded bg-[var(--surface)]/90 px-1.5 py-0.5 text-center text-[11px] font-medium text-[var(--slate)]">
+        <div className="pointer-events-none absolute inset-x-1 top-1 z-[1] truncate rounded bg-[var(--surface)]/90 px-1.5 py-0.5 text-center text-[11px] font-medium text-[var(--slate)]">
           Closed{closed.label ? ` · ${closed.label}` : ''}
         </div>
       )}
@@ -102,10 +105,13 @@ export function DayColumn({
             type="button"
             onClick={() => onBook?.(slot.time)}
             aria-label={`Book ${label} at ${slot.label}`}
-            className="group absolute inset-x-0.5 rounded-md bg-[var(--moss-light)]/50 text-left text-[11px] text-transparent hover:bg-[var(--moss-light)] hover:text-[var(--moss-strong)] focus-visible:text-[var(--moss-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)]"
+            className="group absolute inset-x-0.5 rounded-md text-left text-[11px] text-[var(--moss-strong)] hover:bg-[var(--moss-light)] focus-visible:bg-[var(--moss-light)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)]"
             style={{ top: geometry.top + 1, height: geometry.height - 2 }}
           >
-            <span className="px-1.5">+ {slot.label}</span>
+            {/* Free time stays blank so bookings stand out; touch screens (no
+                hover) get a faint "+" so it's still discoverable. */}
+            <span className="hidden px-1.5 opacity-40 pointer-coarse:inline group-hover:!hidden group-focus-visible:!hidden" aria-hidden>+</span>
+            <span className="hidden px-1.5 group-hover:inline group-focus-visible:inline">+ {slot.label}</span>
           </button>
         );
       })}
@@ -119,6 +125,7 @@ export function DayColumn({
             key={appointment.id}
             type="button"
             onClick={() => onSelect(appointment)}
+            title={`${appointment.patientName} · ${minutesLabel(start)}–${minutesLabel(end)}`}
             className={`absolute z-[2] overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-left text-xs shadow-sm ${style.fill} ${style.text} ${
               selectedId === appointment.id ? 'outline outline-2 outline-[var(--teal)]' : ''
             }`}
@@ -142,7 +149,7 @@ export function DayColumn({
                   {appointment.patientName}
                 </span>
                 <span className="block truncate text-[11px] opacity-80">
-                  {minutesLabel(start)}–{minutesLabel(end)} · {formatMinutes(end - start)}
+                  {dense ? minutesLabel(start) : `${minutesLabel(start)}–${minutesLabel(end)}`} · {formatMinutes(end - start)}
                 </span>
               </>
             )}
@@ -169,8 +176,10 @@ function TimeAxis({ hours }: { hours: GridHours }) {
       {Array.from({ length: hours.endHour - hours.startHour }, (_, index) => (
         <span
           key={index}
-          className="absolute right-2 -translate-y-1/2 text-[11px] text-[var(--muted)]"
-          style={{ top: index * 60 * PX_PER_MINUTE, ...(index === 0 ? { transform: 'none' } : {}) }}
+          // Labels centre on their hour line, except the first, which would
+          // otherwise sit half under the sticky column headers.
+          className={`absolute right-2 text-[11px] text-[var(--muted)] ${index === 0 ? 'top-0.5' : '-translate-y-1/2'}`}
+          style={index === 0 ? undefined : { top: index * 60 * PX_PER_MINUTE }}
         >
           {minutesLabel((hours.startHour + index) * 60).replace(':00', '')}
         </span>
@@ -179,18 +188,46 @@ function TimeAxis({ hours }: { hours: GridHours }) {
   );
 }
 
-/** Scrolls the grid so "now" (or the first appointment) is near the top. */
+/**
+ * Where the grid should open. The focus is "now" while today is inside
+ * booking hours, otherwise the first appointment, otherwise opening time.
+ * The grid stays at the top (first rows visible) unless the focus would be
+ * below the visible area; then it scrolls so the focus sits an hour down.
+ */
+export function initialScrollTop(
+  hours: GridHours,
+  options: { nowMinutes: number | null; firstStart: number | null; viewportHeight: number }
+): number {
+  const open = hours.startHour * 60;
+  const close = hours.endHour * 60;
+  const { nowMinutes, firstStart, viewportHeight } = options;
+  const focus =
+    nowMinutes !== null && nowMinutes >= open && nowMinutes < close
+      ? nowMinutes
+      : firstStart !== null && firstStart >= open && firstStart < close
+        ? firstStart
+        : open;
+  const focusTop = (focus - open) * PX_PER_MINUTE;
+  // Keep ~1.5 hours visible under the focus before scrolling at all.
+  if (focusTop + 90 * PX_PER_MINUTE <= viewportHeight) return 0;
+  return Math.max(0, focusTop - 60 * PX_PER_MINUTE);
+}
+
+/** Positions the grid once per date/week — never again while the user scrolls. */
 function useInitialScroll(
   ref: React.RefObject<HTMLDivElement | null>,
-  hours: GridHours,
-  focusMinutes: number | null,
-  key: string
+  key: string,
+  compute: (viewportHeight: number) => number
 ) {
+  const positionedFor = useRef<string | null>(null);
   useEffect(() => {
     const element = ref.current;
-    if (!element || focusMinutes === null) return;
-    element.scrollTop = Math.max(0, (focusMinutes - hours.startHour * 60 - 45) * PX_PER_MINUTE);
-  }, [ref, hours.startHour, focusMinutes, key]);
+    if (!element || positionedFor.current === key) return;
+    positionedFor.current = key;
+    // Column headers take the top of the scroll box.
+    const header = element.querySelector<HTMLElement>('[data-grid-header]')?.offsetHeight ?? 0;
+    element.scrollTop = compute(element.clientHeight - header);
+  }, [ref, key, compute]);
 }
 
 type GridColumn = {
@@ -231,7 +268,13 @@ function GridFrame({
   const firstStart = columns
     .flatMap((column) => column.appointments.map((a) => minutesOfDay(a.scheduledAt)))
     .sort((a, b) => a - b)[0];
-  useInitialScroll(scrollRef, hours, showsToday ? nowMinutes : firstStart ?? null, scrollKey);
+  const focusNow = showsToday ? nowMinutes : null;
+  const computeScroll = useCallback(
+    (viewportHeight: number) =>
+      initialScrollTop(hours, { nowMinutes: focusNow, firstStart: firstStart ?? null, viewportHeight }),
+    [hours, focusNow, firstStart]
+  );
+  useInitialScroll(scrollRef, scrollKey, computeScroll);
   const template = `56px repeat(${columns.length}, minmax(${minColumnWidth}px, 1fr))`;
 
   return (
@@ -245,6 +288,7 @@ function GridFrame({
           <div
             key={column.key}
             className="sticky top-0 z-[4] border-b border-l border-[var(--border)] bg-[var(--surface)] px-2 py-2"
+            data-grid-header
           >
             {column.header}
           </div>
@@ -267,6 +311,7 @@ function GridFrame({
             selectedId={selectedId}
             onSelect={onSelect}
             onBook={column.onBook}
+            dense={minColumnWidth < 150}
           />
         ))}
       </div>

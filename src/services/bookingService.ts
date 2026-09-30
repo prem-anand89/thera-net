@@ -96,39 +96,6 @@ export const bookingService = {
 
   // ---- Staff (Requests → Bookings, Workspace "Expected today") ----------
 
-  /** Returns the new `appointments.id`. `patientId` is optional and stays
-   *  undefined by default — deferring identity resolution to New Visit's
-  /** Manual/staff-entered booking, alongside the public patient-facing
-   *  link — goes straight to a confirmed appointment (no pending request
-   *  row) since staff already know the date/time/therapist when entering
-   *  one by hand. Returns the new `appointments.id`.
-   *  `patientId` is optional — pass it
-   *  when the caller already knows exactly which patient this is (e.g.
-   *  the Patients list's own "Book" action, starting from a clicked row,
-   *  not a typed name), so the appointment is linked from creation
-   *  instead of waiting for a visit. */
-  async createAppointmentStaff(
-    clinicId: UUID,
-    name: string,
-    phone: string,
-    therapistId: UUID | null,
-    scheduledAt: string,
-    patientId?: UUID | null
-  ): Promise<UUID> {
-    const supabase = supabaseOrThrow();
-    const { data, error } = await supabase.rpc('create_appointment_staff', {
-      p_clinic_id: clinicId,
-      p_name: name,
-      p_phone: phone,
-      p_therapist_id: therapistId,
-      p_scheduled_at: scheduledAt,
-      p_patient_id: patientId ?? null,
-    });
-    if (error) throw new Error(`Could not create booking: ${error.message}`);
-    syncEngine.schedule(0);
-    return data as UUID;
-  },
-
   async confirmBookingSlot(params: {
     clinicId: UUID;
     patientId: UUID | null;
