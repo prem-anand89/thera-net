@@ -94,7 +94,10 @@ export function SyncBadge() {
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-30 mt-2 w-80 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
+          {/* Phones: pinned under the header across the screen width (an
+              absolute w-80 box hanging off a right-edge button ran off the
+              left side). sm: and up: a normal dropdown. */}
+          <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.75rem)] z-30 max-h-[70vh] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80">
             <div className="flex items-center justify-between">
               <span className="font-medium text-[var(--ink)]">Sync</span>
               <button

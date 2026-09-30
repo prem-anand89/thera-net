@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { Appointment } from '@/domain/types';
+import type { Appointment, AppointmentRequest } from '@/domain/types';
 import { minutesLabel, minutesOfDay } from '@/domain/schedule';
 import { AgendaList } from './AgendaList';
+import { RequestsInbox } from './RequestsInbox';
 
 const UPCOMING_LIMIT = 5;
+const REQUESTS_LIMIT = 3;
 
 /**
  * Workspace → Today → Appointments. Kept short so it never pushes the rest
- * of the page down: visits in progress first (arrived, service not added
- * yet), then the next few upcoming, and finished ones folded away.
+ * of the page down: public booking requests waiting for a confirm (admin /
+ * front desk only), visits in progress (arrived, service not added yet),
+ * then the next few upcoming, and finished ones folded away.
  */
 export function TodayAppointments({
   appointments,
@@ -20,6 +23,11 @@ export function TodayAppointments({
   therapistNameFor,
   showTherapist,
   onSelect,
+  requests = [],
+  therapistNameForId,
+  onConfirmRequest,
+  onDeclineRequest,
+  onSeeAllRequests,
 }: {
   appointments: Appointment[];
   slotMinutes: number;
@@ -29,6 +37,12 @@ export function TodayAppointments({
   therapistNameFor: (appointment: Appointment) => string;
   showTherapist: boolean;
   onSelect: (appointment: Appointment) => void;
+  /** Pending public booking requests, oldest first. Omit for therapists. */
+  requests?: AppointmentRequest[];
+  therapistNameForId?: (id: string | null) => string | null;
+  onConfirmRequest?: (request: AppointmentRequest) => void;
+  onDeclineRequest?: (request: AppointmentRequest) => void;
+  onSeeAllRequests?: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   const inProgress = appointments.filter((a) => a.status === 'arrived' && !a.visitId);
@@ -36,12 +50,36 @@ export function TodayAppointments({
   const done = appointments.filter((a) => a.visitId || a.status === 'no_show');
   const shownUpcoming = showAll ? upcoming : upcoming.slice(0, UPCOMING_LIMIT);
 
+  const requestsSection =
+    requests.length > 0 && onConfirmRequest && onDeclineRequest ? (
+      <section aria-label="Requests to confirm">
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--amber)]">
+          Requests to confirm ({requests.length})
+        </h3>
+        <RequestsInbox
+          variant="list"
+          requests={requests}
+          limit={REQUESTS_LIMIT}
+          therapistNameFor={therapistNameForId ?? (() => null)}
+          onConfirm={onConfirmRequest}
+          onDecline={onDeclineRequest}
+          onSeeAll={onSeeAllRequests ?? (() => undefined)}
+        />
+      </section>
+    ) : null;
+
   if (appointments.length === 0) {
-    return <p className="text-sm text-[var(--muted)]">No appointments today.</p>;
+    return (
+      <div className="space-y-4">
+        {requestsSection}
+        <p className="text-sm text-[var(--muted)]">No appointments today.</p>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
+      {requestsSection}
       {inProgress.length > 0 && (
         <section aria-label="In progress">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--amber)]">
@@ -77,7 +115,7 @@ export function TodayAppointments({
 
       {upcoming.length > 0 && (
         <section aria-label="Upcoming">
-          {inProgress.length > 0 && <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Upcoming</h3>}
+          {(inProgress.length > 0 || requestsSection) && <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Upcoming</h3>}
           <AgendaList
             appointments={shownUpcoming}
             slotMinutes={slotMinutes}

@@ -1,15 +1,12 @@
 import { useState } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
-import { db } from '@/lib/db';
-import { syncEngine } from '@/sync/engine';
+import { Link } from '@tanstack/react-router';
 import { signOutSafely } from './signOut';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
-import { AddClinicDialog } from '@/components/AddClinicDialog';
 import { HelpFeedbackDialog } from '@/components/HelpFeedbackDialog';
 import { IconSettings } from '@/components/NavIcons';
 import { useFirstWeekChecklistSummary } from '@/features/settings/FirstWeekChecklist';
-import type { Clinic } from '@/domain/types';
+import { BrandMark } from '@/components/BrandMark';
 
 /** First letters of up to two name words, skipping a leading honorific —
  *  "Dr. Prem Anand" -> "PA", "Ritu" -> "R". Purely decorative (the avatar
@@ -204,11 +201,10 @@ function NameEditor({
  * `NameEditor`), a nudge toward the First Week setup checklist for an admin
  * who hasn't finished/dismissed it (`useFirstWeekChecklistSummary` —
  * SettingsPage's own card is the full version of this, this is a one-line
- * "N of M, continue" pointer to it), a clinic switcher (only rendered once
- * this account actually has 2+ clinics — most accounts never see it), an
- * admin-gated "Add another clinic" action, Change/Set password (label
- * depends on whether the account has an email/password identity yet), and
- * Sign out.
+ * "N of M, continue" pointer to it), Settings, Change/Set password (label
+ * depends on whether the account has an email/password identity yet), Help,
+ * Sign out, and a Thera.Net + version footer. Switching or adding clinics
+ * lives in the header's clinic pill (`ClinicSwitcher`), not here.
  */
 export function AccountMenu({
   displayName,
@@ -216,7 +212,6 @@ export function AccountMenu({
   role,
   setDisplayName,
   clinicId,
-  clinics,
   hasPasswordIdentity,
 }: {
   displayName: string | null;
@@ -224,7 +219,6 @@ export function AccountMenu({
   role: ClinicRole;
   setDisplayName: (name: string) => Promise<void>;
   clinicId: string;
-  clinics: Clinic[];
   /** False for a Google-only account with no email/password identity yet —
    *  relabels the menu item and dialog from "Change" to "Set" so it reads
    *  as the deliberate opt-in it is, not a correction of something broken. */
@@ -232,22 +226,11 @@ export function AccountMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
-  const [addingClinic, setAddingClinic] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const navigate = useNavigate();
   const name = displayName ?? fallbackName;
   const roleLabel = role !== 'unknown' ? CLINIC_ROLE_LABELS[role] : '';
   const setup = useFirstWeekChecklistSummary(clinicId);
   const showSetupNudge = role === 'admin' && setup?.visible === true;
-  const sortedClinics = [...clinics].sort((a, b) => a.name.localeCompare(b.name));
-  const currentClinic = clinics.find((c) => c.id === clinicId);
-
-  function switchClinic(id: string) {
-    setOpen(false);
-    if (id === clinicId) return;
-    void db.meta.put({ key: 'activeClinicId', value: id });
-    void navigate({ to: '/workspace' });
-  }
 
   function closeMenu() {
     setOpen(false);
@@ -317,65 +300,6 @@ export function AccountMenu({
 
             <div className="border-t border-[var(--border)] px-2 py-2">
               <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                {sortedClinics.length > 1 ? 'Switch clinic' : 'Clinic'}
-              </p>
-              {sortedClinics.length > 1 ? (
-                <div className="space-y-0.5">
-                  {sortedClinics.map((c) => {
-                    const active = c.id === clinicId;
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
-                          active
-                            ? 'bg-[var(--teal-light)] font-medium text-[var(--teal-strong)]'
-                            : 'text-[var(--ink)] hover:bg-[var(--paper)]'
-                        }`}
-                        onClick={() => switchClinic(c.id)}
-                      >
-                        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                          {active ? (
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-                              <path
-                                d="M3.5 8.5l3 3 6-7"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          ) : null}
-                        </span>
-                        <span className="truncate">{c.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="mx-2 rounded-lg bg-[var(--teal-light)] px-2.5 py-2 text-sm font-medium text-[var(--teal-strong)]">
-                  {currentClinic?.name ?? 'Current clinic'}
-                </div>
-              )}
-              {role === 'admin' && (
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
-                  onClick={() => {
-                    closeMenu();
-                    setAddingClinic(true);
-                  }}
-                >
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center text-[var(--teal)]">
-                    +
-                  </span>
-                  Add another clinic
-                </button>
-              )}
-            </div>
-
-            <div className="border-t border-[var(--border)] px-2 py-2">
-              <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
                 Account
               </p>
               {role === 'admin' && (
@@ -420,6 +344,10 @@ export function AccountMenu({
                 Sign out
               </button>
             </div>
+            <div className="flex items-center justify-center gap-1.5 border-t border-[var(--border)] px-3 py-2 text-[11px] text-[var(--muted)]">
+              <BrandMark size={14} decorative />
+              <span>Thera.Net · v{__APP_VERSION__}</span>
+            </div>
           </div>
         </>
       )}
@@ -428,16 +356,6 @@ export function AccountMenu({
         <ChangePasswordDialog
           isFirstPassword={!hasPasswordIdentity}
           onClose={() => setChangingPassword(false)}
-        />
-      )}
-      {addingClinic && (
-        <AddClinicDialog
-          onClose={() => setAddingClinic(false)}
-          onCreated={() => {
-            setAddingClinic(false);
-            void syncEngine.schedule(0);
-            void navigate({ to: '/workspace' });
-          }}
         />
       )}
       <HelpFeedbackDialog

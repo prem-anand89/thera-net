@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import type { Appointment } from '@/domain/types';
+import type { Appointment, AppointmentRequest } from '@/domain/types';
 import { localDateTime } from '@/domain/schedule';
 
 vi.mock('@tanstack/react-router', () => ({
@@ -66,6 +66,44 @@ describe('TodayAppointments', () => {
 
   it('handles an empty day', () => {
     setup([]);
+    expect(screen.getByText('No appointments today.')).toBeInTheDocument();
+  });
+
+  it('lists booking requests first, with Confirm / Decline and See all past three', () => {
+    const request = (i: number): AppointmentRequest => ({
+      id: `r${i}`, clinicId: 'c', name: `Req ${i}`, phone: '98', email: null, preferredTherapistId: 't1', notes: null,
+      preferredDate: null, preferredTimeText: 'evening', status: 'pending', appointmentId: null,
+      createdAt: new Date(Date.now() - i * 3_600_000).toISOString(), updatedAt: '',
+    });
+    const onConfirm = vi.fn();
+    const onDecline = vi.fn();
+    const onSeeAll = vi.fn();
+    render(
+      <TodayAppointments
+        appointments={[]}
+        slotMinutes={30}
+        nowMinutes={600}
+        nextUpId={null}
+        colorFor={() => '#000'}
+        therapistNameFor={() => 'Dr A'}
+        showTherapist
+        onSelect={vi.fn()}
+        requests={[1, 2, 3, 4].map(request)}
+        therapistNameForId={() => 'Dr A'}
+        onConfirmRequest={onConfirm}
+        onDeclineRequest={onDecline}
+        onSeeAllRequests={onSeeAll}
+      />
+    );
+    const section = screen.getByRole('region', { name: 'Requests to confirm' });
+    expect(within(section).getByText('Requests to confirm (4)')).toBeInTheDocument();
+    expect(within(section).getAllByRole('button', { name: 'Confirm' })).toHaveLength(3);
+    fireEvent.click(within(section).getAllByRole('button', { name: 'Confirm' })[0]);
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
+    fireEvent.click(within(section).getAllByRole('button', { name: 'Decline' })[1]);
+    expect(onDecline).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }));
+    fireEvent.click(within(section).getByRole('button', { name: 'See all 4 requests' }));
+    expect(onSeeAll).toHaveBeenCalled();
     expect(screen.getByText('No appointments today.')).toBeInTheDocument();
   });
 });

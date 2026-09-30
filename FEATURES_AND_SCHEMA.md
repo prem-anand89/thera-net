@@ -32,8 +32,8 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 #### Today-First Workspace
 - **Default landing page** showing:
   - Today's visits with payment state at a glance (Paid / Collect ₹X / Package / No charge) — boxed cards on phone, a table on tablet/desktop
-  - Packages panel (bottom of page) — Open / Stale / All filter, plus a "Mine only" checkbox for anyone with a linked therapist record (admin included)
-- **Stat strip** — four tiles with a detail line each: linked therapists see collected today (with visit count), my net/visits this month, and open packages (stale count when any); clinic-wide roles see collected today, visits today, new patients, and packages started this month
+  - Packages panel (bottom of page) — **Open** (default: every open package, the ones needing attention sorted first and tagged Stale / Renew soon) and **Needs attention (n)** (stale or renew soon), plus a "Mine only" checkbox for anyone with a linked therapist record (admin included). "Stale" and "All" were dropped: Stale is a subset of Needs attention, and All only differed from Open by the stale rows
+- **Stat strip** (`StatStrip` in `ui.tsx`, inside the Workspace header card) — one strip with hairline dividers, grouped under "Today" (Collected, Visits) and the month name (linked therapists: My net, My visits, New packages; clinic-wide roles: New patients, New packages, Visits). Collected opens the Ledger daybook (billing roles), Visits switches the Today card to its Visits tab. `StatTile` remains for Reports/print
 - **Quick actions** — take payment / issue invoice / split revenue / delete directly from each visit row's kebab menu; "Log visit" from a Packages row resumes the right package
 
 #### Ledger & History
@@ -986,11 +986,12 @@ still falls through to the existing share sheet, unchanged.
     - **`BookSlotSheet`**: one sheet for "+ Book", grid/agenda/free-time clicks, request confirmation, and **reschedule** (`rescheduleAppointment` prop: patient and therapist fixed, the moved appointment is ignored when checking occupied time, submits `reschedule_appointment`). A length picker (15/30/45/60/90 plus the clinic slot) drives the occupied check; times that already passed, overlap the therapist's bookings for the chosen length, or would run past closing are disabled. Therapist defaults to the logged-in therapist or the only therapist, and is locked for therapist logins. Closed weekdays and holidays show a warning but can still be booked. A patient with no phone must have one entered. State resets on every open; the reschedule snapshot is taken at open time so a sync mid-edit can't reset the form. `onBooked` returns `{ kind: 'booked' | 'rescheduled', appointmentId, scheduledAt, durationMinutes, … }`; the toast offers WhatsApp and auto-dismisses after 15s.
     - **Clinic closures**: weekly closed days stay in Settings (`clinics.closed_weekdays`); one-off dates and ranges (holidays) are set from the calendar (`ClosedDaysSheet`, admin / front desk) and shown in the rail, strip, grid, booking sheet and the public `/book/$slug` form. Existing appointments on a newly closed day are kept. `isClosedDay` (holiday wins over weekday) and `groupClosedRanges` live in `src/domain/schedule.ts`.
     - **Public form layout**: time first, then details — header (clinic initial/logo, visit length, hours), step 1 "Choose a time" (clinician chips "Anyone available" / each therapist, a scrollable 14-day strip with uniform day cards and "Closed" days, "More dates" inline month, time grid), step 2 "Your details" (name, phone with compact country picker, optional email and reason), and a summary + "Request appointment" bar pinned to the bottom on phones (safe-area padded).
-    - **Workspace header**: date + greeting (therapist's first name when linked), "+ Note" (clinical docs on + can view notes), "+ Book" (opens `BookSlotSheet`; therapist-locked for therapists) and "+ New visit", a "N appointments today · Next: …" card opening the details panel, and compact chips: visits to complete, the therapist's own notes to finish (opens the oldest draft), pending booking requests, new feedback.
-    - **Workspace Today card**: one card with tabs "Appointments (n) | Visits (n)" (tab remembered per device) instead of separate "Expected today" and "Today's visits" cards. Appointments (`TodayAppointments`): in-progress visits first (arrived, no visit yet — today's plus any left open in the last 7 days) with "Complete visit", then the next 5 upcoming with "Show all", finished ones (visit logged / no-show) folded under "Done (n)". Stat tile "My packages this month" (packages started this month, scoped like the other "My" tiles) replaced "My open packages". The Packages panel opens on "Needs attention" (stale or renew soon).
-    - **Visit in progress (notes before the service)**: a "draft visit" is an **arrived appointment with no `visit_id`**, never a row in `visits` (whose service/price/split snapshots feed invoices, payouts and reports). `StartVisitSheet` (Workspace "+ Note", appointment panel "Start note — service later", New Visit's "Start a note first") finds or creates the patient, then either **Start note** — for a booked appointment it marks it arrived; for a walk-in it calls `start_walk_in` (arrived appointment now, `source = 'walk_in'`, no overlap check, accepts a not-yet-synced patient by name/phone) — and opens the Core Assessment with `?appointmentId=`, or **Log visit now** (normal New Visit). The note stores `appointment_id`; when New Visit later saves with that `appointmentId`, `consultationNoteService.linkAppointmentNotesToVisit` sets the notes' `visit_id` (and marks the visit documented if a note is completed). "Mark arrived" stays optional — logging a visit marks arrival anyway.
+    - **Workspace header**: one card — date + greeting (therapist's first name when linked), "+ Book" (opens `BookSlotSheet`; therapist-locked for therapists) and "+ New visit", the stat strip (see Today-First Workspace), then compact pill chips: visits to complete and pending booking requests (amber; both switch the Today card to Appointments), the therapist's own notes to finish (opens the oldest draft), new feedback. No "+ Note" (notes start from an appointment's "Start note" or New Visit) and no next-appointment card (the Today card already lists them).
+    - **Workspace Today card**: one card with tabs "Appointments (n) | Visits (n)" (tab remembered per device) instead of separate "Expected today" and "Today's visits" cards. Appointments (`TodayAppointments`): in-progress visits first (arrived, no visit yet — today's plus any left open in the last 7 days) with "Complete visit", then the next 5 upcoming with "Show all", finished ones (visit logged / no-show) folded under "Done (n)". For admin / front desk, **Requests to confirm (n)** comes first: the oldest three pending public booking requests (`RequestsInbox variant="list"`, "See all" → `/schedule?view=requests`) with Confirm (Workspace's `BookSlotSheet` on the requested date if not past, with the preferred therapist, name/phone, notes and time wish — same as Schedule) and Decline (`ConfirmDialog` → `declineAppointmentRequest`); the Appointments tab count includes them.
+    - **Visit in progress (notes before the service)**: a "draft visit" is an **arrived appointment with no `visit_id`**, never a row in `visits` (whose service/price/split snapshots feed invoices, payouts and reports). `StartVisitSheet` (appointment panel "Start note — service later", New Visit's "Start a note first") finds or creates the patient, then either **Start note** — for a booked appointment it marks it arrived; for a walk-in it calls `start_walk_in` (arrived appointment now, `source = 'walk_in'`, no overlap check, accepts a not-yet-synced patient by name/phone) — and opens the Core Assessment with `?appointmentId=`, or **Log visit now** (normal New Visit). The note stores `appointment_id`; when New Visit later saves with that `appointmentId`, `consultationNoteService.linkAppointmentNotesToVisit` sets the notes' `visit_id` (and marks the visit documented if a note is completed). "Mark arrived" stays optional — logging a visit marks arrival anyway.
     - **Patient form**: Name, Phone, Age, Sex, Primary condition, Referring source, then a collapsed "More details (optional)" with Email, Alternate phone and Patient ID (blank = auto-generated; fill only to keep an old record's number) — in New Visit's create-patient step and the Edit patient modal. Search matches the alternate phone too.
-    - **App header**: `ClinicSwitcher` — logo + clinic name on every width (switcher ▾ with 2+ clinics; the account menu keeps its list and "Add another clinic"), nav labels from `tab:`, today's date from `tab:`, and `SyncBadge` as a quiet green dot when synced (label in the tooltip / screen-reader text), expanding with text only when offline / syncing / pending / failed.
+    - **App header**: the Thera.Net mark on the left (`BrandMark`, wordmark from `desktop:`, links to Workspace) — the product; nav in the middle (labels from `tab:`); on the right the **clinic pill** (`ClinicSwitcher`: the clinic's uploaded logo or its initial + name; name hidden between `tab:` and `desktop:`, where five nav labels leave no room — tooltip and menu carry it), then `SyncBadge` (a quiet green dot when synced, expanding with text when offline / syncing / pending / failed; its popover is pinned full-width under the header on phones) and the account avatar. The clinic pill is the only clinic switcher, and for admins it also has "+ Add another clinic" (a non-admin with one clinic gets a static label). No date in the header (Workspace shows it).
+    - **Thera.Net branding**: `src/components/BrandMark.tsx` — `BrandMark` (header, account menu footer "Thera.Net · v{version}" from `__APP_VERSION__`, defined in `vite.config.ts` from package.json), `AppLoading` (full-screen loading / "Preparing…" in `Shell`), `PoweredBy` ("Powered by Thera.Net" under the public booking and feedback forms). Sign-in/reset use `AuthBrandHeader`, which renders `BrandMark`. The clinic's own logo appears only in the clinic pill, on the public forms' header and on printed documents.
     - **Public form** (`BookingFormPage.tsx`): dates more than 90 days out aren't offered (availability is only fetched that far), and a failed availability fetch no longer blocks the whole form. A start time is hidden when it overlaps the preferred therapist's bookings for their full length; with no preference, only when every therapist is busy (`isPublicSlotTaken`). Past times today are hidden.
     - **History**: `HistorySurface` — search by name/phone, status and therapist filters (therapist filter hidden for therapist logins), 30-day paging; rows open the same details panel.
   - **Workspace "Expected today"** — a new section (not a replacement of
@@ -2371,8 +2372,10 @@ so an unscoped key would let dismissing/completing the checklist for one
 clinic silently do the same for every other clinic on the device.
 
 **Header layout budget** (`Shell.tsx`'s `<header>`) — the desktop header
-row has a fixed width to spend (`max-w-6xl`, ~1120px usable) and four
-things wanting it: brand, nav, sync badge, account trigger. With a text
+row has a fixed width to spend (`max-w-6xl`, ~1120px usable) and five
+things wanting it: the Thera.Net mark, nav, the clinic pill, sync badge,
+account trigger. (Current layout: mark left, nav, then clinic pill + sync +
+account on the right — see Schedule → App header.) With a text
 label on all of them at once it doesn't fit — six labelled nav items plus
 the clinic name alone overran it by ~160px, which showed up first as the
 account dropdown rendering off-screen at iPad-portrait widths (the row
@@ -2380,11 +2383,10 @@ overflowed, taking the `right-0`-anchored panel's anchor with it) and then,
 after a stopgap `overflow-x-auto`, as a squeezed horizontally-scrolling nav
 even on a full-width screen. Three rules keep it fitting, and a change to
 any element in this row has to keep them true:
-- **Only the brand name shrinks.** The nav and the sync/account cluster are
-  `shrink-0`; the clinic name truncates (`max-w-[11rem]`) and is hidden
-  outright below `desktop:`. It's the one genuinely redundant item in the
-  row — the account dropdown names the current clinic and switches between
-  them — so it yields first, and clicked targets never squeeze.
+- **Only the clinic name shrinks.** The nav and the sync/account cluster are
+  `shrink-0`; the clinic pill's name truncates, and between `tab:` and
+  `desktop:` it is hidden (the pill keeps the clinic logo + ▾, the name is
+  in its tooltip and menu), so clicked targets never squeeze.
 - **Nav labels are `desktop:`-only** (1000px+). Between `sm:` and there,
   the nav is icons carrying `aria-label` + `title` (the label span is
   `display:none`, which screen readers skip, so the accessible name has to
@@ -2411,15 +2413,15 @@ with the full card so both read the exact same derived state, and also
 returns `nextStep`: the first not-done step's own title and link, so the
 nudge's "Continue →" opens exactly where setup was left off — a Settings
 tab or `+ New visit` — instead of always bouncing to Settings' own default
-tab), a clinic switcher, **"Clinic settings"** and "Add another clinic"
-actions (the switcher and "Add another clinic" only relevant to
-multi-clinic accounts — see "Multi-clinic accounts" below), a "Change
+tab), Settings (admin), a "Change
 password" action (`ChangePasswordDialog`,
 `src/components/ChangePasswordDialog.tsx` — calls
 `supabase.auth.updateUser({ password })` directly, since the account menu
 only exists post-login, unlike `ResetPasswordPage.tsx`'s invite/recovery-
 link flow which first has to establish a session from the email link's
-token), and Sign out.
+token), Help & Feedback, Sign out, and a "Thera.Net · v{version}" footer.
+Clinic switching and "Add another clinic" moved to the header's clinic pill
+(`ClinicSwitcher`) — the menu no longer lists clinics.
 
 **Multi-clinic accounts** — one admin can create and switch between
 multiple clinics under a single login; the schema/RLS/billing/sync layers
@@ -2875,9 +2877,10 @@ its own narrow in-place edit path instead.
   brand, five nav items, the sync badge, and the account trigger inside
   `max-w-6xl`, which doesn't fit with full text everywhere at once. These
   rules keep it fitting, all the way down to a 744px iPad-portrait width:
-  1. Only the brand/clinic name shrinks (truncates, then hides below
-     `desktop:`) — nav and the sync/account cluster are `shrink-0`, so a
-     tight row never squeezes the things you click.
+  1. Only the clinic pill's name shrinks (truncates; hidden between
+     `tab:` and `desktop:`) — the Thera.Net mark, nav and the
+     sync/account cluster are `shrink-0`, so a tight row never squeezes
+     the things you click.
   2. Nav item labels show from `tab:` up; below that they're icon-only
      with `aria-label`/`title` carrying the accessible name (a
      `hidden`/`display:none` span is skipped by screen readers).

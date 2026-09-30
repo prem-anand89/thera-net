@@ -5,6 +5,7 @@ import { bookingService } from '@/services';
 import type { UUID, WorkingHours } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
 import { addDays, generateScheduleSlots, isPublicSlotTaken, toLocalDateStr } from '@/domain/schedule';
+import { PoweredBy } from '@/components/BrandMark';
 
 type AvailabilityData = {
   closedWeekdays: number[];
@@ -627,6 +628,7 @@ export function BookingFormPage() {
             <p className="mt-2 text-center text-xs text-[var(--muted)]">{clinicName} will confirm by phone or WhatsApp.</p>
           </div>
         </form>
+        <PoweredBy />
       </main>
     </div>
   );
@@ -664,8 +666,11 @@ function SectionTitle({ id, step, title, hint }: { id: string; step: number; tit
 
 function Centered({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-[80vh] items-center justify-center px-6 text-center">
-      {children}
-    </div>
+    <>
+      <div className="flex min-h-[80vh] items-center justify-center px-6 text-center">
+        {children}
+      </div>
+      <PoweredBy />
+    </>
   );
 }

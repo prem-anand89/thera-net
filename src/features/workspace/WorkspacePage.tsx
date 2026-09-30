@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, dashboardService, reportService, feedbackService } from '@/services';
+import { repos, dashboardService, reportService, feedbackService, bookingService } from '@/services';
 import { db } from '@/lib/db';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
@@ -16,9 +16,10 @@ import {
   type FeedbackRequest,
   type FeedbackResponse,
   type Appointment,
+  type AppointmentRequest,
   type Visit,
 } from '@/domain/types';
-import { appointmentStartsOnDate, minutesLabel, minutesOfDay, patientAttendance, toLocalDateStr } from '@/domain/schedule';
+import { appointmentStartsOnDate, minutesOfDay, patientAttendance, toLocalDateStr } from '@/domain/schedule';
 import { TodayAppointments } from '@/components/schedule/TodayAppointments';
 import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
@@ -33,7 +34,8 @@ import {
   btnPrimary,
   btnSecondary,
   SectionCard,
-  StatTile,
+  StatStrip,
+  ConfirmDialog,
   Pill,
   PackageThread,
   th,
@@ -189,6 +191,11 @@ function todayRowToCardData(
   };
 }
 
+const chip =
+  'inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 text-sm text-[var(--ink)] hover:shadow-sm';
+const chipAmber = 'border-[var(--amber)]/30 bg-[var(--amber-light)]';
+const chipNeutral = 'border-[var(--border)] bg-[var(--paper)]';
+
 /** Single status pill for an open package — `stale` (hasn't been visited in
  *  a while) takes priority over `nearingCompletion` (still active, just
  *  running low on sessions) since a package can't need re-engaging and be
@@ -309,7 +316,6 @@ export function WorkspacePage() {
   const [openAppointmentId, setOpenAppointmentId] = useState<string | null>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [startVisit, setStartVisit] = useState<{ appointment?: Appointment } | null>(null);
-  const nextUp = nextUpId ? expectedToday.find((a) => a.id === nextUpId) ?? null : null;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const myTherapistName = scope.myTherapistId ? therapistRoster.get(scope.myTherapistId)?.name : undefined;
@@ -326,13 +332,25 @@ export function WorkspacePage() {
   const unsyncedVisitCount =
     useLiveQuery(() => db.outbox.filter((e) => e.table === 'visits').count(), []) ?? 0;
   const syncCaption = syncFreshnessCaption(unsyncedVisitCount, 'visits', syncSnapshot.lastSyncAt);
-  const pendingRequestCount = useLiveQuery(
+  // Public booking requests waiting for a confirm — shown first under
+  // Today → Appointments for admin / front desk, oldest first.
+  const appointmentRequests = useLiveQuery(
     () =>
       canManageBookings && clinic.enablePatientComms
-        ? dashboardService.pendingAppointmentRequestCount(clinic.id)
+        ? repos.appointmentRequests.listByClinic(clinic.id)
         : undefined,
     [clinic.id, clinic.enablePatientComms, canManageBookings]
   );
+  const pendingRequests = useMemo(
+    () =>
+      (appointmentRequests ?? [])
+        .filter((r) => r.status === 'pending')
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    [appointmentRequests]
+  );
+  const pendingRequestCount = pendingRequests.length;
+  const [confirmingRequest, setConfirmingRequest] = useState<AppointmentRequest | null>(null);
+  const [decliningRequest, setDecliningRequest] = useState<AppointmentRequest | null>(null);
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
@@ -340,8 +358,9 @@ export function WorkspacePage() {
   const [, setVisitEditError] = useState<string | null>(null);
   const [newPatientId, setNewPatientId] = useState<string | null>(null);
   const [splitting, setSplitting] = useState<Visit | null>(null);
-  // Defaults to the packages that need a call: gone quiet, or nearly used up.
-  const [pkgStatusFilter, setPkgStatusFilter] = useState<'attention' | 'open' | 'stale' | 'all'>('attention');
+  // "Open" = every open package, the ones needing a call (gone quiet, or
+  // nearly used up) sorted first; "Needs attention" narrows to just those.
+  const [pkgStatusFilter, setPkgStatusFilter] = useState<'open' | 'attention'>('open');
   // Defaults on for anyone with a linked therapist record — admin included,
   // since in most solo/small clinics the admin *is* the primary therapist.
   // Role plays no part here: only whether this login has a `therapists` row
@@ -370,26 +389,30 @@ export function WorkspacePage() {
     () => new Set((openPackages ?? []).map((p) => p.packageGroupId)),
     [openPackages]
   );
+  const needsAttention = (p: OpenPackageRow) => p.stale || p.nearingCompletion;
+  const scopedPackages = useMemo(
+    () =>
+      pkgMineOnly && scope.myTherapistId
+        ? (openPackages ?? []).filter((p) => p.startedByTherapistId === scope.myTherapistId)
+        : openPackages ?? [],
+    [openPackages, pkgMineOnly, scope.myTherapistId]
+  );
+  const attentionCount = scopedPackages.filter(needsAttention).length;
   const filteredPackages = useMemo(() => {
-    let rows = openPackages ?? [];
-    if (pkgMineOnly && scope.myTherapistId)
-      rows = rows.filter((p) => p.startedByTherapistId === scope.myTherapistId);
-    if (pkgStatusFilter === 'attention') rows = rows.filter((p) => p.stale || p.nearingCompletion);
-    else if (pkgStatusFilter !== 'all') rows = rows.filter((p) => p.stale === (pkgStatusFilter === 'stale'));
-    return rows;
-  }, [openPackages, pkgMineOnly, scope.myTherapistId, pkgStatusFilter]);
+    if (pkgStatusFilter === 'attention') return scopedPackages.filter(needsAttention);
+    // Stable sort: attention rows first, otherwise the service's own order.
+    return [...scopedPackages].sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)));
+  }, [scopedPackages, pkgStatusFilter]);
 
   const visitsTodayCount = today?.visits.length ?? 0;
   const now = new Date();
   const calendarMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
-  const myMonthReport = useLiveQuery(
-    () =>
-      scope.myTherapistId
-        ? reportService.monthly(clinic.id, calendarMonth)
-        : undefined,
-    [clinic.id, calendarMonth.year, calendarMonth.month, scope.myTherapistId]
+  // "This month" numbers: a therapist's own row, or the clinic total.
+  const monthReport = useLiveQuery(
+    () => reportService.monthly(clinic.id, calendarMonth),
+    [clinic.id, calendarMonth.year, calendarMonth.month]
   );
-  const myMonthRow = myMonthReport?.rows.find((r) => r.therapistId === scope.myTherapistId);
+  const myMonthRow = monthReport?.rows.find((r) => r.therapistId === scope.myTherapistId);
 
   const editPatient = useLiveQuery(
     () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
@@ -497,6 +520,35 @@ export function WorkspacePage() {
 
   const therapistNameById = new Map((therapists ?? []).map((t) => [t.id, t.name]));
 
+  const monthCaption = now.toLocaleDateString('en-IN', { month: 'long' });
+  const statGroups = [
+    {
+      caption: 'Today',
+      cells: [
+        {
+          label: 'Collected',
+          value: formatINR(today?.collectedPaise ?? 0),
+          onClick: canBill ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } }) : undefined,
+        },
+        { label: 'Visits', value: visitsTodayCount, onClick: () => setTodayTab('visits') },
+      ],
+    },
+    {
+      caption: monthCaption,
+      cells: scope.myTherapistId
+        ? [
+            { label: 'My net', value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—' },
+            { label: 'My visits', value: monthReport ? myMonthRow?.visitCount ?? 0 : '—' },
+            { label: 'New packages', value: monthlyNew?.newPackages ?? '—' },
+          ]
+        : [
+            { label: 'New patients', value: monthlyNew?.newPatients ?? '—' },
+            { label: 'New packages', value: monthlyNew?.newPackages ?? '—' },
+            { label: 'Visits', value: monthReport ? monthReport.total.visitCount : '—' },
+          ],
+    },
+  ];
+
   return (
     <div className="space-y-5">
       <InstallAppBanner />
@@ -535,12 +587,43 @@ export function WorkspacePage() {
         prefilledTherapistId={!canManageBookings ? scope.myTherapistId : undefined}
       />
       <BookSlotSheet
+        isOpen={confirmingRequest !== null}
+        onClose={() => setConfirmingRequest(null)}
+        appointments={workspaceAppointments ?? []}
+        prefilledDate={
+          confirmingRequest?.preferredDate && confirmingRequest.preferredDate >= toLocalDateStr(new Date())
+            ? confirmingRequest.preferredDate
+            : undefined
+        }
+        prefilledTherapistId={confirmingRequest?.preferredTherapistId ?? undefined}
+        prefilledPatientName={confirmingRequest?.name}
+        prefilledPatientPhone={confirmingRequest?.phone}
+        requestId={confirmingRequest?.id}
+        requestNotes={confirmingRequest?.notes ?? undefined}
+        requestPreferredTimeText={confirmingRequest?.preferredTimeText ?? undefined}
+      />
+      <ConfirmDialog
+        open={decliningRequest !== null}
+        title="Decline this request?"
+        message={decliningRequest ? `${decliningRequest.name}'s request will be removed from the list. Let them know separately if needed.` : ''}
+        confirmLabel="Decline"
+        destructive
+        onCancel={() => setDecliningRequest(null)}
+        onConfirm={() => {
+          const request = decliningRequest;
+          setDecliningRequest(null);
+          if (request) {
+            bookingService.declineAppointmentRequest(request.id).catch((error: unknown) => alert(toFriendlyMessage(error)));
+          }
+        }}
+      />
+      <BookSlotSheet
         isOpen={reschedulingAppointment !== null}
         onClose={() => setReschedulingAppointment(null)}
         appointments={workspaceAppointments ?? []}
         rescheduleAppointment={reschedulingAppointment ?? undefined}
       />
-      <header className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:p-5">
+      <header className="space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm text-[var(--muted)]">
@@ -553,11 +636,6 @@ export function WorkspacePage() {
             {canEditSettings && <FirstWeekSetupLink clinicId={clinic.id} />}
           </div>
           <div className="flex shrink-0 gap-2">
-            {clinic.clinicalDocsEnabled && canViewClinicalNotes && (
-              <button type="button" className={`${btnSecondary} inline-flex items-center`} onClick={() => setStartVisit({})}>
-                + Note
-              </button>
-            )}
             {clinic.enablePatientComms && (canManageBookings || scope.myTherapistId) && (
               <button type="button" className={`${btnSecondary} hidden sm:inline-flex sm:items-center`} onClick={() => setBookingOpen(true)}>
                 + Book
@@ -569,42 +647,23 @@ export function WorkspacePage() {
           </div>
         </div>
 
-        {(nextUp || expectedToday.length > 0 || newFeedbackCount > 0 || (pendingRequestCount ?? 0) > 0 || toCompleteCount > 0 || myDraftNotes.length > 0) && (
-          <div className="mt-4 flex flex-col gap-2 tab:flex-row tab:items-stretch">
-            {clinic.enablePatientComms && (
-              <button
-                type="button"
-                onClick={() => (nextUp ? setOpenAppointmentId(nextUp.id) : undefined)}
-                disabled={!nextUp}
-                className="flex min-h-14 flex-1 items-center gap-3 rounded-xl bg-[var(--teal-light)] px-3.5 py-2.5 text-left disabled:cursor-default"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] text-sm font-semibold text-[var(--teal)]" aria-hidden>
-                  {expectedToday.length}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-xs text-[var(--muted)]">
-                    {expectedToday.length === 1 ? 'appointment today' : 'appointments today'}
-                  </span>
-                  <span className="block truncate text-sm font-medium text-[var(--ink)]">
-                    {nextUp
-                      ? `Next: ${nextUp.patientName} · ${minutesLabel(minutesOfDay(nextUp.scheduledAt))}${canManageBookings ? ` · ${appointmentTherapistName(nextUp)}` : ''}`
-                      : expectedToday.length
-                        ? 'No more appointments today'
-                        : 'Nothing booked today'}
-                  </span>
-                </span>
+        <div>
+          <StatStrip groups={statGroups} />
+          {syncCaption && <p className="mt-1.5 text-xs text-[var(--slate)]">{syncCaption}</p>}
+        </div>
+
+        {(newFeedbackCount > 0 || pendingRequestCount > 0 || toCompleteCount > 0 || myDraftNotes.length > 0) && (
+          <div className="flex flex-wrap gap-2" aria-label="Needs you">
+            {toCompleteCount > 0 && (
+              <button type="button" onClick={() => setTodayTab('appointments')} className={`${chip} ${chipAmber}`}>
+                <strong>{toCompleteCount}</strong> visit{toCompleteCount === 1 ? '' : 's'} to complete
+                <span aria-hidden className="text-[var(--teal)]">→</span>
               </button>
             )}
-            {toCompleteCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setTodayTab('appointments')}
-                className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--amber)]/30 bg-[var(--amber-light)] px-3.5 py-2.5 text-left text-sm text-[var(--ink)] tab:min-w-52"
-              >
-                <span>
-                  <strong>{toCompleteCount}</strong> visit{toCompleteCount === 1 ? '' : 's'} to complete
-                </span>
-                <span className="font-medium text-[var(--teal)]">Add service →</span>
+            {pendingRequestCount > 0 && (
+              <button type="button" onClick={() => setTodayTab('appointments')} className={`${chip} ${chipAmber}`}>
+                <strong>{pendingRequestCount}</strong> booking request{pendingRequestCount === 1 ? '' : 's'}
+                <span aria-hidden className="text-[var(--teal)]">→</span>
               </button>
             )}
             {myDraftNotes.length > 0 && (
@@ -612,36 +671,16 @@ export function WorkspacePage() {
                 to="/patients/$patientId/notes/$noteId"
                 params={{ patientId: myDraftNotes[0].patientId, noteId: myDraftNotes[0].id }}
                 search={{ from: '/workspace' }}
-                className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3.5 py-2.5 text-sm text-[var(--ink)] tab:min-w-52"
+                className={`${chip} ${chipNeutral}`}
               >
-                <span>
-                  <strong>{myDraftNotes.length}</strong> note{myDraftNotes.length === 1 ? '' : 's'} to finish
-                </span>
-                <span className="font-medium text-[var(--teal)]">Open →</span>
-              </Link>
-            )}
-            {(pendingRequestCount ?? 0) > 0 && (
-              <Link
-                to="/schedule"
-                search={{ tab: 'bookings', view: 'requests' }}
-                className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--amber)]/30 bg-[var(--amber-light)] px-3.5 py-2.5 text-sm text-[var(--ink)] tab:min-w-52"
-              >
-                <span>
-                  <strong>{pendingRequestCount}</strong> booking request{pendingRequestCount === 1 ? '' : 's'}
-                </span>
-                <span className="font-medium text-[var(--teal)]">Review →</span>
+                <strong>{myDraftNotes.length}</strong> note{myDraftNotes.length === 1 ? '' : 's'} to finish
+                <span aria-hidden className="text-[var(--teal)]">→</span>
               </Link>
             )}
             {newFeedbackCount > 0 && (
-              <Link
-                to="/schedule"
-                search={{ tab: 'feedback' }}
-                className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3.5 py-2.5 text-sm text-[var(--ink)] tab:min-w-52"
-              >
-                <span>
-                  <strong>{newFeedbackCount}</strong> new feedback
-                </span>
-                <span className="font-medium text-[var(--teal)]">See →</span>
+              <Link to="/schedule" search={{ tab: 'feedback' }} className={`${chip} ${chipNeutral}`}>
+                <strong>{newFeedbackCount}</strong> new feedback
+                <span aria-hidden className="text-[var(--teal)]">→</span>
               </Link>
             )}
           </div>
@@ -664,29 +703,6 @@ export function WorkspacePage() {
         <SplitChangeBanner clinicId={clinic.id} changedAt={clinic.lastSplitChangeAt} />
       )}
 
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
-        <StatTile label="Collected today" value={formatINR(today?.collectedPaise ?? 0)} />
-        {scope.myTherapistId ? (
-          <>
-            <StatTile
-              label="My net this month"
-              value={myMonthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—'}
-            />
-            <StatTile
-              label="My visits this month"
-              value={myMonthReport ? (myMonthRow?.visitCount ?? 0) : '—'}
-            />
-            <StatTile label="My packages this month" value={monthlyNew?.newPackages ?? '—'} />
-          </>
-        ) : (
-          <>
-            <StatTile label="Visits today" value={visitsTodayCount} />
-            <StatTile label="New patients this month" value={monthlyNew?.newPatients ?? 0} />
-            <StatTile label="Packages this month" value={monthlyNew?.newPackages ?? 0} />
-          </>
-        )}
-      </div>
-      {syncCaption && <p className="text-xs text-[var(--slate)]">{syncCaption}</p>}
 
       <SectionCard
         title="Today"
@@ -702,7 +718,7 @@ export function WorkspacePage() {
                   onClick={() => setTodayTab(tab)}
                   className={`min-h-9 rounded-md px-3 text-xs font-medium ${todayTab === tab ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}
                 >
-                  {tab === 'appointments' ? `Appointments (${todayAppointments.length})` : `Visits (${today?.visits.length ?? 0})`}
+                  {tab === 'appointments' ? `Appointments (${todayAppointments.length + pendingRequestCount})` : `Visits (${today?.visits.length ?? 0})`}
                 </button>
               ))}
             </div>
@@ -720,6 +736,11 @@ export function WorkspacePage() {
               therapistNameFor={appointmentTherapistName}
               showTherapist={canManageBookings}
               onSelect={(a) => setOpenAppointmentId(a.id)}
+              requests={pendingRequests}
+              therapistNameForId={(id) => (id ? therapistRoster.get(id)?.name ?? null : null)}
+              onConfirmRequest={setConfirmingRequest}
+              onDeclineRequest={setDecliningRequest}
+              onSeeAllRequests={() => void navigate({ to: '/schedule', search: { tab: 'bookings', view: 'requests' } })}
             />
             <Link to="/schedule" className="mt-3 inline-block text-sm font-medium text-[var(--teal)] hover:underline">
               Open schedule →
@@ -812,10 +833,8 @@ export function WorkspacePage() {
           <div className="flex items-center gap-1.5">
             {(
               [
-                { key: 'attention', label: 'Needs attention' },
                 { key: 'open', label: 'Open' },
-                { key: 'stale', label: 'Stale' },
-                { key: 'all', label: 'All' },
+                { key: 'attention', label: `Needs attention${attentionCount ? ` (${attentionCount})` : ''}` },
               ] as const
             ).map((opt) => (
               <button

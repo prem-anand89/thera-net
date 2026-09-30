@@ -3,6 +3,7 @@ import { useParams } from '@tanstack/react-router';
 import { getSupabase } from '@/lib/supabase';
 import { hasSupabaseConfig } from '@/lib/env';
 import { btnPrimary } from '@/components/ui';
+import { PoweredBy } from '@/components/BrandMark';
 
 /**
  * Public, unauthenticated patient feedback form — /f/$token. No login, no
@@ -149,12 +150,16 @@ export function FeedbackFormPage() {
           {busy ? 'Submitting…' : 'Submit feedback'}
         </button>
       </form>
+      <PoweredBy />
     </div>
   );
 }
 
 function Centered({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-[60vh] items-center justify-center px-6 text-center">{children}</div>
+    <>
+      <div className="flex min-h-[60vh] items-center justify-center px-6 text-center">{children}</div>
+      <PoweredBy />
+    </>
   );
 }

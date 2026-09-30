@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { BrandMark } from './BrandMark';
 import { paiseToRupees, rupeesToPaise, type Paise } from '@/domain/money';
 
 export const inputCls =
@@ -18,7 +19,7 @@ export const menuItemDestructive =
 export function AuthBrandHeader({ subtitle }: { subtitle: string }) {
   return (
     <div className="mb-6 flex flex-col items-center gap-2">
-      <img src="/apple-touch-icon.png" alt="" className="h-12 w-12 rounded-[12px]" />
+      <BrandMark size={48} decorative />
       <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Thera.Net</h1>
       <p className="text-sm text-[var(--muted)]">{subtitle}</p>
     </div>
@@ -105,6 +106,58 @@ export function RupeeInput({
  *  — sized to sit three-plus across even on a phone, not one per row — so a
  *  strip of them reads as a glanceable stat bar instead of eating most of
  *  the screen before any actual content shows. */
+export type StatCell = {
+  label: string;
+  value: ReactNode;
+  /** Makes the cell a button — e.g. jump to the list behind the number. */
+  onClick?: () => void;
+};
+
+/**
+ * One strip of headline numbers, grouped under small captions ("Today",
+ * "October") — hairline dividers instead of a bordered tile per number.
+ * Each group lays its cells out side by side at every width; the groups
+ * stack on phones and sit in one row from `sm:`. Workspace uses it; Reports
+ * and print keep `StatTile`.
+ */
+export function StatStrip({ groups }: { groups: { caption: string; cells: StatCell[] }[] }) {
+  return (
+    <div className="flex flex-col divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] bg-[var(--paper)] sm:flex-row sm:divide-x sm:divide-y-0">
+      {groups.map((group) => (
+        <section key={group.caption} aria-label={group.caption} className="min-w-0 px-1.5 py-2" style={{ flex: group.cells.length }}>
+          <h3 className="px-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">{group.caption}</h3>
+          <div className="grid" style={{ gridTemplateColumns: `repeat(${group.cells.length}, minmax(0, 1fr))` }}>
+            {group.cells.map((cell) => {
+              const body = (
+                <>
+                  <span className="block truncate text-xs text-[var(--muted)]">{cell.label}</span>
+                  <span className="font-num block truncate text-lg font-semibold tabular-nums text-[var(--ink)] sm:text-xl">
+                    {cell.value}
+                  </span>
+                </>
+              );
+              return cell.onClick ? (
+                <button
+                  key={cell.label}
+                  type="button"
+                  onClick={cell.onClick}
+                  className="min-w-0 rounded-lg px-2 py-1 text-left hover:bg-[var(--surface)] focus-visible:bg-[var(--surface)]"
+                >
+                  {body}
+                </button>
+              ) : (
+                <div key={cell.label} className="min-w-0 px-2 py-1">
+                  {body}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export function StatTile({
   label,
   value,

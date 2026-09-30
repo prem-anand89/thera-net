@@ -17,7 +17,7 @@ import type { Appointment, Patient, UUID } from '@/domain/types';
  *    the visit — service, treatment, payment — can be completed later; the
  *    note joins that visit automatically when it's logged.
  *  - "Log visit now" is the usual New Visit form.
- * Opened from Workspace ("+ Note") or from an appointment ("Start note").
+ * Opened from an appointment ("Start note") or New Visit ("Start a note first").
  */
 export function StartVisitSheet({
   open,

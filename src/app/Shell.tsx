@@ -35,6 +35,7 @@ import {
 } from '@/components/NavIcons';
 import { AccountMenu } from './AccountMenu';
 import { ClinicSwitcher } from './ClinicSwitcher';
+import { AppLoading, BrandMark } from '@/components/BrandMark';
 
 
 
@@ -209,7 +210,7 @@ export function Shell() {
   // must render before those checks would otherwise redirect to login.
   if (pathname === '/reset-password') {
     return (
-      <Suspense fallback={<Centered>Loading…</Centered>}>
+      <Suspense fallback={<AppLoading />}>
         <Outlet />
       </Suspense>
     );
@@ -221,13 +222,13 @@ export function Shell() {
   // anonymous patient to LoginPage.
   if (pathname.startsWith('/f/') || pathname.startsWith('/book/')) {
     return (
-      <Suspense fallback={<Centered>Loading…</Centered>}>
+      <Suspense fallback={<AppLoading />}>
         <Outlet />
       </Suspense>
     );
   }
 
-  if (loading) return <Centered>Loading…</Centered>;
+  if (loading) return <AppLoading />;
   if (!session) return <LoginPage />;
 
   if (!clinic) {
@@ -264,17 +265,14 @@ export function Shell() {
       repairingStalePointer
     ) {
       return (
-        <Centered>
-          <div className="space-y-2 text-center text-sm text-[var(--muted)]">
-            <p>Preparing…</p>
-            {syncKicked && !initialSyncSettled && sync.online === false && (
-              <p className="text-xs">Waiting for a connection to check your clinic access…</p>
-            )}
-            {syncKicked && !initialSyncSettled && sync.online !== false && sync.error && (
-              <p className="text-xs text-[var(--rust)]">Sync issue: {sync.error}</p>
-            )}
-          </div>
-        </Centered>
+        <AppLoading label="Preparing…">
+          {syncKicked && !initialSyncSettled && sync.online === false && (
+            <p className="text-xs text-[var(--muted)]">Waiting for a connection to check your clinic access…</p>
+          )}
+          {syncKicked && !initialSyncSettled && sync.online !== false && sync.error && (
+            <p className="text-xs text-[var(--rust)]">Sync issue: {sync.error}</p>
+          )}
+        </AppLoading>
       );
     }
 
@@ -293,7 +291,7 @@ export function Shell() {
   if (pathname.endsWith('/print')) {
     return (
       <ClinicContext.Provider value={clinic}>
-        <Suspense fallback={<Centered>Loading…</Centered>}>
+        <Suspense fallback={<AppLoading />}>
           <Outlet />
         </Suspense>
       </ClinicContext.Provider>
@@ -304,45 +302,26 @@ export function Shell() {
     <ClinicContext.Provider value={clinic}>
       <div className="min-h-screen bg-[var(--paper)]">
         <header className="no-print sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)]">
-          {/* Header width budget. This row has to carry the brand, five
-              nav items, the sync badge and the account trigger inside
-              max-w-6xl (~1120px of usable width) — and with text labels on
-              everything at once it doesn't, which is what left the nav
-              squeezed and horizontally scrolling even on a full-width
-              screen. These rules keep it fitting instead:
-                1. Only the brand name shrinks. Nav and the sync/account
-                   cluster are shrink-0, so a tight row eats into the
-                   clinic name (truncated, then hidden below desktop:)
-                   rather than squeezing the things you click.
-                2. Nav labels are tab:-only (744px+, iPad-portrait and up).
-                   Below that the nav is icons with tooltips + aria-labels.
-                3. SyncBadge's text is tab:-and-up only when it has
-                   nothing to say ("Synced", the common case) — measured,
-                   there's room for it right alongside the nav labels down
-                   to 744px, same as the label case above. It's a phone-
-                   width-only collapse there, not desktop:, and even that
-                   only applies while quiet: the moment there's something
-                   worth saying (offline, syncing, pending, failed) the
-                   badge expands at every width, phone included — see
-                   SyncBadge's own `quiet` check.
-                4. The account trigger's name collapses to just the avatar
-                   initials below desktop: (was sm:, 640px+) — this is the
-                   one still deliberately conservative, since the dropdown
-                   it opens already repeats the name. Settings moved to
-                   the account menu (see NAV above) keeps this at five nav
-                   items rather than six.
-              The clinic name is also the one genuinely redundant item
-              here — the account trigger's dropdown names the current
-              clinic too, and switches between them — so hiding it first
-              costs the least. */}
-          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5 tab:gap-4">
-            <ClinicSwitcher clinic={clinic} clinics={clinics ?? []} logoUrl={logoUrl} />
-            {/* The same items reappear as the bottom tab bar below sm:, so
-                this one only renders at sm: and up. shrink-0 (not the
-                overflow-x-auto scroller this briefly was) is the point:
-                nav items are targets, and a squeezed or scrolled row of
-                them is worse than a hidden label. The label is what gives
-                way instead, at tab:. */}
+          {/* Header layout. Left: the Thera.Net mark (the product; wordmark
+              from desktop:). Middle: nav, sm:-and-up only — the bottom tab
+              bar replaces it on phones. Right: the clinic pill (where you
+              are: the clinic's own logo + name, and the clinic switcher),
+              then sync and the account avatar. Keeping the clinic on the
+              right, as its own bordered pill, stops it blurring into the
+              app brand. Width budget inside max-w-6xl:
+                1. Only the clinic name shrinks (truncates). Nav and the
+                   sync/account cluster are shrink-0, so a tight row eats
+                   into the name rather than squeezing things you click.
+                2. Nav labels are tab:-only (744px+); below that, icons with
+                   tooltips + aria-labels.
+                3. SyncBadge is just a dot while there's nothing to say, and
+                   expands with text at every width when there is.
+                4. The account trigger's name shows from desktop: only; the
+                   dropdown repeats it anyway. */}
+          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2 tab:gap-4">
+            <Link to="/workspace" aria-label="Thera.Net — Workspace" className="flex min-h-11 shrink-0 items-center rounded-lg">
+              <BrandMark size={30} wordmark wordmarkClassName="hidden text-base desktop:inline" />
+            </Link>
             <nav className="hidden shrink-0 gap-1 sm:flex">
               {nav.map((item) => (
                 <Link
@@ -365,10 +344,11 @@ export function Shell() {
                 </Link>
               ))}
             </nav>
-            <div className="ml-auto flex shrink-0 items-center gap-2 tab:gap-3">
-              <span className="hidden whitespace-nowrap text-xs text-[var(--muted)] tab:inline" title="Today">
-                {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
-              </span>
+            <div className="ml-auto flex min-w-0 items-center gap-2 tab:gap-3">
+              <div className="flex min-w-0 justify-end">
+                <ClinicSwitcher clinic={clinic} clinics={clinics ?? []} logoUrl={logoUrl} isAdmin={role === 'admin'} />
+              </div>
+              <div className="flex shrink-0 items-center gap-1 tab:gap-2">
               <SyncBadge />
               <AccountMenu
                 displayName={displayName}
@@ -376,11 +356,11 @@ export function Shell() {
                 role={role}
                 setDisplayName={setDisplayName}
                 clinicId={clinic.id}
-                clinics={clinics ?? []}
                 hasPasswordIdentity={
                   session?.user.identities?.some((i) => i.provider === 'email') ?? true
                 }
               />
+              </div>
             </div>
           </div>
         </header>
@@ -476,7 +456,4 @@ function PhoneTab({
   );
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
-  return <div className="flex min-h-screen items-center justify-center">{children}</div>;
-}
 
