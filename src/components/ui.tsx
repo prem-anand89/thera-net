@@ -106,56 +106,87 @@ export function RupeeInput({
  *  — sized to sit three-plus across even on a phone, not one per row — so a
  *  strip of them reads as a glanceable stat bar instead of eating most of
  *  the screen before any actual content shows. */
+export type StatTone = 'teal' | 'moss' | 'amber' | 'slate';
+
 export type StatCell = {
   label: string;
   value: ReactNode;
+  /** Small stroke icon shown in a tinted badge beside the number. */
+  icon?: ReactNode;
+  tone?: StatTone;
   /** Makes the cell a button — e.g. jump to the list behind the number. */
   onClick?: () => void;
 };
 
+const STAT_TONE: Record<StatTone, string> = {
+  teal: 'bg-[var(--teal-light)] text-[var(--teal)]',
+  moss: 'bg-[var(--moss-light)] text-[var(--moss)]',
+  amber: 'bg-[var(--amber-light)] text-[var(--amber)]',
+  slate: 'bg-[var(--slate-light)] text-[var(--slate)]',
+};
+
 /**
- * Headline numbers as one compact line per period — "TODAY ₹4,500 collected
- * · 6 visits", "OCTOBER ₹38,200 my net · 41 my visits · 3 new packages".
- * Each number sits inline with a lowercase label (no box per number, no
- * label-over-value stacking), so the whole strip is one line on desktop and
- * two short lines on a phone. Workspace uses it; Reports and print keep
- * `StatTile`.
+ * Headline numbers in one panel per period ("Today", "October"): a small
+ * icon + caption heading, then each number with a tinted icon badge and a
+ * label under it (on phones the badge sits above the number so three fit
+ * untruncated). Panels sit side by side from `sm:` (widths follow the
+ * number of cells) and stack on phones; cells within a panel always share
+ * one row. Workspace uses it; Reports and print keep `StatTile`.
  */
-export function StatStrip({ groups }: { groups: { caption: string; cells: StatCell[] }[] }) {
+export function StatStrip({
+  groups,
+}: {
+  groups: { caption: string; icon?: ReactNode; cells: StatCell[] }[];
+}) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1.5">
-      {groups.map((group, index) => (
+    <div className="flex flex-col gap-2 sm:flex-row">
+      {groups.map((group) => (
         <section
           key={group.caption}
           aria-label={group.caption}
-          className={`flex min-w-0 items-baseline gap-x-3 ${index > 0 ? 'sm:border-l sm:border-[var(--border)] sm:pl-6' : ''}`}
+          className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--paper)]/60 px-3 pb-2.5 pt-2"
+          style={{ flex: group.cells.length }}
         >
-          <h3 className="w-16 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)] sm:w-auto">{group.caption}</h3>
-          {/* Cells wrap inside their own box, so a wrapped number lines up
-              under the first one rather than under the caption. */}
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-          {group.cells.map((cell) => {
-            const body = (
-              <>
-                <span className="font-num text-base font-semibold tabular-nums text-[var(--ink)]">{cell.value}</span>{' '}
-                <span className="text-xs text-[var(--muted)]">{cell.label}</span>
-              </>
-            );
-            return cell.onClick ? (
-              <button
-                key={cell.label}
-                type="button"
-                onClick={cell.onClick}
-                className="whitespace-nowrap rounded text-left decoration-[var(--teal)] underline-offset-4 hover:underline focus-visible:underline"
-              >
-                {body}
-              </button>
-            ) : (
-              <span key={cell.label} className="whitespace-nowrap">
-                {body}
-              </span>
-            );
-          })}
+          <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[var(--ink)]">
+            {group.icon && <span className="text-[var(--muted)] [&>svg]:h-3.5 [&>svg]:w-3.5">{group.icon}</span>}
+            {group.caption}
+          </h3>
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${group.cells.length}, minmax(0, 1fr))` }}>
+            {group.cells.map((cell) => {
+              const body = (
+                <>
+                  {cell.icon && (
+                    <span
+                      aria-hidden
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg [&>svg]:h-4 [&>svg]:w-4 max-sm:h-6 max-sm:w-6 max-sm:[&>svg]:h-3.5 max-sm:[&>svg]:w-3.5 ${STAT_TONE[cell.tone ?? 'teal']}`}
+                    >
+                      {cell.icon}
+                    </span>
+                  )}
+                  <span className="min-w-0">
+                    <span className="font-num block truncate text-base font-semibold leading-tight tabular-nums text-[var(--ink)] desktop:text-lg">
+                      {cell.value}
+                    </span>
+                    <span className="block truncate text-[11px] leading-tight text-[var(--muted)]">{cell.label}</span>
+                  </span>
+                </>
+              );
+              const cls = 'flex min-w-0 flex-col items-start gap-1 rounded-lg bg-[var(--surface)] p-2 sm:flex-row sm:items-center sm:gap-2 desktop:gap-2.5';
+              return cell.onClick ? (
+                <button
+                  key={cell.label}
+                  type="button"
+                  onClick={cell.onClick}
+                  className={`${cls} text-left ring-[var(--teal)]/30 transition-shadow hover:shadow-sm hover:ring-1 focus-visible:ring-2`}
+                >
+                  {body}
+                </button>
+              ) : (
+                <div key={cell.label} className={cls}>
+                  {body}
+                </div>
+              );
+            })}
           </div>
         </section>
       ))}

@@ -349,12 +349,22 @@ export function useFirstWeekChecklistSummary(clinicId: string):
   };
 }
 
+/** Workspace's setup nudge: a small progress pill that sits inline on the
+ *  date line ("Setup 3/7" + a thin bar), so it costs no vertical space. */
 export function FirstWeekSetupLink({ clinicId }: { clinicId: string }) {
-  const visible = useFirstWeekChecklistVisible(clinicId);
-  if (!visible) return null;
+  const setup = useFirstWeekChecklistSummary(clinicId);
+  if (!setup?.visible) return null;
+  const pct = Math.round((setup.completedCount / Math.max(1, setup.totalCount)) * 100);
   return (
-    <Link to="/settings" className="text-sm text-[var(--muted)] hover:text-[var(--teal)]">
-      Setup: first week
+    <Link
+      to="/settings"
+      title={setup.nextStep ? `Next: ${setup.nextStep.title}` : 'First-week setup'}
+      className="inline-flex items-center gap-1.5 rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[11px] font-medium text-[var(--teal-strong)] hover:bg-[var(--teal)] hover:text-white"
+    >
+      Setup {setup.completedCount}/{setup.totalCount}
+      <span aria-hidden className="h-1 w-8 overflow-hidden rounded-full bg-white/70">
+        <span className="block h-full rounded-full bg-current" style={{ width: `${pct}%` }} />
+      </span>
     </Link>
   );
 }

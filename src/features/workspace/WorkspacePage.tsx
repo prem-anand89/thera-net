@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, reportService, feedbackService, bookingService } from '@/services';
@@ -9,7 +9,6 @@ import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
-import { syncFreshnessCaption } from '@/domain/syncCopy';
 import {
   clinicBillingConfig,
   type ConsultationNote,
@@ -56,6 +55,20 @@ import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 import { EditVisitModal } from '@/features/visits/EditVisitModal';
 import { FirstWeekSetupLink } from '@/features/settings/FirstWeekChecklist';
+import {
+  IconBook,
+  IconCheckCircle,
+  IconCloud,
+  IconMonth,
+  IconPackage,
+  IconPlus,
+  IconRupee,
+  IconSun,
+  IconTasks,
+  IconTrend,
+  IconUserPlus,
+  IconVisits,
+} from '@/components/StatIcons';
 
 /** What the invoice-issuance modal needs, independent of which card opened it. */
 type InvoicingTarget = IssueInvoiceTarget;
@@ -191,10 +204,7 @@ function todayRowToCardData(
   };
 }
 
-const chip =
-  'inline-flex min-h-10 items-center gap-1.5 rounded-full border px-2.5 text-[13px] sm:px-3 sm:text-sm text-[var(--ink)] hover:shadow-sm';
-const chipAmber = 'border-[var(--amber)]/30 bg-[var(--amber-light)]';
-const chipNeutral = 'border-[var(--border)] bg-[var(--paper)]';
+type NeedsItem = { key: string; node: ReactElement };
 
 /** Single status pill for an open package — `stale` (hasn't been visited in
  *  a while) takes priority over `nearingCompletion` (still active, just
@@ -331,7 +341,6 @@ export function WorkspacePage() {
   const syncSnapshot = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
   const unsyncedVisitCount =
     useLiveQuery(() => db.outbox.filter((e) => e.table === 'visits').count(), []) ?? 0;
-  const syncCaption = syncFreshnessCaption(unsyncedVisitCount, 'visits', syncSnapshot.lastSyncAt);
   // Public booking requests waiting for a confirm — shown first under
   // Today → Appointments for admin / front desk, oldest first.
   const appointmentRequests = useLiveQuery(
@@ -520,31 +529,81 @@ export function WorkspacePage() {
 
   const therapistNameById = new Map((therapists ?? []).map((t) => [t.id, t.name]));
 
+  const needsItem = 'rounded font-medium text-[var(--ink)] underline-offset-4 hover:text-[var(--teal)] hover:underline';
+  const needsYou = ([
+    toCompleteCount > 0 && {
+      key: 'complete',
+      node: (
+        <button type="button" className={needsItem} onClick={() => setTodayTab('appointments')}>
+          <span className="text-[var(--amber)]">{toCompleteCount}</span> visit{toCompleteCount === 1 ? '' : 's'} to complete
+        </button>
+      ),
+    },
+    pendingRequestCount > 0 && {
+      key: 'requests',
+      node: (
+        <button type="button" className={needsItem} onClick={() => setTodayTab('appointments')}>
+          <span className="text-[var(--amber)]">{pendingRequestCount}</span> booking request{pendingRequestCount === 1 ? '' : 's'}
+        </button>
+      ),
+    },
+    myDraftNotes.length > 0 && {
+      key: 'notes',
+      node: (
+        <Link
+          to="/patients/$patientId/notes/$noteId"
+          params={{ patientId: myDraftNotes[0].patientId, noteId: myDraftNotes[0].id }}
+          search={{ from: '/workspace' }}
+          className={needsItem}
+        >
+          {myDraftNotes.length} note{myDraftNotes.length === 1 ? '' : 's'} to finish
+        </Link>
+      ),
+    },
+    newFeedbackCount > 0 && {
+      key: 'feedback',
+      node: (
+        <Link to="/schedule" search={{ tab: 'feedback' }} className={needsItem}>
+          {newFeedbackCount} new feedback
+        </Link>
+      ),
+    },
+  ] as (NeedsItem | false)[]).filter((item): item is NeedsItem => Boolean(item));
+  const syncLabel =
+    unsyncedVisitCount > 0
+      ? `${unsyncedVisitCount} visit${unsyncedVisitCount === 1 ? '' : 's'} not synced yet`
+      : syncSnapshot.lastSyncAt
+        ? `Synced ${new Date(syncSnapshot.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+        : null;
   const monthCaption = now.toLocaleDateString('en-IN', { month: 'long' });
   const statGroups = [
     {
       caption: 'Today',
+      icon: <IconSun />,
       cells: [
         {
-          label: 'collected',
+          label: 'Collected',
           value: formatINR(today?.collectedPaise ?? 0),
+          icon: <IconRupee />,
+          tone: 'moss' as const,
           onClick: canBill ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } }) : undefined,
         },
-        { label: visitsTodayCount === 1 ? 'visit' : 'visits', value: visitsTodayCount, onClick: () => setTodayTab('visits') },
+        { label: 'Visits', value: visitsTodayCount, icon: <IconVisits />, tone: 'teal' as const, onClick: () => setTodayTab('visits') },
       ],
     },
     {
       caption: monthCaption,
+      icon: <IconMonth />,
       cells: scope.myTherapistId
         ? [
-            { label: 'my net', value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—' },
-            { label: 'my visits', value: monthReport ? myMonthRow?.visitCount ?? 0 : '—' },
-            { label: 'new packages', value: monthlyNew?.newPackages ?? '—' },
+            { label: 'My net', value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—', icon: <IconTrend />, tone: 'amber' as const },
+            { label: 'My visits', value: monthReport ? myMonthRow?.visitCount ?? 0 : '—', icon: <IconVisits />, tone: 'teal' as const },
+            { label: 'New packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'slate' as const },
           ]
         : [
-            { label: 'new patients', value: monthlyNew?.newPatients ?? '—' },
-            { label: 'new packages', value: monthlyNew?.newPackages ?? '—' },
-            { label: 'visits', value: monthReport ? monthReport.total.visitCount : '—' },
+            { label: 'New patients', value: monthlyNew?.newPatients ?? '—', icon: <IconUserPlus />, tone: 'amber' as const },
+            { label: 'New packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'slate' as const },
+            { label: 'Visits', value: monthReport ? monthReport.total.visitCount : '—', icon: <IconVisits />, tone: 'teal' as const },
           ],
     },
   ];
@@ -623,68 +682,63 @@ export function WorkspacePage() {
         appointments={workspaceAppointments ?? []}
         rescheduleAppointment={reschedulingAppointment ?? undefined}
       />
-      <header className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:px-5">
+      <header className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs text-[var(--muted)]">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted)]">
               {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {canEditSettings && <FirstWeekSetupLink clinicId={clinic.id} />}
             </p>
             <h1 className="font-display text-lg font-semibold leading-snug text-[var(--ink)]">
               {greeting}
               {firstName ? `, ${firstName}` : ''}
             </h1>
-            {canEditSettings && <FirstWeekSetupLink clinicId={clinic.id} />}
           </div>
           <div className="flex shrink-0 gap-2">
             {clinic.enablePatientComms && (canManageBookings || scope.myTherapistId) && (
-              <button type="button" className={`${btnSecondary} hidden sm:inline-flex sm:items-center`} onClick={() => setBookingOpen(true)}>
-                + Book
+              <button type="button" className={`${btnSecondary} hidden gap-1.5 sm:inline-flex sm:items-center`} onClick={() => setBookingOpen(true)}>
+                <IconBook className="h-4 w-4" />
+                Book
               </button>
             )}
-            <Link to="/visits/new" className={`${btnPrimary} hidden text-center sm:inline-flex sm:items-center`}>
-              + New visit
+            <Link to="/visits/new" className={`${btnPrimary} hidden gap-1.5 text-center sm:inline-flex sm:items-center`}>
+              <IconPlus className="h-4 w-4" />
+              New visit
             </Link>
           </div>
         </div>
 
-        <div className="border-t border-[var(--border)] pt-3">
-          <StatStrip groups={statGroups} />
-          {syncCaption && <p className="mt-1.5 text-xs text-[var(--slate)]">{syncCaption}</p>}
-        </div>
+        <StatStrip groups={statGroups} />
 
-        {(newFeedbackCount > 0 || pendingRequestCount > 0 || toCompleteCount > 0 || myDraftNotes.length > 0) && (
-          <div className="flex flex-wrap gap-2" aria-label="Needs you">
-            {toCompleteCount > 0 && (
-              <button type="button" onClick={() => setTodayTab('appointments')} className={`${chip} ${chipAmber}`}>
-                <strong>{toCompleteCount}</strong> visit{toCompleteCount === 1 ? '' : 's'} to complete
-                <span aria-hidden className="text-[var(--teal)]">→</span>
-              </button>
-            )}
-            {pendingRequestCount > 0 && (
-              <button type="button" onClick={() => setTodayTab('appointments')} className={`${chip} ${chipAmber}`}>
-                <strong>{pendingRequestCount}</strong> booking request{pendingRequestCount === 1 ? '' : 's'}
-                <span aria-hidden className="text-[var(--teal)]">→</span>
-              </button>
-            )}
-            {myDraftNotes.length > 0 && (
-              <Link
-                to="/patients/$patientId/notes/$noteId"
-                params={{ patientId: myDraftNotes[0].patientId, noteId: myDraftNotes[0].id }}
-                search={{ from: '/workspace' }}
-                className={`${chip} ${chipNeutral}`}
-              >
-                <strong>{myDraftNotes.length}</strong> note{myDraftNotes.length === 1 ? '' : 's'} to finish
-                <span aria-hidden className="text-[var(--teal)]">→</span>
-              </Link>
-            )}
-            {newFeedbackCount > 0 && (
-              <Link to="/schedule" search={{ tab: 'feedback' }} className={`${chip} ${chipNeutral}`}>
-                <strong>{newFeedbackCount}</strong> new feedback
-                <span aria-hidden className="text-[var(--teal)]">→</span>
-              </Link>
-            )}
-          </div>
-        )}
+        {/* "Needs you": one quiet bar — each item jumps to where it's done;
+            the sync state sits at the end so today's numbers can be trusted. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-[var(--paper)] px-3 py-2 text-sm">
+          {needsYou.length > 0 ? (
+            <>
+              <IconTasks className="hidden h-4 w-4 shrink-0 text-[var(--muted)] sm:block" />
+              <ul className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 sm:gap-x-1" aria-label="Needs you">
+                {needsYou.map((item, index) => (
+                  <li key={item.key} className="flex items-center gap-1">
+                    {index > 0 && <span aria-hidden className="hidden px-1 text-[var(--border)] sm:inline">•</span>}
+                    {item.node}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="flex flex-1 items-center gap-2 text-[var(--muted)]">
+              <IconCheckCircle className="h-4 w-4 text-[var(--moss)]" />
+              All caught up
+            </p>
+          )}
+          {syncLabel && (
+            <p className={`flex w-full items-center gap-1.5 border-t border-[var(--border)] pt-1.5 text-xs sm:ml-auto sm:w-auto sm:border-0 sm:pt-0 ${unsyncedVisitCount > 0 ? 'text-[var(--amber)]' : 'text-[var(--muted)]'}`}>
+              <IconCloud className="h-4 w-4" />
+              <span className={`h-1.5 w-1.5 rounded-full ${unsyncedVisitCount > 0 ? 'bg-[var(--amber)]' : 'bg-[var(--moss)]'}`} aria-hidden />
+              {syncLabel}
+            </p>
+          )}
+        </div>
       </header>
 
       {scope.isUnlinkedTherapist && (
