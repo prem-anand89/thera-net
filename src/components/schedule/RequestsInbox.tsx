@@ -73,7 +73,7 @@ export function RequestsInbox({
   limit = 5,
 }: {
   requests: AppointmentRequest[];
-  variant: 'strip' | 'rail';
+  variant: 'strip' | 'rail' | 'list';
   therapistNameFor: (id: string | null) => string | null;
   onConfirm: (request: AppointmentRequest) => void;
   onDecline: (request: AppointmentRequest) => void;
@@ -104,6 +104,8 @@ export function RequestsInbox({
       )}
     </ul>
   );
+
+  if (variant === 'list') return rows;
 
   if (variant === 'rail') {
     return (

@@ -18,7 +18,7 @@ import {
   type Appointment,
   type Visit,
 } from '@/domain/types';
-import { appointmentStartsOnDate, minutesOfDay, patientAttendance, toLocalDateStr } from '@/domain/schedule';
+import { appointmentStartsOnDate, minutesLabel, minutesOfDay, patientAttendance, toLocalDateStr } from '@/domain/schedule';
 import { AgendaList } from '@/components/schedule/AgendaList';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
@@ -30,6 +30,7 @@ import { canAskForFeedbackOnVisit } from '@/domain/patientComms';
 import type { OpenPackageRow, TodayVisitRow } from '@/services/dashboardService';
 import {
   btnPrimary,
+  btnSecondary,
   SectionCard,
   StatTile,
   Pill,
@@ -275,6 +276,12 @@ export function WorkspacePage() {
     [therapistRoster]
   );
   const [openAppointmentId, setOpenAppointmentId] = useState<string | null>(null);
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const nextUp = nextUpId ? expectedToday.find((a) => a.id === nextUpId) ?? null : null;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const myTherapistName = scope.myTherapistId ? therapistRoster.get(scope.myTherapistId)?.name : undefined;
+  const firstName = (myTherapistName ?? '').replace(/^Dr\.?\s+/i, '').split(/\s+/)[0] || '';
   const [reschedulingAppointment, setReschedulingAppointment] = useState<Appointment | null>(null);
   const openAppointment = openAppointmentId
     ? (workspaceAppointments ?? []).find((a) => a.id === openAppointmentId) ?? null
@@ -476,20 +483,95 @@ export function WorkspacePage() {
         }}
       />
       <BookSlotSheet
+        isOpen={bookingOpen}
+        onClose={() => setBookingOpen(false)}
+        appointments={workspaceAppointments ?? []}
+        lockTherapist={!canManageBookings}
+        prefilledTherapistId={!canManageBookings ? scope.myTherapistId : undefined}
+      />
+      <BookSlotSheet
         isOpen={reschedulingAppointment !== null}
         onClose={() => setReschedulingAppointment(null)}
         appointments={workspaceAppointments ?? []}
         rescheduleAppointment={reschedulingAppointment ?? undefined}
       />
-      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Workspace</h1>
-          {canEditSettings && <FirstWeekSetupLink clinicId={clinic.id} />}
+      <header className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm text-[var(--muted)]">
+              {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+            <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">
+              {greeting}
+              {firstName ? `, ${firstName}` : ''}
+            </h1>
+            {canEditSettings && <FirstWeekSetupLink clinicId={clinic.id} />}
+          </div>
+          <div className="flex shrink-0 gap-2">
+            {clinic.enablePatientComms && (canManageBookings || scope.myTherapistId) && (
+              <button type="button" className={`${btnSecondary} hidden sm:inline-flex sm:items-center`} onClick={() => setBookingOpen(true)}>
+                + Book
+              </button>
+            )}
+            <Link to="/visits/new" className={`${btnPrimary} hidden text-center sm:inline-flex sm:items-center`}>
+              + New visit
+            </Link>
+          </div>
         </div>
-        <Link to="/visits/new" className={`${btnPrimary} hidden text-center sm:inline-flex`}>
-          + New visit
-        </Link>
-      </div>
+
+        {(nextUp || expectedToday.length > 0 || newFeedbackCount > 0 || (pendingRequestCount ?? 0) > 0) && (
+          <div className="mt-4 flex flex-col gap-2 tab:flex-row tab:items-stretch">
+            {clinic.enablePatientComms && (
+              <button
+                type="button"
+                onClick={() => (nextUp ? setOpenAppointmentId(nextUp.id) : undefined)}
+                disabled={!nextUp}
+                className="flex min-h-14 flex-1 items-center gap-3 rounded-xl bg-[var(--teal-light)] px-3.5 py-2.5 text-left disabled:cursor-default"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] text-sm font-semibold text-[var(--teal)]" aria-hidden>
+                  {expectedToday.length}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs text-[var(--muted)]">
+                    {expectedToday.length === 1 ? 'appointment today' : 'appointments today'}
+                  </span>
+                  <span className="block truncate text-sm font-medium text-[var(--ink)]">
+                    {nextUp
+                      ? `Next: ${nextUp.patientName} · ${minutesLabel(minutesOfDay(nextUp.scheduledAt))}${canManageBookings ? ` · ${appointmentTherapistName(nextUp)}` : ''}`
+                      : expectedToday.length
+                        ? 'No more appointments today'
+                        : 'Nothing booked today'}
+                  </span>
+                </span>
+              </button>
+            )}
+            {(pendingRequestCount ?? 0) > 0 && (
+              <Link
+                to="/schedule"
+                search={{ tab: 'bookings', view: 'requests' }}
+                className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--amber)]/30 bg-[var(--amber-light)] px-3.5 py-2.5 text-sm text-[var(--ink)] tab:min-w-52"
+              >
+                <span>
+                  <strong>{pendingRequestCount}</strong> booking request{pendingRequestCount === 1 ? '' : 's'}
+                </span>
+                <span className="font-medium text-[var(--teal)]">Review →</span>
+              </Link>
+            )}
+            {newFeedbackCount > 0 && (
+              <Link
+                to="/schedule"
+                search={{ tab: 'feedback' }}
+                className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3.5 py-2.5 text-sm text-[var(--ink)] tab:min-w-52"
+              >
+                <span>
+                  <strong>{newFeedbackCount}</strong> new feedback
+                </span>
+                <span className="font-medium text-[var(--teal)]">See →</span>
+              </Link>
+            )}
+          </div>
+        )}
+      </header>
 
       {scope.isUnlinkedTherapist && (
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
@@ -505,36 +587,6 @@ export function WorkspacePage() {
 
       {clinic.lastSplitChangeAt && (
         <SplitChangeBanner clinicId={clinic.id} changedAt={clinic.lastSplitChangeAt} />
-      )}
-
-      {newFeedbackCount > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--teal)] bg-[var(--teal-light)] px-4 py-3">
-          <p className="text-sm text-[var(--ink)]">
-            {newFeedbackCount} new feedback response{newFeedbackCount === 1 ? '' : 's'}.
-          </p>
-          <Link
-            to="/schedule"
-            search={{ tab: 'feedback' }}
-            className="whitespace-nowrap text-sm font-medium text-[var(--teal)] hover:underline"
-          >
-            See all →
-          </Link>
-        </div>
-      )}
-
-      {!!pendingRequestCount && pendingRequestCount > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--teal)] bg-[var(--teal-light)] px-4 py-3">
-          <p className="text-sm text-[var(--ink)]">
-            {pendingRequestCount} new booking request{pendingRequestCount === 1 ? '' : 's'}.
-          </p>
-          <Link
-            to="/schedule"
-            search={{ tab: 'bookings', view: 'requests' }}
-            className="whitespace-nowrap text-sm font-medium text-[var(--teal)] hover:underline"
-          >
-            Review →
-          </Link>
-        </div>
       )}
 
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">

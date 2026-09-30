@@ -3,7 +3,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
-import { ConfirmDialog, KebabMenu, SectionCard, btnPrimary, btnSecondary, inputCls, menuItem } from '@/components/ui';
+import { ConfirmDialog, KebabMenu, Panel, SectionCard, btnPrimary, btnSecondary, inputCls, menuItem } from '@/components/ui';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -36,7 +36,7 @@ import type { Appointment, AppointmentRequest, UUID } from '@/domain/types';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { ReminderSheet } from '@/components/schedule/ReminderSheet';
 import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
-import { RequestsInbox, timeAgo } from '@/components/schedule/RequestsInbox';
+import { RequestsInbox } from '@/components/schedule/RequestsInbox';
 import { AgendaList } from '@/components/schedule/AgendaList';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
 import { ClosedDaysSheet } from '@/components/schedule/ClosedDaysSheet';
@@ -413,10 +413,12 @@ export function ScheduleBookingsView() {
     );
   }
 
-  const views: [BookingView, string][] = canManageAll
-    ? [['schedule', 'Schedule'], ['requests', `Requests${pendingRequests.length ? ` (${pendingRequests.length})` : ''}`], ['history', 'History']]
-    : [['schedule', 'My schedule'], ['history', 'History']];
-  const activeView = !canManageAll && view === 'requests' ? 'schedule' : view;
+  // Requests live in the inline inbox / "All requests" panel, not a tab;
+  // ?view=requests (old links, Workspace's banner) opens that panel.
+  const views: [BookingView, string][] = [[
+    'schedule', canManageAll ? 'Schedule' : 'My schedule'], ['history', 'History']];
+  const activeView = view === 'requests' ? 'schedule' : view;
+  const requestsPanelOpen = canManageAll && view === 'requests';
   const dayNow = date === today ? now.minutes : null;
   const dayGaps = singleTherapist && !closedToday.closed && date >= today
     ? freeGaps(dayAppointments, singleTherapist.id, date, hours, slotMinutes, { notBefore: dayNow ?? undefined, alignToSlots: true, working: workingFor(singleTherapist.id, date) })
@@ -703,33 +705,24 @@ export function ScheduleBookingsView() {
         </div>
       )}
 
-      {activeView === 'requests' && canManageAll && (
-        <SectionCard title={`Pending requests (${pendingRequests.length})`}>
-          {pendingRequests.length === 0 ? <p className="py-6 text-center text-sm text-[var(--muted)]">No pending booking requests.</p> : (
-            <div className="space-y-3">
-              {pendingRequests.map((request) => (
-                <div key={request.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-[var(--ink)]">{request.name} <span className="text-xs font-normal text-[var(--muted)]">· {timeAgo(request.createdAt)}</span></p>
-                      <p className="text-xs text-[var(--muted)]">
-                        <a href={`tel:${request.phone}`} className="text-[var(--teal)] hover:underline">{request.phone}</a>
-                        {request.preferredDate ? ` · Wants ${longDate(request.preferredDate)}${request.preferredTimeText ? ` at ${request.preferredTimeText}` : ''}` : ''}
-                      </p>
-                      {request.preferredTherapistId && <p className="mt-1 text-xs text-[var(--muted)]">Preferred: {rosterById.get(request.preferredTherapistId)?.name ?? 'Staff'}</p>}
-                      {request.notes && <p className="mt-1 text-sm text-[var(--ink)]">{request.notes}</p>}
-                    </div>
-                    <div className="flex gap-2">
-                      <button type="button" className={btnPrimary} onClick={() => confirmRequest(request)}>Confirm</button>
-                      <button type="button" className={btnSecondary} onClick={() => setDeclining({ id: request.id, name: request.name })}>Decline</button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-      )}
+      <Panel open={requestsPanelOpen} onClose={() => setSchedule({ view: 'schedule' })} title={`Booking requests (${pendingRequests.length})`}>
+        {pendingRequests.length === 0 ? (
+          <p className="py-6 text-center text-sm text-[var(--muted)]">No pending booking requests.</p>
+        ) : (
+          <RequestsInbox
+            variant="list"
+            requests={pendingRequests}
+            limit={pendingRequests.length}
+            therapistNameFor={(id) => (id ? rosterById.get(id)?.name ?? null : null)}
+            onConfirm={(request) => {
+              setSchedule({ view: 'schedule' });
+              confirmRequest(request);
+            }}
+            onDecline={(request) => setDeclining({ id: request.id, name: request.name })}
+            onSeeAll={() => {}}
+          />
+        )}
+      </Panel>
 
       {activeView === 'history' && (
         <HistorySurface
@@ -744,7 +737,7 @@ export function ScheduleBookingsView() {
       )}
 
       {confirmed && (
-        <div role="status" className="fixed inset-x-4 bottom-20 z-20 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-[var(--teal)] bg-[var(--surface)] p-3 shadow-lg sm:bottom-4 sm:left-auto sm:max-w-md">
+        <div role="status" className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-[var(--teal)] bg-[var(--surface)] p-3 shadow-lg sm:bottom-4 sm:left-auto sm:max-w-md">
           <p className="text-sm text-[var(--ink)]">
             <strong>{confirmed.patientName}</strong>{' '}
             {confirmed.kind === 'rescheduled' ? 'moved to' : confirmed.sessions ? `— ${confirmed.sessions} sessions booked, first on` : 'booked for'}{' '}
@@ -859,7 +852,7 @@ export function ScheduleBookingsView() {
       <ClosedDaysSheet open={closedSheetOpen} clinicId={clinic.id} initialDate={date < today ? today : date} onClose={() => setClosedSheetOpen(false)} />
 
       {undo && (
-        <div role="status" className="fixed inset-x-4 bottom-20 z-20 flex items-center justify-between gap-3 rounded-xl bg-[var(--ink)] p-3 text-sm text-white shadow-lg sm:bottom-4 sm:left-auto sm:max-w-md">
+        <div role="status" className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 flex items-center justify-between gap-3 rounded-xl bg-[var(--ink)] p-3 text-sm text-white shadow-lg sm:bottom-4 sm:left-auto sm:max-w-md">
           <span>{undo.message}</span>
           <button
             type="button"

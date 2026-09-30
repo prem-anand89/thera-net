@@ -633,7 +633,7 @@ export function BookSlotSheet({
           )}
 
           <ErrorNote message={error} />
-          <div className="sticky -bottom-4 -mx-4 flex justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3 sm:-bottom-6 sm:-mx-6 sm:px-6">
+          <div className="sticky -bottom-4 -mx-4 flex justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:-bottom-6 sm:-mx-6 sm:px-6 sm:pb-3">
             <button type="button" className={btnSecondary} onClick={onClose} disabled={busy}>Cancel</button>
             <button type="button" className={`${btnPrimary} min-w-0 flex-1 sm:flex-none`} onClick={() => void submit()} disabled={busy}>
               {busy ? 'Saving…' : selectedTime ? `${submitLabel} · ${displayDate(selectedDate)}, ${minutesLabel(Number(selectedTime.slice(0, 2)) * 60 + Number(selectedTime.slice(3, 5)))} · ${formatMinutes(lengthMinutes)}` : submitLabel}

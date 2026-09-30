@@ -302,7 +302,7 @@ export function Shell() {
   return (
     <ClinicContext.Provider value={clinic}>
       <div className="min-h-screen bg-[var(--paper)]">
-        <header className="no-print sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--surface)]">
+        <header className="no-print sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)]">
           {/* Header width budget. This row has to carry the brand, five
               nav items, the sync badge and the account trigger inside
               max-w-6xl (~1120px of usable width) — and with text labels on
@@ -394,7 +394,7 @@ export function Shell() {
           </div>
         </header>
         <SyncStatusBanners />
-        <main className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:pb-6">
+        <main className="mx-auto max-w-6xl px-[max(1rem,env(safe-area-inset-left))] py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6">
           <Suspense
             fallback={<div className="py-16 text-center text-sm text-[var(--muted)]">Loading…</div>}
           >

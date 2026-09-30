@@ -228,7 +228,7 @@ export function WorkingHoursSheet({
           <ErrorNote message={error} />
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-[var(--border)] p-4 sm:p-5">
+        <div className="flex justify-end gap-2 border-t border-[var(--border)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5">
           <button type="button" className={btnSecondary} onClick={onClose} disabled={busy}>Cancel</button>
           <button type="button" className={btnPrimary} onClick={() => void save()} disabled={busy}>{busy ? 'Saving…' : 'Save hours'}</button>
         </div>

@@ -4197,7 +4197,7 @@ export function NoteEditorPage() {
 
         {!readOnly && (
           <div
-            className="modal-actions sticky bottom-20 z-[2] justify-start bg-[var(--paper)] sm:bottom-0"
+            className="modal-actions sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[2] justify-start bg-[var(--paper)] sm:bottom-0"
             style={{ justifyContent: 'flex-start', marginBottom: 0, paddingBottom: 16 }}
           >
             <button

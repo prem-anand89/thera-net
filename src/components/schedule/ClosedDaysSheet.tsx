@@ -59,7 +59,7 @@ export function ClosedDaysSheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby="closed-days-title"
-        className="w-full rounded-t-2xl bg-[var(--surface)] p-4 shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"
+        className="w-full rounded-t-2xl bg-[var(--surface)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="closed-days-title" className="font-display text-lg font-semibold text-[var(--ink)]">

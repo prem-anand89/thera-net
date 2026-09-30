@@ -181,7 +181,7 @@ function TimeGroup({
   if (slots.length === 0) return null;
   return (
     <div className="mb-4 last:mb-0">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">{label}</p>
+      <p className="mb-2 text-xs font-medium text-[var(--muted)]">{label}</p>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {slots.map((t) => {
           const sel = t === selectedTime;
@@ -294,7 +294,7 @@ export function BookingFormPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim() || !phone.trim()) {
-      setSubmitError('Full name and phone number are required.');
+      setSubmitError('Please add your name and phone number.');
       return;
     }
     setBusy(true);
@@ -383,7 +383,6 @@ export function BookingFormPage() {
   ];
   const todayDate = new Date(`${todayIso}T00:00:00`);
   const dayOpen = (date: string) => getDayStatus(new Date(`${date}T00:00:00`), todayDate, availability) === 'available';
-  const quickDates = Array.from({ length: 7 }, (_, index) => addDays(todayIso, index));
   // When the chosen day is full, offer the next day that still has a time.
   const nextOpenDay =
     preferredDate && openSlots.length === 0
@@ -396,67 +395,172 @@ export function BookingFormPage() {
     setPreferredTime(null);
     setCalendarOpen(false);
   };
-  const dayChipLabel = (date: string, index: number) =>
-    index === 0 ? 'Today' : index === 1 ? 'Tomorrow' : new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' });
 
   // ── Layout ────────────────────────────────────────────────────────────────
+  const stripDates = Array.from({ length: 14 }, (_, index) => addDays(todayIso, index));
+  const therapistName = therapists.find((t) => t.id === preferredTherapistId)?.name;
+  const summary = preferredDate
+    ? `${new Date(`${preferredDate}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}${preferredTime ? ` · ${preferredTime}` : ' · any time'}`
+    : 'No date picked — the clinic will suggest one';
+  const hoursLabel = `${generateScheduleSlots(60, startHour, startHour + 1)[0]?.label.replace(':00', '') ?? ''}–${generateScheduleSlots(60, endHour, endHour + 1)[0]?.label.replace(':00', '') ?? ''}`;
+
   return (
-    <div
-      className="min-h-screen"
-      style={{ background: 'linear-gradient(135deg, #e8f4f8 0%, #f0f4f8 50%, #edf2f7 100%)' }}
-    >
-      {/* Main Content — no sticky header, logo is inside the card */}
-      <main className="mx-auto max-w-md px-4 py-10">
-        {/* The single form card */}
-        <div className="rounded-[20px] border border-[var(--border)] bg-white shadow-lg">
-          {/* Card header — logo + title in one row */}
-          <div className="px-6 pt-8 pb-6 border-b border-[var(--border)] flex items-center gap-4">
-            {/* Logo / fallback */}
+    <div className="min-h-dvh bg-[linear-gradient(160deg,#e8f4f4_0%,#f3f5f7_45%,#eef1f5_100%)]">
+      <main className="mx-auto max-w-lg px-3 pt-[max(1.25rem,env(safe-area-inset-top))] pb-6 sm:px-4 sm:pt-10">
+        <form onSubmit={onSubmit} noValidate className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-lg">
+          {/* Clinic header */}
+          <header className="flex items-center gap-3.5 border-b border-[var(--border)] px-5 py-5 sm:px-6">
             {clinicLogo ? (
-              <div className="h-12 w-12 overflow-hidden rounded-full border border-[var(--border)] bg-white shadow-sm flex-shrink-0">
-                <img src={clinicLogo} alt={clinicName || ''} className="h-full w-full object-cover" />
-              </div>
+              <img src={clinicLogo} alt="" className="h-12 w-12 shrink-0 rounded-2xl border border-[var(--border)] object-cover" />
             ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--teal-light)] flex-shrink-0">
-                <span className="text-2xl">🏥</span>
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--teal-light)] text-lg font-semibold text-[var(--teal)]">
+                {(clinicName ?? '?').trim().charAt(0).toUpperCase()}
               </div>
             )}
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold leading-tight text-[var(--ink)]">{clinicName}</h1>
+              <p className="mt-0.5 text-sm text-[var(--muted)]">Book an appointment</p>
+              <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-[var(--muted)]">
+                <span>⏱ {slotDuration} min visits</span>
+                <span>🕘 {hoursLabel}</span>
+              </p>
+            </div>
+          </header>
+
+          {/* 1 — When */}
+          <section className="space-y-4 px-5 py-5 sm:px-6" aria-labelledby="when-heading">
+            <SectionTitle id="when-heading" step={1} title="Choose a time" hint="Optional" />
+
+            {therapists.length > 0 && (
+              <div>
+                <p className="mb-2 text-sm font-medium text-[var(--ink)]">With</p>
+                <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6" role="radiogroup" aria-label="Clinician">
+                  {[{ id: '', name: 'Anyone available' }, ...therapists].map((t) => {
+                    const on = preferredTherapistId === t.id;
+                    return (
+                      <button
+                        key={t.id || 'any'}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => {
+                          setPreferredTherapistId(t.id);
+                          setPreferredTime(null);
+                        }}
+                        className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-medium transition-colors ${
+                          on ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] bg-white text-[var(--ink)] hover:border-[var(--teal)]'
+                        }`}
+                      >
+                        {t.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div>
-              <h1 className="text-xl font-bold text-[var(--ink)] leading-tight">Book an appointment</h1>
-              {clinicName && (
-                <p className="mt-0.5 text-sm text-[var(--muted)]">{clinicName}</p>
+              <div className="mb-2 flex items-baseline justify-between">
+                <p className="text-sm font-medium text-[var(--ink)]">Day</p>
+                <div className="flex items-center gap-3 text-sm">
+                  {preferredDate && (
+                    <button type="button" className="text-[var(--muted)] hover:text-[var(--ink)]" onClick={() => { setPreferredDate(null); setPreferredTime(null); }}>
+                      Clear
+                    </button>
+                  )}
+                  <button type="button" aria-expanded={calendarOpen} className="font-medium text-[var(--teal)]" onClick={() => setCalendarOpen((open) => !open)}>
+                    {calendarOpen ? 'Hide calendar' : 'More dates'}
+                  </button>
+                </div>
+              </div>
+              {calendarOpen ? (
+                <div className="rounded-2xl border border-[var(--border)] p-3">
+                  <MiniCalendar selectedDate={preferredDate} availability={availability} onSelect={pickDate} />
+                </div>
+              ) : (
+                <div className="-mx-5 flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6" role="group" aria-label="Choose a day">
+                  {stripDates.map((date, index) => {
+                    const value = new Date(`${date}T00:00:00`);
+                    const open = dayOpen(date);
+                    const selected = preferredDate === date;
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        disabled={!open}
+                        aria-pressed={selected}
+                        aria-label={`${value.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}${open ? '' : ', closed'}`}
+                        onClick={() => pickDate(date)}
+                        className={`flex h-[72px] w-[60px] shrink-0 snap-start flex-col items-center justify-center rounded-2xl border text-center transition-colors ${
+                          selected
+                            ? 'border-[var(--teal)] bg-[var(--teal)] text-white'
+                            : open
+                              ? 'border-[var(--border)] bg-white text-[var(--ink)] hover:border-[var(--teal)]'
+                              : 'border-transparent bg-[var(--paper)] text-[var(--muted)]'
+                        }`}
+                      >
+                        <span className={`text-[11px] font-medium uppercase ${selected ? 'text-white/80' : 'text-[var(--muted)]'}`}>
+                          {index === 0 ? 'Today' : value.toLocaleDateString('en-IN', { weekday: 'short' })}
+                        </span>
+                        <span className="text-lg font-semibold leading-tight">{value.getDate()}</span>
+                        <span className={`text-[10px] ${selected ? 'text-white/80' : 'text-[var(--muted)]'}`}>
+                          {open ? value.toLocaleDateString('en-IN', { month: 'short' }) : 'Closed'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {preferredDate && !stripDates.includes(preferredDate) && !calendarOpen && (
+                <p className="mt-2 text-sm text-[var(--ink)]">
+                  {new Date(`${preferredDate}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </p>
               )}
             </div>
-          </div>
 
-          {/* Form body */}
-          <form onSubmit={onSubmit} noValidate className="px-6 py-6 space-y-4">
-            {/* --- Required fields --- */}
-            <Field label="Full name *">
-              <input
-                type="text"
-                autoComplete="name"
-                placeholder="John Doe"
-                className={inputCls}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+            {preferredDate && (
+              <div>
+                <p className="mb-2 text-sm font-medium text-[var(--ink)]">Time</p>
+                {openSlots.length === 0 ? (
+                  <div className="rounded-2xl bg-[var(--paper)] p-4 text-center text-sm text-[var(--muted)]">
+                    <p>No times left {therapistName ? `with ${therapistName} ` : ''}on this day.</p>
+                    {nextOpenDay && (
+                      <button type="button" onClick={() => pickDate(nextOpenDay)} className="mt-2 min-h-10 rounded-full border border-[var(--teal)] bg-white px-4 text-sm font-medium text-[var(--teal)]">
+                        Try {new Date(`${nextOpenDay}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} →
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  groups.map((group) => (
+                    <TimeGroup
+                      key={group.label}
+                      label={group.label}
+                      slots={group.slots.map((slot) => slot.label)}
+                      selectedTime={preferredTime}
+                      onSelect={(time) => setPreferredTime(time === preferredTime ? null : time)}
+                    />
+                  ))
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* 2 — Details */}
+          <section className="space-y-4 border-t border-[var(--border)] px-5 py-5 sm:px-6" aria-labelledby="details-heading">
+            <SectionTitle id="details-heading" step={2} title="Your details" />
+            <Field label="Full name">
+              <input type="text" autoComplete="name" placeholder="Your name" className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
 
-            <Field label="Phone number *">
-              <div className="flex h-[46px] rounded-[10px] border border-[var(--border)] bg-white focus-within:border-[var(--teal)]">
+            <Field label="Phone (WhatsApp)">
+              <div className="flex h-12 rounded-xl border border-[var(--border)] bg-white focus-within:border-[var(--teal)] focus-within:ring-2 focus-within:ring-[var(--teal)]/20">
                 {/* The visible label sizes the box to its content; the native
                     select sits on top, invisible, so the phone's own picker opens. */}
-                <div className="relative flex shrink-0 items-center gap-1 rounded-l-[10px] border-r border-[var(--border)] bg-[var(--paper)] px-2.5 text-sm font-medium text-[var(--ink)]">
+                <div className="relative flex shrink-0 items-center gap-1 rounded-l-xl border-r border-[var(--border)] bg-[var(--paper)] px-3 text-sm font-medium text-[var(--ink)]">
                   <span aria-hidden>{COUNTRY_CODES.find((c) => c.code === countryCode)?.flag ?? '🌍'}</span>
                   <span aria-hidden>{countryCode || '+'}</span>
                   <span aria-hidden className="text-[10px] text-[var(--muted)]">▾</span>
-                  <select
-                    aria-label="Country code"
-                    className="absolute inset-0 cursor-pointer opacity-0"
-                    value={countryCode}
-                    onChange={(e) => setCountryCode(e.target.value)}
-                  >
+                  <select aria-label="Country code" className="absolute inset-0 cursor-pointer opacity-0" value={countryCode} onChange={(e) => setCountryCode(e.target.value)}>
                     {COUNTRY_CODES.map((c) => (
                       <option key={c.code} value={c.code}>
                         {c.flag} {c.name} {c.code}
@@ -470,184 +574,71 @@ export function BookingFormPage() {
                   autoComplete="tel-national"
                   aria-label="Phone number"
                   placeholder={countryCode === '+91' ? '98765 43210' : countryCode ? 'Phone number' : 'Full number with country code'}
-                  className="min-w-0 flex-1 rounded-r-[10px] bg-transparent px-3 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none"
+                  className="min-w-0 flex-1 rounded-r-xl bg-transparent px-3 text-base text-[var(--ink)] placeholder:text-[var(--muted)]/70 focus:outline-none sm:text-sm"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                 />
               </div>
             </Field>
 
-            {/* --- Optional fields --- */}
-            <div className="border-t border-[var(--border)] pt-4 mt-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] mb-3">Optional</p>
-              <div className="space-y-4">
-                <Field label="Email address">
-                  <input
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@example.com"
-                    className={inputCls}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </Field>
-                {/* Conditionally render clinician dropdown only if therapists.length > 0 */}
-                {therapists.length > 0 && (
-                  <Field label="Preferred clinician">
-                    <select
-                      className={inputCls}
-                      value={preferredTherapistId}
-                      onChange={(e) => setPreferredTherapistId(e.target.value)}
-                    >
-                      <option value="">No preference — any available clinician</option>
-                      {therapists.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                )}
-                <Field label="Reason for visit">
-                  <textarea
-                    rows={3}
-                    placeholder="Briefly describe what's bothering you…"
-                    className={inputCls}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
-                </Field>
-              </div>
-            </div>
+            <Field label="Email" optional>
+              <input type="email" autoComplete="email" placeholder="you@example.com" className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} />
+            </Field>
 
-            {/* --- Preferred date & time --- */}
-            <div className="mt-4 border-t border-[var(--border)] pt-4">
-              <div className="mb-3 flex items-baseline justify-between">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">Preferred date & time</p>
-                {preferredDate && (
-                  <button type="button" className="text-xs text-[var(--muted)] hover:text-[var(--ink)]" onClick={() => { setPreferredDate(null); setPreferredTime(null); }}>
-                    Clear
-                  </button>
-                )}
-              </div>
+            <Field label="Reason for visit" optional>
+              <textarea rows={3} placeholder="Briefly describe what's bothering you" className={`${inputCls} h-auto py-3`} value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </Field>
+          </section>
 
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-8" role="group" aria-label="Choose a day">
-                {quickDates.map((date, index) => {
-                  const open = dayOpen(date);
-                  const selected = preferredDate === date;
-                  return (
-                    <button
-                      key={date}
-                      type="button"
-                      disabled={!open}
-                      onClick={() => pickDate(date)}
-                      aria-pressed={selected}
-                      className={`flex min-h-12 flex-col items-center justify-center rounded-xl border px-1 text-xs font-medium ${
-                        selected
-                          ? 'border-[var(--teal)] bg-[var(--teal)] text-white'
-                          : open
-                            ? 'border-[var(--border)] bg-white text-[var(--ink)] hover:border-[var(--teal)]'
-                            : 'border-transparent bg-[var(--paper)] text-[var(--muted)] line-through opacity-60'
-                      }`}
-                    >
-                      {dayChipLabel(date, index)}
-                      {!open && <span className="text-[9px] font-normal no-underline">closed</span>}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  aria-expanded={calendarOpen}
-                  onClick={() => setCalendarOpen((prev) => !prev)}
-                  className={`min-h-12 rounded-xl border px-1 text-xs font-medium ${
-                    preferredDate && !quickDates.includes(preferredDate)
-                      ? 'border-[var(--teal)] bg-[var(--teal)] text-white'
-                      : 'border-[var(--border)] bg-white text-[var(--teal)]'
-                  }`}
-                >
-                  {preferredDate && !quickDates.includes(preferredDate)
-                    ? new Date(`${preferredDate}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-                    : 'Later…'}
-                </button>
-              </div>
-
-              {/* Opens in place (no pop-over), so it never clips on a phone. */}
-              {calendarOpen && (
-                <div className="mt-3 rounded-xl border border-[var(--border)] bg-white p-3">
-                  <MiniCalendar selectedDate={preferredDate} availability={availability} onSelect={pickDate} />
-                </div>
-              )}
-
-              {preferredDate && (
-                <div className="mt-4">
-                  {openSlots.length === 0 ? (
-                    <div className="rounded-xl bg-[var(--paper)] p-4 text-center text-sm text-[var(--muted)]">
-                      <p>No times left on this day.</p>
-                      {nextOpenDay && (
-                        <button type="button" onClick={() => pickDate(nextOpenDay)} className="mt-2 min-h-10 rounded-full border border-[var(--teal)] px-4 text-sm font-medium text-[var(--teal)]">
-                          Try {new Date(`${nextOpenDay}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} →
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    groups.map((group) => (
-                      <TimeGroup
-                        key={group.label}
-                        label={group.label}
-                        slots={group.slots.map((slot) => slot.label)}
-                        selectedTime={preferredTime}
-                        onSelect={(time) => setPreferredTime(time === preferredTime ? null : time)}
-                      />
-                    ))
-                  )}
-                </div>
-              )}
-
-              <p className="mt-3 rounded-lg bg-[var(--paper)] px-3 py-2 text-sm text-[var(--ink)]" aria-live="polite">
-                {preferredDate
-                  ? `${new Date(`${preferredDate}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}${preferredTime ? ` · ${preferredTime}` : ' · any time'}`
-                  : 'No preference — the clinic will suggest a time.'}
-              </p>
-            </div>
-
-            {/* Error + Submit */}
-            <div className="pt-2">
-              {submitError && (
-                <p className="mb-3 text-sm font-medium text-[var(--rust)]">{submitError}</p>
-              )}
-              <button
-                type="submit"
-                disabled={busy}
-                className="w-full rounded-full bg-[var(--teal)] py-3.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
-              >
-                {busy ? 'Sending…' : 'Request Appointment →'}
-              </button>
-              <p className="mt-3 text-center text-xs text-[var(--muted)]">
-                {clinicName} will confirm your appointment by phone or email.
-              </p>
-            </div>
-          </form>
-        </div>
+          {/* Summary + submit — pinned on phones, clear of the home indicator */}
+          <div className="sticky bottom-0 border-t border-[var(--border)] bg-white/95 px-5 pt-3 pb-[max(0.875rem,env(safe-area-inset-bottom))] backdrop-blur sm:static sm:px-6 sm:pb-5">
+            {submitError && <p className="mb-2 text-sm font-medium text-[var(--rust)]">{submitError}</p>}
+            <p className="mb-2 flex items-center justify-between gap-3 text-sm" aria-live="polite">
+              <span className="truncate text-[var(--ink)]">{summary}</span>
+              {therapistName && <span className="shrink-0 truncate text-[var(--muted)]">{therapistName}</span>}
+            </p>
+            <button
+              type="submit"
+              disabled={busy}
+              className="min-h-12 w-full rounded-full bg-[var(--teal)] text-base font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {busy ? 'Sending…' : 'Request appointment'}
+            </button>
+            <p className="mt-2 text-center text-xs text-[var(--muted)]">{clinicName} will confirm by phone or WhatsApp.</p>
+          </div>
+        </form>
       </main>
     </div>
   );
 }
 
+
 // ─── Small reusable primitives ────────────────────────────────────────────────
 
 const inputCls =
-  'w-full rounded-[10px] border border-[var(--border)] bg-white p-3 text-sm text-[var(--ink)] placeholder:text-[var(--muted)] focus:border-[var(--teal)] focus:outline-none transition-colors';
+  'h-12 w-full rounded-xl border border-[var(--border)] bg-white px-3.5 text-base text-[var(--ink)] placeholder:text-[var(--muted)]/70 focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20 transition-colors sm:text-sm';
 
-
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, optional = false, children }: { label: string; optional?: boolean; children: ReactNode }) {
   return (
-    <label className="mb-3 block last:mb-0">
-      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+    <label className="block">
+      <span className="mb-1.5 flex items-baseline gap-1.5 text-sm font-medium text-[var(--ink)]">
         {label}
+        {optional && <span className="text-xs font-normal text-[var(--muted)]">optional</span>}
       </span>
       {children}
     </label>
+  );
+}
+
+function SectionTitle({ id, step, title, hint }: { id: string; step: number; title: string; hint?: string }) {
+  return (
+    <h2 id={id} className="flex items-center gap-2.5 text-base font-semibold text-[var(--ink)]">
+      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--teal-light)] text-xs font-semibold text-[var(--teal)]" aria-hidden>
+        {step}
+      </span>
+      {title}
+      {hint && <span className="text-xs font-normal text-[var(--muted)]">{hint}</span>}
+    </h2>
   );
 }
 
