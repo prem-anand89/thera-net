@@ -5,10 +5,12 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { ErrorNote, Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useClinic } from '@/app/clinicContext';
+import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import {
   addDays,
   generateScheduleSlots,
   isTherapistSlotOccupied,
+  localDateTime,
   localDateTimeToIso,
   toLocalDateStr,
 } from '@/domain/schedule';
@@ -58,6 +60,7 @@ export function BookSlotSheet({
   requestPreferredTimeText,
 }: BookSlotSheetProps) {
   const clinic = useClinic();
+  const { myTherapistId } = useWorkspaceScope();
   const today = toLocalDateStr(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
@@ -67,6 +70,7 @@ export function BookSlotSheet({
   const [patientName, setPatientName] = useState('');
   const [patientPhone, setPatientPhone] = useState('');
   const [showLater, setShowLater] = useState(false);
+  const [therapistTouched, setTherapistTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,7 +84,7 @@ export function BookSlotSheet({
     [patients]
   );
   const slots = useMemo(
-    () => generateScheduleSlots(clinic.slotDurationMinutes || 30, clinic.bookingStartHour ?? 8, clinic.bookingEndHour ?? 18),
+    () => generateScheduleSlots(clinic.slotDurationMinutes || 30, clinic.bookingStartHour ?? 9, clinic.bookingEndHour ?? 17),
     [clinic.bookingEndHour, clinic.bookingStartHour, clinic.slotDurationMinutes]
   );
   const quickDates = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(today, index)), [today]);
@@ -91,6 +95,7 @@ export function BookSlotSheet({
     setSelectedDate(date);
     setSelectedTime(prefilledTime ? prefilledTime.slice(0, 5) : null);
     setTherapistId(prefilledTherapistId ?? '');
+    setTherapistTouched(Boolean(prefilledTherapistId));
     setPatientId('');
     setPatientName(prefilledPatientName ?? '');
     setPatientPhone(prefilledPatientPhone ?? '');
@@ -100,7 +105,26 @@ export function BookSlotSheet({
     setError(null);
   }, [isOpen, prefilledDate, prefilledPatientName, prefilledPatientPhone, prefilledTherapistId, prefilledTime, today]);
 
+  // Solo clinics and therapist logins shouldn't have to pick themselves.
+  useEffect(() => {
+    if (!isOpen || therapistTouched || therapistId || !therapists) return;
+    const fallback = myTherapistId && therapists.some((t) => t.id === myTherapistId)
+      ? myTherapistId
+      : therapists.length === 1 ? therapists[0].id : '';
+    if (fallback) setTherapistId(fallback);
+  }, [isOpen, therapistTouched, therapistId, therapists, myTherapistId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, busy, onClose]);
+
   if (!isOpen) return null;
+
+  const dayClosed = (clinic.closedWeekdays ?? []).includes(localDateTime(selectedDate, '00:00').getDay());
+  const isPast = (time: string) => localDateTime(selectedDate, time).getTime() < Date.now();
 
   const occupied = (time: string) =>
     Boolean(therapistId) && isTherapistSlotOccupied(
@@ -112,8 +136,10 @@ export function BookSlotSheet({
     if (!selectedTime) return setError('Choose an available time.');
     const existing = patientId ? patients?.find((patient) => patient.id === patientId) : undefined;
     const finalName = patientMode === 'find' ? existing?.name ?? '' : patientName.trim();
-    const finalPhone = patientMode === 'find' ? existing?.phone ?? '' : patientPhone.trim();
-    if (!finalName || !finalPhone) return setError('Choose an existing patient or enter name and phone.');
+    const finalPhone = patientMode === 'find' ? (existing?.phone ?? patientPhone).trim() : patientPhone.trim();
+    if (patientMode === 'find' && !existing) return setError('Choose an existing patient, or switch to New patient.');
+    if (!finalName) return setError('Enter the patient name.');
+    if (!finalPhone) return setError('This patient has no phone on file — enter one so the booking can be confirmed.');
 
     setBusy(true);
     setError(null);
@@ -162,7 +188,7 @@ export function BookSlotSheet({
               <button type="button" className={patientMode === 'new' ? btnPrimary : btnSecondary} onClick={() => setPatientMode('new')}>New patient</button>
             </div>
             {patientMode === 'find' ? (
-              <SearchableSelect label="" value={patientId} onChange={(value) => setPatientId(value as UUID)} options={patientOptions} placeholder="Search name or phone" />
+              <div className="space-y-3"><SearchableSelect label="" value={patientId} onChange={(value) => setPatientId(value as UUID)} options={patientOptions} placeholder="Search name or phone" />{patientId && !patients?.find((p) => p.id === patientId)?.phone && <Field label="Phone (none on file)"><input type="tel" className={inputCls} value={patientPhone} onChange={(event) => setPatientPhone(event.target.value)} /></Field>}</div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Patient name"><input className={inputCls} value={patientName} onChange={(event) => setPatientName(event.target.value)} /></Field>
@@ -172,7 +198,7 @@ export function BookSlotSheet({
           </div>
 
           <Field label="Therapist">
-            <select className={inputCls} value={therapistId} onChange={(event) => { setTherapistId(event.target.value as UUID); setSelectedTime(null); }}>
+            <select className={inputCls} value={therapistId} onChange={(event) => { setTherapistId(event.target.value as UUID); setTherapistTouched(true); setSelectedTime(null); }}>
               <option value="">Choose therapist</option>
               {(therapists ?? []).map((therapist) => <option key={therapist.id} value={therapist.id}>{therapist.name}</option>)}
             </select>
@@ -189,10 +215,11 @@ export function BookSlotSheet({
 
           <div>
             <p className="mb-2 text-xs font-medium text-[var(--muted)]">Available time</p>
+            {dayClosed && <p className="mb-2 rounded-lg bg-[var(--paper)] p-3 text-sm text-[var(--rust)]">The clinic is normally closed on this day. You can still book, but check first.</p>}
             {!therapistId ? <p className="rounded-lg bg-[var(--paper)] p-3 text-sm text-[var(--muted)]">Choose a therapist to see their available times.</p> : (
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {slots.map((slot) => {
-                  const isOccupied = occupied(slot.time);
+                  const isOccupied = occupied(slot.time) || isPast(slot.time);
                   return <button key={slot.time} type="button" disabled={isOccupied} onClick={() => setSelectedTime(slot.time)} className={`min-h-11 rounded-lg border px-2 text-xs font-medium ${selectedTime === slot.time ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : isOccupied ? 'cursor-not-allowed border-[var(--border)] bg-[var(--paper)] text-[var(--muted)] line-through' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--teal)]'}`}>{slot.label}</button>;
                 })}
               </div>

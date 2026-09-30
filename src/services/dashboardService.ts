@@ -1,3 +1,4 @@
+import { toLocalDateStr } from '@/domain/schedule';
 import {
   REFERRING_SOURCE_LABELS,
   referringSourceDetailLabel,
@@ -948,7 +949,7 @@ export function createDashboardService(repos: Repos) {
       asOf = new Date(),
       therapistId?: UUID
     ): Promise<TodayAppointmentRow[]> {
-      const todayStr = asOf.toISOString().slice(0, 10);
+      const todayStr = toLocalDateStr(asOf);
       const [appointments, therapists] = await Promise.all([
         repos.appointments.listByClinic(clinicId),
         repos.therapists.list(clinicId, true),
@@ -956,7 +957,7 @@ export function createDashboardService(repos: Repos) {
       const therapistNameById = new Map(therapists.map((t) => [t.id, t.name]));
 
       return appointments
-        .filter((a) => a.scheduledAt.slice(0, 10) === todayStr)
+        .filter((a) => toLocalDateStr(new Date(a.scheduledAt)) === todayStr)
         .filter((a) => !therapistId || a.therapistId === therapistId)
         .map((a) => ({
           id: a.id,

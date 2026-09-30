@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, appointmentsOverlap, generateScheduleSlots, getWeekStart, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, appointmentsOverlap, belongsToColumn, countByDate, filterHistory, generateScheduleSlots, getWeekStart, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 describe('schedule helpers', () => {
@@ -61,5 +61,55 @@ describe('schedule helpers', () => {
     expect(isTherapistSlotOccupied(appointments, therapistId, '2026-10-01', '11:00', 30)).toBe(false);
     // 11:00 is occupied for t2
     expect(isTherapistSlotOccupied(appointments, 't2' as UUID, '2026-10-01', '11:00', 30)).toBe(true);
+  });
+});
+
+describe('schedule grouping and history', () => {
+  const mk = (over: Partial<Appointment>) =>
+    ({
+      id: 'a', patientName: 'Asha Rao', patientPhone: '98200', status: 'confirmed',
+      therapistId: 't1', scheduledAt: localDateTime('2026-09-20', '10:00').toISOString(), ...over,
+    }) as Appointment;
+  const known = new Map([['t1', 'Dr A']]);
+
+  it('week strip days are Monday to Sunday and Sunday belongs to the prior Monday', () => {
+    const days = weekDays('2026-10-04'); // a Sunday
+    expect(days[0]).toBe('2026-09-28');
+    expect(days).toHaveLength(7);
+    expect(days[6]).toBe('2026-10-04');
+    expect(addWeeks('2026-10-04', 1)).toBe('2026-10-05');
+  });
+
+  it('week rollover across a year boundary', () => {
+    expect(weekDays('2026-12-31')[0]).toBe('2026-12-28');
+    expect(weekDays('2026-12-31')[6]).toBe('2027-01-03');
+  });
+
+  it('counts appointments per date', () => {
+    const counts = countByDate(['2026-09-20', '2026-09-20', '2026-09-21']);
+    expect(counts.get('2026-09-20')).toBe(2);
+    expect(counts.get('2026-09-22')).toBeUndefined();
+  });
+
+  it('routes unknown or missing therapists to the Unassigned column', () => {
+    expect(belongsToColumn(mk({}), 't1', known)).toBe(true);
+    expect(belongsToColumn(mk({}), '', known)).toBe(false);
+    expect(belongsToColumn(mk({ therapistId: null }), '', known)).toBe(true);
+    expect(belongsToColumn(mk({ therapistId: 'gone' as UUID }), '', known)).toBe(true);
+  });
+
+  it('filters history by date, status, therapist and text', () => {
+    const rows = [
+      mk({ id: '1' }),
+      mk({ id: '2', status: 'cancelled', patientName: 'Ben' }),
+      mk({ id: '3', therapistId: 't2' as UUID, patientPhone: '77700' }),
+      mk({ id: '4', scheduledAt: localDateTime('2026-08-01', '10:00').toISOString() }),
+    ];
+    const base = { from: '2026-09-01', query: '', status: '', therapistId: '' };
+    expect(filterHistory(rows, base).map((r) => r.id).sort()).toEqual(['1', '2', '3']);
+    expect(filterHistory(rows, { ...base, status: 'cancelled' }).map((r) => r.id)).toEqual(['2']);
+    expect(filterHistory(rows, { ...base, therapistId: 't2' }).map((r) => r.id)).toEqual(['3']);
+    expect(filterHistory(rows, { ...base, query: '777' }).map((r) => r.id)).toEqual(['3']);
+    expect(filterHistory(rows, { ...base, query: 'ben' }).map((r) => r.id)).toEqual(['2']);
   });
 });

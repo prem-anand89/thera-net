@@ -121,7 +121,7 @@ export function RequestsPage() {
   if (!isAdmin && !canSeeBookings) {
     return (
       <div className="space-y-4">
-        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Requests</h1>
+        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Schedule</h1>
         <p className="text-sm text-[var(--muted)]">Requests are managed by your clinic admin.</p>
       </div>
     );
@@ -129,7 +129,7 @@ export function RequestsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Requests</h1>
+      <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Schedule</h1>
 
       <div className="flex gap-2 border-b border-[var(--border)]">
         <Link

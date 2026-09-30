@@ -96,3 +96,40 @@ export function isTherapistSlotOccupied(
       appointmentsOverlap(appointment, candidateStart, durationMinutes)
   );
 }
+
+export function isUnassigned(appointment: Appointment, knownTherapists: Map<string, string>): boolean {
+  return !appointment.therapistId || !knownTherapists.has(appointment.therapistId);
+}
+
+/** '' is the synthetic "Unassigned" column: no therapist, or one no longer listed. */
+export function belongsToColumn(
+  appointment: Appointment,
+  columnId: string,
+  knownTherapists: Map<string, string>
+): boolean {
+  return columnId ? appointment.therapistId === columnId : isUnassigned(appointment, knownTherapists);
+}
+
+export function countByDate(dates: string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const date of dates) counts.set(date, (counts.get(date) ?? 0) + 1);
+  return counts;
+}
+
+export function filterHistory(
+  appointments: Appointment[],
+  filters: { from: string; query: string; status: string; therapistId: string }
+): Appointment[] {
+  const query = filters.query.trim().toLowerCase();
+  return appointments
+    .filter((a) => toLocalDateStr(new Date(a.scheduledAt)) >= filters.from)
+    .filter((a) => !filters.status || a.status === filters.status)
+    .filter((a) => !filters.therapistId || a.therapistId === filters.therapistId)
+    .filter(
+      (a) =>
+        !query ||
+        a.patientName.toLowerCase().includes(query) ||
+        (a.patientPhone ?? '').toLowerCase().includes(query)
+    )
+    .sort((x, y) => y.scheduledAt.localeCompare(x.scheduledAt));
+}
