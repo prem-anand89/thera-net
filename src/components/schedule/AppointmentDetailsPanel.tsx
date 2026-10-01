@@ -11,7 +11,7 @@ import {
 } from '@/domain/appointmentStatus';
 import {
   appointmentMinutes,
-  formatMinutes,
+  lengthLabel,
   minutesLabel,
   minutesOfDay,
   type Attendance,
@@ -19,9 +19,13 @@ import {
 import type { Appointment } from '@/domain/types';
 import { PatientFlagPills } from './PatientFlagPills';
 import type { PatientFlag } from '@/domain/patientFlags';
+import { IconClose, IconMessage, IconNoShow, IconPhone, IconReschedule } from '@/components/StatIcons';
 
 const actionCls =
   'min-h-11 rounded-lg border border-[var(--border)] px-3 text-sm font-medium hover:bg-[var(--paper)] disabled:opacity-50';
+// Quick actions: icon over a short label, a row of equal cells.
+const quickCls =
+  'flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-medium text-[var(--teal)] hover:bg-[var(--teal-light)] disabled:opacity-50 [&>svg]:h-5 [&>svg]:w-5';
 
 export function AttendanceNote({ attendance }: { attendance: Attendance | null }) {
   if (!attendance || (attendance.noShows === 0 && attendance.cancelled === 0)) return null;
@@ -101,10 +105,18 @@ export function AppointmentDetailsPanel({
   const minutes = appointmentMinutes(appointment, slotMinutes);
   const active = isActiveAppointmentStatus(appointment.status);
   const dateLabel = new Date(appointment.scheduledAt).toLocaleDateString('en-IN', {
-    weekday: 'long',
+    weekday: 'short',
     day: 'numeric',
-    month: 'long',
+    month: 'short',
   });
+  // A reschedule can keep the time (e.g. a therapist change); only show
+  // "Moved from" when the time itself moved.
+  const movedFrom =
+    appointment.previousScheduledAt && appointment.previousScheduledAt !== appointment.scheduledAt
+      ? `${new Date(appointment.previousScheduledAt).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} · ${minutesLabel(minutesOfDay(appointment.previousScheduledAt))}`
+      : null;
+  const open = !appointment.visitId && appointment.status !== 'cancelled' && appointment.status !== 'no_show';
+  const arrived = appointment.status === 'arrived';
   const timeRange = `${minutesLabel(start)}–${minutesLabel(start + minutes)}`;
   const messageInput = {
     patientName: appointment.patientName,
@@ -163,55 +175,58 @@ export function AppointmentDetailsPanel({
               <PatientFlagPills flags={flags.filter((flag) => flag.key !== 'noshow')} />
             </div>
           </div>
-          <button type="button" className="min-h-11 px-2 text-sm text-[var(--muted)]" onClick={onClose}>
-            Close
+          <button
+            type="button"
+            aria-label="Close"
+            className="-mr-2 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]"
+            onClick={onClose}
+          >
+            <IconClose className="h-5 w-5" />
           </button>
         </div>
 
-        <dl className="mt-4 space-y-2 text-sm">
+        {/* Facts, one line each: when, who, phone, what for. */}
+        <dl className="mt-3 space-y-1.5 text-sm">
           <div className="flex gap-2">
-            <dt className="w-20 shrink-0 text-[var(--muted)]">When</dt>
+            <dt className="sr-only">When</dt>
             <dd className="text-[var(--ink)]">
-              {dateLabel}
-              <br />
-              {timeRange} · {formatMinutes(minutes)}
+              {dateLabel} · {timeRange} <span className="text-[var(--muted)]">· {lengthLabel(minutes)}</span>
             </dd>
           </div>
-          <div className="flex gap-2">
-            <dt className="w-20 shrink-0 text-[var(--muted)]">Therapist</dt>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <dt className="sr-only">Therapist</dt>
             <dd className="flex items-center gap-1.5 text-[var(--ink)]">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: therapistColor }} aria-hidden />
               {therapistName}
             </dd>
+            {appointment.patientPhone && (
+              <>
+                <dt className="sr-only">Phone</dt>
+                <dd>
+                  <span className="text-[var(--muted)]" aria-hidden>· </span>
+                  <a href={`tel:${appointment.patientPhone}`} className="text-[var(--teal)] hover:underline">
+                    {appointment.patientPhone}
+                  </a>
+                </dd>
+              </>
+            )}
           </div>
-          {appointment.patientPhone && (
-            <div className="flex gap-2">
-              <dt className="w-20 shrink-0 text-[var(--muted)]">Phone</dt>
-              <dd>
-                <a href={`tel:${appointment.patientPhone}`} className="text-[var(--teal)] hover:underline">
-                  {appointment.patientPhone}
-                </a>
-              </dd>
-            </div>
-          )}
-          {appointment.previousScheduledAt && (
-            <div className="flex gap-2">
-              <dt className="w-20 shrink-0 text-[var(--muted)]">Moved from</dt>
-              <dd className="text-[var(--muted)]">
-                {new Date(appointment.previousScheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
-              </dd>
-            </div>
-          )}
           {condition && (
             <div className="flex gap-2">
-              <dt className="w-20 shrink-0 text-[var(--muted)]">Condition</dt>
+              <dt className="w-24 shrink-0 text-[var(--muted)]">Condition</dt>
               <dd className="text-[var(--ink)]">{condition}</dd>
             </div>
           )}
           {requestNotes && (
             <div className="flex gap-2">
-              <dt className="w-20 shrink-0 text-[var(--muted)]">Patient says</dt>
+              <dt className="w-24 shrink-0 text-[var(--muted)]">Patient says</dt>
               <dd className="text-[var(--ink)]">{requestNotes}</dd>
+            </div>
+          )}
+          {movedFrom && (
+            <div className="flex gap-2">
+              <dt className="w-24 shrink-0 text-[var(--muted)]">Moved from</dt>
+              <dd className="text-[var(--muted)]">{movedFrom}</dd>
             </div>
           )}
         </dl>
@@ -220,74 +235,95 @@ export function AppointmentDetailsPanel({
           <AttendanceNote attendance={attendance ?? null} />
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {active && (
-            <button
-              type="button"
-              disabled={busy}
-              className="col-span-2 min-h-11 rounded-lg bg-[var(--moss)] px-3 text-sm font-medium text-white hover:bg-[var(--moss-strong)] disabled:opacity-50"
-              onClick={() => void run(() => bookingService.markAppointmentArrived(appointment.id))}
-            >
-              ✓ Mark arrived
-            </button>
-          )}
-          {appointment.status === 'arrived' && !appointment.visitId && (
-            <p className="col-span-2 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber)]">
-              In progress — add the service and payment with Complete visit.
-            </p>
-          )}
-          {onStartNote && !appointment.visitId && appointment.status !== 'cancelled' && appointment.status !== 'no_show' && (
-            <button type="button" className={`${actionCls} col-span-2 text-[var(--teal)]`} onClick={() => onStartNote(appointment)}>
-              Start note — service later
-            </button>
-          )}
-          {!appointment.visitId && appointment.status !== 'cancelled' && appointment.status !== 'no_show' && (
-            <Link
-              to="/visits/new"
-              search={{
-                appointmentId: appointment.id,
-                prefillName: appointment.patientName,
-                prefillPhone: appointment.patientPhone,
-                ...(appointment.patientId ? { patientId: appointment.patientId } : {}),
-              }}
-              className="col-span-2 flex min-h-11 items-center justify-center rounded-lg bg-[var(--teal)] px-3 text-sm font-medium text-white hover:bg-[var(--teal-strong)]"
-            >
-              {appointment.status === 'arrived' ? 'Complete visit' : 'Create visit'}
-            </Link>
-          )}
-          {active && appointment.patientPhone && (
-            <button type="button" className={`${actionCls} text-[var(--teal)]`} onClick={() => bookingService.messagePatient('reminder', messageInput)}>
-              Remind patient
-            </button>
-          )}
-          {active && therapistPhone && (
-            <button
-              type="button"
-              className={`${actionCls} text-[var(--teal)]`}
-              onClick={() => bookingService.messageTherapist(appointment.status === 'rescheduled' ? 'rescheduled' : 'booked', therapistInput)}
-            >
-              Notify therapist
-            </button>
-          )}
-          {active && canManage && (
-            <>
-              <button type="button" disabled={busy} className={`${actionCls} text-[var(--teal)]`} onClick={() => onReschedule(appointment)}>
-                Reschedule
-              </button>
+        {/* One main action by state: Mark arrived before they come, Complete
+            visit once they have. Start note / Create visit sit beside each
+            other as the secondary pair. */}
+        {open && (
+          <div className="mt-4 space-y-2">
+            {active && (
               <button
                 type="button"
                 disabled={busy}
-                className={`${actionCls} text-[var(--muted)]`}
-                onClick={() => void run(() => bookingService.markAppointmentNoShow(appointment.id))}
+                className="flex min-h-11 w-full items-center justify-center rounded-lg bg-[var(--moss)] px-3 text-sm font-medium text-white hover:bg-[var(--moss-strong)] disabled:opacity-50"
+                onClick={() => void run(() => bookingService.markAppointmentArrived(appointment.id))}
               >
-                No-show
+                ✓ Mark arrived
               </button>
-              <button type="button" disabled={busy} className={`${actionCls} col-span-2 text-[var(--rust)]`} onClick={() => setConfirmCancel(true)}>
-                Cancel appointment
+            )}
+            {arrived && (
+              <p className="rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber)]">
+                In progress — add the service and payment with Complete visit.
+              </p>
+            )}
+            <div className="flex gap-2">
+              {onStartNote && (
+                <button type="button" className={`${actionCls} flex-1 text-[var(--teal)]`} onClick={() => onStartNote(appointment)}>
+                  Start note
+                </button>
+              )}
+              <Link
+                to="/visits/new"
+                search={{
+                  appointmentId: appointment.id,
+                  prefillName: appointment.patientName,
+                  prefillPhone: appointment.patientPhone,
+                  ...(appointment.patientId ? { patientId: appointment.patientId } : {}),
+                }}
+                className={
+                  arrived
+                    ? 'flex min-h-11 flex-1 items-center justify-center rounded-lg bg-[var(--teal)] px-3 text-sm font-medium text-white hover:bg-[var(--teal-strong)]'
+                    : `${actionCls} flex flex-1 items-center justify-center text-[var(--teal)]`
+                }
+              >
+                {arrived ? 'Complete visit' : 'Create visit'}
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {active && (appointment.patientPhone || therapistPhone || canManage) && (
+          <div className="mt-3 grid auto-cols-fr grid-flow-col gap-1 border-t border-[var(--border)] pt-3">
+            {appointment.patientPhone && (
+              <a href={`tel:${appointment.patientPhone}`} className={quickCls}>
+                <IconPhone />
+                Call
+              </a>
+            )}
+            {appointment.patientPhone && (
+              <button type="button" className={quickCls} onClick={() => bookingService.messagePatient('reminder', messageInput)}>
+                <IconMessage />
+                Remind
               </button>
-            </>
-          )}
-        </div>
+            )}
+            {therapistPhone && (
+              <button
+                type="button"
+                className={quickCls}
+                onClick={() => bookingService.messageTherapist(appointment.status === 'rescheduled' ? 'rescheduled' : 'booked', therapistInput)}
+              >
+                <IconMessage />
+                Tell therapist
+              </button>
+            )}
+            {canManage && (
+              <>
+                <button type="button" disabled={busy} className={quickCls} onClick={() => onReschedule(appointment)}>
+                  <IconReschedule />
+                  Reschedule
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className={`${quickCls} !text-[var(--muted)]`}
+                  onClick={() => void run(() => bookingService.markAppointmentNoShow(appointment.id))}
+                >
+                  <IconNoShow />
+                  No-show
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         {appointment.status === 'cancelled' && (
           <div className="mt-4 rounded-lg bg-[var(--paper)] p-3">
@@ -307,14 +343,19 @@ export function AppointmentDetailsPanel({
           </div>
         )}
 
-        <div className="mt-4 flex items-center justify-between border-t border-[var(--border)] pt-3 text-xs">
-          <button type="button" className="min-h-9 text-[var(--muted)] hover:text-[var(--ink)]" onClick={copyDetails}>
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--border)] pt-2 text-xs">
+          <button type="button" className="min-h-11 text-[var(--muted)] hover:text-[var(--ink)]" onClick={copyDetails}>
             {copied ? 'Copied' : 'Copy details'}
           </button>
-          {!therapistPhone && active && (
-            <span className="text-[var(--muted)]">Add the therapist's phone in Settings → Team to notify them.</span>
+          {active && canManage && (
+            <button type="button" disabled={busy} className="min-h-11 font-medium text-[var(--rust)] hover:underline disabled:opacity-50" onClick={() => setConfirmCancel(true)}>
+              Cancel appointment
+            </button>
           )}
         </div>
+        {active && canManage && !therapistPhone && (
+          <p className="text-[11px] text-[var(--muted)]">Add {therapistName}'s phone in Settings → Team to message them.</p>
+        )}
       </aside>
       <ConfirmDialog
         open={confirmCancel}

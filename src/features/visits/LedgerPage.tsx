@@ -37,6 +37,8 @@ import {
   SectionCard,
   StatTile,
   CountBadge,
+  KebabMenu,
+  menuItem,
 } from '@/components/ui';
 import { PatientOverview } from './PatientOverview';
 import { EditVisitModal } from './EditVisitModal';
@@ -224,6 +226,9 @@ export function LedgerPage() {
   const [onlyCollectedNoReceipt, setOnlyCollectedNoReceipt] = useState(false);
   const [onlyNotCollected, setOnlyNotCollected] = useState(false);
   const [onlyNotDocumented, setOnlyNotDocumented] = useState(false);
+  // Phones fold therapist + the three "only" checkboxes behind a Filters
+  // button (with a count of what's on); from sm: they're always shown.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [patientQuery, setPatientQuery] = useState('');
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
@@ -573,12 +578,17 @@ export function LedgerPage() {
   const unsyncedVisitCount =
     useLiveQuery(() => db.outbox.filter((e) => e.table === 'visits').count(), []) ?? 0;
   const syncCaption = syncFreshnessCaption(unsyncedVisitCount, 'visits', syncSnapshot.lastSyncAt);
+  const activeFilterCount =
+    Number(therapistId !== '') + Number(onlyCollectedNoReceipt) + Number(onlyNotCollected) + Number(onlyNotDocumented);
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* The nav tab already names the page, so the title is for screen
+          readers only; the + in the phone bar is New visit, so the button
+          shows from sm:. The row only takes space when it has something. */}
+      <h1 className="sr-only">Ledger</h1>
+      <div className={`flex-wrap items-center justify-between gap-3 ${filteredPatient ? 'flex' : 'hidden sm:flex'}`}>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Ledger</h1>
           {filteredPatient && (
             <span className="rounded-full bg-[var(--teal-light)] px-3 py-1 text-xs text-[var(--teal)]">
               {filteredPatient.name} ({filteredPatient.mrno})
@@ -588,7 +598,7 @@ export function LedgerPage() {
             </span>
           )}
         </div>
-        <Link to="/visits/new" className={btnPrimary}>
+        <Link to="/visits/new" className={`${btnPrimary} hidden items-center sm:inline-flex`}>
           + New visit
         </Link>
       </div>
@@ -622,84 +632,121 @@ export function LedgerPage() {
 
       {recordsView === 'visits' && (
         <>
-          <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
-            <div className="relative">
-              <Field label="Find patient">
-                <input
-                  className={inputCls}
-                  placeholder="Name or Patient ID..."
-                  value={patientQuery}
-                  onChange={(e) => setPatientQuery(e.target.value)}
-                  onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
-                />
-              </Field>
-              {patientMatches.length > 0 && (
-                <div className="absolute z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-                  {patientMatches.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className="block w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--paper)]"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setPatientQuery('');
-                        void navigate({ to: '/ledger', search: { patientId: p.id } });
-                      }}
-                    >
-                      <span className="font-display">{p.name}</span>{' '}
-                      <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <Field label="Therapist">
-              <select
-                className={inputCls}
-                value={therapistId}
-                onChange={(e) => setTherapistId(e.target.value)}
+          <div className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-sm sm:flex sm:flex-wrap sm:items-end sm:gap-3 sm:space-y-0 sm:p-4">
+            {/* Phones: search, Filters and ⋮ share the first row; from sm:
+                the wrappers dissolve (`sm:contents`) into the old one-row
+                layout. */}
+            <div className="flex items-end gap-2 sm:contents">
+              <div className="relative min-w-0 flex-1 sm:flex-none">
+                <Field label="Find patient">
+                  <input
+                    className={inputCls}
+                    placeholder="Name or Patient ID..."
+                    value={patientQuery}
+                    onChange={(e) => setPatientQuery(e.target.value)}
+                    onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
+                  />
+                </Field>
+                {patientMatches.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+                    {patientMatches.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="block w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--paper)]"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setPatientQuery('');
+                          void navigate({ to: '/ledger', search: { patientId: p.id } });
+                        }}
+                      >
+                        <span className="font-display">{p.name}</span>{' '}
+                        <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                aria-expanded={filtersOpen}
+                onClick={() => setFiltersOpen((current) => !current)}
+                className={`${btnSecondary} flex shrink-0 items-center gap-1.5 px-3 sm:hidden ${activeFilterCount > 0 ? 'border-[var(--teal)] text-[var(--teal)]' : ''}`}
               >
-                <option value="">All</option>
-                {(therapists ?? []).map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <label className="flex items-center gap-1.5 pb-2 text-xs text-[var(--muted)]">
-              <input
-                type="checkbox"
-                checked={onlyCollectedNoReceipt}
-                onChange={(e) => setOnlyCollectedNoReceipt(e.target.checked)}
-              />
-              Collected, no invoice
-            </label>
-            <label className="flex items-center gap-1.5 pb-2 text-xs text-[var(--muted)]">
-              <input
-                type="checkbox"
-                checked={onlyNotCollected}
-                onChange={(e) => setOnlyNotCollected(e.target.checked)}
-              />
-              Not collected
-            </label>
-            {clinic.clinicalDocsEnabled && (
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--teal)] px-1 text-[11px] font-semibold text-white">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+              <div className="flex min-h-11 shrink-0 items-center sm:hidden">
+                <KebabMenu ariaLabel="More ledger options">
+                  {(close) => (
+                    <>
+                      <button type="button" className={menuItem} disabled={!visits?.length} onClick={() => { downloadCsv(); close(); }}>
+                        Export CSV
+                      </button>
+                      {canViewPayouts && (
+                        <Link to="/insights" search={{ tab: 'monthly' }} className={`${menuItem} block`} onClick={close}>
+                          Generate report
+                        </Link>
+                      )}
+                    </>
+                  )}
+                </KebabMenu>
+              </div>
+            </div>
+            <div className={`${filtersOpen ? 'flex' : 'hidden'} flex-wrap items-end gap-x-3 gap-y-1 sm:contents`}>
+              <Field label="Therapist">
+                <select
+                  className={inputCls}
+                  value={therapistId}
+                  onChange={(e) => setTherapistId(e.target.value)}
+                >
+                  <option value="">All</option>
+                  {(therapists ?? []).map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
               <label className="flex items-center gap-1.5 pb-2 text-xs text-[var(--muted)]">
                 <input
                   type="checkbox"
-                  checked={onlyNotDocumented}
-                  onChange={(e) => setOnlyNotDocumented(e.target.checked)}
+                  checked={onlyCollectedNoReceipt}
+                  onChange={(e) => setOnlyCollectedNoReceipt(e.target.checked)}
                 />
-                Not documented
+                Collected, no invoice
               </label>
-            )}
-            <div className="ml-auto flex flex-wrap items-end gap-2">
-              <div className="flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+              <label className="flex items-center gap-1.5 pb-2 text-xs text-[var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={onlyNotCollected}
+                  onChange={(e) => setOnlyNotCollected(e.target.checked)}
+                />
+                Not collected
+              </label>
+              {clinic.clinicalDocsEnabled && (
+                <label className="flex items-center gap-1.5 pb-2 text-xs text-[var(--muted)]">
+                  <input
+                    type="checkbox"
+                    checked={onlyNotDocumented}
+                    onChange={(e) => setOnlyNotDocumented(e.target.checked)}
+                  />
+                  Not documented
+                </label>
+              )}
+            </div>
+            <div className="flex flex-wrap items-end gap-2 sm:ml-auto">
+              {/* One scrollable row on phones instead of wrapping to two. */}
+              <div className="hide-scrollbar flex max-w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1 sm:flex-wrap">
                 {DATE_PRESETS.map((p) => (
                   <button
                     key={p.key}
                     type="button"
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${datePreset === p.key
+                    className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${datePreset === p.key
                         ? 'bg-[var(--teal)] text-white'
                         : 'text-[var(--muted)] hover:bg-[var(--surface)]'
                       }`}
@@ -729,23 +776,28 @@ export function LedgerPage() {
                   </Field>
                 </div>
               )}
+              {/* Phones: these two live in the ⋮ beside the search. */}
               <button
                 type="button"
-                className={btnSecondary}
+                className={`${btnSecondary} hidden sm:block`}
                 disabled={!visits?.length}
                 onClick={downloadCsv}
               >
                 Export CSV
               </button>
               {canViewPayouts && (
-                <Link to="/insights" search={{ tab: 'monthly' }} className={btnSecondary}>
+                <Link to="/insights" search={{ tab: 'monthly' }} className={`${btnSecondary} hidden sm:block`}>
                   Generate report
                 </Link>
               )}
             </div>
           </div>
 
-          {syncCaption && <p className="text-xs text-[var(--slate)]">{syncCaption}</p>}
+          {/* Phones have the header's sync dot, so the "as of" line only
+              shows there when something is still unsynced. */}
+          {syncCaption && (
+            <p className={`text-xs text-[var(--slate)] ${unsyncedVisitCount > 0 ? '' : 'hidden sm:block'}`}>{syncCaption}</p>
+          )}
 
           {filteredPatient && <PatientOverview patient={filteredPatient} />}
         </>

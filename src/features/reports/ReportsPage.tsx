@@ -75,6 +75,9 @@ export function ReportsPage() {
 
   return (
     <div className="space-y-5">
+      {/* Phones reach Reports through More, so it keeps a compact title
+          there; from sm: the top nav names the page. */}
+      <h1 className="font-display text-lg font-semibold text-[var(--ink)] sm:sr-only">Reports</h1>
       <div className="flex w-fit gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
         {(
           [

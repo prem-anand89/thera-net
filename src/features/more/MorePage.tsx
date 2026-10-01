@@ -1,64 +1,44 @@
+import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { usePermissions } from '@/app/usePermissions';
-import { useClinic } from '@/app/clinicContext';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { repos } from '@/services';
+import { IconPatients, IconReports, IconSettings } from '@/components/NavIcons';
+import { IconChevronRight } from '@/components/StatIcons';
 
+/**
+ * Phone-only hub for the pages the bottom bar has no room for (Workspace,
+ * Schedule, New visit and Ledger take the bar). Booking requests aren't
+ * listed: the Schedule tab already carries their badge and inbox.
+ */
 export function MorePage() {
   const { canEditSettings, isAdmin, role } = usePermissions();
+  // Same gate as the desktop nav's Reports item in Shell.tsx.
   const showReports = isAdmin || role === 'front_desk';
-  // Requests → Feedback is admin-only, but Bookings (Slice 5) is
-  // front_desk's primary surface too — same gate as the desktop nav's
-  // /requests item in Shell.tsx.
-  const showRequests = isAdmin || role === 'front_desk';
-  const clinic = useClinic();
-  
-  const appointmentRequests = useLiveQuery(
-    () => clinic && showRequests ? repos.appointmentRequests.listByClinic(clinic.id) : undefined,
-    [clinic?.id, showRequests]
-  );
-  const pendingRequestsCount = appointmentRequests?.filter(r => r.status === 'pending').length ?? 0;
 
   return (
     <div className="space-y-4">
-      <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">More</h1>
+      <h1 className="font-display text-lg font-semibold text-[var(--ink)]">More</h1>
       <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-        {showReports && (
-          <li>
-            <Link
-              to="/insights"
-              className="block min-h-11 px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
-            >
-              Reports
-            </Link>
-          </li>
-        )}
-        {canEditSettings && (
-          <li>
-            <Link
-              to="/settings"
-              className="block min-h-11 px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
-            >
-              Settings
-            </Link>
-          </li>
-        )}
-        {showRequests && (
-          <li>
-            <Link
-              to="/schedule"
-              className="flex items-center justify-between min-h-11 px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
-            >
-              <span>Requests</span>
-              {pendingRequestsCount > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--rust)] px-1.5 text-[11px] font-bold text-white">
-                  {pendingRequestsCount}
-                </span>
-              )}
-            </Link>
-          </li>
-        )}
+        <MoreItem to="/patients" label="Patients" icon={<IconPatients />} />
+        {showReports && <MoreItem to="/insights" label="Reports" icon={<IconReports />} />}
+        {canEditSettings && <MoreItem to="/settings" label="Settings" icon={<IconSettings />} />}
       </ul>
     </div>
+  );
+}
+
+function MoreItem({ to, label, icon }: { to: '/patients' | '/insights' | '/settings'; label: string; icon: ReactNode }) {
+  return (
+    <li>
+      <Link
+        to={to}
+        className="flex min-h-12 items-center gap-3 px-4 py-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+      >
+        <span className="text-[var(--teal)]" aria-hidden>
+          {icon}
+        </span>
+        <span className="flex-1">{label}</span>
+        <IconChevronRight className="h-4 w-4 text-[var(--muted)]" />
+      </Link>
+    </li>
   );
 }

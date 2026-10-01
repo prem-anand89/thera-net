@@ -62,7 +62,9 @@ const PATIENT_COMPARATORS = {
 export function PatientsPage() {
   return (
     <div className="space-y-6">
-      <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">Patients</h1>
+      {/* Phones reach Patients through More, so it keeps a compact title
+          there; from sm: the top nav names the page. */}
+      <h1 className="font-display text-lg font-semibold text-[var(--ink)] sm:sr-only">Patients</h1>
       <AllPatientsSection />
     </div>
   );

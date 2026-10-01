@@ -198,3 +198,50 @@ export function IconUserCheck(props: IconProps) {
     </Svg>
   );
 }
+
+/** Handset — call the patient. */
+export function IconPhone(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5 3h3.5l1.8 4.5-2.3 1.4a11 11 0 006.1 6.1l1.4-2.3L20 14.5V18a2 2 0 01-2 2A15 15 0 013 5a2 2 0 012-2z" />
+    </Svg>
+  );
+}
+
+/** Speech bubble — send a message (reminder, notify). */
+export function IconMessage(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M21 12a8 8 0 01-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1121 12z" />
+    </Svg>
+  );
+}
+
+/** Calendar with a circular arrow — move to another time. */
+export function IconReschedule(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M20 11V7a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2h5M4 10h16M8 3v4M16 3v4" />
+      <path d="M21 17a4 4 0 11-1.2-2.8M21 13v1.5h-1.5" />
+    </Svg>
+  );
+}
+
+/** Person with a slash — didn't turn up. */
+export function IconNoShow(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="10" cy="8" r="4" />
+      <path d="M3 21a7 7 0 0111.5-5.4M16 16l5 5M21 16l-5 5" />
+    </Svg>
+  );
+}
+
+/** Cross — close a sheet or panel. */
+export function IconClose(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </Svg>
+  );
+}
