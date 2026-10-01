@@ -43,12 +43,16 @@ export function computeVisitPaymentState(
   invoiceStatus: PaymentStatus | undefined
 ): VisitPaymentState {
   if (actualBillPaise === 0) return 'zero_session';
-  const invoiceMarkedPaid = invoiceId != null && invoiceStatus !== 'outstanding';
+  // A void invoice is no invoice: its visits are released (invoice_id null)
+  // by void_invoice(), but a stale link — e.g. a restored older backup —
+  // must never read as "invoiced and paid" (anything not 'outstanding').
+  const invoiced = invoiceId != null && invoiceStatus !== 'void';
+  const invoiceMarkedPaid = invoiced && invoiceStatus !== 'outstanding';
   if (invoiceMarkedPaid || directPaymentAmountPaise >= actualBillPaise) {
-    return invoiceId ? 'paid' : 'collected_no_receipt';
+    return invoiced ? 'paid' : 'collected_no_receipt';
   }
   if (directPaymentAmountPaise > 0) return 'partially_collected';
-  return invoiceId ? 'outstanding' : 'uninvoiced';
+  return invoiced ? 'outstanding' : 'uninvoiced';
 }
 
 /**

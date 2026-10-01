@@ -62,7 +62,9 @@ export function withPendingLinks<T extends { id: string; visitId?: string | null
   const byAppointment = new Map(links.map((l) => [l.appointmentId, l]));
   return appointments.map((a) => {
     const link = byAppointment.get(a.id);
-    if (!link || a.visitId) return a;
+    // A cancelled / no-show appointment can't be linked (the server rejects
+    // it), so never show one as arrived on the strength of a pending link.
+    if (!link || a.visitId || a.status === 'cancelled' || a.status === 'no_show') return a;
     return { ...a, visitId: link.visitId, patientId: a.patientId ?? link.patientId, status: 'arrived' };
   });
 }

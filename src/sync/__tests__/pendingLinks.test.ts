@@ -41,6 +41,12 @@ describe('pending appointment links', () => {
     expect(out[1]).toMatchObject({ status: 'confirmed', visitId: null });
   });
 
+  it('does not revive a cancelled or no-show appointment', () => {
+    const links = [{ appointmentId: 'a1', visitId: 'v1', patientId: 'p1' }, { appointmentId: 'a2', visitId: 'v2', patientId: 'p2' }];
+    const out = withPendingLinks([appt({ status: 'cancelled' }), appt({ id: 'a2', status: 'no_show' })], links);
+    expect(out.map((a) => a.status)).toEqual(['cancelled', 'no_show']);
+  });
+
   it('the appointments repo applies pending links, and stops once the link is sent', async () => {
     await db.appointments.put(appt());
     await enqueueAppointmentLink({ appointmentId: 'a1', visitId: 'v1', patientId: 'p1' });

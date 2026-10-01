@@ -137,13 +137,29 @@ export function createBackupService(repos: Repos) {
       }
       const settlementPayments = bundle.settlementPayments ?? [];
 
+      // A voided invoice stays void. The server owns that (void_invoice()
+      // releases the visits and rejects any client write of status 'void' or
+      // any change to a void row), so an older backup must neither push a
+      // status row for it nor re-link its released visits — that would put
+      // the visits back onto an invoice that no longer counts. Void rows
+      // already on this device (and on the server) are left exactly as they are.
+      const currentStatuses = await repos.invoicePayments.list(currentClinicId);
+      const voidedInvoiceIds = new Set<UUID>([
+        ...currentStatuses.filter((p) => p.status === 'void').map((p) => p.invoiceId),
+        ...bundle.invoicePayments.filter((p) => p.status === 'void').map((p) => p.invoiceId),
+      ]);
+      const visitsToRestore = bundle.visits.map((v) =>
+        v.invoiceId && voidedInvoiceIds.has(v.invoiceId) ? { ...v, invoiceId: null } : v
+      );
+      const statusRowsToRestore = bundle.invoicePayments.filter((p) => !voidedInvoiceIds.has(p.invoiceId));
+
       await Promise.all([
         ...bundle.therapists.map((t) => repos.therapists.put(t)),
         ...bundle.catalog.map((c) => repos.catalog.put(c)),
         ...bundle.patients.map((p) => repos.patients.put(p)),
-        ...bundle.visits.map((v) => repos.visits.put(v)),
+        ...visitsToRestore.map((v) => repos.visits.put(v)),
         ...bundle.invoices.map((inv) => repos.invoices.putLocal(inv)),
-        ...bundle.invoicePayments.map((p) => repos.invoicePayments.put(p)),
+        ...statusRowsToRestore.map((p) => repos.invoicePayments.put(p)),
         ...bundle.payments.map((p) => repos.payments.put(p)),
         ...bundle.settlements.map((s) => repos.settlements.put(s)),
         ...settlementPayments.map((p) => repos.settlementPayments.put(p)),
@@ -156,7 +172,7 @@ export function createBackupService(repos: Repos) {
         patients: bundle.patients.length,
         visits: bundle.visits.length,
         invoices: bundle.invoices.length,
-        invoicePayments: bundle.invoicePayments.length,
+        invoicePayments: statusRowsToRestore.length,
         payments: bundle.payments.length,
         settlements: bundle.settlements.length,
         settlementPayments: settlementPayments.length,

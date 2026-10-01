@@ -69,7 +69,7 @@ src/repositories/      data-access interfaces + Dexie implementations (UI reads/
 src/sync/              outbox push / delta pull engine against Supabase
 src/services/          visit/invoice/report/patient/dashboard/consultation-note/advance orchestration — no React imports
 src/features/          UI pages and components (React + TanStack Router)
-  ├── workspace/       WorkspacePage (default landing: Today, Recent, Open Packages, Pending Work)
+  ├── workspace/       WorkspacePage (default landing: header stats, Today, Open Packages, therapist comparison)
   ├── visits/          LedgerPage at /ledger (Visits/Invoices/Daybook sub-tabs); DaybookPage; NewVisitPage
   ├── patients/        PatientsPage, PatientProfilePage, NoteEditorPage (Core Assessment)
   ├── reports/         ReportsPage at /insights (Trends + monthly statement; nav label is "Reports")
@@ -139,7 +139,7 @@ patients work.
 - **Today section** — visits entered today with payment state chips (Paid / Collect ₹X / Package / No charge), organized as table rows
 - **Recent section** — rolling 7/15/30 day windows with same column structure as Today, excludes today's visits for continuous timeline
 - **Open Packages** — active treatment packages with stale indicators (14+ days since last visit)
-- **Pending Work feed** — unresolved items (stale packages, outstanding invoices, incomplete notes) with "Mark paid" actions for quick invoice payment recording
+- **Dues** — Workspace shows what is still owed (the whole clinic for admin/front desk, a therapist's own visits for them) and opens the unpaid visits in the Ledger; payments are taken with **Take payment** (part payments fine), and an invoice is an optional, immutable **Give bill** step that can be **voided** and reissued if the amount was wrong
 - **Stat strip** — Today's visits count, collected today, new patients this month, packages this month
 
 **Archive Page (`/archive`, since renamed to Ledger at `/ledger` — see Phase 3)**

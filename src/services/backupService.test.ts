@@ -176,3 +176,40 @@ describe('backupService.restoreBundle', () => {
     expect(await fake.repos.patients.list('clinic-1')).toHaveLength(1);
   });
 });
+
+describe('backupService.restoreBundle with voided invoices', () => {
+  const status = (id: string, invoiceId: string, st: InvoicePayment['status']): InvoicePayment => ({
+    id, clinicId: 'clinic-1', invoiceId, status: st, paidAt: null, updatedAt: '',
+  });
+  const visit = (id: string, invoiceId: string | null) => ({ id, clinicId: 'clinic-1', invoiceId }) as unknown as Visit;
+
+  it('does not push a void status row, and releases visits an older backup still links to a void invoice', async () => {
+    const fake = makeFakeRepos();
+    const svc = createBackupService(fake.repos);
+    const bundle = await svc.exportBundle('clinic-1');
+    bundle.visits = [visit('v1', 'inv-void'), visit('v2', 'inv-ok')];
+    bundle.invoicePayments = [status('s1', 'inv-void', 'void'), status('s2', 'inv-ok', 'paid')];
+
+    const summary = await svc.restoreBundle(bundle, 'clinic-1');
+
+    expect(fake.visits.get('v1')?.invoiceId).toBeNull();
+    expect(fake.visits.get('v2')?.invoiceId).toBe('inv-ok');
+    expect([...fake.invoicePayments.keys()]).toEqual(['s2']);
+    expect(summary.invoicePayments).toBe(1);
+  });
+
+  it('does not overwrite an invoice that is void on this device, even if the backup says paid', async () => {
+    const fake = makeFakeRepos();
+    fake.invoicePayments.set('now', status('now', 'inv-1', 'void'));
+    const svc = createBackupService(fake.repos);
+    const bundle = await svc.exportBundle('clinic-1');
+    bundle.visits = [visit('v1', 'inv-1')];
+    bundle.invoicePayments = [status('old', 'inv-1', 'paid')];
+
+    await svc.restoreBundle(bundle, 'clinic-1');
+
+    expect(fake.visits.get('v1')?.invoiceId).toBeNull();
+    expect(fake.invoicePayments.get('now')?.status).toBe('void');
+    expect(fake.invoicePayments.has('old')).toBe(false);
+  });
+});

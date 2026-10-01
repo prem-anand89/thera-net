@@ -199,8 +199,13 @@ export class SyncEngine {
     try {
       await this.reconcileClinicMembership(session.user.id);
       await this.push();
-      await this.flushAppointmentLinks();
+      const sentLinks = await this.flushAppointmentLinks();
       await this.pull();
+      // Cleared only now: removing a link before the pull let the appointment
+      // flash back to "not done" until the linked row arrived. If the pull
+      // fails, the link stays queued and the next cycle's RPC answers "already
+      // linked", which drops it.
+      for (const appointmentId of sentLinks) await removePendingLink(appointmentId);
       syncStatus.set({ lastSyncAt: Date.now(), error: null });
       this.retryDelayMs = RETRY_MIN_MS;
     } catch (e) {
@@ -226,8 +231,9 @@ export class SyncEngine {
    * visit still waiting in the outbox just means "next cycle"; a network
    * failure leaves the link queued; an error that can never succeed drops it.
    */
-  private async flushAppointmentLinks() {
-    if (!this.started) return;
+  private async flushAppointmentLinks(): Promise<string[]> {
+    const sent: string[] = [];
+    if (!this.started) return sent;
     const links = await listPendingLinks();
     for (const link of links) {
       const visitWaiting =
@@ -243,7 +249,7 @@ export class SyncEngine {
         p_patient_id: link.patientId,
       });
       if (!error) {
-        await removePendingLink(link.appointmentId);
+        sent.push(link.appointmentId);
       } else if (isPermanentLinkError(error.message)) {
         console.error('Dropping an appointment link that can never apply', error.message);
         await removePendingLink(link.appointmentId);
@@ -252,6 +258,7 @@ export class SyncEngine {
       }
       // Anything else (e.g. a not-yet-synced row): keep it queued, retry next cycle.
     }
+    return sent;
   }
 
   private async updatePending() {

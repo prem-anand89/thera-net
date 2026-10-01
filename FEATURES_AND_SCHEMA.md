@@ -232,7 +232,7 @@ queued with a visible error.
   a regression, not a simplification.
 - **Collect promotion**: wherever money can still be taken (`take_payment`
   available), the passive status pill is replaced by a filled `Collect ₹X`
-  button rather than shown alongside it; `Issue invoice` moved out of the
+  button rather than shown alongside it; `Give bill` (was "Issue invoice") moved out of the
   visible row entirely into the row's kebab menu, so there's exactly one
   primary action per row. Two independent implementations both carry this
   (the desktop table's `PaymentStatusDisplay` and the mobile
@@ -243,7 +243,7 @@ queued with a visible error.
 #### Needs-Receipt Queue
 - **Ledger → Invoices tab**: a "Needs receipt (N)" section lists every
   visit that's `collected_no_receipt` (money taken, no invoice ever
-  issued) clinic-wide, oldest first, each with a one-click "Issue invoice"
+  issued) clinic-wide, oldest first, each with a one-click "Give bill"
   into the existing dialog. `dashboardService.needsReceipt()` is the single
   source of truth for both this section and the tab's own count badge, so
   the two can never disagree — deliberately unbounded (no date filter),
@@ -253,7 +253,7 @@ queued with a visible error.
 
 #### Issue Invoice Right After Logging a Visit
 - **`NewVisitPage.tsx`'s post-save screen** ("Visit logged") gained an
-  "Issue invoice" button, gated on `canBill` (same entitlement/role check
+  "Give bill" button (originally "Issue invoice"), gated on `canBill` (same entitlement/role check
   every other invoicing entry point uses), alongside the existing "Add
   clinical note"/"Another visit"/"Done" actions — billing staff no longer
   have to leave the page and find the visit again on Ledger/Workspace to
@@ -282,7 +282,6 @@ queued with a visible error.
 - **Dues = what visits still owe** (`visitDuePaise` / `hasDue` in `paymentState.ts`, the single definition): `uninvoiced` and `outstanding` owe the whole bill, `partially_collected` owes bill − collected, everything else owes nothing. Used by Workspace's Dues tile (`duesSummary`), the Ledger's **Not collected** filter (which includes part-paid visits) and the Ledger totals line (billed = collected + outstanding, a part-paid visit splits), and `todayWorklist.outstandingPaise`. `outstandingInvoices` (invoice-flag based, misses uninvoiced visits) now only feeds the Ledger's "Unpaid invoices" card.
 - **"Collected now" at invoice time records the cash**: `IssueInvoiceDialog` calls `paymentService.collectInvoiceNow` — it logs whatever the invoice's visits haven't received as a `payments` row (method from the chosen payment mode: UPI→upi, Cash→cash, Card→card, Insurance→bank_transfer; received today) and marks the invoice paid. Flipping only the paid flag left the cash out of the Daybook and the by-method totals, which are built from `payments`. A visit saved as "paid" already logged its payment, so nothing is added twice.
 - **The Workspace "Collected" tile is money received today** (`dashboardService.receivedOnDate`): payments received that day (not those drawn from an advance) plus advances deposited — exactly the Daybook's total for the day, which the tile opens; a therapist login counts only payments against their own visits. It is no longer the sum of today's visits' bills, which missed a payment today on an older visit and a part-payment. A printed bill (`InvoicePrintPage`) now shows **PART PAID** with "Received ₹X · Balance due ₹Y" for a part-paid invoice, and shows no PAID/DUE stamp until the payment status has loaded (it used to flash PAID).
-- **Quick "Mark paid"** action from Workspace pending feed
 - **Partial payments against an invoice**: recording an amount less than
   the invoice total leaves it `outstanding` with the balance tracked, not
   a full-or-nothing toggle. No amount column exists on `invoice_payments`
@@ -300,7 +299,7 @@ queued with a visible error.
   recorded against its visits, to undo a mis-click — `canMarkOutstanding` in
   `src/domain/invoiceStatus.ts`. The Invoices tab reads a missing status row
   as **paid** (`invoiceRowStatus`), like every other screen.) Entry
-  points: the Invoices tab's "Record payment" action (works for
+  points: the Invoices tab's "Take payment" action (works for
   multi-visit invoices), and the existing "Take payment" dialog on any
   visit card (works standalone; for an invoiced visit it now looks up and
   is bounded by that invoice's real total rather than assuming one visit
@@ -2782,6 +2781,7 @@ keeps the invoice and its number in the series, marked VOID, and releases its
 visits so they can be corrected and billed again with a new invoice.
 
 - **`void_invoice(invoice_id, reason)` RPC** (`supabase/migrations/20261005110000_void_invoice.sql`): same membership / entitlement / `billing_enabled` / `invoicing_access` gates as `issue_invoice()` and `amend_invoice()`; a reason is required; refuses an invoice that was already amended ("void the latest version") or is already void. It upserts `invoice_payments` to `status = 'void'` (with `void_reason`, `voided_at`) — **no UPDATE on `invoices`**, which stay immutable — and sets `visits.invoice_id = null` using the same `app.allow_invoice_amendment` transaction flag `amend_invoice()` uses (every other frozen visit field stays frozen). It returns the `invoice_payments` row id so the client mirrors the same row. Payments already recorded stay with the visits (they are `payments` rows, not on the invoice), so a fully paid voided visit becomes `collected_no_receipt` and can be billed again.
+- **Void is final everywhere**: `computeVisitPaymentState` treats a visit still pointing at a void invoice as not invoiced (never as paid), and `backupService.restoreBundle` never pushes a status row for a voided invoice, never overwrites one that is void on the device, and releases visits an older backup still links to one — the server rejects client writes to a void row, so a restore would otherwise leave permanently failing sync rows and put released visits back on a dead invoice.
 - **Client**: `invoiceService.voidInvoice()` (online only) calls the RPC then mirrors locally (`visits.markUninvoiced`, `invoicePayments.putLocal`, no outbox). `VoidInvoiceDialog` (reason required; says received money stays recorded) opens from the print page's "Void invoice"; a void invoice shows a VOID watermark, a VOID stamp, a banner with the reason, and no Edit details / Amend / Void actions. The Invoices tab shows a "Void" pill and excludes void invoices from its totals.
 - **Invoice policy** (`clinics.invoice_policy`, Settings → Billing → "Bills after a visit"): a payment is always recorded; an invoice is a separate, immutable document, so the clinic chooses what the app nudges. `on_request` (default): a **Give bill** button on the saved-visit screen, Needs receipt list kept. `always`: the bill step (the usual review-then-issue dialog, never issued silently) opens straight after a visit saved as paid. `never_nag`: the Needs receipt list and the Invoices-tab badge are hidden. Display-level only — `issue_invoice()` enforces nothing here.
 - **Saved-visit screen**: **Take payment · ₹X** (while anything is still owed; part payments fine) and **Give bill** (replacing "Issue invoice"; primary once nothing is owed). "Record payment" on an invoice is now also **Take payment** — it is the same dialog (`TakePaymentDialog`) and the same `payments` rows.

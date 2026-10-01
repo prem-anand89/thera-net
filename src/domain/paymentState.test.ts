@@ -275,6 +275,14 @@ describe('paymentBadge', () => {
   });
 });
 
+describe('computeVisitPaymentState with a void invoice', () => {
+  it('treats a visit still pointing at a void invoice as not invoiced, never as paid', () => {
+    expect(computeVisitPaymentState(rs(500), INV, 0, 'void')).toBe('uninvoiced');
+    expect(computeVisitPaymentState(rs(500), INV, rs(500), 'void')).toBe('collected_no_receipt');
+    expect(computeVisitPaymentState(rs(500), INV, rs(300), 'void')).toBe('partially_collected');
+  });
+});
+
 describe('visitDuePaise / hasDue', () => {
   it('owes the whole bill when nothing was collected, invoiced or not ("take payment later" is uninvoiced)', () => {
     expect(visitDuePaise('uninvoiced', rs(600), 0)).toBe(rs(600));
