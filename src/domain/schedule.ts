@@ -225,6 +225,13 @@ export function formatMinutes(total: number): string {
   return minutes ? `${hours}h${String(minutes).padStart(2, '0')}` : `${hours}h`;
 }
 
+/** Appointment length chips, always in minutes: "30m", "60m", "90m" — no
+ *  "1h"/"1h30" (the booking sheet's length picker and grid blocks use this,
+ *  not `formatMinutes`, which stays for free-time gaps and durations elsewhere). */
+export function lengthLabel(total: number): string {
+  return `${total}m`;
+}
+
 /** Label for minutes after midnight, e.g. 630 -> "10:30 AM". */
 export function minutesLabel(total: number): string {
   const hour = Math.floor(total / 60);

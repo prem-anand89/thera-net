@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { Appointment, AppointmentRequest } from '@/domain/types';
-import { appointmentMinutes, formatMinutes, minutesLabel, minutesOfDay } from '@/domain/schedule';
+import { appointmentMinutes, lengthLabel, minutesLabel, minutesOfDay } from '@/domain/schedule';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import { Pill } from '@/components/ui';
 import { RequestsInbox } from './RequestsInbox';
@@ -64,7 +64,7 @@ export function TodayAppointments({
   const sectionCount = [hasRequests, inProgress.length > 0, upcoming.length > 0].filter(Boolean).length;
 
   const row = (a: Appointment, end: ReactNode, note?: string) => {
-    const length = formatMinutes(appointmentMinutes(a, slotMinutes));
+    const length = lengthLabel(appointmentMinutes(a, slotMinutes));
     const color = colorFor(a);
     // Same colour code as the Schedule grid: therapist edge + status fill.
     const fill = appointmentFill(a, color);

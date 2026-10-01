@@ -12,7 +12,7 @@ import {
   firstAvailableSlot,
   nextAppointmentFor,
   patientAttendance,
-  formatMinutes,
+  lengthLabel,
   generateScheduleSlots,
   isClosedDay,
   isTherapistSlotOccupied,
@@ -65,7 +65,7 @@ type BookSlotSheetProps = {
   rescheduleAppointment?: Appointment;
 };
 
-const LENGTH_OPTIONS = [15, 30, 45, 60, 90];
+const LENGTH_OPTIONS = [30, 45, 60, 90];
 
 function displayDate(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', {
@@ -400,7 +400,7 @@ export function BookSlotSheet({
   const submitLabel = isReschedule ? 'Move appointment' : repeat && activeRows.length > 1 ? `Book ${activeRows.length} sessions` : 'Confirm booking';
   const timeLabel = selectedTime ? minutesLabel(Number(selectedTime.slice(0, 2)) * 60 + Number(selectedTime.slice(3, 5))) : null;
   const summary = selectedTime
-    ? `${displayDate(selectedDate)}, ${timeLabel} · ${formatMinutes(lengthMinutes)}${therapistName ? ` · ${therapistName}` : ''}`
+    ? `${displayDate(selectedDate)}, ${timeLabel} · ${lengthLabel(lengthMinutes)}${therapistName ? ` · ${therapistName}` : ''}`
     : null;
   const roster = [...(therapists ?? [])].sort((a, b) => a.name.localeCompare(b.name));
   const colorOf = (id: string) => therapistColor(Math.max(0, roster.findIndex((t) => t.id === id)));
@@ -531,7 +531,7 @@ export function BookSlotSheet({
                     lengthMinutes === minutes ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]' : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--ink)]'
                   }`}
                 >
-                  {formatMinutes(minutes)}
+                  {lengthLabel(minutes)}
                 </button>
               ))}
             </div>

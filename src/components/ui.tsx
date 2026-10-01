@@ -131,32 +131,35 @@ const STAT_BADGE: Record<StatTone, string> = {
   plum: 'bg-[var(--plum-light)] text-[var(--plum)]',
 };
 
-// Fixed widths sized to the digits each money tile has to hold, per
-// breakpoint (value font 15px phones, 18px from tab:); counts flex.
+// Counts (visits, packages, patients) are always 2–3 digits, so they get a
+// fixed width and never move; money ranges from a day's ₹4,500 to a month's
+// ₹9,99,999, so it gets the flexible share of the row (with a minimum that
+// still fits its largest expected value) and only reflows by breakpoint —
+// not by shrinking every time a neighbouring count tile needs room.
 const STAT_WIDTH = {
-  money: 'w-[7.75rem] shrink-0 tab:w-[8.5rem] desktop:w-[9.5rem]',
-  'money-lg': 'w-[8.25rem] shrink-0 tab:w-[10.25rem] desktop:w-[11.5rem]',
-  count: 'min-w-0 flex-1 tab:min-w-[6.75rem]',
+  money: 'min-w-[7.25rem] flex-1 tab:min-w-[8.25rem]',
+  'money-lg': 'min-w-[8.25rem] flex-1 tab:min-w-[10rem]',
+  count: 'w-[5.75rem] shrink-0 tab:w-[7rem] desktop:w-[7.5rem]',
 } as const;
 
 /**
- * Headline numbers: one small caption per period ("Today", "Oct") over a
- * row of two-line tiles (number over a short label), each with a tinted
- * icon badge. Periods stack on phones and small tablets and share one row
- * from `tab:`, split by a hairline. Workspace uses it; Reports and print
- * keep `StatTile`.
+ * Headline numbers, one soft-bordered group per period ("Today", "Oct") —
+ * the caption sits as a quiet label inside the group rather than as a
+ * stray line above it, so it reads as one labelled unit. Each group holds
+ * a row of white tiles (number over a short label, tinted icon badge).
+ * Periods stack on phones and small tablets and share one row from `tab:`.
+ * Workspace uses it; Reports and print keep `StatTile`.
  */
 export function StatStrip({ groups }: { groups: { caption: string; cells: StatCell[] }[] }) {
   return (
-    <div className="flex flex-col gap-2.5 tab:flex-row tab:gap-0">
-      {groups.map((group, index) => (
+    <div className="flex flex-col gap-2 tab:flex-row">
+      {groups.map((group) => (
         <section
           key={group.caption}
           aria-label={group.caption}
-          className={`min-w-0 ${index > 0 ? 'tab:ml-3 tab:border-l tab:border-[var(--border)] tab:pl-3' : ''}`}
-          style={{ flex: `${group.cells.filter((cell) => (cell.kind ?? 'count') === 'count').length || 1} 1 auto` }}
+          className="min-w-0 flex-1 rounded-2xl bg-[var(--paper)] p-1.5"
         >
-          <h3 className="mb-1 text-[10px] font-medium leading-none text-[var(--muted)]">{group.caption}</h3>
+          <h3 className="mb-1 px-0.5 text-[11px] font-medium leading-none text-[var(--muted)]">{group.caption}</h3>
           <div className="flex gap-1.5 tab:gap-2">
             {group.cells.map((cell) => {
               const body = (
@@ -177,7 +180,7 @@ export function StatStrip({ groups }: { groups: { caption: string; cells: StatCe
                   </span>
                 </>
               );
-              const cls = `flex items-center gap-1 rounded-xl bg-[var(--paper)] p-1 sm:gap-1.5 tab:gap-2 tab:p-2 ${STAT_WIDTH[cell.kind ?? 'count']}`;
+              const cls = `flex items-center gap-1 rounded-xl bg-[var(--surface)] p-1 sm:gap-1.5 tab:gap-2 tab:p-2 ${STAT_WIDTH[cell.kind ?? 'count']}`;
               return cell.onClick ? (
                 <button
                   key={cell.label}

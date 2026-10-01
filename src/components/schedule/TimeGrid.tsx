@@ -9,7 +9,7 @@ import {
   dragTarget,
   dropAllowed,
   resizeTarget,
-  formatMinutes,
+  lengthLabel,
   generateScheduleSlots,
   minutesLabel,
   minutesOfDay,
@@ -259,7 +259,7 @@ export function DayColumn({
           }}
           data-drag-ghost
         >
-          {minutesLabel(drag.ghost.start)} · {formatMinutes(drag.ghost.duration)}
+          {minutesLabel(drag.ghost.start)} · {lengthLabel(drag.ghost.duration)}
           {!drag.ghost.valid && ' · not free'}
         </div>
       )}

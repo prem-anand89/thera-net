@@ -113,7 +113,7 @@ describe('BookSlotSheet', () => {
     render(<BookSlotSheet isOpen onClose={() => {}} appointments={[appointment({})]} prefilledDate="2026-10-01" />);
     expect(slot('11:00 AM')).toBeDisabled();
     expect(slot('10:30 AM')).toBeEnabled();
-    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '1h' }));
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '60m' }));
     expect(slot('10:30 AM')).toBeDisabled(); // 10:30–11:30 hits the 11:00 booking
     // 11:30 + 60 min would end after the 12:00 close: listed under "Outside working hours", disabled.
     fireEvent.click(screen.getByRole('button', { name: /Outside working hours \(1\)/ }));

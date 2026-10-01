@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, dayLoad, dragTarget, dropAllowed, resizeTarget, snapMinutes, seriesDates, seriesProblem, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, dayLoad, lengthLabel, dragTarget, dropAllowed, resizeTarget, snapMinutes, seriesDates, seriesProblem, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -63,6 +63,12 @@ describe('duration-aware scheduling', () => {
     expect(formatMinutes(45)).toBe('45m');
     expect(formatMinutes(120)).toBe('2h');
     expect(formatMinutes(270)).toBe('4h30');
+  });
+
+  it('lengthLabel always stays in minutes, for appointment length chips and blocks', () => {
+    expect(lengthLabel(30)).toBe('30m');
+    expect(lengthLabel(60)).toBe('60m');
+    expect(lengthLabel(90)).toBe('90m');
   });
 });
 
