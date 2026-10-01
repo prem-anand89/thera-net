@@ -69,7 +69,6 @@ import {
   IconStar,
   IconWallet,
   IconUserCheck,
-  IconUserPlus,
   IconVisits,
 } from '@/components/StatIcons';
 
@@ -427,7 +426,6 @@ export function WorkspacePage() {
     return [...scopedPackages].sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a)));
   }, [scopedPackages, pkgStatusFilter]);
 
-  const visitsTodayCount = today?.visits.length ?? 0;
   const now = new Date();
   const calendarMonth = { year: now.getFullYear(), month: now.getMonth() + 1 };
   // "This month" numbers: a therapist's own row, or the clinic total.
@@ -436,6 +434,12 @@ export function WorkspacePage() {
     [clinic.id, calendarMonth.year, calendarMonth.month]
   );
   const myMonthRow = monthReport?.rows.find((r) => r.therapistId === scope.myTherapistId);
+  // Dues: admin/front desk only (the clinic-wide figure) — therapists
+  // don't bill, and a per-therapist breakdown isn't meaningful here.
+  const outstanding = useLiveQuery(
+    () => (scope.isClinicWideView ? dashboardService.outstandingInvoices(clinic.id) : undefined),
+    [clinic.id, scope.isClinicWideView]
+  );
 
   const editPatient = useLiveQuery(
     () => (editPatientId ? repos.patients.get(editPatientId) : undefined),
@@ -603,13 +607,17 @@ export function WorkspacePage() {
         ? `Synced ${new Date(syncSnapshot.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
         : null;
   const monthCaption = now.toLocaleDateString('en-IN', { month: 'long' });
+  const monthShort = now.toLocaleDateString('en-IN', { month: 'short' });
   // Icon + hue per kind of number, the same wherever it appears: money in
-  // (moss banknote), money earned (teal wallet), visits (sky patient-tick),
-  // packages (plum stack), new patients (amber).
-  const statGroups = [
-    {
-      caption: 'Today',
-      cells: [
+  // (moss banknote), dues owed (amber), visits (sky patient-tick), packages
+  // (plum stack). Reports (admin/front desk only) already carries the full
+  // monthly breakdown with trends, so the header keeps only what Reports
+  // doesn't show (today, and what's owed) plus a link to it below; a
+  // therapist has no Reports access, so their header keeps the month's
+  // own numbers instead.
+  const duesCount = outstanding?.count ?? 0;
+  const statCells = scope.isClinicWideView
+    ? [
         {
           label: 'Collected',
           value: formatINR(today?.collectedPaise ?? 0),
@@ -618,34 +626,20 @@ export function WorkspacePage() {
           kind: 'money' as const,
           onClick: canBill ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } }) : undefined,
         },
-        { label: 'Visits', value: visitsTodayCount, icon: <IconUserCheck />, tone: 'sky' as const, onClick: () => setTodayTab('visits') },
-      ],
-    },
-    {
-      caption: monthCaption,
-      // Owners who also treat (admin linked to a therapist) see their own
-      // net plus how the clinic is growing; other linked therapists see
-      // their own month; admins/front desk who don't treat see the clinic.
-      cells: scope.myTherapistId && scope.role === 'admin'
-        ? [
-            { label: 'My net', value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—', icon: <IconWallet />, tone: 'teal' as const, kind: 'money-lg' as const },
-            { label: 'New patients', value: monthlyNew?.newPatients ?? '—', icon: <IconUserPlus />, tone: 'amber' as const },
-            { label: 'Packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
-            { label: 'Visits', value: monthReport ? monthReport.total.visitCount : '—', icon: <IconUserCheck />, tone: 'sky' as const },
-          ]
-        : scope.myTherapistId
-        ? [
-            { label: 'My net', value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—', icon: <IconWallet />, tone: 'teal' as const, kind: 'money-lg' as const },
-            { label: 'Visits', value: monthReport ? myMonthRow?.visitCount ?? 0 : '—', icon: <IconUserCheck />, tone: 'sky' as const },
-            { label: 'Packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
-          ]
-        : [
-            { label: 'New patients', value: monthlyNew?.newPatients ?? '—', icon: <IconUserPlus />, tone: 'amber' as const },
-            { label: 'Packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
-            { label: 'Visits', value: monthReport ? monthReport.total.visitCount : '—', icon: <IconUserCheck />, tone: 'sky' as const },
-          ],
-    },
-  ];
+        {
+          label: duesCount > 0 ? `Dues · ${duesCount}` : 'Dues',
+          value: formatINR(outstanding?.totalPaise ?? 0),
+          icon: <IconWallet />,
+          tone: 'amber' as const,
+          kind: 'money' as const,
+          onClick: canBill ? () => void navigate({ to: '/ledger', search: { tab: 'visits' } }) : undefined,
+        },
+      ]
+    : [
+        { label: 'Collected', value: formatINR(today?.collectedPaise ?? 0), icon: <IconRupee />, tone: 'moss' as const, kind: 'money' as const },
+        { label: `${monthShort} visits`, value: monthReport ? myMonthRow?.visitCount ?? 0 : '—', icon: <IconUserCheck />, tone: 'sky' as const },
+        { label: `${monthShort} packages`, value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
+      ];
 
   return (
     <div className="space-y-5">
@@ -723,17 +717,17 @@ export function WorkspacePage() {
         appointments={workspaceAppointments ?? []}
         rescheduleAppointment={reschedulingAppointment ?? undefined}
       />
-      <header className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm sm:p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--muted)]">
-              {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
-              {canEditSettings && <FirstWeekSetupLink clinicId={clinic.id} />}
-            </p>
+      <header className="space-y-2.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-sm sm:space-y-3 sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
             <h1 className="font-display text-lg font-semibold leading-snug text-[var(--ink)]">
               {greeting}
               {firstName ? `, ${firstName}` : ''}
             </h1>
+            <span className="text-xs text-[var(--muted)]">
+              {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </span>
+            {canEditSettings && <FirstWeekSetupLink clinicId={clinic.id} />}
           </div>
           <div className="flex shrink-0 gap-2">
             {clinic.enablePatientComms && (canManageBookings || scope.myTherapistId) && (
@@ -749,7 +743,24 @@ export function WorkspacePage() {
           </div>
         </div>
 
-        <StatStrip groups={statGroups} />
+        <StatStrip cells={statCells} />
+
+        {/* Month figure + a link to the full breakdown — Reports already has
+            revenue, visits, new patients and packages with trends, so the
+            header doesn't repeat it beyond this one line. Admin/front desk
+            only; a therapist has no Reports access. */}
+        {scope.isClinicWideView && (
+          <Link
+            to="/insights"
+            className="flex items-center justify-between gap-2 text-xs text-[var(--muted)] hover:text-[var(--teal)]"
+          >
+            <span className="min-w-0 truncate">
+              {monthCaption}: {monthReport ? formatINR(monthReport.total.netPostTaxPaise) : '—'} net revenue ·{' '}
+              {monthReport ? monthReport.total.visitCount : '—'} visits
+            </span>
+            <span className="shrink-0 font-medium text-[var(--teal)]">Reports ›</span>
+          </Link>
+        )}
 
         {/* "Needs you": one line at every width — each item jumps to where
             it's done; icons separate the items. The sync state shows from
