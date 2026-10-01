@@ -1,19 +1,21 @@
 import type { ReactNode } from 'react';
 
-/** Small stroke icons for the Workspace header — same language as
- *  `NavIcons.tsx` (currentColor, ~1.6px stroke, round caps, no fill). */
+/** Stroke icons for the Workspace header. Drawn on a 24px grid edge to edge
+ *  (2px margin) with a 2px stroke, so they read clearly at 18–22px inside
+ *  a badge — the earlier 20px set sat in the middle ~12px of its box and
+ *  looked small. currentColor, round caps, no fill. */
 type IconProps = { className?: string };
 
 function Svg({ className, children }: IconProps & { children: ReactNode }) {
   return (
     <svg
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
       fill="none"
       aria-hidden="true"
       stroke="currentColor"
-      strokeWidth="1.6"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
@@ -26,32 +28,37 @@ function Svg({ className, children }: IconProps & { children: ReactNode }) {
 export function IconRupee(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M6 4.5h8M6 8h8M6 4.5h2.5a3.5 3.5 0 010 7H6l6 5" />
+      <path d="M6 4h12M6 9h12M9 4h1.5a5 5 0 010 10H6l8.5 7" />
     </Svg>
   );
 }
 
+/** Clipboard with a tick — a visit logged. */
 export function IconVisits(props: IconProps) {
   return (
     <Svg {...props}>
-      <rect x="4.5" y="3.5" width="11" height="13" rx="1.8" />
-      <path d="M7.5 3.5V5h5V3.5M7.5 9.5l1.7 1.7 3.3-3.4M7.5 13.5h5" />
+      <path d="M9 4H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2h-2" />
+      <rect x="9" y="2" width="6" height="4" rx="1" />
+      <path d="M9 14l2 2 4-4" />
     </Svg>
   );
 }
 
+/** Rising bars with an arrow — net earnings this month. */
 export function IconTrend(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M3.5 16.5h13M5.5 13.5v-2M9 13.5V8.5M12.5 13.5v-4M16 13.5V5" />
+      <path d="M4 21V15M10 21v-8M16 21v-5M3 21h18M4 10l6-5 4 3 7-6M16 2h5v5" />
     </Svg>
   );
 }
 
+/** Stacked layers — sessions in a package. */
 export function IconPackage(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M10 3l6.5 3.3L10 9.6 3.5 6.3 10 3zM3.5 10L10 13.3l6.5-3.3M3.5 13.7L10 17l6.5-3.3" />
+      <path d="M12 2L2 7l10 5 10-5-10-5z" />
+      <path d="M2 12l10 5 10-5M2 17l10 5 10-5" />
     </Svg>
   );
 }
@@ -59,26 +66,8 @@ export function IconPackage(props: IconProps) {
 export function IconUserPlus(props: IconProps) {
   return (
     <Svg {...props}>
-      <circle cx="8" cy="7" r="2.8" />
-      <path d="M3 16.5c.6-2.7 2.6-4.2 5-4.2s4.4 1.5 5 4.2M15 6.5v4M13 8.5h4" />
-    </Svg>
-  );
-}
-
-export function IconSun(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx="10" cy="10" r="3" />
-      <path d="M10 2.8v1.5M10 15.7v1.5M2.8 10h1.5M15.7 10h1.5M4.9 4.9l1 1M14.1 14.1l1 1M4.9 15.1l1-1M14.1 5.9l1-1" />
-    </Svg>
-  );
-}
-
-export function IconMonth(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <rect x="3.5" y="4.5" width="13" height="12" rx="2" />
-      <path d="M3.5 8.5h13M7 3v3M13 3v3M7 11.5h1M11.5 11.5h1M7 14h1" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M2 21v-1a6 6 0 016-6h2a6 6 0 016 6v1M19 8v6M16 11h6" />
     </Svg>
   );
 }
@@ -86,24 +75,42 @@ export function IconMonth(props: IconProps) {
 export function IconPlus(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M10 4.5v11M4.5 10h11" />
+      <path d="M12 5v14M5 12h14" />
     </Svg>
   );
 }
 
+/** Calendar with a plus — book an appointment. */
 export function IconBook(props: IconProps) {
   return (
     <Svg {...props}>
-      <rect x="3.5" y="4.5" width="13" height="12" rx="2" />
-      <path d="M3.5 8.5h13M7 3v3M13 3v3M10 10.8v3.4M8.3 12.5h3.4" />
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M3 10h18M8 2v4M16 2v4M12 13v6M9 16h6" />
     </Svg>
   );
 }
 
-export function IconTasks(props: IconProps) {
+export function IconCalendar(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M8 5.5h8.5M8 10h8.5M8 14.5h8.5M3.5 5.5h1M3.5 10h1M3.5 14.5h1" />
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M3 10h18M8 2v4M16 2v4" />
+    </Svg>
+  );
+}
+
+export function IconPen(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </Svg>
+  );
+}
+
+export function IconStar(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1L12 2z" />
     </Svg>
   );
 }
@@ -111,8 +118,8 @@ export function IconTasks(props: IconProps) {
 export function IconCheckCircle(props: IconProps) {
   return (
     <Svg {...props}>
-      <circle cx="10" cy="10" r="6.5" />
-      <path d="M7.3 10.2l1.9 1.9 3.6-3.8" />
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 12l3 3 5-6" />
     </Svg>
   );
 }
@@ -120,7 +127,7 @@ export function IconCheckCircle(props: IconProps) {
 export function IconCloud(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M6 15.5h8.2a3.3 3.3 0 00.4-6.6A4.6 4.6 0 005.7 8a3.8 3.8 0 00.3 7.5z" />
+      <path d="M7 19h10.5a4.5 4.5 0 00.5-9 6 6 0 00-11.6-1.5A5.3 5.3 0 007 19z" />
     </Svg>
   );
 }
@@ -128,7 +135,34 @@ export function IconCloud(props: IconProps) {
 export function IconChevronRight(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M8 5l5 5-5 5" />
+      <path d="M9 6l6 6-6 6" />
+    </Svg>
+  );
+}
+
+export function IconChevronLeft(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M15 6l-6 6 6 6" />
+    </Svg>
+  );
+}
+
+export function IconUsers(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="9" cy="7" r="4" />
+      <path d="M2 21v-1a6 6 0 016-6h2a6 6 0 016 6v1M16 3.1a4 4 0 010 7.8M22 21v-1a6 6 0 00-4-5.7" />
+    </Svg>
+  );
+}
+
+export function IconMore(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="5" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="12" cy="19" r="1" />
     </Svg>
   );
 }

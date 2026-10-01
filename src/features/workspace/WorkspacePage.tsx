@@ -57,14 +57,14 @@ import { EditVisitModal } from '@/features/visits/EditVisitModal';
 import { FirstWeekSetupLink } from '@/features/settings/FirstWeekChecklist';
 import {
   IconBook,
+  IconCalendar,
   IconCheckCircle,
   IconCloud,
-  IconMonth,
   IconPackage,
+  IconPen,
   IconPlus,
   IconRupee,
-  IconSun,
-  IconTasks,
+  IconStar,
   IconTrend,
   IconUserPlus,
   IconVisits,
@@ -529,13 +529,23 @@ export function WorkspacePage() {
 
   const therapistNameById = new Map((therapists ?? []).map((t) => [t.id, t.name]));
 
-  const needsItem = 'rounded font-medium text-[var(--ink)] underline-offset-4 hover:text-[var(--teal)] hover:underline';
+  const needsItem =
+    'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded font-medium text-[var(--ink)] underline-offset-4 hover:text-[var(--teal)] hover:underline [&>svg]:h-4 [&>svg]:w-4';
+  // Short wording on phones keeps the bar on one line; full wording from sm:.
+  const both = (short: string, long: string) => (
+    <>
+      <span className="sm:hidden">{short}</span>
+      <span className="hidden sm:inline">{long}</span>
+    </>
+  );
+  const plural = (n: number, word: string) => `${word}${n === 1 ? '' : 's'}`;
   const needsYou = ([
     toCompleteCount > 0 && {
       key: 'complete',
       node: (
         <button type="button" className={needsItem} onClick={() => setTodayTab('appointments')}>
-          <span className="text-[var(--amber)]">{toCompleteCount}</span> visit{toCompleteCount === 1 ? '' : 's'} to complete
+          <IconVisits className="text-[var(--amber)]" />
+          {both(`${toCompleteCount} to complete`, `${toCompleteCount} ${plural(toCompleteCount, 'visit')} to complete`)}
         </button>
       ),
     },
@@ -543,7 +553,8 @@ export function WorkspacePage() {
       key: 'requests',
       node: (
         <button type="button" className={needsItem} onClick={() => setTodayTab('appointments')}>
-          <span className="text-[var(--amber)]">{pendingRequestCount}</span> booking request{pendingRequestCount === 1 ? '' : 's'}
+          <IconCalendar className="text-[var(--amber)]" />
+          {both(`${pendingRequestCount} ${plural(pendingRequestCount, 'request')}`, `${pendingRequestCount} booking ${plural(pendingRequestCount, 'request')}`)}
         </button>
       ),
     },
@@ -556,7 +567,8 @@ export function WorkspacePage() {
           search={{ from: '/workspace' }}
           className={needsItem}
         >
-          {myDraftNotes.length} note{myDraftNotes.length === 1 ? '' : 's'} to finish
+          <IconPen className="text-[var(--slate)]" />
+          {both(`${myDraftNotes.length} ${plural(myDraftNotes.length, 'note')}`, `${myDraftNotes.length} ${plural(myDraftNotes.length, 'note')} to finish`)}
         </Link>
       ),
     },
@@ -564,7 +576,8 @@ export function WorkspacePage() {
       key: 'feedback',
       node: (
         <Link to="/schedule" search={{ tab: 'feedback' }} className={needsItem}>
-          {newFeedbackCount} new feedback
+          <IconStar className="text-[var(--plum)]" />
+          {both(`${newFeedbackCount} feedback`, `${newFeedbackCount} new feedback`)}
         </Link>
       ),
     },
@@ -579,31 +592,30 @@ export function WorkspacePage() {
   const statGroups = [
     {
       caption: 'Today',
-      icon: <IconSun />,
       cells: [
         {
-          label: 'Collected',
+          label: 'Collected today',
           value: formatINR(today?.collectedPaise ?? 0),
           icon: <IconRupee />,
           tone: 'moss' as const,
+          kind: 'money' as const,
           onClick: canBill ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } }) : undefined,
         },
-        { label: 'Visits', value: visitsTodayCount, icon: <IconVisits />, tone: 'teal' as const, onClick: () => setTodayTab('visits') },
+        { label: 'Visits today', value: visitsTodayCount, icon: <IconVisits />, tone: 'sky' as const, onClick: () => setTodayTab('visits') },
       ],
     },
     {
       caption: monthCaption,
-      icon: <IconMonth />,
       cells: scope.myTherapistId
         ? [
-            { label: 'My net', value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—', icon: <IconTrend />, tone: 'amber' as const },
-            { label: 'My visits', value: monthReport ? myMonthRow?.visitCount ?? 0 : '—', icon: <IconVisits />, tone: 'teal' as const },
-            { label: 'New packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'slate' as const },
+            { label: `${monthCaption} net`, value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—', icon: <IconTrend />, tone: 'amber' as const, kind: 'money' as const },
+            { label: `${monthCaption} visits`, value: monthReport ? myMonthRow?.visitCount ?? 0 : '—', icon: <IconVisits />, tone: 'sky' as const },
+            { label: 'New packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
           ]
         : [
-            { label: 'New patients', value: monthlyNew?.newPatients ?? '—', icon: <IconUserPlus />, tone: 'amber' as const },
-            { label: 'New packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'slate' as const },
-            { label: 'Visits', value: monthReport ? monthReport.total.visitCount : '—', icon: <IconVisits />, tone: 'teal' as const },
+            { label: 'New patients', value: monthlyNew?.newPatients ?? '—', icon: <IconUserPlus />, tone: 'teal' as const },
+            { label: 'New packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
+            { label: `${monthCaption} visits`, value: monthReport ? monthReport.total.visitCount : '—', icon: <IconVisits />, tone: 'sky' as const },
           ],
     },
   ];
@@ -710,21 +722,16 @@ export function WorkspacePage() {
 
         <StatStrip groups={statGroups} />
 
-        {/* "Needs you": one quiet bar — each item jumps to where it's done;
-            the sync state sits at the end so today's numbers can be trusted. */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-[var(--paper)] px-3 py-2 text-sm">
+        {/* "Needs you": one line at every width — each item jumps to where
+            it's done; icons separate the items. The sync state shows from
+            sm: (phones have the header's sync dot). */}
+        <div className="flex items-center gap-3 rounded-xl bg-[var(--paper)] px-3 py-2 text-sm">
           {needsYou.length > 0 ? (
-            <>
-              <IconTasks className="hidden h-4 w-4 shrink-0 text-[var(--muted)] sm:block" />
-              <ul className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 sm:gap-x-1" aria-label="Needs you">
-                {needsYou.map((item, index) => (
-                  <li key={item.key} className="flex items-center gap-1">
-                    {index > 0 && <span aria-hidden className="hidden px-1 text-[var(--border)] sm:inline">•</span>}
-                    {item.node}
-                  </li>
-                ))}
-              </ul>
-            </>
+            <ul className="flex min-w-0 flex-1 items-center gap-4 overflow-x-auto" aria-label="Needs you">
+              {needsYou.map((item) => (
+                <li key={item.key}>{item.node}</li>
+              ))}
+            </ul>
           ) : (
             <p className="flex flex-1 items-center gap-2 text-[var(--muted)]">
               <IconCheckCircle className="h-4 w-4 text-[var(--moss)]" />
@@ -732,9 +739,8 @@ export function WorkspacePage() {
             </p>
           )}
           {syncLabel && (
-            <p className={`flex w-full items-center gap-1.5 border-t border-[var(--border)] pt-1.5 text-xs sm:ml-auto sm:w-auto sm:border-0 sm:pt-0 ${unsyncedVisitCount > 0 ? 'text-[var(--amber)]' : 'text-[var(--muted)]'}`}>
+            <p className={`hidden shrink-0 items-center gap-1.5 text-xs sm:flex ${unsyncedVisitCount > 0 ? 'text-[var(--amber)]' : 'text-[var(--muted)]'}`}>
               <IconCloud className="h-4 w-4" />
-              <span className={`h-1.5 w-1.5 rounded-full ${unsyncedVisitCount > 0 ? 'bg-[var(--amber)]' : 'bg-[var(--moss)]'}`} aria-hidden />
               {syncLabel}
             </p>
           )}
@@ -784,7 +790,6 @@ export function WorkspacePage() {
             <TodayAppointments
               appointments={todayAppointments}
               slotMinutes={clinic.slotDurationMinutes || 30}
-              nowMinutes={nowMinutes}
               nextUpId={nextUpId}
               colorFor={appointmentColor}
               therapistNameFor={appointmentTherapistName}

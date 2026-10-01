@@ -18,6 +18,8 @@ import {
   type Interval,
 } from '@/domain/schedule';
 import { CLOSED_HATCH_STYLE } from './scheduleColors';
+import { LoadLine, type LoadSummary } from './LoadLine';
+export type { LoadSummary } from './LoadLine';
 
 /** 30 minutes = 48px: tall enough for two lines of text in a 30-minute block. */
 export const PX_PER_MINUTE = 1.6;
@@ -64,6 +66,26 @@ type ColumnDrag = {
 };
 
 /** One vertical day column: free slots tinted and bookable, blocks sized by length. */
+/**
+ * Status by fill, so the day reads at a glance (the mark/label still says
+ * it in words): upcoming = white card with the therapist's edge; arrived
+ * (visit not logged yet) = tinted in the therapist's colour; visit logged =
+ * greyed back; no-show = rust; cancelled = struck through.
+ */
+function blockLook(appointment: Appointment, color: string): { className: string; style: React.CSSProperties } {
+  if (appointment.status === 'arrived' && appointment.visitId) {
+    return { className: 'bg-[var(--slate-light)] text-[var(--muted)]', style: {} };
+  }
+  if (appointment.status === 'arrived') {
+    return { className: 'text-[var(--ink)] shadow-sm', style: { background: `color-mix(in srgb, ${color} 18%, white)` } };
+  }
+  if (appointment.status === 'confirmed' || appointment.status === 'rescheduled') {
+    return { className: 'border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] shadow-sm', style: {} };
+  }
+  const style = APPOINTMENT_BLOCK_STYLE[appointment.status];
+  return { className: `${style.fill} ${style.text}`, style: {} };
+}
+
 export function DayColumn({
   label,
   date,
@@ -172,6 +194,7 @@ export function DayColumn({
         const geometry = blockGeometry(start, end - start, hours.startHour, PX_PER_MINUTE);
         const lane = lanes.get(appointment.id) ?? { lane: 0, lanes: 1 };
         const style = APPOINTMENT_BLOCK_STYLE[appointment.status];
+        const look = blockLook(appointment, colorFor(appointment));
         const compact = geometry.height < 34;
         const draggable = Boolean(drag?.canDrag(appointment)) && !isPastDay;
         return (
@@ -185,7 +208,7 @@ export function DayColumn({
             onPointerDown={draggable ? (event) => drag!.onPointerDown(event, appointment, 'move') : undefined}
             onContextMenu={draggable ? (event) => event.preventDefault() : undefined}
             title={`${appointment.patientName} · ${minutesLabel(start)}–${minutesLabel(end)}${draggable ? ' · drag to move' : ''}`}
-            className={`group/block absolute z-[2] overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-left text-xs shadow-sm ${style.fill} ${style.text} ${
+            className={`group/block absolute z-[2] overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-left text-xs transition-shadow hover:shadow-md ${look.className} ${
               selectedId === appointment.id ? 'outline outline-2 outline-[var(--teal)]' : ''
             } ${draggable ? 'pointer-fine:cursor-grab' : ''} ${drag?.draggingId === appointment.id ? 'opacity-40' : ''}`}
             style={{
@@ -194,6 +217,7 @@ export function DayColumn({
               left: `calc(${(lane.lane / lane.lanes) * 100}% + 2px)`,
               width: `calc(${100 / lane.lanes}% - 4px)`,
               borderLeftColor: colorFor(appointment),
+              ...look.style,
             }}
           >
             {draggable && (
@@ -644,7 +668,7 @@ export function ResourceDayGrid({
   onSelect: (appointment: Appointment) => void;
   canBookFor: (therapistId: string) => boolean;
   onBook: (input: { time: string; therapistId: string }) => void;
-  summaryFor: (therapistId: string) => string;
+  summaryFor: (therapistId: string) => LoadSummary;
   /** Working intervals for a therapist on this date; omit = booking hours. */
   workingFor?: (therapistId: string) => Interval[];
   drag?: GridDragOptions;
@@ -669,7 +693,7 @@ export function ResourceDayGrid({
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: therapist.color }} aria-hidden />
           {therapist.name}
         </p>
-        <p className="text-[11px] text-[var(--muted)]">{summaryFor(therapist.id)}</p>
+        <LoadLine summary={summaryFor(therapist.id)} color={therapist.color} />
       </div>
     ),
     onBook:

@@ -2,8 +2,9 @@ import { useMemo, useState, type ReactNode } from 'react';
 import type { UUID } from '@/domain/types';
 import { addDays, toLocalDateStr, type ClosedDayInfo, type ClosedRange } from '@/domain/schedule';
 import { CLOSED_HATCH_STYLE } from './scheduleColors';
+import { LoadLine, type LoadSummary } from './LoadLine';
 
-type RailTherapist = { id: UUID; name: string; color: string; summary: string };
+type RailTherapist = { id: UUID; name: string; color: string; summary: LoadSummary };
 
 /**
  * Desktop left rail (Athena / Google Calendar): mini month, therapist
@@ -57,7 +58,7 @@ export function ScheduleRail({
       {showTherapistToggles && (
         <section>
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Therapists</h3>
+            <h3 className="text-xs font-semibold text-[var(--muted)]">Therapists</h3>
             {visibleIds.length > 0 && (
               <button type="button" className="text-xs font-medium text-[var(--teal)]" onClick={onShowAll}>
                 Show all
@@ -69,18 +70,20 @@ export function ScheduleRail({
               const on = visibleIds.length === 0 || visibleIds.includes(therapist.id);
               return (
                 <li key={therapist.id} className="group relative">
-                  <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2 hover:bg-[var(--paper)]">
+                  <label className="flex min-h-10 cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--paper)]">
                     <input
                       type="checkbox"
                       checked={on}
                       onChange={() => onToggleTherapist(therapist.id)}
-                      className="h-4 w-4 rounded"
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded"
                       style={{ accentColor: therapist.color }}
                     />
-                    <span className="min-w-0 flex-1 truncate text-sm text-[var(--ink)]">{therapist.name}</span>
-                    <span className="shrink-0 text-[11px] text-[var(--muted)] group-hover:invisible group-focus-within:invisible">{therapist.summary}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-[var(--ink)]">{therapist.name}</span>
+                      <LoadLine summary={therapist.summary} color={therapist.color} />
+                    </span>
                   </label>
-                  <span className="invisible absolute right-2 top-1/2 flex -translate-y-1/2 gap-1 group-hover:visible group-focus-within:visible">
+                  <span className="invisible absolute right-2 top-1.5 flex gap-1 rounded bg-[var(--paper)] group-hover:visible group-focus-within:visible">
                     {onEditHours && (
                       <button
                         type="button"
@@ -111,7 +114,7 @@ export function ScheduleRail({
 
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Closed days</h3>
+          <h3 className="text-xs font-semibold text-[var(--muted)]">Closed days</h3>
           {canEditClosures && (
             <button type="button" className="text-xs font-medium text-[var(--teal)]" onClick={onAddClosure}>
               + Add

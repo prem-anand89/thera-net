@@ -106,88 +106,85 @@ export function RupeeInput({
  *  — sized to sit three-plus across even on a phone, not one per row — so a
  *  strip of them reads as a glanceable stat bar instead of eating most of
  *  the screen before any actual content shows. */
-export type StatTone = 'teal' | 'moss' | 'amber' | 'slate';
+export type StatTone = 'teal' | 'moss' | 'amber' | 'sky' | 'plum';
 
 export type StatCell = {
   label: string;
   value: ReactNode;
-  /** Small stroke icon shown in a tinted badge beside the number. */
+  /** Icon shown in a badge beside the number (StatIcons.tsx). */
   icon?: ReactNode;
   tone?: StatTone;
+  /** Money gets a wider tile (fits ₹9,99,999) and a solid badge; counts
+   *  (2–3 digits) get a narrow tile and a tinted badge. */
+  kind?: 'money' | 'count';
   /** Makes the cell a button — e.g. jump to the list behind the number. */
   onClick?: () => void;
 };
 
-const STAT_TONE: Record<StatTone, string> = {
-  teal: 'bg-[var(--teal-light)] text-[var(--teal)]',
-  moss: 'bg-[var(--moss-light)] text-[var(--moss)]',
-  amber: 'bg-[var(--amber-light)] text-[var(--amber)]',
-  slate: 'bg-[var(--slate-light)] text-[var(--slate)]',
+const STAT_BADGE: Record<StatTone, { solid: string; tint: string }> = {
+  teal: { solid: 'bg-[var(--teal)] text-white', tint: 'bg-[var(--teal-light)] text-[var(--teal)]' },
+  moss: { solid: 'bg-[var(--moss)] text-white', tint: 'bg-[var(--moss-light)] text-[var(--moss-strong)]' },
+  amber: { solid: 'bg-[var(--amber)] text-white', tint: 'bg-[var(--amber-light)] text-[var(--amber)]' },
+  sky: { solid: 'bg-[var(--sky)] text-white', tint: 'bg-[var(--sky-light)] text-[var(--sky)]' },
+  plum: { solid: 'bg-[var(--plum)] text-white', tint: 'bg-[var(--plum-light)] text-[var(--plum)]' },
 };
 
 /**
- * Headline numbers in one panel per period ("Today", "October"): a small
- * icon + caption heading, then each number with a tinted icon badge and a
- * label under it (on phones the badge sits above the number so three fit
- * untruncated). Panels sit side by side from `sm:` (widths follow the
- * number of cells) and stack on phones; cells within a panel always share
- * one row. Workspace uses it; Reports and print keep `StatTile`.
+ * Headline numbers as one row of two-line tiles (number over label), each
+ * with an icon badge. Groups ("Today", the month) are separated by a
+ * hairline from `sm:` and become their own row on phones; the period is in
+ * each label, so there's no heading line. Money tiles are wider than count
+ * tiles; on phones count tiles drop their badge so number and label fit. Workspace uses it; Reports and print keep `StatTile`.
  */
-export function StatStrip({
-  groups,
-}: {
-  groups: { caption: string; icon?: ReactNode; cells: StatCell[] }[];
-}) {
+export function StatStrip({ groups }: { groups: { caption: string; cells: StatCell[] }[] }) {
   return (
-    <div className="flex flex-col gap-2 sm:flex-row">
-      {groups.map((group) => (
+    <div className="flex flex-col gap-2 sm:flex-row sm:gap-0">
+      {groups.map((group, index) => (
         <section
           key={group.caption}
           aria-label={group.caption}
-          className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--paper)]/60 px-3 pb-2.5 pt-2"
-          style={{ flex: group.cells.length }}
+          className={`flex min-w-0 gap-2 ${index > 0 ? 'sm:ml-3 sm:border-l sm:border-[var(--border)] sm:pl-3' : ''}`}
+          style={{ flex: group.cells.reduce((sum, cell) => sum + (cell.kind === 'money' ? 1.7 : 1), 0) }}
         >
-          <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[var(--ink)]">
-            {group.icon && <span className="text-[var(--muted)] [&>svg]:h-3.5 [&>svg]:w-3.5">{group.icon}</span>}
-            {group.caption}
-          </h3>
-          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${group.cells.length}, minmax(0, 1fr))` }}>
-            {group.cells.map((cell) => {
-              const body = (
-                <>
-                  {cell.icon && (
-                    <span
-                      aria-hidden
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg [&>svg]:h-4 [&>svg]:w-4 max-sm:h-6 max-sm:w-6 max-sm:[&>svg]:h-3.5 max-sm:[&>svg]:w-3.5 ${STAT_TONE[cell.tone ?? 'teal']}`}
-                    >
-                      {cell.icon}
-                    </span>
-                  )}
-                  <span className="min-w-0">
-                    <span className="font-num block truncate text-base font-semibold leading-tight tabular-nums text-[var(--ink)] desktop:text-lg">
-                      {cell.value}
-                    </span>
-                    <span className="block truncate text-[11px] leading-tight text-[var(--muted)]">{cell.label}</span>
+          {group.cells.map((cell) => {
+            const money = cell.kind === 'money';
+            const badge = STAT_BADGE[cell.tone ?? 'teal'][money ? 'solid' : 'tint'];
+            const body = (
+              <>
+                {cell.icon && (
+                  <span
+                    aria-hidden
+                    className={`${money ? 'flex' : 'hidden sm:flex'} h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-9 sm:w-9 sm:rounded-xl [&>svg]:h-[18px] [&>svg]:w-[18px] sm:[&>svg]:h-[22px] sm:[&>svg]:w-[22px] ${badge}`}
+                  >
+                    {cell.icon}
                   </span>
-                </>
-              );
-              const cls = 'flex min-w-0 flex-col items-start gap-1 rounded-lg bg-[var(--surface)] p-2 sm:flex-row sm:items-center sm:gap-2 desktop:gap-2.5';
-              return cell.onClick ? (
-                <button
-                  key={cell.label}
-                  type="button"
-                  onClick={cell.onClick}
-                  className={`${cls} text-left ring-[var(--teal)]/30 transition-shadow hover:shadow-sm hover:ring-1 focus-visible:ring-2`}
-                >
-                  {body}
-                </button>
-              ) : (
-                <div key={cell.label} className={cls}>
-                  {body}
-                </div>
-              );
-            })}
-          </div>
+                )}
+                <span className="min-w-0">
+                  <span className="font-num block whitespace-nowrap text-[15px] font-semibold leading-tight tabular-nums text-[var(--ink)] sm:text-lg">
+                    {cell.value}
+                  </span>
+                  <span className="block truncate text-[11px] leading-tight text-[var(--muted)] sm:text-xs">{cell.label}</span>
+                </span>
+              </>
+            );
+            const cls = `flex min-w-0 items-center gap-2 rounded-xl bg-[var(--paper)] p-1.5 sm:gap-2.5 sm:p-2 ${
+              money ? 'min-w-[8.5rem] flex-[1.7_1_0%]' : 'min-w-[5.25rem] flex-[1_1_0%]'
+            }`;
+            return cell.onClick ? (
+              <button
+                key={cell.label}
+                type="button"
+                onClick={cell.onClick}
+                className={`${cls} text-left outline-[var(--teal)] hover:bg-[var(--teal-light)] focus-visible:outline-2`}
+              >
+                {body}
+              </button>
+            ) : (
+              <div key={cell.label} className={cls}>
+                {body}
+              </div>
+            );
+          })}
         </section>
       ))}
     </div>

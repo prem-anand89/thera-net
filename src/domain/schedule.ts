@@ -594,3 +594,51 @@ export function dropAllowed(input: {
     return s < input.start + input.duration && e > input.start;
   });
 }
+
+export interface DayLoad {
+  /** Live (not cancelled) appointments for this therapist on the day. */
+  count: number;
+  bookedMinutes: number;
+  workingMinutes: number;
+  /** Whole slots still bookable inside working hours (from `notBefore`). */
+  freeSlots: number;
+  /** booked ÷ working, 0–1; null when the therapist isn't working. */
+  ratio: number | null;
+  /** Plain-language caption: "3 booked, 4 slots free", "Fully booked", "Not working". */
+  text: string;
+}
+
+/**
+ * How full a therapist's day is — the Schedule column headers and rail draw
+ * it as a capacity bar so "who can take a walk-in?" reads at a glance.
+ */
+export function dayLoad(
+  appointments: Appointment[],
+  therapistId: string,
+  date: string,
+  hours: { startHour: number; endHour: number },
+  slotMinutes: number,
+  working: Interval[],
+  notBefore?: number
+): DayLoad {
+  const live = appointments.filter(
+    (a) => a.therapistId === therapistId && a.status !== 'cancelled' && appointmentStartsOnDate(a, date)
+  );
+  const bookedMinutes = live.reduce((sum, a) => sum + appointmentMinutes(a, slotMinutes), 0);
+  const workingMinutes = working.reduce((sum, w) => sum + Math.max(0, w.end - w.start), 0);
+  const freeSlots = freeGaps(appointments, therapistId, date, hours, slotMinutes, {
+    working,
+    alignToSlots: true,
+    notBefore,
+  }).reduce((sum, gap) => sum + Math.floor((gap.end - gap.start) / slotMinutes), 0);
+  const ratio = workingMinutes > 0 ? Math.min(1, bookedMinutes / workingMinutes) : null;
+  const text =
+    workingMinutes === 0
+      ? 'Not working'
+      : freeSlots === 0
+        ? live.length
+          ? 'Fully booked'
+          : 'No time left'
+        : `${live.length ? `${live.length} booked, ` : ''}${freeSlots} ${freeSlots === 1 ? 'slot' : 'slots'} free`;
+  return { count: live.length, bookedMinutes, workingMinutes, freeSlots, ratio, text };
+}

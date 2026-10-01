@@ -8,6 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { SectionCard, th, td } from '@/components/ui';
 import { ScheduleBookingsView } from './ScheduleBookingsView';
+import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
 import { requestsLastViewedKey } from './requestsSignals';
 
 /** Filled/empty star string for a 1–5 rating — same glance-first spirit as
@@ -122,16 +123,15 @@ export function RequestsPage() {
   // Therapists get their own schedule only — no Feedback / Bookings tab row.
   if (!isAdmin && !canSeeBookings) {
     return (
-      <div className="space-y-3">
-        <ScheduleTabs active={activeTab} showFeedback={false} scheduleLabel="My schedule" />
-        <ScheduleBookingsView />
-      </div>
+      <ScheduleBookingsView tabs={{ active: activeTab, showFeedback: false, scheduleLabel: 'My schedule' }} />
     );
   }
 
   return (
     <div className="space-y-3">
-      <ScheduleTabs active={activeTab} showFeedback={isAdmin} scheduleLabel="Schedule" />
+      {/* Schedule / History render the tab row themselves (with Reminders
+          and + Book on its right); Feedback gets the plain row. */}
+      {tab === 'feedback' && <ScheduleTabs active={activeTab} showFeedback={isAdmin} scheduleLabel="Schedule" />}
 
       {tab === 'feedback' &&
         isAdmin &&
@@ -248,50 +248,7 @@ export function RequestsPage() {
           </SectionCard>
         ))}
 
-      {tab === 'bookings' && <ScheduleBookingsView />}
+      {tab === 'bookings' && <ScheduleBookingsView tabs={{ active: activeTab, showFeedback: isAdmin, scheduleLabel: 'Schedule' }} />}
     </div>
-  );
-}
-
-type ScheduleTab = 'schedule' | 'history' | 'feedback';
-
-/**
- * The page's one tab row — Schedule · History · Feedback. It replaced three
- * stacked rows (a "Schedule" title, Bookings | Feedback, then Schedule |
- * History inside Bookings) that pushed the calendar down. The page title
- * stays for screen readers only; the header nav already says Schedule.
- * URLs are unchanged: Schedule/History are `?tab=bookings&view=…`,
- * Feedback is `?tab=feedback` (admins only).
- */
-function ScheduleTabs({
-  active,
-  showFeedback,
-  scheduleLabel,
-}: {
-  active: ScheduleTab;
-  showFeedback: boolean;
-  scheduleLabel: string;
-}) {
-  const cls = (tab: ScheduleTab) =>
-    `-mb-px flex min-h-11 items-center border-b-2 px-1 text-sm font-medium ${
-      active === tab ? 'border-[var(--teal)] text-[var(--teal)]' : 'border-transparent text-[var(--muted)] hover:text-[var(--ink)]'
-    }`;
-  return (
-    <>
-      <h1 className="sr-only">Schedule</h1>
-      <nav aria-label="Schedule views" className="flex gap-5 border-b border-[var(--border)]">
-        <Link to="/schedule" search={{ tab: 'bookings', view: 'schedule' }} className={cls('schedule')} aria-current={active === 'schedule' ? 'page' : undefined}>
-          {scheduleLabel}
-        </Link>
-        <Link to="/schedule" search={{ tab: 'bookings', view: 'history' }} className={cls('history')} aria-current={active === 'history' ? 'page' : undefined}>
-          History
-        </Link>
-        {showFeedback && (
-          <Link to="/schedule" search={{ tab: 'feedback' }} className={cls('feedback')} aria-current={active === 'feedback' ? 'page' : undefined}>
-            Feedback
-          </Link>
-        )}
-      </nav>
-    </>
   );
 }

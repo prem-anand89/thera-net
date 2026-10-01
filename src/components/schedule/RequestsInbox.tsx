@@ -73,7 +73,8 @@ export function RequestsInbox({
   limit = 5,
 }: {
   requests: AppointmentRequest[];
-  variant: 'strip' | 'rail' | 'list';
+  /** 'rows': flat divided rows sized like Workspace's visit list. */
+  variant: 'strip' | 'rail' | 'list' | 'rows';
   therapistNameFor: (id: string | null) => string | null;
   onConfirm: (request: AppointmentRequest) => void;
   onDecline: (request: AppointmentRequest) => void;
@@ -106,6 +107,47 @@ export function RequestsInbox({
   );
 
   if (variant === 'list') return rows;
+
+  if (variant === 'rows') {
+    return (
+      <ul className="-mx-5 divide-y divide-[var(--border)] border-y border-[var(--border)]">
+        {shown.map((request) => {
+          const therapist = therapistNameFor(request.preferredTherapistId);
+          return (
+            <li key={request.id} className="flex items-center gap-3 px-5 py-2.5">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-[var(--ink)]">
+                  {request.name}
+                  <span className="ml-2 text-xs font-normal text-[var(--muted)]">{timeAgo(request.createdAt)}</span>
+                </span>
+                <span className="block truncate text-xs text-[var(--muted)]">
+                  {requestWants(request)}
+                  {therapist ? `, with ${therapist}` : ''}
+                  {', '}
+                  <a href={`tel:${request.phone}`} className="text-[var(--teal)] hover:underline">
+                    {request.phone}
+                  </a>
+                </span>
+              </span>
+              <button type="button" className="shrink-0 rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]" onClick={() => onConfirm(request)}>
+                Confirm
+              </button>
+              <button type="button" className="shrink-0 px-1 text-xs font-medium text-[var(--muted)] hover:text-[var(--rust)]" onClick={() => onDecline(request)}>
+                Decline
+              </button>
+            </li>
+          );
+        })}
+        {requests.length > shown.length && (
+          <li className="px-5 py-2">
+            <button type="button" className="text-xs font-medium text-[var(--teal)] hover:underline" onClick={onSeeAll}>
+              See all {requests.length} requests
+            </button>
+          </li>
+        )}
+      </ul>
+    );
+  }
 
   if (variant === 'rail') {
     return (

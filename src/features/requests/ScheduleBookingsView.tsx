@@ -27,6 +27,7 @@ import {
   toLocalDateStr,
   weekDays,
   type ClosedRange,
+  dayLoad,
 } from '@/domain/schedule';
 import {
   APPOINTMENT_BLOCK_STYLE,
@@ -39,12 +40,15 @@ import { usePermissions } from '@/app/usePermissions';
 import { ReminderSheet } from '@/components/schedule/ReminderSheet';
 import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
 import { RequestsInbox } from '@/components/schedule/RequestsInbox';
+import { TherapistFilter } from '@/components/schedule/TherapistFilter';
+import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
+import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
 import { AgendaList } from '@/components/schedule/AgendaList';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
 import { ClosedDaysSheet } from '@/components/schedule/ClosedDaysSheet';
 import { FindTimePanel } from '@/components/schedule/FindTimePanel';
 import { ScheduleRail, rangeLabel } from '@/components/schedule/ScheduleRail';
-import { ResourceDayGrid, WeekTimeGrid, type GridDragOptions, type GridTherapist, type MoveTarget } from '@/components/schedule/TimeGrid';
+import { ResourceDayGrid, WeekTimeGrid, type GridDragOptions, type GridTherapist, type LoadSummary, type MoveTarget } from '@/components/schedule/TimeGrid';
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
 
 type BookingView = 'schedule' | 'requests' | 'history';
@@ -77,6 +81,18 @@ function longDate(date: string) {
   });
 }
 
+/** "Thu, 1 Oct" — the phone toolbar has room for this, not the long form. */
+function shortDate(date: string) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', {
+    weekday: 'short', day: 'numeric', month: 'short',
+  });
+}
+
+const tabAction =
+  'inline-flex h-9 items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]';
+const tabPrimary =
+  'inline-flex h-9 items-center rounded-lg bg-[var(--teal)] px-3.5 text-sm font-medium text-white hover:bg-[var(--teal-strong)]';
+
 function dateForAppointment(appointment: Appointment) {
   return toLocalDateStr(new Date(appointment.scheduledAt));
 }
@@ -100,7 +116,12 @@ function isTypingTarget(target: EventTarget | null) {
   return Boolean(element?.closest('input, select, textarea, [contenteditable="true"], [role="dialog"]'));
 }
 
-export function ScheduleBookingsView() {
+export function ScheduleBookingsView({
+  tabs,
+}: {
+  /** The page's tab row, rendered here so Reminders and + Book sit on its right. */
+  tabs: { active: ScheduleTab; showFeedback: boolean; scheduleLabel: string };
+}) {
   const clinic = useClinic();
   const navigate = useNavigate();
   const scope = useWorkspaceScope();
@@ -202,15 +223,18 @@ export function ScheduleBookingsView() {
     [closedDates, today]
   );
 
+  // Column headers + rail: how full each therapist's day is (capacity bar +
+  // "3 booked, 4 slots free"). The unassigned column just counts.
   const summaryFor = useCallback(
-    (therapistId: string) => {
-      const rows = dayAppointments.filter(
-        (a) => a.status !== 'cancelled' && (therapistId ? a.therapistId === therapistId : !a.therapistId || !rosterById.has(a.therapistId))
-      );
-      const minutes = rows.reduce((sum, a) => sum + appointmentMinutes(a, slotMinutes), 0);
-      return rows.length ? `${rows.length} · ${formatMinutes(minutes)}` : 'Free';
+    (therapistId: string): LoadSummary => {
+      if (!therapistId) {
+        const count = dayAppointments.filter((a) => a.status !== 'cancelled' && (!a.therapistId || !rosterById.has(a.therapistId))).length;
+        return { text: count ? `${count} booked` : 'None', ratio: null };
+      }
+      const load = dayLoad(dayAppointments, therapistId, date, hours, slotMinutes, workingFor(therapistId, date), date === today ? now.minutes : undefined);
+      return { text: load.text, ratio: load.ratio };
     },
-    [dayAppointments, rosterById, slotMinutes]
+    [dayAppointments, rosterById, slotMinutes, date, hours, workingFor, today, now.minutes]
   );
 
   const gridTherapists: GridTherapist[] = useMemo(() => {
@@ -430,57 +454,47 @@ export function ScheduleBookingsView() {
   const upcoming = liveDay.filter((a) => (a.status === 'confirmed' || a.status === 'rescheduled') && (date > today || (date === today && minutesOfDay(a.scheduledAt) >= now.minutes))).length;
   const arrived = liveDay.filter((a) => a.status === 'arrived').length;
   const noShow = liveDay.filter((a) => a.status === 'no_show').length;
+  const daySummary = liveDay.length
+    ? [
+        `${liveDay.length} booked`,
+        upcoming ? `${upcoming} still to come` : '',
+        arrived ? `${arrived} arrived` : '',
+        noShow ? `${noShow} no-show` : '',
+      ]
+        .filter(Boolean)
+        .join(', ')
+    : 'Nothing booked yet';
   const closureForDate = closures.find((range) => range.from <= date && range.to >= date)
     ?? groupClosedRanges(closedDates ?? []).find((range) => range.from <= date && range.to >= date);
 
   return (
     <div className="space-y-4 pb-20">
-      <header className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] pb-3">
-        {/* Below desktop the week strip carries Today / previous / next, so the
-            header doesn't repeat them. */}
-        <div className={`hidden items-center gap-1 ${activeView === 'schedule' ? 'desktop:flex' : ''}`}>
-          <button type="button" className={btnSecondary} onClick={() => setSchedule({ date: today })}>Today</button>
-          <button type="button" className="min-h-11 min-w-11 rounded-lg text-lg text-[var(--teal)] hover:bg-[var(--paper)]" aria-label={mode === 'day' ? 'Previous day' : 'Previous week'} onClick={() => step(-1)}>‹</button>
-          <button type="button" className="min-h-11 min-w-11 rounded-lg text-lg text-[var(--teal)] hover:bg-[var(--paper)]" aria-label={mode === 'day' ? 'Next day' : 'Next week'} onClick={() => step(1)}>›</button>
-        </div>
-        <h2 className="min-w-0 flex-1 truncate font-display text-base font-semibold text-[var(--ink)]">
-          {activeView === 'history' ? '' : mode === 'day' ? longDate(date) : `Week of ${longDate(getWeekStart(date))}`}
-        </h2>
-        <div className="flex items-center gap-2">
-          <div className={`${activeView === 'schedule' ? 'flex' : 'hidden'} rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5`} role="group" aria-label="View">
-            {(['day', 'week'] as const).map((candidate) => (
-              <button key={candidate} type="button" aria-pressed={mode === candidate} onClick={() => setSchedule({ mode: candidate })} className={`min-h-9 rounded-md px-3 text-xs font-medium ${mode === candidate ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}>
-                {candidate === 'day' ? 'Day' : 'Week'}
+      <ScheduleTabs
+        {...tabs}
+        actions={
+          <>
+            {isTherapist && myTherapistId && (
+              <button type="button" className={tabAction} onClick={() => setHoursTherapistId(myTherapistId)}>
+                My hours
               </button>
-            ))}
-          </div>
-          {canManageAll && (
-            <button type="button" className={`${btnSecondary} hidden desktop:inline-flex desktop:items-center`} onClick={() => setReminderOpen(true)}>
-              Reminders
-            </button>
-          )}
-          <button
-            type="button"
-            className="hidden min-h-11 min-w-11 rounded-lg text-sm text-[var(--muted)] hover:bg-[var(--paper)] desktop:inline"
-            aria-label="Keyboard shortcuts"
-            aria-expanded={shortcutsOpen}
-            onClick={() => setShortcutsOpen((current) => !current)}
-          >
-            ?
-          </button>
-          {isTherapist && myTherapistId && (
-            <button type="button" className={btnSecondary} onClick={() => setHoursTherapistId(myTherapistId)}>
-              My hours
-            </button>
-          )}
-          <button type="button" className={btnPrimary} onClick={() => openBooking()}>+ Book</button>
+            )}
+            {canManageAll && (
+              <button type="button" className={`${tabAction} hidden tab:inline-flex`} onClick={() => setReminderOpen(true)}>
+                Reminders
+              </button>
+            )}
+            <button type="button" className={tabPrimary} onClick={() => openBooking()}>+ Book</button>
+          </>
+        }
+      />
+      {shortcutsOpen && (
+        <div role="note" className="flex items-start justify-between gap-3 rounded-lg bg-[var(--paper)] px-3 py-2 text-xs text-[var(--muted)]">
+          <span>
+            <strong className="text-[var(--ink)]">Shortcuts:</strong> <kbd>t</kbd> today, <kbd>d</kbd> day, <kbd>w</kbd> week, <kbd>←</kbd> <kbd>→</kbd> previous and next, <kbd>Esc</kbd> close, <kbd>?</kbd> this help
+          </span>
+          <button type="button" className="font-medium text-[var(--teal)]" onClick={() => setShortcutsOpen(false)}>Close</button>
         </div>
-        {shortcutsOpen && (
-          <div role="note" className="w-full rounded-lg bg-[var(--paper)] px-3 py-2 text-xs text-[var(--muted)]">
-            <strong className="text-[var(--ink)]">Shortcuts:</strong> <kbd>t</kbd> today · <kbd>d</kbd> day · <kbd>w</kbd> week · <kbd>←</kbd>/<kbd>→</kbd> previous/next · <kbd>Esc</kbd> close · <kbd>?</kbd> this help
-          </div>
-        )}
-      </header>
+      )}
 
 
       {activeView === 'schedule' && (
@@ -532,6 +546,87 @@ export function ScheduleBookingsView() {
                 />
               </div>
             )}
+
+            {/* One toolbar for the day: date as the headline with ‹ › and
+                Today, a plain-language summary, then the view controls.
+                Replaces the old header row and the chips/summary row. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <div className="flex min-w-0 flex-1 items-center gap-1">
+                <button type="button" className="hidden min-h-9 min-w-9 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--paper)] tab:flex" aria-label={mode === 'day' ? 'Previous day' : 'Previous week'} onClick={() => step(-1)}>
+                  <IconChevronLeft className="h-5 w-5" />
+                </button>
+                <button type="button" className="hidden min-h-9 min-w-9 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--paper)] tab:flex" aria-label={mode === 'day' ? 'Next day' : 'Next week'} onClick={() => step(1)}>
+                  <IconChevronRight className="h-5 w-5" />
+                </button>
+                <div className="min-w-0 tab:ml-1">
+                  <h2 className="flex items-baseline gap-2 truncate font-display text-lg font-semibold leading-tight text-[var(--ink)]">
+                    {mode === 'day' ? (
+                      <>
+                        <span className="sm:hidden">{shortDate(date)}</span>
+                        <span className="hidden sm:inline">{longDate(date)}</span>
+                      </>
+                    ) : (
+                      `Week of ${shortDate(getWeekStart(date))}`
+                    )}
+                    {mode === 'day' && date === today && <span className="hidden font-sans text-xs font-medium text-[var(--teal)] sm:inline">Today</span>}
+                  </h2>
+                  {mode === 'day' && <p className="truncate text-xs text-[var(--muted)]">{daySummary}</p>}
+                </div>
+                {!(mode === 'day' ? date === today : getWeekStart(date) === getWeekStart(today)) && (
+                  <button type="button" className="ml-1 min-h-9 shrink-0 rounded-lg border border-[var(--border)] px-2.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]" onClick={() => setSchedule({ date: today })}>
+                    Today
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {mode === 'day' && (
+                  <button type="button" className="min-h-9 px-1 text-xs font-medium text-[var(--teal)] tab:hidden" onClick={() => setFindTime((current) => !current)}>
+                    {findTime ? 'Back to day' : 'Find a time'}
+                  </button>
+                )}
+                {canManageAll && roster.length > 1 && (
+                  <div className="desktop:hidden">
+                    <TherapistFilter therapists={roster} visibleIds={selectedIds} onToggle={toggleTherapist} onShowAll={() => setTherapists([])} />
+                  </div>
+                )}
+                <div className="flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5" role="group" aria-label="View">
+                  {(['day', 'week'] as const).map((candidate) => (
+                    <button key={candidate} type="button" aria-pressed={mode === candidate} onClick={() => setSchedule({ mode: candidate })} className={`min-h-8 rounded-md px-3 text-xs font-medium ${mode === candidate ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}>
+                      {candidate === 'day' ? 'Day' : 'Week'}
+                    </button>
+                  ))}
+                </div>
+                <KebabMenu ariaLabel="More schedule options">
+                  {(close) => (
+                    <>
+                      <button type="button" className={menuItem} onClick={() => { setShowCancelled((current) => !current); close(); }}>
+                        {showCancelled ? 'Hide cancelled' : 'Show cancelled'}
+                      </button>
+                      {canManageAll && (
+                        <button type="button" className={`${menuItem} tab:hidden`} onClick={() => { setReminderOpen(true); close(); }}>
+                          Send reminders
+                        </button>
+                      )}
+                      {canManageAll && (
+                        <button type="button" className={menuItem} onClick={() => { setClosedSheetOpen(true); close(); }}>
+                          Set closed days
+                        </button>
+                      )}
+                      {canManageAll &&
+                        roster.map((t) => (
+                          <button key={t.id} type="button" className={menuItem} onClick={() => { setHoursTherapistId(t.id); close(); }}>
+                            Working hours, {t.name}
+                          </button>
+                        ))}
+                      <button type="button" className={`${menuItem} hidden pointer-fine:block`} onClick={() => { setShortcutsOpen(true); close(); }}>
+                        Keyboard shortcuts
+                      </button>
+                    </>
+                  )}
+                </KebabMenu>
+              </div>
+            </div>
+
             <div className="desktop:hidden">
               <MiniCalendarStrip
                 selectedDate={date}
@@ -544,11 +639,12 @@ export function ScheduleBookingsView() {
             {closedToday.closed && (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--slate-light)] px-3 py-2 text-sm text-[var(--slate)]">
                 <span>
-                  <strong>Closed</strong>
-                  {closedToday.kind === 'holiday'
-                    ? `${closedToday.label ? ` — ${closedToday.label}` : ''}${closureForDate ? ` (${rangeLabel(closureForDate)})` : ''}`
-                    : ' — weekly closed day'}
-                  . Public booking is off for this day.
+                  <strong>
+                    {closedToday.kind === 'holiday'
+                      ? `Closed${closedToday.label ? ` for ${closedToday.label}` : ''}`
+                      : 'Closed every week on this day'}
+                  </strong>
+                  {closedToday.kind === 'holiday' && closureForDate ? ` (${rangeLabel(closureForDate)})` : ''}. Public booking is off for this day.
                 </span>
                 {canManageAll && closedToday.kind === 'holiday' && closureForDate && (
                   <button type="button" className="text-xs font-medium text-[var(--rust)] hover:underline" onClick={() => setRemoving(closureForDate)}>
@@ -557,66 +653,6 @@ export function ScheduleBookingsView() {
                 )}
               </div>
             )}
-
-            <div className="flex flex-wrap items-center gap-2">
-              {canManageAll && roster.length > 1 && (
-                <div className="chip-row desktop:hidden">
-                  <button type="button" className={`toggle-chip ${selectedIds.length === 0 ? 'on' : ''}`} onClick={() => setTherapists([])}>All</button>
-                  {roster.map((t) => (
-                    <button key={t.id} type="button" className={`toggle-chip ${selectedIds.length === 1 && selectedIds[0] === t.id ? 'on' : ''}`} onClick={() => setTherapists([t.id])}>
-                      <span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: t.color }} aria-hidden />
-                      {t.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <p className="text-xs text-[var(--muted)]">
-                {mode === 'day'
-                  ? liveDay.length
-                    ? `${liveDay.length} appointment${liveDay.length === 1 ? '' : 's'}${upcoming ? ` · ${upcoming} upcoming` : ''}${arrived ? ` · ${arrived} arrived` : ''}${noShow ? ` · ${noShow} no-show` : ''}`
-                    : 'No appointments'
-                  : null}
-              </p>
-              <div className="ml-auto flex items-center gap-1">
-                {mode === 'day' && (
-                  <button type="button" className="min-h-11 px-2 text-sm font-medium text-[var(--teal)] tab:hidden" onClick={() => setFindTime((current) => !current)}>
-                    {findTime ? 'Back to day' : 'Find a time'}
-                  </button>
-                )}
-                <label className="hidden min-h-11 items-center gap-1.5 text-xs text-[var(--muted)] desktop:flex">
-                  <input type="checkbox" checked={showCancelled} onChange={(event) => setShowCancelled(event.target.checked)} />
-                  Show cancelled
-                </label>
-                {/* Below desktop, the secondary controls live in one menu. */}
-                <div className="desktop:hidden">
-                  <KebabMenu ariaLabel="More schedule options">
-                    {(close) => (
-                      <>
-                        <button type="button" className={menuItem} onClick={() => { setShowCancelled((current) => !current); close(); }}>
-                          {showCancelled ? 'Hide cancelled' : 'Show cancelled'}
-                        </button>
-                        {canManageAll && (
-                          <button type="button" className={menuItem} onClick={() => { setReminderOpen(true); close(); }}>
-                            Send reminders
-                          </button>
-                        )}
-                        {canManageAll && (
-                          <button type="button" className={menuItem} onClick={() => { setClosedSheetOpen(true); close(); }}>
-                            Set closed days
-                          </button>
-                        )}
-                        {canManageAll &&
-                          roster.map((t) => (
-                            <button key={t.id} type="button" className={menuItem} onClick={() => { setHoursTherapistId(t.id); close(); }}>
-                              Hours · {t.name}
-                            </button>
-                          ))}
-                      </>
-                    )}
-                  </KebabMenu>
-                </div>
-              </div>
-            </div>
 
             {mode === 'day' ? (
               <>

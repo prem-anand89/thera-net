@@ -43,14 +43,13 @@ describe('MiniCalendarStrip', () => {
     expect(screen.getByRole('tab', { name: /29 September, 0 appointments/ })).toBeInTheDocument();
   });
 
-  it('moves exactly one week with the arrows and returns to today', () => {
+  it('moves exactly one week with the arrows (Today lives in the Schedule toolbar)', () => {
     const { onSelectDate } = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Next week' }));
     expect(onSelectDate).toHaveBeenLastCalledWith('2026-10-05');
     fireEvent.click(screen.getByRole('button', { name: 'Previous week' }));
     expect(onSelectDate).toHaveBeenLastCalledWith('2026-09-21');
-    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
-    expect(onSelectDate).toHaveBeenLastCalledWith('2026-09-30');
+    expect(screen.queryByRole('button', { name: 'Today' })).not.toBeInTheDocument();
   });
 
   it('selects a day on click and steps days with the arrow keys', () => {

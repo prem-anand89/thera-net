@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, dragTarget, dropAllowed, resizeTarget, snapMinutes, seriesDates, seriesProblem, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, dayLoad, dragTarget, dropAllowed, resizeTarget, snapMinutes, seriesDates, seriesProblem, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -362,5 +362,24 @@ describe('drag helpers', () => {
     expect(dropAllowed({ ...base, start: 630, working: [{ start: 540, end: 600 }] })).toBe(false);
     expect(dropAllowed({ ...base, start: 630, closed: true })).toBe(false);
     expect(dropAllowed({ ...base, start: 630, isPast: true })).toBe(false);
+  });
+});
+
+describe('dayLoad', () => {
+  const hours = { startHour: 9, endHour: 13 };
+  const working = [{ start: 9 * 60, end: 13 * 60 }];
+  it('counts booked minutes against working time and free 30-min slots', () => {
+    const list = [
+      appt({ id: 'x', scheduledAt: at('2026-10-01', '09:00'), durationMinutes: 60 }),
+      appt({ id: 'y', scheduledAt: at('2026-10-01', '11:00'), durationMinutes: 30, status: 'cancelled' }),
+    ];
+    const load = dayLoad(list, 't1', '2026-10-01', hours, 30, working);
+    expect(load).toMatchObject({ count: 1, bookedMinutes: 60, workingMinutes: 240, freeSlots: 6, ratio: 0.25, text: '1 booked, 6 slots free' });
+  });
+  it('reads Fully booked, Not working and No time left', () => {
+    const full = [appt({ id: 'z', scheduledAt: at('2026-10-01', '09:00'), durationMinutes: 240 })];
+    expect(dayLoad(full, 't1', '2026-10-01', hours, 30, working).text).toBe('Fully booked');
+    expect(dayLoad([], 't1', '2026-10-01', hours, 30, []).text).toBe('Not working');
+    expect(dayLoad([], 't1', '2026-10-01', hours, 30, working, 13 * 60).text).toBe('No time left');
   });
 });

@@ -26,7 +26,6 @@ function setup(appointments: Appointment[]) {
     <TodayAppointments
       appointments={appointments}
       slotMinutes={30}
-      nowMinutes={600}
       nextUpId={null}
       colorFor={() => '#000'}
       therapistNameFor={() => 'Dr A'}
@@ -45,8 +44,9 @@ describe('TodayAppointments', () => {
     setup([appt('09:00', { status: 'arrived', source: 'walk_in', patientName: 'Walk In' }), ...upcoming]);
     const progress = screen.getByRole('region', { name: 'In progress' });
     expect(within(progress).getByText('Walk In')).toBeInTheDocument();
-    expect(within(progress).getByText(/Walk-in/)).toBeInTheDocument();
+    expect(within(progress).getAllByText(/Walk-in/).length).toBeGreaterThan(0);
     expect(within(progress).getByText('Complete visit')).toBeInTheDocument();
+    expect(within(progress).getByRole('link', { name: /Complete/ })).toBeInTheDocument();
 
     const upcomingList = screen.getByRole('region', { name: 'Upcoming' });
     expect(within(upcomingList).getAllByRole('button').filter((b) => b.textContent?.includes('P'))).toHaveLength(5);
@@ -82,8 +82,7 @@ describe('TodayAppointments', () => {
       <TodayAppointments
         appointments={[]}
         slotMinutes={30}
-        nowMinutes={600}
-        nextUpId={null}
+          nextUpId={null}
         colorFor={() => '#000'}
         therapistNameFor={() => 'Dr A'}
         showTherapist

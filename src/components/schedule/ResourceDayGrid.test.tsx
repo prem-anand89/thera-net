@@ -40,7 +40,7 @@ function baseProps(overrides: Partial<Props> = {}): Props {
     onSelect: vi.fn(),
     canBookFor: () => true,
     onBook: vi.fn(),
-    summaryFor: (id) => (id === 't1' ? '1 · 45m' : 'Free'),
+    summaryFor: (id) => (id === 't1' ? { text: '1 booked, 6 slots free', ratio: 0.2 } : { text: 'None', ratio: null }),
     ...overrides,
   };
 }
@@ -52,7 +52,8 @@ describe('ResourceDayGrid', () => {
     render(<ResourceDayGrid {...baseProps()} />);
     expect(screen.getByText('Dr Asha')).toBeInTheDocument();
     expect(screen.getByText('Dr Ravi')).toBeInTheDocument();
-    expect(screen.getByText('1 · 45m')).toBeInTheDocument();
+    expect(screen.getByText('1 booked, 6 slots free')).toBeInTheDocument();
+    expect(screen.getByRole('meter', { name: 'Day booked' })).toHaveAttribute('aria-valuenow', '20');
   });
 
   it('sizes and positions a block by its start and length', () => {
