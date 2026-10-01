@@ -1,55 +1,14 @@
 -- ---------------------------------------------------------------------------
--- Void an issued invoice.
+-- Voiding an invoice is admin / front desk only.
 --
--- Invoices are immutable and numbered without gaps, and an amendment can
--- only add visits or re-point them — it can never change a billed amount. So
--- a wrong price or patient on an issued invoice had no fix. A void keeps the
--- invoice (and its number) in the series, marked void, and releases its
--- visits so they can be corrected and billed again with a new invoice.
---
--- Status lives where payment status already lives — invoice_payments — as a
--- third value, so no new synced table and no UPDATE on invoices. Because a
--- client can write invoice_payments directly, a trigger makes 'void'
--- reachable only through void_invoice() (which also releases the visits), and
--- makes it final.
--- Payments already recorded against the visits stay with the visits.
+-- void_invoice() first copied issue_invoice()'s rule: with invoicing_access =
+-- 'everyone' (the default), any clinic member could void. Voiding is more
+-- disruptive than issuing or amending — it can release another person's
+-- invoiced visits and cannot be undone — so it is limited to the roles that
+-- run billing, whatever invoicing_access says. A therapist can still issue
+-- and amend per invoicing_access; a wrong invoice of theirs is voided by
+-- front desk or an admin.
 -- ---------------------------------------------------------------------------
-alter table public.invoice_payments drop constraint if exists invoice_payments_status_check;
-alter table public.invoice_payments
-  add constraint invoice_payments_status_check check (status in ('paid', 'outstanding', 'void'));
-alter table public.invoice_payments add column if not exists void_reason text;
-alter table public.invoice_payments add column if not exists voided_at timestamptz;
-
-create or replace function public.guard_invoice_void()
-returns trigger language plpgsql as $$
-begin
-  if coalesce(current_setting('app.allow_invoice_void', true), '') = 'true' then
-    return new;
-  end if;
-  if tg_op = 'INSERT' then
-    if new.status = 'void' then
-      raise exception 'invoices are voided with void_invoice()';
-    end if;
-    return new;
-  end if;
-  if old.status = 'void' then
-    raise exception 'this invoice is void; its status can no longer change';
-  end if;
-  if new.status = 'void' then
-    raise exception 'invoices are voided with void_invoice()';
-  end if;
-  return new;
-end $$;
-
-drop trigger if exists invoice_payments_guard_void on public.invoice_payments;
-create trigger invoice_payments_guard_void before insert or update on public.invoice_payments
-  for each row execute function public.guard_invoice_void();
-
--- Returns the invoice_payments row id so the client mirrors the same row.
--- Admin / front desk only (see 20261001195227_void_invoice_staff_only.sql,
--- which was applied to the live database separately and sorts earlier): the
--- body is repeated here so that a rebuild ends on the staff-only rule
--- whichever of the two files runs last.
 create or replace function public.void_invoice(p_invoice_id uuid, p_reason text)
 returns uuid
 language plpgsql security definer set search_path = public as $$
@@ -113,5 +72,7 @@ begin
   return v_row_id;
 end $$;
 
+-- create or replace keeps the grants from the original migration, restated
+-- so this file is correct on its own.
 revoke execute on function public.void_invoice(uuid, text) from public, anon;
 grant execute on function public.void_invoice(uuid, text) to authenticated;

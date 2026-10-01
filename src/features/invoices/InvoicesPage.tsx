@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { canMarkOutstanding, invoiceRowStatus } from '@/domain/invoiceStatus';
+import { toLocalDateStr } from '@/domain/schedule';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, paymentService, dashboardService } from '@/services';
@@ -596,7 +597,7 @@ export function InvoicesPage() {
           visitId={sampleVisitIdByInvoiceId.get(takingPayment.id) ?? ''}
           invoiceId={takingPayment.id}
           amountPaise={takingPayment.totalPaise}
-          visitDate={new Date().toISOString().slice(0, 10)}
+          visitDate={toLocalDateStr(new Date())}
           patientLabel={takingPayment.patientSnapshot.name}
           mrno={takingPayment.patientSnapshot.mrno}
           onClose={() => setTakingPayment(null)}

@@ -283,7 +283,10 @@ function LineItemsTable({
 
 export function InvoicePrintPage() {
   const clinic = useClinic();
-  const { canBill } = usePermissions();
+  const { canBill, role } = usePermissions();
+  // Voiding is admin / front desk only on the server (void_invoice()), whatever
+  // invoicing access says; a therapist can issue and amend but not void.
+  const canVoid = canBill && (role === 'admin' || role === 'front_desk');
   const { invoiceId } = useParams({ strict: false }) as { invoiceId: string };
   const { from: backTo, tab: backTab } = useSearch({ strict: false }) as {
     from?: InvoicePrintBackTarget;
@@ -453,7 +456,7 @@ export function InvoicePrintPage() {
               Amend this invoice
             </button>
           )}
-          {!supersededBy && !isVoid && canBill && (
+          {!supersededBy && !isVoid && canVoid && (
             <button type="button" className={`${btnSecondary} !text-[var(--rust)]`} onClick={() => setVoiding(true)}>
               Void invoice
             </button>

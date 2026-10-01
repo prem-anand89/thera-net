@@ -996,6 +996,16 @@ describe('dashboardService.todayWorklist', () => {
     expect(result.visits[0].paymentState).toBe('zero_session');
   });
 
+  it('uses the local calendar day at 3:30 AM, when the UTC date is still yesterday in India', async () => {
+    // Built from local components, so it holds in any timezone; in IST the old
+    // UTC-based date would have been 10 Jun here and missed this visit.
+    const earlyMorning = new Date(2026, 5, 11, 3, 30);
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-11', actualBillPaise: rs(500) }));
+    const svc = createDashboardService(fake.repos);
+    const result = await svc.todayWorklist('clinic-1', earlyMorning);
+    expect(result.visitCount).toBe(1);
+  });
+
   it('marks a billable visit with no invoice as uninvoiced and counts it outstanding', async () => {
     fake.visits.set('v1', baseVisit('v1', { visitDate: todayStr, actualBillPaise: rs(1500) }));
     const svc = createDashboardService(fake.repos);

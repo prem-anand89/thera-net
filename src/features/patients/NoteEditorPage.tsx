@@ -1,3 +1,4 @@
+import { toLocalDateStr } from '@/domain/schedule';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useBlocker, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -2509,7 +2510,7 @@ export function NoteEditorPage() {
                           {
                             label: '',
                             baseline: 5,
-                            baselineDate: new Date().toISOString().slice(0, 10),
+                            baselineDate: toLocalDateStr(new Date()),
                             current: 5,
                           },
                         ],

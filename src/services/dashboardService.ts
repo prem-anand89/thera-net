@@ -558,7 +558,7 @@ export function createDashboardService(repos: Repos) {
       const { from, to } = monthDateRange(month);
       const lookbackDate = new Date(`${from}T00:00:00`);
       lookbackDate.setDate(lookbackDate.getDate() - 30);
-      const lookbackFrom = lookbackDate.toISOString().slice(0, 10);
+      const lookbackFrom = toLocalDateStr(lookbackDate);
 
       const visits = await repos.visits.list({ clinicId, from: lookbackFrom, to, therapistId });
       const inMonth = visits.filter((v) => v.visitDate >= from && v.visitDate <= to);
@@ -785,10 +785,12 @@ export function createDashboardService(repos: Repos) {
       days: number,
       asOf = new Date()
     ): Promise<RecentVisitRow[]> {
-      const todayStr = asOf.toISOString().slice(0, 10);
+      // Local dates: visit dates are local calendar days, and the UTC date is
+      // a day behind from midnight to 5:30 AM in India.
+      const todayStr = toLocalDateStr(asOf);
       const cutoff = new Date(asOf);
       cutoff.setDate(cutoff.getDate() - days);
-      const fromStr = cutoff.toISOString().slice(0, 10);
+      const fromStr = toLocalDateStr(cutoff);
       const [visits, patients, therapists, catalog, invoicePayments, directPayments] =
         await Promise.all([
           repos.visits.list({ clinicId, from: fromStr }),
@@ -928,7 +930,7 @@ export function createDashboardService(repos: Repos) {
       asOf = new Date(),
       therapistId?: UUID
     ): Promise<TodayWorklist> {
-      const todayStr = asOf.toISOString().slice(0, 10);
+      const todayStr = toLocalDateStr(asOf);
       const [visits, patients, therapists, catalog, invoicePayments, directPayments, invoices] =
         await Promise.all([
           repos.visits.list({ clinicId, from: todayStr, to: todayStr, therapistId }),

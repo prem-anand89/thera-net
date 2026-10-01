@@ -18,6 +18,7 @@ import { useSession } from '@/app/useSession';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { formatINR } from '@/domain/money';
+import { toLocalDateStr } from '@/domain/schedule';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { DUPLICATE_NAME_THRESHOLD, nameSimilarity } from '@/domain/nameSimilarity';
 import { isNearingCompletion } from '@/domain/packageTracking';
@@ -183,7 +184,9 @@ export function NewVisitPage() {
     useLiveQuery(() => repos.referringSourceCatalog.list(clinic.id), [clinic.id]) ?? [];
 
   // Visit fields
-  const today = new Date().toISOString().slice(0, 10);
+  // The local calendar day — the UTC date is yesterday from midnight to 5:30 AM in
+  // India, which dated an early-morning visit (and its payment) a day back.
+  const today = toLocalDateStr(new Date());
   const [visitDate, setVisitDate] = useState(today);
   const [therapistId, setTherapistId] = useState('');
   const [mode, setMode] = useState<'new' | 'continuation'>('new');

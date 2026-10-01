@@ -135,7 +135,7 @@ function todayRowToCardData(
   return {
     visitId: row.visitId,
     therapistId: row.therapistId,
-    visitDate: new Date().toISOString().slice(0, 10),
+    visitDate: toLocalDateStr(new Date()),
     patientId: row.patientId,
     patientName: row.patientName,
     patientPhone: row.phone,
