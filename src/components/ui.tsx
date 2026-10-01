@@ -112,7 +112,7 @@ export type StatCell = {
   /** Short label ("Collected", "Visits"); the group caption carries the period. */
   label: string;
   value: ReactNode;
-  /** Small icon before the label, in the tone colour (StatIcons.tsx). */
+  /** Icon on a white badge in the tile's hue (StatIcons.tsx). */
   icon?: ReactNode;
   tone?: StatTone;
   /** Width by expected size: 'money' fits ₹99,999 (a day's takings),
@@ -123,68 +123,72 @@ export type StatCell = {
   onClick?: () => void;
 };
 
-// Tone colours the small icon beside each label — the number itself stays ink.
-const STAT_TONE: Record<StatTone, string> = {
-  teal: 'text-[var(--teal)]',
-  moss: 'text-[var(--moss)]',
-  amber: 'text-[var(--amber)]',
-  sky: 'text-[var(--sky)]',
-  plum: 'text-[var(--plum)]',
+// Each tile is lightly tinted in its own hue, the icon on a white badge.
+const STAT_TILE: Record<StatTone, { tile: string; icon: string }> = {
+  teal: { tile: 'bg-[var(--teal-light)]', icon: 'text-[var(--teal)]' },
+  moss: { tile: 'bg-[var(--moss-light)]', icon: 'text-[var(--moss-strong)]' },
+  amber: { tile: 'bg-[var(--amber-light)]', icon: 'text-[var(--amber)]' },
+  sky: { tile: 'bg-[var(--sky-light)]', icon: 'text-[var(--sky)]' },
+  plum: { tile: 'bg-[var(--plum-light)]', icon: 'text-[var(--plum)]' },
 };
 
-// Counts (visits, packages, patients) are always 2–3 digits, so they get a
-// fixed width and never move; money ranges from a day's ₹4,500 to a month's
-// ₹9,99,999, so it gets the flexible share of the row (with a minimum that
-// still fits its largest expected value) and only reflows by breakpoint —
-// not by shrinking every time a neighbouring count tile needs room.
+// From tab: one row per period. Counts (visits, packages, patients) are
+// always 2–3 digits, so they get a fixed width and never move; money ranges
+// from a day's ₹4,500 to a month's ₹9,99,999, so it gets the flexible share
+// (with a minimum that fits its largest expected value). Phones use a
+// two-column grid instead (see StatStrip).
 const STAT_WIDTH = {
-  money: 'min-w-[7rem] flex-1 tab:min-w-[8rem]',
-  'money-lg': 'min-w-[8rem] flex-1 tab:min-w-[9.5rem]',
-  count: 'w-[5.75rem] shrink-0 tab:w-[6.5rem]',
+  money: 'tab:min-w-[8.5rem] tab:flex-1',
+  'money-lg': 'tab:min-w-[10rem] tab:flex-1',
+  count: 'tab:w-[9rem] tab:shrink-0',
 } as const;
 
 /**
- * Headline numbers in one outlined band — no boxes inside it. Each period
- * ("Today", "October") is a section with a small uppercase eyebrow; its
- * numbers sit side by side between hairline rules, each the number over a
- * short label with a small tone-coloured icon. Periods stack (split by a
- * rule) on phones and sit side by side from `tab:`.
+ * Headline numbers as tinted tiles, one row per period ("Today", "October")
+ * under a small uppercase caption — no box around the group (the Workspace
+ * header is already a card). Each tile: a white icon badge in the tile's
+ * hue, the number over a short label. Phones: a two-column grid (with an
+ * odd count the first, money, tile spans both). From `tab:` each period is
+ * one row; periods sit side by side from `desktop:`.
  * Workspace uses it; Reports and print keep `StatTile`.
  */
 export function StatStrip({ groups }: { groups: { caption: string; cells: StatCell[] }[] }) {
   return (
-    <div className="flex flex-col divide-y divide-[var(--border)] overflow-hidden rounded-xl border border-[var(--border)] tab:flex-row tab:divide-x tab:divide-y-0">
+    <div className="flex flex-col gap-3 desktop:flex-row desktop:gap-5">
       {groups.map((group) => (
         <section key={group.caption} aria-label={group.caption} className="min-w-0 flex-auto">
-          <h3 className="px-2.5 pt-2 tab:px-3 text-[10px] font-semibold uppercase leading-none tracking-wide text-[var(--muted)]">
+          <h3 className="mb-1.5 text-[10px] font-semibold uppercase leading-none tracking-wide text-[var(--muted)]">
             {group.caption}
           </h3>
-          <div className="flex divide-x divide-[var(--border)] py-1.5">
-            {group.cells.map((cell) => {
+          <div className="grid grid-cols-2 gap-1.5 tab:flex tab:gap-2">
+            {group.cells.map((cell, index) => {
+              const tone = STAT_TILE[cell.tone ?? 'teal'];
+              const span = group.cells.length % 2 === 1 && index === 0 ? 'col-span-2' : '';
               const body = (
                 <>
-                  <span className="font-num block whitespace-nowrap text-[17px] font-semibold leading-tight tabular-nums text-[var(--ink)] tab:text-xl">
-                    {cell.value}
-                  </span>
-                  <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] leading-tight text-[var(--muted)] tab:text-xs">
-                    {cell.icon ? (
-                      <span aria-hidden className={`shrink-0 [&>svg]:h-3.5 [&>svg]:w-3.5 ${STAT_TONE[cell.tone ?? 'teal']}`}>
-                        {cell.icon}
-                      </span>
-                    ) : (
-                      <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full bg-current ${STAT_TONE[cell.tone ?? 'teal']}`} />
-                    )}
-                    <span className="truncate">{cell.label}</span>
+                  {cell.icon && (
+                    <span
+                      aria-hidden
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--surface)]/80 tab:h-9 tab:w-9 [&>svg]:h-[18px] [&>svg]:w-[18px] tab:[&>svg]:h-5 tab:[&>svg]:w-5 ${tone.icon}`}
+                    >
+                      {cell.icon}
+                    </span>
+                  )}
+                  <span className="min-w-0">
+                    <span className="font-num block whitespace-nowrap text-[15px] font-semibold leading-tight tabular-nums text-[var(--ink)] tab:text-lg">
+                      {cell.value}
+                    </span>
+                    <span className="block truncate text-[11px] leading-tight text-[var(--muted)] tab:text-xs">{cell.label}</span>
                   </span>
                 </>
               );
-              const cls = `block px-2.5 py-0.5 tab:px-3 ${STAT_WIDTH[cell.kind ?? 'count']}`;
+              const cls = `flex min-w-0 items-center gap-2 rounded-xl px-2 py-1.5 tab:gap-2.5 tab:px-2.5 tab:py-2 ${tone.tile} ${span} ${STAT_WIDTH[cell.kind ?? 'count']}`;
               return cell.onClick ? (
                 <button
                   key={cell.label}
                   type="button"
                   onClick={cell.onClick}
-                  className={`${cls} text-left outline-[var(--teal)] hover:bg-[var(--paper)] focus-visible:outline-2`}
+                  className={`${cls} text-left outline-[var(--teal)] hover:brightness-[0.97] focus-visible:outline-2`}
                 >
                   {body}
                 </button>

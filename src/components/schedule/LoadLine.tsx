@@ -8,15 +8,17 @@ const CAPTION: Record<DayLoadTone, string> = {
   busy: 'font-medium text-[var(--amber)]',
   full: 'font-medium text-[var(--rust)]',
   off: 'text-[var(--muted)]',
+  done: 'text-[var(--muted)]',
 };
 
 /** Capacity bar (booked ÷ working minutes) with a plain-language caption —
  *  the Schedule's one bold element; it answers "who can take a walk-in?"
  *  without reading the grid. The bar is the therapist's colour, amber when
- *  the day is nearly full (≥70% or one slot left), rust when full. */
+ *  the day is nearly full (≥70% or one slot left), rust when full, grey
+ *  once today's hours are over. */
 export function LoadLine({ summary, color }: { summary: LoadSummary; color: string }) {
   const tone = summary.tone ?? (summary.ratio !== null && summary.ratio >= 1 ? 'full' : 'normal');
-  const barColor = tone === 'full' ? 'var(--rust)' : tone === 'busy' ? 'var(--amber)' : color;
+  const barColor = tone === 'full' ? 'var(--rust)' : tone === 'busy' ? 'var(--amber)' : tone === 'done' ? 'var(--slate)' : color;
   return (
     <span className="mt-1 block">
       <span className={`block truncate text-[11px] ${CAPTION[tone]}`}>{summary.text}</span>

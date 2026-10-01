@@ -609,7 +609,7 @@ export function dropAllowed(input: {
   });
 }
 
-export type DayLoadTone = 'normal' | 'busy' | 'full' | 'off';
+export type DayLoadTone = 'normal' | 'busy' | 'full' | 'off' | 'done';
 
 export interface DayLoad {
   /** Live (not cancelled) appointments for this therapist on the day. */
@@ -621,11 +621,12 @@ export interface DayLoad {
   /** booked ÷ working, 0–1; null when the therapist isn't working. */
   ratio: number | null;
   /** normal → therapist colour; busy (≥70% or one slot left) → amber;
-   *  full → rust; off → no bar. */
+   *  full → rust; off → no bar; done (today, hours over) → grey bar. */
   tone: DayLoadTone;
   /** The next useful thing to know, in plain words: "Free now, 4 slots",
    *  "Free from 2:30 PM, 3 slots", "On break until 2:00 PM", "Almost full",
-   *  "Fully booked", "Done for today", "6 slots free", "Off today", "Closed". */
+   *  "Fully booked", "Finished · 6 seen", "No more slots today", "6 slots free",
+   *  "Off today", "Closed". */
   text: string;
 }
 
@@ -635,7 +636,7 @@ export interface DayLoad {
  * take a walk-in?" reads at a glance.
  *
  * `now` (minutes after midnight) is passed only when `date` is today; it
- * switches the caption to "free now / free from / on break / done for today".
+ * switches the caption to "free now / free from / on break / finished".
  */
 export function dayLoad(
   appointments: Appointment[],
@@ -671,8 +672,13 @@ export function dayLoad(
     return result(`${slots} free`);
   }
 
+  // Hours over: a quiet recap (grey, not the rust "full" alarm).
   const lastEnd = Math.max(...working.map((w) => w.end));
-  if (freeSlots === 0) return result(now >= lastEnd || live.length === 0 ? 'Done for today' : 'Fully booked');
+  if (now >= lastEnd) {
+    const seen = live.filter((a) => a.status !== 'no_show').length;
+    return { ...base, freeSlots, ratio, tone: 'done', text: seen ? `Finished · ${seen} seen` : 'Finished for the day' };
+  }
+  if (freeSlots === 0) return result(live.length === 0 ? 'No more slots today' : 'Fully booked');
 
   // Between two working intervals (a break), with more work later today.
   const inWork = working.some((w) => now >= w.start && now < w.end);

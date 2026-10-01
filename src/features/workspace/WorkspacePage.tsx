@@ -623,7 +623,17 @@ export function WorkspacePage() {
     },
     {
       caption: monthCaption,
-      cells: scope.myTherapistId
+      // Owners who also treat (admin linked to a therapist) see their own
+      // net plus how the clinic is growing; other linked therapists see
+      // their own month; admins/front desk who don't treat see the clinic.
+      cells: scope.myTherapistId && scope.role === 'admin'
+        ? [
+            { label: 'My net', value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—', icon: <IconWallet />, tone: 'teal' as const, kind: 'money-lg' as const },
+            { label: 'New patients', value: monthlyNew?.newPatients ?? '—', icon: <IconUserPlus />, tone: 'amber' as const },
+            { label: 'Packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
+            { label: 'Visits', value: monthReport ? monthReport.total.visitCount : '—', icon: <IconUserCheck />, tone: 'sky' as const },
+          ]
+        : scope.myTherapistId
         ? [
             { label: 'My net', value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—', icon: <IconWallet />, tone: 'teal' as const, kind: 'money-lg' as const },
             { label: 'Visits', value: monthReport ? myMonthRow?.visitCount ?? 0 : '—', icon: <IconUserCheck />, tone: 'sky' as const },
