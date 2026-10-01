@@ -17,7 +17,7 @@ import {
   type ClosedDayInfo,
   type Interval,
 } from '@/domain/schedule';
-import { CLOSED_HATCH_STYLE } from './scheduleColors';
+import { CLOSED_HATCH_STYLE, appointmentFill } from './scheduleColors';
 import { LoadLine, type LoadSummary } from './LoadLine';
 export type { LoadSummary } from './LoadLine';
 
@@ -65,27 +65,19 @@ type ColumnDrag = {
   onPlace: (start: number) => void;
 };
 
-/** One vertical day column: free slots tinted and bookable, blocks sized by length. */
-/**
- * Status by fill, so the day reads at a glance (the mark/label still says
- * it in words): upcoming = white card with the therapist's edge; arrived
- * (visit not logged yet) = tinted in the therapist's colour; visit logged =
- * greyed back; no-show = rust; cancelled = struck through.
- */
+/** Grid block look from the shared status colour code (`appointmentFill`). */
 function blockLook(appointment: Appointment, color: string): { className: string; style: React.CSSProperties } {
-  if (appointment.status === 'arrived' && appointment.visitId) {
-    return { className: 'bg-[var(--slate-light)] text-[var(--muted)]', style: {} };
-  }
-  if (appointment.status === 'arrived') {
-    return { className: 'text-[var(--ink)] shadow-sm', style: { background: `color-mix(in srgb, ${color} 18%, white)` } };
-  }
-  if (appointment.status === 'confirmed' || appointment.status === 'rescheduled') {
-    return { className: 'border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] shadow-sm', style: {} };
-  }
-  const style = APPOINTMENT_BLOCK_STYLE[appointment.status];
-  return { className: `${style.fill} ${style.text}`, style: {} };
+  const fill = appointmentFill(appointment, color);
+  const text =
+    fill.kind === 'done' ? 'text-[var(--muted)]'
+      : fill.kind === 'no_show' ? APPOINTMENT_BLOCK_STYLE.no_show.text
+        : fill.kind === 'cancelled' ? APPOINTMENT_BLOCK_STYLE.cancelled.text
+          : 'text-[var(--ink)]';
+  const lift = fill.kind === 'upcoming' ? 'border border-[var(--border)] shadow-sm' : fill.kind === 'arrived' ? 'shadow-sm' : '';
+  return { className: `${text} ${lift}`, style: { background: fill.background } };
 }
 
+/** One vertical day column: free slots tinted and bookable, blocks sized by length. */
 export function DayColumn({
   label,
   date,

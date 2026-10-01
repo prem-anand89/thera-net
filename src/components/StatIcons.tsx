@@ -166,3 +166,35 @@ export function IconMore(props: IconProps) {
     </Svg>
   );
 }
+
+/** Banknote with a ₹ — money collected at the desk today. */
+export function IconBanknote(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="2" y="5" width="20" height="14" rx="2.5" />
+      <path d="M9.5 9h5M9.5 11.5h5M11 9a2.5 2.5 0 010 5H9.5l3.5 2.5" />
+      <path d="M5.5 9v.01M18.5 15v.01" />
+    </Svg>
+  );
+}
+
+/** Wallet — the therapist's net earnings this month. */
+export function IconWallet(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M19 7V5.5A1.5 1.5 0 0017.5 4H5a2 2 0 000 4h14a2 2 0 012 2v3" />
+      <path d="M3 6v12a2 2 0 002 2h14a2 2 0 002-2v-3" />
+      <path d="M21 13h-4a2 2 0 000 4h4v-4z" />
+    </Svg>
+  );
+}
+
+/** Patient with a tick — a visit seen. */
+export function IconUserCheck(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="9" cy="7" r="4" />
+      <path d="M2 21v-1a6 6 0 016-6h2a6 6 0 016 6v1M16 11l2 2 4-4" />
+    </Svg>
+  );
+}

@@ -110,23 +110,25 @@ export type StatTone = 'teal' | 'moss' | 'amber' | 'sky' | 'plum';
 
 export type StatCell = {
   label: string;
+  /** Shorter label for phones ("Oct visits"), where tiles are ~90px. */
+  shortLabel?: string;
   value: ReactNode;
   /** Icon shown in a badge beside the number (StatIcons.tsx). */
   icon?: ReactNode;
   tone?: StatTone;
-  /** Money gets a wider tile (fits ₹9,99,999) and a solid badge; counts
-   *  (2–3 digits) get a narrow tile and a tinted badge. */
+  /** Money gets a wider tile (fits ₹9,99,999); counts (2–3 digits) a
+   *  narrow one. Every badge is the same tinted style — no tile shouts. */
   kind?: 'money' | 'count';
   /** Makes the cell a button — e.g. jump to the list behind the number. */
   onClick?: () => void;
 };
 
-const STAT_BADGE: Record<StatTone, { solid: string; tint: string }> = {
-  teal: { solid: 'bg-[var(--teal)] text-white', tint: 'bg-[var(--teal-light)] text-[var(--teal)]' },
-  moss: { solid: 'bg-[var(--moss)] text-white', tint: 'bg-[var(--moss-light)] text-[var(--moss-strong)]' },
-  amber: { solid: 'bg-[var(--amber)] text-white', tint: 'bg-[var(--amber-light)] text-[var(--amber)]' },
-  sky: { solid: 'bg-[var(--sky)] text-white', tint: 'bg-[var(--sky-light)] text-[var(--sky)]' },
-  plum: { solid: 'bg-[var(--plum)] text-white', tint: 'bg-[var(--plum-light)] text-[var(--plum)]' },
+const STAT_BADGE: Record<StatTone, string> = {
+  teal: 'bg-[var(--teal-light)] text-[var(--teal)]',
+  moss: 'bg-[var(--moss-light)] text-[var(--moss-strong)]',
+  amber: 'bg-[var(--amber-light)] text-[var(--amber)]',
+  sky: 'bg-[var(--sky-light)] text-[var(--sky)]',
+  plum: 'bg-[var(--plum-light)] text-[var(--plum)]',
 };
 
 /**
@@ -134,7 +136,7 @@ const STAT_BADGE: Record<StatTone, { solid: string; tint: string }> = {
  * with an icon badge. Groups ("Today", the month) are separated by a
  * hairline from `sm:` and become their own row on phones; the period is in
  * each label, so there's no heading line. Money tiles are wider than count
- * tiles; on phones count tiles drop their badge so number and label fit. Workspace uses it; Reports and print keep `StatTile`.
+ * tiles; phones use `shortLabel` so every tile keeps its badge. Workspace uses it; Reports and print keep `StatTile`.
  */
 export function StatStrip({ groups }: { groups: { caption: string; cells: StatCell[] }[] }) {
   return (
@@ -148,13 +150,13 @@ export function StatStrip({ groups }: { groups: { caption: string; cells: StatCe
         >
           {group.cells.map((cell) => {
             const money = cell.kind === 'money';
-            const badge = STAT_BADGE[cell.tone ?? 'teal'][money ? 'solid' : 'tint'];
+            const badge = STAT_BADGE[cell.tone ?? 'teal'];
             const body = (
               <>
                 {cell.icon && (
                   <span
                     aria-hidden
-                    className={`${money ? 'flex' : 'hidden sm:flex'} h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-9 sm:w-9 sm:rounded-xl [&>svg]:h-[18px] [&>svg]:w-[18px] sm:[&>svg]:h-[22px] sm:[&>svg]:w-[22px] ${badge}`}
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:h-9 sm:w-9 sm:rounded-xl [&>svg]:h-[17px] [&>svg]:w-[17px] sm:[&>svg]:h-[22px] sm:[&>svg]:w-[22px] ${badge}`}
                   >
                     {cell.icon}
                   </span>
@@ -163,12 +165,23 @@ export function StatStrip({ groups }: { groups: { caption: string; cells: StatCe
                   <span className="font-num block whitespace-nowrap text-[15px] font-semibold leading-tight tabular-nums text-[var(--ink)] sm:text-lg">
                     {cell.value}
                   </span>
-                  <span className="block truncate text-[11px] leading-tight text-[var(--muted)] sm:text-xs">{cell.label}</span>
+                  <span className="block truncate text-[11px] leading-tight text-[var(--muted)] sm:text-xs">
+                    {cell.shortLabel ? (
+                      <>
+                        <span className="sm:hidden">{cell.shortLabel}</span>
+                        <span className="hidden sm:inline">{cell.label}</span>
+                      </>
+                    ) : (
+                      cell.label
+                    )}
+                  </span>
                 </span>
               </>
             );
-            const cls = `flex min-w-0 items-center gap-2 rounded-xl bg-[var(--paper)] p-1.5 sm:gap-2.5 sm:p-2 ${
-              money ? 'min-w-[8.5rem] flex-[1.7_1_0%]' : 'min-w-[5.25rem] flex-[1_1_0%]'
+            // Phones: money 1.4 : count 1 so a count tile keeps room for its
+            // badge and a short label; from sm: money gets 1.7.
+            const cls = `flex min-w-0 items-center gap-1.5 rounded-xl bg-[var(--paper)] p-1 sm:gap-2.5 sm:p-2 ${
+              money ? 'min-w-[7.5rem] flex-[1.4_1_0%] sm:min-w-[8.5rem] sm:flex-[1.7_1_0%]' : 'min-w-[5.25rem] flex-[1_1_0%]'
             }`;
             return cell.onClick ? (
               <button

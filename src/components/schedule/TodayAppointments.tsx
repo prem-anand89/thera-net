@@ -5,14 +5,15 @@ import { appointmentMinutes, formatMinutes, minutesLabel, minutesOfDay } from '@
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import { Pill } from '@/components/ui';
 import { RequestsInbox } from './RequestsInbox';
+import { appointmentFill } from './scheduleColors';
 
 const UPCOMING_LIMIT = 5;
 const REQUESTS_LIMIT = 3;
 
 const sectionHeading = 'mb-1.5 text-xs font-medium text-[var(--muted)]';
 /** Flat divided rows bleeding to the card edge — the same density as the
- *  Visits tab's list (`ResponsiveVisitList`), so switching tabs doesn't
- *  change the scale of the page. */
+ *  Visits tab's list (`ResponsiveVisitList`), and the Schedule grid's colour
+ *  code (`appointmentFill`): therapist-colour edge, status fill. */
 const listCls = '-mx-5 divide-y divide-[var(--border)] border-y border-[var(--border)]';
 
 /**
@@ -59,18 +60,25 @@ export function TodayAppointments({
 
   const row = (a: Appointment, end: ReactNode, note?: string) => {
     const length = formatMinutes(appointmentMinutes(a, slotMinutes));
+    const color = colorFor(a);
+    // Same colour code as the Schedule grid: therapist edge + status fill.
+    const fill = appointmentFill(a, color);
     return (
-      <li key={a.id} className="flex items-center gap-3 px-5 py-2.5">
+      <li
+        key={a.id}
+        className="flex items-center gap-3 border-l-4 py-2.5 pl-4 pr-5"
+        style={{ borderLeftColor: color, background: fill.background }}
+      >
         <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => onSelect(a)}>
           <span className="w-16 shrink-0 whitespace-nowrap text-[13px] tabular-nums text-[var(--muted)] sm:w-[4.5rem] sm:text-sm">{minutesLabel(minutesOfDay(a.scheduledAt))}</span>
-          <span aria-hidden className="hidden h-2 w-2 shrink-0 rounded-full sm:block" style={{ background: colorFor(a) }} />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2">
-              <span className="truncate text-sm font-medium text-[var(--ink)]">{a.patientName}</span>
+              <span className={`truncate text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}>
+                {a.patientName}
+              </span>
               {a.id === nextUpId && <Pill tone="teal">Next</Pill>}
             </span>
-            <span className="flex items-center gap-1.5 truncate text-xs text-[var(--muted)] sm:hidden">
-              <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: colorFor(a) }} />
+            <span className="block truncate text-xs text-[var(--muted)] sm:hidden">
               {note ? `${note}, ` : ''}
               {length}
               {showTherapist ? `, ${therapistNameFor(a)}` : ''}

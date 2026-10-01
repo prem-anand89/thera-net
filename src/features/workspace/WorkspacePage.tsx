@@ -63,9 +63,10 @@ import {
   IconPackage,
   IconPen,
   IconPlus,
-  IconRupee,
+  IconBanknote,
   IconStar,
-  IconTrend,
+  IconWallet,
+  IconUserCheck,
   IconUserPlus,
   IconVisits,
 } from '@/components/StatIcons';
@@ -589,33 +590,38 @@ export function WorkspacePage() {
         ? `Synced ${new Date(syncSnapshot.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
         : null;
   const monthCaption = now.toLocaleDateString('en-IN', { month: 'long' });
+  const monthShort = now.toLocaleDateString('en-IN', { month: 'short' });
+  // Icon + hue per kind of number, the same wherever it appears: money in
+  // (moss banknote), money earned (teal wallet), visits (sky patient-tick),
+  // packages (plum stack), new patients (amber).
   const statGroups = [
     {
       caption: 'Today',
       cells: [
         {
           label: 'Collected today',
+          shortLabel: 'Collected',
           value: formatINR(today?.collectedPaise ?? 0),
-          icon: <IconRupee />,
+          icon: <IconBanknote />,
           tone: 'moss' as const,
           kind: 'money' as const,
           onClick: canBill ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } }) : undefined,
         },
-        { label: 'Visits today', value: visitsTodayCount, icon: <IconVisits />, tone: 'sky' as const, onClick: () => setTodayTab('visits') },
+        { label: 'Visits today', shortLabel: 'Visits', value: visitsTodayCount, icon: <IconUserCheck />, tone: 'sky' as const, onClick: () => setTodayTab('visits') },
       ],
     },
     {
       caption: monthCaption,
       cells: scope.myTherapistId
         ? [
-            { label: `${monthCaption} net`, value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—', icon: <IconTrend />, tone: 'amber' as const, kind: 'money' as const },
-            { label: `${monthCaption} visits`, value: monthReport ? myMonthRow?.visitCount ?? 0 : '—', icon: <IconVisits />, tone: 'sky' as const },
-            { label: 'New packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
+            { label: `${monthCaption} net`, shortLabel: `${monthShort} net`, value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—', icon: <IconWallet />, tone: 'teal' as const, kind: 'money' as const },
+            { label: `${monthCaption} visits`, shortLabel: `${monthShort} visits`, value: monthReport ? myMonthRow?.visitCount ?? 0 : '—', icon: <IconUserCheck />, tone: 'sky' as const },
+            { label: 'New packages', shortLabel: 'Packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
           ]
         : [
-            { label: 'New patients', value: monthlyNew?.newPatients ?? '—', icon: <IconUserPlus />, tone: 'teal' as const },
-            { label: 'New packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
-            { label: `${monthCaption} visits`, value: monthReport ? monthReport.total.visitCount : '—', icon: <IconVisits />, tone: 'sky' as const },
+            { label: 'New patients', shortLabel: 'Patients', value: monthlyNew?.newPatients ?? '—', icon: <IconUserPlus />, tone: 'amber' as const },
+            { label: 'New packages', shortLabel: 'Packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
+            { label: `${monthCaption} visits`, shortLabel: `${monthShort} visits`, value: monthReport ? monthReport.total.visitCount : '—', icon: <IconUserCheck />, tone: 'sky' as const },
           ],
     },
   ];
