@@ -146,6 +146,7 @@ export function InvoicesPage() {
   function balanceFor(inv: Invoice): { paidPaise: number; remainingPaise: number } {
     const status = statusByInvoiceId.get(inv.id) ?? 'outstanding';
     if (status === 'paid') return { paidPaise: inv.totalPaise, remainingPaise: 0 };
+    if (status === 'void') return { paidPaise: 0, remainingPaise: 0 };
     const paidPaise = paidByInvoiceId.get(inv.id) ?? 0;
     return { paidPaise, remainingPaise: Math.max(0, inv.totalPaise - paidPaise) };
   }
@@ -167,8 +168,10 @@ export function InvoicesPage() {
     let collected = 0;
     let invoiced = 0;
     for (const inv of filteredInvoices) {
-      invoiced += inv.totalPaise;
       const status = statusByInvoiceId.get(inv.id) ?? 'outstanding';
+      // A voided invoice keeps its number but counts for nothing.
+      if (status === 'void') continue;
+      invoiced += inv.totalPaise;
       if (status === 'paid') {
         collected += inv.totalPaise;
       } else {
@@ -194,7 +197,7 @@ export function InvoicesPage() {
   }, [filteredInvoices, statusByInvoiceId, paidByInvoiceId, visits, from, to, directPaymentByVisitId]);
 
   // Undo for an invoice flagged paid with no payment behind it. Paying is
-  // Record payment, which logs the cash.
+  // Take payment, which logs the cash.
   async function markOutstanding(invoiceId: string) {
     setError(null);
     setBusy(true);
@@ -274,7 +277,7 @@ export function InvoicesPage() {
         </div>
       </div>
 
-      {needsReceipt && needsReceipt.length > 0 && (
+      {needsReceipt && needsReceipt.length > 0 && clinic.invoicePolicy !== 'never_nag' && (
         <SectionCard title={`Needs receipt (${needsReceipt.length})`}>
           <div className="space-y-2">
             <p className="text-xs text-[var(--muted)]">
@@ -319,7 +322,7 @@ export function InvoicesPage() {
                       })
                     }
                   >
-                    Issue invoice
+                    Give bill
                   </button>
                 </div>
               ))}
@@ -361,7 +364,7 @@ export function InvoicesPage() {
                             })
                           }
                         >
-                          Issue invoice
+                          Give bill
                         </button>
                       </td>
                     </tr>
@@ -414,8 +417,8 @@ export function InvoicesPage() {
                       <span className="font-num text-sm font-medium text-[var(--ink)]">
                         {formatINR(inv.totalPaise)}
                       </span>
-                      <Pill tone={status === 'paid' ? 'green' : 'amber'}>
-                        {status === 'paid' ? 'Paid' : isPartial ? 'Partially paid' : 'Outstanding'}
+                      <Pill tone={status === 'paid' ? 'green' : status === 'void' ? 'slate' : 'amber'}>
+                        {status === 'paid' ? 'Paid' : status === 'void' ? 'Void' : isPartial ? 'Partially paid' : 'Outstanding'}
                       </Pill>
                     </div>
                     <div className="flex items-center gap-2">
@@ -426,7 +429,7 @@ export function InvoicesPage() {
                           disabled={busy}
                           onClick={() => setTakingPayment(inv)}
                         >
-                          Record payment
+                          Take payment
                         </button>
                       )}
                       {status === 'outstanding' && (
@@ -438,7 +441,7 @@ export function InvoicesPage() {
                           Send WhatsApp reminder
                         </button>
                       )}
-                      {/* Paying goes through Record payment (amount + method, so the
+                      {/* Paying goes through Take payment (amount + method, so the
                           cash reaches the Daybook). Only an invoice flagged paid with
                           no payment behind it can be flipped back. */}
                       {status === 'paid' && paidPaise === 0 && (
@@ -504,12 +507,14 @@ export function InvoicesPage() {
                       <td className={tdNum}>{formatINR(inv.totalPaise)}</td>
                       <td className={td}>{inv.paymentMode}</td>
                       <td className={td}>
-                        <Pill tone={status === 'paid' ? 'green' : 'amber'}>
+                        <Pill tone={status === 'paid' ? 'green' : status === 'void' ? 'slate' : 'amber'}>
                           {status === 'paid'
                             ? 'Paid'
-                            : isPartial
-                              ? 'Partially paid'
-                              : 'Outstanding'}
+                            : status === 'void'
+                              ? 'Void'
+                              : isPartial
+                                ? 'Partially paid'
+                                : 'Outstanding'}
                         </Pill>
                         {isPartial && (
                           <div className="mt-1 text-xs text-[var(--muted)]">
@@ -524,7 +529,7 @@ export function InvoicesPage() {
                             onClick={() => setTakingPayment(inv)}
                             disabled={busy}
                           >
-                            Record payment
+                            Take payment
                           </button>
                         )}
                         {status === 'outstanding' && (

@@ -20,7 +20,7 @@ import { getSupabase, publicTherapistPhotoUrl, publicLogoUrl } from '@/lib/supab
 import { resizeImageToBlob } from '@/lib/resizeImage';
 import { db } from '@/lib/db';
 import { MONTH_NAMES, formatDateDM } from '@/domain/fiscalYear';
-import { clinicShareLabels, type Clinic, type Therapist, type UUID } from '@/domain/types';
+import { clinicShareLabels, type Clinic, type InvoicePolicy, type Therapist, type UUID } from '@/domain/types';
 import {
   memberOnboardingStatus,
   MEMBER_ONBOARDING_LABELS,
@@ -990,6 +990,7 @@ type BillingFields = Pick<
   | 'fyStartMonth'
   | 'billingEnabled'
   | 'invoicingAccess'
+  | 'invoicePolicy'
   | 'upiVpa'
   | 'upiPayeeName'
   | 'upiQrPath'
@@ -1006,6 +1007,7 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         fyStartMonth: c.fyStartMonth,
         billingEnabled: c.billingEnabled ?? true,
         invoicingAccess: c.invoicingAccess ?? 'everyone',
+        invoicePolicy: c.invoicePolicy ?? 'on_request',
         upiVpa: c.upiVpa ?? '',
         upiPayeeName: c.upiPayeeName ?? '',
         upiQrPath: c.upiQrPath ?? null,
@@ -1130,6 +1132,26 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             >
               <option value="everyone">Everyone</option>
               <option value="billing_staff">Front desk and admins only</option>
+            </select>
+          </Field>
+        )}
+        {form.billingEnabled && (
+          <Field
+            label={
+              <>
+                Bills after a visit
+                <InfoTip text="Payments are always recorded. A bill (invoice) is a separate numbered document that can't be edited once given — so it's your call when to offer it." />
+              </>
+            }
+          >
+            <select
+              className={inputCls}
+              value={form.invoicePolicy ?? 'on_request'}
+              onChange={(e) => set({ invoicePolicy: e.target.value as InvoicePolicy })}
+            >
+              <option value="on_request">On request — a "Give bill" button after each visit</option>
+              <option value="always">Always — open the bill step after a paid visit</option>
+              <option value="never_nag">Never remind — hide the Needs receipt list</option>
             </select>
           </Field>
         )}

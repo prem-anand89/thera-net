@@ -231,6 +231,46 @@ export function createInvoiceService(repos: Repos) {
     },
 
     /**
+     * Voids an issued invoice: it keeps its number (the series stays gap-free)
+     * but is marked void, and its visits are released so a wrong price,
+     * patient or date can be corrected and billed again with a new invoice.
+     * Payments already recorded stay with the visits. Online-only, like
+     * issuing — the server does the work (`void_invoice()`), this just
+     * mirrors the result locally so the screen updates at once.
+     */
+    async voidInvoice(invoiceId: UUID, reason: string): Promise<void> {
+      const supabase = getSupabase();
+      if (!supabase) throw new Error('Supabase is not configured');
+      if (!navigator.onLine) throw new Error('Voiding an invoice needs a connection — reconnect and try again.');
+      if (!reason.trim()) throw new Error('Enter a reason for voiding this invoice');
+      const invoice = await repos.invoices.get(invoiceId);
+      if (!invoice) throw new Error('Invoice not found');
+
+      const { data, error } = await supabase.rpc('void_invoice', {
+        p_invoice_id: invoiceId,
+        p_reason: reason.trim(),
+      });
+      if (error) throw new Error(`Could not void invoice: ${error.message}`);
+
+      const visits = (await repos.visits.list({ clinicId: invoice.clinicId })).filter(
+        (v) => v.invoiceId === invoiceId
+      );
+      await repos.visits.markUninvoiced(visits.map((v) => v.id));
+      const now = new Date().toISOString();
+      const existing = await repos.invoicePayments.getByInvoiceId(invoiceId);
+      await repos.invoicePayments.putLocal({
+        id: (data as string | null) ?? existing?.id ?? crypto.randomUUID(),
+        clinicId: invoice.clinicId,
+        invoiceId,
+        status: 'void',
+        paidAt: null,
+        voidReason: reason.trim(),
+        voidedAt: now,
+        updatedAt: now,
+      });
+    },
+
+    /**
      * Computes what issuing an invoice for these visits WOULD produce —
      * same line-item build `issueForVisits` itself calls, just without the
      * `issue_invoice` RPC — so `IssueInvoiceDialog`'s preview step is

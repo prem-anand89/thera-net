@@ -130,6 +130,7 @@ function makeFakeRepos() {
         if (v) visits.set(id, { ...v, deleted: true });
       },
       markInvoiced: async () => {},
+      markUninvoiced: async () => {},
     },
     invoices: {
       get: async (id) => invoices.get(id),
@@ -142,6 +143,7 @@ function makeFakeRepos() {
       list: async (clinicId) =>
         [...invoicePayments.values()].filter((p) => p.clinicId === clinicId),
       put: async (p) => void invoicePayments.set(p.id, p),
+      putLocal: async (p) => void invoicePayments.set(p.id, p),
     },
     payments: {
       get: async (id) => payments.get(id),
@@ -381,6 +383,14 @@ describe('dashboardService.duesSummary', () => {
     fake.invoicePayments.set('p2', { id: 'p2', clinicId: 'clinic-1', invoiceId: 'inv-2', status: 'outstanding', paidAt: null, updatedAt: '' });
     const svc = createDashboardService(fake.repos);
     expect(await svc.duesSummary('clinic-1')).toMatchObject({ totalPaise: rs(200) + rs(1500), visitCount: 2 });
+  });
+
+  it('can be scoped to one therapist\'s own visits', async () => {
+    fake.visits.set('v1', baseVisit('v1', { actualBillPaise: rs(600), therapistId: 'th-prem' }));
+    fake.visits.set('v2', baseVisit('v2', { actualBillPaise: rs(900), therapistId: 'th-other' }));
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.duesSummary('clinic-1')).toMatchObject({ totalPaise: rs(1500), visitCount: 2 });
+    expect(await svc.duesSummary('clinic-1', 'th-prem')).toMatchObject({ totalPaise: rs(600), visitCount: 1 });
   });
 
   it('ignores collected, ₹0 and deleted visits', async () => {

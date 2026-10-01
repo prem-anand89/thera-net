@@ -87,7 +87,7 @@ export function RowActionsMenu({
                 onInvoice!();
               }}
             >
-              Issue invoice
+              Give bill
             </button>
           )}
           {showReminder && (

@@ -99,6 +99,8 @@ export interface VisitRepo {
   softDelete(id: UUID): Promise<void>;
   /** Local stamp after the server-side issue_invoice RPC succeeds */
   markInvoiced(ids: UUID[], invoiceId: UUID): Promise<void>;
+  /** Mirrors void_invoice() locally: the visits are released from their invoice. */
+  markUninvoiced(ids: UUID[]): Promise<void>;
 }
 
 export interface InvoiceRepo {
@@ -112,6 +114,8 @@ export interface InvoicePaymentRepo {
   getByInvoiceId(invoiceId: UUID): Promise<InvoicePayment | undefined>;
   list(clinicId: UUID): Promise<InvoicePayment[]>;
   put(payment: InvoicePayment): Promise<void>;
+  /** Local-only write for a change the server already made (void_invoice()). */
+  putLocal(payment: InvoicePayment): Promise<void>;
 }
 
 export interface SettlementRepo {

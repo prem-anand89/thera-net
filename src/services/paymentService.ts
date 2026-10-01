@@ -21,7 +21,8 @@ export function createPaymentService(repos: Repos) {
   async function setStatus(
     invoiceId: UUID,
     clinicId: UUID,
-    status: PaymentStatus
+    // 'void' is never set from here — only the server's void_invoice() does it.
+    status: Exclude<PaymentStatus, 'void'>
   ): Promise<InvoicePayment> {
     const existing = await repos.invoicePayments.getByInvoiceId(invoiceId);
     const payment: InvoicePayment = {

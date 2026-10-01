@@ -378,11 +378,12 @@ export function createDashboardService(repos: Repos) {
      * later" (no invoice, no payment) counts the same as one on an invoice
      * marked outstanding, and a partly paid visit counts only the rest.
      * `outstandingInvoices` below only sees invoices explicitly marked
-     * outstanding, which misses the uninvoiced ones. All dates, whole clinic.
+     * outstanding, which misses the uninvoiced ones. All dates; whole clinic,
+     * or one therapist's own visits when `therapistId` is given.
      */
-    async duesSummary(clinicId: UUID): Promise<DuesSummary> {
+    async duesSummary(clinicId: UUID, therapistId?: UUID): Promise<DuesSummary> {
       const [visits, invoicePayments, payments] = await Promise.all([
-        repos.visits.list({ clinicId }),
+        repos.visits.list({ clinicId, therapistId }),
         repos.invoicePayments.list(clinicId),
         repos.payments.list(clinicId),
       ]);

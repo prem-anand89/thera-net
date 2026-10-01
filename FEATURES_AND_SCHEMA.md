@@ -33,7 +33,7 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 - **Default landing page** showing:
   - Today's visits with payment state at a glance (Paid / Collect ₹X / Package / No charge) — boxed cards on phone, a table on tablet/desktop
   - Packages panel (bottom of page) — **Open** (default: every open package, the ones needing attention sorted first and tagged Stale / Renew soon) and **Needs attention (n)** (stale or renew soon), plus a "Mine only" checkbox for anyone with a linked therapist record (admin included). "Stale" and "All" were dropped: Stale is a subset of Needs attention, and All only differed from Open by the stale rows
-- **Stat strip** (`StatStrip` in `ui.tsx`, inside the Workspace header card) — one row of tinted tiles, no period captions (each label carries its own period). Each tile is lightly tinted in its own hue with a white icon badge (from `sm:`; phones drop the badge so three tiles fit at 390px), the number (`font-num`) over a short label. Phones split the row evenly; from `tab:` counts get a **fixed width** (`kind: 'count'`, 9rem) and money tiles **flex** for the spare room (`'money'` fits ₹99,999). **What it shows is chosen by role, so the header only holds numbers that aren't already one tap away:** Reports (admin / front desk only) already carries the month's revenue, visits, new patients and packages with trends, and the Today card's tabs already count today's appointments and visits. So admin / front desk see **Collected** (today, opens the Ledger daybook) and **Dues** (everything still owed across all visits — `dashboardService.duesSummary`, per visit via `visitDuePaise`: a "Take payment later" visit with no invoice counts, an invoiced-but-unpaid visit counts, a part-paid visit counts only its rest; labelled "Dues · 3" with the visit count; opens the Ledger on the unpaid visits, all dates: `/ledger?tab=visits&filter=not_collected`), followed by one muted line "October: ₹4,82,300 net revenue · 86 visits — Reports ›" linking to `/insights`. Therapists (no Reports access, so this is their only view of it) see **Collected** (their own today), **Oct visits** and **Oct packages** (their own month). One icon and hue per kind of number (`src/components/StatIcons.tsx`): collected = moss ₹, dues = amber wallet, visits = sky patient-tick, packages = plum stack; `--sky` / `--plum` are tokens for stat icons only. `StatTile` remains for Reports/print
+- **Stat strip** (`StatStrip` in `ui.tsx`, inside the Workspace header card) — one row of tinted tiles, no period captions (each label carries its own period). Each tile is lightly tinted in its own hue with a white icon badge (from `sm:`; phones drop the badge so three tiles fit at 390px), the number (`font-num`) over a short label. Phones split the row evenly; from `tab:` counts get a **fixed width** (`kind: 'count'`, 9rem) and money tiles **flex** for the spare room (`'money'` fits ₹99,999). **What it shows is chosen by role, so the header only holds numbers that aren't already one tap away:** Reports (admin / front desk only) already carries the month's revenue, visits, new patients and packages with trends, and the Today card's tabs already count today's appointments and visits. So admin / front desk see **Collected** (today, opens the Ledger daybook) and **Dues** (everything still owed across all visits — `dashboardService.duesSummary`, per visit via `visitDuePaise`: a "Take payment later" visit with no invoice counts, an invoiced-but-unpaid visit counts, a part-paid visit counts only its rest; labelled "Dues · 3" with the visit count; opens the Ledger on the unpaid visits, all dates: `/ledger?tab=visits&filter=not_collected`), followed by one muted line "October: ₹4,82,300 net revenue · 86 visits — Reports ›" linking to `/insights`. Therapists (no Reports access, so this is their only view of it) see **Collected** (their own today), **Dues** (what's owed on their own visits, via `duesSummary(clinicId, therapistId)`; opens the Ledger on their unpaid visits) and **Oct visits** — when billing is open to them; otherwise Collected, Oct visits and Oct packages (open packages are listed below on the page). One icon and hue per kind of number (`src/components/StatIcons.tsx`): collected = moss ₹, dues = amber wallet, visits = sky patient-tick, packages = plum stack; `--sky` / `--plum` are tokens for stat icons only. `StatTile` remains for Reports/print
 - **Quick actions** — take payment / issue invoice / split revenue / delete directly from each visit row's kebab menu; "Log visit" from a Packages row resumes the right package
 
 #### Ledger & History
@@ -1331,6 +1331,7 @@ last_split_change_at        timestamptz (NULLABLE) — stamped whenever an
                              "your split changed on X" banner off this
 billing_enabled              boolean NOT NULL
 invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
+invoice_policy              text NOT NULL DEFAULT 'on_request' — 'on_request' | 'always' | 'never_nag'
 clinical_docs_enabled       boolean NOT NULL
 show_therapist_comparison   boolean NOT NULL
 walk_in_mrno_prefix         text (NULLABLE, default 'W')
@@ -1621,8 +1622,10 @@ PRIMARY KEY (clinic_id, fy_label)
 id              uuid PRIMARY KEY
 invoice_id      uuid NOT NULL (FOREIGN KEY → invoices.id)
 clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
-status          text NOT NULL — 'paid' | 'outstanding'
+status          text NOT NULL — 'paid' | 'outstanding' | 'void'
 paid_at         timestamptz (NULLABLE)
+void_reason     text (NULLABLE) — only on a void row
+voided_at       timestamptz (NULLABLE) — only on a void row
 created_by, updated_by  uuid (NULLABLE)
 created_at, updated_at  timestamptz
 ```
@@ -1633,6 +1636,10 @@ the only write this table itself supports; a partial amount toward an
 invoice is tracked via `payments` below instead (see
 `paymentService.recordInvoicePayment()`), keyed to the invoice's own
 constituent visits.
+
+`'void'` is reachable only through `void_invoice()` (see §3c): the
+`guard_invoice_void` trigger rejects a client writing it directly and makes
+it final.
 
 #### `payments`
 ```sql
@@ -2765,6 +2772,17 @@ should honor.
   query `visits` directly, and each visit's `invoice_id` always points to
   whichever invoice currently claims it, so reports automatically reflect
   only the latest state.
+
+### 3c. Voiding an invoice, and the invoice policy
+An amendment can add visits or re-point them but never change a billed amount,
+so a wrong price, patient or date on an issued invoice had no fix. **Void**
+keeps the invoice and its number in the series, marked VOID, and releases its
+visits so they can be corrected and billed again with a new invoice.
+
+- **`void_invoice(invoice_id, reason)` RPC** (`supabase/migrations/20261005110000_void_invoice.sql`): same membership / entitlement / `billing_enabled` / `invoicing_access` gates as `issue_invoice()` and `amend_invoice()`; a reason is required; refuses an invoice that was already amended ("void the latest version") or is already void. It upserts `invoice_payments` to `status = 'void'` (with `void_reason`, `voided_at`) — **no UPDATE on `invoices`**, which stay immutable — and sets `visits.invoice_id = null` using the same `app.allow_invoice_amendment` transaction flag `amend_invoice()` uses (every other frozen visit field stays frozen). It returns the `invoice_payments` row id so the client mirrors the same row. Payments already recorded stay with the visits (they are `payments` rows, not on the invoice), so a fully paid voided visit becomes `collected_no_receipt` and can be billed again.
+- **Client**: `invoiceService.voidInvoice()` (online only) calls the RPC then mirrors locally (`visits.markUninvoiced`, `invoicePayments.putLocal`, no outbox). `VoidInvoiceDialog` (reason required; says received money stays recorded) opens from the print page's "Void invoice"; a void invoice shows a VOID watermark, a VOID stamp, a banner with the reason, and no Edit details / Amend / Void actions. The Invoices tab shows a "Void" pill and excludes void invoices from its totals.
+- **Invoice policy** (`clinics.invoice_policy`, Settings → Billing → "Bills after a visit"): a payment is always recorded; an invoice is a separate, immutable document, so the clinic chooses what the app nudges. `on_request` (default): a **Give bill** button on the saved-visit screen, Needs receipt list kept. `always`: the bill step (the usual review-then-issue dialog, never issued silently) opens straight after a visit saved as paid. `never_nag`: the Needs receipt list and the Invoices-tab badge are hidden. Display-level only — `issue_invoice()` enforces nothing here.
+- **Saved-visit screen**: **Take payment · ₹X** (while anything is still owed; part payments fine) and **Give bill** (replacing "Issue invoice"; primary once nothing is owed). "Record payment" on an invoice is now also **Take payment** — it is the same dialog (`TakePaymentDialog`) and the same `payments` rows.
 
 **"Not invoiced" nudge for a trailing package session** — `issue_invoice()`
 sweeps in every session that exists in a package group *at issue time*

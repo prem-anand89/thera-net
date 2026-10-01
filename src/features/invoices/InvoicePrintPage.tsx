@@ -21,6 +21,7 @@ import type { InvoiceLineItem, Therapist } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
 import { btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
 import { AmendInvoiceDialog } from '@/components/AmendInvoiceDialog';
+import { VoidInvoiceDialog } from '@/components/VoidInvoiceDialog';
 import { EditInvoiceDetailsDialog } from '@/components/EditInvoiceDetailsDialog';
 import { renderElementToPdf, shareFileToWhatsApp } from '@/lib/pdfShare';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -316,6 +317,7 @@ export function InvoicePrintPage() {
 
   const [paper, setPaper] = useState<'A4' | 'A5'>('A4');
   const [amending, setAmending] = useState(false);
+  const [voiding, setVoiding] = useState(false);
   const [editingDetails, setEditingDetails] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
@@ -349,8 +351,9 @@ export function InvoicePrintPage() {
   }
 
   const statusLoaded = invoicePaymentQuery !== undefined;
-  const isPaid = invoicePayment?.status !== 'outstanding';
-  const isPartial = !isPaid && !!balance && balance.paidPaise > 0;
+  const isVoid = invoicePayment?.status === 'void';
+  const isPaid = invoicePayment?.status !== 'outstanding' && !isVoid;
+  const isPartial = !isPaid && !isVoid && !!balance && balance.paidPaise > 0;
   const hasAdjustments = invoice.lineItems.some((li) => li.adjustmentPaise !== 0);
   const isV2Invoice = invoice.lineItems.length > 0 && invoice.lineItems.every(isV2Line);
   const period = invoicePeriod(invoice.lineItems);
@@ -440,14 +443,19 @@ export function InvoicePrintPage() {
               mirrors that exact rule (see usePermissions.ts). Without this
               gate, the buttons rendered fully clickable for every role and
               only failed with an opaque RPC error once submitted. */}
-          {!supersededBy && canBill && (
+          {!supersededBy && !isVoid && canBill && (
             <button type="button" className={btnSecondary} onClick={() => setEditingDetails(true)}>
               Edit details
             </button>
           )}
-          {!supersededBy && canBill && (
+          {!supersededBy && !isVoid && canBill && (
             <button type="button" className={btnSecondary} onClick={() => setAmending(true)}>
               Amend this invoice
+            </button>
+          )}
+          {!supersededBy && !isVoid && canBill && (
+            <button type="button" className={`${btnSecondary} !text-[var(--rust)]`} onClick={() => setVoiding(true)}>
+              Void invoice
             </button>
           )}
         </div>
@@ -456,6 +464,17 @@ export function InvoicePrintPage() {
       {shareError && (
         <div className="no-print mx-auto max-w-3xl px-4">
           <ErrorNote message={shareError} />
+        </div>
+      )}
+
+      {isVoid && (
+        <div className="no-print mx-auto max-w-3xl px-4">
+          <div className="mb-3 rounded-md border-l-4 border-[var(--rust)] bg-[var(--rust-light)] p-3 text-xs text-[var(--ink)]">
+            <strong>Void.</strong> This invoice was voided
+            {invoicePayment?.voidedAt ? ` on ${formatDateDMY(invoicePayment.voidedAt)}` : ''}
+            {invoicePayment?.voidReason ? `: ${invoicePayment.voidReason}` : '.'} Its number stays in the series.
+            The visit can be corrected and billed again.
+          </div>
         </div>
       )}
 
@@ -501,6 +520,14 @@ export function InvoicePrintPage() {
         />
       )}
 
+      {voiding && (
+        <VoidInvoiceDialog
+          invoice={invoice}
+          receivedPaise={balance?.paidPaise ?? 0}
+          onClose={() => setVoiding(false)}
+        />
+      )}
+
       {editingDetails && (
         <EditInvoiceDetailsDialog
           clinicId={clinic.id}
@@ -511,8 +538,18 @@ export function InvoicePrintPage() {
 
       <div
         ref={contentRef}
-        className={`mx-auto max-w-3xl bg-[var(--surface)] p-4 sm:p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm]' : 'print:max-w-[178mm]'}`}
+        className={`relative mx-auto max-w-3xl bg-[var(--surface)] p-4 sm:p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm]' : 'print:max-w-[178mm]'}`}
       >
+        {isVoid && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-hidden"
+          >
+            <span className="-rotate-[24deg] select-none text-[7rem] font-black tracking-widest text-[var(--rust)] opacity-20 print:opacity-25">
+              VOID
+            </span>
+          </div>
+        )}
         <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} />
 
         {/* Invoice meta + patient */}
@@ -535,7 +572,7 @@ export function InvoicePrintPage() {
           </div>
           <div className="text-right">
             <p className="text-lg font-bold text-[var(--ink)]">
-              {isPaid ? 'BILL CUM RECEIPT' : 'BILL'}
+              {isVoid ? 'BILL (VOID)' : isPaid ? 'BILL CUM RECEIPT' : 'BILL'}
             </p>
             <p className="text-[var(--ink)]">{invoice.invoiceNo}</p>
             <p className="text-[var(--muted)]">{formatDateDMY(invoice.issuedAt)}</p>
@@ -548,7 +585,7 @@ export function InvoicePrintPage() {
                     : { borderColor: 'var(--rust)', color: 'var(--rust)' }
                 }
               >
-                {isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE'}
+                {isVoid ? 'VOID' : isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE'}
               </p>
             )}
           </div>

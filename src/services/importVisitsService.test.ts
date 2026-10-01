@@ -113,6 +113,7 @@ function makeFakeRepos() {
         if (v) visits.set(id, { ...v, deleted: true });
       },
       markInvoiced: async () => {},
+      markUninvoiced: async () => {},
     },
     invoices: {
       get: async () => undefined,
@@ -123,6 +124,7 @@ function makeFakeRepos() {
       getByInvoiceId: async () => undefined,
       list: async () => [],
       put: async () => {},
+      putLocal: async () => {},
     },
     payments: {
       get: async () => undefined,

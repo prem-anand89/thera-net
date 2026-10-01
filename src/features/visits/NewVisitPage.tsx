@@ -42,6 +42,7 @@ import {
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
+import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { PAYMENT_CHIP } from '@/components/VisitCard';
 import {
   computeVisitPaymentState,
@@ -234,8 +235,18 @@ export function NewVisitPage() {
     isPackage: boolean;
     alreadyCollected: boolean;
     therapistId: UUID;
+    billPaise: number;
+    visitDate: string;
+    mrno: string;
   } | null>(null);
   const [invoicing, setInvoicing] = useState(false);
+  const [takingPayment, setTakingPayment] = useState(false);
+  // What's been received for the just-saved visit, so Take payment disappears
+  // once it's settled (the dialog can be used for part payments too).
+  const savedPayments = useLiveQuery(
+    () => (justSaved ? repos.payments.listByVisit(justSaved.visitId) : undefined),
+    [justSaved?.visitId]
+  );
   // Patient Communications, Slice 1 — tracks whether the post-save "Ask
   // for feedback" button has already been clicked for this visit, so it
   // can't be double-fired (the RLS unique-pending-request-per-visit index
@@ -642,8 +653,16 @@ export function NewVisitPage() {
         isPackage: mode === 'continuation',
         alreadyCollected: billPaise > 0 && canBill && paymentChoice === 'paid',
         therapistId,
+        billPaise,
+        visitDate,
+        mrno: patient.mrno,
       });
       setFeedbackRequested(false);
+      // Clinic policy "always": the bill step opens straight after a paid visit
+      // (still the usual review-then-issue dialog, never issued silently).
+      if (clinic.invoicePolicy === 'always' && billPaise > 0 && canBill && paymentChoice === 'paid') {
+        setInvoicing(true);
+      }
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
@@ -653,22 +672,36 @@ export function NewVisitPage() {
 
   if (justSaved) {
     const otherPrimaryShown = clinic.clinicalDocsEnabled || canBill;
+    // Still owed on this visit (0 without billing access or when settled).
+    const paymentDue = canBill
+      ? Math.max(0, justSaved.billPaise - (savedPayments ?? []).reduce((sum, p) => sum + p.amountPaise, 0))
+      : 0;
     const invoiceTarget: IssueInvoiceTarget = {
       visitId: justSaved.visitId,
       patientId: justSaved.patientId,
       patientLabel: justSaved.patientName,
       serviceLabel: justSaved.serviceLabel,
       isPackage: justSaved.isPackage,
-      alreadyCollected: justSaved.alreadyCollected,
+      // Settled up front, or since (Take payment above).
+      alreadyCollected: justSaved.alreadyCollected || (canBill && justSaved.billPaise > 0 && paymentDue === 0),
     };
     return (
       <div className="mx-auto max-w-2xl space-y-4">
         <SectionCard title="Visit logged">
           <p className="text-sm text-[var(--ink)]">Visit saved for {justSaved.patientName}.</p>
           <div className="mt-4 flex flex-wrap gap-2">
+            {paymentDue > 0 && (
+              <button type="button" className={btnPrimary} onClick={() => setTakingPayment(true)}>
+                Take payment · {formatINR(paymentDue)}
+              </button>
+            )}
             {canBill && (
-              <button type="button" className={btnPrimary} onClick={() => setInvoicing(true)}>
-                Issue invoice
+              <button
+                type="button"
+                className={paymentDue > 0 ? btnSecondary : btnPrimary}
+                onClick={() => setInvoicing(true)}
+              >
+                Give bill
               </button>
             )}
             {clinic.clinicalDocsEnabled && (
@@ -723,6 +756,19 @@ export function NewVisitPage() {
             </button>
           </div>
         </SectionCard>
+        {takingPayment && (
+          <TakePaymentDialog
+            clinicId={clinic.id}
+            visitId={justSaved.visitId}
+            invoiceId={null}
+            amountPaise={justSaved.billPaise}
+            visitDate={justSaved.visitDate}
+            patientLabel={justSaved.patientName}
+            mrno={justSaved.mrno}
+            patientId={justSaved.patientId}
+            onClose={() => setTakingPayment(false)}
+          />
+        )}
         {invoicing && (
           <IssueInvoiceDialog
             clinicId={clinic.id}

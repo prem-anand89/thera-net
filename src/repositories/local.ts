@@ -212,6 +212,16 @@ const visits: VisitRepo = {
       throw new Error('This visit is on an issued invoice and cannot be deleted.');
     await putWithOutbox('visits', { ...visit, deleted: true });
   },
+  async markUninvoiced(ids: UUID[]) {
+    // The server released these rows inside void_invoice(); mirror it locally
+    // without queueing an outbox write.
+    await db.transaction('rw', db.visits, async () => {
+      for (const id of ids) {
+        const v = await db.visits.get(id);
+        if (v) await db.visits.put({ ...v, invoiceId: null });
+      }
+    });
+  },
   async markInvoiced(ids: UUID[], invoiceId: UUID) {
     // Server already stamped these rows inside issue_invoice(); this mirrors
     // the result locally without queueing an outbox write.
@@ -239,6 +249,9 @@ const invoicePayments: InvoicePaymentRepo = {
   getByInvoiceId: (invoiceId) => db.invoice_payments.where('invoiceId').equals(invoiceId).first(),
   list: (clinicId) => db.invoice_payments.where('clinicId').equals(clinicId).toArray(),
   put: (payment) => putWithOutbox('invoice_payments', payment),
+  async putLocal(payment) {
+    await db.invoice_payments.put(payment);
+  },
 };
 
 const settlements: SettlementRepo = {

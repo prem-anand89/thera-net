@@ -3,6 +3,8 @@ import type { TdsBasis } from './split';
 
 export type UUID = string;
 
+export type InvoicePolicy = 'on_request' | 'always' | 'never_nag';
+
 export interface Clinic {
   id: UUID;
   name: string;
@@ -84,6 +86,13 @@ export interface Clinic {
    * Optional so older cached rows default to 'everyone'.
    */
   invoicingAccess?: 'everyone' | 'billing_staff';
+  /**
+   * What the app nudges after a visit. A payment is always recorded; an
+   * invoice is optional. 'on_request' (default): a Give bill button, Needs
+   * receipt list kept. 'always': the bill step opens right after a visit
+   * saved as paid. 'never_nag': the Needs receipt list and badge are hidden.
+   */
+  invoicePolicy?: InvoicePolicy;
   /**
    * Therapist comparison chart on Reports: visible to admin + therapist
    * (not front_desk) when on, for competitive visibility. Off by default
@@ -557,7 +566,8 @@ export interface Invoice {
   updatedAt: string;
 }
 
-export type PaymentStatus = 'paid' | 'outstanding';
+/** 'void' is set only by the server's void_invoice() (see invoiceService.voidInvoice). */
+export type PaymentStatus = 'paid' | 'outstanding' | 'void';
 
 /**
  * Lives apart from Invoice — invoices are immutable once issued, so payment
@@ -571,6 +581,9 @@ export interface InvoicePayment {
   invoiceId: UUID;
   status: PaymentStatus;
   paidAt: string | null;
+  /** Why the invoice was voided — only on a void row. */
+  voidReason?: string | null;
+  voidedAt?: string | null;
   updatedAt: string;
 }
 

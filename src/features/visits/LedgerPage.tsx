@@ -184,7 +184,7 @@ export function LedgerPage() {
   const clinic = useClinic();
   const { canBill, isAdmin, canViewClinicalNotes, canViewPayouts, entitlementsLoading } =
     usePermissions();
-  const { myTherapistId } = useWorkspaceScope();
+  const { myTherapistId, isClinicWideView } = useWorkspaceScope();
   const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView; filter?: 'not_collected' };
@@ -221,7 +221,8 @@ export function LedgerPage() {
   const [from, setFrom] = useState(dueLanding ? '' : initialWeek.from);
   const [to, setTo] = useState(dueLanding ? '' : initialWeek.to);
   const [datePreset, setDatePreset] = useState<DatePreset>(dueLanding ? 'all' : 'week');
-  const [therapistId, setTherapistId] = useState('');
+  // A therapist landing from their own Dues sees just their visits.
+  const [therapistId, setTherapistId] = useState(dueLanding && !isClinicWideView ? (myTherapistId ?? '') : '');
   const [onlyCollectedNoReceipt, setOnlyCollectedNoReceipt] = useState(false);
   const [onlyNotCollected, setOnlyNotCollected] = useState(dueLanding);
   const [onlyNotDocumented, setOnlyNotDocumented] = useState(false);
@@ -626,7 +627,7 @@ export function LedgerPage() {
               >
                 {v.label}
                 {v.key === 'invoices' && (
-                  <CountBadge count={needsReceipt?.length ?? 0} tone="amber" />
+                  <CountBadge count={clinic.invoicePolicy === 'never_nag' ? 0 : (needsReceipt?.length ?? 0)} tone="amber" />
                 )}
               </button>
             ))}

@@ -433,11 +433,13 @@ export function WorkspacePage() {
     () => dashboardService.receivedOnDate(clinic.id, toLocalDateStr(new Date()), scope.scopeTherapistId),
     [clinic.id, scope.scopeTherapistId]
   );
-  // Dues: admin/front desk only (the clinic-wide figure) — therapists
-  // don't bill. Per visit, so "Take payment later" visits count too.
+  // Dues: what's still owed — the whole clinic for admin/front desk, a
+  // therapist's own visits for them (when billing is open to them). Per visit,
+  // so "Take payment later" visits count too.
+  const showDues = canBill && (scope.isClinicWideView || Boolean(scope.myTherapistId));
   const dues = useLiveQuery(
-    () => (scope.isClinicWideView ? dashboardService.duesSummary(clinic.id) : undefined),
-    [clinic.id, scope.isClinicWideView]
+    () => (showDues ? dashboardService.duesSummary(clinic.id, scope.scopeTherapistId) : undefined),
+    [clinic.id, showDues, scope.scopeTherapistId]
   );
 
   const editPatient = useLiveQuery(
@@ -604,31 +606,40 @@ export function WorkspacePage() {
   // therapist has no Reports access, so their header keeps the month's
   // own numbers instead.
   const duesCount = dues?.visitCount ?? 0;
+  const collectedCell = {
+    label: 'Collected',
+    value: formatINR(receivedToday ?? 0),
+    icon: <IconRupee />,
+    tone: 'moss' as const,
+    kind: 'money' as const,
+    onClick: canBill && scope.isClinicWideView ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } }) : undefined,
+  };
+  const duesCell = {
+    label: duesCount > 0 ? `Dues · ${duesCount}` : 'Dues',
+    value: formatINR(dues?.totalPaise ?? 0),
+    icon: <IconWallet />,
+    tone: 'amber' as const,
+    kind: 'money' as const,
+    // Straight to the unpaid visits, all dates (a therapist's own).
+    onClick: () => void navigate({ to: '/ledger', search: { tab: 'visits', filter: 'not_collected' } }),
+  };
+  const visitsCell = {
+    label: `${monthShort} visits`,
+    value: monthReport ? myMonthRow?.visitCount ?? 0 : '—',
+    icon: <IconUserCheck />,
+    tone: 'sky' as const,
+  };
   const statCells = scope.isClinicWideView
-    ? [
-        {
-          label: 'Collected',
-          value: formatINR(receivedToday ?? 0),
-          icon: <IconRupee />,
-          tone: 'moss' as const,
-          kind: 'money' as const,
-          onClick: canBill ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } }) : undefined,
-        },
-        {
-          label: duesCount > 0 ? `Dues · ${duesCount}` : 'Dues',
-          value: formatINR(dues?.totalPaise ?? 0),
-          icon: <IconWallet />,
-          tone: 'amber' as const,
-          kind: 'money' as const,
-          // Straight to the unpaid visits, all dates.
-          onClick: () => void navigate({ to: '/ledger', search: { tab: 'visits', filter: 'not_collected' } }),
-        },
-      ]
-    : [
-        { label: 'Collected', value: formatINR(receivedToday ?? 0), icon: <IconRupee />, tone: 'moss' as const, kind: 'money' as const },
-        { label: `${monthShort} visits`, value: monthReport ? myMonthRow?.visitCount ?? 0 : '—', icon: <IconUserCheck />, tone: 'sky' as const },
-        { label: `${monthShort} packages`, value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
-      ];
+    ? [collectedCell, duesCell]
+    : showDues
+      ? // A therapist who bills: what they've collected, what's owed on their
+        // visits, and their month. (Open packages are listed below.)
+        [collectedCell, duesCell, visitsCell]
+      : [
+          collectedCell,
+          visitsCell,
+          { label: `${monthShort} packages`, value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
+        ];
 
   return (
     <div className="space-y-5">
