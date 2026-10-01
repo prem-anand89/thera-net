@@ -38,6 +38,7 @@ import {
   menuItem,
 } from '@/components/ui';
 import { PatientOverview } from './PatientOverview';
+import { useDueLandingScope } from './useDueLandingScope';
 import { EditVisitModal } from './EditVisitModal';
 import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
 import { SplitModal } from '@/components/SplitModal';
@@ -222,7 +223,9 @@ export function LedgerPage() {
   const [to, setTo] = useState(dueLanding ? '' : initialWeek.to);
   const [datePreset, setDatePreset] = useState<DatePreset>(dueLanding ? 'all' : 'week');
   // A therapist landing from their own Dues sees just their visits.
-  const [therapistId, setTherapistId] = useState(dueLanding && !isClinicWideView ? (myTherapistId ?? '') : '');
+  const [therapistId, setTherapistId] = useState('');
+  // A therapist landing from their own Dues sees just their visits.
+  useDueLandingScope({ dueLanding, isClinicWideView, myTherapistId, setTherapistId });
   const [onlyCollectedNoReceipt, setOnlyCollectedNoReceipt] = useState(false);
   const [onlyNotCollected, setOnlyNotCollected] = useState(dueLanding);
   const [onlyNotDocumented, setOnlyNotDocumented] = useState(false);

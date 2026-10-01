@@ -296,8 +296,10 @@ queued with a visible error.
   correct. The invoice flips to `paid` automatically once the running
   total reaches its total. (There is no bare "Mark paid" toggle any more:
   it flipped the flag without recording any cash. The Invoices tab offers
-  "Mark outstanding" only for an invoice flagged paid with no payment behind
-  it, to undo a mis-click.) Entry
+  "Mark outstanding" only for an invoice flagged paid with no payment
+  recorded against its visits, to undo a mis-click — `canMarkOutstanding` in
+  `src/domain/invoiceStatus.ts`. The Invoices tab reads a missing status row
+  as **paid** (`invoiceRowStatus`), like every other screen.) Entry
   points: the Invoices tab's "Record payment" action (works for
   multi-visit invoices), and the existing "Take payment" dialog on any
   visit card (works standalone; for an invoiced visit it now looks up and

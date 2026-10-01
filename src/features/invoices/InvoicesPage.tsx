@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { canMarkOutstanding, invoiceRowStatus } from '@/domain/invoiceStatus';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, paymentService, dashboardService } from '@/services';
@@ -85,6 +86,13 @@ export function InvoicesPage() {
     () => new Map((payments ?? []).map((p) => [p.invoiceId, p.status])),
     [payments]
   );
+  // No status row reads as paid, as everywhere else (see invoiceRowStatus).
+  // Treating it as outstanding here alone showed "Outstanding" with Take
+  // payment, and paying would record the cash twice.
+  const invoiceStatus = useCallback(
+    (invoiceId: string) => invoiceRowStatus(statusByInvoiceId.get(invoiceId)),
+    [statusByInvoiceId]
+  );
 
   const directPaymentByVisitId = useMemo(() => {
     const map = new Map<string, number>();
@@ -144,7 +152,7 @@ export function InvoicesPage() {
   }
 
   function balanceFor(inv: Invoice): { paidPaise: number; remainingPaise: number } {
-    const status = statusByInvoiceId.get(inv.id) ?? 'outstanding';
+    const status = invoiceStatus(inv.id);
     if (status === 'paid') return { paidPaise: inv.totalPaise, remainingPaise: 0 };
     if (status === 'void') return { paidPaise: 0, remainingPaise: 0 };
     const paidPaise = paidByInvoiceId.get(inv.id) ?? 0;
@@ -168,7 +176,7 @@ export function InvoicesPage() {
     let collected = 0;
     let invoiced = 0;
     for (const inv of filteredInvoices) {
-      const status = statusByInvoiceId.get(inv.id) ?? 'outstanding';
+      const status = invoiceStatus(inv.id);
       // A voided invoice keeps its number but counts for nothing.
       if (status === 'void') continue;
       invoiced += inv.totalPaise;
@@ -194,7 +202,7 @@ export function InvoicesPage() {
     }
 
     return { totalOutstanding: outstanding, totalCollected: collected, totalInvoiced: invoiced, unbilledTotal: unbilled };
-  }, [filteredInvoices, statusByInvoiceId, paidByInvoiceId, visits, from, to, directPaymentByVisitId]);
+  }, [filteredInvoices, invoiceStatus, paidByInvoiceId, visits, from, to, directPaymentByVisitId]);
 
   // Undo for an invoice flagged paid with no payment behind it. Paying is
   // Take payment, which logs the cash.
@@ -383,7 +391,7 @@ export function InvoicesPage() {
               scroll sideways on a phone. */}
           <div className="tab:hidden space-y-2">
             {sortedInvoices.map((inv) => {
-              const status = statusByInvoiceId.get(inv.id) ?? 'outstanding';
+              const status = invoiceStatus(inv.id);
               const { paidPaise, remainingPaise } = balanceFor(inv);
               const isPartial = status === 'outstanding' && paidPaise > 0;
               const initials = inv.patientSnapshot.name
@@ -444,7 +452,7 @@ export function InvoicesPage() {
                       {/* Paying goes through Take payment (amount + method, so the
                           cash reaches the Daybook). Only an invoice flagged paid with
                           no payment behind it can be flipped back. */}
-                      {status === 'paid' && paidPaise === 0 && (
+                      {canMarkOutstanding(status, paidByInvoiceId.get(inv.id) ?? 0) && (
                         <button
                           type="button"
                           className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
@@ -495,7 +503,7 @@ export function InvoicesPage() {
               </thead>
               <tbody>
                 {sortedInvoices.map((inv) => {
-                  const status = statusByInvoiceId.get(inv.id) ?? 'outstanding';
+                  const status = invoiceStatus(inv.id);
                   const { paidPaise, remainingPaise } = balanceFor(inv);
                   const isPartial = status === 'outstanding' && paidPaise > 0;
                   return (
@@ -541,7 +549,7 @@ export function InvoicesPage() {
                             Send WhatsApp reminder
                           </button>
                         )}
-                        {status === 'paid' && paidPaise === 0 && (
+                        {canMarkOutstanding(status, paidByInvoiceId.get(inv.id) ?? 0) && (
                           <button
                             type="button"
                             className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
