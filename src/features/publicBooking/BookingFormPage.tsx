@@ -97,7 +97,7 @@ function MiniCalendar({
         >
           ‹
         </button>
-        <span className="text-xl font-bold font-serif text-[var(--ink)]">{monthLabel}</span>
+        <span className="font-display text-xl font-semibold text-[var(--ink)]">{monthLabel}</span>
         <button
           type="button"
           onClick={nextMonth}

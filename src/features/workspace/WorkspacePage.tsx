@@ -599,7 +599,6 @@ export function WorkspacePage() {
         ? `Synced ${new Date(syncSnapshot.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
         : null;
   const monthCaption = now.toLocaleDateString('en-IN', { month: 'long' });
-  const monthShort = now.toLocaleDateString('en-IN', { month: 'short' });
   // Icon + hue per kind of number, the same wherever it appears: money in
   // (moss banknote), money earned (teal wallet), visits (sky patient-tick),
   // packages (plum stack), new patients (amber).
@@ -608,29 +607,28 @@ export function WorkspacePage() {
       caption: 'Today',
       cells: [
         {
-          label: 'Collected today',
-          shortLabel: 'Collected',
+          label: 'Collected',
           value: formatINR(today?.collectedPaise ?? 0),
           icon: <IconRupee />,
           tone: 'moss' as const,
           kind: 'money' as const,
           onClick: canBill ? () => void navigate({ to: '/ledger', search: { tab: 'daybook' } }) : undefined,
         },
-        { label: 'Visits today', shortLabel: 'Visits', value: visitsTodayCount, icon: <IconUserCheck />, tone: 'sky' as const, onClick: () => setTodayTab('visits') },
+        { label: 'Visits', value: visitsTodayCount, icon: <IconUserCheck />, tone: 'sky' as const, onClick: () => setTodayTab('visits') },
       ],
     },
     {
       caption: monthCaption,
       cells: scope.myTherapistId
         ? [
-            { label: `${monthCaption} net`, shortLabel: `${monthShort} net`, value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—', icon: <IconWallet />, tone: 'teal' as const, kind: 'money' as const },
-            { label: `${monthCaption} visits`, shortLabel: `${monthShort} visits`, value: monthReport ? myMonthRow?.visitCount ?? 0 : '—', icon: <IconUserCheck />, tone: 'sky' as const },
-            { label: 'New packages', shortLabel: 'Packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
+            { label: 'My net', value: monthReport ? formatINR(myMonthRow?.netPostTaxPaise ?? 0) : '—', icon: <IconWallet />, tone: 'teal' as const, kind: 'money-lg' as const },
+            { label: 'Visits', value: monthReport ? myMonthRow?.visitCount ?? 0 : '—', icon: <IconUserCheck />, tone: 'sky' as const },
+            { label: 'Packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
           ]
         : [
-            { label: 'New patients', shortLabel: 'Patients', value: monthlyNew?.newPatients ?? '—', icon: <IconUserPlus />, tone: 'amber' as const },
-            { label: 'New packages', shortLabel: 'Packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
-            { label: `${monthCaption} visits`, shortLabel: `${monthShort} visits`, value: monthReport ? monthReport.total.visitCount : '—', icon: <IconUserCheck />, tone: 'sky' as const },
+            { label: 'New patients', value: monthlyNew?.newPatients ?? '—', icon: <IconUserPlus />, tone: 'amber' as const },
+            { label: 'Packages', value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
+            { label: 'Visits', value: monthReport ? monthReport.total.visitCount : '—', icon: <IconUserCheck />, tone: 'sky' as const },
           ],
     },
   ];
@@ -963,7 +961,7 @@ export function WorkspacePage() {
                       <div className="font-display text-sm font-medium text-[var(--ink)]">
                         {p.patientName}
                       </div>
-                      <div className="text-xs text-[var(--muted)]">{p.mrno}</div>
+                      <div className="font-num text-xs text-[var(--muted)]">{p.mrno}</div>
                     </Link>
                     <PackageStatusPill pkg={p} />
                   </div>
@@ -1036,7 +1034,8 @@ export function WorkspacePage() {
                   {filteredPackages.map((p) => (
                     <tr key={p.packageGroupId}>
                       <td className={td}>
-                        {p.patientName} <span className="text-[var(--muted)]">{p.mrno}</span>
+                        <span className="font-display font-medium">{p.patientName}</span>{' '}
+                        <span className="font-num text-xs text-[var(--muted)]">{p.mrno}</span>
                       </td>
                       <td className={td}>{p.serviceName}</td>
                       <td className={td}>{p.startedByTherapistName}</td>

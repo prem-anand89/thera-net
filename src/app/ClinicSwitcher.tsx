@@ -40,7 +40,7 @@ export function ClinicSwitcher({
   const identity = (
     <>
       <ClinicAvatar name={clinic.name} logoUrl={logoUrl} />
-      <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)] tab:hidden desktop:inline desktop:max-w-[14rem]">
+      <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)] sm:max-w-[10rem] desktop:max-w-[14rem]">
         {clinic.name}
       </span>
       {hasMenu && (
@@ -50,11 +50,11 @@ export function ClinicSwitcher({
       )}
     </>
   );
-  // The name hides on iPad widths (tab: up to desktop:) — five nav labels
-  // leave ~100px there, which only ever showed "Apex…". The clinic's logo
-  // (or initial) still identifies it; the tooltip and menu carry the name.
+  // On iPad widths the nav shows only the active item's label (see Shell),
+  // which leaves room for the name; it truncates rather than squashing the
+  // avatar or chevron (both shrink-0).
   const pill =
-    'flex min-h-10 min-w-0 max-w-full items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--paper)] py-1 pl-1 pr-3 tab:pr-2 desktop:pr-3';
+    'flex min-h-10 min-w-0 max-w-full items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--paper)] py-1 pl-1 pr-3';
 
   if (!hasMenu) {
     return (

@@ -6,6 +6,16 @@ import { onLocalWrite } from '@/repositories/local';
 import { syncStatus, isPermanentFailure } from './status';
 import { coerceReferringSource } from '@/domain/types';
 
+/** Shown (and matched by toFriendlyMessage) when the server can't be reached. */
+export const NETWORK_UNREACHABLE = 'Network unreachable';
+const RETRY_MIN_MS = 15_000;
+const RETRY_MAX_MS = 120_000;
+
+/** fetch() failures across browsers: Chrome "Failed to fetch", Safari "Load failed", Firefox "NetworkError…". */
+export function isFetchFailure(message: string): boolean {
+  return /failed to fetch|load failed|networkerror|network request failed|network unreachable/i.test(message);
+}
+
 /**
  * Offline-first sync:
  * - push: drain the outbox (current Dexie row state, so edits coalesce) as
@@ -92,6 +102,26 @@ export class SyncEngine {
     syncStatus.set({ online: false });
   };
 
+  // Phones suspend the PWA in the background; its first request on resume
+  // often fails. Sync again as soon as it's visible.
+  private handleVisible = () => {
+    if (document.visibilityState === 'visible') this.schedule();
+  };
+
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryDelayMs = RETRY_MIN_MS;
+
+  /** Back off 15s → 30s → … → 2 min after a network failure. */
+  private scheduleRetry() {
+    if (this.retryTimer) return;
+    const delay = this.retryDelayMs;
+    this.retryDelayMs = Math.min(this.retryDelayMs * 2, RETRY_MAX_MS);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.schedule(0);
+    }, delay);
+  }
+
   async stop(): Promise<void> {
     this.started = false;
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
@@ -104,9 +134,14 @@ export class SyncEngine {
       this.channel = null;
     }
     
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     if (typeof window !== 'undefined') {
       window.removeEventListener('online', this.handleOnline);
       window.removeEventListener('offline', this.handleOffline);
+      document.removeEventListener('visibilitychange', this.handleVisible);
     }
     while (this.running) {
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -124,6 +159,7 @@ export class SyncEngine {
 
     window.addEventListener('online', this.handleOnline);
     window.addEventListener('offline', this.handleOffline);
+    document.addEventListener('visibilitychange', this.handleVisible);
 
     this.channel = this.supabase.channel('thera-net-sync');
     for (const table of SYNC_TABLES) {
@@ -164,8 +200,13 @@ export class SyncEngine {
       await this.push();
       await this.pull();
       syncStatus.set({ lastSyncAt: Date.now(), error: null });
+      this.retryDelayMs = RETRY_MIN_MS;
     } catch (e) {
-      syncStatus.set({ error: e instanceof Error ? e.message : String(e) });
+      const message = e instanceof Error ? e.message : String(e);
+      syncStatus.set({ error: isFetchFailure(message) ? NETWORK_UNREACHABLE : message });
+      // Connection blips clear on their own — retry soon rather than waiting
+      // for the 5-minute poll.
+      if (isFetchFailure(message)) this.scheduleRetry();
     } finally {
       await this.updatePending();
       syncStatus.set({ syncing: false });
@@ -285,7 +326,7 @@ export class SyncEngine {
       if (error) {
         // Network-level failures throw to stop the drain; server rejections
         // (RLS, constraints, immutability triggers) stay queued and visible.
-        if (error.message.toLowerCase().includes('fetch')) throw new Error('Network unreachable');
+        if (isFetchFailure(error.message)) throw new Error(NETWORK_UNREACHABLE);
         await db.outbox
           .where('seq')
           .equals(entry.seq!)
@@ -355,7 +396,12 @@ export class SyncEngine {
         .gt('updated_at', cursor)
         .order('updated_at', { ascending: true })
         .limit(PAGE);
-      if (error) throw new Error(`pull ${table}: ${error.message}`);
+      if (error) {
+        // A request that never reached the server (mobile data drop, app
+        // resumed from background) — not a problem with this table.
+        if (isFetchFailure(error.message)) throw new Error(NETWORK_UNREACHABLE);
+        throw new Error(`pull ${table}: ${error.message}`);
+      }
       if (!data?.length) break;
 
       const pendingIds = new Set(

@@ -312,8 +312,10 @@ export function Shell() {
                 1. Only the clinic name shrinks (truncates). Nav and the
                    sync/account cluster are shrink-0, so a tight row eats
                    into the name rather than squeezing things you click.
-                2. Nav labels are tab:-only (744px+); below that, icons with
-                   tooltips + aria-labels.
+                2. Nav labels: every item from desktop:; on iPad widths
+                   (tab: to desktop:) only the active item, the rest are
+                   icons with tooltips + aria-labels (all five labels plus
+                   the clinic pill don't fit 744–999px); icons only below.
                 3. SyncBadge is just a dot while there's nothing to say, and
                    expands with text at every width when there is.
                 4. The account trigger's name shows from desktop: only; the
@@ -335,7 +337,7 @@ export function Shell() {
                   className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--paper)] [&.active]:bg-[var(--teal-light)] [&.active]:font-medium [&.active]:text-[var(--teal)] desktop:px-3"
                 >
                   <item.Icon className="shrink-0" />
-                  <span className="hidden tab:inline">{item.label}</span>
+                  <span className="hidden tab:in-[.active]:inline desktop:inline">{item.label}</span>
                   {item.to === '/schedule' && pendingRequestsCount > 0 && (
                     <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--rust)] px-1 text-[10px] font-bold text-white">
                       {pendingRequestsCount}

@@ -73,7 +73,7 @@ export function TodayAppointments({
           <span className="w-16 shrink-0 whitespace-nowrap text-[13px] tabular-nums text-[var(--muted)] sm:w-[4.5rem] sm:text-sm">{minutesLabel(minutesOfDay(a.scheduledAt))}</span>
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2">
-              <span className={`truncate text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}>
+              <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}>
                 {a.patientName}
               </span>
               {a.id === nextUpId && <Pill tone="teal">Next</Pill>}

@@ -10,6 +10,10 @@ const OFFLINE_MESSAGE = "You're offline (or not connected to the server). Check 
 // few common unique-constraint names.
 const MESSAGE_PATTERNS: Array<[RegExp, string]> = [
   [
+    /failed to fetch|load failed|networkerror|network request failed|network unreachable/i,
+    "Can't reach the server right now. Your changes are saved on this device and will sync when the connection is back.",
+  ],
+  [
     /issued invoices are immutable/i,
     'This invoice has already been issued and can no longer be edited. Create an amendment instead.',
   ],
@@ -94,7 +98,7 @@ function isPostgrestError(e: unknown): e is PostgrestError {
 }
 
 function isNetworkError(e: unknown): boolean {
-  return e instanceof TypeError && /fetch/i.test(e.message);
+  return e instanceof TypeError && /fetch|load failed|networkerror/i.test(e.message);
 }
 
 function matchPattern(message: string): string | undefined {
