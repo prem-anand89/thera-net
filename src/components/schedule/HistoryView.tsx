@@ -34,10 +34,11 @@ function dayHeading(date: string, today: string) {
 }
 
 /**
- * Schedule → History, built for phones first: Past / Upcoming, one search
- * field, one row of pill filters (range, status, therapist — native selects,
- * so phones get their own picker), tappable counters for the past, and the
- * same divided, colour-coded rows as Workspace's Today list.
+ * Schedule → History, built for phones first and kept to two control rows:
+ * Past / Upcoming beside the search, then one row of pill filters (range,
+ * status, therapist — native selects, so phones get their own picker) and
+ * the past's tappable outcome counters, then the same divided, colour-coded
+ * rows as Workspace's Today list.
  */
 export function HistoryView({
   appointments,
@@ -109,42 +110,67 @@ export function HistoryView({
     setCustomDate(next === 'past' ? addDays(today, -60) : addDays(today, 60));
   };
 
+  // Outcome counters double as status filters; a zero one can't filter to
+  // anything, so it's left out unless it's the active filter.
+  const counters = (
+    [
+      ['arrived', `${counts.arrived} attended`, 'bg-[var(--moss-light)] text-[var(--moss-strong)]', counts.arrived],
+      ['no_show', `${counts.no_show} no-show${counts.no_show === 1 ? '' : 's'}`, 'bg-[var(--rust-light)] text-[var(--rust)]', counts.no_show],
+      ['cancelled', `${counts.cancelled} cancelled`, 'bg-[var(--slate-light)] text-[var(--slate)]', counts.cancelled],
+    ] as const
+  ).filter(([key, , , count]) => count > 0 || status === key);
+
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 rounded-xl bg-[var(--paper)] p-1 sm:inline-grid sm:w-72" role="tablist" aria-label="Past or upcoming">
-        {(['past', 'upcoming'] as const).map((candidate) => (
-          <button
-            key={candidate}
-            type="button"
-            role="tab"
-            aria-selected={when === candidate}
-            onClick={() => switchWhen(candidate)}
-            className={`min-h-10 rounded-lg text-sm font-medium ${when === candidate ? 'bg-[var(--surface)] text-[var(--ink)] shadow-sm' : 'text-[var(--muted)]'}`}
-          >
-            {candidate === 'past' ? 'Past' : 'Upcoming'}
-          </button>
-        ))}
+    <div className="space-y-2.5">
+      {/* Row 1: Past / Upcoming beside the search. */}
+      <div className="flex items-center gap-2">
+        <div className="flex shrink-0 gap-0.5 rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5" role="tablist" aria-label="Past or upcoming">
+          {(['past', 'upcoming'] as const).map((candidate) => (
+            <button
+              key={candidate}
+              type="button"
+              role="tab"
+              aria-selected={when === candidate}
+              onClick={() => switchWhen(candidate)}
+              className={`min-h-9 rounded-full px-3.5 text-sm font-medium ${when === candidate ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)] hover:text-[var(--ink)]'}`}
+            >
+              {candidate === 'past' ? 'Past' : 'Upcoming'}
+            </button>
+          ))}
+        </div>
+        <input
+          type="search"
+          className="min-h-10 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-base focus:border-[var(--teal)] focus:outline-none sm:max-w-sm sm:text-sm"
+          placeholder="Name or phone"
+          aria-label="Search name or phone"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setLimit(PAGE);
+          }}
+        />
       </div>
 
-      <input
-        type="search"
-        className="min-h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3.5 text-base focus:border-[var(--teal)] focus:outline-none sm:max-w-md sm:text-sm"
-        placeholder="Search name or phone"
-        aria-label="Search name or phone"
-        value={query}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          setLimit(PAGE);
-        }}
-      />
-
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 sm:mx-0 sm:px-0">
+      {/* Row 2: range, status, therapist, then the outcome counters — one
+          row that scrolls sideways on phones. */}
+      <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 sm:mx-0 sm:flex-wrap sm:px-0">
         <select aria-label="Date range" className={chipSelect} style={chevron} value={range} onChange={(event) => setRange(event.target.value as Range)}>
           {(['7', '30', '90'] as const).map((key) => (
             <option key={key} value={key}>{RANGE_LABEL[when][key]}</option>
           ))}
           <option value="custom">{when === 'past' ? 'Since a date…' : 'Until a date…'}</option>
         </select>
+        {range === 'custom' && (
+          <input
+            type="date"
+            aria-label={when === 'past' ? 'Since' : 'Until'}
+            className="min-h-9 shrink-0 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 text-xs text-[var(--ink)]"
+            value={customDate}
+            max={when === 'past' ? today : undefined}
+            min={when === 'upcoming' ? today : undefined}
+            onChange={(event) => setCustomDate(event.target.value)}
+          />
+        )}
         <select aria-label="Status" className={chipSelect} style={chevron} value={status} onChange={(event) => setStatus(event.target.value as AppointmentStatus | '')}>
           <option value="">All statuses</option>
           {STATUSES.map((candidate) => (
@@ -159,43 +185,23 @@ export function HistoryView({
             ))}
           </select>
         )}
+        {when === 'past' && counters.length > 0 && (
+          <>
+            <span className="h-5 w-px shrink-0 bg-[var(--border)]" aria-hidden />
+            {counters.map(([key, label, tone]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={status === key}
+                onClick={() => setStatus((current) => (current === key ? '' : key))}
+                className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3 text-xs font-medium ${tone} ${status === key ? 'ring-2 ring-[var(--teal)] ring-offset-1' : ''}`}
+              >
+                {label}
+              </button>
+            ))}
+          </>
+        )}
       </div>
-
-      {range === 'custom' && (
-        <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
-          {when === 'past' ? 'Since' : 'Until'}
-          <input
-            type="date"
-            className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm text-[var(--ink)]"
-            value={customDate}
-            max={when === 'past' ? today : undefined}
-            min={when === 'upcoming' ? today : undefined}
-            onChange={(event) => setCustomDate(event.target.value)}
-          />
-        </label>
-      )}
-
-      {when === 'past' && inRange.length > 0 && (
-        <div className="flex flex-wrap gap-2" aria-label="Filter by outcome">
-          {(
-            [
-              ['arrived', `${counts.arrived} attended`, 'bg-[var(--moss-light)] text-[var(--moss-strong)]'],
-              ['no_show', `${counts.no_show} no-show${counts.no_show === 1 ? '' : 's'}`, 'bg-[var(--rust-light)] text-[var(--rust)]'],
-              ['cancelled', `${counts.cancelled} cancelled`, 'bg-[var(--slate-light)] text-[var(--slate)]'],
-            ] as const
-          ).map(([key, label, tone]) => (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={status === key}
-              onClick={() => setStatus((current) => (current === key ? '' : key))}
-              className={`min-h-9 rounded-full px-3 text-xs font-medium ${tone} ${status === key ? 'ring-2 ring-[var(--teal)] ring-offset-1' : ''}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
 
       {groups.length ? (
         <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">

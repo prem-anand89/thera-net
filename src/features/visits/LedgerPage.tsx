@@ -27,13 +27,10 @@ import {
 } from '@/domain/types';
 import {
   btnPrimary,
-  btnSecondary,
-  inputCls,
   th,
   thNum,
   td,
   tdNum,
-  Field,
   SectionCard,
   StatTile,
   CountBadge,
@@ -581,223 +578,181 @@ export function LedgerPage() {
   const activeFilterCount =
     Number(therapistId !== '') + Number(onlyCollectedNoReceipt) + Number(onlyNotCollected) + Number(onlyNotDocumented);
 
+  // Compact toolbar controls (no field labels; aria-labels instead).
+  const toolInput =
+    'min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none sm:text-sm';
+  const therapistSelect = (
+    <select aria-label="Therapist" className={toolInput} value={therapistId} onChange={(e) => setTherapistId(e.target.value)}>
+      <option value="">All therapists</option>
+      {(therapists ?? []).map((t) => (
+        <option key={t.id} value={t.id}>
+          {t.name}
+        </option>
+      ))}
+    </select>
+  );
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* The nav tab already names the page, so the title is for screen
-          readers only; the + in the phone bar is New visit, so the button
-          shows from sm:. The row only takes space when it has something. */}
+          readers only. Row 1: the Visits / Invoices / Daybook switch, a
+          patient filter chip when one is set, and New visit (from sm:; the
+          phone bar's + is New visit). */}
       <h1 className="sr-only">Ledger</h1>
-      <div className={`flex-wrap items-center justify-between gap-3 ${filteredPatient ? 'flex' : 'hidden sm:flex'}`}>
-        <div className="flex flex-wrap items-center gap-3">
-          {filteredPatient && (
-            <span className="rounded-full bg-[var(--teal-light)] px-3 py-1 text-xs text-[var(--teal)]">
-              {filteredPatient.name} ({filteredPatient.mrno})
-              <Link to="/ledger" className="ml-2 font-medium">
-                ✕
-              </Link>
-            </span>
-          )}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="hide-scrollbar flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-1">
+          {(
+            [
+              { key: 'visits', label: 'Visits' },
+              { key: 'invoices', label: 'Invoices' },
+              { key: 'daybook', label: 'Daybook' },
+            ] as const
+          )
+            .filter((v) => (v.key !== 'invoices' && v.key !== 'daybook') || canBill || entitlementsLoading)
+            .map((v) => (
+              <button
+                key={v.key}
+                type="button"
+                className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${recordsView === v.key
+                    ? 'bg-[var(--teal)] text-white shadow-sm'
+                    : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
+                  }`}
+                onClick={() => setRecordsView(v.key)}
+              >
+                {v.label}
+                {v.key === 'invoices' && (
+                  <CountBadge count={needsReceipt?.length ?? 0} tone="amber" />
+                )}
+              </button>
+            ))}
         </div>
-        <Link to="/visits/new" className={`${btnPrimary} hidden items-center sm:inline-flex`}>
+        {filteredPatient && (
+          <span className="rounded-full bg-[var(--teal-light)] px-3 py-1 text-xs text-[var(--teal)]">
+            {filteredPatient.name} ({filteredPatient.mrno})
+            <Link to="/ledger" className="ml-2 font-medium" aria-label="Clear patient filter">
+              ✕
+            </Link>
+          </span>
+        )}
+        <Link to="/visits/new" className={`${btnPrimary} ml-auto hidden items-center sm:inline-flex`}>
           + New visit
         </Link>
       </div>
 
-      <div className="flex w-fit max-w-full gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] p-1 overflow-x-auto hide-scrollbar">
-        {(
-          [
-            { key: 'visits', label: 'Visits' },
-            { key: 'invoices', label: 'Invoices' },
-            { key: 'daybook', label: 'Daybook' },
-          ] as const
-        )
-          .filter((v) => (v.key !== 'invoices' && v.key !== 'daybook') || canBill || entitlementsLoading)
-          .map((v) => (
-            <button
-              key={v.key}
-              type="button"
-              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${recordsView === v.key
-                  ? 'bg-[var(--teal)] text-white shadow-sm'
-                  : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
-                }`}
-              onClick={() => setRecordsView(v.key)}
-            >
-              {v.label}
-              {v.key === 'invoices' && (
-                <CountBadge count={needsReceipt?.length ?? 0} tone="amber" />
-              )}
-            </button>
-          ))}
-      </div>
-
       {recordsView === 'visits' && (
         <>
-          <div className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-sm sm:flex sm:flex-wrap sm:items-end sm:gap-3 sm:space-y-0 sm:p-4">
-            {/* Phones: search, Filters and ⋮ share the first row; from sm:
-                the wrappers dissolve (`sm:contents`) into the old one-row
-                layout. */}
-            <div className="flex items-end gap-2 sm:contents">
-              <div className="relative min-w-0 flex-1 sm:flex-none">
-                <Field label="Find patient">
-                  <input
-                    className={inputCls}
-                    placeholder="Name or Patient ID..."
-                    value={patientQuery}
-                    onChange={(e) => setPatientQuery(e.target.value)}
-                    onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
-                  />
-                </Field>
-                {patientMatches.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-                    {patientMatches.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        className="block w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--paper)]"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setPatientQuery('');
-                          void navigate({ to: '/ledger', search: { patientId: p.id } });
-                        }}
-                      >
-                        <span className="font-display">{p.name}</span>{' '}
-                        <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                aria-expanded={filtersOpen}
-                onClick={() => setFiltersOpen((current) => !current)}
-                className={`${btnSecondary} flex shrink-0 items-center gap-1.5 px-3 sm:hidden ${activeFilterCount > 0 ? 'border-[var(--teal)] text-[var(--teal)]' : ''}`}
-              >
-                Filters
-                {activeFilterCount > 0 && (
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--teal)] px-1 text-[11px] font-semibold text-white">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-              <div className="flex min-h-11 shrink-0 items-center sm:hidden">
-                <KebabMenu ariaLabel="More ledger options">
-                  {(close) => (
-                    <>
-                      <button type="button" className={menuItem} disabled={!visits?.length} onClick={() => { downloadCsv(); close(); }}>
-                        Export CSV
-                      </button>
-                      {canViewPayouts && (
-                        <Link to="/insights" search={{ tab: 'monthly' }} className={`${menuItem} block`} onClick={close}>
-                          Generate report
-                        </Link>
-                      )}
-                    </>
-                  )}
-                </KebabMenu>
-              </div>
-            </div>
-            <div className={`${filtersOpen ? 'flex' : 'hidden'} flex-wrap items-end gap-x-3 gap-y-1 sm:contents`}>
-              <Field label="Therapist">
-                <select
-                  className={inputCls}
-                  value={therapistId}
-                  onChange={(e) => setTherapistId(e.target.value)}
-                >
-                  <option value="">All</option>
-                  {(therapists ?? []).map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
+          {/* Row 2, directly on the page: search · therapist · Filters ·
+              date presets · ⋮. Phones: search, Filters and ⋮ first, the
+              presets on their own scrolling row (order-last), therapist
+              inside Filters. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
+              <input
+                type="search"
+                aria-label="Find patient"
+                className={`${toolInput} w-full`}
+                placeholder="Find patient or ID"
+                value={patientQuery}
+                onChange={(e) => setPatientQuery(e.target.value)}
+                onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
+              />
+              {patientMatches.length > 0 && (
+                <div className="absolute z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+                  {patientMatches.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="block w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--paper)]"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setPatientQuery('');
+                        void navigate({ to: '/ledger', search: { patientId: p.id } });
+                      }}
+                    >
+                      <span className="font-display">{p.name}</span>{' '}
+                      <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                    </button>
                   ))}
-                </select>
-              </Field>
-              <label className="flex items-center gap-1.5 pb-2 text-xs text-[var(--muted)]">
-                <input
-                  type="checkbox"
-                  checked={onlyCollectedNoReceipt}
-                  onChange={(e) => setOnlyCollectedNoReceipt(e.target.checked)}
-                />
+                </div>
+              )}
+            </div>
+            <div className="hidden sm:block">{therapistSelect}</div>
+            <button
+              type="button"
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen((current) => !current)}
+              className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium ${activeFilterCount > 0 ? 'border-[var(--teal)] text-[var(--teal)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]'}`}
+            >
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--teal)] px-1 text-[11px] font-semibold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            <div className="hide-scrollbar order-last flex w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1 sm:order-none sm:w-auto">
+              {DATE_PRESETS.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${datePreset === p.key
+                      ? 'bg-[var(--teal)] text-white'
+                      : 'text-[var(--muted)] hover:bg-[var(--surface)]'
+                    }`}
+                  onClick={() => applyDatePreset(p.key)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {datePreset === 'custom' && (
+              <div className="order-last flex items-center gap-1.5 text-xs text-[var(--muted)] sm:order-none">
+                <input type="date" aria-label="From" className={toolInput} value={from} onChange={(e) => setFrom(e.target.value)} />
+                –
+                <input type="date" aria-label="To" className={toolInput} value={to} onChange={(e) => setTo(e.target.value)} />
+              </div>
+            )}
+            <div className="flex min-h-10 shrink-0 items-center sm:ml-auto">
+              <KebabMenu ariaLabel="More ledger options">
+                {(close) => (
+                  <>
+                    <button type="button" className={menuItem} disabled={!visits?.length} onClick={() => { downloadCsv(); close(); }}>
+                      Export CSV
+                    </button>
+                    {canViewPayouts && (
+                      <Link to="/insights" search={{ tab: 'monthly' }} className={`${menuItem} block`} onClick={close}>
+                        Generate report
+                      </Link>
+                    )}
+                  </>
+                )}
+              </KebabMenu>
+            </div>
+          </div>
+
+          {filtersOpen && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)] shadow-sm">
+              <div className="sm:hidden">{therapistSelect}</div>
+              <label className="flex min-h-10 items-center gap-2">
+                <input type="checkbox" checked={onlyCollectedNoReceipt} onChange={(e) => setOnlyCollectedNoReceipt(e.target.checked)} />
                 Collected, no invoice
               </label>
-              <label className="flex items-center gap-1.5 pb-2 text-xs text-[var(--muted)]">
-                <input
-                  type="checkbox"
-                  checked={onlyNotCollected}
-                  onChange={(e) => setOnlyNotCollected(e.target.checked)}
-                />
+              <label className="flex min-h-10 items-center gap-2">
+                <input type="checkbox" checked={onlyNotCollected} onChange={(e) => setOnlyNotCollected(e.target.checked)} />
                 Not collected
               </label>
               {clinic.clinicalDocsEnabled && (
-                <label className="flex items-center gap-1.5 pb-2 text-xs text-[var(--muted)]">
-                  <input
-                    type="checkbox"
-                    checked={onlyNotDocumented}
-                    onChange={(e) => setOnlyNotDocumented(e.target.checked)}
-                  />
+                <label className="flex min-h-10 items-center gap-2">
+                  <input type="checkbox" checked={onlyNotDocumented} onChange={(e) => setOnlyNotDocumented(e.target.checked)} />
                   Not documented
                 </label>
               )}
             </div>
-            <div className="flex flex-wrap items-end gap-2 sm:ml-auto">
-              {/* One scrollable row on phones instead of wrapping to two. */}
-              <div className="hide-scrollbar flex max-w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1 sm:flex-wrap">
-                {DATE_PRESETS.map((p) => (
-                  <button
-                    key={p.key}
-                    type="button"
-                    className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${datePreset === p.key
-                        ? 'bg-[var(--teal)] text-white'
-                        : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-                      }`}
-                    onClick={() => applyDatePreset(p.key)}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-              {datePreset === 'custom' && (
-                <div className="flex flex-wrap gap-2">
-                  <Field label="From">
-                    <input
-                      type="date"
-                      className={inputCls}
-                      value={from}
-                      onChange={(e) => setFrom(e.target.value)}
-                    />
-                  </Field>
-                  <Field label="To">
-                    <input
-                      type="date"
-                      className={inputCls}
-                      value={to}
-                      onChange={(e) => setTo(e.target.value)}
-                    />
-                  </Field>
-                </div>
-              )}
-              {/* Phones: these two live in the ⋮ beside the search. */}
-              <button
-                type="button"
-                className={`${btnSecondary} hidden sm:block`}
-                disabled={!visits?.length}
-                onClick={downloadCsv}
-              >
-                Export CSV
-              </button>
-              {canViewPayouts && (
-                <Link to="/insights" search={{ tab: 'monthly' }} className={`${btnSecondary} hidden sm:block`}>
-                  Generate report
-                </Link>
-              )}
-            </div>
-          </div>
-
-          {/* Phones have the header's sync dot, so the "as of" line only
-              shows there when something is still unsynced. */}
-          {syncCaption && (
-            <p className={`text-xs text-[var(--slate)] ${unsyncedVisitCount > 0 ? '' : 'hidden sm:block'}`}>{syncCaption}</p>
           )}
+
+          {/* The header's sync dot covers "all synced"; the caption only
+              shows while visits are still waiting to sync. */}
+          {syncCaption && unsyncedVisitCount > 0 && <p className="text-xs text-[var(--amber)]">{syncCaption}</p>}
 
           {filteredPatient && <PatientOverview patient={filteredPatient} />}
         </>

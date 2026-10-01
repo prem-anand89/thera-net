@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, reportService, feedbackService, bookingService } from '@/services';
 import { db } from '@/lib/db';
-import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { usePermissions } from '@/app/usePermissions';
@@ -59,8 +58,6 @@ import { EditVisitModal } from '@/features/visits/EditVisitModal';
 import { FirstWeekSetupLink } from '@/features/settings/FirstWeekChecklist';
 import {
   IconBook,
-  IconCalendar,
-  IconCheckCircle,
   IconCloud,
   IconPackage,
   IconPen,
@@ -69,7 +66,6 @@ import {
   IconStar,
   IconWallet,
   IconUserCheck,
-  IconVisits,
 } from '@/components/StatIcons';
 
 /** What the invoice-issuance modal needs, independent of which card opened it. */
@@ -347,11 +343,8 @@ export function WorkspacePage() {
   const openAppointment = openAppointmentId
     ? (workspaceAppointments ?? []).find((a) => a.id === openAppointmentId) ?? null
     : null;
-  // Same caveat as Ledger's totals, and arguably more time-sensitive here —
-  // "Collected today" is the number staff actually watch through the day.
-  // See LedgerPage's own comment on why unsynced changes take priority
-  // over a last-sync timestamp.
-  const syncSnapshot = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
+  // Unsynced visits make "Collected today" understate the day, so they get
+  // a needs-you item (see LedgerPage on unsynced counts vs last-sync time).
   const unsyncedVisitCount =
     useLiveQuery(() => db.outbox.filter((e) => e.table === 'visits').count(), []) ?? 0;
   // Public booking requests waiting for a confirm — shown first under
@@ -557,23 +550,18 @@ export function WorkspacePage() {
     </>
   );
   const plural = (n: number, word: string) => `${word}${n === 1 ? '' : 's'}`;
+  // Only what the page doesn't already show: visits in progress and booking
+  // requests are listed in the Today card right below, so they're not
+  // repeated here. Unsynced visits get an item (the header's dot only says
+  // "something's pending").
   const needsYou = ([
-    toCompleteCount > 0 && {
-      key: 'complete',
+    unsyncedVisitCount > 0 && {
+      key: 'unsynced',
       node: (
-        <button type="button" className={needsItem} onClick={() => setTodayTab('appointments')}>
-          <IconVisits className="text-[var(--amber)]" />
-          {both(`${toCompleteCount} to complete`, `${toCompleteCount} ${plural(toCompleteCount, 'visit')} to complete`)}
-        </button>
-      ),
-    },
-    pendingRequestCount > 0 && {
-      key: 'requests',
-      node: (
-        <button type="button" className={needsItem} onClick={() => setTodayTab('appointments')}>
-          <IconCalendar className="text-[var(--amber)]" />
-          {both(`${pendingRequestCount} ${plural(pendingRequestCount, 'request')}`, `${pendingRequestCount} booking ${plural(pendingRequestCount, 'request')}`)}
-        </button>
+        <span className={`${needsItem} !text-[var(--amber)] hover:!no-underline`}>
+          <IconCloud />
+          {both(`${unsyncedVisitCount} not synced`, `${unsyncedVisitCount} ${plural(unsyncedVisitCount, 'visit')} not synced yet`)}
+        </span>
       ),
     },
     myDraftNotes.length > 0 && {
@@ -600,12 +588,6 @@ export function WorkspacePage() {
       ),
     },
   ] as (NeedsItem | false)[]).filter((item): item is NeedsItem => Boolean(item));
-  const syncLabel =
-    unsyncedVisitCount > 0
-      ? `${unsyncedVisitCount} visit${unsyncedVisitCount === 1 ? '' : 's'} not synced yet`
-      : syncSnapshot.lastSyncAt
-        ? `Synced ${new Date(syncSnapshot.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-        : null;
   const monthCaption = now.toLocaleDateString('en-IN', { month: 'long' });
   const monthShort = now.toLocaleDateString('en-IN', { month: 'short' });
   // Icon + hue per kind of number, the same wherever it appears: money in
@@ -762,29 +744,16 @@ export function WorkspacePage() {
           </Link>
         )}
 
-        {/* "Needs you": one line at every width — each item jumps to where
-            it's done; icons separate the items. The sync state shows from
-            sm: (phones have the header's sync dot). */}
-        <div className="flex items-center gap-3 rounded-xl bg-[var(--paper)] px-3 py-2 text-sm">
-          {needsYou.length > 0 ? (
-            <ul className="flex min-w-0 flex-1 items-center gap-4 overflow-x-auto" aria-label="Needs you">
-              {needsYou.map((item) => (
-                <li key={item.key}>{item.node}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="flex flex-1 items-center gap-2 text-[var(--muted)]">
-              <IconCheckCircle className="h-4 w-4 text-[var(--moss)]" />
-              All caught up
-            </p>
-          )}
-          {syncLabel && (
-            <p className={`hidden shrink-0 items-center gap-1.5 text-xs sm:flex ${unsyncedVisitCount > 0 ? 'text-[var(--amber)]' : 'text-[var(--muted)]'}`}>
-              <IconCloud className="h-4 w-4" />
-              {syncLabel}
-            </p>
-          )}
-        </div>
+        {/* "Needs you": one line, only when something needs attention that
+            the page doesn't already list (draft notes, new feedback,
+            unsynced visits); each item jumps to where it's done. */}
+        {needsYou.length > 0 && (
+          <ul className="flex items-center gap-4 overflow-x-auto rounded-xl bg-[var(--paper)] px-3 py-2 text-sm" aria-label="Needs you">
+            {needsYou.map((item) => (
+              <li key={item.key}>{item.node}</li>
+            ))}
+          </ul>
+        )}
       </header>
 
       {scope.isUnlinkedTherapist && (
