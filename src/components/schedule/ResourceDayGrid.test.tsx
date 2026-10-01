@@ -61,7 +61,8 @@ describe('ResourceDayGrid', () => {
     const block = screen.getByRole('button', { name: /Priya/ });
     expect(block.style.top).toBe(`${60 * PX_PER_MINUTE}px`);
     expect(block.style.height).toBe(`${45 * PX_PER_MINUTE - 1}px`);
-    expect(block).toHaveTextContent('10:00 AM–10:45 AM · 45m');
+    expect(block).toHaveTextContent('10:00 AM–10:45 AM');
+    expect(block).not.toHaveTextContent('45m'); // the range already says how long
   });
 
   it('offers only free, non-overlapping slots for booking', () => {

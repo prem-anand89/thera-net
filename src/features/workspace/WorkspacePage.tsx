@@ -20,6 +20,8 @@ import {
 } from '@/domain/types';
 import { appointmentStartsOnDate, minutesOfDay, patientAttendance, toLocalDateStr } from '@/domain/schedule';
 import { TodayAppointments } from '@/components/schedule/TodayAppointments';
+import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
+import { patientFlags } from '@/domain/patientFlags';
 import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
@@ -206,6 +208,7 @@ function todayRowToCardData(
 }
 
 type NeedsItem = { key: string; node: ReactElement };
+const EMPTY_APPOINTMENTS: Appointment[] = [];
 
 /** Single status pill for an open package — `stale` (hasn't been visited in
  *  a while) takes priority over `nearingCompletion` (still active, just
@@ -334,6 +337,7 @@ export function WorkspacePage() {
     [therapistRoster]
   );
   const [openAppointmentId, setOpenAppointmentId] = useState<string | null>(null);
+  const flagContext = usePatientFlagContext(clinic.id, workspaceAppointments ?? EMPTY_APPOINTMENTS);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [startVisit, setStartVisit] = useState<{ appointment?: Appointment } | null>(null);
   const hour = new Date().getHours();
@@ -647,6 +651,8 @@ export function WorkspacePage() {
             : null
         }
         slotMinutes={clinic.slotDurationMinutes || 30}
+        flags={openAppointment ? patientFlags(openAppointment, flagContext) : []}
+        condition={openAppointment?.patientId ? flagContext?.conditionByPatient.get(openAppointment.patientId) ?? null : null}
         canManage={Boolean(openAppointment) && (canManageBookings || openAppointment?.therapistId === scope.myTherapistId)}
         onClose={() => setOpenAppointmentId(null)}
         onReschedule={(appointment) => {
@@ -813,6 +819,7 @@ export function WorkspacePage() {
               onConfirmRequest={setConfirmingRequest}
               onDeclineRequest={setDecliningRequest}
               onSeeAllRequests={() => void navigate({ to: '/schedule', search: { tab: 'bookings', view: 'requests' } })}
+              flagContext={flagContext}
             />
             <Link to="/schedule" className="mt-3 inline-block text-sm font-medium text-[var(--teal)] hover:underline">
               Open schedule →

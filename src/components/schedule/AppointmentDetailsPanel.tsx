@@ -17,6 +17,8 @@ import {
   type Attendance,
 } from '@/domain/schedule';
 import type { Appointment } from '@/domain/types';
+import { PatientFlagPills } from './PatientFlagPills';
+import type { PatientFlag } from '@/domain/patientFlags';
 
 const actionCls =
   'min-h-11 rounded-lg border border-[var(--border)] px-3 text-sm font-medium hover:bg-[var(--paper)] disabled:opacity-50';
@@ -49,6 +51,8 @@ export function AppointmentDetailsPanel({
   attendance,
   requestNotes,
   seriesLabel,
+  flags = [],
+  condition,
   onClose,
   onReschedule,
   onCancelSeries,
@@ -66,6 +70,10 @@ export function AppointmentDetailsPanel({
   requestNotes?: string | null;
   /** e.g. "Session 3 of 8" when part of a repeat series. */
   seriesLabel?: string | null;
+  /** All patient flags (New patient, Package 3/6, Balance due, no-shows). */
+  flags?: PatientFlag[];
+  /** The condition on file (primary, else the latest visit's). */
+  condition?: string | null;
   onClose: () => void;
   onReschedule: (appointment: Appointment) => void;
   /** Cancels this and the following sessions of its series. */
@@ -152,6 +160,7 @@ export function AppointmentDetailsPanel({
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Pill tone={APPOINTMENT_STATUS_TONE[appointment.status]}>{APPOINTMENT_STATUS_LABEL[appointment.status]}</Pill>
               {seriesLabel && <span className="text-xs text-[var(--muted)]">{seriesLabel}</span>}
+              <PatientFlagPills flags={flags.filter((flag) => flag.key !== 'noshow')} />
             </div>
           </div>
           <button type="button" className="min-h-11 px-2 text-sm text-[var(--muted)]" onClick={onClose}>
@@ -193,9 +202,15 @@ export function AppointmentDetailsPanel({
               </dd>
             </div>
           )}
+          {condition && (
+            <div className="flex gap-2">
+              <dt className="w-20 shrink-0 text-[var(--muted)]">Condition</dt>
+              <dd className="text-[var(--ink)]">{condition}</dd>
+            </div>
+          )}
           {requestNotes && (
             <div className="flex gap-2">
-              <dt className="w-20 shrink-0 text-[var(--muted)]">Note</dt>
+              <dt className="w-20 shrink-0 text-[var(--muted)]">Patient says</dt>
               <dd className="text-[var(--ink)]">{requestNotes}</dd>
             </div>
           )}

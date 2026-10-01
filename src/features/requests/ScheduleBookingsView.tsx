@@ -3,7 +3,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
-import { ConfirmDialog, KebabMenu, Panel, SectionCard, btnPrimary, btnSecondary, inputCls, menuItem } from '@/components/ui';
+import { ConfirmDialog, KebabMenu, Panel, btnPrimary, btnSecondary, menuItem } from '@/components/ui';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -12,7 +12,6 @@ import {
   addDays,
   addWeeks,
   appointmentMinutes,
-  filterHistory,
   formatMinutes,
   freeGaps,
   getWeekStart,
@@ -29,10 +28,6 @@ import {
   type ClosedRange,
   dayLoad,
 } from '@/domain/schedule';
-import {
-  APPOINTMENT_BLOCK_STYLE,
-  APPOINTMENT_STATUS_LABEL,
-} from '@/domain/appointmentStatus';
 import type { Appointment, AppointmentRequest, UUID } from '@/domain/types';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { StartVisitSheet } from '@/components/StartVisitSheet';
@@ -41,6 +36,9 @@ import { ReminderSheet } from '@/components/schedule/ReminderSheet';
 import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
 import { RequestsInbox } from '@/components/schedule/RequestsInbox';
 import { TherapistFilter } from '@/components/schedule/TherapistFilter';
+import { HistoryView } from '@/components/schedule/HistoryView';
+import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
+import { appointmentReason, patientFlags } from '@/domain/patientFlags';
 import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
 import { AgendaList } from '@/components/schedule/AgendaList';
@@ -82,14 +80,18 @@ function longDate(date: string) {
 }
 
 /** "Thu, 1 Oct" — the phone toolbar has room for this, not the long form. */
+const EMPTY_APPOINTMENTS: Appointment[] = [];
+
 function shortDate(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', {
     weekday: 'short', day: 'numeric', month: 'short',
   });
 }
 
+// No display class here: callers pick `inline-flex` or `hidden tab:inline-flex`
+// (a shared `inline-flex` used to override `hidden`, showing Reminders on phones).
 const tabAction =
-  'inline-flex h-9 items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]';
+  'h-9 items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]';
 const tabPrimary =
   'inline-flex h-9 items-center rounded-lg bg-[var(--teal)] px-3.5 text-sm font-medium text-white hover:bg-[var(--teal-strong)]';
 
@@ -143,6 +145,8 @@ export function ScheduleBookingsView({
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const allAppointments = useLiveQuery(() => repos.appointments.listByClinic(clinic.id), [clinic.id]);
+  const flagContext = usePatientFlagContext(clinic.id, allAppointments ?? EMPTY_APPOINTMENTS);
+  const reasonFor = useCallback((appointment: Appointment) => appointmentReason(appointment, flagContext)?.text ?? null, [flagContext]);
   const requests = useLiveQuery(
     () => (canManageAll ? repos.appointmentRequests.listByClinic(clinic.id) : undefined),
     [canManageAll, clinic.id]
@@ -231,10 +235,14 @@ export function ScheduleBookingsView({
         const count = dayAppointments.filter((a) => a.status !== 'cancelled' && (!a.therapistId || !rosterById.has(a.therapistId))).length;
         return { text: count ? `${count} booked` : 'None', ratio: null };
       }
-      const load = dayLoad(dayAppointments, therapistId, date, hours, slotMinutes, workingFor(therapistId, date), date === today ? now.minutes : undefined);
-      return { text: load.text, ratio: load.ratio };
+      const load = dayLoad(
+        dayAppointments, therapistId, date, hours, slotMinutes, workingFor(therapistId, date),
+        date === today ? now.minutes : undefined,
+        closedFor(date).closed
+      );
+      return { text: load.text, ratio: load.ratio, tone: load.tone };
     },
-    [dayAppointments, rosterById, slotMinutes, date, hours, workingFor, today, now.minutes]
+    [dayAppointments, rosterById, slotMinutes, date, hours, workingFor, today, now.minutes, closedFor]
   );
 
   const gridTherapists: GridTherapist[] = useMemo(() => {
@@ -479,7 +487,7 @@ export function ScheduleBookingsView({
         actions={
           <>
             {isTherapist && myTherapistId && (
-              <button type="button" className={tabAction} onClick={() => setHoursTherapistId(myTherapistId)}>
+              <button type="button" className={`${tabAction} inline-flex`} onClick={() => setHoursTherapistId(myTherapistId)}>
                 My hours
               </button>
             )}
@@ -584,11 +592,6 @@ export function ScheduleBookingsView({
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {mode === 'day' && (
-                  <button type="button" className="min-h-9 px-1 text-xs font-medium text-[var(--teal)] tab:hidden" onClick={() => setFindTime((current) => !current)}>
-                    {findTime ? 'Back to day' : 'Find a time'}
-                  </button>
-                )}
                 {canManageAll && roster.length > 1 && (
                   <div className="desktop:hidden">
                     <TherapistFilter therapists={roster} visibleIds={selectedIds} onToggle={toggleTherapist} onShowAll={() => setTherapists([])} />
@@ -604,6 +607,11 @@ export function ScheduleBookingsView({
                 <KebabMenu ariaLabel="More schedule options">
                   {(close) => (
                     <>
+                      {mode === 'day' && (
+                        <button type="button" className={`${menuItem} tab:hidden`} onClick={() => { setFindTime((current) => !current); close(); }}>
+                          {findTime ? 'Back to the day' : 'Find a time'}
+                        </button>
+                      )}
                       <button type="button" className={menuItem} onClick={() => { setShowCancelled((current) => !current); close(); }}>
                         {showCancelled ? 'Hide cancelled' : 'Show cancelled'}
                       </button>
@@ -642,12 +650,12 @@ export function ScheduleBookingsView({
             </div>
 
             {closedToday.closed && (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--slate-light)] px-3 py-2 text-sm text-[var(--slate)]">
+              <div className={`${dayAppointments.length === 0 && mode === 'day' ? 'hidden tab:flex' : 'flex'} flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--slate-light)] px-3 py-2 text-sm text-[var(--slate)]`}>
                 <span>
                   <strong>
                     {closedToday.kind === 'holiday'
                       ? `Closed${closedToday.label ? ` for ${closedToday.label}` : ''}`
-                      : 'Closed every week on this day'}
+                      : `Closed every ${new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long' })}`}
                   </strong>
                   {closedToday.kind === 'holiday' && closureForDate ? ` (${rangeLabel(closureForDate)})` : ''}. Public booking is off for this day.
                 </span>
@@ -663,6 +671,7 @@ export function ScheduleBookingsView({
               <>
                 <div className="hidden tab:block">
                   <ResourceDayGrid
+                    reasonFor={reasonFor}
                     date={date}
                     today={today}
                     nowMinutes={now.minutes}
@@ -695,9 +704,21 @@ export function ScheduleBookingsView({
                       workingFor={(therapistId) => workingFor(therapistId, date)}
                     />
                   ) : dayAppointments.length === 0 && dayGaps.length === 0 ? (
-                    <EmptyDay closed={closedToday.closed} onBook={() => openBooking({ date })} onFindTime={() => setFindTime(true)} />
+                    <EmptyDay
+                      closedTitle={
+                        closedToday.closed
+                          ? closedToday.kind === 'holiday'
+                            ? `Closed${closedToday.label ? ` for ${closedToday.label}` : ''}`
+                            : `Closed every ${new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long' })}`
+                          : null
+                      }
+                      onReopen={canManageAll && closedToday.kind === 'holiday' && closureForDate ? () => setRemoving(closureForDate) : undefined}
+                      onBook={() => openBooking({ date })}
+                      onFindTime={() => setFindTime(true)}
+                    />
                   ) : (
                     <AgendaList
+                      flagContext={flagContext}
                       appointments={dayAppointments}
                       slotMinutes={slotMinutes}
                       colorFor={colorFor}
@@ -715,6 +736,7 @@ export function ScheduleBookingsView({
               <>
                 <div className="hidden tab:block">
                   <WeekTimeGrid
+                    reasonFor={reasonFor}
                     days={weekDays(date)}
                     today={today}
                     nowMinutes={now.minutes}
@@ -762,14 +784,14 @@ export function ScheduleBookingsView({
       </Panel>
 
       {activeView === 'history' && (
-        <HistorySurface
+        <HistoryView
           appointments={scopedAppointments}
           therapists={canManageAll ? roster : []}
           today={today}
-          slotMinutes={slotMinutes}
           colorFor={colorFor}
           therapistNameFor={therapistNameFor}
           onSelect={(a) => setSelectedId(a.id)}
+          flagContext={flagContext}
         />
       )}
 
@@ -829,6 +851,8 @@ export function ScheduleBookingsView({
         attendance={selectedAttendance}
         requestNotes={selectedAppointment?.requestId ? requestById.get(selectedAppointment.requestId)?.notes ?? null : null}
         seriesLabel={seriesLabel}
+        flags={selectedAppointment ? patientFlags(selectedAppointment, flagContext) : []}
+        condition={selectedAppointment?.patientId ? flagContext?.conditionByPatient.get(selectedAppointment.patientId) ?? null : null}
         onCancelSeries={
           selectedAppointment?.seriesId
             ? (appointment) =>
@@ -974,14 +998,47 @@ function ScheduleSkeleton() {
   );
 }
 
-function EmptyDay({ closed, onBook, onFindTime }: { closed: boolean; onBook: () => void; onFindTime: () => void }) {
+/** Phone day view with nothing booked. On a closed day it is also the
+ *  closed notice (the separate banner hides), so the two don't stack. */
+function EmptyDay({
+  closedTitle,
+  onReopen,
+  onBook,
+  onFindTime,
+}: {
+  closedTitle: string | null;
+  onReopen?: () => void;
+  onBook: () => void;
+  onFindTime: () => void;
+}) {
+  if (closedTitle) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--slate-light)] px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-[var(--ink)]">{closedTitle}</p>
+          <p className="text-xs text-[var(--slate)]">
+            Public booking is off. You can still book here.
+            {onReopen && (
+              <>
+                {' '}
+                <button type="button" className="font-medium text-[var(--rust)] underline" onClick={onReopen}>
+                  Reopen
+                </button>
+              </>
+            )}
+          </p>
+        </div>
+        <button type="button" className={`${btnSecondary} shrink-0`} onClick={onBook}>Book</button>
+      </div>
+    );
+  }
   return (
-    <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-10 text-center">
-      <p className="font-medium text-[var(--ink)]">{closed ? 'Clinic closed' : 'No bookings for this day'}</p>
-      <p className="mt-1 text-sm text-[var(--muted)]">{closed ? 'You can still book if you need to.' : 'Create a booking or check free times.'}</p>
-      <div className="mt-4 flex justify-center gap-2">
+    <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-6 text-center">
+      <p className="font-medium text-[var(--ink)]">Nothing booked yet</p>
+      <p className="mt-1 text-sm text-[var(--muted)]">Tap Find a time to see free slots, or book directly.</p>
+      <div className="mt-3 flex justify-center gap-2">
         <button type="button" className={btnPrimary} onClick={onBook}>New booking</button>
-        {!closed && <button type="button" className={btnSecondary} onClick={onFindTime}>Find a time</button>}
+        <button type="button" className={btnSecondary} onClick={onFindTime}>Find a time</button>
       </div>
     </div>
   );
@@ -1039,159 +1096,5 @@ function WeekBoard({
         );
       })}
     </div>
-  );
-}
-
-/** Appointment history: Upcoming / Past, a date range, grouped by day, with outcome counts. */
-function HistorySurface({
-  appointments,
-  therapists,
-  today,
-  slotMinutes,
-  colorFor,
-  therapistNameFor,
-  onSelect,
-}: {
-  appointments: Appointment[];
-  /** Empty hides the therapist filter (therapist logins see only their own). */
-  therapists: { id: UUID; name: string }[];
-  today: string;
-  slotMinutes: number;
-  colorFor: (appointment: Appointment) => string;
-  therapistNameFor: (appointment: Appointment) => string;
-  onSelect: (appointment: Appointment) => void;
-}) {
-  const [when, setWhen] = useState<'past' | 'upcoming'>('past');
-  const [from, setFrom] = useState(() => addDays(today, -30));
-  const [to, setTo] = useState(() => addDays(today, 30));
-  const [query, setQuery] = useState('');
-  const [status, setStatus] = useState('');
-  const [therapistFilter, setTherapistFilter] = useState('');
-
-  const noShowsByPatient = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const a of appointments) {
-      if (a.status !== 'no_show') continue;
-      const key = a.patientId ?? a.patientPhone.replace(/\D/g, '').slice(-10);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return counts;
-  }, [appointments]);
-
-  const range = when === 'past' ? { from, to: addDays(today, -1) } : { from: today, to };
-  const rows = filterHistory(appointments, { from: range.from, query, status, therapistId: therapistFilter })
-    .filter((a) => dateForAppointment(a) <= range.to)
-    .sort((a, b) => (when === 'past' ? b.scheduledAt.localeCompare(a.scheduledAt) : a.scheduledAt.localeCompare(b.scheduledAt)));
-  const groups: { date: string; rows: Appointment[] }[] = [];
-  for (const row of rows) {
-    const key = dateForAppointment(row);
-    const last = groups[groups.length - 1];
-    if (last && last.date === key) last.rows.push(row);
-    else groups.push({ date: key, rows: [row] });
-  }
-  const counts = {
-    attended: rows.filter((a) => a.status === 'arrived').length,
-    noShow: rows.filter((a) => a.status === 'no_show').length,
-    cancelled: rows.filter((a) => a.status === 'cancelled').length,
-  };
-
-  return (
-    <SectionCard title="History">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-[var(--border)] p-0.5" role="tablist" aria-label="Upcoming or past">
-          {(['past', 'upcoming'] as const).map((candidate) => (
-            <button
-              key={candidate}
-              type="button"
-              role="tab"
-              aria-selected={when === candidate}
-              onClick={() => setWhen(candidate)}
-              className={`min-h-9 rounded-md px-3 text-xs font-medium ${when === candidate ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}
-            >
-              {candidate === 'past' ? 'Past' : 'Upcoming'}
-            </button>
-          ))}
-        </div>
-        <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-          {when === 'past' ? 'Since' : 'Until'}
-          <input
-            type="date"
-            className={`${inputCls} w-auto py-1.5`}
-            value={when === 'past' ? from : to}
-            max={when === 'past' ? today : undefined}
-            min={when === 'upcoming' ? today : undefined}
-            onChange={(event) => (when === 'past' ? setFrom(event.target.value) : setTo(event.target.value))}
-          />
-        </label>
-      </div>
-      <div className={`mb-3 grid gap-2 ${therapists.length ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
-        <input className={inputCls} placeholder="Search name or phone" aria-label="Search name or phone" value={query} onChange={(event) => setQuery(event.target.value)} />
-        <select className={inputCls} aria-label="Status" value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="">All statuses</option>
-          {(['confirmed', 'rescheduled', 'arrived', 'no_show', 'cancelled'] as const).map((candidate) => (
-            <option key={candidate} value={candidate}>{APPOINTMENT_STATUS_LABEL[candidate]}</option>
-          ))}
-        </select>
-        {therapists.length > 0 && (
-          <select className={inputCls} aria-label="Therapist" value={therapistFilter} onChange={(event) => setTherapistFilter(event.target.value)}>
-            <option value="">All therapists</option>
-            {therapists.map((therapist) => <option key={therapist.id} value={therapist.id}>{therapist.name}</option>)}
-          </select>
-        )}
-      </div>
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        {rows.length} appointment{rows.length === 1 ? '' : 's'}
-        {when === 'past' && rows.length > 0 && ` · ${counts.attended} attended · ${counts.noShow} no-show · ${counts.cancelled} cancelled`}
-      </p>
-      {groups.length ? (
-        <div className="space-y-4">
-          {groups.map((group) => (
-            <section key={group.date} aria-label={longDate(group.date)}>
-              <h3 className="sticky top-0 mb-1.5 bg-[var(--surface)] py-1 text-xs font-semibold text-[var(--muted)]">
-                {longDate(group.date)}
-              </h3>
-              <ul className="space-y-2">
-                {group.rows.map((appointment) => {
-                  const style = APPOINTMENT_BLOCK_STYLE[appointment.status];
-                  const key = appointment.patientId ?? appointment.patientPhone.replace(/\D/g, '').slice(-10);
-                  const noShows = noShowsByPatient.get(key) ?? 0;
-                  return (
-                    <li key={appointment.id}>
-                      <button
-                        type="button"
-                        onClick={() => onSelect(appointment)}
-                        className={`flex w-full items-center gap-3 rounded-xl border-l-4 p-3 text-left ${style.fill}`}
-                        style={{ borderLeftColor: colorFor(appointment) }}
-                      >
-                        <span className="w-16 shrink-0 text-xs text-[var(--muted)]">
-                          {minutesLabel(minutesOfDay(appointment.scheduledAt))}
-                          <br />
-                          {formatMinutes(appointmentMinutes(appointment, slotMinutes))}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className={`block truncate font-medium ${style.text}`}>
-                            {appointment.patientName}
-                            {noShows >= 2 && (
-                              <span className="ml-1.5 rounded bg-[var(--rust-light)] px-1 text-[10px] font-medium text-[var(--rust)]" title={`${noShows} no-shows`}>
-                                {noShows} no-shows
-                              </span>
-                            )}
-                          </span>
-                          <span className="block truncate text-xs text-[var(--muted)]">
-                            {therapistNameFor(appointment)} · {style.mark && <span aria-hidden>{style.mark} </span>}{APPOINTMENT_STATUS_LABEL[appointment.status]}
-                          </span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ))}
-        </div>
-      ) : (
-        <p className="py-6 text-center text-sm text-[var(--muted)]">No appointments match.</p>
-      )}
-    </SectionCard>
   );
 }

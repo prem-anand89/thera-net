@@ -602,22 +602,33 @@ export function dropAllowed(input: {
   });
 }
 
+export type DayLoadTone = 'normal' | 'busy' | 'full' | 'off';
+
 export interface DayLoad {
   /** Live (not cancelled) appointments for this therapist on the day. */
   count: number;
   bookedMinutes: number;
   workingMinutes: number;
-  /** Whole slots still bookable inside working hours (from `notBefore`). */
+  /** Whole slots still bookable inside working hours (from `now` when today). */
   freeSlots: number;
   /** booked ÷ working, 0–1; null when the therapist isn't working. */
   ratio: number | null;
-  /** Plain-language caption: "3 booked, 4 slots free", "Fully booked", "Not working". */
+  /** normal → therapist colour; busy (≥70% or one slot left) → amber;
+   *  full → rust; off → no bar. */
+  tone: DayLoadTone;
+  /** The next useful thing to know, in plain words: "Free now, 4 slots",
+   *  "Free from 2:30 PM, 3 slots", "On break until 2:00 PM", "Almost full",
+   *  "Fully booked", "Done for today", "6 slots free", "Off today", "Closed". */
   text: string;
 }
 
 /**
- * How full a therapist's day is — the Schedule column headers and rail draw
- * it as a capacity bar so "who can take a walk-in?" reads at a glance.
+ * How full a therapist's day is, and when they're next free — the Schedule
+ * column headers and rail draw it as a capacity bar plus caption so "who can
+ * take a walk-in?" reads at a glance.
+ *
+ * `now` (minutes after midnight) is passed only when `date` is today; it
+ * switches the caption to "free now / free from / on break / done for today".
  */
 export function dayLoad(
   appointments: Appointment[],
@@ -626,26 +637,44 @@ export function dayLoad(
   hours: { startHour: number; endHour: number },
   slotMinutes: number,
   working: Interval[],
-  notBefore?: number
+  now?: number,
+  closed = false
 ): DayLoad {
   const live = appointments.filter(
     (a) => a.therapistId === therapistId && a.status !== 'cancelled' && appointmentStartsOnDate(a, date)
   );
   const bookedMinutes = live.reduce((sum, a) => sum + appointmentMinutes(a, slotMinutes), 0);
   const workingMinutes = working.reduce((sum, w) => sum + Math.max(0, w.end - w.start), 0);
-  const freeSlots = freeGaps(appointments, therapistId, date, hours, slotMinutes, {
-    working,
-    alignToSlots: true,
-    notBefore,
-  }).reduce((sum, gap) => sum + Math.floor((gap.end - gap.start) / slotMinutes), 0);
-  const ratio = workingMinutes > 0 ? Math.min(1, bookedMinutes / workingMinutes) : null;
-  const text =
-    workingMinutes === 0
-      ? 'Not working'
-      : freeSlots === 0
-        ? live.length
-          ? 'Fully booked'
-          : 'No time left'
-        : `${live.length ? `${live.length} booked, ` : ''}${freeSlots} ${freeSlots === 1 ? 'slot' : 'slots'} free`;
-  return { count: live.length, bookedMinutes, workingMinutes, freeSlots, ratio, text };
+  const base = { count: live.length, bookedMinutes, workingMinutes };
+  const isToday = now !== undefined;
+
+  if (closed) return { ...base, freeSlots: 0, ratio: null, tone: 'off', text: 'Closed' };
+  if (workingMinutes === 0) return { ...base, freeSlots: 0, ratio: null, tone: 'off', text: isToday ? 'Off today' : 'Day off' };
+
+  const gaps = freeGaps(appointments, therapistId, date, hours, slotMinutes, { working, alignToSlots: true, notBefore: now });
+  const freeSlots = gaps.reduce((sum, gap) => sum + Math.floor((gap.end - gap.start) / slotMinutes), 0);
+  const ratio = Math.min(1, bookedMinutes / workingMinutes);
+  const tone: DayLoadTone = freeSlots === 0 || ratio >= 1 ? 'full' : freeSlots === 1 || ratio >= 0.7 ? 'busy' : 'normal';
+  const slots = `${freeSlots} ${freeSlots === 1 ? 'slot' : 'slots'}`;
+  const result = (text: string): DayLoad => ({ ...base, freeSlots, ratio, tone, text });
+
+  if (!isToday) {
+    if (freeSlots === 0) return result('Fully booked');
+    if (freeSlots === 1) return result('Almost full, 1 slot free');
+    return result(`${slots} free`);
+  }
+
+  const lastEnd = Math.max(...working.map((w) => w.end));
+  if (freeSlots === 0) return result(now >= lastEnd || live.length === 0 ? 'Done for today' : 'Fully booked');
+
+  // Between two working intervals (a break), with more work later today.
+  const inWork = working.some((w) => now >= w.start && now < w.end);
+  const firstStart = Math.min(...working.map((w) => w.start));
+  const nextWork = working.filter((w) => w.start > now).sort((x, y) => x.start - y.start)[0];
+  if (!inWork && now > firstStart && nextWork) return result(`On break until ${minutesLabel(nextWork.start)}`);
+
+  const first = gaps.find((gap) => gap.end - gap.start >= slotMinutes);
+  if (!first) return result('Fully booked');
+  const when = first.start - now < slotMinutes ? 'Free now' : `Free from ${minutesLabel(first.start)}`;
+  return result(freeSlots === 1 ? `Almost full, ${when.charAt(0).toLowerCase()}${when.slice(1)}` : `${when}, ${slots}`);
 }

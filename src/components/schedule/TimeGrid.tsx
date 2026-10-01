@@ -34,6 +34,8 @@ type DayColumnProps = {
   slotMinutes: number;
   closed: ClosedDayInfo;
   colorFor: (appointment: Appointment) => string;
+  /** Short condition / reason shown on blocks an hour or longer. */
+  reasonFor?: (appointment: Appointment) => string | null;
   /** Minutes after midnight when this column is today, else null. */
   nowMinutes: number | null;
   isPastDay: boolean;
@@ -86,6 +88,7 @@ export function DayColumn({
   slotMinutes,
   closed,
   colorFor,
+  reasonFor,
   nowMinutes,
   isPastDay,
   selectedId,
@@ -187,6 +190,7 @@ export function DayColumn({
         const lane = lanes.get(appointment.id) ?? { lane: 0, lanes: 1 };
         const style = APPOINTMENT_BLOCK_STYLE[appointment.status];
         const look = blockLook(appointment, colorFor(appointment));
+        const reason = reasonFor?.(appointment) ?? null;
         const compact = geometry.height < 34;
         const draggable = Boolean(drag?.canDrag(appointment)) && !isPastDay;
         return (
@@ -199,7 +203,7 @@ export function DayColumn({
             }}
             onPointerDown={draggable ? (event) => drag!.onPointerDown(event, appointment, 'move') : undefined}
             onContextMenu={draggable ? (event) => event.preventDefault() : undefined}
-            title={`${appointment.patientName} · ${minutesLabel(start)}–${minutesLabel(end)}${draggable ? ' · drag to move' : ''}`}
+            title={`${appointment.patientName} · ${minutesLabel(start)}–${minutesLabel(end)}${reason ? ` · ${reason}` : ''}${draggable ? ' · drag to move' : ''}`}
             className={`group/block absolute z-[2] overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-left text-xs transition-shadow hover:shadow-md ${look.className} ${
               selectedId === appointment.id ? 'outline outline-2 outline-[var(--teal)]' : ''
             } ${draggable ? 'pointer-fine:cursor-grab' : ''} ${drag?.draggingId === appointment.id ? 'opacity-40' : ''}`}
@@ -234,8 +238,11 @@ export function DayColumn({
                   {appointment.patientName}
                 </span>
                 <span className="block truncate text-[11px] opacity-80">
-                  {dense ? minutesLabel(start) : `${minutesLabel(start)}–${minutesLabel(end)}`} · {formatMinutes(end - start)}
+                  {dense ? minutesLabel(start) : `${minutesLabel(start)}–${minutesLabel(end)}`}
                 </span>
+                {reason && geometry.height >= 60 * PX_PER_MINUTE && (
+                  <span className="mt-0.5 block truncate text-[11px] italic opacity-80">{reason}</span>
+                )}
               </>
             )}
           </button>
@@ -540,6 +547,7 @@ function GridFrame({
   today,
   nowMinutes,
   colorFor,
+  reasonFor,
   selectedId,
   onSelect,
   scrollKey,
@@ -552,6 +560,8 @@ function GridFrame({
   today: string;
   nowMinutes: number;
   colorFor: (appointment: Appointment) => string;
+  /** Short condition / reason shown on blocks an hour or longer. */
+  reasonFor?: (appointment: Appointment) => string | null;
   selectedId: string | null;
   onSelect: (appointment: Appointment) => void;
   scrollKey: string;
@@ -613,6 +623,7 @@ function GridFrame({
             slotMinutes={slotMinutes}
             closed={column.closed}
             colorFor={colorFor}
+            reasonFor={reasonFor}
             nowMinutes={column.date === today ? nowMinutes : null}
             isPastDay={column.date < today}
             selectedId={selectedId}
@@ -642,6 +653,7 @@ export function ResourceDayGrid({
   slotMinutes,
   closed,
   colorFor,
+  reasonFor,
   selectedId,
   onSelect,
   canBookFor,
@@ -659,6 +671,8 @@ export function ResourceDayGrid({
   slotMinutes: number;
   closed: ClosedDayInfo;
   colorFor: (appointment: Appointment) => string;
+  /** Short condition / reason shown on blocks an hour or longer. */
+  reasonFor?: (appointment: Appointment) => string | null;
   selectedId: string | null;
   onSelect: (appointment: Appointment) => void;
   canBookFor: (therapistId: string) => boolean;
@@ -705,6 +719,7 @@ export function ResourceDayGrid({
       today={today}
       nowMinutes={nowMinutes}
       colorFor={colorFor}
+      reasonFor={reasonFor}
       selectedId={selectedId}
       onSelect={onSelect}
       scrollKey={date}
@@ -724,6 +739,7 @@ export function WeekTimeGrid({
   slotMinutes,
   closedFor,
   colorFor,
+  reasonFor,
   selectedId,
   onSelect,
   onBook,
@@ -739,6 +755,8 @@ export function WeekTimeGrid({
   slotMinutes: number;
   closedFor: (date: string) => ClosedDayInfo;
   colorFor: (appointment: Appointment) => string;
+  /** Short condition / reason shown on blocks an hour or longer. */
+  reasonFor?: (appointment: Appointment) => string | null;
   selectedId: string | null;
   onSelect: (appointment: Appointment) => void;
   onBook?: (input: { date: string; time: string }) => void;
@@ -785,6 +803,7 @@ export function WeekTimeGrid({
       today={today}
       nowMinutes={nowMinutes}
       colorFor={colorFor}
+      reasonFor={reasonFor}
       selectedId={selectedId}
       onSelect={onSelect}
       scrollKey={days[0]}

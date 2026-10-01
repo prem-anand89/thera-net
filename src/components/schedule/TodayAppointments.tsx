@@ -6,6 +6,8 @@ import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appo
 import { Pill } from '@/components/ui';
 import { RequestsInbox } from './RequestsInbox';
 import { appointmentFill } from './scheduleColors';
+import { PatientFlagPills } from './PatientFlagPills';
+import { appointmentReason, patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
 
 const UPCOMING_LIMIT = 5;
 const REQUESTS_LIMIT = 3;
@@ -35,6 +37,7 @@ export function TodayAppointments({
   onConfirmRequest,
   onDeclineRequest,
   onSeeAllRequests,
+  flagContext,
 }: {
   appointments: Appointment[];
   slotMinutes: number;
@@ -49,6 +52,8 @@ export function TodayAppointments({
   onConfirmRequest?: (request: AppointmentRequest) => void;
   onDeclineRequest?: (request: AppointmentRequest) => void;
   onSeeAllRequests?: () => void;
+  /** Patient flags + condition (`usePatientFlagContext`); omit to hide them. */
+  flagContext?: PatientFlagContext;
 }) {
   const [showAll, setShowAll] = useState(false);
   const inProgress = appointments.filter((a) => a.status === 'arrived' && !a.visitId);
@@ -63,6 +68,10 @@ export function TodayAppointments({
     const color = colorFor(a);
     // Same colour code as the Schedule grid: therapist edge + status fill.
     const fill = appointmentFill(a, color);
+    const flags = patientFlags(a, flagContext);
+    const reason = appointmentReason(a, flagContext);
+    const phoneDetail = [note, reason?.text, length, showTherapist ? therapistNameFor(a) : null].filter(Boolean).join(', ');
+    const wideDetail = [note, reason?.text].filter(Boolean).join(', ');
     return (
       <li
         key={a.id}
@@ -77,12 +86,10 @@ export function TodayAppointments({
                 {a.patientName}
               </span>
               {a.id === nextUpId && <Pill tone="teal">Next</Pill>}
+              <PatientFlagPills flags={flags} max={2} />
             </span>
-            <span className="block truncate text-xs text-[var(--muted)] sm:hidden">
-              {note ? `${note}, ` : ''}
-              {length}
-              {showTherapist ? `, ${therapistNameFor(a)}` : ''}
-            </span>
+            <span className="block truncate text-xs text-[var(--muted)] sm:hidden">{phoneDetail}</span>
+            {wideDetail && <span className="hidden truncate text-xs text-[var(--muted)] sm:block">{wideDetail}</span>}
           </span>
           {showTherapist && <span className="hidden w-36 shrink-0 truncate text-xs text-[var(--muted)] sm:block">{therapistNameFor(a)}</span>}
           <span className="hidden w-14 shrink-0 text-xs text-[var(--muted)] sm:block">{length}</span>

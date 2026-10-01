@@ -8,6 +8,9 @@ import {
   minutesToTime,
   type Interval,
 } from '@/domain/schedule';
+import { appointmentFill } from './scheduleColors';
+import { PatientFlagPills } from './PatientFlagPills';
+import { appointmentReason, patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
 
 type Row =
   | { kind: 'appointment'; at: number; appointment: Appointment }
@@ -29,6 +32,7 @@ export function AgendaList({
   onSelect,
   onBookGap,
   highlightId,
+  flagContext,
 }: {
   appointments: Appointment[];
   slotMinutes: number;
@@ -43,6 +47,8 @@ export function AgendaList({
   onBookGap?: (time: string) => void;
   /** Marks one row as "Next up". */
   highlightId?: string | null;
+  /** Patient flags + condition (`usePatientFlagContext`). */
+  flagContext?: PatientFlagContext;
 }) {
   const rows: Row[] = [
     ...appointments.map((appointment) => ({
@@ -86,30 +92,36 @@ export function AgendaList({
         const { appointment } = row;
         const style = APPOINTMENT_BLOCK_STYLE[appointment.status];
         const minutes = appointmentMinutes(appointment, slotMinutes);
+        const color = colorFor(appointment);
+        // Same colour code as the grid and Workspace's Today rows.
+        const fill = appointmentFill(appointment, color);
+        const flags = patientFlags(appointment, flagContext);
+        const reason = appointmentReason(appointment, flagContext)?.text;
         return (
           <li key={appointment.id}>
             <button
               type="button"
               onClick={() => onSelect(appointment)}
-              className={`flex w-full items-stretch gap-3 rounded-xl border-l-4 p-3 text-left ${style.fill} ${highlightId === appointment.id ? 'ring-2 ring-[var(--teal)]' : ''}`}
-              style={{ borderLeftColor: colorFor(appointment) }}
+              className={`flex w-full items-start gap-3 rounded-xl border border-[var(--border)] border-l-4 px-3 py-2.5 text-left ${highlightId === appointment.id ? 'ring-2 ring-[var(--teal)]' : ''}`}
+              style={{ borderLeftColor: color, background: fill.background }}
             >
-              <span className="w-16 shrink-0 text-xs text-[var(--muted)]">
+              <span className="w-16 shrink-0 whitespace-nowrap text-[13px] tabular-nums text-[var(--muted)]">
                 {minutesLabel(row.at)}
-                <br />
-                {formatMinutes(minutes)}
+                <span className="block text-[11px]">{minutes}m</span>
               </span>
               <span className="min-w-0 flex-1">
-                <span className={`block truncate font-medium ${style.text}`}>
-                  {appointment.patientName}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className={`truncate font-display text-sm font-medium ${style.text}`}>{appointment.patientName}</span>
                   {highlightId === appointment.id && (
-                    <span className="ml-2 rounded bg-[var(--teal)] px-1.5 py-0.5 text-[10px] font-medium text-white">Next up</span>
+                    <span className="shrink-0 rounded-full bg-[var(--teal)] px-1.5 text-[10px] font-medium leading-4 text-white">Next</span>
                   )}
+                  <PatientFlagPills flags={flags} max={2} />
                 </span>
+                {reason && <span className="block truncate text-xs text-[var(--ink)]/80">{reason}</span>}
                 <span className="block truncate text-xs text-[var(--muted)]">
-                  {showTherapist && `${therapistNameFor(appointment)} · `}
+                  {showTherapist && `${therapistNameFor(appointment)}, `}
                   {style.mark && <span aria-hidden>{style.mark} </span>}
-                  {APPOINTMENT_STATUS_LABEL[appointment.status]}
+                  {appointment.visitId ? 'Visit logged' : APPOINTMENT_STATUS_LABEL[appointment.status]}
                 </span>
               </span>
             </button>
