@@ -1,10 +1,15 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { UUID } from '@/domain/types';
 import { addDays, toLocalDateStr, type ClosedDayInfo, type ClosedRange } from '@/domain/schedule';
-import { CLOSED_HATCH_STYLE } from './scheduleColors';
+import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
 import { LoadLine, type LoadSummary } from './LoadLine';
 
 type RailTherapist = { id: UUID; name: string; color: string; summary: LoadSummary };
+/** Per-day state for the mini month: closed, free time left, appointments booked. */
+export type RailDayState = { closed: ClosedDayInfo; hasFreeTime: boolean; booked: number };
+
+/** Rail sections sit on white cards so they read as panels on the paper page. */
+const railCard = 'rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3';
 
 /**
  * Desktop left rail (Athena / Google Calendar): mini month, therapist
@@ -31,8 +36,7 @@ export function ScheduleRail({
   date: string;
   today: string;
   onSelectDate: (date: string) => void;
-  /** Per-day state for the mini month: free time left, closed, or neither. */
-  dayState: (date: string) => { closed: ClosedDayInfo; hasFreeTime: boolean };
+  dayState: (date: string) => RailDayState;
   therapists: RailTherapist[];
   /** Empty = everyone visible. */
   visibleIds: string[];
@@ -51,12 +55,12 @@ export function ScheduleRail({
   requests?: ReactNode;
 }) {
   return (
-    <aside className="space-y-5" aria-label="Calendar sidebar">
+    <aside className="space-y-3" aria-label="Calendar sidebar">
       <MiniMonth date={date} today={today} onSelectDate={onSelectDate} dayState={dayState} />
       {requests}
 
       {showTherapistToggles && (
-        <section>
+        <section className={railCard}>
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-xs font-semibold text-[var(--muted)]">Therapists</h3>
             {visibleIds.length > 0 && (
@@ -70,7 +74,7 @@ export function ScheduleRail({
               const on = visibleIds.length === 0 || visibleIds.includes(therapist.id);
               return (
                 <li key={therapist.id} className="group relative">
-                  <label className="flex min-h-10 cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--paper)]">
+                  <label className="flex min-h-10 cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--teal-light)]">
                     <input
                       type="checkbox"
                       checked={on}
@@ -83,7 +87,7 @@ export function ScheduleRail({
                       <LoadLine summary={therapist.summary} color={therapist.color} />
                     </span>
                   </label>
-                  <span className="invisible absolute right-2 top-1.5 flex gap-1 rounded bg-[var(--paper)] group-hover:visible group-focus-within:visible">
+                  <span className="invisible absolute right-2 top-1.5 flex gap-1 rounded bg-[var(--teal-light)] group-hover:visible group-focus-within:visible">
                     {onEditHours && (
                       <button
                         type="button"
@@ -112,7 +116,7 @@ export function ScheduleRail({
         </section>
       )}
 
-      <section>
+      <section className={railCard}>
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-xs font-semibold text-[var(--muted)]">Closed days</h3>
           {canEditClosures && (
@@ -127,7 +131,7 @@ export function ScheduleRail({
           <ul className="space-y-1">
             {closures.map((range) => (
               <li key={range.from} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm">
-                <span className="h-3 w-3 shrink-0 rounded-sm" style={CLOSED_HATCH_STYLE} aria-hidden />
+                <span className="h-3 w-3 shrink-0 rounded-sm border border-[var(--border)]" style={RAIL_CLOSED_STYLE} aria-hidden />
                 <button
                   type="button"
                   className="min-w-0 flex-1 truncate text-left text-[var(--ink)] hover:underline"
@@ -169,7 +173,7 @@ function MiniMonth({
   date: string;
   today: string;
   onSelectDate: (date: string) => void;
-  dayState: (date: string) => { closed: ClosedDayInfo; hasFreeTime: boolean };
+  dayState: (date: string) => RailDayState;
 }) {
   const [cursor, setCursor] = useState(() => date.slice(0, 7));
   // Follow the selected date when it moves to another month.
@@ -196,21 +200,24 @@ function MiniMonth({
     value.setMonth(value.getMonth() + amount);
     setCursor(toLocalDateStr(value).slice(0, 7));
   };
+  const navButton = 'flex min-h-9 min-w-9 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--teal-light)]';
 
   return (
-    <section aria-label="Month">
-      <div className="mb-1 flex items-center justify-between">
-        <button type="button" className="min-h-9 min-w-9 rounded-lg text-[var(--teal)] hover:bg-[var(--paper)]" aria-label="Previous month" onClick={() => shiftMonth(-1)}>
-          ‹
+    <section aria-label="Month" className={railCard}>
+      <div className="mb-2 flex items-center justify-between">
+        <button type="button" className={navButton} aria-label="Previous month" onClick={() => shiftMonth(-1)}>
+          <IconChevronLeft className="h-4 w-4" />
         </button>
-        <span className="text-sm font-semibold text-[var(--ink)]">{monthLabel}</span>
-        <button type="button" className="min-h-9 min-w-9 rounded-lg text-[var(--teal)] hover:bg-[var(--paper)]" aria-label="Next month" onClick={() => shiftMonth(1)}>
-          ›
+        <span className="font-display text-base font-semibold text-[var(--ink)]">{monthLabel}</span>
+        <button type="button" className={navButton} aria-label="Next month" onClick={() => shiftMonth(1)}>
+          <IconChevronRight className="h-4 w-4" />
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-medium uppercase text-[var(--muted)]">
+      <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-semibold uppercase">
         {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((label, index) => (
-          <span key={index}>{label}</span>
+          <span key={index} className={index >= 5 ? 'text-[var(--muted)]/60' : 'text-[var(--muted)]'}>
+            {label}
+          </span>
         ))}
       </div>
       <div className="mt-1 grid grid-cols-7 gap-0.5">
@@ -219,40 +226,77 @@ function MiniMonth({
           const selected = cell === date;
           const isToday = cell === today;
           const state = dayState(cell);
-          const free = state.hasFreeTime && !state.closed.closed && cell >= today;
+          const closed = state.closed.closed;
+          const free = state.hasFreeTime && !closed && cell >= today;
+          // Most working days have free time, so flag the exception: a day
+          // with bookings and nothing left (a day off has no bookings).
+          const full = inMonth && !closed && cell >= today && !state.hasFreeTime && state.booked > 0;
+          const dots = !inMonth || closed ? 0 : loadDots(state.booked);
+          const text = selected
+            ? 'bg-[var(--teal)] font-semibold text-white'
+            : isToday
+              ? 'font-bold text-[var(--teal)] ring-2 ring-inset ring-[var(--teal)] hover:bg-[var(--teal-light)]'
+              : !inMonth
+                ? 'text-[var(--muted)]/40 hover:bg-[var(--teal-light)]'
+                : closed
+                  ? 'text-[var(--slate)] hover:bg-[var(--teal-light)]'
+                  : cell < today
+                    ? 'text-[var(--muted)] hover:bg-[var(--teal-light)]'
+                    : 'font-medium text-[var(--ink)] hover:bg-[var(--teal-light)]';
+          const details = [
+            closed ? 'closed' : null,
+            state.booked ? `${state.booked} booked` : null,
+            full ? 'fully booked' : free ? 'has free time' : null,
+          ].filter(Boolean);
           return (
             <button
               key={cell}
               type="button"
               onClick={() => onSelectDate(cell)}
-              aria-label={`${cell}${state.closed.closed ? ', closed' : free ? ', has free time' : ''}`}
+              aria-label={[cell, ...details].join(', ')}
               aria-current={selected ? 'date' : undefined}
-              className={`flex h-8 items-center justify-center rounded-full text-xs ${
-                selected
-                  ? 'bg-[var(--teal)] font-semibold text-white'
-                  : isToday
-                    ? 'font-semibold text-[var(--teal)] ring-1 ring-[var(--teal)]'
-                    : free
-                      ? 'bg-[var(--moss-light)] text-[var(--ink)]'
-                      : inMonth
-                        ? 'text-[var(--ink)] hover:bg-[var(--paper)]'
-                        : 'text-[var(--muted)]/60'
-              }`}
-              style={state.closed.closed && !selected ? CLOSED_HATCH_STYLE : undefined}
+              className={`relative flex h-9 flex-col items-center justify-center rounded-lg text-xs tabular-nums ${text}`}
+              style={closed && !selected && inMonth ? RAIL_CLOSED_STYLE : undefined}
             >
               {Number(cell.slice(8))}
+              <span className="flex h-1 gap-0.5" aria-hidden>
+                {Array.from({ length: dots }, (_, index) => (
+                  <span key={index} className={`h-1 w-1 rounded-full ${selected ? 'bg-white' : 'bg-[var(--teal)]'}`} />
+                ))}
+              </span>
+              {full && (
+                <span className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full ${selected ? 'bg-white' : 'bg-[var(--rust)]'}`} aria-hidden />
+              )}
             </button>
           );
         })}
       </div>
-      <p className="mt-2 flex items-center gap-3 text-[10px] text-[var(--muted)]">
+      <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[var(--muted)]">
         <span className="flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-full border border-[var(--moss)]/40 bg-[var(--moss-light)]" aria-hidden /> Free time
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--teal)]" aria-hidden /> Booked
         </span>
         <span className="flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-sm border border-[var(--border)]" style={CLOSED_HATCH_STYLE} aria-hidden /> Closed
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--rust)]" aria-hidden /> Full
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-sm border border-[var(--border)]" style={RAIL_CLOSED_STYLE} aria-hidden /> Closed
         </span>
       </p>
     </section>
   );
+}
+
+/** Closed days in the mini month: a tighter, darker hatch than the grid's,
+ *  so it still reads at 36px on a white card. */
+const RAIL_CLOSED_STYLE = {
+  backgroundColor: 'var(--paper)',
+  backgroundImage: 'repeating-linear-gradient(135deg, var(--border) 0 1.5px, transparent 1.5px 5px)',
+} as const;
+
+/** Load dots under a day: 1–2 booked → 1, 3–5 → 2, 6+ → 3. */
+export function loadDots(booked: number): number {
+  if (booked <= 0) return 0;
+  if (booked <= 2) return 1;
+  if (booked <= 5) return 2;
+  return 3;
 }

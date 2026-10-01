@@ -132,7 +132,6 @@ export function ScheduleBookingsView({
   const now = useNowMinutes();
   const today = now.today;
   const view = search.view ?? 'schedule';
-  const mode = search.mode ?? 'day';
   const date = search.date ?? today;
   const canManageAll = scope.isClinicWideView;
   const isTherapist = scope.role === 'therapist';
@@ -191,6 +190,11 @@ export function ScheduleBookingsView({
     [isTherapist, myTherapistId, selectedIds, roster]
   );
   const singleTherapist = visibleRoster.length === 1 ? visibleRoster[0] : null;
+  // Week is a real time grid only with one therapist in view (tab+); with
+  // several it was a list of names the week strip already gives, so a
+  // `mode=week` link falls back to Day.
+  const weekAvailable = singleTherapist !== null;
+  const mode = weekAvailable ? search.mode ?? 'day' : 'day';
 
   const [showCancelled, setShowCancelled] = useState(false);
   const scopedAppointments = useMemo(() => {
@@ -410,7 +414,7 @@ export function ScheduleBookingsView({
       }
       if (event.key === 't') setSchedule({ date: toLocalDateStr(new Date()) });
       else if (event.key === 'd') setSchedule({ mode: 'day' });
-      else if (event.key === 'w') setSchedule({ mode: 'week' });
+      else if (event.key === 'w' && weekAvailable) setSchedule({ mode: 'week' });
       else if (event.key === 'ArrowLeft') step(-1);
       else if (event.key === 'ArrowRight') step(1);
       else return;
@@ -418,7 +422,7 @@ export function ScheduleBookingsView({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [view, sheet, selectedId, closedSheetOpen, reminderOpen, hoursTherapistId, setSchedule, step]);
+  }, [view, sheet, selectedId, closedSheetOpen, reminderOpen, hoursTherapistId, setSchedule, step, weekAvailable]);
 
   async function decline(requestId: UUID) {
     try {
@@ -431,13 +435,14 @@ export function ScheduleBookingsView({
   const dayState = useCallback(
     (day: string) => {
       const closed = closedFor(day);
-      if (closed.closed || day < today) return { closed, hasFreeTime: false };
       const list = byDate.get(day) ?? [];
+      const booked = list.filter((a) => a.status !== 'cancelled').length;
+      if (closed.closed || day < today) return { closed, hasFreeTime: false, booked };
       const notBefore = day === today ? now.minutes : undefined;
       const hasFreeTime = visibleRoster.some(
         (t) => freeGaps(list, t.id, day, hours, slotMinutes, { notBefore, working: workingFor(t.id, day) }).length > 0
       );
-      return { closed, hasFreeTime };
+      return { closed, hasFreeTime, booked };
     },
     [closedFor, today, byDate, now.minutes, visibleRoster, hours, slotMinutes, workingFor]
   );
@@ -597,21 +602,21 @@ export function ScheduleBookingsView({
                     <TherapistFilter therapists={roster} visibleIds={selectedIds} onToggle={toggleTherapist} onShowAll={() => setTherapists([])} />
                   </div>
                 )}
-                <div className="flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5" role="group" aria-label="View">
-                  {(['day', 'week'] as const).map((candidate) => (
-                    <button key={candidate} type="button" aria-pressed={mode === candidate} onClick={() => setSchedule({ mode: candidate })} className={`min-h-8 rounded-md px-3 text-xs font-medium ${mode === candidate ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}>
-                      {candidate === 'day' ? 'Day' : 'Week'}
-                    </button>
-                  ))}
-                </div>
+                {weekAvailable && (
+                  <div className="hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5 tab:flex" role="group" aria-label="View">
+                    {(['day', 'week'] as const).map((candidate) => (
+                      <button key={candidate} type="button" aria-pressed={mode === candidate} onClick={() => setSchedule({ mode: candidate })} className={`min-h-8 rounded-md px-3 text-xs font-medium ${mode === candidate ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}>
+                        {candidate === 'day' ? 'Day' : 'Week'}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <KebabMenu ariaLabel="More schedule options">
                   {(close) => (
                     <>
-                      {mode === 'day' && (
-                        <button type="button" className={`${menuItem} tab:hidden`} onClick={() => { setFindTime((current) => !current); close(); }}>
-                          {findTime ? 'Back to the day' : 'Find a time'}
-                        </button>
-                      )}
+                      <button type="button" className={`${menuItem} tab:hidden`} onClick={() => { setFindTime((current) => !current); close(); }}>
+                        {findTime ? 'Back to the day' : 'Find a time'}
+                      </button>
                       <button type="button" className={menuItem} onClick={() => { setShowCancelled((current) => !current); close(); }}>
                         {showCancelled ? 'Hide cancelled' : 'Show cancelled'}
                       </button>
@@ -667,99 +672,89 @@ export function ScheduleBookingsView({
               </div>
             )}
 
-            {mode === 'day' ? (
-              <>
-                <div className="hidden tab:block">
-                  <ResourceDayGrid
-                    reasonFor={reasonFor}
-                    date={date}
-                    today={today}
-                    nowMinutes={now.minutes}
-                    therapists={gridTherapists}
-                    appointments={dayAppointments}
-                    hours={hours}
-                    slotMinutes={slotMinutes}
-                    closed={closedToday}
-                    colorFor={colorFor}
-                    selectedId={selectedId}
-                    onSelect={(a) => setSelectedId(a.id)}
-                    canBookFor={canBookFor}
-                    onBook={({ time, therapistId }) => openBooking({ date, time, therapistId })}
-                    summaryFor={summaryFor}
-                    workingFor={(therapistId) => workingFor(therapistId, date)}
-                    drag={dragOptions}
-                  />
-                </div>
-                <div className="tab:hidden">
-                  {findTime ? (
-                    <FindTimePanel
-                      date={date}
-                      therapists={visibleRoster.filter((t) => canBookFor(t.id))}
-                      appointments={dayAppointments}
-                      hours={hours}
-                      slotMinutes={slotMinutes}
-                      closed={closedToday}
-                      nowMinutes={dayNow}
-                      onPick={({ therapistId, time }) => { setFindTime(false); openBooking({ date, time, therapistId }); }}
-                      workingFor={(therapistId) => workingFor(therapistId, date)}
-                    />
-                  ) : dayAppointments.length === 0 && dayGaps.length === 0 ? (
-                    <EmptyDay
-                      closedTitle={
-                        closedToday.closed
-                          ? closedToday.kind === 'holiday'
-                            ? `Closed${closedToday.label ? ` for ${closedToday.label}` : ''}`
-                            : `Closed every ${new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long' })}`
-                          : null
-                      }
-                      onReopen={canManageAll && closedToday.kind === 'holiday' && closureForDate ? () => setRemoving(closureForDate) : undefined}
-                      onBook={() => openBooking({ date })}
-                      onFindTime={() => setFindTime(true)}
-                    />
-                  ) : (
-                    <AgendaList
-                      flagContext={flagContext}
-                      appointments={dayAppointments}
-                      slotMinutes={slotMinutes}
-                      colorFor={colorFor}
-                      therapistNameFor={therapistNameFor}
-                      showTherapist={!singleTherapist}
-                      gaps={dayGaps}
-                      nowMinutes={dayNow}
-                      onSelect={(a) => setSelectedId(a.id)}
-                      onBookGap={singleTherapist && canBookFor(singleTherapist.id) ? (time) => openBooking({ date, time, therapistId: singleTherapist.id }) : undefined}
-                    />
-                  )}
-                </div>
-              </>
-            ) : singleTherapist ? (
-              <>
-                <div className="hidden tab:block">
-                  <WeekTimeGrid
-                    reasonFor={reasonFor}
-                    days={weekDays(date)}
-                    today={today}
-                    nowMinutes={now.minutes}
-                    appointments={visibleAppointments.filter((a) => a.therapistId === singleTherapist.id)}
-                    hours={hours}
-                    slotMinutes={slotMinutes}
-                    closedFor={closedFor}
-                    colorFor={colorFor}
-                    selectedId={selectedId}
-                    onSelect={(a) => setSelectedId(a.id)}
-                    onBook={canBookFor(singleTherapist.id) ? ({ date: day, time }) => openBooking({ date: day, time, therapistId: singleTherapist.id }) : undefined}
-                    onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
-                    workingFor={(day) => workingFor(singleTherapist.id, day)}
-                    drag={dragOptions}
-                  />
-                </div>
-                <div className="tab:hidden">
-                  <WeekBoard date={date} today={today} byDate={byDate} closedFor={closedFor} colorFor={colorFor} therapistNameFor={therapistNameFor} showTherapist={false} onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })} />
-                </div>
-              </>
-            ) : (
-              <WeekBoard date={date} today={today} byDate={byDate} closedFor={closedFor} colorFor={colorFor} therapistNameFor={therapistNameFor} showTherapist onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })} />
-            )}
+            {/* Phones always show the day (agenda); Week is tab+ only. */}
+            <div className="hidden tab:block">
+              {mode === 'week' && singleTherapist ? (
+                <WeekTimeGrid
+                  reasonFor={reasonFor}
+                  days={weekDays(date)}
+                  today={today}
+                  nowMinutes={now.minutes}
+                  appointments={visibleAppointments.filter((a) => a.therapistId === singleTherapist.id)}
+                  hours={hours}
+                  slotMinutes={slotMinutes}
+                  closedFor={closedFor}
+                  colorFor={colorFor}
+                  selectedId={selectedId}
+                  onSelect={(a) => setSelectedId(a.id)}
+                  onBook={canBookFor(singleTherapist.id) ? ({ date: day, time }) => openBooking({ date: day, time, therapistId: singleTherapist.id }) : undefined}
+                  onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
+                  workingFor={(day) => workingFor(singleTherapist.id, day)}
+                  drag={dragOptions}
+                />
+              ) : (
+                <ResourceDayGrid
+                  reasonFor={reasonFor}
+                  date={date}
+                  today={today}
+                  nowMinutes={now.minutes}
+                  therapists={gridTherapists}
+                  appointments={dayAppointments}
+                  hours={hours}
+                  slotMinutes={slotMinutes}
+                  closed={closedToday}
+                  colorFor={colorFor}
+                  selectedId={selectedId}
+                  onSelect={(a) => setSelectedId(a.id)}
+                  canBookFor={canBookFor}
+                  onBook={({ time, therapistId }) => openBooking({ date, time, therapistId })}
+                  summaryFor={summaryFor}
+                  workingFor={(therapistId) => workingFor(therapistId, date)}
+                  drag={dragOptions}
+                />
+              )}
+            </div>
+            <div className="tab:hidden">
+              {findTime ? (
+                <FindTimePanel
+                  date={date}
+                  therapists={visibleRoster.filter((t) => canBookFor(t.id))}
+                  appointments={dayAppointments}
+                  hours={hours}
+                  slotMinutes={slotMinutes}
+                  closed={closedToday}
+                  nowMinutes={dayNow}
+                  onPick={({ therapistId, time }) => { setFindTime(false); openBooking({ date, time, therapistId }); }}
+                  workingFor={(therapistId) => workingFor(therapistId, date)}
+                />
+              ) : dayAppointments.length === 0 && dayGaps.length === 0 ? (
+                <EmptyDay
+                  closedTitle={
+                    closedToday.closed
+                      ? closedToday.kind === 'holiday'
+                        ? `Closed${closedToday.label ? ` for ${closedToday.label}` : ''}`
+                        : `Closed every ${new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long' })}`
+                      : null
+                  }
+                  onReopen={canManageAll && closedToday.kind === 'holiday' && closureForDate ? () => setRemoving(closureForDate) : undefined}
+                  onBook={() => openBooking({ date })}
+                  onFindTime={() => setFindTime(true)}
+                />
+              ) : (
+                <AgendaList
+                  flagContext={flagContext}
+                  appointments={dayAppointments}
+                  slotMinutes={slotMinutes}
+                  colorFor={colorFor}
+                  therapistNameFor={therapistNameFor}
+                  showTherapist={!singleTherapist}
+                  gaps={dayGaps}
+                  nowMinutes={dayNow}
+                  onSelect={(a) => setSelectedId(a.id)}
+                  onBookGap={singleTherapist && canBookFor(singleTherapist.id) ? (time) => openBooking({ date, time, therapistId: singleTherapist.id }) : undefined}
+                />
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1040,61 +1035,6 @@ function EmptyDay({
         <button type="button" className={btnPrimary} onClick={onBook}>New booking</button>
         <button type="button" className={btnSecondary} onClick={onFindTime}>Find a time</button>
       </div>
-    </div>
-  );
-}
-
-/** Seven compact day cards: phone week view, and the all-therapists week on tablet. */
-function WeekBoard({
-  date,
-  today,
-  byDate,
-  closedFor,
-  colorFor,
-  therapistNameFor,
-  showTherapist,
-  onOpenDay,
-}: {
-  date: string;
-  today: string;
-  byDate: Map<string, Appointment[]>;
-  closedFor: (date: string) => ReturnType<typeof isClosedDay>;
-  colorFor: (appointment: Appointment) => string;
-  therapistNameFor: (appointment: Appointment) => string;
-  showTherapist: boolean;
-  onOpenDay: (date: string) => void;
-}) {
-  return (
-    <div className="grid gap-2 tab:grid-cols-7">
-      {weekDays(date).map((day) => {
-        const list = (byDate.get(day) ?? []).filter((a) => a.status !== 'cancelled');
-        const closed = closedFor(day);
-        return (
-          <button
-            key={day}
-            type="button"
-            onClick={() => onOpenDay(day)}
-            className={`min-h-20 rounded-xl border p-3 text-left hover:border-[var(--teal)] ${day === today ? 'border-[var(--teal)]' : 'border-[var(--border)]'} ${closed.closed ? 'bg-[var(--slate-light)]' : 'bg-[var(--surface)]'}`}
-          >
-            <div className="flex items-center justify-between">
-              <span className={`text-sm font-semibold ${day === today ? 'text-[var(--teal)]' : 'text-[var(--ink)]'}`}>
-                {new Date(`${day}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' })}
-              </span>
-              <span className="text-xs text-[var(--muted)]">{closed.closed ? closed.label ?? 'Closed' : list.length || ''}</span>
-            </div>
-            {list.slice(0, 4).map((appointment) => (
-              <p key={appointment.id} className="mt-1 flex items-center gap-1 truncate text-xs text-[var(--muted)]">
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colorFor(appointment) }} aria-hidden />
-                <span className="truncate">
-                  {minutesLabel(minutesOfDay(appointment.scheduledAt))} {appointment.patientName}
-                  {showTherapist ? ` · ${therapistNameFor(appointment)}` : ''}
-                </span>
-              </p>
-            ))}
-            {list.length > 4 && <p className="mt-1 text-xs font-medium text-[var(--teal)]">+{list.length - 4} more</p>}
-          </button>
-        );
-      })}
     </div>
   );
 }

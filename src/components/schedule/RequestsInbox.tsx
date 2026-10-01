@@ -151,7 +151,7 @@ export function RequestsInbox({
 
   if (variant === 'rail') {
     return (
-      <section aria-label="Booking requests">
+      <section aria-label="Booking requests" className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
             Requests <span className="ml-1 rounded-full bg-[var(--rust)] px-1.5 text-[10px] text-white">{requests.length}</span>
