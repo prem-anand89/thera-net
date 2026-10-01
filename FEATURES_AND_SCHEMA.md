@@ -281,6 +281,7 @@ queued with a visible error.
   stored on the state itself.
 - **Dues = what visits still owe** (`visitDuePaise` / `hasDue` in `paymentState.ts`, the single definition): `uninvoiced` and `outstanding` owe the whole bill, `partially_collected` owes bill − collected, everything else owes nothing. Used by Workspace's Dues tile (`duesSummary`), the Ledger's **Not collected** filter (which includes part-paid visits) and the Ledger totals line (billed = collected + outstanding, a part-paid visit splits), and `todayWorklist.outstandingPaise`. `outstandingInvoices` (invoice-flag based, misses uninvoiced visits) now only feeds the Ledger's "Unpaid invoices" card.
 - **"Collected now" at invoice time records the cash**: `IssueInvoiceDialog` calls `paymentService.collectInvoiceNow` — it logs whatever the invoice's visits haven't received as a `payments` row (method from the chosen payment mode: UPI→upi, Cash→cash, Card→card, Insurance→bank_transfer; received today) and marks the invoice paid. Flipping only the paid flag left the cash out of the Daybook and the by-method totals, which are built from `payments`. A visit saved as "paid" already logged its payment, so nothing is added twice.
+- **The Workspace "Collected" tile is money received today** (`dashboardService.receivedOnDate`): payments received that day (not those drawn from an advance) plus advances deposited — exactly the Daybook's total for the day, which the tile opens; a therapist login counts only payments against their own visits. It is no longer the sum of today's visits' bills, which missed a payment today on an older visit and a part-payment. A printed bill (`InvoicePrintPage`) now shows **PART PAID** with "Received ₹X · Balance due ₹Y" for a part-paid invoice, and shows no PAID/DUE stamp until the payment status has loaded (it used to flash PAID).
 - **Quick "Mark paid"** action from Workspace pending feed
 - **Partial payments against an invoice**: recording an amount less than
   the invoice total leaves it `outstanding` with the balance tracked, not
@@ -293,7 +294,10 @@ queued with a visible error.
   across those visits in date order, each visit's own bill as the ceiling
   for what lands on it, so every visit's individual payment state stays
   correct. The invoice flips to `paid` automatically once the running
-  total reaches its total — same as the manual "Mark paid" toggle. Entry
+  total reaches its total. (There is no bare "Mark paid" toggle any more:
+  it flipped the flag without recording any cash. The Invoices tab offers
+  "Mark outstanding" only for an invoice flagged paid with no payment behind
+  it, to undo a mis-click.) Entry
   points: the Invoices tab's "Record payment" action (works for
   multi-visit invoices), and the existing "Take payment" dialog on any
   visit card (works standalone; for an invoiced visit it now looks up and
@@ -490,9 +494,7 @@ queued with a visible error.
 - **Editable fields**: age, sex, phone, primary condition, referring source
 - Phone is searchable everywhere but only *displayed* on the Patient Profile
   page — dropped from the Patients list/card to save space there
-- **Patients list period filter** — FY picker + a second dropdown: Full FY
-  (default), Year to date, a specific month, or Custom range (From/To date
-  inputs, same pattern as Ledger's custom date range)
+- **Patients list toolbar** — one compact row (two on phones), no card heading (the page title says Patients): the All / Needs invoice / My patients switch on the left; search and a **single Period select** on the right (financial year and month in one control, grouped by FY: "FY 26-27 · full year" (default), "to date", each month; or Custom range, whose From/To inputs then show below, same pattern as Ledger's). The old "Showing patients seen in…" sentence is gone — the select says it.
 - **Patients list "Bill" column** — a patient-level summary (lifetime
   billed total, plus an outstanding-due figure when nonzero), not the
   latest visit's own status phrase or package-session detail — those stay
@@ -918,7 +920,17 @@ still falls through to the existing share sheet, unchanged.
     discipline as every RPC in this module). `link_appointment_visit` is
     the one `NewVisitPage.tsx` calls right after a visit saves, when that
     visit was started via `?appointmentId=...` — sets `patient_id`,
-    `visit_id`, and flips `status` to `arrived` in one call.
+    `visit_id`, and flips `status` to `arrived` in one call. **It is
+    queued, not called inline** (`src/sync/pendingLinks.ts`, persisted in
+    `meta`): `appointments.visit_id` is a foreign key to `visits`, and the
+    visit only reaches the server on the next push, so calling the RPC right
+    after the local save failed every time (and could never work offline).
+    The sync engine sends queued links right after `push()` once the visit is
+    no longer in the outbox, drops one only on a permanent error ("already
+    linked", "not found"), keeps it through network failures, and
+    `repos.appointments.listByClinic` overlays pending links (linked,
+    arrived) so Workspace and Schedule already treat the appointment as done
+    — no "in progress" row left to log a second time.
     **`create_appointment_staff(clinic_id, name, phone, therapist_id,
     scheduled_at)`** was added later, alongside the manual-booking form on
     the Bookings tab — same admin-or-front_desk check and
@@ -2893,6 +2905,8 @@ Defined in `src/index.css`; use the classes, never ad-hoc families (`font-serif`
 ### 9d. Page titles
 
 A top-level page doesn't repeat its name as a big heading when a visible nav item already names it: the `<h1>` is screen-reader only (`sr-only`). That's Schedule and Ledger at every width (bottom bar on phones, top nav from `sm:`), and Patients and Reports from `sm:` (`sm:sr-only`). Patients and Reports are reached through **More** on phones, where nothing else names them, so they keep a compact `text-lg` title there. Workspace's greeting is its title. Settings, More and detail pages keep a visible `text-lg` title. The Ledger's "+ New visit" button shows from `sm:` only — the phone bar's + is New visit.
+
+**New visit's return target**: `/visits/new` takes `from` (`/workspace`, `/schedule`, `/ledger`, `/patients`), set by whatever opened it — the appointment panel (`returnTo`), Today's Complete visit, the Ledger and Patients buttons, the phone bar's + (the page it's tapped on). Done / Cancel / the invoice print's ← Back return there. Without `from`, a visit opened with a `patientId` returns to that patient's profile (the profile's own New visit button) and anything else to Workspace. Previously every appointment-started visit (which carries `patientId`) ended on the patient profile.
 
 **Ledger top, two rows at every width**: (1) the Visits / Invoices / Daybook switch, the patient-filter chip when set, and "+ New visit" on the right (from `sm:`). (2) The Visits toolbar, directly on the page (no card, no field labels): the **date presets on the left**, then on the right search ("Find patient or ID"), therapist select (from `sm:`), a **Filters** button (count badge of active filters, teal when any are on) that expands the three "only" checkboxes (and therapist on phones) in a row below, and ⋮ (Export CSV, Generate report). On phones the presets are their own horizontally scrolling row above search / Filters / ⋮. Landing with `?filter=not_collected` (Workspace's Dues tile) starts on All time with Not collected on and the filters open. The "Includes N unsynced visits" caption shows only while visits are waiting to sync (the header's sync dot covers "all synced").
 

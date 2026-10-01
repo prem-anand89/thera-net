@@ -154,6 +154,7 @@ export function TodayAppointments({
                       prefillName: a.patientName,
                       prefillPhone: a.patientPhone,
                       ...(a.patientId ? { patientId: a.patientId } : {}),
+                      from: '/workspace',
                     }}
                     className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
                   >

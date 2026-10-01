@@ -1,3 +1,4 @@
+import type { NewVisitBackTarget } from '@/app/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -24,6 +25,7 @@ export function StartVisitSheet({
   onClose,
   appointment,
   initialPatientId,
+  returnTo,
 }: {
   open: boolean;
   onClose: () => void;
@@ -31,6 +33,8 @@ export function StartVisitSheet({
   appointment?: Appointment | null;
   /** Pre-select an existing patient (e.g. from New Visit). */
   initialPatientId?: UUID;
+  /** Where "Log visit now" → Done should return to (see New visit's `from`). */
+  returnTo?: NewVisitBackTarget;
 }) {
   const clinic = useClinic();
   const navigate = useNavigate();
@@ -149,6 +153,7 @@ export function StartVisitSheet({
           ...(appointment ? { appointmentId: appointment.id } : {}),
           prefillName: patient.name,
           ...(patient.phone ? { prefillPhone: patient.phone } : {}),
+          ...(returnTo ? { from: returnTo } : {}),
         },
       });
     } catch (startError) {

@@ -199,6 +199,8 @@ export interface PatientAdvanceRepo {
   get(id: UUID): Promise<PatientAdvance | undefined>;
   /** A patient's advances, most-recently-received first. */
   listByPatient(clinicId: UUID, patientId: UUID): Promise<PatientAdvance[]>;
+  /** Advances received on one date (YYYY-MM-DD) — the Daybook's second source. */
+  listByDate(clinicId: UUID, date: string): Promise<PatientAdvance[]>;
   put(advance: PatientAdvance): Promise<void>;
 }
 

@@ -1,3 +1,4 @@
+import { isPermanentLinkError, listPendingLinks, removePendingLink } from './pendingLinks';
 import { db, ALL_SYNCED_TABLES, CLIENT_WRITABLE_TABLES, type SyncedTable } from '@/lib/db';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase';
@@ -198,6 +199,7 @@ export class SyncEngine {
     try {
       await this.reconcileClinicMembership(session.user.id);
       await this.push();
+      await this.flushAppointmentLinks();
       await this.pull();
       syncStatus.set({ lastSyncAt: Date.now(), error: null });
       this.retryDelayMs = RETRY_MIN_MS;
@@ -215,6 +217,40 @@ export class SyncEngine {
         this.rerunRequested = false;
         this.schedule();
       }
+    }
+  }
+
+  /**
+   * Sends queued appointment → visit links (see pendingLinks.ts) once the
+   * visit itself is on the server — the RPC's foreign key needs it there. A
+   * visit still waiting in the outbox just means "next cycle"; a network
+   * failure leaves the link queued; an error that can never succeed drops it.
+   */
+  private async flushAppointmentLinks() {
+    if (!this.started) return;
+    const links = await listPendingLinks();
+    for (const link of links) {
+      const visitWaiting =
+        (await db.outbox
+          .where('table')
+          .equals('visits')
+          .and((e) => e.rowId === link.visitId)
+          .count()) > 0;
+      if (visitWaiting) continue;
+      const { error } = await this.supabase!.rpc('link_appointment_visit', {
+        p_appointment_id: link.appointmentId,
+        p_visit_id: link.visitId,
+        p_patient_id: link.patientId,
+      });
+      if (!error) {
+        await removePendingLink(link.appointmentId);
+      } else if (isPermanentLinkError(error.message)) {
+        console.error('Dropping an appointment link that can never apply', error.message);
+        await removePendingLink(link.appointmentId);
+      } else if (isFetchFailure(error.message)) {
+        throw new Error(error.message);
+      }
+      // Anything else (e.g. a not-yet-synced row): keep it queued, retry next cycle.
     }
   }
 

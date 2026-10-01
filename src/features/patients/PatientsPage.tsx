@@ -22,12 +22,10 @@ import {
 import { REFERRING_SOURCE_LABELS, type Patient, type Visit, type ReferringSourceItem } from '@/domain/types';
 import { isStale } from '@/domain/packageTracking';
 import {
-  inputCls,
   th,
   td,
   ErrorNote,
   Pill,
-  SectionCard,
   KebabMenu,
   menuItem,
   TherapistPill,
@@ -61,7 +59,7 @@ const PATIENT_COMPARATORS = {
 
 export function PatientsPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Phones reach Patients through More, so it keeps a compact title
           there; from sm: the top nav names the page. */}
       <h1 className="font-display text-lg font-semibold text-[var(--ink)] sm:sr-only">Patients</h1>
@@ -100,10 +98,6 @@ function AllPatientsSection() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
-  const months = useMemo(
-    () => monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth),
-    [fyStartYear, clinic.fyStartMonth]
-  );
   const selectedPeriod = useMemo(() => {
     if (!month || month === 'ytd' || month === 'custom') return null;
     const [y, m] = month.split('-').map(Number);
@@ -288,15 +282,13 @@ function AllPatientsSection() {
   }
 
   return (
-    <SectionCard title="All Patients">
-      {/* One row, not two — chips and the FY/search controls used to each
-          sit on their own full-width row (chips left with empty space to
-          their right, controls right with empty space to their left).
-          justify-between puts them on the same row, chips claiming the
-          left and controls the right, so nothing goes to waste; wrap lets
-          narrower widths fall back to two rows without an empty gap. */}
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap gap-1.5">
+    <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:p-5">
+      {/* The page title above already says "Patients", so no card heading.
+          One toolbar: the chips on the left; search and a single period
+          select (financial year + month in one) on the right. Phones: the
+          chips scroll on one row, search and period share the next. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="hide-scrollbar flex w-full gap-1 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-1 sm:w-auto">
           {(
             [
               { key: 'all', label: 'All' },
@@ -307,9 +299,9 @@ function AllPatientsSection() {
             <button
               key={c.key}
               type="button"
-              className={`min-h-11 rounded-full px-3 py-1 text-xs font-medium ${
+              className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium ${
                 chip === c.key
-                  ? 'bg-[var(--teal-light)] text-[var(--teal)]'
+                  ? 'bg-[var(--teal)] text-white'
                   : 'text-[var(--muted)] hover:bg-[var(--paper)]'
               }`}
               onClick={() => setChip(c.key)}
@@ -318,108 +310,59 @@ function AllPatientsSection() {
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex gap-2">
-            <select
-              className={inputCls}
-              value={fyStartYear}
-              onChange={(e) => setFyStartYear(Number(e.target.value))}
-            >
-              {[currentFy.startYear - 2, currentFy.startYear - 1, currentFy.startYear].map((y) => (
-                <option key={y} value={y}>
-                  FY{' '}
-                  {fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label}
-                </option>
-              ))}
-            </select>
-            <select className={inputCls} value={month} onChange={(e) => setMonth(e.target.value)}>
-              <option value="">Full FY</option>
-              <option value="ytd">Year to date</option>
-              {months.map((m) => (
-                <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
-                  {monthName(m.month)} {m.year}
-                </option>
-              ))}
-              <option value="custom">Custom range…</option>
-            </select>
-          </div>
-          {month === 'custom' && (
-            <div className="flex gap-2">
-              <input
-                type="date"
-                className={inputCls}
-                value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                aria-label="From"
-              />
-              <input
-                type="date"
-                className={inputCls}
-                value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
-                aria-label="To"
-              />
-            </div>
-          )}
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           <input
-            className={`${inputCls} max-w-xs`}
-            placeholder="Search by Patient ID, name, or phone…"
+            type="search"
+            aria-label="Search patients"
+            className="min-h-10 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-base focus:border-[var(--teal)] focus:outline-none sm:w-64 sm:flex-none sm:text-sm"
+            placeholder="Search ID, name or phone"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          <select
+            aria-label="Period"
+            className="min-h-10 w-[9.5rem] shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-base text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none sm:w-auto sm:text-sm"
+            value={month === 'custom' ? 'custom' : `${fyStartYear}:${month}`}
+            onChange={(e) => {
+              if (e.target.value === 'custom') {
+                setMonth('custom');
+                return;
+              }
+              const [fy, m] = e.target.value.split(':');
+              setFyStartYear(Number(fy));
+              setMonth(m);
+            }}
+          >
+            {[currentFy.startYear, currentFy.startYear - 1, currentFy.startYear - 2].map((y) => {
+              const label = fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label;
+              return (
+                <optgroup key={y} label={`FY ${label}`}>
+                  <option value={`${y}:`}>FY {label} · full year</option>
+                  <option value={`${y}:ytd`}>FY {label} · to date</option>
+                  {monthsOfFiscalYear(y, clinic.fyStartMonth).map((m) => (
+                    <option key={`${m.year}-${m.month}`} value={`${y}:${m.year}-${m.month}`}>
+                      {monthName(m.month)} {m.year}
+                    </option>
+                  ))}
+                </optgroup>
+              );
+            })}
+            <option value="custom">Custom range…</option>
+          </select>
         </div>
       </div>
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        {selectedPeriod ? (
-          <>
-            Showing patients seen in {monthName(selectedPeriod.month)} {selectedPeriod.year}.{' '}
-            <button
-              type="button"
-              className="font-medium text-[var(--teal)] hover:underline"
-              onClick={() => setMonth('')}
-            >
-              Show Full FY
-            </button>
-          </>
-        ) : month === 'ytd' ? (
-          <>
-            Showing patients seen since the start of FY{' '}
-            {
-              fiscalYearOf(new Date(fyStartYear, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth)
-                .label
-            }
-            , through today.{' '}
-            <button
-              type="button"
-              className="font-medium text-[var(--teal)] hover:underline"
-              onClick={() => setMonth('')}
-            >
-              Show Full FY
-            </button>
-          </>
-        ) : month === 'custom' ? (
-          customFrom && customTo ? (
-            customFrom > customTo ? (
-              <span className="text-[var(--rust)]">From date must be before To date.</span>
-            ) : (
-              <>
-                Showing patients seen {formatDateDMY(customFrom)}–{formatDateDMY(customTo)}.{' '}
-                <button
-                  type="button"
-                  className="font-medium text-[var(--teal)] hover:underline"
-                  onClick={() => setMonth('')}
-                >
-                  Show Full FY
-                </button>
-              </>
-            )
-          ) : (
-            'Pick a From and To date above.'
-          )
-        ) : (
-          `Showing patients seen in FY ${fiscalYearOf(new Date(fyStartYear, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label}.`
-        )}
-      </p>
+      {month === 'custom' && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+          <input type="date" className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm text-[var(--ink)]" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} aria-label="From" />
+          –
+          <input type="date" className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm text-[var(--ink)]" value={customTo} onChange={(e) => setCustomTo(e.target.value)} aria-label="To" />
+          {!customFrom || !customTo ? (
+            <span>Pick a From and To date.</span>
+          ) : customFrom > customTo ? (
+            <span className="text-[var(--rust)]">From date must be before To date.</span>
+          ) : null}
+        </div>
+      )}
 
       <ErrorNote message={error} />
 
@@ -434,9 +377,9 @@ function AllPatientsSection() {
       ) : (
         <>
           {/* Below tab: (744px) — flat rows inside SectionCard, same as visit lists. */}
-          <div className="tab:hidden -mx-5 divide-y divide-[var(--border)]">
+          <div className="tab:hidden -mx-4 divide-y divide-[var(--border)] sm:-mx-5">
             {rows.map((p) => (
-              <div key={p.id} className="px-5">
+              <div key={p.id} className="px-4 sm:px-5">
                 <PatientCard
                   patient={p}
                   stats={visitStatsByPatient.get(p.id)}
@@ -590,7 +533,7 @@ function AllPatientsSection() {
                         <div className="flex items-center gap-1.5">
                           <Link
                             to="/visits/new"
-                            search={{ patientId: p.id }}
+                            search={{ patientId: p.id, from: '/patients' }}
                             className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
                           >
                             + Visit
@@ -711,7 +654,7 @@ function AllPatientsSection() {
         prefilledPatientId={booking?.id}
         prefilledTherapistId={booking ? visitStatsByPatient.get(booking.id)?.latestVisit.therapistId ?? undefined : undefined}
       />
-    </SectionCard>
+    </section>
   );
 }
 
@@ -863,7 +806,7 @@ function PatientCard({
           )}
           <Link
             to="/visits/new"
-            search={{ patientId: p.id }}
+            search={{ patientId: p.id, from: '/patients' }}
             className={
               nextAction === 'invoice'
                 ? 'rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]'

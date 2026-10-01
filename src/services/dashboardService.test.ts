@@ -183,6 +183,7 @@ function makeFakeRepos() {
     patientAdvances: {
       get: async () => undefined,
       listByPatient: async () => [],
+      listByDate: async () => [],
       put: async () => {},
     },
     feedbackRequests: {
@@ -329,6 +330,34 @@ describe('dashboardService.openPackages', () => {
     );
     const svc = createDashboardService(fake.repos);
     expect(await svc.openPackages('clinic-1')).toEqual([]);
+  });
+});
+
+describe('dashboardService.receivedOnDate', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+  const pay = (id: string, visitId: string, amount: number, date: string, extra: object = {}) =>
+    fake.payments.set(id, { id, clinicId: 'clinic-1', visitId, amountPaise: amount, method: 'cash', receivedDate: date, notes: null, updatedAt: '', ...extra } as Payment);
+
+  it('counts payments received that day — including one on an older visit — not bills of that day\'s visits', async () => {
+    fake.visits.set('old', baseVisit('old', { visitDate: '2026-05-01', actualBillPaise: rs(800) }));
+    fake.visits.set('today', baseVisit('today', { visitDate: '2026-06-10', actualBillPaise: rs(500) }));
+    pay('p1', 'old', rs(800), '2026-06-10');
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.receivedOnDate('clinic-1', '2026-06-10')).toBe(rs(800));
+  });
+
+  it('skips payments drawn from an advance, and only counts a therapist\'s own visits when scoped', async () => {
+    fake.visits.set('v1', baseVisit('v1', { therapistId: 'th-prem' }));
+    fake.visits.set('v2', baseVisit('v2', { therapistId: 'th-other' }));
+    pay('p1', 'v1', rs(300), '2026-06-10');
+    pay('p2', 'v2', rs(400), '2026-06-10');
+    pay('p3', 'v1', rs(200), '2026-06-10', { advanceId: 'adv-1' });
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.receivedOnDate('clinic-1', '2026-06-10')).toBe(rs(700));
+    expect(await svc.receivedOnDate('clinic-1', '2026-06-10', 'th-prem')).toBe(rs(300));
   });
 });
 
@@ -714,6 +743,13 @@ describe('dashboardService.recentVisits', () => {
     );
     const svc = createDashboardService(fake.repos);
     expect((await svc.recentVisits('clinic-1'))[0].treatmentNotes).toBe('Ultrasound + stretch');
+  });
+
+  it('reports only the unpaid rest as outstanding for a part-paid visit', async () => {
+    fake.visits.set('v1', baseVisit('v1', { visitDate: '2026-06-01', actualBillPaise: rs(500) }));
+    fake.payments.set('pay-1', { id: 'pay-1', clinicId: 'clinic-1', visitId: 'v1', amountPaise: rs(300), method: 'cash', receivedDate: '2026-06-01', notes: null, updatedAt: '' });
+    const svc = createDashboardService(fake.repos);
+    expect((await svc.recentVisits('clinic-1'))[0].outstandingPaise).toBe(rs(200));
   });
 
   it('reports the full bill as outstanding when there is no invoice yet', async () => {

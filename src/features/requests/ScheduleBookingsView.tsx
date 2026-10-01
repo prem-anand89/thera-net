@@ -839,6 +839,7 @@ export function ScheduleBookingsView({
       )}
 
       <AppointmentDetailsPanel
+        returnTo="/schedule"
         appointment={selectedAppointment}
         therapistName={selectedAppointment ? therapistNameFor(selectedAppointment) : ''}
         therapistColor={selectedAppointment ? colorFor(selectedAppointment) : UNASSIGNED_COLOR}
@@ -894,7 +895,7 @@ export function ScheduleBookingsView({
         }}
       />
 
-      <StartVisitSheet open={startNoteFor !== null} appointment={startNoteFor} onClose={() => setStartNoteFor(null)} />
+      <StartVisitSheet open={startNoteFor !== null} appointment={startNoteFor} returnTo="/schedule" onClose={() => setStartNoteFor(null)} />
 
       <ReminderSheet
         open={reminderOpen}

@@ -19,6 +19,7 @@ import {
 import type { Appointment } from '@/domain/types';
 import { PatientFlagPills } from './PatientFlagPills';
 import type { PatientFlag } from '@/domain/patientFlags';
+import type { NewVisitBackTarget } from '@/app/router';
 import { IconClose, IconMessage, IconNoShow, IconPhone, IconReschedule } from '@/components/StatIcons';
 
 const actionCls =
@@ -61,6 +62,7 @@ export function AppointmentDetailsPanel({
   onReschedule,
   onCancelSeries,
   onStartNote,
+  returnTo,
 }: {
   appointment: Appointment | null;
   therapistName: string;
@@ -84,6 +86,8 @@ export function AppointmentDetailsPanel({
   onCancelSeries?: (appointment: Appointment) => void;
   /** Opens "Start note" — notes now, service and payment later. */
   onStartNote?: (appointment: Appointment) => void;
+  /** Page this panel is on, so a visit completed from it returns here. */
+  returnTo?: NewVisitBackTarget;
 }) {
   const clinic = useClinic();
   const [busy, setBusy] = useState(false);
@@ -268,6 +272,7 @@ export function AppointmentDetailsPanel({
                   prefillName: appointment.patientName,
                   prefillPhone: appointment.patientPhone,
                   ...(appointment.patientId ? { patientId: appointment.patientId } : {}),
+                  ...(returnTo ? { from: returnTo } : {}),
                 }}
                 className={
                   arrived

@@ -94,6 +94,10 @@ export function Shell() {
   // aggregates stay off-limits to a plain therapist (decision 3), hidden
   // during 'unknown' role resolution too, not just for a confirmed
   // therapist, so the item never flashes visible before role settles.
+  // The phone bar's + (New visit) returns to the page it was tapped on.
+  const newVisitFrom = (['/workspace', '/schedule', '/ledger', '/patients'] as const).find((p) =>
+    pathname.startsWith(p)
+  );
   const nav = useMemo(
     () =>
       NAV.filter(
@@ -393,6 +397,7 @@ export function Shell() {
           />
           <Link
             to="/visits/new"
+            search={newVisitFrom ? { from: newVisitFrom } : {}}
             aria-label="New visit"
             className="flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center py-1"
           >

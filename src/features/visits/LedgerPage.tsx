@@ -639,7 +639,7 @@ export function LedgerPage() {
             </Link>
           </span>
         )}
-        <Link to="/visits/new" className={`${btnPrimary} ml-auto hidden items-center sm:inline-flex`}>
+        <Link to="/visits/new" search={{ from: '/ledger' }} className={`${btnPrimary} ml-auto hidden items-center sm:inline-flex`}>
           + New visit
         </Link>
       </div>

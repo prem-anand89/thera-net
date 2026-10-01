@@ -153,6 +153,12 @@ const archiveRedirectRoute = createRoute({
   },
 });
 
+// Where New visit's Done / Cancel returns to. Without it, a visit opened for
+// a known patient (an appointment's Complete visit) landed on that patient's
+// profile even when it was started from Workspace or Schedule.
+const NEW_VISIT_BACK_TARGETS = ['/workspace', '/schedule', '/ledger', '/patients'] as const;
+export type NewVisitBackTarget = (typeof NEW_VISIT_BACK_TARGETS)[number];
+
 const newVisitRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/visits/new',
@@ -165,6 +171,7 @@ const newVisitRoute = createRoute({
     prefillName?: string;
     prefillPhone?: string;
     appointmentId?: string;
+    from?: NewVisitBackTarget;
   } => ({
     ...(typeof search.repeatVisitId === 'string' ? { repeatVisitId: search.repeatVisitId } : {}),
     ...(typeof search.newPatient === 'string' ? { newPatient: search.newPatient } : {}),
@@ -172,6 +179,9 @@ const newVisitRoute = createRoute({
     ...(typeof search.prefillName === 'string' ? { prefillName: search.prefillName } : {}),
     ...(typeof search.prefillPhone === 'string' ? { prefillPhone: search.prefillPhone } : {}),
     ...(typeof search.appointmentId === 'string' ? { appointmentId: search.appointmentId } : {}),
+    ...(NEW_VISIT_BACK_TARGETS.includes(search.from as NewVisitBackTarget)
+      ? { from: search.from as NewVisitBackTarget }
+      : {}),
   }),
   component: NewVisitPage,
 });
@@ -362,7 +372,7 @@ const reportsPrintRedirectRoute = createRoute({
   },
 });
 
-const INVOICE_PRINT_BACK_TARGETS = ['/ledger', '/workspace', '/visits/new'] as const;
+const INVOICE_PRINT_BACK_TARGETS = ['/ledger', '/workspace', '/schedule', '/patients', '/visits/new'] as const;
 export type InvoicePrintBackTarget = (typeof INVOICE_PRINT_BACK_TARGETS)[number];
 
 const invoicePrintRoute = createRoute({

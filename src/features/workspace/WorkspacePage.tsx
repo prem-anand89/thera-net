@@ -427,6 +427,12 @@ export function WorkspacePage() {
     [clinic.id, calendarMonth.year, calendarMonth.month]
   );
   const myMonthRow = monthReport?.rows.find((r) => r.therapistId === scope.myTherapistId);
+  // "Collected" = money received today (the Daybook's figure), scoped to the
+  // therapist's own visits for a therapist login.
+  const receivedToday = useLiveQuery(
+    () => dashboardService.receivedOnDate(clinic.id, toLocalDateStr(new Date()), scope.scopeTherapistId),
+    [clinic.id, scope.scopeTherapistId]
+  );
   // Dues: admin/front desk only (the clinic-wide figure) — therapists
   // don't bill. Per visit, so "Take payment later" visits count too.
   const dues = useLiveQuery(
@@ -602,7 +608,7 @@ export function WorkspacePage() {
     ? [
         {
           label: 'Collected',
-          value: formatINR(today?.collectedPaise ?? 0),
+          value: formatINR(receivedToday ?? 0),
           icon: <IconRupee />,
           tone: 'moss' as const,
           kind: 'money' as const,
@@ -619,7 +625,7 @@ export function WorkspacePage() {
         },
       ]
     : [
-        { label: 'Collected', value: formatINR(today?.collectedPaise ?? 0), icon: <IconRupee />, tone: 'moss' as const, kind: 'money' as const },
+        { label: 'Collected', value: formatINR(receivedToday ?? 0), icon: <IconRupee />, tone: 'moss' as const, kind: 'money' as const },
         { label: `${monthShort} visits`, value: monthReport ? myMonthRow?.visitCount ?? 0 : '—', icon: <IconUserCheck />, tone: 'sky' as const },
         { label: `${monthShort} packages`, value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
       ];
@@ -628,6 +634,7 @@ export function WorkspacePage() {
     <div className="space-y-5">
       <InstallAppBanner />
       <AppointmentDetailsPanel
+        returnTo="/workspace"
         appointment={openAppointment}
         therapistName={openAppointment ? appointmentTherapistName(openAppointment) : ''}
         therapistColor={openAppointment ? appointmentColor(openAppointment) : UNASSIGNED_COLOR}
@@ -655,7 +662,7 @@ export function WorkspacePage() {
             : undefined
         }
       />
-      <StartVisitSheet open={startVisit !== null} appointment={startVisit?.appointment} onClose={() => setStartVisit(null)} />
+      <StartVisitSheet open={startVisit !== null} appointment={startVisit?.appointment} returnTo="/workspace" onClose={() => setStartVisit(null)} />
       <BookSlotSheet
         isOpen={bookingOpen}
         onClose={() => setBookingOpen(false)}

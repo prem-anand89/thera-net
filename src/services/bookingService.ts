@@ -9,6 +9,7 @@ import {
   type TherapistMessageKind,
 } from '@/domain/bookingMessages';
 import { syncEngine } from '@/sync/engine';
+import { enqueueAppointmentLink } from '@/sync/pendingLinks';
 
 /**
  * Patient Communications, Slice 5: public booking requests → confirmed
@@ -311,15 +312,12 @@ export const bookingService = {
   },
 
   /** Called right after New Visit saves, when the visit was started from
-   *  an appointment row — see `NewVisitPage`'s `appointmentId` search param. */
+   *  an appointment row — see `NewVisitPage`'s `appointmentId` search param.
+   *  Queues the link; the sync engine sends it once the visit is on the
+   *  server (the RPC needs it there), so it works offline and survives a
+   *  reload. Until then this device already shows the appointment as done. */
   async linkAppointmentVisit(appointmentId: UUID, visitId: UUID, patientId: UUID): Promise<void> {
-    const supabase = supabaseOrThrow();
-    const { error } = await supabase.rpc('link_appointment_visit', {
-      p_appointment_id: appointmentId,
-      p_visit_id: visitId,
-      p_patient_id: patientId,
-    });
-    if (error) throw new Error(`Could not link visit: ${error.message}`);
+    await enqueueAppointmentLink({ appointmentId, visitId, patientId });
     syncEngine.schedule(0);
   },
 

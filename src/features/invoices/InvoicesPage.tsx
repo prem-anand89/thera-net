@@ -193,12 +193,13 @@ export function InvoicesPage() {
     return { totalOutstanding: outstanding, totalCollected: collected, totalInvoiced: invoiced, unbilledTotal: unbilled };
   }, [filteredInvoices, statusByInvoiceId, paidByInvoiceId, visits, from, to, directPaymentByVisitId]);
 
-  async function toggleInvoiceStatus(invoiceId: string, currentStatus: string) {
+  // Undo for an invoice flagged paid with no payment behind it. Paying is
+  // Record payment, which logs the cash.
+  async function markOutstanding(invoiceId: string) {
     setError(null);
     setBusy(true);
     try {
-      const newStatus = currentStatus === 'paid' ? 'outstanding' : 'paid';
-      await paymentService.setStatus(invoiceId, clinic.id, newStatus);
+      await paymentService.setStatus(invoiceId, clinic.id, 'outstanding');
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
@@ -437,14 +438,19 @@ export function InvoicesPage() {
                           Send WhatsApp reminder
                         </button>
                       )}
-                      <button
-                        type="button"
-                        className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={busy}
-                        onClick={() => void toggleInvoiceStatus(inv.id, status)}
-                      >
-                        Mark {status === 'paid' ? 'outstanding' : 'paid'}
-                      </button>
+                      {/* Paying goes through Record payment (amount + method, so the
+                          cash reaches the Daybook). Only an invoice flagged paid with
+                          no payment behind it can be flipped back. */}
+                      {status === 'paid' && paidPaise === 0 && (
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={busy}
+                          onClick={() => void markOutstanding(inv.id)}
+                        >
+                          Mark outstanding
+                        </button>
+                      )}
                       <Link
                         to="/invoices/$invoiceId/print"
                         params={{ invoiceId: inv.id }}
@@ -530,14 +536,16 @@ export function InvoicesPage() {
                             Send WhatsApp reminder
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                          onClick={() => void toggleInvoiceStatus(inv.id, status)}
-                          disabled={busy}
-                        >
-                          Mark {status === 'paid' ? 'outstanding' : 'paid'}
-                        </button>
+                        {status === 'paid' && paidPaise === 0 && (
+                          <button
+                            type="button"
+                            className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => void markOutstanding(inv.id)}
+                            disabled={busy}
+                          >
+                            Mark outstanding
+                          </button>
+                        )}
                       </td>
                       <td className={`${td} text-right`}>
                         <Link

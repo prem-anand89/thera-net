@@ -1,4 +1,5 @@
 import { db, type SyncedTable } from '@/lib/db';
+import { listPendingLinks, withPendingLinks } from '@/sync/pendingLinks';
 import type {
   Clinic,
   Therapist,
@@ -343,6 +344,10 @@ const patientAdvances: PatientAdvanceRepo = {
       .filter((a) => a.clinicId === clinicId && !a.deleted)
       .sort((a, b) => b.receivedDate.localeCompare(a.receivedDate));
   },
+  async listByDate(clinicId, date) {
+    const all = await db.patient_advances.where('clinicId').equals(clinicId).toArray();
+    return all.filter((a) => !a.deleted && a.receivedDate?.slice(0, 10) === date);
+  },
   put: (advance) => putWithOutbox('patient_advances', advance),
 };
 
@@ -368,7 +373,15 @@ const appointmentRequests: AppointmentRequestRepo = {
 };
 
 const appointments: AppointmentRepo = {
-  listByClinic: (clinicId) => db.appointments.where('clinicId').equals(clinicId).toArray(),
+  // With any not-yet-sent visit links applied (see sync/pendingLinks.ts), so
+  // every screen agrees an appointment whose visit was just saved is done.
+  async listByClinic(clinicId) {
+    const [rows, links] = await Promise.all([
+      db.appointments.where('clinicId').equals(clinicId).toArray(),
+      listPendingLinks(),
+    ]);
+    return withPendingLinks(rows, links);
+  },
 };
 
 const clinicClosedDates: ClinicClosedDateRepo = {

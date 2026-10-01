@@ -346,6 +346,33 @@ export function createDashboardService(repos: Repos) {
     },
 
     /**
+     * Money actually received on a date — the same figure the Daybook totals
+     * for that day: payments received (not those drawn from an advance, which
+     * were counted when the advance came in) plus advances deposited. Scoped
+     * to a therapist, only payments against their own visits count (an
+     * advance isn't theirs). The Workspace "Collected" tile uses this, so the
+     * tile and the Daybook it opens can't disagree — unlike summing the bills
+     * of today's visits, which misses a payment today on an older visit and
+     * counts a bill whose cash came another day.
+     */
+    async receivedOnDate(clinicId: UUID, date: string, therapistId?: UUID): Promise<Paise> {
+      const payments = (await repos.payments.listByDate(clinicId, date)).filter((p) => !p.advanceId);
+      let ownVisitIds: Set<UUID> | null = null;
+      if (therapistId) {
+        const visits = await repos.visits.list({ clinicId, therapistId });
+        ownVisitIds = new Set(visits.filter((v) => !v.deleted).map((v) => v.id));
+      }
+      let total = payments
+        .filter((p) => !ownVisitIds || ownVisitIds.has(p.visitId))
+        .reduce((sum, p) => sum + p.amountPaise, 0);
+      if (!therapistId) {
+        const advances = await repos.patientAdvances.listByDate(clinicId, date);
+        total += advances.reduce((sum, a) => sum + a.amountPaise, 0);
+      }
+      return total;
+    },
+
+    /**
      * What the clinic is still owed, counted per visit so it matches the
      * Ledger's Not collected filter: a visit saved with "Take payment
      * later" (no invoice, no payment) counts the same as one on an invoice
@@ -721,7 +748,6 @@ export function createDashboardService(repos: Repos) {
             directPaymentByVisitId.get(v.id) ?? 0,
             v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
           );
-          const outstanding = !isCollected(state) && state !== 'zero_session';
           return {
             visitId: v.id,
             visitDate: v.visitDate,
@@ -739,7 +765,7 @@ export function createDashboardService(repos: Repos) {
             billPaise: v.actualBillPaise,
             hasInvoice: Boolean(v.invoiceId),
             invoiceId: v.invoiceId,
-            outstandingPaise: outstanding ? v.actualBillPaise : 0,
+            outstandingPaise: visitDuePaise(state, v.actualBillPaise, directPaymentByVisitId.get(v.id) ?? 0),
           };
         });
     },
@@ -793,7 +819,6 @@ export function createDashboardService(repos: Repos) {
             directPaymentByVisitId.get(v.id) ?? 0,
             v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
           );
-          const outstanding = !isCollected(state) && state !== 'zero_session';
           return {
             visitId: v.id,
             visitDate: v.visitDate,
@@ -811,7 +836,7 @@ export function createDashboardService(repos: Repos) {
             billPaise: v.actualBillPaise,
             hasInvoice: Boolean(v.invoiceId),
             invoiceId: v.invoiceId,
-            outstandingPaise: outstanding ? v.actualBillPaise : 0,
+            outstandingPaise: visitDuePaise(state, v.actualBillPaise, directPaymentByVisitId.get(v.id) ?? 0),
           };
         });
     },

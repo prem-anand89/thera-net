@@ -162,6 +162,7 @@ function makeFakeRepos() {
     patientAdvances: {
       get: async () => undefined,
       listByPatient: async () => [],
+      listByDate: async () => [],
       put: async () => {},
     },
     feedbackRequests: {

@@ -1,4 +1,5 @@
 import { StartVisitSheet } from '@/components/StartVisitSheet';
+import type { NewVisitBackTarget } from '@/app/router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -139,14 +140,17 @@ export function NewVisitPage() {
     prefillName?: string;
     prefillPhone?: string;
     appointmentId?: string;
+    from?: NewVisitBackTarget;
   };
 
-  // "Done"/"Cancel" used to always land on Workspace, even when this page
-  // was opened from a patient's own profile (via its "New visit" button,
-  // which passes patientId) — leaving that patient behind instead of
-  // returning to them.
+  // "Done"/"Cancel" return to where the visit was started (`from`: Workspace,
+  // Schedule, Ledger, Patients). Without one, a visit opened from a patient's
+  // own profile (its "New visit" button, which passes patientId) returns to
+  // that patient, and anything else to Workspace.
   function goBack() {
-    if (search.patientId) {
+    if (search.from) {
+      void navigate({ to: search.from });
+    } else if (search.patientId) {
       void navigate({ to: '/patients/$patientId', params: { patientId: search.patientId } });
     } else {
       void navigate({ to: '/workspace' });
@@ -616,9 +620,10 @@ export function NewVisitPage() {
       // appointment to arrived. Doesn't block the save-succeeded screen
       // below on this secondary link; the visit itself already saved.
       if (search.appointmentId) {
+        // Queued (and sent after the visit syncs), so this can't fail the save.
         void bookingService
           .linkAppointmentVisit(search.appointmentId, visit.id, patient.id)
-          .catch((e) => console.error('Could not link this visit to its appointment', e));
+          .catch((e) => console.error('Could not queue the appointment link', e));
         // Notes written before the service was chosen join this visit.
         void consultationNoteService
           .linkAppointmentNotesToVisit(clinic.id, patient.id, search.appointmentId, visit.id)
@@ -705,7 +710,10 @@ export function NewVisitPage() {
               className={otherPrimaryShown ? btnSecondary : btnPrimary}
               onClick={() => {
                 setJustSaved(null);
-                void navigate({ to: '/visits/new', search: { patientId: justSaved.patientId } });
+                void navigate({
+                  to: '/visits/new',
+                  search: { patientId: justSaved.patientId, ...(search.from ? { from: search.from } : {}) },
+                });
               }}
             >
               Another visit for {justSaved.patientName}
@@ -720,7 +728,7 @@ export function NewVisitPage() {
             clinicId={clinic.id}
             target={invoiceTarget}
             onClose={() => setInvoicing(false)}
-            returnTo="/visits/new"
+            returnTo={search.from ?? '/workspace'}
           />
         )}
       </div>
@@ -782,7 +790,7 @@ export function NewVisitPage() {
               </button>
             </div>
           )}
-          <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} onClose={() => setStartNoteOpen(false)} />
+          <StartVisitSheet open={startNoteOpen} initialPatientId={patient.id} returnTo={search.from} onClose={() => setStartNoteOpen(false)} />
 
           {patientVisits !== undefined && (
             <SummaryTile label="Last visit">

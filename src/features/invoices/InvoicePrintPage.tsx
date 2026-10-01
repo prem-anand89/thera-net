@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearch } from '@tanstack/react-router';
 import type { InvoicePrintBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos } from '@/services';
+import { repos, paymentService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
@@ -293,9 +293,18 @@ export function InvoicePrintPage() {
   // Missing row reads as paid, matching computeVisitPaymentState's convention
   // (issuing an invoice and recording its initial payment status are two
   // separate writes — the invoice is still real if the second one lags).
-  const invoicePayment = useLiveQuery(
-    () => (invoice ? repos.invoicePayments.getByInvoiceId(invoice.id) : undefined),
+  // Wrapped so "still loading" (undefined) differs from "no row" (row: null) —
+  // otherwise a not-yet-loaded status read as paid and a due bill flashed PAID.
+  const invoicePaymentQuery = useLiveQuery(
+    async () =>
+      invoice ? { row: (await repos.invoicePayments.getByInvoiceId(invoice.id)) ?? null } : undefined,
     [invoice?.id]
+  );
+  const invoicePayment = invoicePaymentQuery?.row ?? undefined;
+  // What's been received so far, so a part-paid bill says so (and the balance).
+  const balance = useLiveQuery(
+    () => (invoice ? paymentService.invoiceBalance(clinic.id, invoice) : undefined),
+    [clinic.id, invoice?.id]
   );
   const allInvoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
   const supersededBy = (allInvoices ?? []).find((inv) => inv.supersedesInvoiceId === invoice?.id);
@@ -339,7 +348,9 @@ export function InvoicePrintPage() {
     );
   }
 
+  const statusLoaded = invoicePaymentQuery !== undefined;
   const isPaid = invoicePayment?.status !== 'outstanding';
+  const isPartial = !isPaid && !!balance && balance.paidPaise > 0;
   const hasAdjustments = invoice.lineItems.some((li) => li.adjustmentPaise !== 0);
   const isV2Invoice = invoice.lineItems.length > 0 && invoice.lineItems.every(isV2Line);
   const period = invoicePeriod(invoice.lineItems);
@@ -528,16 +539,18 @@ export function InvoicePrintPage() {
             </p>
             <p className="text-[var(--ink)]">{invoice.invoiceNo}</p>
             <p className="text-[var(--muted)]">{formatDateDMY(invoice.issuedAt)}</p>
-            <p
-              className="mt-1 inline-block rounded border px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-widest"
-              style={
-                isPaid
-                  ? { borderColor: 'var(--moss-strong)', color: 'var(--moss-strong)' }
-                  : { borderColor: 'var(--rust)', color: 'var(--rust)' }
-              }
-            >
-              {isPaid ? 'PAID' : 'PAYMENT DUE'}
-            </p>
+            {statusLoaded && (
+              <p
+                className="mt-1 inline-block rounded border px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-widest"
+                style={
+                  isPaid
+                    ? { borderColor: 'var(--moss-strong)', color: 'var(--moss-strong)' }
+                    : { borderColor: 'var(--rust)', color: 'var(--rust)' }
+                }
+              >
+                {isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE'}
+              </p>
+            )}
           </div>
         </section>
 
@@ -611,6 +624,13 @@ export function InvoicePrintPage() {
           {isPaid ? 'Received with thanks: ' : 'Amount in words: '}
           {amountInWords(invoice.totalPaise)}
         </p>
+
+        {isPartial && balance && (
+          <p className="mt-2 text-sm font-medium text-[var(--ink)]">
+            Received: <span className="font-num">{formatINR(balance.paidPaise)}</span>
+            {' · '}Balance due: <span className="font-num">{formatINR(balance.remainingPaise)}</span>
+          </p>
+        )}
 
         <p className="mt-3 text-sm text-[var(--muted)]">Payment mode: {invoice.paymentMode}</p>
 
