@@ -428,9 +428,9 @@ export function WorkspacePage() {
   );
   const myMonthRow = monthReport?.rows.find((r) => r.therapistId === scope.myTherapistId);
   // Dues: admin/front desk only (the clinic-wide figure) — therapists
-  // don't bill, and a per-therapist breakdown isn't meaningful here.
-  const outstanding = useLiveQuery(
-    () => (scope.isClinicWideView ? dashboardService.outstandingInvoices(clinic.id) : undefined),
+  // don't bill. Per visit, so "Take payment later" visits count too.
+  const dues = useLiveQuery(
+    () => (scope.isClinicWideView ? dashboardService.duesSummary(clinic.id) : undefined),
     [clinic.id, scope.isClinicWideView]
   );
 
@@ -597,7 +597,7 @@ export function WorkspacePage() {
   // doesn't show (today, and what's owed) plus a link to it below; a
   // therapist has no Reports access, so their header keeps the month's
   // own numbers instead.
-  const duesCount = outstanding?.count ?? 0;
+  const duesCount = dues?.visitCount ?? 0;
   const statCells = scope.isClinicWideView
     ? [
         {
@@ -610,11 +610,12 @@ export function WorkspacePage() {
         },
         {
           label: duesCount > 0 ? `Dues · ${duesCount}` : 'Dues',
-          value: formatINR(outstanding?.totalPaise ?? 0),
+          value: formatINR(dues?.totalPaise ?? 0),
           icon: <IconWallet />,
           tone: 'amber' as const,
           kind: 'money' as const,
-          onClick: canBill ? () => void navigate({ to: '/ledger', search: { tab: 'visits' } }) : undefined,
+          // Straight to the unpaid visits, all dates.
+          onClick: () => void navigate({ to: '/ledger', search: { tab: 'visits', filter: 'not_collected' } }),
         },
       ]
     : [

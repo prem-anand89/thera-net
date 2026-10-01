@@ -11,7 +11,7 @@ import { useGoogleReviewEligibleRequestIds } from '@/features/requests/requestsS
 import { formatINR } from '@/domain/money';
 import { formatDateDMY, formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
-import { computeVisitPaymentState, isCollected } from '@/domain/paymentState';
+import { computeVisitPaymentState, hasDue, isCollected, visitDuePaise } from '@/domain/paymentState';
 import { noteForVisit } from '@/domain/noteLinks';
 import { syncFreshnessCaption } from '@/domain/syncCopy';
 import {
@@ -187,7 +187,9 @@ export function LedgerPage() {
   const { myTherapistId } = useWorkspaceScope();
   const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView };
+  const search = useSearch({ strict: false }) as { patientId?: string; tab?: RecordsView; filter?: 'not_collected' };
+  // Workspace's Dues tile lands here: unpaid visits, every date.
+  const dueLanding = search.filter === 'not_collected';
 
   // URL is the source of truth (not local state) so the /invoices redirect,
   // and any bookmark/shared link with ?tab=, land on the right sub-tab
@@ -216,16 +218,16 @@ export function LedgerPage() {
     if ((recordsView === 'invoices' || recordsView === 'daybook') && !canBill) setRecordsView('visits');
   }, [recordsView, canBill, entitlementsLoading, setRecordsView]);
   const initialWeek = currentWeekRange();
-  const [from, setFrom] = useState(initialWeek.from);
-  const [to, setTo] = useState(initialWeek.to);
-  const [datePreset, setDatePreset] = useState<DatePreset>('week');
+  const [from, setFrom] = useState(dueLanding ? '' : initialWeek.from);
+  const [to, setTo] = useState(dueLanding ? '' : initialWeek.to);
+  const [datePreset, setDatePreset] = useState<DatePreset>(dueLanding ? 'all' : 'week');
   const [therapistId, setTherapistId] = useState('');
   const [onlyCollectedNoReceipt, setOnlyCollectedNoReceipt] = useState(false);
-  const [onlyNotCollected, setOnlyNotCollected] = useState(false);
+  const [onlyNotCollected, setOnlyNotCollected] = useState(dueLanding);
   const [onlyNotDocumented, setOnlyNotDocumented] = useState(false);
   // Phones fold therapist + the three "only" checkboxes behind a Filters
   // button (with a count of what's on); from sm: they're always shown.
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(dueLanding);
   const [patientQuery, setPatientQuery] = useState('');
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
@@ -494,10 +496,8 @@ export function LedgerPage() {
     () =>
       cardRows
         .filter((r) => !onlyCollectedNoReceipt || r.paymentState === 'collected_no_receipt')
-        .filter(
-          (r) =>
-            !onlyNotCollected || r.paymentState === 'outstanding' || r.paymentState === 'uninvoiced'
-        )
+        // Includes part-paid visits: they still owe the rest.
+        .filter((r) => !onlyNotCollected || hasDue(r.paymentState))
         .filter((r) => !onlyNotDocumented || r.needsNote),
     [cardRows, onlyCollectedNoReceipt, onlyNotCollected, onlyNotDocumented]
   );
@@ -510,10 +510,15 @@ export function LedgerPage() {
       visibleRows.reduce(
         (acc, r) => ({
           bill: acc.bill + r.billPaise,
-          collected: acc.collected + (isCollected(r.paymentState) ? r.billPaise : 0),
-          outstanding:
-            acc.outstanding +
-            (!isCollected(r.paymentState) && r.paymentState !== 'zero_session' ? r.billPaise : 0),
+          // Billed = collected + outstanding: a part-paid visit splits.
+          collected:
+            acc.collected +
+            (isCollected(r.paymentState)
+              ? r.billPaise
+              : r.paymentState === 'partially_collected'
+                ? r.collectedPaise
+                : 0),
+          outstanding: acc.outstanding + visitDuePaise(r.paymentState, r.billPaise, r.collectedPaise),
         }),
         { bill: 0, collected: 0, outstanding: 0 }
       ),
@@ -641,56 +646,12 @@ export function LedgerPage() {
 
       {recordsView === 'visits' && (
         <>
-          {/* Row 2, directly on the page: search · therapist · Filters ·
-              date presets · ⋮. Phones: search, Filters and ⋮ first, the
-              presets on their own scrolling row (order-last), therapist
-              inside Filters. */}
+          {/* Row 2, directly on the page: the date presets on the left, then
+              search · therapist · Filters · ⋮ on the right. Phones: presets
+              on their own scrolling row, then search, Filters and ⋮, with
+              therapist inside Filters. */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
-              <input
-                type="search"
-                aria-label="Find patient"
-                className={`${toolInput} w-full`}
-                placeholder="Find patient or ID"
-                value={patientQuery}
-                onChange={(e) => setPatientQuery(e.target.value)}
-                onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
-              />
-              {patientMatches.length > 0 && (
-                <div className="absolute z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-                  {patientMatches.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className="block w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--paper)]"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setPatientQuery('');
-                        void navigate({ to: '/ledger', search: { patientId: p.id } });
-                      }}
-                    >
-                      <span className="font-display">{p.name}</span>{' '}
-                      <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="hidden sm:block">{therapistSelect}</div>
-            <button
-              type="button"
-              aria-expanded={filtersOpen}
-              onClick={() => setFiltersOpen((current) => !current)}
-              className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium ${activeFilterCount > 0 ? 'border-[var(--teal)] text-[var(--teal)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]'}`}
-            >
-              Filters
-              {activeFilterCount > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--teal)] px-1 text-[11px] font-semibold text-white">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-            <div className="hide-scrollbar order-last flex w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1 sm:order-none sm:w-auto">
+            <div className="hide-scrollbar flex w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1 sm:w-auto">
               {DATE_PRESETS.map((p) => (
                 <button
                   key={p.key}
@@ -706,27 +667,73 @@ export function LedgerPage() {
               ))}
             </div>
             {datePreset === 'custom' && (
-              <div className="order-last flex items-center gap-1.5 text-xs text-[var(--muted)] sm:order-none">
+              <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
                 <input type="date" aria-label="From" className={toolInput} value={from} onChange={(e) => setFrom(e.target.value)} />
                 –
                 <input type="date" aria-label="To" className={toolInput} value={to} onChange={(e) => setTo(e.target.value)} />
               </div>
             )}
-            <div className="flex min-h-10 shrink-0 items-center sm:ml-auto">
-              <KebabMenu ariaLabel="More ledger options">
-                {(close) => (
-                  <>
-                    <button type="button" className={menuItem} disabled={!visits?.length} onClick={() => { downloadCsv(); close(); }}>
-                      Export CSV
-                    </button>
-                    {canViewPayouts && (
-                      <Link to="/insights" search={{ tab: 'monthly' }} className={`${menuItem} block`} onClick={close}>
-                        Generate report
-                      </Link>
-                    )}
-                  </>
+            <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+              <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
+                <input
+                  type="search"
+                  aria-label="Find patient"
+                  className={`${toolInput} w-full`}
+                  placeholder="Find patient or ID"
+                  value={patientQuery}
+                  onChange={(e) => setPatientQuery(e.target.value)}
+                  onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
+                />
+                {patientMatches.length > 0 && (
+                  <div className="absolute right-0 z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+                    {patientMatches.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="block w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--paper)]"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setPatientQuery('');
+                          void navigate({ to: '/ledger', search: { patientId: p.id } });
+                        }}
+                      >
+                        <span className="font-display">{p.name}</span>{' '}
+                        <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                      </button>
+                    ))}
+                  </div>
                 )}
-              </KebabMenu>
+              </div>
+              <div className="hidden sm:block">{therapistSelect}</div>
+              <button
+                type="button"
+                aria-expanded={filtersOpen}
+                onClick={() => setFiltersOpen((current) => !current)}
+                className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium ${activeFilterCount > 0 ? 'border-[var(--teal)] text-[var(--teal)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]'}`}
+              >
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--teal)] px-1 text-[11px] font-semibold text-white">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+              <div className="flex min-h-10 shrink-0 items-center">
+                <KebabMenu ariaLabel="More ledger options">
+                  {(close) => (
+                    <>
+                      <button type="button" className={menuItem} disabled={!visits?.length} onClick={() => { downloadCsv(); close(); }}>
+                        Export CSV
+                      </button>
+                      {canViewPayouts && (
+                        <Link to="/insights" search={{ tab: 'monthly' }} className={`${menuItem} block`} onClick={close}>
+                          Generate report
+                        </Link>
+                      )}
+                    </>
+                  )}
+                </KebabMenu>
+              </div>
             </div>
           </div>
 
@@ -759,9 +766,9 @@ export function LedgerPage() {
       )}
 
       {recordsView === 'visits' && outstanding && outstanding.rows.length > 0 && (
-        <SectionCard title="Outstanding payments">
+        <SectionCard title="Unpaid invoices">
           <div className="mb-4 flex gap-4">
-            <StatTile label="Total outstanding" value={formatINR(outstanding.totalPaise)} />
+            <StatTile label="Invoiced, unpaid" value={formatINR(outstanding.totalPaise)} />
             <StatTile label="Invoices" value={outstanding.count} />
           </div>
           {/* Below tab: — boxed cards instead of forcing this 5-column

@@ -17,7 +17,9 @@ import {
 } from '@/domain/packageTracking';
 import {
   computeVisitPaymentState,
+  hasDue,
   isCollected,
+  visitDuePaise,
   type VisitPaymentState,
 } from '@/domain/paymentState';
 import type { Repos } from '@/repositories/types';
@@ -59,6 +61,14 @@ export interface OutstandingSummary {
   rows: OutstandingInvoiceRow[];
   totalPaise: Paise;
   count: number;
+}
+
+/** Money billed but not yet received, across every visit (see `duesSummary`). */
+export interface DuesSummary {
+  totalPaise: Paise;
+  /** Visits that still owe something. */
+  visitCount: number;
+  patientCount: number;
 }
 
 export interface NeedsReceiptRow {
@@ -333,6 +343,45 @@ export function createDashboardService(repos: Repos) {
           };
         })
         .sort((a, b) => b.daysSinceLastVisit - a.daysSinceLastVisit);
+    },
+
+    /**
+     * What the clinic is still owed, counted per visit so it matches the
+     * Ledger's Not collected filter: a visit saved with "Take payment
+     * later" (no invoice, no payment) counts the same as one on an invoice
+     * marked outstanding, and a partly paid visit counts only the rest.
+     * `outstandingInvoices` below only sees invoices explicitly marked
+     * outstanding, which misses the uninvoiced ones. All dates, whole clinic.
+     */
+    async duesSummary(clinicId: UUID): Promise<DuesSummary> {
+      const [visits, invoicePayments, payments] = await Promise.all([
+        repos.visits.list({ clinicId }),
+        repos.invoicePayments.list(clinicId),
+        repos.payments.list(clinicId),
+      ]);
+      const statusByInvoiceId = new Map(invoicePayments.map((p) => [p.invoiceId, p.status]));
+      const paidByVisitId = new Map<UUID, Paise>();
+      for (const p of payments) {
+        paidByVisitId.set(p.visitId, (paidByVisitId.get(p.visitId) ?? 0) + p.amountPaise);
+      }
+      let totalPaise = 0;
+      let visitCount = 0;
+      const patients = new Set<UUID>();
+      for (const v of visits) {
+        if (v.deleted) continue;
+        const collected = paidByVisitId.get(v.id) ?? 0;
+        const state = computeVisitPaymentState(
+          v.actualBillPaise,
+          v.invoiceId,
+          collected,
+          v.invoiceId ? statusByInvoiceId.get(v.invoiceId) : undefined
+        );
+        if (!hasDue(state)) continue;
+        totalPaise += visitDuePaise(state, v.actualBillPaise, collected);
+        visitCount += 1;
+        patients.add(v.patientId);
+      }
+      return { totalPaise, visitCount, patientCount: patients.size };
     },
 
     async outstandingInvoices(clinicId: UUID): Promise<OutstandingSummary> {
@@ -926,9 +975,10 @@ export function createDashboardService(repos: Repos) {
       const collectedPaise = rows
         .filter((r) => isCollected(r.paymentState))
         .reduce((sum, r) => sum + r.billPaise, 0);
-      const outstandingPaise = rows
-        .filter((r) => r.paymentState === 'outstanding' || r.paymentState === 'uninvoiced')
-        .reduce((sum, r) => sum + r.billPaise, 0);
+      const outstandingPaise = rows.reduce(
+        (sum, r) => sum + visitDuePaise(r.paymentState, r.billPaise, r.collectedPaise),
+        0
+      );
 
       return { visits: rows, visitCount: rows.length, collectedPaise, outstandingPaise };
     },

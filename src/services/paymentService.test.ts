@@ -172,6 +172,35 @@ describe('paymentService.recordInvoicePayment / invoiceBalance', () => {
     expect(status?.status).toBe('outstanding'); // unchanged — still owes the rest
   });
 
+  it('collectInvoiceNow records the unpaid rest as a real payment and marks the invoice paid', async () => {
+    const visit = visitFixture({ id: 'visit-1', invoiceId: 'inv-1', actualBillPaise: rs(500) });
+    const fake = makeInvoicePaymentFlowRepos([visit]);
+    await seedOutstanding(fake, 'inv-1');
+    const svc = createPaymentService(fake.repos);
+    const invoice = invoiceFixture({ id: 'inv-1', totalPaise: rs(500) });
+
+    await svc.collectInvoiceNow('clinic-1', invoice, 'upi', '2026-08-02');
+
+    const payments = await fake.repos.payments.listByVisit('visit-1');
+    expect(payments).toHaveLength(1);
+    expect(payments[0]).toMatchObject({ amountPaise: rs(500), method: 'upi', receivedDate: '2026-08-02' });
+    expect((await fake.repos.invoicePayments.getByInvoiceId('inv-1'))?.status).toBe('paid');
+  });
+
+  it('collectInvoiceNow adds no second payment when the visit was already paid in full', async () => {
+    const visit = visitFixture({ id: 'visit-1', invoiceId: 'inv-1', actualBillPaise: rs(500) });
+    const fake = makeInvoicePaymentFlowRepos([visit]);
+    await seedOutstanding(fake, 'inv-1');
+    const svc = createPaymentService(fake.repos);
+    const invoice = invoiceFixture({ id: 'inv-1', totalPaise: rs(500) });
+    await svc.recordInvoicePayment('clinic-1', invoice, rs(500), 'cash', '2026-08-01', null);
+
+    await svc.collectInvoiceNow('clinic-1', invoice, 'upi', '2026-08-02');
+
+    expect(await fake.repos.payments.listByVisit('visit-1')).toHaveLength(1);
+    expect((await fake.repos.invoicePayments.getByInvoiceId('inv-1'))?.status).toBe('paid');
+  });
+
   it('marks the invoice paid once cumulative payments reach the total', async () => {
     const visit = visitFixture({ id: 'visit-1', invoiceId: 'inv-1', actualBillPaise: rs(500) });
     const fake = makeInvoicePaymentFlowRepos([visit]);

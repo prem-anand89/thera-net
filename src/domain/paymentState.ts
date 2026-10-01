@@ -51,6 +51,35 @@ export function computeVisitPaymentState(
   return invoiceId ? 'outstanding' : 'uninvoiced';
 }
 
+/**
+ * What a visit still owes: nothing once collected (or a ₹0 session), the
+ * rest of the bill after a partial payment, the whole bill otherwise —
+ * whether or not an invoice was issued ("Take payment later" saves a visit
+ * with no invoice and no payment, i.e. `uninvoiced`). The one definition
+ * behind Workspace's Dues tile and the Ledger's Not collected filter and
+ * totals, so they can never disagree.
+ */
+export function visitDuePaise(
+  state: VisitPaymentState,
+  billPaise: Paise,
+  collectedPaise: Paise
+): Paise {
+  switch (state) {
+    case 'outstanding':
+    case 'uninvoiced':
+      return billPaise;
+    case 'partially_collected':
+      return Math.max(0, billPaise - collectedPaise);
+    default:
+      return 0;
+  }
+}
+
+/** Whether a visit still has money to collect (the Ledger's Not collected filter). */
+export function hasDue(state: VisitPaymentState): boolean {
+  return state === 'outstanding' || state === 'uninvoiced' || state === 'partially_collected';
+}
+
 /** Whether a payment state represents the bill fully settled, regardless of receipt. */
 export function isCollected(state: VisitPaymentState): boolean {
   return state === 'paid' || state === 'collected_no_receipt';

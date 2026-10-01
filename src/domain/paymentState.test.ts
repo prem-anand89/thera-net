@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeVisitPaymentState,
+  hasDue,
   isCollected,
   isPackageContinuation,
   paymentActions,
@@ -8,6 +9,7 @@ import {
   paymentStatusLine,
   paymentStatusPhrase,
   paymentStatusShortPhrase,
+  visitDuePaise,
 } from './paymentState';
 import { rupeesToPaise as rs } from './money';
 
@@ -270,5 +272,27 @@ describe('paymentBadge', () => {
     });
     expect(b.kind).toBe('overdue');
     expect(b.label).toBe('₹300 of ₹500');
+  });
+});
+
+describe('visitDuePaise / hasDue', () => {
+  it('owes the whole bill when nothing was collected, invoiced or not ("take payment later" is uninvoiced)', () => {
+    expect(visitDuePaise('uninvoiced', rs(600), 0)).toBe(rs(600));
+    expect(visitDuePaise('outstanding', rs(600), 0)).toBe(rs(600));
+  });
+
+  it('owes only the rest after a partial payment', () => {
+    expect(visitDuePaise('partially_collected', rs(500), rs(300))).toBe(rs(200));
+  });
+
+  it('owes nothing once collected or for a ₹0 session', () => {
+    expect(visitDuePaise('paid', rs(500), rs(500))).toBe(0);
+    expect(visitDuePaise('collected_no_receipt', rs(500), rs(500))).toBe(0);
+    expect(visitDuePaise('zero_session', 0, 0)).toBe(0);
+  });
+
+  it('hasDue matches the states that owe money, partials included', () => {
+    expect(['uninvoiced', 'outstanding', 'partially_collected'].every((s) => hasDue(s as never))).toBe(true);
+    expect(['paid', 'collected_no_receipt', 'zero_session'].some((s) => hasDue(s as never))).toBe(false);
   });
 });

@@ -130,8 +130,10 @@ const ledgerRoute = createRoute({
   path: '/ledger',
   validateSearch: (
     search: Record<string, unknown>
-  ): { patientId?: string; tab?: (typeof LEDGER_TABS)[number] } => ({
+  ): { patientId?: string; tab?: (typeof LEDGER_TABS)[number]; filter?: 'not_collected' } => ({
     ...(typeof search.patientId === 'string' ? { patientId: search.patientId } : {}),
+    // Landing straight on the unpaid visits (Workspace's Dues tile).
+    ...(search.filter === 'not_collected' ? { filter: 'not_collected' as const } : {}),
     ...(LEDGER_TABS.includes(search.tab as (typeof LEDGER_TABS)[number])
       ? { tab: search.tab as (typeof LEDGER_TABS)[number] }
       : {}),

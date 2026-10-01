@@ -5,6 +5,7 @@ import type {
   ConsultationNote,
   InvoiceClinicalSnapshot,
   InvoiceLineItem,
+  PaymentMethod,
   PaymentMode,
 } from '@/domain/types';
 import type { CoreAssessmentPayload } from '@/domain/coreAssessment';
@@ -14,6 +15,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { treatmentsDisplayText } from '@/components/VisitCard';
 import type { InvoicePrintBackTarget } from '@/app/router';
 import { formatINR } from '@/domain/money';
+import { toLocalDateStr } from '@/domain/schedule';
 import { sessionCountLabel } from '@/domain/invoiceLine';
 import {
   EMPTY_CLINICAL_FIELDS,
@@ -25,6 +27,14 @@ import {
 // desk, so it's both the default selection below and the top option here
 // rather than making staff scroll past Cash on every single bill.
 const PAYMENT_MODES: PaymentMode[] = ['UPI', 'Cash', 'Card', 'Insurance'];
+// The invoice's payment mode is also how it was paid; the payment record
+// uses the (wider) PaymentMethod vocabulary. Insurance settles by transfer.
+const METHOD_FOR_MODE: Record<PaymentMode, PaymentMethod> = {
+  UPI: 'upi',
+  Cash: 'cash',
+  Card: 'card',
+  Insurance: 'bank_transfer',
+};
 
 export interface IssueInvoiceTarget {
   visitId: string;
@@ -199,7 +209,16 @@ export function IssueInvoiceDialog({
         clinicalSnapshotFromFields()
       );
       try {
-        await paymentService.setStatus(invoice.id, clinicId, collectedNow ? 'paid' : 'outstanding');
+        if (collectedNow) {
+          await paymentService.collectInvoiceNow(
+            clinicId,
+            invoice,
+            METHOD_FOR_MODE[paymentMode],
+            toLocalDateStr(new Date())
+          );
+        } else {
+          await paymentService.setStatus(invoice.id, clinicId, 'outstanding');
+        }
       } catch (statusError) {
         console.error('Could not record payment status', statusError);
       }

@@ -119,7 +119,28 @@ export function createPaymentService(repos: Repos) {
     }
   }
 
-  return { setStatus, invoiceBalance, recordInvoicePayment };
+  /**
+   * "Collected now" at invoice time: records whatever the invoice's visits
+   * haven't already received as a real payment (method, date) and marks the
+   * invoice paid. Flipping only the paid flag would leave the cash out of the
+   * Daybook and the by-method totals, which are built from `payments` rows.
+   * Nothing extra is written when the visits were already paid in full (a
+   * visit saved as "paid" logged its payment up front).
+   */
+  async function collectInvoiceNow(
+    clinicId: UUID,
+    invoice: Invoice,
+    method: PaymentMethod,
+    receivedDate: string
+  ): Promise<void> {
+    const { remainingPaise } = await invoiceBalance(clinicId, invoice);
+    if (remainingPaise > 0) {
+      await recordInvoicePayment(clinicId, invoice, remainingPaise, method, receivedDate, null);
+    }
+    await setStatus(invoice.id, clinicId, 'paid');
+  }
+
+  return { setStatus, invoiceBalance, recordInvoicePayment, collectInvoiceNow };
 }
 
 /**

@@ -332,6 +332,38 @@ describe('dashboardService.openPackages', () => {
   });
 });
 
+describe('dashboardService.duesSummary', () => {
+  let fake: ReturnType<typeof makeFakeRepos>;
+  beforeEach(() => {
+    fake = makeFakeRepos();
+  });
+
+  it('counts a "take payment later" visit (no invoice, no payment) — outstandingInvoices does not', async () => {
+    fake.visits.set('v1', baseVisit('v1', { actualBillPaise: rs(600) }));
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.duesSummary('clinic-1')).toEqual({ totalPaise: rs(600), visitCount: 1, patientCount: 1 });
+    expect((await svc.outstandingInvoices('clinic-1')).totalPaise).toBe(0);
+  });
+
+  it('counts only the unpaid rest of a partly paid visit, and an outstanding invoice in full', async () => {
+    fake.visits.set('v1', baseVisit('v1', { actualBillPaise: rs(500) }));
+    fake.payments.set('pay-1', { id: 'pay-1', clinicId: 'clinic-1', visitId: 'v1', amountPaise: rs(300), method: 'cash', receivedDate: '2026-06-01', notes: null, updatedAt: '' });
+    fake.visits.set('v2', baseVisit('v2', { actualBillPaise: rs(1500), invoiceId: 'inv-2' }));
+    fake.invoicePayments.set('p2', { id: 'p2', clinicId: 'clinic-1', invoiceId: 'inv-2', status: 'outstanding', paidAt: null, updatedAt: '' });
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.duesSummary('clinic-1')).toMatchObject({ totalPaise: rs(200) + rs(1500), visitCount: 2 });
+  });
+
+  it('ignores collected, ₹0 and deleted visits', async () => {
+    fake.visits.set('v1', baseVisit('v1', { actualBillPaise: rs(500) }));
+    fake.payments.set('pay-1', { id: 'pay-1', clinicId: 'clinic-1', visitId: 'v1', amountPaise: rs(500), method: 'upi', receivedDate: '2026-06-01', notes: null, updatedAt: '' });
+    fake.visits.set('v2', baseVisit('v2', { actualBillPaise: 0 }));
+    fake.visits.set('v3', baseVisit('v3', { actualBillPaise: rs(900), deleted: true }));
+    const svc = createDashboardService(fake.repos);
+    expect(await svc.duesSummary('clinic-1')).toEqual({ totalPaise: 0, visitCount: 0, patientCount: 0 });
+  });
+});
+
 describe('dashboardService.outstandingInvoices', () => {
   let fake: ReturnType<typeof makeFakeRepos>;
   beforeEach(() => {
