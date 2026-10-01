@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService, dashboardService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
-import { ErrorNote, Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
+import { ErrorNote, Field, inputCls, btnPrimary } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -29,6 +29,7 @@ import {
 } from '@/domain/schedule';
 import type { Appointment, UUID, Patient } from '@/domain/types';
 import { AttendanceNote } from '@/components/schedule/AppointmentDetailsPanel';
+import { therapistColor } from '@/components/schedule/scheduleColors';
 
 export type BookedSlot = {
   kind: 'booked' | 'rescheduled';
@@ -219,7 +220,7 @@ export function BookSlotSheet({
         disabled={unavailable}
         aria-pressed={selected}
         onClick={() => setSelectedTime(slot.time)}
-        className={`min-h-11 rounded-lg border px-2 text-xs font-medium ${selected ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : unavailable ? 'cursor-not-allowed border-[var(--border)] bg-[var(--paper)] text-[var(--muted)] line-through' : 'border-[var(--moss)]/40 bg-[var(--moss-light)] text-[var(--ink)] hover:border-[var(--moss)]'}`}
+        className={`min-h-11 rounded-lg border px-1 text-xs font-medium tabular-nums ${selected ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : unavailable ? 'cursor-not-allowed border-transparent bg-[var(--paper)] text-[var(--muted)]/60' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--teal)] hover:bg-[var(--teal-light)]'}`}
       >
         {slot.label}
       </button>
@@ -397,120 +398,211 @@ export function BookSlotSheet({
 
   const title = isReschedule ? 'Reschedule' : requestId ? 'Confirm request' : 'New booking';
   const submitLabel = isReschedule ? 'Move appointment' : repeat && activeRows.length > 1 ? `Book ${activeRows.length} sessions` : 'Confirm booking';
+  const timeLabel = selectedTime ? minutesLabel(Number(selectedTime.slice(0, 2)) * 60 + Number(selectedTime.slice(3, 5))) : null;
+  const summary = selectedTime
+    ? `${displayDate(selectedDate)}, ${timeLabel} · ${formatMinutes(lengthMinutes)}${therapistName ? ` · ${therapistName}` : ''}`
+    : null;
+  const roster = [...(therapists ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+  const colorOf = (id: string) => therapistColor(Math.max(0, roster.findIndex((t) => t.id === id)));
+  const dayParts = [
+    { label: 'Morning', slots: workingSlots.filter((slot) => slot.minutes < 12 * 60) },
+    { label: 'Afternoon', slots: workingSlots.filter((slot) => slot.minutes >= 12 * 60 && slot.minutes < 17 * 60) },
+    { label: 'Evening', slots: workingSlots.filter((slot) => slot.minutes >= 17 * 60) },
+  ].filter((part) => part.slots.length > 0);
+  const chip = (on: boolean) =>
+    `flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium ${
+      on ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--teal)]/50'
+    }`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4">
-      <div role="dialog" aria-modal="true" aria-labelledby="book-slot-title" className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-[var(--surface)] p-4 shadow-xl sm:max-w-lg sm:rounded-2xl sm:p-6">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={() => !busy && onClose()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="book-slot-title"
+        className="flex h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-[var(--surface)] shadow-xl sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {/* Header — stays put while the body scrolls. */}
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-4 pb-3 pt-3 sm:px-6 sm:pt-5">
+          <div className="min-w-0">
+            <span aria-hidden className="mx-auto mb-2 block h-1 w-10 rounded-full bg-[var(--border)] sm:hidden" />
             <h2 id="book-slot-title" className="font-display text-lg font-semibold text-[var(--ink)]">{title}</h2>
-            {rescheduleAppointment ? (
-              <p className="text-sm text-[var(--muted)]">
-                {rescheduleAppointment.patientName} · now {displayDate(toLocalDateStr(new Date(rescheduleAppointment.scheduledAt)))}, {minutesLabel(minutesOfDay(rescheduleAppointment.scheduledAt))}
+            {rescheduleAppointment && (
+              <p className="truncate text-sm text-[var(--muted)]">
+                <span className="font-display font-medium text-[var(--ink)]">{rescheduleAppointment.patientName}</span>, now{' '}
+                {displayDate(toLocalDateStr(new Date(rescheduleAppointment.scheduledAt)))}, {minutesLabel(minutesOfDay(rescheduleAppointment.scheduledAt))}
               </p>
-            ) : (
-              <p className="text-sm text-[var(--muted)]">Choose the patient, therapist, and an available slot.</p>
-            )}
-            {requestId && (requestNotes || requestPreferredTimeText) && (
-              <div className="mt-3 rounded-lg bg-[var(--paper)] p-3 text-xs text-[var(--ink)]">
-                {requestPreferredTimeText && <p><strong>Requested time:</strong> {requestPreferredTimeText}</p>}
-                {requestNotes && <p><strong>Notes:</strong> {requestNotes}</p>}
-              </div>
             )}
           </div>
-          <button type="button" className="min-h-11 px-2 text-sm text-[var(--muted)]" onClick={onClose}>Close</button>
+          <button type="button" aria-label="Close" className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--muted)] hover:bg-[var(--paper)]" onClick={onClose} disabled={busy}>
+            <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
         </div>
 
-        <div className="space-y-5">
+        <div className="flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-6">
+          {requestId && (requestNotes || requestPreferredTimeText) && (
+            <div className="rounded-xl bg-[var(--amber-light)] px-3 py-2.5 text-sm text-[var(--ink)]">
+              {requestPreferredTimeText && <p><span className="text-[var(--muted)]">Asked for</span> {requestPreferredTimeText}</p>}
+              {requestNotes && <p className="mt-0.5"><span className="text-[var(--muted)]">Reason</span> {requestNotes}</p>}
+            </div>
+          )}
+
           {!isReschedule && (
-            <div>
-              <p className="mb-2 text-xs font-medium text-[var(--muted)]">Patient</p>
-              <div className="mb-3 flex gap-2">
-                <button type="button" className={patientMode === 'find' ? btnPrimary : btnSecondary} onClick={() => setPatientMode('find')}>Find patient</button>
-                <button type="button" className={patientMode === 'new' ? btnPrimary : btnSecondary} onClick={() => setPatientMode('new')}>New patient</button>
+            <section aria-labelledby="book-patient">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h3 id="book-patient" className={sectionTitle}>Patient</h3>
+                <div className="flex rounded-lg bg-[var(--paper)] p-0.5" role="group" aria-label="Patient type">
+                  {(['find', 'new'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={patientMode === mode}
+                      onClick={() => setPatientMode(mode)}
+                      className={`min-h-9 rounded-md px-3 text-xs font-medium ${patientMode === mode ? 'bg-[var(--surface)] text-[var(--ink)] shadow-sm' : 'text-[var(--muted)]'}`}
+                    >
+                      {mode === 'find' ? 'Existing patient' : 'New patient'}
+                    </button>
+                  ))}
+                </div>
               </div>
               {patientMode === 'find' ? (
                 <div className="space-y-3">
                   <SearchableSelect label="" value={patientId} onChange={(value) => setPatientId(value as UUID)} options={patientOptions} placeholder="Search name or phone" />
                   {patientId && !patients?.find((p) => p.id === patientId)?.phone && (
-                    <Field label="Phone (none on file)"><input type="tel" className={inputCls} value={patientPhone} onChange={(event) => setPatientPhone(event.target.value)} /></Field>
+                    <Field label="Phone (none on file)"><input type="tel" inputMode="tel" autoComplete="tel" className={inputCls} value={patientPhone} onChange={(event) => setPatientPhone(event.target.value)} /></Field>
                   )}
                 </div>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Patient name"><input className={inputCls} value={patientName} onChange={(event) => setPatientName(event.target.value)} /></Field>
-                  <Field label="Phone"><input type="tel" className={inputCls} value={patientPhone} onChange={(event) => setPatientPhone(event.target.value)} /></Field>
+                  <Field label="Patient name"><input className={inputCls} autoComplete="name" value={patientName} onChange={(event) => setPatientName(event.target.value)} /></Field>
+                  <Field label="Phone"><input type="tel" inputMode="tel" autoComplete="tel" className={inputCls} value={patientPhone} onChange={(event) => setPatientPhone(event.target.value)} /></Field>
                 </div>
               )}
-            </div>
-          )}
-
-          {(attendance || alreadyBooked) && (
-            <div className="space-y-2">
-              <AttendanceNote attendance={attendance} />
-              {alreadyBooked && (
-                <p className="rounded-lg bg-[var(--teal-light)] px-3 py-2 text-xs text-[var(--ink)]">
-                  Already booked: {displayDate(toLocalDateStr(new Date(alreadyBooked.scheduledAt)))}, {minutesLabel(minutesOfDay(alreadyBooked.scheduledAt))}.
-                </p>
+              {(attendance || alreadyBooked) && (
+                <div className="mt-3 space-y-2">
+                  <AttendanceNote attendance={attendance} />
+                  {alreadyBooked && (
+                    <p className="rounded-lg bg-[var(--teal-light)] px-3 py-2 text-xs text-[var(--ink)]">
+                      Already booked: {displayDate(toLocalDateStr(new Date(alreadyBooked.scheduledAt)))}, {minutesLabel(minutesOfDay(alreadyBooked.scheduledAt))}.
+                    </p>
+                  )}
+                </div>
               )}
-            </div>
+            </section>
           )}
+          {isReschedule && attendance && <AttendanceNote attendance={attendance} />}
 
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+          <section aria-labelledby="book-who">
+            <h3 id="book-who" className={`${sectionTitle} mb-2`}>Therapist and length</h3>
             {therapistLocked ? (
-              <div>
-                <p className="mb-1 text-xs font-medium text-[var(--muted)]">Therapist</p>
-                <p className="min-h-11 rounded-lg bg-[var(--paper)] px-3 py-2.5 text-sm text-[var(--ink)]">{therapistName ?? 'Unassigned'}</p>
-              </div>
+              <p className="mb-3 flex items-center gap-2 text-sm text-[var(--ink)]">
+                <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: therapistId ? colorOf(therapistId) : 'var(--slate)' }} />
+                {therapistName ?? 'Unassigned'}
+              </p>
             ) : (
-              <Field label="Therapist">
-                <select className={inputCls} value={therapistId} onChange={(event) => { setTherapistId(event.target.value as UUID); setTherapistTouched(true); setSelectedTime(null); }}>
-                  <option value="">Choose therapist</option>
-                  {(therapists ?? []).map((therapist) => <option key={therapist.id} value={therapist.id}>{therapist.name}</option>)}
-                </select>
-              </Field>
+              <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="radiogroup" aria-label="Therapist">
+                {roster.map((therapist) => (
+                  <button
+                    key={therapist.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={therapistId === therapist.id}
+                    onClick={() => { setTherapistId(therapist.id); setTherapistTouched(true); setSelectedTime(null); }}
+                    className={chip(therapistId === therapist.id)}
+                  >
+                    <span aria-hidden className="h-2.5 w-2.5 rounded-full ring-2 ring-white/70" style={{ background: colorOf(therapist.id) }} />
+                    {therapist.name}
+                  </button>
+                ))}
+              </div>
             )}
-            <Field label="Length">
-              <select className={inputCls} value={lengthMinutes} onChange={(event) => { setLengthMinutes(Number(event.target.value)); setSelectedTime(null); }}>
-                {lengthOptions.map((minutes) => <option key={minutes} value={minutes}>{formatMinutes(minutes)}</option>)}
-              </select>
-            </Field>
-          </div>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Length">
+              {lengthOptions.map((minutes) => (
+                <button
+                  key={minutes}
+                  type="button"
+                  role="radio"
+                  aria-checked={lengthMinutes === minutes}
+                  onClick={() => { setLengthMinutes(minutes); setSelectedTime(null); }}
+                  className={`min-h-9 min-w-14 rounded-lg border px-2.5 text-xs font-medium ${
+                    lengthMinutes === minutes ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]' : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  {formatMinutes(minutes)}
+                </button>
+              ))}
+            </div>
+          </section>
 
-          <div>
-            <p className="mb-2 text-xs font-medium text-[var(--muted)]">Date</p>
-            <div className="flex gap-2 overflow-x-auto pb-1">
+          <section aria-labelledby="book-date">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 id="book-date" className={sectionTitle}>Day</h3>
+              <button type="button" className="min-h-9 text-xs font-medium text-[var(--teal)] hover:underline" onClick={() => setShowLater((current) => !current)}>
+                {showLater ? 'Hide calendar' : 'Other date'}
+              </button>
+            </div>
+            <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" role="radiogroup" aria-label="Day">
               {quickDates.map((date, index) => {
                 const dayClosed = isClosedDay(date, clinic.closedWeekdays, closedDates ?? []).closed;
-                return <button key={date} type="button" onClick={() => { setSelectedDate(date); setSelectedTime(null); }} className={`min-h-11 shrink-0 rounded-lg border px-3 text-xs font-medium ${selectedDate === date ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : dayClosed ? 'border-[var(--border)] bg-[var(--slate-light)] text-[var(--muted)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]'}`}>{index === 0 ? 'Today' : index === 1 ? 'Tomorrow' : displayDate(date)}{dayClosed ? ' · closed' : ''}</button>;
+                const value = new Date(`${date}T00:00:00`);
+                const on = selectedDate === date;
+                return (
+                  <button
+                    key={date}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    aria-label={`${index === 0 ? 'Today' : index === 1 ? 'Tomorrow' : displayDate(date)}${dayClosed ? ', closed' : ''}`}
+                    onClick={() => { setSelectedDate(date); setSelectedTime(null); }}
+                    className={`flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-xl border text-center leading-none sm:w-auto sm:flex-1 ${
+                      on ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : dayClosed ? 'border-[var(--border)] bg-[var(--slate-light)] text-[var(--muted)]' : 'border-[var(--border)] text-[var(--ink)] hover:border-[var(--teal)]/50'
+                    }`}
+                  >
+                    <span className={`text-[10px] font-medium ${on ? 'text-white/80' : 'text-[var(--muted)]'}`}>
+                      {index === 0 ? 'Today' : value.toLocaleDateString('en-IN', { weekday: 'short' })}
+                    </span>
+                    <span className="mt-1 text-base font-semibold tabular-nums">{value.getDate()}</span>
+                  </button>
+                );
               })}
-              <button type="button" onClick={() => setShowLater(true)} className="min-h-11 shrink-0 rounded-lg border border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)]">Later…</button>
             </div>
-            {showLater && <input type="date" aria-label="Date" className={`${inputCls} mt-3`} value={selectedDate} onChange={(event) => { setSelectedDate(event.target.value); setSelectedTime(null); }} />}
-          </div>
+            {(showLater || !quickDates.includes(selectedDate)) && (
+              <input type="date" aria-label="Date" className={`${inputCls} mt-3`} value={selectedDate} onChange={(event) => { setSelectedDate(event.target.value); setSelectedTime(null); }} />
+            )}
+          </section>
 
-          <div>
+          <section aria-labelledby="book-time">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-medium text-[var(--muted)]">Available time</p>
-              <button type="button" className="min-h-9 text-xs font-medium text-[var(--teal)] hover:underline" onClick={pickFirstAvailable}>
-                First available →
+              <h3 id="book-time" className={sectionTitle}>Time</h3>
+              <button type="button" className="flex min-h-9 items-center gap-1 rounded-full bg-[var(--teal-light)] px-3 text-xs font-medium text-[var(--teal-strong)] hover:bg-[var(--teal)] hover:text-white" onClick={pickFirstAvailable}>
+                First available
               </button>
             </div>
             {closed.closed && (
-              <p role="status" className="mb-2 rounded-lg bg-[var(--slate-light)] p-3 text-sm text-[var(--slate)]">
+              <p role="status" className="mb-3 rounded-lg bg-[var(--slate-light)] p-3 text-sm text-[var(--slate)]">
                 {closed.kind === 'holiday'
                   ? `The clinic is closed this day${closed.label ? ` (${closed.label})` : ''}.`
                   : 'The clinic is normally closed on this day.'}{' '}
                 You can still book, but check first.
               </p>
             )}
-            {!therapistId ? <p className="rounded-lg bg-[var(--paper)] p-3 text-sm text-[var(--muted)]">Choose a therapist to see their available times.</p> : (
+            {!therapistId ? (
+              <p className="rounded-lg bg-[var(--paper)] p-3 text-sm text-[var(--muted)]">Choose a therapist to see their free times.</p>
+            ) : (
               <>
                 {workingSlots.length === 0 && (
                   <p className="mb-2 rounded-lg bg-[var(--paper)] p-3 text-sm text-[var(--muted)]">{therapistName ?? 'This therapist'} isn't working this day.</p>
                 )}
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {workingSlots.map(renderSlot)}
+                <div className="space-y-3">
+                  {dayParts.map((part) => (
+                    <div key={part.label}>
+                      <p className="mb-1.5 text-[11px] font-medium text-[var(--muted)]">{part.label}</p>
+                      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">{part.slots.map(renderSlot)}</div>
+                    </div>
+                  ))}
                 </div>
                 {offSlots.length > 0 && (
                   <div className="mt-3">
@@ -523,18 +615,26 @@ export function BookSlotSheet({
                       {showOffHours || offSlots.some((slot) => slot.time === selectedTime) ? '▾' : '▸'} Outside working hours ({offSlots.length})
                     </button>
                     {(showOffHours || offSlots.some((slot) => slot.time === selectedTime)) && (
-                      <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">{offSlots.map(renderSlot)}</div>
+                      <div className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-5">{offSlots.map(renderSlot)}</div>
                     )}
                   </div>
                 )}
               </>
             )}
-          </div>
+          </section>
+
           {!isReschedule && !requestId && (
-            <div className="rounded-xl border border-[var(--border)] p-3">
-              <label className="flex items-center gap-2 text-sm font-medium text-[var(--ink)]">
+            <section className="rounded-xl border border-[var(--border)]">
+              <label className="flex min-h-12 cursor-pointer items-center justify-between gap-3 px-3 text-sm font-medium text-[var(--ink)]">
+                <span>
+                  Repeat this booking
+                  <span className="block text-xs font-normal text-[var(--muted)]">Same time on chosen weekdays</span>
+                </span>
                 <input
                   type="checkbox"
+                  role="switch"
+                  aria-label="Repeat this booking"
+                  className="h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-[var(--border)] transition-colors before:block before:h-4 before:w-4 before:translate-x-0.5 before:rounded-full before:bg-white before:shadow before:transition-transform checked:bg-[var(--teal)] checked:before:translate-x-[18px]"
                   checked={repeat}
                   onChange={(event) => {
                     setRepeat(event.target.checked);
@@ -543,13 +643,12 @@ export function BookSlotSheet({
                     }
                   }}
                 />
-                Repeat this booking
               </label>
               {repeat && (
-                <div className="mt-3 space-y-3">
+                <div className="space-y-3 border-t border-[var(--border)] p-3">
                   <div>
                     <p className="mb-1.5 text-xs font-medium text-[var(--muted)]">On</p>
-                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Repeat on">
+                    <div className="grid grid-cols-7 gap-1" role="group" aria-label="Repeat on">
                       {[1, 2, 3, 4, 5, 6, 0].map((day) => {
                         const on = repeatDays.includes(day);
                         return (
@@ -558,7 +657,7 @@ export function BookSlotSheet({
                             type="button"
                             aria-pressed={on}
                             onClick={() => setRepeatDays((current) => (on ? current.filter((d) => d !== day) : [...current, day]))}
-                            className={`min-h-9 min-w-11 rounded-lg border px-2 text-xs font-medium ${on ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] text-[var(--ink)]'}`}
+                            className={`min-h-10 rounded-lg border text-xs font-medium ${on ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] text-[var(--ink)]'}`}
                           >
                             {WEEKDAY_NAMES[day].slice(0, 3)}
                           </button>
@@ -570,6 +669,7 @@ export function BookSlotSheet({
                     <Field label="Sessions">
                       <input
                         type="number"
+                        inputMode="numeric"
                         min={2}
                         max={52}
                         className={`${inputCls} w-24`}
@@ -597,9 +697,9 @@ export function BookSlotSheet({
                         >
                           <span>
                             {index + 1}. {displayDate(row.date)}, {minutesLabel(Number(row.time.slice(0, 2)) * 60 + Number(row.time.slice(3, 5)))}
-                            {!row.skipped && row.problem === 'clash' && ' — clashes'}
-                            {!row.skipped && row.problem === 'off-hours' && ' — outside hours'}
-                            {!row.skipped && row.problem === 'past' && ' — in the past'}
+                            {!row.skipped && row.problem === 'clash' && ', clashes'}
+                            {!row.skipped && row.problem === 'off-hours' && ', outside hours'}
+                            {!row.skipped && row.problem === 'past' && ', in the past'}
                           </span>
                           <span className="flex shrink-0 gap-2">
                             {!row.skipped && row.problem && (
@@ -624,23 +724,28 @@ export function BookSlotSheet({
                   {selectedTime && (
                     <p className="text-xs text-[var(--muted)]">
                       {activeRows.length} session{activeRows.length === 1 ? '' : 's'}
-                      {unresolved > 0 ? ` · ${unresolved} need a new time or skip` : ' · all free'}
+                      {unresolved > 0 ? `, ${unresolved} need a new time or skip` : ', all free'}
                     </p>
                   )}
                 </div>
               )}
-            </div>
+            </section>
           )}
+        </div>
 
+        {/* Footer — what will be booked, then the action. */}
+        <div className="border-t border-[var(--border)] bg-[var(--surface)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:pb-4">
           <ErrorNote message={error} />
-          <div className="sticky -bottom-4 -mx-4 flex justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:-bottom-6 sm:-mx-6 sm:px-6 sm:pb-3">
-            <button type="button" className={btnSecondary} onClick={onClose} disabled={busy}>Cancel</button>
-            <button type="button" className={`${btnPrimary} min-w-0 flex-1 sm:flex-none`} onClick={() => void submit()} disabled={busy}>
-              {busy ? 'Saving…' : selectedTime ? `${submitLabel} · ${displayDate(selectedDate)}, ${minutesLabel(Number(selectedTime.slice(0, 2)) * 60 + Number(selectedTime.slice(3, 5)))} · ${formatMinutes(lengthMinutes)}` : submitLabel}
-            </button>
-          </div>
+          <p className="mb-2 truncate text-sm text-[var(--ink)]" aria-live="polite">
+            {summary ?? <span className="text-[var(--muted)]">Pick a time to continue</span>}
+          </p>
+          <button type="button" className={`${btnPrimary} w-full`} onClick={() => void submit()} disabled={busy}>
+            {busy ? 'Saving…' : submitLabel}
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
+const sectionTitle = 'text-sm font-semibold text-[var(--ink)]';

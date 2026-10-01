@@ -100,7 +100,7 @@ describe('BookSlotSheet', () => {
 
   it('defaults the therapist to the logged-in therapist', () => {
     render(<BookSlotSheet isOpen onClose={() => {}} />);
-    expect(screen.getByLabelText('Therapist')).toHaveValue('t1');
+    expect(screen.getByRole('radio', { name: /Dr Asha/ })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('disables times that have already passed today', () => {
@@ -113,7 +113,7 @@ describe('BookSlotSheet', () => {
     render(<BookSlotSheet isOpen onClose={() => {}} appointments={[appointment({})]} prefilledDate="2026-10-01" />);
     expect(slot('11:00 AM')).toBeDisabled();
     expect(slot('10:30 AM')).toBeEnabled();
-    fireEvent.change(screen.getByLabelText('Length'), { target: { value: '60' } });
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '1h' }));
     expect(slot('10:30 AM')).toBeDisabled(); // 10:30–11:30 hits the 11:00 booking
     // 11:30 + 60 min would end after the 12:00 close: listed under "Outside working hours", disabled.
     fireEvent.click(screen.getByRole('button', { name: /Outside working hours \(1\)/ }));
@@ -133,7 +133,7 @@ describe('BookSlotSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New patient' }));
     fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Meera' } });
     fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '9820000002' } });
-    fireEvent.change(screen.getByLabelText('Length'), { target: { value: '45' } });
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '45m' }));
     fireEvent.click(slot('9:00 AM'));
     fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
 
@@ -184,7 +184,7 @@ describe('BookSlotSheet', () => {
     rerender(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
     // Back to "find" mode with no leftover name, and the therapist default re-applied.
     expect(screen.queryByLabelText('Patient name')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Therapist')).toHaveValue('t1');
+    expect(screen.getByRole('radio', { name: /Dr Asha/ })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('warns on a closed day but still allows booking', () => {
@@ -239,10 +239,12 @@ describe('BookSlotSheet', () => {
     expect(confirmBookingSlot).not.toHaveBeenCalled();
     expect(onBooked).toHaveBeenCalledWith(expect.objectContaining({ kind: 'rescheduled', appointmentId: 'a1' }));
   });
-  it('summarises the choice on the submit button', () => {
+  it('summarises the choice above the submit button', () => {
     render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+    expect(screen.getByText('Pick a time to continue')).toBeInTheDocument();
     fireEvent.click(slot('10:30 AM'));
-    expect(screen.getByRole('button', { name: /^Confirm booking · Thu, 1 Oct, 10:30 AM · 30m$/ })).toBeInTheDocument();
+    expect(screen.getByText('Thu, 1 Oct, 10:30 AM · 30m · Dr Asha')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm booking' })).toBeEnabled();
   });
 
   it('jumps to the first available time', () => {
@@ -251,7 +253,7 @@ describe('BookSlotSheet', () => {
       appointment({ id: 'b2', scheduledAt: localDateTime('2026-09-30', '10:30').toISOString() }),
     ];
     render(<BookSlotSheet isOpen onClose={() => {}} appointments={busy} />);
-    fireEvent.click(screen.getByRole('button', { name: 'First available →' }));
+    fireEvent.click(screen.getByRole('button', { name: 'First available' }));
     // Now is 10:00 today; 10:00 and 10:30 are taken for t1 -> 11:00.
     expect(slot('11:00 AM')).toHaveClass('bg-[var(--teal)]');
   });
@@ -277,7 +279,7 @@ describe('BookSlotSheet', () => {
     expect(screen.getByLabelText('Sessions')).toHaveValue(4); // 10 - 6 left in package
     const rows = within(screen.getByRole('list', { name: 'Planned sessions' })).getAllByRole('listitem');
     expect(rows).toHaveLength(4); // Thursdays from 1 Oct
-    expect(rows[1]).toHaveTextContent('Thu, 8 Oct, 10:00 AM — clashes');
+    expect(rows[1]).toHaveTextContent('Thu, 8 Oct, 10:00 AM, clashes');
     expect(screen.getByText(/1 need a new time or skip/)).toBeInTheDocument();
 
     fireEvent.click(within(rows[1]).getByRole('button', { name: 'Find a time' }));
