@@ -250,8 +250,10 @@ export function WorkspacePage() {
   // (scope.scopeTherapistId already resolves to undefined for the
   // clinic-wide roles — see useWorkspaceScope's own doc comment).
   const workspaceAppointments = useLiveQuery(
-    () => (clinic.enablePatientComms ? repos.appointments.listByClinic(clinic.id) : undefined),
-    [clinic.id, clinic.enablePatientComms]
+    // Loaded even with patient comms off: a walk-in started from "Start a note
+    // first" is an arrived appointment, and it has to be completable here.
+    () => repos.appointments.listByClinic(clinic.id),
+    [clinic.id]
   );
   const workspaceTherapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const canManageBookings = scope.isClinicWideView;
@@ -294,9 +296,16 @@ export function WorkspacePage() {
         (!scope.scopeTherapistId || a.therapistId === scope.scopeTherapistId)
       );
     });
-    return [...olderOpen, ...expectedToday];
-  }, [workspaceAppointments, expectedToday, scope.scopeTherapistId]);
+    // Patient comms off: no bookings to show, only visits in progress.
+    const todays = clinic.enablePatientComms
+      ? expectedToday
+      : expectedToday.filter((a) => a.status === 'arrived' && !a.visitId);
+    return [...olderOpen, ...todays];
+  }, [workspaceAppointments, expectedToday, scope.scopeTherapistId, clinic.enablePatientComms]);
   const toCompleteCount = todayAppointments.filter((a) => a.status === 'arrived' && !a.visitId).length;
+  // The Appointments tab: always with patient comms; otherwise only while a
+  // walk-in visit is in progress.
+  const showAppointmentsTab = Boolean(clinic.enablePatientComms) || toCompleteCount > 0;
   const [todayTab, setTodayTabState] = useState<'appointments' | 'visits'>(() => {
     try {
       return (window.localStorage.getItem('thera-net:workspace-today-tab') as 'appointments' | 'visits') ?? 'appointments';
@@ -773,7 +782,7 @@ export function WorkspacePage() {
       <SectionCard
         title="Today"
         action={
-          clinic.enablePatientComms ? (
+          showAppointmentsTab ? (
             <div className="flex rounded-lg border border-[var(--border)] p-0.5" role="tablist" aria-label="Today">
               {(['appointments', 'visits'] as const).map((tab) => (
                 <button
@@ -791,7 +800,7 @@ export function WorkspacePage() {
           ) : undefined
         }
       >
-        {clinic.enablePatientComms && todayTab === 'appointments' ? (
+        {showAppointmentsTab && todayTab === 'appointments' ? (
           <>
             <TodayAppointments
               appointments={todayAppointments}

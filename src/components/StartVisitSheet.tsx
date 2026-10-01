@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ErrorNote, Field, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
@@ -48,9 +48,13 @@ export function StartVisitSheet({
   const [therapistId, setTherapistId] = useState<UUID | ''>('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A "New patient" created on a try whose next step failed (e.g. offline
+  // for start_walk_in) — reused on retry instead of creating a duplicate.
+  const createdPatient = useRef<Patient | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    createdPatient.current = null;
     setError(null);
     setBusy(false);
     setPatientId(appointment?.patientId ?? initialPatientId ?? '');
@@ -92,7 +96,11 @@ export function StartVisitSheet({
       return found;
     }
     if (!name.trim()) throw new Error('Enter the patient name.');
-    return patientService.create({ clinicId: clinic.id, name, phone: phone || null });
+    const earlier = createdPatient.current;
+    if (earlier && earlier.name.trim() === name.trim() && (earlier.phone ?? '').trim() === phone.trim()) return earlier;
+    const created = await patientService.create({ clinicId: clinic.id, name, phone: phone || null });
+    createdPatient.current = created;
+    return created;
   }
 
   async function startNote() {

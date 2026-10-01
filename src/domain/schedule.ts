@@ -438,8 +438,15 @@ export function workingIntervals(
   clinicHours: { startHour: number; endHour: number }
 ): Interval[] {
   if (!workingHours) return [{ start: clinicHours.startHour * 60, end: clinicHours.endHour * 60 }];
+  if (typeof workingHours !== 'object') return [{ start: clinicHours.startHour * 60, end: clinicHours.endHour * 60 }];
   const weekday = String(localDateTime(date, '00:00').getDay()) as keyof WorkingHours;
-  return (workingHours[weekday] ?? []).map(([start, end]) => ({ start, end }));
+  const day: unknown = workingHours[weekday];
+  // Defensive: a malformed day (not an array of [start, end] pairs) reads as
+  // "not working" rather than crashing the Schedule or the public form.
+  if (!Array.isArray(day)) return [];
+  return day
+    .filter((pair): pair is [number, number] => Array.isArray(pair) && typeof pair[0] === 'number' && typeof pair[1] === 'number')
+    .map(([start, end]) => ({ start, end }));
 }
 
 /** Does [start, start + length) sit entirely inside one working interval? */

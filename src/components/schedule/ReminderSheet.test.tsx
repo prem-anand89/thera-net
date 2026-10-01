@@ -68,4 +68,21 @@ describe('ReminderSheet', () => {
     expect(sendText).toHaveBeenCalledWith(expect.stringMatching(/^Hi Dr Asha, your 1 appointment on Friday, 2 Oct:\n• 10:00 am — Priya N\. \(30 min\)$/i), '9820000100');
     expect(within(rows[1]).getByRole('button', { name: 'Send list' })).toBeDisabled();
   });
+
+  it('keeps its state when the parent re-renders with a new onClose', () => {
+    const props = {
+      open: true,
+      initialDate: '2026-10-02',
+      clinicName: 'BM Physio',
+      slotMinutes: 30,
+      therapists,
+      appointments: [appt({})],
+    };
+    const { rerender } = render(<ReminderSheet {...props} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(screen.getByRole('button', { name: 'Sent ✓' })).toBeInTheDocument();
+    // Schedule re-renders every minute and on each sync, passing a fresh arrow.
+    rerender(<ReminderSheet {...props} onClose={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Sent ✓' })).toBeInTheDocument();
+  });
 });

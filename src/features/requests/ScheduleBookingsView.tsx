@@ -350,10 +350,16 @@ export function ScheduleBookingsView({
   const canBookFor = (therapistId: string) => canManageAll || therapistId === myTherapistId;
 
   async function commitMove(appointment: Appointment, target: MoveTarget) {
+    // Everything Undo needs to put back exactly (canDrag only allows
+    // confirmed / rescheduled, so the status narrows safely).
     const previous = {
-      at: appointment.scheduledAt,
-      duration: appointmentMinutes(appointment, slotMinutes),
-      therapistId: appointment.therapistId,
+      id: appointment.id,
+      scheduledAt: appointment.scheduledAt,
+      durationMinutes: appointmentMinutes(appointment, slotMinutes),
+      therapistId: appointment.therapistId ?? null,
+      status: appointment.status === 'rescheduled' ? ('rescheduled' as const) : ('confirmed' as const),
+      rescheduleCount: appointment.rescheduleCount ?? 0,
+      previousScheduledAt: appointment.previousScheduledAt ?? null,
     };
     const reassign = target.therapistId && target.therapistId !== appointment.therapistId ? target.therapistId : undefined;
     try {
@@ -363,8 +369,7 @@ export function ScheduleBookingsView({
         message: resized
           ? `${appointment.patientName} is now ${formatMinutes(target.duration)}.`
           : `${appointment.patientName} moved to ${minutesLabel(target.start)}${reassign ? ` with ${rosterById.get(reassign)?.name ?? 'another therapist'}` : ''}.`,
-        run: () =>
-          bookingService.rescheduleAppointment(appointment.id, previous.at, previous.duration, reassign ? previous.therapistId ?? undefined : undefined),
+        run: () => bookingService.restoreAppointmentSlot(previous),
       });
     } catch (error) {
       alert(toFriendlyMessage(error));

@@ -988,7 +988,7 @@ still falls through to the existing share sheet, unchanged.
     - **Public form layout**: time first, then details — header (clinic initial/logo, visit length, hours), step 1 "Choose a time" (clinician chips "Anyone available" / each therapist, a scrollable 14-day strip with uniform day cards and "Closed" days, "More dates" inline month, time grid), step 2 "Your details" (name, phone with compact country picker, optional email and reason), and a summary + "Request appointment" bar pinned to the bottom on phones (safe-area padded).
     - **Workspace header**: one card — date + greeting (therapist's first name when linked), "+ Book" (opens `BookSlotSheet`; therapist-locked for therapists) and "+ New visit", the stat strip (see Today-First Workspace), then one "needs you" bar on a single line at every width: icon-led items (visits to complete and pending booking requests in amber, both switching the Today card to Appointments; the therapist's notes to finish, opening the oldest draft; new feedback), short wording on phones ("2 to complete", "3 requests"), or "All caught up"; the sync state ("Synced 10:42", or "N visits not synced yet" in amber) shows at the end from `sm:`. Book / New visit carry icons. The admin's first-week setup nudge (`FirstWeekSetupLink`) is a small "Setup 3/7" progress pill on the date line, so it takes no extra row.
     - **Workspace Today card**: one card with tabs "Appointments (n) | Visits (n)" (tab remembered per device) instead of separate "Expected today" and "Today's visits" cards. Appointments (`TodayAppointments`) use flat divided rows at the same density as the Visits list, coloured like the Schedule grid (`appointmentFill` in `scheduleColors.ts`: therapist-colour left edge; white = upcoming, therapist tint = arrived, grey = visit logged, rust = no-show) (time, name, therapist and length from `sm:`, a small status pill; "Next" pill on the next appointment): in-progress visits first (arrived, no visit yet, today's plus any left open in the last 7 days) with a compact "Complete visit" button, then the next 5 upcoming with "Show all", finished ones (visit logged / no-show) folded under "Done (n)". For admin / front desk, **Requests to confirm (n)** comes first: the oldest three pending public booking requests (`RequestsInbox variant="list"`, "See all" → `/schedule?view=requests`) with Confirm (Workspace's `BookSlotSheet` on the requested date if not past, with the preferred therapist, name/phone, notes and time wish — same as Schedule) and Decline (`ConfirmDialog` → `declineAppointmentRequest`); the Appointments tab count includes them.
-    - **Visit in progress (notes before the service)**: a "draft visit" is an **arrived appointment with no `visit_id`**, never a row in `visits` (whose service/price/split snapshots feed invoices, payouts and reports). `StartVisitSheet` (appointment panel "Start note — service later", New Visit's "Start a note first") finds or creates the patient, then either **Start note** — for a booked appointment it marks it arrived; for a walk-in it calls `start_walk_in` (arrived appointment now, `source = 'walk_in'`, no overlap check, accepts a not-yet-synced patient by name/phone) — and opens the Core Assessment with `?appointmentId=`, or **Log visit now** (normal New Visit). The note stores `appointment_id`; when New Visit later saves with that `appointmentId`, `consultationNoteService.linkAppointmentNotesToVisit` sets the notes' `visit_id` (and marks the visit documented if a note is completed). "Mark arrived" stays optional — logging a visit marks arrival anyway.
+    - **Visit in progress (notes before the service)**: a "draft visit" is an **arrived appointment with no `visit_id`**, never a row in `visits` (whose service/price/split snapshots feed invoices, payouts and reports). `StartVisitSheet` (appointment panel "Start note — service later", New Visit's "Start a note first") finds or creates the patient, then either **Start note** — for a booked appointment it marks it arrived; for a walk-in it calls `start_walk_in` (arrived appointment now, `source = 'walk_in'`, no overlap check, accepts a not-yet-synced patient by name/phone) — and opens the Core Assessment with `?appointmentId=`, or **Log visit now** (normal New Visit). The note stores `appointment_id`; when New Visit later saves with that `appointmentId`, `consultationNoteService.linkAppointmentNotesToVisit` sets the notes' `visit_id` (and marks the visit documented if a note is completed). "Mark arrived" stays optional — logging a visit marks arrival anyway. Workspace loads appointments even with patient comms off, so a walk-in in progress shows under Today → Appointments (the tab appears only while one is open). A "New patient" created by a Start note attempt that then fails (e.g. offline) is reused on retry, not duplicated.
     - **Patient form**: Name, Phone, Age, Sex, Primary condition, Referring source, then a collapsed "More details (optional)" with Email, Alternate phone and Patient ID (blank = auto-generated; fill only to keep an old record's number) — in New Visit's create-patient step and the Edit patient modal. Search matches the alternate phone too.
     - **App header**: the Thera.Net mark on the left (`BrandMark`, wordmark from `desktop:`, links to Workspace) — the product; nav in the middle (labels from `tab:`); on the right the **clinic pill** (`ClinicSwitcher`: the clinic's uploaded logo or its initial + name; name hidden between `tab:` and `desktop:`, where five nav labels leave no room — tooltip and menu carry it), then `SyncBadge` (a quiet green dot when synced, expanding with text when offline / syncing / pending / failed; its popover is pinned full-width under the header on phones) and the account avatar. The clinic pill is the only clinic switcher, and for admins it also has "+ Add another clinic" (a non-admin with one clinic gets a static label). No date in the header (Workspace shows it).
     - **Thera.Net branding**: `src/components/BrandMark.tsx` — `BrandMark` (header, account menu footer "Thera.Net · v{version}" from `__APP_VERSION__`, defined in `vite.config.ts` from package.json), `AppLoading` (full-screen loading / "Preparing…" in `Shell`), `PoweredBy` ("Powered by Thera.Net" under the public booking and feedback forms). Sign-in/reset use `AuthBrandHeader`, which renders `BrandMark`. The clinic's own logo appears only in the clinic pill, on the public forms' header and on printed documents.
@@ -1363,7 +1363,12 @@ working_hours   jsonb (NULLABLE) — weekly hours: {"0"–"6": [[startMin, endMi
                 gaps are breaks, a missing weekday is a day off, NULL = clinic
                 booking hours. Written only via set_therapist_working_hours
                 (admin / front desk for anyone, the therapist for themselves;
-                validated by working_hours_valid)
+                validated by working_hours_valid). CHECK
+                therapists_working_hours_valid (NOT VALID: new writes only)
+                guards the column too, and the sync push drops working_hours
+                from therapist upserts so a stale local row can't revert it
+                (`src/sync/engine.ts`). Client `workingIntervals` reads a
+                malformed day as "not working" instead of throwing
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 ```
@@ -1999,7 +2004,8 @@ row's `duration_minutes`), `mark_appointment_arrived` / `link_appointment_visit`
 all-or-nothing; clashes listed as UTC ISO times the client localises) /
 `cancel_appointment_series(series, from)`, `set_therapist_working_hours`,
 `start_walk_in(clinic, therapist, name, phone?, patient?)` (arrived walk-in, no
-overlap check, own therapist or admin/front desk), and
+overlap check, own therapist or admin/front desk), `restore_appointment_slot`
+(drag Undo, see Review fixes below), and
 `set_clinic_closed_dates` /
 `remove_clinic_closed_dates` (admin/front_desk, ranges up to 366 days). The
 public `get_booking_availability(slug, start, end)` returns weekly closed
@@ -2009,6 +2015,23 @@ for active therapists with custom hours). `reschedule_appointment(id, at, durati
 (drop-and-recreate, pattern 3c): reassigning needs `can_manage_appointment` for both the
 current and the new therapist; a pure resize (same start and therapist) doesn't bump
 `reschedule_count` or the status.
+**Review fixes** (`20261004100000_schedule_review_fixes.sql`):
+- **No double booking under concurrency**: trigger `appointments_overlap_guard`
+  (BEFORE INSERT OR UPDATE on `appointments`) takes a per-therapist
+  `pg_advisory_xact_lock` and re-runs `therapist_has_overlap`, so two bookings at the
+  same moment can't both commit. It skips walk-ins (`source = 'walk_in'`), cancelled
+  rows, unassigned rows and updates that don't change the time, length or therapist
+  (status changes, sync re-saves).
+- `confirm_booking_series` compares requested starts by position, so duplicate
+  timestamps in one request are flagged as clashes.
+- `cancel_appointment_series` requires `can_manage_appointment` for **every** session it
+  would cancel (sessions can have been moved to another therapist).
+- `restore_appointment_slot(id, at, duration, therapist|null, status, reschedule_count,
+  previous_scheduled_at)` backs the calendar's Undo after a drag. It restores the exact
+  previous state, including Unassigned (admin / front desk only), and can only wind
+  `reschedule_count` back, never forward.
+- The `clinic_closed_dates` dedup in `20261001100000` breaks `created_at` ties on
+  `ctid`, so a rebuild with duplicates from one transaction no longer aborts.
 All three are synced, read-only Dexie tables (`ALL_SYNCED_TABLES` without
 `CLIENT_WRITABLE_TABLES`); `clinic_closed_dates` arrived in Dexie `version(20)`,
 and `repos.clinicClosedDates.listByClinic` filters out soft-deleted rows.

@@ -383,3 +383,12 @@ describe('dayLoad', () => {
     expect(dayLoad([], 't1', '2026-10-01', hours, 30, working, 13 * 60).text).toBe('No time left');
   });
 });
+
+describe('workingIntervals with malformed hours', () => {
+  it('treats a malformed day as not working instead of throwing', () => {
+    const bad = { 4: 'x' } as unknown as Parameters<typeof workingIntervals>[0];
+    expect(workingIntervals(bad, '2026-10-01', { startHour: 9, endHour: 18 })).toEqual([]);
+    const mixed = { 4: [[540, 600], 'y'] } as unknown as Parameters<typeof workingIntervals>[0];
+    expect(workingIntervals(mixed, '2026-10-01', { startHour: 9, endHour: 18 })).toEqual([{ start: 540, end: 600 }]);
+  });
+});

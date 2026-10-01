@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { Field, btnSecondary, inputCls } from '@/components/ui';
 import { bookingService } from '@/services';
 import { patientMessage, therapistDayListMessage, timeOnlyLabel } from '@/domain/bookingMessages';
@@ -38,12 +38,22 @@ export function ReminderSheet({
     setDate(initialDate);
     setTab('patients');
     setSent(new Set());
+    // Reset only when the sheet opens. The parent passes inline callbacks and
+    // re-renders every minute and on each sync, which used to wipe in-progress
+    // input (date, Sent ticks, a closure being typed).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on open only
+  }, [open]);
+
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, initialDate, onClose]);
+  }, [open]);
 
   const day = useMemo(
     () =>

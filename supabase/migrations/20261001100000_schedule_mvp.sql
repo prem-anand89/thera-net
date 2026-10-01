@@ -262,12 +262,13 @@ alter table public.clinic_closed_dates
   add column if not exists updated_at timestamptz not null default now(),
   add column if not exists removed_at timestamptz;
 
--- Collapse any duplicates before the unique constraint.
+-- Collapse any duplicates before the unique constraint (newest kept; rows
+-- created in the same transaction tie on created_at, so ctid breaks the tie).
 delete from public.clinic_closed_dates d
   using public.clinic_closed_dates newer
   where d.clinic_id = newer.clinic_id
     and d.closed_date = newer.closed_date
-    and d.created_at < newer.created_at;
+    and (d.created_at, d.ctid) < (newer.created_at, newer.ctid);
 
 alter table public.clinic_closed_dates
   add constraint clinic_closed_dates_clinic_date_key unique (clinic_id, closed_date);

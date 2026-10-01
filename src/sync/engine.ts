@@ -276,7 +276,12 @@ export class SyncEngine {
         }
       }
 
-      const { error } = await supabase.from(entry.table).upsert(domainToRow(row));
+      const payload = domainToRow(row);
+      // Server-owned columns a full-row upsert must not carry: working hours
+      // are written only by set_therapist_working_hours, and a stale local
+      // copy (pending edit to the same row) would silently revert them.
+      if (entry.table === 'therapists') delete payload.working_hours;
+      const { error } = await supabase.from(entry.table).upsert(payload);
       if (error) {
         // Network-level failures throw to stop the drain; server rejections
         // (RLS, constraints, immutability triggers) stay queued and visible.

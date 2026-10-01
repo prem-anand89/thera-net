@@ -370,7 +370,10 @@ function useGridDrag(input: {
   const [ghost, setGhost] = useState<DragGhost | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [placing, setPlacing] = useState<{ appointment: Appointment; duration: number } | null>(null);
-  const suppressClick = useRef(false);
+  // Swallow the click that follows a drag or long-press — but only for a
+  // moment: if the pointer was released elsewhere, that click never reaches
+  // the block, and a plain boolean stayed set and ate the next real click.
+  const suppressClickUntil = useRef(0);
   const latest = useRef({ columns, hours, slotMinutes, today, nowMinutes, options });
   latest.current = { columns, hours, slotMinutes, today, nowMinutes, options };
 
@@ -411,7 +414,7 @@ function useGridDrag(input: {
 
       if (event.pointerType === 'touch') {
         const timer = window.setTimeout(() => {
-          suppressClick.current = true;
+          suppressClickUntil.current = Date.now() + 1500;
           setPlacing({ appointment, duration });
           navigator.vibrate?.(15);
         }, LONG_PRESS_MS);
@@ -467,7 +470,7 @@ function useGridDrag(input: {
         window.removeEventListener('keydown', onKey);
         document.body.style.userSelect = '';
         if (active) {
-          suppressClick.current = true;
+          suppressClickUntil.current = Date.now() + 500;
           const unchanged = current && current.columnKey === originColumn.key && current.start === originStart && current.duration === duration;
           if (commit && current && !unchanged) finish(appointment, current);
         }
@@ -516,8 +519,8 @@ function useGridDrag(input: {
           canDrag: options.canDrag,
           onPointerDown,
           consumeClick: () => {
-            const value = suppressClick.current;
-            suppressClick.current = false;
+            const value = Date.now() < suppressClickUntil.current;
+            suppressClickUntil.current = 0;
             return value;
           },
           ghost,

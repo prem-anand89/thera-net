@@ -222,6 +222,32 @@ export const bookingService = {
     syncEngine.schedule(0);
   },
 
+  /** Undo of a calendar drag: puts the appointment's previous slot,
+   *  therapist (including Unassigned), status and reschedule history back,
+   *  instead of counting the undo as another reschedule. */
+  async restoreAppointmentSlot(previous: {
+    id: UUID;
+    scheduledAt: string;
+    durationMinutes: number;
+    therapistId: UUID | null;
+    status: 'confirmed' | 'rescheduled';
+    rescheduleCount: number;
+    previousScheduledAt: string | null;
+  }): Promise<void> {
+    const supabase = supabaseOrThrow();
+    const { error } = await supabase.rpc('restore_appointment_slot', {
+      p_appointment_id: previous.id,
+      p_scheduled_at: previous.scheduledAt,
+      p_duration_minutes: previous.durationMinutes,
+      p_therapist_id: previous.therapistId,
+      p_status: previous.status,
+      p_reschedule_count: previous.rescheduleCount,
+      p_previous_scheduled_at: previous.previousScheduledAt,
+    });
+    if (error) throw new Error(`Could not undo: ${error.message}`);
+    syncEngine.schedule(0);
+  },
+
   async markAppointmentNoShow(appointmentId: UUID): Promise<void> {
     const supabase = supabaseOrThrow();
     const { error } = await supabase.rpc('mark_appointment_no_show', {

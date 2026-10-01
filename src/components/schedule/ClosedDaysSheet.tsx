@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ErrorNote, Field, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -30,12 +30,22 @@ export function ClosedDaysSheet({
     setLabel('');
     setError(null);
     setBusy(false);
+    // Reset only when the sheet opens. The parent passes inline callbacks and
+    // re-renders every minute and on each sync, which used to wipe in-progress
+    // input (date, Sent ticks, a closure being typed).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on open only
+  }, [open]);
+
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, initialDate, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
