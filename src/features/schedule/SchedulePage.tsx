@@ -7,7 +7,7 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { addDays, toLocalDateStr } from '@/domain/schedule';
-import { SectionCard, StatTile, Pill, th, td } from '@/components/ui';
+import { SectionCard, Pill, th, td } from '@/components/ui';
 import type { UUID } from '@/domain/types';
 import { ScheduleBookingsView } from './ScheduleBookingsView';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
@@ -19,19 +19,49 @@ import { requestsLastViewedKey } from './scheduleSignals';
  *  showing ratings. Text glyphs render inconsistently across platforms'
  *  font fallbacks; an inline SVG looks the same everywhere. */
 function StarRating({ rating }: { rating: number }) {
+  const activeColor = rating === 5 ? 'fill-[var(--moss)]' : rating <= 3 ? 'fill-[var(--rust)]' : 'fill-[var(--amber)]';
   return (
     <span className="inline-flex items-center gap-0.5" title={`${rating} of 5`}>
       {Array.from({ length: 5 }, (_, i) => (
         <svg
           key={i}
           viewBox="0 0 20 20"
-          className={`h-3.5 w-3.5 ${i < rating ? 'fill-[var(--amber)]' : 'fill-[var(--border)]'}`}
+          className={`h-3.5 w-3.5 ${i < rating ? activeColor : 'fill-[var(--border)]'}`}
           aria-hidden="true"
         >
           <path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
         </svg>
       ))}
     </span>
+  );
+}
+
+/** Compact stat tile for a `SectionCard` header's `action` slot — same
+ *  bordered-box, label-over-value look as the shared `StatTile`
+ *  (`components/ui.tsx`), but fixed-width and sized for sitting next to a
+ *  title instead of `StatTile`'s dashboard-strip proportions (`flex-1`,
+ *  `text-xl`/`text-2xl` value text). Not worth promoting into `ui.tsx`
+ *  for a single call site. Border/text tone mirrors `StarRating`'s rating
+ *  color language, so a bad 30-day average reads as a warning the same
+ *  way a bad individual rating does. */
+function AverageRatingTile({ averageRating }: { averageRating: number | null }) {
+  const tone =
+    averageRating == null
+      ? 'border-[var(--border)] text-[var(--muted)]'
+      : averageRating >= 4.5
+        ? 'border-[var(--moss)] text-[var(--moss-strong)]'
+        : averageRating >= 3
+          ? 'border-[var(--amber)] text-[var(--amber)]'
+          : 'border-[var(--rust)] text-[var(--rust)]';
+  return (
+    <div className={`shrink-0 rounded-lg border bg-[var(--surface)] px-2.5 py-1 ${tone}`}>
+      <div className="text-[9px] font-medium uppercase leading-tight tracking-wide text-[var(--muted)]">
+        30-day avg
+      </div>
+      <div className="text-sm font-semibold tabular-nums leading-tight">
+        {averageRating == null ? '—' : `${averageRating.toFixed(1)} ★`}
+      </div>
+    </div>
   );
 }
 
@@ -173,15 +203,35 @@ export function SchedulePage() {
 
   const [therapistFilter, setTherapistFilter] = useState<UUID | ''>('');
   const [dateRange, setDateRange] = useState<FeedbackDateRange>('all');
+  const [statusFilter, setStatusFilter] = useState<FeedbackRow['status'] | 'all'>('all');
   const today = toLocalDateStr(new Date());
 
-  const rows = useMemo(() => {
+  // Therapist + date only, status not yet applied — the status pills' own
+  // counts are computed from this, same reasoning as `HistoryView`'s
+  // `inRange`: "how many of each status, given the other active filters."
+  const rowsBeforeStatus = useMemo(() => {
     const from = dateRange === 'all' ? null : addDays(today, -Number(dateRange));
     return allRows
       .filter((row) => !therapistFilter || row.therapistId === therapistFilter)
-      .filter((row) => !from || !row.visitDate || row.visitDate >= from)
-      .sort((a, b) => b.dateForSort.localeCompare(a.dateForSort));
+      .filter((row) => !from || !row.visitDate || row.visitDate >= from);
   }, [allRows, therapistFilter, dateRange, today]);
+
+  const statusCounts = useMemo(
+    () => ({
+      answered: rowsBeforeStatus.filter((r) => r.status === 'answered').length,
+      awaiting: rowsBeforeStatus.filter((r) => r.status === 'awaiting').length,
+      expired: rowsBeforeStatus.filter((r) => r.status === 'expired').length,
+    }),
+    [rowsBeforeStatus]
+  );
+
+  const rows = useMemo(
+    () =>
+      rowsBeforeStatus
+        .filter((row) => statusFilter === 'all' || row.status === statusFilter)
+        .sort((a, b) => b.dateForSort.localeCompare(a.dateForSort)),
+    [rowsBeforeStatus, statusFilter]
+  );
 
   // Fixed 30-day snapshot, independent of the Date Range list filter above
   // (that one narrows what's shown; this is always "the last 30 days",
@@ -228,14 +278,11 @@ export function SchedulePage() {
             Patient communications is off — turn it on in Settings to start collecting feedback.
           </p>
         ) : (
-          <SectionCard title={`Feedback (${rows.length})`}>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <StatTile
-                label="30-day average"
-                value={averageRating == null ? '—' : `${averageRating.toFixed(1)} ★`}
-                detail={averageRating == null ? 'No responses yet' : undefined}
-                className="basis-[140px]"
-              />
+          <SectionCard
+            title={`Feedback (${rows.length})`}
+            action={<AverageRatingTile averageRating={averageRating} />}
+          >
+            <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap">
               <select
                 value={therapistFilter}
                 onChange={(e) => setTherapistFilter(e.target.value as UUID | '')}
@@ -263,6 +310,53 @@ export function SchedulePage() {
                   </option>
                 ))}
               </select>
+              <span className="h-5 w-px shrink-0 bg-[var(--border)]" aria-hidden />
+              <button
+                type="button"
+                aria-pressed={statusFilter === 'all'}
+                onClick={() => setStatusFilter('all')}
+                className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3 text-xs font-medium ${
+                  statusFilter === 'all'
+                    ? 'bg-[var(--teal)] text-white'
+                    : 'bg-[var(--paper)] text-[var(--muted)] hover:text-[var(--ink)]'
+                }`}
+              >
+                All
+              </button>
+              {(
+                [
+                  ['answered', 'Responded', 'bg-[var(--moss-light)] text-[var(--moss-strong)]', statusCounts.answered],
+                  ['awaiting', 'Awaiting', 'bg-[var(--amber-light)] text-[var(--amber)]', statusCounts.awaiting],
+                  ['expired', 'Expired', 'bg-[var(--slate-light)] text-[var(--slate)]', statusCounts.expired],
+                ] as const
+              )
+                .filter(([key, , , count]) => count > 0 || statusFilter === key)
+                .map(([key, label, tone, count]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={statusFilter === key}
+                    onClick={() => setStatusFilter((current) => (current === key ? 'all' : key))}
+                    className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3 text-xs font-medium ${tone} ${
+                      statusFilter === key ? 'ring-2 ring-[var(--teal)] ring-offset-1' : ''
+                    }`}
+                  >
+                    {label} {count}
+                  </button>
+                ))}
+              {(therapistFilter || dateRange !== 'all' || statusFilter !== 'all') && (
+                <button
+                  type="button"
+                  className="shrink-0 whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+                  onClick={() => {
+                    setTherapistFilter('');
+                    setDateRange('all');
+                    setStatusFilter('all');
+                  }}
+                >
+                  Clear
+                </button>
+              )}
             </div>
 
             {rows.length === 0 ? (
