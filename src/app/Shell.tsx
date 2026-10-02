@@ -19,6 +19,7 @@ import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { CreateClinicForm } from '@/features/settings/CreateClinicForm';
 import { SyncBadge, SyncStatusBanners } from '@/components/SyncBadge';
+import { NotificationBell } from '@/components/NotificationBell';
 import {
   clinicNeedsOnboarding,
   isPathAllowedDuringClinicOnboarding,
@@ -355,6 +356,13 @@ export function Shell() {
                 <ClinicSwitcher clinic={clinic} clinics={clinics ?? []} logoUrl={logoUrl} isAdmin={role === 'admin'} />
               </div>
               <div className="flex shrink-0 items-center gap-1 tab:gap-2">
+              {(role === 'admin' || role === 'front_desk') && (
+                <NotificationBell
+                  clinicId={clinic.id}
+                  pendingRequestsCount={pendingRequestsCount}
+                  isAdmin={role === 'admin'}
+                />
+              )}
               <SyncBadge />
               <AccountMenu
                 displayName={displayName}

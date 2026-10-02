@@ -145,6 +145,27 @@ export function IconCalendar({ className }: { className?: string }) {
     </svg>
   );
 }
+export function IconBell({ className }: { className?: string }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M5 8.5a5 5 0 0110 0c0 3 1 4 1.3 4.5H3.7C4 12.5 5 11.5 5 8.5z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M8 15.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
 export function IconMore({ className }: { className?: string }) {
   return (
     <svg

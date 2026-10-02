@@ -43,6 +43,27 @@ export function useNewFeedbackResponseCount(clinicId: string, enabled: boolean):
   }, [enabled, responses, lastViewed]);
 }
 
+/** Same "since last viewed" window as `useNewFeedbackResponseCount`, narrowed
+ *  to 1-2 star responses — the Notification Bell's "turn red" signal
+ *  (Phase 6.5). Admin-only, same RLS reasoning as the count above: a
+ *  front_desk caller's Dexie never receives `feedback_responses` rows at
+ *  all, so `enabled` must stay false for them. */
+export function useNewLowRatingFeedbackCount(clinicId: string, enabled: boolean): number {
+  const responses = useLiveQuery(
+    () => (enabled ? repos.feedbackResponses.listByClinic(clinicId) : undefined),
+    [clinicId, enabled]
+  );
+  const lastViewed = useLiveQuery(
+    () => (enabled ? db.meta.get(requestsLastViewedKey(clinicId)) : undefined),
+    [clinicId, enabled]
+  );
+  return useMemo(() => {
+    if (!enabled || !responses) return 0;
+    const since = lastViewed?.value;
+    return responses.filter((r) => r.rating <= 2 && (!since || r.createdAt > since)).length;
+  }, [enabled, responses, lastViewed]);
+}
+
 /**
  * Google-review-nudge eligibility for callers who can't get it from the
  * synced `feedback_responses.rating` column — i.e. front_desk, since that
