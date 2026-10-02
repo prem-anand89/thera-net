@@ -11,6 +11,8 @@ import {
   btnPrimary,
   btnSecondary,
   inputCls,
+  chipSelect,
+  chipSelectChevron as chevron,
   Field,
   RupeeInput,
   SectionCard,
@@ -106,13 +108,21 @@ export function MonthlyStatementPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <h2 className="font-display text-base font-semibold text-[var(--ink)]">
           Monthly statement
         </h2>
-        <div className="ml-auto flex items-end gap-2">
+        {/* `w-full` on mobile (wraps onto its own line below the title,
+            scrolling sideways rather than forcing the whole page wider —
+            this cluster of 4 controls has no business fighting the title
+            for one cramped row on a phone) vs `sm:w-auto` to sit beside
+            the title again once there's room. Same scroll/trailing-padding
+            treatment as the Schedule → Feedback filter row. */}
+        <div className="ml-auto flex w-full items-center gap-2 overflow-x-auto pb-1 pr-2 sm:w-auto sm:flex-wrap sm:overflow-visible sm:pb-0 sm:pr-0">
           <select
-            className={inputCls}
+            className={chipSelect}
+            style={chevron}
+            aria-label="Fiscal year"
             value={fyStartYear}
             onChange={(e) => setFyStartYear(Number(e.target.value))}
           >
@@ -123,20 +133,31 @@ export function MonthlyStatementPage() {
               </option>
             ))}
           </select>
-          <select className={inputCls} value={month} onChange={(e) => setMonth(e.target.value)}>
+          <select
+            className={chipSelect}
+            style={chevron}
+            aria-label="Month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+          >
             {months.map((m) => (
               <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
                 {monthName(m.month)} {m.year}
               </option>
             ))}
           </select>
-          <button type="button" className={btnSecondary} onClick={downloadCsv}>
+          <span className="h-5 w-px shrink-0 bg-[var(--border)]" aria-hidden />
+          <button
+            type="button"
+            className={`${btnSecondary} shrink-0 whitespace-nowrap`}
+            onClick={downloadCsv}
+          >
             Export CSV
           </button>
           <Link
             to="/insights/print"
             search={{ year: selected.year, month: selected.month }}
-            className={btnSecondary}
+            className={`${btnSecondary} shrink-0 whitespace-nowrap`}
           >
             Export as PDF
           </Link>

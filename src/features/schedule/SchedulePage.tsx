@@ -7,7 +7,14 @@ import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { addDays, toLocalDateStr } from '@/domain/schedule';
-import { SectionCard, Pill, th, td } from '@/components/ui';
+import {
+  SectionCard,
+  Pill,
+  th,
+  td,
+  chipSelect,
+  chipSelectChevron as chevron,
+} from '@/components/ui';
 import type { UUID } from '@/domain/types';
 import { ScheduleBookingsView } from './ScheduleBookingsView';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
@@ -64,16 +71,6 @@ function AverageRatingTile({ averageRating }: { averageRating: number | null }) 
     </div>
   );
 }
-
-/** Pill-shaped native select — same visual language as the Schedule →
- *  History filter row (`HistoryView.tsx`), reused here so the two filter
- *  rows in this feature look and behave the same. */
-const chipSelect =
-  'min-h-9 shrink-0 appearance-none rounded-full border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1 pl-3 pr-7 text-xs font-medium text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none';
-const chevron = {
-  backgroundImage:
-    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%2355636e' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E\")",
-} as const;
 
 type FeedbackDateRange = 'all' | '7' | '30' | '90';
 const DATE_RANGE_LABEL: Record<FeedbackDateRange, string> = {

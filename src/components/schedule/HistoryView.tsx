@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pill } from '@/components/ui';
+import { Pill, chipSelect, chipSelectChevron as chevron } from '@/components/ui';
 import { addDays, filterHistory, minutesLabel, minutesOfDay, toLocalDateStr } from '@/domain/schedule';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import { appointmentReason, patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
@@ -17,14 +17,6 @@ const RANGE_LABEL: Record<When, Record<Exclude<Range, 'custom'>, string>> = {
 };
 
 const STATUSES: AppointmentStatus[] = ['arrived', 'no_show', 'cancelled', 'confirmed', 'rescheduled'];
-
-/** Pill-shaped native select: one tap opens the phone's own picker. */
-const chipSelect =
-  'min-h-9 shrink-0 appearance-none rounded-full border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1 pl-3 pr-7 text-xs font-medium text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none';
-const chevron = {
-  backgroundImage:
-    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%2355636e' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E\")",
-} as const;
 
 function dayHeading(date: string, today: string) {
   if (date === today) return 'Today';

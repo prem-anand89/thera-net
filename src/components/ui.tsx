@@ -5,6 +5,20 @@ import { paiseToRupees, rupeesToPaise, type Paise } from '@/domain/money';
 
 export const inputCls =
   'w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-base sm:text-sm focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/30 disabled:bg-[var(--paper)]';
+/** Pill-shaped native select for a filter row — a compact alternative to
+ *  `inputCls` (which is `w-full`, sized for a form field, not a filter
+ *  chip). Originated in `HistoryView.tsx`'s Schedule filter row, then
+ *  copied verbatim into `SchedulePage.tsx`'s Feedback filters; promoted
+ *  here once `MonthlyStatementPage.tsx` became a third, byte-identical
+ *  copy. Pair with `chipSelectChevron` for the dropdown arrow (a plain
+ *  `<select>` can't take an SVG child, so the arrow has to be a
+ *  background-image, applied via `style`, not a class). */
+export const chipSelect =
+  'min-h-9 shrink-0 appearance-none rounded-full border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1 pl-3 pr-7 text-xs font-medium text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none';
+export const chipSelectChevron = {
+  backgroundImage:
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%2355636e' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E\")",
+} as const;
 export const btnPrimary =
   'min-h-11 rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--teal-strong)] disabled:opacity-50';
 export const btnSecondary =
