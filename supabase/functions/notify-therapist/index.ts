@@ -1,7 +1,21 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 
 /** Mirrors the `appointments` row shape the Postgres trigger forwards via
- *  `row_to_json(NEW)` — see the `trigger_notify_therapist` migration. */
+ *  `row_to_json(NEW)` — see the `trigger_notify_therapist` migration.
+ *
+ *  verify_jwt is OFF for this function (matching invite-therapist and
+ *  brevo-mailer, the only other trigger/webhook-style functions in this
+ *  project) — not an oversight. The alternative considered was passing
+ *  this project's anon key as the trigger's bearer token so verify_jwt
+ *  could stay on, but the anon key is public (shipped in the client
+ *  bundle), so that would only have LOOKED like access control while
+ *  providing none; turning the gate off is the honest version of the same
+ *  security posture, and avoids hardcoding any key into the trigger at
+ *  all. The real secret (service-role key) was the original plan's
+ *  suggestion, but no `app.service_role_key` DB setting has ever been
+ *  provisioned on this project, and nothing in this codebase's available
+ *  tooling can read the live key to set one — using it would mean
+ *  shipping a trigger that fails on every call. */
 interface AppointmentPayload {
   id: string;
   clinic_id: string;

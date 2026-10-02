@@ -29,3 +29,10 @@ entrypoint = "./functions/brevo-mailer/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/brevo-mailer/*.html" ]
+
+# Trigger-invoked (Postgres -> pg_net), same reasoning as invite-therapist's
+# verify_jwt=false above: no browser ever calls this directly, and a bearer
+# token here would only be security theater (see the function's own doc
+# comment for why).
+[functions.notify-therapist]
+verify_jwt = false
