@@ -459,7 +459,7 @@ export function ScheduleBookingsView({
     );
   }
 
-  // Schedule / History tabs live in the page's one tab row (RequestsPage's
+  // Schedule / History tabs live in the page's one tab row (SchedulePage's
   // ScheduleTabs). Requests live in the inline inbox / "All requests" panel,
   // not a tab; ?view=requests (old links) opens that panel.
   const activeView = view === 'requests' ? 'schedule' : view;

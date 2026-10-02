@@ -17,7 +17,7 @@ TheraNet is a mobile-first clinic management SaaS. Core features: patient billin
 | Workspace (home page) | `src/features/workspace/WorkspacePage.tsx` |
 | Public booking form | `src/features/publicBooking/BookingFormPage.tsx` |
 | Public feedback form | `src/features/publicFeedback/FeedbackFormPage.tsx` |
-| Booking requests inbox | `src/features/requests/RequestsPage.tsx` |
+| Booking requests inbox | `src/features/schedule/SchedulePage.tsx` |
 | Settings page | `src/features/settings/SettingsPage.tsx` |
 | WhatsApp link logic | `src/lib/pdfShare.ts` → `openPatientWhatsAppChat()` |
 | Feedback service | `src/services/feedbackService.ts` |

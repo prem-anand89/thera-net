@@ -5,22 +5,27 @@ import { db } from '@/lib/db';
 import type { UUID } from '@/domain/types';
 
 /**
- * Split out of `RequestsPage.tsx` so `WorkspacePage.tsx` — eagerly bundled,
+ * Split out of `SchedulePage.tsx` so `WorkspacePage.tsx` — eagerly bundled,
  * unlike every other route — can read the "new response" count without
- * pulling the (route-code-split) Requests page component into that eager
+ * pulling the (route-code-split) Schedule page component into that eager
  * bundle. Keep this file free of anything page-shaped.
  */
 
 /** Scoped per clinic, same reasoning as `lastBackupMetaKey` — `db.meta` is
  *  one global table shared by every clinic on this device, so an unscoped
- *  key would clear the "new response" signal for every clinic at once. */
+ *  key would clear the "new response" signal for every clinic at once.
+ *  The key string itself (`requestsLastViewedAt:...`) is left as-is even
+ *  though the page it refers to is now Schedule, not Requests — this is a
+ *  persisted key on real devices, and renaming the string would reset every
+ *  existing user's last-viewed marker, making all historical feedback
+ *  responses look new again. Don't "fix" this string. */
 export function requestsLastViewedKey(clinicId: string): string {
   return `requestsLastViewedAt:${clinicId}`;
 }
 
 /** Count of responses created after this clinic's own last-viewed
  *  timestamp — Workspace's "new response" surface, cleared by opening
- *  `/requests?tab=feedback` (see that page's own mark-as-viewed effect). */
+ *  `/schedule?tab=feedback` (see that page's own mark-as-viewed effect). */
 export function useNewFeedbackResponseCount(clinicId: string, enabled: boolean): number {
   const responses = useLiveQuery(
     () => (enabled ? repos.feedbackResponses.listByClinic(clinicId) : undefined),

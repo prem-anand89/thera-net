@@ -2,11 +2,11 @@ import type { AppointmentStatus } from './types';
 
 /**
  * Shared between `WorkspacePage.tsx` ("Expected today") and
- * `RequestsPage.tsx` (Bookings tab) — kept in its own tiny module rather
- * than defined in either page, because `RequestsPage` is route-code-split
+ * `SchedulePage.tsx` (Bookings tab) — kept in its own tiny module rather
+ * than defined in either page, because `SchedulePage` is route-code-split
  * and `WorkspacePage` is not: importing one page's export from the other
- * would pull WorkspacePage's whole eager bundle into RequestsPage's lazy
- * chunk, the exact bundle-leakage `requestsSignals.ts` was already split
+ * would pull WorkspacePage's whole eager bundle into SchedulePage's lazy
+ * chunk, the exact bundle-leakage `scheduleSignals.ts` was already split
  * out to avoid (see that file's own doc comment).
  */
 export const APPOINTMENT_STATUS_LABEL: Record<AppointmentStatus, string> = {
@@ -31,7 +31,7 @@ export const APPOINTMENT_STATUS_TONE: Record<
 /**
  * Calendar block styling (Schedule grid, agenda, week views). The fill is
  * the status; the left bar is the therapist colour (see
- * `therapistColor` in `src/features/requests/schedule/scheduleColors.ts`).
+ * `therapistColor` in `src/components/schedule/scheduleColors.ts`).
  * Every status also carries a mark or word, so colour is never the only
  * signal.
  */

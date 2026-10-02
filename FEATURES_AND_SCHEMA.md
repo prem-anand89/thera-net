@@ -690,8 +690,8 @@ still falls through to the existing share sheet, unchanged.
     client-side check).
   - The visit row's "★ Responded" marker only says a response exists, not
     what it says — see the **Requests → Feedback** page below for that.
-- **Requests → Feedback page (Phase 2)** — `/requests?tab=feedback`, admin-
-  only (`RequestsPage.tsx`), lists every `feedback_responses` row with its
+- **Requests → Feedback page (Phase 2)** — `/schedule?tab=feedback`, admin-
+  only (`SchedulePage.tsx`), lists every `feedback_responses` row with its
   rating (★★★★☆) and comment, joined locally against the already-synced
   `feedback_requests`/`patients`/`therapists`/`visits` tables for context
   (patient, visit date, therapist) rather than duplicating that data. A
@@ -723,13 +723,13 @@ still falls through to the existing share sheet, unchanged.
     rather than shown a disabled tab, per the doc's own resolved note.
     **Bookings is the first tab and the default landing tab for every
     role** (including admin) — it's the busier, more actionable surface
-    day to day; the un-parameterized `/requests` URL defaults to
+    day to day; the un-parameterized `/schedule` URL defaults to
     `?tab=bookings` rather than `?tab=feedback`.
   - **Workspace "new response" banner** — admin + module-on only, reading
     a `db.meta` "last viewed Requests" timestamp (clinic-scoped key, same
     pattern as `lastBackupMetaKey`) that gets stamped the moment
-    `RequestsPage` mounts; the count is exported from a small
-    `requestsSignals.ts` module rather than `RequestsPage.tsx` itself so
+    `SchedulePage` mounts; the count is exported from a small
+    `scheduleSignals.ts` module rather than `SchedulePage.tsx` itself so
     that reading it from the eagerly-bundled `WorkspacePage.tsx` doesn't
     pull the route-code-split Requests page into that eager bundle.
 - **Google review nudge (Phase 3)** — `clinics.google_review_url` (nullable
@@ -760,7 +760,7 @@ still falls through to the existing share sheet, unchanged.
     without ever returning a rating or a comment. This closes the gap the
     Phase 3 slice originally shipped with (spec's send-table lists front
     desk as eligible to send; the first cut only worked for admins).
-    `useGoogleReviewEligibleRequestIds` (`requestsSignals.ts`) is the
+    `useGoogleReviewEligibleRequestIds` (`scheduleSignals.ts`) is the
     front_desk-only fetch — a one-shot RPC call on mount/clinic-change,
     re-run on window focus, skipped entirely for admin.
 - **Re-engagement reminders (Phase 4)** — "No new detection" per the
@@ -981,7 +981,7 @@ still falls through to the existing share sheet, unchanged.
     drives surfaces likely-existing-patient candidates for free; staff
     still explicitly pick or create, never auto-selected (no silent
     find-or-create by phone, per the doc's explicit-scope list).
-  - **Schedule (`/schedule`, `ScheduleBookingsView.tsx` + `features/requests/schedule/`)** — the clinic calendar. Tablet/desktop-first for the front desk (Athena-style therapist columns, Google-Calendar details panel, Calendly-style free times); phones get an agenda list. The nav item stays "Schedule". URL state: `?view=schedule|requests|history`, `?mode=day|week`, `?date=YYYY-MM-DD`, `?therapist=<id>[,<id>…]` (empty = everyone); every change uses `replace`, so Back leaves the page.
+  - **Schedule (`/schedule`, `ScheduleBookingsView.tsx` + `features/schedule/`)** — the clinic calendar. Tablet/desktop-first for the front desk (Athena-style therapist columns, Google-Calendar details panel, Calendly-style free times); phones get an agenda list. The nav item stays "Schedule". URL state: `?view=schedule|requests|history`, `?mode=day|week`, `?date=YYYY-MM-DD`, `?therapist=<id>[,<id>…]` (empty = everyone); every change uses `replace`, so Back leaves the page.
     - **Who sees what**: admin / front desk see every therapist plus Requests and History. A **therapist** sees "My schedule" (their own column only) and History scoped to themselves; they can book for themselves for any clinic patient or a new patient, and reschedule / cancel / mark no-show their own appointments. Requests stay admin / front desk. An unlinked therapist login gets a "ask your admin to link your login" message. The server enforces all of this (`can_manage_appointment`, below); the UI only mirrors it.
     - **Layout by width**: from `desktop:` (1000px) a left rail (`ScheduleRail`, each section a white card on the paper page) holds a mini month (up to three teal load dots under each day by bookings — `loadDots`: 1–2 → 1, 3–5 → 2, 6+ → 3; a rust corner dot on future days that are fully booked; closed days with a fine hatch; today ringed; selected solid teal; weekends' letters dimmed), therapist toggles with the day's load ("6 · 4h30"), and upcoming closures. Below `desktop:` the Monday–Sunday `MiniCalendarStrip` replaces the month, and therapist chips replace the toggles. From `tab:` (744px) the Day view is `ResourceDayGrid` — one column per therapist, blocks absolutely positioned and sized by `duration_minutes` (`blockGeometry`, 1.6px/min), free slots tinted and clickable (opens the booking sheet prefilled with date, time and therapist), a current-time line on today, closed days hatched with their label, overlapping blocks side by side (`assignLanes`; only the synthetic Unassigned column can overlap). Below `tab:` the Day view is `AgendaList` (time-ordered rows, now divider, free gaps inline when one therapist is in view) and "Find a time" shows `FindTimePanel` (free start times as buttons per therapist). Week view exists only with one therapist in view (a therapist's own schedule, or an admin filtered to one), from `tab:`: `WeekTimeGrid` (7 day columns, drag across days). The Day/Week toggle and the `w` shortcut appear only then; with several therapists in view a `mode=week` link falls back to Day, and phones always show the day agenda (the week strip already covers the week). The old 7-card week board was removed.
     - **Colours** (existing tokens only, never colour alone): block left bar = therapist (`therapistColor`, the `chartColors.ts` palette by roster order); fill = status (`APPOINTMENT_BLOCK_STYLE`: confirmed teal-light, rescheduled teal-light + ↻, arrived moss-light + ✓, no-show rust-light + ✕, cancelled slate-light struck through and hidden unless "Show cancelled"); free time moss-light; closed = slate hatch + label; now line rust.
@@ -992,7 +992,7 @@ still falls through to the existing share sheet, unchanged.
     - **Notifications (in-app, no calendar feed)**: WhatsApp via wa.me, one tap per recipient. Wording lives in `src/domain/bookingMessages.ts` (tested); therapist messages use the patient's first name + surname initial only. The booking/reschedule toast offers "WhatsApp patient" and "Notify therapist" (needs `therapists.phone`); the details panel has "Remind patient", "Notify therapist", and after a cancel "Tell patient" / "Tell therapist". `ReminderSheet` (header "Reminders" on desktop, ⋮ → Send reminders elsewhere; admin/front desk) lists a day's live appointments with a Send per patient and a "Send list" day summary per therapist, ticking to Sent for the session.
     - **Install nudge**: `useInstallPrompt` + `InstallAppBanner` on Schedule and Workspace — phones only, not already installed (standalone), from the second visit, "Not now" snoozes 14 days (localStorage, per device). Android/Chrome uses the captured `beforeinstallprompt`; iPhone shows Share → Add to Home Screen.
     - **No-show history**: `patientAttendance` (last 6 months, by patient id, else last 10 phone digits; past appointments only) feeds `AttendanceNote` in the details panel and booking sheet ("2 no-shows, 1 cancelled… consider calling to confirm"); History rows badge patients with ≥2 no-shows. The booking sheet also warns when the patient already has an upcoming appointment (`nextAppointmentFor`).
-    - **Requests inbox**: `RequestsInbox` — a collapsible "N booking requests waiting · oldest 2h" strip above the calendar below `desktop:`, and a Requests section in the rail on desktop; Confirm opens the booking sheet on the requested date (if not past) with the preferred therapist; Decline uses `ConfirmDialog`. **Chrome: two rows.** (1) `ScheduleTabs` (`src/features/requests/ScheduleTabs.tsx`): Schedule ("My schedule" for therapists) · History · Feedback (admins) on the left, page actions on the right (My hours for therapists, Reminders from `tab:` for admin/front desk, + Book). The page title is screen-reader only. URLs are unchanged (`?tab=bookings&view=schedule|history`, `?tab=feedback`). (2) The day toolbar, in the grid column so the desktop rail lines up with it: ‹ › (from `tab:`), the date as a display-font headline ("Thu, 1 Oct" on phones) with a "Today" marker, a plain summary line ("10 booked, 5 still to come, 3 arrived, 1 no-show"), a Today button when away from today, then `TherapistFilter` (below `desktop:`, a popover of checkboxes replacing the old name-chip row), Day/Week, and ⋮ (show cancelled, send reminders on phones, closed days, working hours per therapist, keyboard shortcuts). Below `desktop:` the week strip (`MiniCalendarStrip`) is one row: ‹ days ›, with appointment counts as up to three dots (exact count in the label). **Therapist load**: each grid column header and rail row shows `LoadLine` (`src/components/schedule/LoadLine.tsx`), a capacity bar (booked ÷ working minutes) with a caption from `dayLoad()` in `src/domain/schedule.ts` that says the next useful thing. Today: "Free now, 4 slots", "Free from 2:30 PM, 3 slots", "On break until 2:00 PM" (between two working intervals), "Almost full, free from …" (one slot left), "Fully booked"; once the day's working hours are over, a quiet recap "Finished · 6 seen" (no-shows not counted) or "Finished for the day". Other days: "6 slots free", "Almost full, 1 slot free", "Fully booked". Any day: "Off today" / "Day off" (no working hours), "Closed". `tone` colours the bar and caption: the therapist's colour, amber from 70% booked or one slot left, rust when full, grey (`done`) once today's hours are over, no bar when off or closed.
+    - **Requests inbox**: `RequestsInbox` — a collapsible "N booking requests waiting · oldest 2h" strip above the calendar below `desktop:`, and a Requests section in the rail on desktop; Confirm opens the booking sheet on the requested date (if not past) with the preferred therapist; Decline uses `ConfirmDialog`. **Chrome: two rows.** (1) `ScheduleTabs` (`src/features/schedule/ScheduleTabs.tsx`): Schedule ("My schedule" for therapists) · History · Feedback (admins) on the left, page actions on the right (My hours for therapists, Reminders from `tab:` for admin/front desk, + Book). The page title is screen-reader only. URLs are unchanged (`?tab=bookings&view=schedule|history`, `?tab=feedback`). (2) The day toolbar, in the grid column so the desktop rail lines up with it: ‹ › (from `tab:`), the date as a display-font headline ("Thu, 1 Oct" on phones) with a "Today" marker, a plain summary line ("10 booked, 5 still to come, 3 arrived, 1 no-show"), a Today button when away from today, then `TherapistFilter` (below `desktop:`, a popover of checkboxes replacing the old name-chip row), Day/Week, and ⋮ (show cancelled, send reminders on phones, closed days, working hours per therapist, keyboard shortcuts). Below `desktop:` the week strip (`MiniCalendarStrip`) is one row: ‹ days ›, with appointment counts as up to three dots (exact count in the label). **Therapist load**: each grid column header and rail row shows `LoadLine` (`src/components/schedule/LoadLine.tsx`), a capacity bar (booked ÷ working minutes) with a caption from `dayLoad()` in `src/domain/schedule.ts` that says the next useful thing. Today: "Free now, 4 slots", "Free from 2:30 PM, 3 slots", "On break until 2:00 PM" (between two working intervals), "Almost full, free from …" (one slot left), "Fully booked"; once the day's working hours are over, a quiet recap "Finished · 6 seen" (no-shows not counted) or "Finished for the day". Other days: "6 slots free", "Almost full, 1 slot free", "Fully booked". Any day: "Off today" / "Day off" (no working hours), "Closed". `tone` colours the bar and caption: the therapist's colour, amber from 70% booked or one slot left, rust when full, grey (`done`) once today's hours are over, no bar when off or closed.
     - **Patient flags and condition** (`src/domain/patientFlags.ts`, loaded once per screen by `usePatientFlagContext` in `src/components/schedule/`): `patientFlags()` → "New patient" (unlinked, or no visits on record), "Package 3/6" (the session this appointment is), "Balance due" (an outstanding invoice, matched by patient ID), "N no-shows" (2+; a rust dot in lists). `PatientFlagPills` shows up to 2 in Today rows and the phone agenda, 1 in History, all in the details panel. `appointmentReason()` gives the condition on file (primary condition, else the latest visit's), else the booking request's note as "Patient says: …"; it's the second line of Today, agenda and History rows, line 3 of grid blocks an hour or longer (and their tooltip), and "Condition" / "Patient says" in the details panel. Grid blocks show the time range only (no "· 1h").
     - **History** (`HistoryView`, `src/components/schedule/HistoryView.tsx`): two control rows. (1) A Past / Upcoming pill switch (teal when selected, as the Ledger's) beside the search field. (2) One row — scrolling sideways on phones — of pill selects (Last / Next 7, 30 or 90 days or a chosen date, whose date input then sits inline; status; therapist for admin / front desk) and, after a thin divider, the past's tappable outcome counters (attended / no-shows / cancelled; a zero counter is hidden unless it's the active filter). Then rows grouped by day ("Yesterday", "Tue, 29 Sept") in one bordered list with the Schedule colour code, flags and condition, and "Show more" every 50.
     - **Phones**: the tabs row shows Schedule · History · Feedback and + Book (Reminders from `tab:`, in ⋮ on phones); "Find a time" lives in ⋮ and in the empty-day card; on a closed day with nothing booked the empty card is the closed notice ("Closed every Thursday. Public booking is off. You can still book here.") instead of a banner plus a card. **Blocks show status by fill** (`appointmentFill`, shared with Workspace's Today rows): upcoming = white card with the therapist's edge; arrived without a visit = tinted in the therapist's colour; visit logged = grey; no-show = rust; cancelled = struck through. `.chip-row` sits in `@layer components` in `index.css` so Tailwind display utilities can hide it (unlayered, it beat `desktop:hidden`). There is no Requests tab: "See all" / "All" (and `?view=requests`, e.g. Workspace's Review link) opens the full list in a `Panel`.
@@ -1065,7 +1065,7 @@ still falls through to the existing share sheet, unchanged.
     - The Patients-list "Book" action above always passes it —
       `BookAppointmentDialog` opens from an already-clicked patient row,
       so there's no name to match and no ambiguity to defer.
-    - The Bookings tab's Confirm mini-form (`RequestsPage.tsx`) grew a
+    - The Bookings tab's Confirm mini-form (`SchedulePage.tsx`) grew a
       third, optional field alongside Scheduled-for/Therapist: a
       `SearchableSelect` "Link to existing patient · optional" picker
       (options built from `repos.patients.list`, broadened from
@@ -1163,7 +1163,7 @@ still falls through to the existing share sheet, unchanged.
     `shareTherapistNotify`) go through it, reading the recipient's phone
     off `Patient.phone` (added to `VisitCardData` as `patientPhone`,
     `OpenPackageRow` as `phone`, and threaded through `NewVisitPage`'s
-    post-save state and `RequestsPage`'s `justConfirmed` state to reach the
+    post-save state and `SchedulePage`'s `justConfirmed` state to reach the
     call sites) or, for `shareTherapistNotify`, off the new
     `therapists.phone` column (nullable text; `RosterCard`'s edit form in
     Settings, next to Registration no. — absent still means share-sheet-
@@ -1249,10 +1249,10 @@ src/features/            UI pages and components (React + TanStack Router)
   ├── invoices/          InvoicePrintPage
   ├── import/            Historical Excel visit import (preview + commit)
   ├── auth/              Login, reset-password
-  ├── requests/          RequestsPage at /requests (Feedback tab, admin;
-                         Bookings tab, admin + front_desk); requestsSignals.ts
+  ├── schedule/          SchedulePage at /schedule (Feedback tab, admin;
+                         Bookings tab, admin + front_desk); scheduleSignals.ts
                          (the "new response" count + the front-desk Google-
-                         review-eligibility hook, kept out of RequestsPage
+                         review-eligibility hook, kept out of SchedulePage
                          itself so Workspace's eager bundle can read them
                          without pulling in the route-code-split page)
   ├── publicFeedback/    FeedbackFormPage at /f/$token (anonymous, no Shell)

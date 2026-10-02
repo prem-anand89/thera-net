@@ -104,7 +104,7 @@ const BookingFormPage = lazy(() =>
   }))
 );
 const SchedulePage = lazy(() =>
-  import('@/features/requests/RequestsPage').then((m) => ({ default: m.RequestsPage }))
+  import('@/features/schedule/SchedulePage').then((m) => ({ default: m.SchedulePage }))
 );
 
 const rootRoute = createRootRoute({ component: Shell });
@@ -442,7 +442,7 @@ const settingsRoute = createRoute({
 });
 
 // 'bookings' isn't built yet (later slice) but is accepted here so the tab
-// shape doesn't need another route change to add it — RequestsPage just
+// shape doesn't need another route change to add it — SchedulePage just
 // doesn't render anything for it today, same as the Bookings tab itself
 // showing "coming later" rather than being absent.
 const SCHEDULE_TABS = ['feedback', 'bookings'] as const;

@@ -9,7 +9,7 @@ import { formatDateDMY } from '@/domain/fiscalYear';
 import { SectionCard, th, td } from '@/components/ui';
 import { ScheduleBookingsView } from './ScheduleBookingsView';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
-import { requestsLastViewedKey } from './requestsSignals';
+import { requestsLastViewedKey } from './scheduleSignals';
 
 /** Filled/empty star string for a 1–5 rating — same glance-first spirit as
  *  the icon+word markers on the visit row (`VisitCard.tsx`'s
@@ -35,7 +35,7 @@ function ratingStars(rating: number): string {
  * doc's own resolved note says a front_desk viewer on `?tab=feedback`
  * gets redirected to Bookings, not shown a disabled tab.
  */
-export function RequestsPage() {
+export function SchedulePage() {
   const clinic = useClinic();
   const navigate = useNavigate();
   const { isAdmin, role } = usePermissions();

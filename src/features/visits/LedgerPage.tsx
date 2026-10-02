@@ -7,7 +7,7 @@ import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
-import { useGoogleReviewEligibleRequestIds } from '@/features/requests/requestsSignals';
+import { useGoogleReviewEligibleRequestIds } from '@/features/schedule/scheduleSignals';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY, formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';

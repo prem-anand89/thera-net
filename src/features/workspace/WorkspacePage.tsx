@@ -47,7 +47,7 @@ import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard'
 import {
   useNewFeedbackResponseCount,
   useGoogleReviewEligibleRequestIds,
-} from '@/features/requests/requestsSignals';
+} from '@/features/schedule/scheduleSignals';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { SplitModal } from '@/components/SplitModal';
@@ -218,14 +218,8 @@ function PackageStatusPill({ pkg }: { pkg: OpenPackageRow }) {
 export function WorkspacePage() {
   const clinic = useClinic();
   const scope = useWorkspaceScope();
-  const { role, canBill, canViewClinicalNotes, canEditSettings } = usePermissions();
+  const { canBill, canViewClinicalNotes, canEditSettings } = usePermissions();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (role === 'front_desk') {
-      void navigate({ to: '/ledger', search: { tab: 'daybook' } });
-    }
-  }, [role, navigate]);
 
   const { therapistSplit } = clinicBillingConfig(clinic);
   // Patient Communications, Slice 2 — "something arrived" surface per the
