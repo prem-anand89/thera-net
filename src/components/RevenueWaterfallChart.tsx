@@ -158,8 +158,14 @@ export function RevenueWaterfallChart({
                   )}
                 </>
               )}
+              {/* No prior month to diff the first category against, so it
+                  gets this marker instead of a delta bar. Placed on the
+                  zero line, the same vertical zone every other column's
+                  delta sits in — a previous version anchored it off
+                  `baseline` (the x-axis row), landing only ~4-6px above
+                  the month label below it and visually colliding with it. */}
               {ci === 0 && (
-                <text x={cx} y={baseline + 14} textAnchor="middle" className="fill-slate-400" fontSize={8}>
+                <text x={cx} y={y0 - 6} textAnchor="middle" className="fill-slate-400" fontSize={8}>
                   start
                 </text>
               )}

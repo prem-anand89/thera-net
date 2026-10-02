@@ -11,7 +11,7 @@ import {
 } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
-import { SectionCard, StatTile, Pill, th, td, tdNum, thNum, btnSecondary } from '@/components/ui';
+import { SectionCard, Pill, th, td, tdNum, thNum, btnSecondary } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
 import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { PieChart } from '@/components/PieChart';
@@ -571,7 +571,21 @@ export function ReportsOverviewPage() {
           }}
           className="scroll-mt-28 md:scroll-mt-20"
         >
-          <SectionCard title="Single-visit patients">
+          <SectionCard
+            title="Single-visit patients"
+            action={
+              singleVisitPatients && singleVisitPatients.length > 0 ? (
+                <div className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1">
+                  <div className="text-[9px] font-medium uppercase leading-tight tracking-wide text-[var(--muted)]">
+                    Total
+                  </div>
+                  <div className="text-sm font-semibold leading-tight tabular-nums text-[var(--ink)]">
+                    {singleVisitPatients.length}
+                  </div>
+                </div>
+              ) : undefined
+            }
+          >
             <div className="mb-3 flex items-start justify-between gap-3">
               <p className="text-xs text-[var(--muted)]">
                 Exactly one visit on record, more than 14 days ago — click a bar to filter, call
@@ -644,9 +658,6 @@ export function ReportsOverviewPage() {
               </p>
             ) : (
               <>
-                <div className="mb-4">
-                  <StatTile label="Total" value={singleVisitPatients.length} />
-                </div>
                 <div className="mb-2 flex justify-end">
                   <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
                     <input

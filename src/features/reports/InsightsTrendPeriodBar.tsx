@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { fiscalYearOf, monthsOfFiscalYear, monthName } from '@/domain/fiscalYear';
 import type { Clinic } from '@/domain/types';
-import { inputCls } from '@/components/ui';
+import { chipSelect, chipSelectChevron as chevron } from '@/components/ui';
 import type { FyMonth } from '@/domain/fiscalYear';
 import type { InsightsTrendPeriodMode } from './insightsTrendPeriod';
 
@@ -66,7 +66,9 @@ export function InsightsTrendPeriodBar({
         {mode === 'mom' && (
           <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <select
-              className={`${inputCls} !w-auto min-w-0 py-1.5 text-sm`}
+              className={chipSelect}
+              style={chevron}
+              aria-label="Fiscal year"
               value={fyStartYear}
               onChange={(e) => setFyStartYear(Number(e.target.value))}
             >
@@ -78,7 +80,9 @@ export function InsightsTrendPeriodBar({
               ))}
             </select>
             <select
-              className={`${inputCls} !w-auto min-w-0 py-1.5 text-sm`}
+              className={chipSelect}
+              style={chevron}
+              aria-label="Month"
               value={monthValue}
               onChange={(e) => {
                 const [y, m] = e.target.value.split('-').map(Number);
