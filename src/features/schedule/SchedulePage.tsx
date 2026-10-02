@@ -108,14 +108,8 @@ export function SchedulePage() {
   const requestById = useMemo(() => new Map((requests ?? []).map((r) => [r.id, r])), [requests]);
 
   const visitIds = useMemo(
-    () => [
-      ...new Set(
-        (responses ?? [])
-          .map((r) => requestById.get(r.requestId)?.visitId)
-          .filter((id): id is string => !!id)
-      ),
-    ],
-    [responses, requestById]
+    () => [...new Set((requests ?? []).map((r) => r.visitId).filter((id): id is string => !!id))],
+    [requests]
   );
   const visits = useLiveQuery(
     () => (visitIds.length ? repos.visits.listByIds(visitIds) : Promise.resolve([])),
