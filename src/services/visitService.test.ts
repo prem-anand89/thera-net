@@ -20,6 +20,7 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
     logoPath: null,
     partnerHospitalName: 'Health Valley',
     partnerHospitalLogoPath: null,
+    hasPartner: true,
     invoicePrefix: 'BM',
     bmSplitPct: 75,
     taxPct: 10,
@@ -291,8 +292,8 @@ describe('visitService.create', () => {
     expect(updated.postTaxPaise).toBe(rs(1350)); // 2000 × 0.675
   });
 
-  it('degenerates the split in simple (non-hospital) billing mode', async () => {
-    const simpleFake = makeFakeRepos({ billingMode: 'simple' });
+  it('degenerates the split for a clinic with no billing partner', async () => {
+    const simpleFake = makeFakeRepos({ hasPartner: false });
     const v = await createVisitService(simpleFake.repos).create(base);
     // Whole bill is the clinic's; no tax withheld; snapshots stored as 100/0.
     expect(v.bmSplitPct).toBe(100);

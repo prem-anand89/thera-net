@@ -18,6 +18,7 @@ function makeFakeRepos() {
     logoPath: null,
     partnerHospitalName: 'Health Valley',
     partnerHospitalLogoPath: null,
+    hasPartner: true,
     invoicePrefix: 'BM',
     bmSplitPct: 75,
     taxPct: 10,

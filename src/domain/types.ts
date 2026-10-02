@@ -33,10 +33,12 @@ export interface Clinic {
   /** Whether the clinic has an external partner (hospital, organization, etc.). Defaults to false. */
   hasPartner?: boolean;
   /**
-   * Legacy field: maps to clinicType and hasPartner for backward compat.
-   * 'hospital_split' = clinicType='multiple' + hasPartner=true (with revenue split).
-   * 'simple' = clinicType='individual' + hasPartner=false.
-   * Kept for older cached rows; new saves use clinicType + hasPartner.
+   * Legacy field, no longer read by any app code (`clinicBillingConfig()`
+   * used to fall back to this when `clinicType` was undefined — which was
+   * always, since `clinic_type` didn't exist as a live column until the
+   * migration that retired this fallback; see that function's own doc
+   * comment). Column stays for old rows that still have it set; nothing
+   * writes or reads it anymore.
    */
   billingMode?: 'simple' | 'hospital_split';
   /** Whether the internal therapist revenue-split feature is available. */
@@ -187,24 +189,29 @@ export function clinicShareLabels(clinic: Pick<Clinic, 'ownShareLabel' | 'partne
 }
 
 /**
- * Which billing surfaces a clinic shows. Defaults preserve the original
- * hospital-split behavior when the fields are unset (older cached rows), so
- * nothing changes for existing clinics using billingMode.
+ * Which billing surfaces a clinic shows. `partnerSplit` (hospital/partner
+ * settlement card, TDS footnote, Post-Tax column) depends only on
+ * `hasPartner` — whether an external org bills/settles with this clinic at
+ * all. It used to also require `clinicType === 'multiple'`, conflating two
+ * orthogonal things: "do we have a billing partner" and "do we have more
+ * than one therapist." That second concern is `clinicType`'s own job
+ * (it still independently gates the "Track therapist splits" toggle in
+ * Settings) and has nothing to do with whether settlement UI applies.
+ *
+ * The old code also had a dead fallback branch keyed on `clinicType !==
+ * undefined` to fall back to the legacy `billingMode` field otherwise —
+ * `clinicType` never actually existed as a live DB column until the
+ * migration that added it alongside this fix, so every clinic took that
+ * fallback, and `billingMode` defaults to `'hospital_split'` with nothing
+ * in the app ever writing it — meaning `partnerSplit` was `true` for every
+ * clinic in production, including clinics with `hasPartner: false`. See
+ * `src/features/reports/MonthlyStatementPage.tsx`'s `SettlementCard` gate.
  */
 export function clinicBillingConfig(
-  clinic: Pick<Clinic, 'clinicType' | 'hasPartner' | 'billingMode' | 'enableTherapistSplit'>
+  clinic: Pick<Clinic, 'hasPartner' | 'enableTherapistSplit'>
 ): { partnerSplit: boolean; therapistSplit: boolean } {
-  // Prefer new clinicType/hasPartner model; fall back to billingMode for backward compat
-  let partnerSplit: boolean;
-  if (clinic.clinicType !== undefined) {
-    // New model: partnerSplit = multiple therapists AND has a partner
-    partnerSplit = clinic.clinicType === 'multiple' && (clinic.hasPartner ?? false);
-  } else {
-    // Legacy: billingMode
-    partnerSplit = (clinic.billingMode ?? 'hospital_split') === 'hospital_split';
-  }
   return {
-    partnerSplit,
+    partnerSplit: clinic.hasPartner ?? false,
     therapistSplit: clinic.enableTherapistSplit ?? true,
   };
 }

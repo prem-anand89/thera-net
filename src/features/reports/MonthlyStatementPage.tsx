@@ -22,6 +22,7 @@ import { MonthlyReportTable } from '@/components/MonthlyReportTable';
 import { toFriendlyMessage } from '@/lib/errors';
 import { SERIES_COLORS } from '@/components/chartColors';
 import { VisitsRevenueTrendChart } from '@/components/VisitsRevenueTrendChart';
+import { useCompactChart } from '@/components/useCompactChart';
 
 export function MonthlyStatementPage() {
   const clinic = useClinic();
@@ -82,6 +83,7 @@ export function MonthlyStatementPage() {
   );
 
   const [showTrend, setShowTrend] = useState(false);
+  const compactChart = useCompactChart();
 
   // A 0% TDS rate leaves the split itself in place, but with nothing
   // actually withheld "Post-Tax" no longer describes the figure.
@@ -182,7 +184,7 @@ export function MonthlyStatementPage() {
               visitsColor={SERIES_COLORS[1]}
               revenueColor={SERIES_COLORS[0]}
               formatRevenue={formatINR}
-              compact={true}
+              compact={compactChart}
             />
           </div>
         )}
