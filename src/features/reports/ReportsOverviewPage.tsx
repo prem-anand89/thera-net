@@ -768,7 +768,7 @@ export function ReportsOverviewPage() {
             if (el) sectionRefs.current.set('revenue', el);
             else sectionRefs.current.delete('revenue');
           }}
-          className="scroll-mt-28 md:scroll-mt-20 space-y-4"
+          className="scroll-mt-28 md:scroll-mt-20 space-y-2"
         >
           <InsightsTrendPeriodBar
             clinic={clinic}
