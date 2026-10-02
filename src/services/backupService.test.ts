@@ -28,7 +28,7 @@ function makeFakeRepos() {
     partnerHospitalName: null,
     partnerHospitalLogoPath: null,
     invoicePrefix: 'BM',
-    bmSplitPct: 75,
+    clinicSplitPct: 75,
     taxPct: 10,
     tdsBasis: 'gross_bill',
     fyStartMonth: 4,

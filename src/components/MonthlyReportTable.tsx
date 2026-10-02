@@ -12,7 +12,7 @@ import type { FyMonth } from '@/domain/fiscalYear';
  * partner-share columns; a simple clinic turns it off and sees just billed
  * totals. `showPostTax` further drops just the Post Tax column on top of
  * that — at 0% TDS nothing is withheld, so it would only repeat the
- * clinic-share figure. `Net` (Post-Tax BM adjusted for same-visit Shared/Split splits AND
+ * clinic-share figure. `Net` (Post-Tax adjusted for same-visit Shared/Split splits AND
  * automatic package-session attribution — see TherapistMonthRow.netPostTaxPaise)
  * always shows, on both the Reports page and the partner-facing PDF, since
  * it's the one number that answers "how much did this therapist actually
@@ -50,10 +50,10 @@ export function MonthlyReportTable({
   const cells = (r: TherapistMonthRow) => (
     <>
       <td className={tdNum}>{formatINR(r.billPaise)}</td>
-      {partnerSplit && <td className={tdNum}>{formatINR(r.bmSharePaise)}</td>}
+      {partnerSplit && <td className={tdNum}>{formatINR(r.clinicSharePaise)}</td>}
       {partnerSplit && <td className={tdNum}>{formatINR(r.tdsPaise)}</td>}
       {partnerSplit && showPostTax && <td className={tdNum}>{formatINR(r.postTaxPaise)}</td>}
-      {partnerSplit && <td className={tdNum}>{formatINR(r.hvPaise)}</td>}
+      {partnerSplit && <td className={tdNum}>{formatINR(r.partnerSharePaise)}</td>}
       {showShared && <td className={tdNum}>{r.sharedPaise !== 0 ? formatINR(r.sharedPaise) : '—'}</td>}
       <td className={tdNum}>
         {formatINR(r.netPostTaxPaise)}

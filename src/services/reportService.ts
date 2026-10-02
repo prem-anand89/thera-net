@@ -8,10 +8,10 @@ export interface TherapistMonthRow {
   therapistId: UUID | 'total';
   therapistName: string;
   billPaise: Paise;
-  bmSharePaise: Paise;
+  clinicSharePaise: Paise;
   tdsPaise: Paise;
   postTaxPaise: Paise;
-  hvPaise: Paise;
+  partnerSharePaise: Paise;
   /** Net catalog-vs-actual variance — "revenue lost to discounts" when negative */
   adjustmentPaise: Paise;
   /**
@@ -21,10 +21,10 @@ export interface TherapistMonthRow {
    */
   sharedPaise: Paise;
   /**
-   * Post-Tax BM after splits AND package-session attribution — this
+   * Post-Tax after splits AND package-session attribution — this
    * therapist's actual take-home/credit figure, not just what happened to
    * be billed under their name. Two adjustments feed in, both applied to
-   * Post-Tax BM directly (not derived from sharedPaise, a different base):
+   * Post-Tax directly (not derived from sharedPaise, a different base):
    * (1) same-visit manual Shared/Split — a share given to/from a named
    * assisting therapist; (2) automatic package attribution — a package's
    * full price is billed on one session's visit (the "billing visit"),
@@ -33,7 +33,7 @@ export interface TherapistMonthRow {
    * package to whichever therapist logged the billing visit even when a
    * colleague delivered other sessions. For every OTHER session in the
    * group logged by a DIFFERENT therapist, a fixed per-session share
-   * (billing visit's Post-Tax BM ÷ declared session count, whole rupees)
+   * (billing visit's Post-Tax ÷ declared session count, whole rupees)
    * moves from the biller to that therapist, but only for sessions that
    * fall inside THIS report's own month — a package spanning several
    * months settles incrementally, one month at a time, so a past month's
@@ -51,6 +51,8 @@ export interface TherapistMonthRow {
    */
   netPostTaxPaise: Paise;
   visitCount: number;
+  /** Number of sessions represented by the revenue billed this month (e.g., a 5-session package counts as 5, not 1) */
+  billedSessionCount: number;
   /** COUNT(DISTINCT mrno) — unique patients, not visit count (spec §5.2) */
   uniquePatients: number;
 }
@@ -63,7 +65,7 @@ export interface MonthlyReport {
 }
 
 /**
- * Per-therapist Post-Tax BM deltas from automatic package-session
+ * Per-therapist Post-Tax deltas from automatic package-session
  * attribution (see TherapistMonthRow.netPostTaxPaise). For each
  * multi-session package group, the "billing visit" (the one carrying the
  * package's price — everything else is logged at ₹0) defines a fixed
@@ -155,14 +157,15 @@ export function createReportService(repos: Repos) {
         therapistId: id,
         therapistName: name,
         billPaise: 0,
-        bmSharePaise: 0,
+        clinicSharePaise: 0,
         tdsPaise: 0,
         postTaxPaise: 0,
-        hvPaise: 0,
+        partnerSharePaise: 0,
         adjustmentPaise: 0,
         sharedPaise: 0,
         netPostTaxPaise: 0,
         visitCount: 0,
+        billedSessionCount: 0,
         uniquePatients: 0,
       });
 
@@ -175,13 +178,20 @@ export function createReportService(repos: Repos) {
         const row = rowFor(v.therapistId);
         for (const r of [row, total]) {
           r.billPaise += v.actualBillPaise;
-          r.bmSharePaise += v.bmSharePaise;
+          r.clinicSharePaise += v.clinicSharePaise;
           r.tdsPaise += v.tdsPaise;
           r.postTaxPaise += v.postTaxPaise;
-          r.hvPaise += v.hvPaise;
+          r.partnerSharePaise += v.partnerSharePaise;
           r.adjustmentPaise += v.adjustmentPaise;
           r.netPostTaxPaise += v.postTaxPaise;
           r.visitCount += 1;
+          
+          // Only add to billedSessionCount if this visit actually generated the revenue
+          // (continuation sessions are logged at ₹0, so they don't count here).
+          // If a visit was 100% discounted (₹0) and not a package, it still counts as 1.
+          if (v.actualBillPaise > 0 || !v.packageTotal) {
+            r.billedSessionCount += v.packageTotal ?? 1;
+          }
         }
         if (!patientsByTherapist.has(v.therapistId)) patientsByTherapist.set(v.therapistId, new Set());
         patientsByTherapist.get(v.therapistId)!.add(v.patientId);
@@ -191,7 +201,7 @@ export function createReportService(repos: Repos) {
       total.uniquePatients = allPatients.size;
 
       // Internal therapist splits: move a share of the billed amount (Shared)
-      // and, separately, of Post-Tax BM (Net) from the primary to an
+      // and, separately, of Post-Tax (Net) from the primary to an
       // assisting therapist. Both round to whole rupees like every other
       // money figure in the app; both net to zero, so no billed total above
       // is affected — this is attribution only.
@@ -265,9 +275,9 @@ export function createReportService(repos: Repos) {
       const line = (r: TherapistMonthRow) => [
         r.therapistName,
         paiseToRupees(r.billPaise),
-        ...(partnerSplit ? [paiseToRupees(r.bmSharePaise), paiseToRupees(r.tdsPaise)] : []),
+        ...(partnerSplit ? [paiseToRupees(r.clinicSharePaise), paiseToRupees(r.tdsPaise)] : []),
         ...(showPostTax ? [paiseToRupees(r.postTaxPaise)] : []),
-        ...(partnerSplit ? [paiseToRupees(r.hvPaise)] : []),
+        ...(partnerSplit ? [paiseToRupees(r.partnerSharePaise)] : []),
         ...(therapistSplit ? [paiseToRupees(r.sharedPaise)] : []),
         paiseToRupees(r.netPostTaxPaise),
         r.visitCount,

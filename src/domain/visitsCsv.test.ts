@@ -12,7 +12,7 @@ function row(overrides: Partial<VisitsCsvRow> = {}): VisitsCsvRow {
     serviceName: 'Physiotherapy',
     condition: 'Back pain',
     billPaise: rs(2200),
-    bmSharePaise: rs(1650),
+    clinicSharePaise: rs(1650),
     postTaxPaise: rs(1485),
     invoiced: true,
     ...overrides,
@@ -61,7 +61,7 @@ describe('visitsToCsv', () => {
 
   it('ends with a totals line summing bill, share, and post-tax across all rows', () => {
     const csv = visitsToCsv(
-      [row({ billPaise: rs(2200), bmSharePaise: rs(1650), postTaxPaise: rs(1485) }), row({ billPaise: rs(800), bmSharePaise: rs(600), postTaxPaise: rs(540) })],
+      [row({ billPaise: rs(2200), clinicSharePaise: rs(1650), postTaxPaise: rs(1485) }), row({ billPaise: rs(800), clinicSharePaise: rs(600), postTaxPaise: rs(540) })],
       { filterDescription: 'All time', partnerSplit: true, showPostTax: true, ownShareLabel: 'BM' }
     );
     const lines = csv.split('\n');

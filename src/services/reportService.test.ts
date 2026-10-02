@@ -43,13 +43,13 @@ function visit(over: Partial<Visit>): Visit {
     sessionIndex: null,
     packageTotal: null,
     packageGroupId: null,
-    bmSplitPct: 75,
+    clinicSplitPct: 75,
     taxPct: 10,
     tdsBasis: 'gross_bill',
-    bmSharePaise: rs(4050),
+    clinicSharePaise: rs(4050),
     postTaxPaise: rs(3645),
     tdsPaise: rs(540),
-    hvPaise: rs(1350),
+    partnerSharePaise: rs(1350),
     invoiceId: null,
     deleted: false,
     updatedAt: '',
@@ -97,7 +97,7 @@ describe('reportService.monthly — therapist split', () => {
     const without = await createReportService(makeFakeRepos([visit({})])).monthly(CLINIC, JULY);
     // The primary therapist row and the total row must reconcile identically —
     // splits never move the billed figures the hospital audits.
-    for (const key of ['billPaise', 'bmSharePaise', 'tdsPaise', 'postTaxPaise', 'hvPaise'] as const) {
+    for (const key of ['billPaise', 'clinicSharePaise', 'tdsPaise', 'postTaxPaise', 'partnerSharePaise'] as const) {
       expect(withSplit.total[key]).toBe(without.total[key]);
     }
   });
@@ -131,8 +131,8 @@ describe('reportService.monthly — therapist split', () => {
     // no tax/split machinery to obscure it — this is the guarantee behind
     // "for clinics with no TDS and partner, Net should match the bill."
     const repos = makeFakeRepos([
-      visit({ therapistId: PREM, actualBillPaise: rs(2000), bmSharePaise: rs(2000), postTaxPaise: rs(2000), tdsPaise: 0, hvPaise: 0 }),
-      visit({ therapistId: AISH, actualBillPaise: rs(3000), bmSharePaise: rs(3000), postTaxPaise: rs(3000), tdsPaise: 0, hvPaise: 0 }),
+      visit({ therapistId: PREM, actualBillPaise: rs(2000), clinicSharePaise: rs(2000), postTaxPaise: rs(2000), tdsPaise: 0, partnerSharePaise: 0 }),
+      visit({ therapistId: AISH, actualBillPaise: rs(3000), clinicSharePaise: rs(3000), postTaxPaise: rs(3000), tdsPaise: 0, partnerSharePaise: 0 }),
     ]);
     const report = await createReportService(repos).monthly(CLINIC, JULY);
     expect(report.total.netPostTaxPaise).toBe(report.total.billPaise);

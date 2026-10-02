@@ -22,7 +22,7 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
     partnerHospitalLogoPath: null,
     hasPartner: true,
     invoicePrefix: 'BM',
-    bmSplitPct: 75,
+    clinicSplitPct: 75,
     taxPct: 10,
     tdsBasis: 'gross_bill',
     fyStartMonth: 4,
@@ -209,11 +209,11 @@ describe('visitService.create', () => {
     expect(v.catalogPricePaise).toBe(rs(2200));
     expect(v.actualBillPaise).toBe(rs(2200));
     expect(v.adjustmentPaise).toBe(0);
-    expect(v.bmSplitPct).toBe(75);
+    expect(v.clinicSplitPct).toBe(75);
     expect(v.tdsBasis).toBe('gross_bill');
     expect(v.postTaxPaise).toBe(rs(1485)); // matches charges sheet SELF SHARE
     expect(v.tdsPaise).toBe(rs(220)); // 10% of the ₹2200 gross
-    expect(v.bmSharePaise).toBe(rs(1705)); // postTaxPaise + tdsPaise (75% of the ₹1980 post-tax remainder, plus the TDS)
+    expect(v.clinicSharePaise).toBe(rs(1705)); // postTaxPaise + tdsPaise (75% of the ₹1980 post-tax remainder, plus the TDS)
     // 3-day package auto-tracks sessions
     expect(v.sessionIndex).toBe(1);
     expect(v.packageTotal).toBe(3);
@@ -248,7 +248,7 @@ describe('visitService.create', () => {
     });
     expect(second.actualBillPaise).toBe(0);
     expect(second.adjustmentPaise).toBe(0);
-    expect(second.bmSharePaise).toBe(0);
+    expect(second.clinicSharePaise).toBe(0);
     expect(second.packageGroupId).toBe(first.packageGroupId);
   });
 
@@ -296,12 +296,12 @@ describe('visitService.create', () => {
     const simpleFake = makeFakeRepos({ hasPartner: false });
     const v = await createVisitService(simpleFake.repos).create(base);
     // Whole bill is the clinic's; no tax withheld; snapshots stored as 100/0.
-    expect(v.bmSplitPct).toBe(100);
+    expect(v.clinicSplitPct).toBe(100);
     expect(v.taxPct).toBe(0);
-    expect(v.bmSharePaise).toBe(v.actualBillPaise);
+    expect(v.clinicSharePaise).toBe(v.actualBillPaise);
     expect(v.postTaxPaise).toBe(v.actualBillPaise);
     expect(v.tdsPaise).toBe(0);
-    expect(v.hvPaise).toBe(0);
+    expect(v.partnerSharePaise).toBe(0);
   });
 
   it('leaves clinicalStatus unset when the clinic has not opted into clinical docs', async () => {
@@ -432,7 +432,7 @@ describe('visitService.recomputeUninvoicedSplits', () => {
   };
 
   it("re-snapshots not-yet-invoiced visits to the clinic's current split, leaving invoiced ones alone", async () => {
-    const fake = makeFakeRepos(); // bmSplitPct: 75, taxPct: 10, tdsBasis: 'gross_bill'
+    const fake = makeFakeRepos(); // clinicSplitPct: 75, taxPct: 10, tdsBasis: 'gross_bill'
     const svc = createVisitService(fake.repos);
     const open = await svc.create(base);
     const invoiced = await svc.create({ ...base, visitDate: '2026-05-11' });
@@ -440,23 +440,23 @@ describe('visitService.recomputeUninvoicedSplits', () => {
 
     // Renegotiate: clinic's split changes after both visits were logged.
     const clinic = await fake.repos.clinics.get('clinic-1');
-    await fake.repos.clinics.put({ ...clinic!, bmSplitPct: 60, taxPct: 5 });
+    await fake.repos.clinics.put({ ...clinic!, clinicSplitPct: 60, taxPct: 5 });
 
     const result = await svc.recomputeUninvoicedSplits('clinic-1');
     expect(result.updated).toBe(1);
 
     const reopened = await fake.repos.visits.get(open.id);
-    expect(reopened!.bmSplitPct).toBe(60);
+    expect(reopened!.clinicSplitPct).toBe(60);
     expect(reopened!.taxPct).toBe(5);
     // gross_bill: 5% TDS off the ₹2200 bill first (₹110), then 60% of the
-    // ₹2090 remainder (₹1254) — bmSharePaise is that plus the TDS.
+    // ₹2090 remainder (₹1254) — clinicSharePaise is that plus the TDS.
     expect(reopened!.tdsPaise).toBe(rs(110));
     expect(reopened!.postTaxPaise).toBe(rs(1254));
-    expect(reopened!.bmSharePaise).toBe(rs(1364));
+    expect(reopened!.clinicSharePaise).toBe(rs(1364));
 
     // Invoiced visit's billing stays exactly as it was billed.
     const stillInvoiced = await fake.repos.visits.get(invoiced.id);
-    expect(stillInvoiced!.bmSplitPct).toBe(75);
+    expect(stillInvoiced!.clinicSplitPct).toBe(75);
   });
 
   it('is a no-op when nothing needs updating', async () => {

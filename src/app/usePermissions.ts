@@ -10,7 +10,7 @@ export interface Permissions {
   /**
    * Payout- and settlement-shaped aggregates — a colleague's earnings, not
    * a per-visit bill amount. Gates Ledger's Reports sub-tab (the full
-   * per-therapist Bill/BM Share/TDS/Post-Tax/HV monthly breakdown).
+   * per-therapist Bill/Clinic Share/TDS/Post-Tax/Partner Share monthly breakdown).
    */
   canViewPayouts: boolean;
   /** Clinical consultation notes — reception has no clinical-documentation need. */

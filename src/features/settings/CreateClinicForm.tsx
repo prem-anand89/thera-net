@@ -108,9 +108,9 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         partner_hospital_name: string | null;
         partner_hospital_logo_path: string | null;
         invoice_prefix: string;
-        bm_split_pct: number;
+        clinic_split_pct: number;
         tax_pct: number;
-        tds_basis: 'gross_bill' | 'bm_share';
+        tds_basis: 'gross_bill' | 'clinic_share';
         fy_start_month: number;
         enable_therapist_split: boolean;
         updated_at: string;
@@ -128,7 +128,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         partnerHospitalName: row.partner_hospital_name,
         partnerHospitalLogoPath: row.partner_hospital_logo_path,
         invoicePrefix: row.invoice_prefix,
-        bmSplitPct: row.bm_split_pct,
+        clinicSplitPct: row.clinic_split_pct,
         taxPct: row.tax_pct,
         tdsBasis: row.tds_basis,
         fyStartMonth: row.fy_start_month,

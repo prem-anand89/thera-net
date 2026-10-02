@@ -496,7 +496,7 @@ export function createDashboardService(repos: Repos) {
     /**
      * Billed vs. actually collected for one calendar month — the "how much
      * of what we billed did we actually get paid" number the reporting
-     * pages never surfaced (revenueTrend/MonthlyReport track the BM
+     * pages never surfaced (revenueTrend/MonthlyReport track the clinic's
      * split/tax rollup, not collection status at all). Reuses
      * computeVisitPaymentState per visit — the same source of truth
      * VisitCard's payment chips and pendingWork's outstanding-payment

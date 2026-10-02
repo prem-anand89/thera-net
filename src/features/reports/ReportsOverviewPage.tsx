@@ -11,7 +11,7 @@ import {
 } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
-import { SectionCard, Pill, th, td, tdNum, thNum, btnSecondary } from '@/components/ui';
+import { SectionCard, Pill, th, td, tdNum, thNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
 import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { PieChart } from '@/components/PieChart';
@@ -96,14 +96,15 @@ function KpiCard({
 
 const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> = {
   billPaise: 0,
-  bmSharePaise: 0,
+  clinicSharePaise: 0,
   tdsPaise: 0,
   postTaxPaise: 0,
-  hvPaise: 0,
+  partnerSharePaise: 0,
   adjustmentPaise: 0,
   sharedPaise: 0,
   netPostTaxPaise: 0,
   visitCount: 0,
+  billedSessionCount: 0,
   uniquePatients: 0,
 };
 
@@ -332,8 +333,8 @@ export function ReportsOverviewPage() {
   // same latest trend entry.
   const latestReport = trend?.[trend.length - 1];
   const avgChargePerSession =
-    latestReport && latestReport.total.visitCount > 0
-      ? Math.round(latestReport.total.billPaise / latestReport.total.visitCount)
+    latestReport && latestReport.total.billedSessionCount > 0
+      ? Math.round(latestReport.total.billPaise / latestReport.total.billedSessionCount)
       : null;
 
   // Jump-nav: mobile chips + desktop rail, same sticky/IntersectionObserver
@@ -526,42 +527,46 @@ export function ReportsOverviewPage() {
         />
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Link
-          to="/insights/trends-print"
-          search={{
-            year: focusMonth.year,
-            month: focusMonth.month,
-            period: trendPeriodMode,
-          }}
-          className={btnSecondary}
-        >
-          Print / PDF review
-        </Link>
-      </div>
+
 
       {/* Jump-nav — sticky under Shell's own header, same pattern the note
           editor uses. A horizontal chip row at every width now (used to be
           mobile-only, with a persistent left-side rail taking sidebar
           space on desktop) — the rail cost more room than a page of
           reference cards, glanced at rather than edited, actually needed. */}
-      <nav className="sticky top-14 z-[1] -mx-4 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--paper)] px-4 py-2">
-        {jumpTargets.map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => jumpToSection(key)}
-            className="flex shrink-0 items-center rounded-full border px-3 py-1.5 text-xs font-medium"
-            style={{
-              background: activeSection === key ? 'var(--teal-light)' : 'var(--surface)',
-              borderColor: activeSection === key ? 'transparent' : 'var(--border)',
-              color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
-            }}
+      {/* Jump-nav row with fixed Print button */}
+      <div className="sticky top-14 z-[1] -mx-4 flex items-center border-b border-[var(--border)] bg-[var(--paper)]">
+        {/* Scrollable Jump Targets */}
+        <nav className="flex flex-1 gap-1.5 overflow-x-auto px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {jumpTargets.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => jumpToSection(key)}
+              className="flex shrink-0 items-center rounded-full border px-3 py-1.5 text-xs font-medium"
+              style={{
+                background: activeSection === key ? 'var(--teal-light)' : 'var(--surface)',
+                borderColor: activeSection === key ? 'transparent' : 'var(--border)',
+                color: activeSection === key ? 'var(--teal)' : 'var(--muted)',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Fixed Action Button */}
+        <div className="shrink-0 border-l border-[var(--border)] bg-[var(--paper)] px-3 py-2 z-10 shadow-[-4px_0_8px_rgba(255,255,255,0.8)] dark:shadow-[-4px_0_8px_var(--paper)]">
+          <Link
+            to="/insights/trends-print"
+            search={{ year: focusMonth.year, month: focusMonth.month, period: trendPeriodMode }}
+            className="flex items-center rounded-md border border-[var(--border)] bg-white dark:bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] shadow-sm hover:bg-gray-50 dark:hover:bg-[var(--border)] transition-colors"
           >
-            {label}
-          </button>
-        ))}
-      </nav>
+            <span className="hidden sm:inline">Print / PDF</span>
+            <span className="sm:hidden">Print</span>
+          </Link>
+        </div>
+      </div>
 
       <div className="space-y-6">
         <div

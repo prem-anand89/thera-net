@@ -71,7 +71,7 @@ import {
 /** What the invoice-issuance modal needs, independent of which card opened it. */
 type InvoicingTarget = IssueInvoiceTarget;
 
-/** A changed hasPartner/bmSplitPct/taxPct/tdsBasis/clinicType (stamped as
+/** A changed hasPartner/clinicSplitPct/taxPct/tdsBasis/clinicType (stamped as
  *  clinic.lastSplitChangeAt by SettingsPage) silently moves every
  *  not-yet-invoiced visit's split and, downstream, a therapist's Net figure
  *  — with nothing on Workspace explaining why. Surfaced for 14 days after
@@ -330,7 +330,7 @@ export function WorkspacePage() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [startVisit, setStartVisit] = useState<{ appointment?: Appointment } | null>(null);
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const greeting = hour < 4 ? 'Good evening' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const myTherapistName = scope.myTherapistId ? therapistRoster.get(scope.myTherapistId)?.name : undefined;
   const firstName = (myTherapistName ?? '').replace(/^Dr\.?\s+/i, '').split(/\s+/)[0] || '';
   const [reschedulingAppointment, setReschedulingAppointment] = useState<Appointment | null>(null);

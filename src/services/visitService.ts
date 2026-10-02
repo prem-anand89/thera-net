@@ -66,7 +66,7 @@ export function createVisitService(repos: Repos) {
       // visit self-consistent (share=bill, post-tax=bill, tds=0, hv=0) so
       // reports reconcile and the immutability trigger stays satisfied.
       const { partnerSplit } = clinicBillingConfig(clinic);
-      const splitPct = partnerSplit ? clinic.bmSplitPct : 100;
+      const splitPct = partnerSplit ? clinic.clinicSplitPct : 100;
       const taxPct = partnerSplit ? clinic.taxPct : 0;
       const tdsBasis = partnerSplit ? clinic.tdsBasis : 'gross_bill';
       const split = computeVisitSplit(actualBillPaise, splitPct, taxPct, tdsBasis);
@@ -91,13 +91,13 @@ export function createVisitService(repos: Repos) {
         packageGroupId: input.packageGroupId ?? (isPackage ? crypto.randomUUID() : null),
         // Rate snapshots: historical visits keep the split that was active
         // when they were billed, even if the clinic renegotiates later.
-        bmSplitPct: splitPct,
+        clinicSplitPct: splitPct,
         taxPct,
         tdsBasis,
-        bmSharePaise: split.bmSharePaise,
+        clinicSharePaise: split.clinicSharePaise,
         postTaxPaise: split.postTaxPaise,
         tdsPaise: split.tdsPaise,
-        hvPaise: split.hvPaise,
+        partnerSharePaise: split.partnerSharePaise,
         invoiceId: null,
         pendingPaymentNote: input.pendingPaymentNote?.trim() || null,
         deleted: false,
@@ -156,7 +156,7 @@ export function createVisitService(repos: Repos) {
       }
       const split = computeVisitSplit(
         actualBillPaise,
-        visit.bmSplitPct,
+        visit.clinicSplitPct,
         visit.taxPct,
         visit.tdsBasis
       );
@@ -229,7 +229,7 @@ export function createVisitService(repos: Repos) {
     },
 
     /**
-     * Re-snapshots the clinic/partner split (bmSplitPct, taxPct, tdsBasis)
+     * Re-snapshots the clinic/partner split (clinicSplitPct, taxPct, tdsBasis)
      * onto every not-yet-invoiced visit, using the clinic's CURRENT settings.
      * updateBilling deliberately keeps a visit's original rate snapshot on
      * edit (see its test) — that's correct for a visit whose rates were
@@ -243,7 +243,7 @@ export function createVisitService(repos: Repos) {
       const clinic = await repos.clinics.get(clinicId);
       if (!clinic) throw new Error(`Clinic not found (id: ${clinicId})`);
       const { partnerSplit } = clinicBillingConfig(clinic);
-      const splitPct = partnerSplit ? clinic.bmSplitPct : 100;
+      const splitPct = partnerSplit ? clinic.clinicSplitPct : 100;
       const taxPct = partnerSplit ? clinic.taxPct : 0;
       const tdsBasis = partnerSplit ? clinic.tdsBasis : 'gross_bill';
 
@@ -251,11 +251,11 @@ export function createVisitService(repos: Repos) {
       let updated = 0;
       for (const v of visits) {
         if (v.invoiceId) continue;
-        if (v.bmSplitPct === splitPct && v.taxPct === taxPct && v.tdsBasis === tdsBasis) continue;
+        if (v.clinicSplitPct === splitPct && v.taxPct === taxPct && v.tdsBasis === tdsBasis) continue;
         const split = computeVisitSplit(v.actualBillPaise, splitPct, taxPct, tdsBasis);
         await repos.visits.put({
           ...v,
-          bmSplitPct: splitPct,
+          clinicSplitPct: splitPct,
           taxPct,
           tdsBasis,
           ...split,

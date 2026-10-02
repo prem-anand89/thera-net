@@ -43,8 +43,8 @@ const PAGE = 1000;
 // numeric(5,2) columns can arrive as strings depending on the PostgREST
 // version — force them back to numbers on the way in.
 const NUMERIC_FIELDS: Partial<Record<SyncedTable, string[]>> = {
-  clinics: ['bmSplitPct', 'taxPct', 'fyStartMonth'],
-  visits: ['bmSplitPct', 'taxPct', 'sharedPct'],
+  clinics: ['clinicSplitPct', 'taxPct', 'fyStartMonth'],
+  visits: ['clinicSplitPct', 'taxPct', 'sharedPct'],
   // psfs_mean is numeric(3,1), same family as the columns above that
   // PostgREST can hand back as a string.
   consultation_notes: ['psfsMean'],

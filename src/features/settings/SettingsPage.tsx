@@ -837,7 +837,7 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
   // clinicType feeds clinicBillingConfig()'s partnerSplit flag alongside
   // Partner & split's own fields — switching Individual/Multiple can turn
   // the clinic/partner split on or off, so it needs the same catch-up as a
-  // bmSplitPct/taxPct change there. See PartnerSection.savePartner.
+  // clinicSplitPct/taxPct change there. See PartnerSection.savePartner.
   async function saveProfile() {
     setRecomputeMsg(null);
     const splitAffected = form.clinicType !== clinic.clinicType;
@@ -1269,7 +1269,7 @@ type PartnerFields = Pick<
   | 'partnerHospitalLogoPath'
   | 'ownShareLabel'
   | 'partnerShareLabel'
-  | 'bmSplitPct'
+  | 'clinicSplitPct'
   | 'taxPct'
   | 'tdsBasis'
   | 'lastSplitChangeAt'
@@ -1288,7 +1288,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         partnerHospitalLogoPath: c.partnerHospitalLogoPath,
         ownShareLabel: c.ownShareLabel,
         partnerShareLabel: c.partnerShareLabel,
-        bmSplitPct: c.bmSplitPct,
+        clinicSplitPct: c.clinicSplitPct,
         taxPct: c.taxPct,
         tdsBasis: c.tdsBasis,
       }),
@@ -1298,7 +1298,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   const partnerLogoPreviewUrl = publicLogoUrl(form.partnerHospitalLogoPath);
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
 
-  // hasPartner/bmSplitPct/taxPct/tdsBasis all feed clinicBillingConfig() and
+  // hasPartner/clinicSplitPct/taxPct/tdsBasis all feed clinicBillingConfig() and
   // computeVisitSplit() — a change to any of them means visits already
   // logged (but not yet invoiced) are now showing a stale split, since
   // updateBilling deliberately keeps a visit's ORIGINAL rate snapshot on
@@ -1308,7 +1308,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
     setRecomputeMsg(null);
     const splitAffected =
       (form.hasPartner ?? false) !== (clinic.hasPartner ?? false) ||
-      form.bmSplitPct !== clinic.bmSplitPct ||
+      form.clinicSplitPct !== clinic.clinicSplitPct ||
       form.taxPct !== clinic.taxPct ||
       form.tdsBasis !== clinic.tdsBasis;
     const ok = await save();
@@ -1400,8 +1400,8 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
               <input
                 type="number"
                 className={inputCls}
-                value={form.bmSplitPct}
-                onChange={(e) => set({ bmSplitPct: Number(e.target.value) })}
+                value={form.clinicSplitPct}
+                onChange={(e) => set({ clinicSplitPct: Number(e.target.value) })}
               />
             </Field>
             <Field label="Partner logo">
@@ -1454,7 +1454,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
               <option value="gross_bill">
                 {form.taxPct}% of gross bill (matches {labels.partner} sheet)
               </option>
-              <option value="bm_share">On clinic share only</option>
+              <option value="clinic_share">On clinic share only</option>
             </select>
           </Field>
         )}

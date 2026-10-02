@@ -20,7 +20,7 @@ function makeFakeRepos() {
     partnerHospitalLogoPath: null,
     hasPartner: true,
     invoicePrefix: 'BM',
-    bmSplitPct: 75,
+    clinicSplitPct: 75,
     taxPct: 10,
     tdsBasis: 'gross_bill',
     fyStartMonth: 4,
@@ -341,7 +341,7 @@ describe('importVisitsService.commit', () => {
     const visit = [...fake.visits.values()][0];
     expect(visit.actualBillPaise).toBe(rs(1500));
     expect(visit.postTaxPaise).toBe(rs(1013)); // 75% of the ₹1350 post-tax remainder, 1012.50 rounds half-up
-    expect(visit.bmSharePaise).toBe(rs(1163)); // postTaxPaise + tdsPaise (₹150 TDS off the ₹1500 gross)
+    expect(visit.clinicSharePaise).toBe(rs(1163)); // postTaxPaise + tdsPaise (₹150 TDS off the ₹1500 gross)
     expect(visit.adjustmentPaise).toBe(0);
   });
 
@@ -387,11 +387,11 @@ describe('importVisitsService.commit', () => {
     expect(billed).toHaveLength(1);
     expect(billed[0].sessionIndex).toBe(2);
     // gross_bill: 10% TDS off ₹3500 first (₹350), then 75% of the ₹3150
-    // remainder (₹2363, half-up) — bmSharePaise is that plus the TDS.
-    expect(billed[0].bmSharePaise).toBe(rs(2713));
+    // remainder (₹2363, half-up) — clinicSharePaise is that plus the TDS.
+    expect(billed[0].clinicSharePaise).toBe(rs(2713));
     const zeroRows = visits.filter((v) => v.actualBillPaise === 0);
     expect(zeroRows).toHaveLength(4);
-    expect(zeroRows.every((v) => v.bmSharePaise === 0)).toBe(true);
+    expect(zeroRows.every((v) => v.clinicSharePaise === 0)).toBe(true);
   });
 
   it('skips a row marked skip and excludes it from the summary counts', async () => {

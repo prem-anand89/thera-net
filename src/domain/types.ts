@@ -16,13 +16,14 @@ export interface Clinic {
   partnerHospitalName: string | null;
   partnerHospitalLogoPath: string | null;
   invoicePrefix: string;
-  bmSplitPct: number;
+  clinicSplitPct: number;
   taxPct: number;
   tdsBasis: TdsBasis;
   fyStartMonth: number;
-  /** Abbreviation for the clinic's own share (default "BM"). Optional so existing rows are unaffected. */
+  /** Abbreviation for the clinic's own share, shown on reports/invoices
+   *  (falls back to "Clinic" if unset — see `clinicShareLabels()`). */
   ownShareLabel?: string | null;
-  /** Abbreviation for the partner hospital's share (default "HV"). */
+  /** Abbreviation for the partner's share (falls back to "Partner" if unset). */
   partnerShareLabel?: string | null;
   /**
    * 'individual' = single therapist clinic;
@@ -44,7 +45,7 @@ export interface Clinic {
   /** Whether the internal therapist revenue-split feature is available. */
   enableTherapistSplit?: boolean;
   /** When a field feeding clinicBillingConfig()/computeVisitSplit() (hasPartner,
-   *  bmSplitPct, taxPct, tdsBasis, clinicType) was last changed — lets
+   *  clinicSplitPct, taxPct, tdsBasis, clinicType) was last changed — lets
    *  Workspace tell a therapist "your split changed on X" instead of their
    *  Net figure silently moving with no explanation. Null until the first
    *  such change after this field shipped. */
@@ -441,13 +442,13 @@ export interface Visit {
   sharedTherapistId?: UUID | null;
   sharedPct?: number | null;
   /** Rate snapshots — historical reports stay correct if clinic rates change */
-  bmSplitPct: number;
+  clinicSplitPct: number;
   taxPct: number;
   tdsBasis: TdsBasis;
-  bmSharePaise: Paise;
+  clinicSharePaise: Paise;
   postTaxPaise: Paise;
   tdsPaise: Paise;
-  hvPaise: Paise;
+  partnerSharePaise: Paise;
   invoiceId: UUID | null;
   /**
    * Set when the bill was explicitly marked "collect later" at logging time

@@ -1,4 +1,4 @@
-/** Fiscal-year helpers. BM runs April→March (fyStartMonth = 4); configurable per clinic. */
+/** Fiscal-year helpers. Indian clinics typically run April→March (fyStartMonth = 4); configurable per clinic. */
 
 export interface FiscalYear {
   /** Calendar year the FY starts in, e.g. 2026 for FY 26-27 */

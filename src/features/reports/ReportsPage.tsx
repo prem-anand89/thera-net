@@ -12,7 +12,7 @@ type InsightsView = 'overview' | 'monthly' | 'audit';
  * you act on daily). Trends is the Dashboard (patient retention, packages,
  * revenue trend, referral sources — an "insights" page in substance, so it
  * now says so); Monthly statement is the
- * full per-therapist Bill/BM Share/TDS/Post-Tax/HV breakdown, gated on
+ * full per-therapist Bill/Clinic Share/TDS/Post-Tax/Partner Share breakdown, gated on
  * canViewPayouts (admin-only) the same way Ledger's Invoices sub-tab is
  * gated on canBill — a colleague's individual earnings, not a per-visit
  * bill amount. The nav item itself is hidden from plain therapists

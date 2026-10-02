@@ -558,7 +558,7 @@ export function LedgerPage() {
       serviceName: serviceName.get(v.serviceCatalogId) ?? '—',
       condition: v.condition,
       billPaise: v.actualBillPaise,
-      bmSharePaise: v.bmSharePaise,
+      clinicSharePaise: v.clinicSharePaise,
       postTaxPaise: v.postTaxPaise,
       invoiced: v.invoiceId != null,
     }));

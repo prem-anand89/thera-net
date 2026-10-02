@@ -12,7 +12,7 @@ export interface VisitsCsvRow {
   serviceName: string;
   condition: string | null;
   billPaise: Paise;
-  bmSharePaise: Paise;
+  clinicSharePaise: Paise;
   postTaxPaise: Paise;
   invoiced: boolean;
 }
@@ -61,17 +61,17 @@ export function visitsToCsv(
     r.serviceName,
     r.condition ?? '',
     paiseToRupees(r.billPaise),
-    ...(opts.partnerSplit ? [paiseToRupees(r.bmSharePaise)] : []),
+    ...(opts.partnerSplit ? [paiseToRupees(r.clinicSharePaise)] : []),
     ...(showPostTax ? [paiseToRupees(r.postTaxPaise)] : []),
     r.invoiced ? 'Yes' : 'No',
   ];
   const totals = rows.reduce(
     (acc, r) => ({
       billPaise: acc.billPaise + r.billPaise,
-      bmSharePaise: acc.bmSharePaise + r.bmSharePaise,
+      clinicSharePaise: acc.clinicSharePaise + r.clinicSharePaise,
       postTaxPaise: acc.postTaxPaise + r.postTaxPaise,
     }),
-    { billPaise: 0, bmSharePaise: 0, postTaxPaise: 0 }
+    { billPaise: 0, clinicSharePaise: 0, postTaxPaise: 0 }
   );
   const totalLine = [
     '',
@@ -81,7 +81,7 @@ export function visitsToCsv(
     '',
     `Total (${rows.length} visit${rows.length === 1 ? '' : 's'})`,
     paiseToRupees(totals.billPaise),
-    ...(opts.partnerSplit ? [paiseToRupees(totals.bmSharePaise)] : []),
+    ...(opts.partnerSplit ? [paiseToRupees(totals.clinicSharePaise)] : []),
     ...(showPostTax ? [paiseToRupees(totals.postTaxPaise)] : []),
     '',
   ];
