@@ -282,7 +282,7 @@ export function SchedulePage() {
             title={`Feedback (${rows.length})`}
             action={<AverageRatingTile averageRating={averageRating} />}
           >
-            <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap">
+            <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1 pr-2 sm:flex-wrap sm:pr-0">
               <select
                 value={therapistFilter}
                 onChange={(e) => setTherapistFilter(e.target.value as UUID | '')}
