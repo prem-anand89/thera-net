@@ -18,9 +18,17 @@ function makeFakeRepos() {
   return { repos, invoicePayments };
 }
 
-function makeFakePaymentsRepos() {
+/** `visitBillsPaise` lets a test give a specific visit a small bill to
+ *  exercise `logPayment`'s overpayment ceiling; any visit not listed gets a
+ *  generous default so the existing sum-across-payments tests (well under
+ *  ₹10,000 combined) are unaffected. */
+function makeFakePaymentsRepos(visitBillsPaise: Record<string, number> = {}) {
   const payments = new Map<string, Payment>();
   const repos = {
+    visits: {
+      get: async (id: string) =>
+        ({ id, actualBillPaise: visitBillsPaise[id] ?? rs(10000) }) as Visit,
+    },
     payments: {
       get: async (id: string) => payments.get(id),
       list: async (clinicId: string) =>
@@ -310,5 +318,24 @@ describe('directPaymentService.logPayment', () => {
     );
     await svc.deletePayment(payment.id);
     expect(fake.payments.size).toBe(0);
+  });
+
+  it('rejects an amount larger than the visit\'s own bill, same ceiling recordInvoicePayment already enforces', async () => {
+    const capped = makeFakePaymentsRepos({ 'visit-1': rs(500) });
+    const svc = createDirectPaymentService(capped.repos);
+    await expect(
+      svc.logPayment('clinic-1', 'visit-1', rs(600), 'cash', '2026-07-10', null)
+    ).rejects.toThrow(/exceeds the outstanding balance/);
+    expect(capped.payments.size).toBe(0);
+  });
+
+  it('rejects once prior payments already cover the bill, even if this one amount alone would fit', async () => {
+    const capped = makeFakePaymentsRepos({ 'visit-1': rs(500) });
+    const svc = createDirectPaymentService(capped.repos);
+    await svc.logPayment('clinic-1', 'visit-1', rs(400), 'cash', '2026-07-10', null);
+    await expect(
+      svc.logPayment('clinic-1', 'visit-1', rs(200), 'upi', '2026-07-11', null)
+    ).rejects.toThrow(/exceeds the outstanding balance/);
+    expect(await svc.totalPaidForVisit('visit-1')).toBe(rs(400));
   });
 });

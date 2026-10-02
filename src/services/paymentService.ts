@@ -152,7 +152,15 @@ export function createPaymentService(repos: Repos) {
  */
 export function createDirectPaymentService(repos: Repos) {
   return {
-    /** Log a payment received for a visit. */
+    /**
+     * Log a payment received for a visit. Capped at the visit's own
+     * remaining due, same ceiling `recordInvoicePayment` already enforces
+     * for the invoiced path — without it, a fat-fingered amount (typed
+     * freehand in TakePaymentDialog, unlike the invoice path's
+     * pre-filled/validated total) would silently overpay and the excess
+     * would never be recorded, refunded, or flagged anywhere; the visit
+     * just reads as "paid" with no trace of the extra money.
+     */
     async logPayment(
       clinicId: UUID,
       visitId: UUID,
@@ -161,6 +169,14 @@ export function createDirectPaymentService(repos: Repos) {
       receivedDate: string,
       notes: string | null = null
     ): Promise<Payment> {
+      const visit = await repos.visits.get(visitId);
+      if (!visit) throw new Error('Visit not found.');
+      const existing = await repos.payments.listByVisit(visitId);
+      const alreadyPaid = existing.reduce((sum, p) => sum + p.amountPaise, 0);
+      const remaining = visit.actualBillPaise - alreadyPaid;
+      if (amountPaise > remaining) {
+        throw new Error(`Amount exceeds the outstanding balance of ${formatINR(Math.max(0, remaining))}.`);
+      }
       const payment: Payment = {
         id: crypto.randomUUID(),
         clinicId,
