@@ -71,11 +71,13 @@ function LegacyLineItemsTable({
   hasAdjustments,
   totalPaise,
   paper,
+  isSharing,
 }: {
   lineItems: InvoiceLineItem[];
   hasAdjustments: boolean;
   totalPaise: number;
   paper: 'A4' | 'A5';
+  isSharing?: boolean;
 }) {
   const isA5 = paper === 'A5';
   return (
@@ -83,8 +85,8 @@ function LegacyLineItemsTable({
     // scrolling the table on its own axis on a narrow phone keeps every
     // column readable instead of letting service names and rupee figures
     // fight each other for space.
-    <div className="mt-6 overflow-x-auto print:overflow-visible">
-      <table className={`w-full ${isA5 ? 'min-w-full text-xs' : 'min-w-[560px] text-sm'}`}>
+    <div className={`mt-6 ${isSharing ? 'overflow-visible' : 'overflow-x-auto'} print:overflow-visible`}>
+      <table className={`w-full ${isA5 ? 'min-w-full text-xs' : 'min-w-[560px] print:min-w-full text-sm'}`}>
         <thead>
           <tr className={`border-b border-[var(--border)] text-left uppercase tracking-wide text-[var(--muted)] ${isA5 ? 'text-[10px]' : 'text-xs'}`}>
             <th className="py-2">Service</th>
@@ -112,9 +114,9 @@ function LegacyLineItemsTable({
                     : '1'}
                   <div className="text-xs text-[var(--muted)]">{sessionDatesCellText(li)}</div>
                 </td>
-                <td className="font-num py-2 text-right">{formatINR(li.catalogPricePaise)}</td>
+                <td className="font-num py-2 text-right whitespace-nowrap">{formatINR(li.catalogPricePaise)}</td>
                 {hasAdjustments && (
-                  <td className="font-num py-2 text-right">
+                  <td className="font-num py-2 text-right whitespace-nowrap">
                     {li.adjustmentPaise !== 0 ? (
                       <>
                         {formatINR(li.adjustmentPaise)}
@@ -124,7 +126,7 @@ function LegacyLineItemsTable({
                     )}
                   </td>
                 )}
-                <td className="font-num py-2 text-right font-medium">{formatINR(li.totalPaise)}</td>
+                <td className="font-num py-2 text-right font-medium whitespace-nowrap">{formatINR(li.totalPaise)}</td>
               </tr>
             );
           })}
@@ -139,7 +141,7 @@ function LegacyLineItemsTable({
                 >
                   Subtotal
                 </td>
-                <td className="font-num pt-3 pb-1 text-right text-[var(--muted)]">
+                <td className="font-num pt-3 pb-1 text-right text-[var(--muted)] whitespace-nowrap">
                   {formatINR(lineItems.reduce((acc, li) => acc + (li.totalPaise - li.adjustmentPaise), 0))}
                 </td>
               </tr>
@@ -150,7 +152,7 @@ function LegacyLineItemsTable({
                 >
                   Total Adjustment
                 </td>
-                <td className="font-num py-1 text-right text-[var(--muted)]">
+                <td className="font-num py-1 text-right text-[var(--muted)] whitespace-nowrap">
                   {(() => {
                     const adj = lineItems.reduce((acc, li) => acc + li.adjustmentPaise, 0);
                     return adj < 0 ? `-${formatINR(Math.abs(adj))}` : formatINR(adj);
@@ -166,7 +168,7 @@ function LegacyLineItemsTable({
             >
               Total
             </td>
-            <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)]">
+            <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap">
               {formatINR(totalPaise)}
             </td>
           </tr>
@@ -181,24 +183,26 @@ function LineItemsTable({
   hasAdjustments,
   totalPaise,
   paper,
+  isSharing,
 }: {
   lineItems: InvoiceLineItem[];
   hasAdjustments: boolean;
   totalPaise: number;
   paper: 'A4' | 'A5';
+  isSharing?: boolean;
 }) {
   const isA5 = paper === 'A5';
   return (
-    <div className="mt-6 overflow-x-auto print:overflow-visible">
-      <table className={`w-full ${isA5 ? 'min-w-full text-xs' : 'min-w-[680px] text-sm'} table-fixed border-b-2 border-[var(--border)] pb-2`}>
+    <div className={`mt-6 ${isSharing ? 'overflow-visible' : 'overflow-x-auto'} print:overflow-visible`}>
+      <table className={`w-full ${isA5 ? 'min-w-full text-xs' : 'min-w-[680px] print:min-w-full text-sm table-fixed'} border-b-2 border-[var(--border)] pb-2`}>
         <thead>
           <tr className={`border-y-2 border-[var(--border)] bg-[var(--surface)] text-left uppercase tracking-wide text-[var(--muted)] ${isA5 ? 'text-[10px]' : 'text-xs'}`}>
-            <th className="py-2 px-2 w-[30%]">Service</th>
-            <th className="py-2 px-2 w-[20%]">Dates of service</th>
-            <th className="py-2 px-2 w-[15%]">Sessions</th>
-            <th className="py-2 px-2 w-[10%] text-right">Rate</th>
-            {hasAdjustments && <th className="py-2 px-2 w-[10%] text-right">Adjustment</th>}
-            <th className="py-2 px-2 w-[15%] text-right">Amount</th>
+            <th className="py-2 w-[30%]">Service</th>
+            <th className="py-2 w-[20%]">Dates of service</th>
+            <th className="py-2 w-[15%]">Sessions</th>
+            <th className="py-2 w-[10%] text-right">Rate</th>
+            {hasAdjustments && <th className="py-2 w-[10%] text-right">Adjustment</th>}
+            <th className="py-2 w-[15%] text-right">Amount</th>
           </tr>
         </thead>
         <tbody className="align-top border-b border-[var(--border)]">
@@ -214,12 +218,12 @@ function LineItemsTable({
                 </td>
                 <td className="py-2 text-xs text-[var(--muted)]">{sessionDatesCellText(li)}</td>
                 <td className="py-2 text-[var(--muted)]">{sessionsCellText(li)}</td>
-                <td className="font-num py-2 text-right">
+                <td className="font-num py-2 text-right whitespace-nowrap">
                   {formatINR(lineRatePerSessionPaise(li))}
                   <span className="text-xs text-[var(--muted)]">/session</span>
                 </td>
                 {hasAdjustments && (
-                  <td className="font-num py-2 text-right">
+                  <td className="font-num py-2 text-right whitespace-nowrap">
                     {li.adjustmentPaise !== 0 ? (
                       <>
                         {formatINR(li.adjustmentPaise)}
@@ -229,7 +233,7 @@ function LineItemsTable({
                     )}
                   </td>
                 )}
-                <td className="font-num py-2 text-right font-medium">{formatINR(li.totalPaise)}</td>
+                <td className="font-num py-2 text-right font-medium whitespace-nowrap">{formatINR(li.totalPaise)}</td>
               </tr>
             );
           })}
@@ -244,7 +248,7 @@ function LineItemsTable({
                 >
                   Subtotal
                 </td>
-                <td className="font-num pt-3 pb-1 text-right text-[var(--muted)]">
+                <td className="font-num pt-3 pb-1 text-right text-[var(--muted)] whitespace-nowrap">
                   {formatINR(lineItems.reduce((acc, li) => acc + (li.totalPaise - li.adjustmentPaise), 0))}
                 </td>
               </tr>
@@ -255,7 +259,7 @@ function LineItemsTable({
                 >
                   Total Adjustment
                 </td>
-                <td className="font-num py-1 text-right text-[var(--muted)]">
+                <td className="font-num py-1 text-right text-[var(--muted)] whitespace-nowrap">
                   {(() => {
                     const adj = lineItems.reduce((acc, li) => acc + li.adjustmentPaise, 0);
                     return adj < 0 ? `-${formatINR(Math.abs(adj))}` : formatINR(adj);
@@ -271,7 +275,7 @@ function LineItemsTable({
             >
               Total
             </td>
-            <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)]">
+            <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap">
               {formatINR(totalPaise)}
             </td>
           </tr>
@@ -650,6 +654,7 @@ export function InvoicePrintPage() {
             hasAdjustments={hasAdjustments}
             totalPaise={invoice.totalPaise}
             paper={paper}
+            isSharing={sharing}
           />
         ) : (
           <LegacyLineItemsTable
@@ -657,6 +662,7 @@ export function InvoicePrintPage() {
             hasAdjustments={hasAdjustments}
             totalPaise={invoice.totalPaise}
             paper={paper}
+            isSharing={sharing}
           />
         )}
 
