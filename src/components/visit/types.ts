@@ -114,8 +114,8 @@ export interface VisitCardData {
     token?: string;
     updatedAt: string;
     /** Set only once `status` is `'responded'` — whether this response
-     *  qualifies for the "Ask for a Google review" nudge (Slice 3: 4-5*
-     *  only). Deliberately a bare boolean, not the rating itself: an admin
+     *  qualifies for the "Ask for a Google review" nudge (Slice 3: 5* only).
+     *  Deliberately a bare boolean, not the rating itself: an admin
      *  caller derives it from the synced `feedback_responses.rating` (which
      *  only ever reaches their Dexie, per RLS), while a front_desk caller
      *  has no rating available at all and instead derives it from
@@ -126,7 +126,7 @@ export interface VisitCardData {
     googleReviewEligible?: boolean;
   } | null;
   /** Clinic's Google review link (Slice 3) — unset means the nudge never
-   *  shows, even for a 4-5* response. Plain passthrough of
+   *  shows, even for a 5* response. Plain passthrough of
    *  `clinic.googleReviewUrl`, not derived. */
   googleReviewUrl?: string | null;
 }

@@ -126,11 +126,14 @@ export function createFeedbackService(repos: Repos) {
     },
 
     /**
-     * Slice 3: staff nudging a 4-5* respondent toward a Google review — a
-     * pure share action, no DB write. Callers gate this on rating >= 4 and
-     * a configured `clinic.googleReviewUrl` themselves (see
-     * `VisitFeedbackLink`); this function trusts that gating rather than
-     * re-checking it, since it has no rating of its own to check against.
+     * Slice 3 (+ its Visit-Row direct variant): staff nudging a patient
+     * toward a Google review — a pure share action, no DB write. The
+     * feedback-driven nudge (`VisitFeedbackLink`) gates this on a 5*
+     * response plus a configured `clinic.googleReviewUrl`; the direct,
+     * no-feedback-required entry point (`VisitRowActions`' kebab menu)
+     * gates only on `clinic.googleReviewUrl`. Either way this function
+     * trusts the caller's gating rather than re-checking it, since it has
+     * no rating of its own to check against.
      */
     async askForGoogleReview(
       clinicId: UUID,

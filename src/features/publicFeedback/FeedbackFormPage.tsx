@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useParams } from '@tanstack/react-router';
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { hasSupabaseConfig } from '@/lib/env';
 import { btnPrimary } from '@/components/ui';
 import { PoweredBy } from '@/components/BrandMark';
@@ -19,6 +19,7 @@ import { PoweredBy } from '@/components/BrandMark';
 export function FeedbackFormPage() {
   const { token } = useParams({ strict: false }) as { token: string };
   const [clinicName, setClinicName] = useState<string | null>(null);
+  const [clinicLogo, setClinicLogo] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
   const [invalid, setInvalid] = useState(false);
   const [rating, setRating] = useState(0);
@@ -42,7 +43,9 @@ export function FeedbackFormPage() {
       if (rpcError || !data) {
         setInvalid(true);
       } else {
-        setClinicName(data as string);
+        const info = data as { clinicName: string; logoPath: string | null };
+        setClinicName(info.clinicName);
+        setClinicLogo(publicLogoUrl(info.logoPath));
       }
       setChecking(false);
     })();
@@ -69,7 +72,7 @@ export function FeedbackFormPage() {
       setError(rpcError.message);
       return;
     }
-    // The RPC itself decides whether this qualifies (rating >= 4 AND the
+    // The RPC itself decides whether this qualifies (rating = 5 AND the
     // clinic has one configured) — returns null for anything else, so no
     // client-side rating/URL logic needed here, just "show it if present".
     setGoogleReviewUrl((data as string | null) ?? null);
@@ -114,6 +117,13 @@ export function FeedbackFormPage() {
   return (
     <div className="mx-auto mt-16 max-w-sm px-4">
       <div className="mb-6 text-center">
+        {clinicLogo && (
+          <img
+            src={clinicLogo}
+            alt=""
+            className="mx-auto mb-3 h-12 w-12 rounded-2xl border border-[var(--border)] object-cover"
+          />
+        )}
         <h1 className="font-display text-lg font-semibold text-[var(--ink)]">{clinicName}</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">How was your visit?</p>
       </div>

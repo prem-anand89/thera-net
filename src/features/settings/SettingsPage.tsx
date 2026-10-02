@@ -1542,7 +1542,7 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
           label={
             <>
               Google review link
-              <InfoTip text="Your clinic's Google review page. Set it to unlock a 'Leave a Google review' prompt for patients who rate 4-5 stars, plus an 'Ask for a Google review' action for staff on those same responses. Leave blank to skip Google review nudges entirely." />
+              <InfoTip text="Your clinic's Google review page. Set it to unlock a 'Leave a Google review' prompt for patients who rate 5 stars, plus an 'Ask for a Google review' action for staff on those same responses — or any visit at all, via the row menu. Leave blank to skip Google review nudges entirely." />
             </>
           }
         >

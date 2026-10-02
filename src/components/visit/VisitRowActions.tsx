@@ -5,6 +5,7 @@ import { formatINR } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { paymentActions } from '@/domain/paymentState';
 import { openPatientWhatsAppChat } from '@/lib/pdfShare';
+import { feedbackService } from '@/services';
 import { KebabMenu, menuItem, menuItemDestructive } from '@/components/ui';
 import type { VisitCardData } from './types';
 
@@ -34,15 +35,33 @@ export function RowActionsMenu({
     Boolean(onInvoice) &&
     paymentActions(data.paymentState).includes('issue_invoice');
   const showReminder = canInvoice && paymentActions(data.paymentState).includes('take_payment');
-  
+  // Direct ask, independent of the feedback flow's own nudge
+  // (`VisitFeedbackLink`'s "⭐ Google review", which only shows after a
+  // 5* response) — this one is for staff who already know the patient is
+  // happy and don't want to wait for them to fill in internal feedback
+  // first. Same `data.googleReviewUrl` field that nudge already uses, just
+  // without its `request.googleReviewEligible` rating gate.
+  const canAskGoogleReview = Boolean(data.googleReviewUrl);
+
   const hasMenu =
     data.canRepeat ||
     canIssueInvoice ||
     showReminder ||
+    canAskGoogleReview ||
     (data.canEdit && onEdit) ||
     (data.canSplit && onSplit) ||
     data.canDelete;
   if (!hasMenu) return null;
+
+  const handleAskGoogleReview = () => {
+    void feedbackService.askForGoogleReview(
+      clinic.id,
+      data.patientName,
+      data.patientPhone ?? null,
+      clinic.name,
+      data.googleReviewUrl!
+    );
+  };
 
   const handleSendReminder = () => {
     const remainingPaise = data.billPaise - data.collectedPaise;
@@ -100,6 +119,18 @@ export function RowActionsMenu({
               }}
             >
               Send WhatsApp reminder
+            </button>
+          )}
+          {canAskGoogleReview && (
+            <button
+              type="button"
+              className={menuItem}
+              onClick={() => {
+                close();
+                handleAskGoogleReview();
+              }}
+            >
+              Ask for Google review
             </button>
           )}
           {data.canEdit && onEdit && (

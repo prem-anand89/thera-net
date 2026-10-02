@@ -130,7 +130,7 @@ export interface Clinic {
    */
   enablePatientComms?: boolean;
   /** Where "Leave a Google review" / "Ask for a Google review" point to —
-   *  unset means neither ever shows, even for a 4-5* response (Slice 3 of
+   *  unset means neither ever shows, even for a 5* response (Slice 3 of
    *  the same doc). Plain URL, not validated beyond what the Settings
    *  input itself enforces. */
   googleReviewUrl?: string | null;

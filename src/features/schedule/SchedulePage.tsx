@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos } from '@/services';
@@ -6,23 +6,68 @@ import { db } from '@/lib/db';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { formatDateDMY } from '@/domain/fiscalYear';
-import { SectionCard, th, td } from '@/components/ui';
+import { addDays, toLocalDateStr } from '@/domain/schedule';
+import { SectionCard, StatTile, Pill, th, td } from '@/components/ui';
+import type { UUID } from '@/domain/types';
 import { ScheduleBookingsView } from './ScheduleBookingsView';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
 import { requestsLastViewedKey } from './scheduleSignals';
 
-/** Filled/empty star string for a 1–5 rating — same glance-first spirit as
- *  the icon+word markers on the visit row (`VisitCard.tsx`'s
+/** SVG stars, replacing the old text-glyph `★★★☆☆` — same glance-first
+ *  spirit as the icon+word markers on the visit row (`VisitCard.tsx`'s
  *  `VisitFeedbackLink`), just denser since this page's whole job is
- *  showing ratings. */
-function ratingStars(rating: number): string {
-  return '★'.repeat(rating) + '☆'.repeat(5 - rating);
+ *  showing ratings. Text glyphs render inconsistently across platforms'
+ *  font fallbacks; an inline SVG looks the same everywhere. */
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <span className="inline-flex items-center gap-0.5" title={`${rating} of 5`}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <svg
+          key={i}
+          viewBox="0 0 20 20"
+          className={`h-3.5 w-3.5 ${i < rating ? 'fill-[var(--amber)]' : 'fill-[var(--border)]'}`}
+          aria-hidden="true"
+        >
+          <path d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
+        </svg>
+      ))}
+    </span>
+  );
 }
 
-/** `<input type="datetime-local">` needs local-time-no-offset, unlike the
- *  ISO strings everywhere else in this app — a plain slice off
- *  toISOString() would silently shift by the browser's UTC offset. */
+/** Pill-shaped native select — same visual language as the Schedule →
+ *  History filter row (`HistoryView.tsx`), reused here so the two filter
+ *  rows in this feature look and behave the same. */
+const chipSelect =
+  'min-h-9 shrink-0 appearance-none rounded-full border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-1 pl-3 pr-7 text-xs font-medium text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none';
+const chevron = {
+  backgroundImage:
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%2355636e' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E\")",
+} as const;
 
+type FeedbackDateRange = 'all' | '7' | '30' | '90';
+const DATE_RANGE_LABEL: Record<FeedbackDateRange, string> = {
+  all: 'All time',
+  '7': 'Last 7 days',
+  '30': 'Last 30 days',
+  '90': 'Last 90 days',
+};
+
+/** One row per `feedback_requests` row, whether or not it's been answered
+ *  yet — the old list only ever showed answered ones, so a request that
+ *  expired unanswered was invisible rather than flagged. */
+type FeedbackRow = {
+  key: UUID;
+  requestId: UUID;
+  therapistId: UUID;
+  patient?: { id: UUID; name: string; mrno: string };
+  visitDate?: string;
+  dateForSort: string;
+  status: 'answered' | 'awaiting' | 'expired';
+  rating?: number;
+  comment?: string | null;
+  respondedAt?: string;
+};
 
 
 
@@ -97,19 +142,68 @@ export function SchedulePage() {
     [therapists]
   );
 
-  const rows = useMemo(
-    () =>
-      (responses ?? [])
-        .map((response) => {
-          const request = requestById.get(response.requestId);
-          const visit = request ? visitById.get(request.visitId) : undefined;
-          const patient = request ? patientById.get(request.patientId) : undefined;
-          return { response, request, visit, patient };
-        })
-        .sort((a, b) => b.response.createdAt.localeCompare(a.response.createdAt)),
-    [responses, requestById, visitById, patientById]
+  const responseByRequestId = useMemo(
+    () => new Map((responses ?? []).map((r) => [r.requestId, r])),
+    [responses]
   );
 
+  // One row per request, answered or not — the old list only ever showed
+  // answered ones, so a request that expired unanswered was invisible
+  // instead of flagged (see Phase 6.3's "Expired" pill).
+  const allRows: FeedbackRow[] = useMemo(
+    () =>
+      (requests ?? []).map((request) => {
+        const response = responseByRequestId.get(request.id);
+        const visit = visitById.get(request.visitId);
+        const patient = patientById.get(request.patientId);
+        const status: FeedbackRow['status'] = response
+          ? 'answered'
+          : request.status === 'expired' || new Date(request.expiresAt) < new Date()
+            ? 'expired'
+            : 'awaiting';
+        return {
+          key: request.id,
+          requestId: request.id,
+          therapistId: request.therapistId,
+          patient: patient ? { id: patient.id, name: patient.name, mrno: patient.mrno } : undefined,
+          visitDate: visit?.visitDate,
+          dateForSort: response?.createdAt ?? visit?.visitDate ?? request.updatedAt,
+          status,
+          rating: response?.rating,
+          comment: response?.comment,
+          respondedAt: response?.createdAt,
+        };
+      }),
+    [requests, responseByRequestId, visitById, patientById]
+  );
+
+  const [therapistFilter, setTherapistFilter] = useState<UUID | ''>('');
+  const [dateRange, setDateRange] = useState<FeedbackDateRange>('all');
+  const today = toLocalDateStr(new Date());
+
+  const rows = useMemo(() => {
+    const from = dateRange === 'all' ? null : addDays(today, -Number(dateRange));
+    return allRows
+      .filter((row) => !therapistFilter || row.therapistId === therapistFilter)
+      .filter((row) => !from || !row.visitDate || row.visitDate >= from)
+      .sort((a, b) => b.dateForSort.localeCompare(a.dateForSort));
+  }, [allRows, therapistFilter, dateRange, today]);
+
+  // Fixed 30-day snapshot, independent of the Date Range list filter above
+  // (that one narrows what's shown; this is always "the last 30 days",
+  // same convention as Reports' other 30-day metrics) — but it does follow
+  // the Therapist filter, since "this therapist's average" is the useful
+  // reading once one is selected.
+  const averageRating = useMemo(() => {
+    const cutoff = addDays(today, -30);
+    const recent = (responses ?? []).filter((r) => {
+      if (toLocalDateStr(new Date(r.createdAt)) < cutoff) return false;
+      if (!therapistFilter) return true;
+      return requestById.get(r.requestId)?.therapistId === therapistFilter;
+    });
+    if (recent.length === 0) return null;
+    return recent.reduce((sum, r) => sum + r.rating, 0) / recent.length;
+  }, [responses, requestById, therapistFilter, today]);
 
   // Marks every response caught up as of this visit — Workspace's "new
   // response" count reads this same key, so opening this page is what
@@ -141,51 +235,94 @@ export function SchedulePage() {
           </p>
         ) : (
           <SectionCard title={`Feedback (${rows.length})`}>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <StatTile
+                label="30-day average"
+                value={averageRating == null ? '—' : `${averageRating.toFixed(1)} ★`}
+                detail={averageRating == null ? 'No responses yet' : undefined}
+                className="basis-[140px]"
+              />
+              <select
+                value={therapistFilter}
+                onChange={(e) => setTherapistFilter(e.target.value as UUID | '')}
+                className={chipSelect}
+                style={chevron}
+                aria-label="Filter by therapist"
+              >
+                <option value="">All therapists</option>
+                {(therapists ?? []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value as FeedbackDateRange)}
+                className={chipSelect}
+                style={chevron}
+                aria-label="Filter by date range"
+              >
+                {(Object.keys(DATE_RANGE_LABEL) as FeedbackDateRange[]).map((r) => (
+                  <option key={r} value={r}>
+                    {DATE_RANGE_LABEL[r]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {rows.length === 0 ? (
               <p className="py-6 text-center text-sm text-[var(--muted)]">
-                No feedback responses yet.
+                {allRows.length === 0 ? 'No feedback requests yet.' : 'No feedback matches these filters.'}
               </p>
             ) : (
               <>
                 {/* Below tab: cards on phone; table from iPad portrait up. */}
                 <div className="tab:hidden space-y-2">
-                  {rows.map(({ response, request, visit, patient }) => (
+                  {rows.map((row) => (
                     <div
-                      key={response.id}
+                      key={row.key}
                       className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="font-display text-sm font-medium text-[var(--ink)]">
-                            {patient ? (
+                            {row.patient ? (
                               <Link
                                 to="/patients/$patientId"
-                                params={{ patientId: patient.id }}
+                                params={{ patientId: row.patient.id }}
                                 className="text-[var(--teal)] hover:underline"
                               >
-                                {patient.name}
+                                {row.patient.name}
                               </Link>
                             ) : (
                               <span className="text-[var(--muted)]">—</span>
                             )}
                           </div>
                           <div className="text-xs text-[var(--muted)]">
-                            {visit ? formatDateDMY(visit.visitDate) : '—'}
-                            {request && <> · {therapistNameById.get(request.therapistId) ?? '—'}</>}
+                            {row.visitDate ? formatDateDMY(row.visitDate) : '—'}
+                            {' · '}
+                            {therapistNameById.get(row.therapistId) ?? '—'}
                           </div>
                         </div>
-                        <span className="text-[var(--amber)]" title={`${response.rating} of 5`}>
-                          {ratingStars(response.rating)}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm text-[var(--ink)]">
-                        {response.comment ?? (
-                          <span className="text-[var(--muted)]">No comment</span>
+                        {row.status === 'answered' ? (
+                          <StarRating rating={row.rating!} />
+                        ) : (
+                          <Pill tone={row.status === 'expired' ? 'slate' : 'amber'}>
+                            {row.status === 'expired' ? 'Expired' : 'Awaiting'}
+                          </Pill>
                         )}
-                      </p>
-                      <div className="mt-1 text-xs text-[var(--muted)]">
-                        Responded {formatDateDMY(response.createdAt)}
                       </div>
+                      {row.status === 'answered' && (
+                        <>
+                          <p className="mt-2 text-sm text-[var(--ink)]">
+                            {row.comment ?? <span className="text-[var(--muted)]">No comment</span>}
+                          </p>
+                          <div className="mt-1 text-xs text-[var(--muted)]">
+                            Responded {formatDateDMY(row.respondedAt!)}
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -203,41 +340,45 @@ export function SchedulePage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border)]">
-                      {rows.map(({ response, request, visit, patient }) => (
-                        <tr key={response.id}>
+                      {rows.map((row) => (
+                        <tr key={row.key}>
                           <td className={td}>
-                            {patient ? (
+                            {row.patient ? (
                               <Link
                                 to="/patients/$patientId"
-                                params={{ patientId: patient.id }}
+                                params={{ patientId: row.patient.id }}
                                 className="font-medium text-[var(--teal)] hover:underline"
                               >
-                                {patient.name}
+                                {row.patient.name}
                               </Link>
                             ) : (
                               <span className="text-[var(--muted)]">—</span>
                             )}
-                            {patient && (
+                            {row.patient && (
                               <span className="ml-1 text-xs text-[var(--muted)]">
-                                {patient.mrno}
+                                {row.patient.mrno}
                               </span>
                             )}
                           </td>
-                          <td className={td}>{visit ? formatDateDMY(visit.visitDate) : '—'}</td>
+                          <td className={td}>{row.visitDate ? formatDateDMY(row.visitDate) : '—'}</td>
+                          <td className={td}>{therapistNameById.get(row.therapistId) ?? '—'}</td>
                           <td className={td}>
-                            {request ? (therapistNameById.get(request.therapistId) ?? '—') : '—'}
-                          </td>
-                          <td className={td}>
-                            <span className="text-[var(--amber)]" title={`${response.rating} of 5`}>
-                              {ratingStars(response.rating)}
-                            </span>
-                          </td>
-                          <td className={`${td} max-w-xs`}>
-                            {response.comment ?? (
-                              <span className="text-[var(--muted)]">No comment</span>
+                            {row.status === 'answered' ? (
+                              <StarRating rating={row.rating!} />
+                            ) : (
+                              <Pill tone={row.status === 'expired' ? 'slate' : 'amber'}>
+                                {row.status === 'expired' ? 'Expired' : 'Awaiting'}
+                              </Pill>
                             )}
                           </td>
-                          <td className={td}>{formatDateDMY(response.createdAt)}</td>
+                          <td className={`${td} max-w-xs`}>
+                            {row.status === 'answered'
+                              ? (row.comment ?? <span className="text-[var(--muted)]">No comment</span>)
+                              : <span className="text-[var(--muted)]">—</span>}
+                          </td>
+                          <td className={td}>
+                            {row.status === 'answered' ? formatDateDMY(row.respondedAt!) : '—'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -164,7 +164,7 @@ function visitToCardData(
         // rating available at all, see feedbackRequest field's own doc
         // comment) falls back to the role-blind eligibility RPC result.
         googleReviewEligible: isAdmin
-          ? (responseByRequestId.get(feedbackRequest.id)?.rating ?? 0) >= 4
+          ? (responseByRequestId.get(feedbackRequest.id)?.rating ?? 0) === 5
           : googleReviewEligibleIds.has(feedbackRequest.id),
       }
       : null,
