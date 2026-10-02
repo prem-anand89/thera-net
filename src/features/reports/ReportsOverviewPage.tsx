@@ -556,11 +556,11 @@ export function ReportsOverviewPage() {
         </nav>
 
         {/* Fixed Action Button */}
-        <div className="shrink-0 border-l border-[var(--border)] bg-[var(--paper)] px-3 py-2 z-10 shadow-[-4px_0_8px_rgba(255,255,255,0.8)] dark:shadow-[-4px_0_8px_var(--paper)]">
+        <div className="shrink-0 border-l border-[var(--border)] bg-[var(--paper)] px-3 py-2 z-10 shadow-[-4px_0_8px_var(--paper)]">
           <Link
             to="/insights/trends-print"
             search={{ year: focusMonth.year, month: focusMonth.month, period: trendPeriodMode }}
-            className="flex items-center rounded-md border border-[var(--border)] bg-white dark:bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] shadow-sm hover:bg-gray-50 dark:hover:bg-[var(--border)] transition-colors"
+            className="flex items-center rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] shadow-sm hover:bg-[var(--paper)] transition-colors"
           >
             <span className="hidden sm:inline">Print / PDF</span>
             <span className="sm:hidden">Print</span>
