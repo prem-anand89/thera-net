@@ -4,7 +4,7 @@ import { createReportService } from './reportService';
 import { createPatientService } from './patientService';
 import type { Repos, VisitFilter } from '@/repositories/types';
 import type { CatalogItem, Clinic, Patient, Therapist, Visit } from '@/domain/types';
-import { roundToRupeeHalfUp, rupeesToPaise as rs } from '@/domain/money';
+import { rupeesToPaise as rs } from '@/domain/money';
 
 // In-memory Repos double — services never touch Dexie or Supabase directly,
 // which is exactly what makes them testable (and the backend swappable).
@@ -211,9 +211,9 @@ describe('visitService.create', () => {
     expect(v.adjustmentPaise).toBe(0);
     expect(v.bmSplitPct).toBe(75);
     expect(v.tdsBasis).toBe('gross_bill');
-    expect(v.bmSharePaise).toBe(rs(1650));
     expect(v.postTaxPaise).toBe(rs(1485)); // matches charges sheet SELF SHARE
-    expect(v.tdsPaise).toBe(rs(220));
+    expect(v.tdsPaise).toBe(rs(220)); // 10% of the ₹2200 gross
+    expect(v.bmSharePaise).toBe(rs(1705)); // postTaxPaise + tdsPaise (75% of the ₹1980 post-tax remainder, plus the TDS)
     // 3-day package auto-tracks sessions
     expect(v.sessionIndex).toBe(1);
     expect(v.packageTotal).toBe(3);
@@ -448,7 +448,11 @@ describe('visitService.recomputeUninvoicedSplits', () => {
     const reopened = await fake.repos.visits.get(open.id);
     expect(reopened!.bmSplitPct).toBe(60);
     expect(reopened!.taxPct).toBe(5);
-    expect(reopened!.bmSharePaise).toBe(roundToRupeeHalfUp((open.actualBillPaise * 60) / 100));
+    // gross_bill: 5% TDS off the ₹2200 bill first (₹110), then 60% of the
+    // ₹2090 remainder (₹1254) — bmSharePaise is that plus the TDS.
+    expect(reopened!.tdsPaise).toBe(rs(110));
+    expect(reopened!.postTaxPaise).toBe(rs(1254));
+    expect(reopened!.bmSharePaise).toBe(rs(1364));
 
     // Invoiced visit's billing stays exactly as it was billed.
     const stillInvoiced = await fake.repos.visits.get(invoiced.id);

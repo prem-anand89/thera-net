@@ -340,8 +340,8 @@ describe('importVisitsService.commit', () => {
     expect(summary.visitsCreated).toBe(1);
     const visit = [...fake.visits.values()][0];
     expect(visit.actualBillPaise).toBe(rs(1500));
-    expect(visit.bmSharePaise).toBe(rs(1125)); // 75% of 1500
-    expect(visit.postTaxPaise).toBe(rs(1013)); // 1012.50 rounds half-up to the rupee
+    expect(visit.postTaxPaise).toBe(rs(1013)); // 75% of the ₹1350 post-tax remainder, 1012.50 rounds half-up
+    expect(visit.bmSharePaise).toBe(rs(1163)); // postTaxPaise + tdsPaise (₹150 TDS off the ₹1500 gross)
     expect(visit.adjustmentPaise).toBe(0);
   });
 
@@ -386,7 +386,9 @@ describe('importVisitsService.commit', () => {
     const billed = visits.filter((v) => v.actualBillPaise > 0);
     expect(billed).toHaveLength(1);
     expect(billed[0].sessionIndex).toBe(2);
-    expect(billed[0].bmSharePaise).toBe(rs(2625)); // 75% of 3500
+    // gross_bill: 10% TDS off ₹3500 first (₹350), then 75% of the ₹3150
+    // remainder (₹2363, half-up) — bmSharePaise is that plus the TDS.
+    expect(billed[0].bmSharePaise).toBe(rs(2713));
     const zeroRows = visits.filter((v) => v.actualBillPaise === 0);
     expect(zeroRows).toHaveLength(4);
     expect(zeroRows.every((v) => v.bmSharePaise === 0)).toBe(true);
