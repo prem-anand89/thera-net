@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { getSupabase } from '@/lib/supabase';
 import { syncEngine } from '@/sync/engine';
+import { disablePushForThisDevice } from '@/features/notifications/pushSubscription';
 
 /**
  * Sign-out entry point shared by every "Sign out" button. `Shell.tsx`'s
@@ -36,5 +37,7 @@ export async function signOutSafely(): Promise<void> {
   }
 
   await syncEngine.stop();
+  // Must run while the session still exists: the row's RLS needs auth.uid().
+  await disablePushForThisDevice().catch(() => {});
   await supabase.auth.signOut();
 }
