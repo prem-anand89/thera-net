@@ -40,6 +40,7 @@ import {
   StatTile,
 } from '@/components/ui';
 import { CatalogSection, type CatalogView } from './CatalogSection';
+import { PushSettingsCard } from '@/features/notifications/PushSettingsCard';
 import { toFriendlyMessage } from '@/lib/errors';
 import {
   FirstWeekChecklist,
@@ -521,6 +522,7 @@ export function SettingsPage() {
           )}
           {activeKey === 'data' && (
             <>
+              <PushSettingsCard />
               <HistoricalData />
               <DataBackup />
               <DangerZone />
