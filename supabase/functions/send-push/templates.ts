@@ -18,9 +18,15 @@ function formatTime(iso: string, timeZone: string): string {
   }).format(new Date(iso));
 }
 
+function formatDate(ymd: string, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-IN', {
+    day: 'numeric', month: 'short', timeZone,
+  }).format(new Date(`${ymd}T00:00:00+05:30`));
+}
+
 /** Fixed text per kind. No patient name, patient id, or free-text field is ever read here. */
 export function buildPayload(kind: PushKind, when: string | null, timeZone: string): PushPayload {
-  const at = when ? formatTime(when, timeZone) : '';
+  const at = when && kind !== 'booking_request' ? formatTime(when, timeZone) : '';
   switch (kind) {
     case 'appointment_confirmed':
       return { title: 'Thera.Net', body: `Appointment confirmed at ${at}`, tag: 'appointment', url: '/schedule?tab=bookings' };
@@ -29,7 +35,12 @@ export function buildPayload(kind: PushKind, when: string | null, timeZone: stri
     case 'appointment_cancelled':
       return { title: 'Thera.Net', body: `Appointment at ${at} cancelled`, tag: 'appointment', url: '/schedule?tab=bookings' };
     case 'booking_request':
-      return { title: 'Thera.Net', body: `New booking request for ${at}`, tag: 'booking-request', url: '/schedule?tab=bookings' };
+      return {
+        title: 'Thera.Net',
+        body: when ? `New booking request for ${formatDate(when, timeZone)}` : 'New booking request',
+        tag: 'booking-request',
+        url: '/schedule?tab=bookings',
+      };
     case 'low_rating_feedback':
       return { title: 'Thera.Net', body: 'New low-rated feedback, open to review', tag: 'feedback', url: '/schedule?tab=feedback' };
   }

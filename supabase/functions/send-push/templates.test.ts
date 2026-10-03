@@ -14,8 +14,8 @@ Deno.test('low rating payload routes to feedback tab and carries no rating or co
   assertEquals(/\d/.test(p.body), false);
 });
 
-Deno.test('booking request uses its own tag and shows the requested time', () => {
-  const p = buildPayload('booking_request', '2026-10-03T10:30:00Z', 'Asia/Kolkata');
+Deno.test('booking request uses its own tag and shows the preferred date, not free text', () => {
+  const p = buildPayload('booking_request', '2026-10-03', 'Asia/Kolkata');
   assertEquals(p.tag, 'booking-request');
-  assertStringIncludes(p.body, '4:00 pm');
+  assertStringIncludes(p.body, '3 Oct');
 });
