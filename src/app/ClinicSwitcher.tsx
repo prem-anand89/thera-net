@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { db } from '@/lib/db';
 import { syncEngine } from '@/sync/engine';
@@ -24,11 +24,25 @@ export function ClinicSwitcher({
   isAdmin: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [addingClinic, setAddingClinic] = useState(false);
   const navigate = useNavigate();
   const many = clinics.length > 1;
   const hasMenu = many || isAdmin;
   const sorted = [...clinics].sort((a, b) => a.name.localeCompare(b.name));
+
+  function toggleMenu() {
+    if (!open) {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const width = Math.min(256, window.innerWidth - 24);
+        const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+        setMenuPos({ top: rect.bottom + 8, left, width });
+      }
+    }
+    setOpen(!open);
+  }
 
   function switchTo(id: string) {
     setOpen(false);
@@ -67,22 +81,24 @@ export function ClinicSwitcher({
   return (
     <div className="relative min-w-0">
       <button
+        ref={triggerRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Clinic: ${clinic.name}. ${many ? 'Switch clinic' : 'Clinic menu'}`}
         title={clinic.name}
-        onClick={() => setOpen((current) => !current)}
+        onClick={toggleMenu}
         className={`${pill} hover:border-[var(--teal)]/40 hover:bg-[var(--surface)]`}
       >
         {identity}
       </button>
-      {open && (
+      {open && menuPos && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
           <div
             role="menu"
-            className="absolute right-0 top-full z-20 mt-2 w-[min(16rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg"
+            style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+            className="fixed z-20 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg"
           >
             <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
               {many ? 'Switch clinic' : 'Clinic'}

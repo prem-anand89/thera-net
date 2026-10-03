@@ -47,19 +47,28 @@ describe('NotificationBell', () => {
     const button = screen.getByRole('button');
     expect(button).toHaveTextContent('3');
     expect(button.className).toContain('text-[var(--rust)]');
-    expect(button).toHaveAccessibleName('1 new booking request, 2 new feedback responses');
+    expect(button).toHaveAccessibleName('1 new booking request, 2 new feedback responses · 1 low-rated');
   });
 
-  it('routes to the feedback tab when unread feedback exists, bookings otherwise', () => {
-    const { rerender } = render(<NotificationBell clinicId="c1" pendingRequestsCount={2} isAdmin />);
-    fireEvent.click(screen.getByRole('button'));
-    expect(navigate).toHaveBeenCalledWith({ to: '/schedule', search: { tab: 'bookings' } });
-
+  it('opens a dropdown row for each unread category and routes to its tab', () => {
     newFeedbackCount = 1;
-    navigate.mockClear();
-    rerender(<NotificationBell clinicId="c1" pendingRequestsCount={2} isAdmin />);
+    newAppointmentCount = 0;
+    render(<NotificationBell clinicId="c1" pendingRequestsCount={2} isAdmin />);
     fireEvent.click(screen.getByRole('button'));
-    expect(navigate).toHaveBeenCalledWith({ to: '/schedule', search: { tab: 'feedback' } });
+    expect(screen.getByRole('menuitem', { name: /2 new booking requests/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /1 new feedback response/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /2 new booking requests/ }));
+    expect(navigate).toHaveBeenLastCalledWith({ to: '/schedule', search: { tab: 'bookings' } });
+    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /new feedback response/ }));
+    expect(navigate).toHaveBeenLastCalledWith({ to: '/schedule', search: { tab: 'feedback' } });
+  });
+
+  it('says so in the dropdown when nothing is new', () => {
+    render(<NotificationBell clinicId="c1" pendingRequestsCount={0} isAdmin />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.getByText('No new notifications.')).toBeInTheDocument();
   });
 
   it('badges a therapist viewer with their own new/changed appointment count', () => {
@@ -73,6 +82,7 @@ describe('NotificationBell', () => {
     expect(button).toHaveAccessibleName('2 new or updated appointments');
 
     fireEvent.click(button);
+    fireEvent.click(screen.getByRole('menuitem', { name: /new or updated appointment/ }));
     expect(navigate).toHaveBeenCalledWith({ to: '/schedule', search: { tab: 'bookings' } });
   });
 });

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import {
   useNewFeedbackResponseCount,
@@ -8,30 +9,18 @@ import { IconBell } from './NavIcons';
 import type { UUID } from '@/domain/types';
 
 /**
- * Header-level alert, visible from any page (unlike the Schedule nav
- * item's own pending-requests dot, which only shows while that tab is in
- * view). Aggregates signals that previously had no app-wide surface at
- * all: pending booking requests (passed in — Shell.tsx already computes
- * this for the nav badge, no need for a second query), new feedback
- * responses (admin-only, `scheduleSignals.ts`'s existing "since last
- * viewed" hooks — the same ones Workspace's own "new feedback" tile
- * reads), and — for a therapist viewer — their own new/changed
- * appointments (the one in-app signal a therapist gets at all besides
- * the automatic `notify-therapist` email; see that hook's own doc
- * comment). A given viewer only ever has one of {isAdmin, therapistId}
- * meaningfully set — a plain therapist is never also admin — so the
- * feedback and appointment counts never both contribute for the same
- * person. Turns red instead of the default teal specifically when a 1-2
- * star response is among the unread ones (Phase 6.5) — color is paired
- * with the count/tooltip text, never the only signal, same rule as every
- * other status indicator in this app.
+ * Header-level alert, visible from any page. Aggregates pending booking
+ * requests (passed in — Shell.tsx already computes this for the nav badge),
+ * new feedback responses (admin-only), and — for a therapist viewer — their
+ * own new/changed appointments. A given viewer only ever has one of
+ * {isAdmin, therapistId} set, so the feedback and appointment counts never
+ * both contribute for the same person.
  *
- * Realtime responsiveness comes for free from `syncEngine`'s own realtime
- * channel (it already subscribes to every `ALL_SYNCED_TABLES` entry,
- * including every table this bell cares about) — once those tables were
- * added to the `supabase_realtime` publication, a server-side insert
- * reaches this component within the engine's normal debounce window, no
- * separate subscription needed here.
+ * Pressing the bell opens a dropdown with one row per unread category; each
+ * row opens the Schedule tab that holds it. Rows are category counts, not
+ * individual items, so the dropdown never lists patient names in-app beyond
+ * what the Schedule page itself shows. Turns red when a 1–2 star response is
+ * among the unread ones; color is paired with the count, never the only signal.
  */
 export function NotificationBell({
   clinicId,
@@ -42,54 +31,92 @@ export function NotificationBell({
   clinicId: UUID;
   pendingRequestsCount: number;
   isAdmin: boolean;
-  /** Set only for a therapist viewer — enables their own "new/changed
-   *  appointment" count. Omit for admin/front_desk. */
+  /** Set only for a therapist viewer. Omit for admin/front_desk. */
   therapistId?: UUID;
 }) {
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
   const newFeedbackCount = useNewFeedbackResponseCount(clinicId, isAdmin);
   const lowRatingCount = useNewLowRatingFeedbackCount(clinicId, isAdmin);
   const newAppointmentCount = useNewTherapistAppointmentCount(clinicId, therapistId, !!therapistId);
   const total = pendingRequestsCount + newFeedbackCount + newAppointmentCount;
   const alert = lowRatingCount > 0;
 
-  const parts: string[] = [];
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const rows: { key: string; label: string; tab: 'bookings' | 'feedback' }[] = [];
   if (pendingRequestsCount > 0) {
-    parts.push(`${pendingRequestsCount} new booking request${pendingRequestsCount === 1 ? '' : 's'}`);
+    rows.push({ key: 'requests', label: plural(pendingRequestsCount, 'new booking request'), tab: 'bookings' });
   }
   if (newFeedbackCount > 0) {
-    parts.push(`${newFeedbackCount} new feedback response${newFeedbackCount === 1 ? '' : 's'}`);
+    const low = lowRatingCount > 0 ? ` · ${lowRatingCount} low-rated` : '';
+    rows.push({ key: 'feedback', label: `${plural(newFeedbackCount, 'new feedback response')}${low}`, tab: 'feedback' });
   }
   if (newAppointmentCount > 0) {
-    parts.push(`${newAppointmentCount} new or updated appointment${newAppointmentCount === 1 ? '' : 's'}`);
+    rows.push({
+      key: 'appointments',
+      label: `${plural(newAppointmentCount, 'new or updated appointment')}`,
+      tab: 'bookings',
+    });
   }
-  const label = parts.length ? parts.join(', ') : 'No new notifications';
+  const summary = rows.length ? rows.map((r) => r.label).join(', ') : 'No new notifications';
+
+  function openTab(tab: 'bookings' | 'feedback') {
+    setOpen(false);
+    void navigate({ to: '/schedule', search: { tab } });
+  }
 
   return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-[var(--paper)] ${
-        alert ? 'text-[var(--rust)]' : 'text-[var(--muted)]'
-      }`}
-      onClick={() =>
-        void navigate({
-          to: '/schedule',
-          search: { tab: newFeedbackCount > 0 ? 'feedback' : 'bookings' },
-        })
-      }
-    >
-      <IconBell />
-      {total > 0 && (
-        <span
-          className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white ${
-            alert ? 'bg-[var(--rust)]' : 'bg-[var(--teal)]'
-          }`}
-        >
-          {total}
-        </span>
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        title={summary}
+        aria-label={summary}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-[var(--paper)] ${
+          alert ? 'text-[var(--rust)]' : 'text-[var(--muted)]'
+        }`}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <IconBell />
+        {total > 0 && (
+          <span
+            className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white ${
+              alert ? 'bg-[var(--rust)]' : 'bg-[var(--teal)]'
+            }`}
+          >
+            {total}
+          </span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-20 mt-2 w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg"
+          >
+            <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Notifications
+            </p>
+            {rows.length === 0 && <p className="px-3 py-3 text-sm text-[var(--muted)]">No new notifications.</p>}
+            {rows.map((row) => (
+              <button
+                key={row.key}
+                type="button"
+                role="menuitem"
+                onClick={() => openTab(row.tab)}
+                className={`flex min-h-10 w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)] ${
+                  row.key === 'feedback' && lowRatingCount > 0 ? 'text-[var(--rust)]' : ''
+                }`}
+              >
+                <span>{row.label}</span>
+                <span aria-hidden className="text-[var(--muted)]">›</span>
+              </button>
+            ))}
+          </div>
+        </>
       )}
-    </button>
+    </div>
   );
 }
