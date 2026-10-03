@@ -1219,6 +1219,18 @@ still falls through to the existing share sheet, unchanged.
 
 ---
 
+### 10. Push Notifications
+
+Web Push alerts reach staff and therapists when the app is closed. Opt-in per device from Settings → Data (Notifications on this device).
+
+- **Therapist:** confirmed, rescheduled, or cancelled appointment on their own schedule.
+- **Admin and front desk:** every new public booking request for the clinic.
+- **Admin only:** 1–2 star feedback responses.
+- **Content rule:** payloads are fixed text per kind with the appointment or request time only. No patient name, ID, count, or free text is ever sent, since lock screens show notifications.
+- **Shared devices:** signing out removes this browser's subscription, so the next login doesn't receive the previous user's alerts.
+- **iOS:** push works only after the app is added to the Home Screen; Settings shows an install prompt instead of the enable button until then.
+- **Delivery:** triggers on `appointments`, `appointment_requests`, and `feedback_responses` call the `send-push` edge function asynchronously via `pg_net`. Recipients are resolved at send time from clinic membership. Subscriptions returning 404 or 410 are removed.
+
 ## Application Architecture
 
 ### Directory Structure
@@ -2578,6 +2590,12 @@ succeed despite both restrictions; flipping the switch back on immediately
 re-blocks the same clinic with no other change.
 
 ---
+
+### `push_subscriptions`
+
+One row per subscribed browser (`endpoint` unique), keyed to `auth.users(id)`. Users can insert, update, and delete only their own rows; reads for sending use the service role. Written by the browser on enable, deleted on disable and sign-out, and pruned by `send-push` on 404/410.
+
+Triggers `appointments_push`, `appointment_requests_push`, and `feedback_responses_push` call `notify_push()`, which posts `{kind, clinic_id, row_id}` to `send-push`.
 
 ## Key Design Patterns
 

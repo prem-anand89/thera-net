@@ -20,6 +20,7 @@ client-side implementation yet — no UI, no Dexie/sync integration. See
 ## What it does
 
 ### Visit Management & Ledger
+- **Push notifications** — opt-in alerts to therapists (their appointments) and admin/front desk (new booking requests, low-rated feedback) on installed apps and desktop browsers. Payloads carry no patient data.
 - **Visit entry & patient lookup** — search by MRNO/name (create-if-missing, walk-in MRNO auto-generation with sequential format `PREFIXYY-NNNN`, e.g. `W26-0001` for the first walk-in of 2026, resetting yearly and auto-widening past 9999), visit entry with catalog price autofill, price override with mandatory adjustment reason, package session tracking (1/3, 2/3 … with ₹0 continuations). Once a patient's confirmed, a reference panel shows their last visit and open-package progress alongside the form.
 - **Edit visit** — condition, treatment notes, treatments performed, and (while not yet invoiced) bill amount, therapist, and date, editable after the fact from Ledger's row menu — scoped to the visit's own therapist or an admin. Clinical fields stay editable after invoicing; only billing locks.
 - **Treatment tracking** — a clinic-editable list of treatment types (Manual Therapy, Exercise Therapy, Kinesio Taping, ...), independent of billing and of Core Assessment. Checked off per visit as "Treatments performed"; Patient Profile's Care plan card shows a running per-package count (e.g. "Manual Therapy: 4 · Exercise: 6").
