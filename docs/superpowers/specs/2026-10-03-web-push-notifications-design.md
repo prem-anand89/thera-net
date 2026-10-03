@@ -12,7 +12,7 @@ Alert staff and therapists when something needs their attention, even when Thera
 - **Therapist:** push on new confirmation, reschedule, or cancellation of their own appointment.
 - **Admin and front desk:** push on every new public booking request (`appointment_requests` insert) for their clinic.
 - **Admin only:** push on every 1–2 star feedback response.
-- **Content:** time and count only. No patient names, anywhere in the payload. Notifications show on lock screens.
+- **Content:** therapist and feedback payloads carry no patient data. Booking-request payloads show the patient's name, preferred date, and the chosen slot time, which the partner chose explicitly. Notifications show on lock screens.
 - **Devices:** one user may subscribe on several devices; every subscribed device receives the push.
 - **Out of scope:** changes to the existing email (`notify-therapist`), the in-app bells, and the manual WhatsApp button.
 
@@ -57,7 +57,7 @@ create table public.push_subscriptions (
 | Source | Condition | Recipients | Template |
 |---|---|---|---|
 | `appointments` | insert or update of `status`/`scheduled_at` to confirmed (new or rescheduled), or to cancelled | the therapist (`therapists.user_id`) | "Appointment {confirmed\|rescheduled\|cancelled} at {time}" |
-| `appointment_requests` | insert | clinic admins and front desk | "New booking request, {time}" |
+| `appointment_requests` | insert | clinic admins and front desk | "New booking request" · {patient name} · {date} · {slot time} |
 | `feedback_responses` | insert with `rating <= 2` | clinic admins | "New low-rated feedback" |
 
 Times are shown in clinic-local time. Repeated alerts are collapsed on the device by a per-kind `tag` (see service worker), so no count is included in the payload.

@@ -1226,7 +1226,7 @@ Web Push alerts reach staff and therapists when the app is closed. Opt-in per de
 - **Therapist:** confirmed, rescheduled, or cancelled appointment on their own schedule.
 - **Admin and front desk:** every new public booking request for the clinic.
 - **Admin only:** 1–2 star feedback responses.
-- **Content rule:** payloads are fixed text per kind with the appointment or request time only. No patient name, ID, count, or free text is ever sent, since lock screens show notifications.
+- **Content rule:** therapist and feedback payloads carry no patient data (time only, or fixed text). Booking-request payloads carry the patient's name, preferred date, and the chosen slot time (`H:MM AM/PM`), since the staff member chose to see these on the lock screen. The slot is validated server-side and dropped if it isn't a slot label; the name is capped at 60 characters with control characters removed.
 - **Shared devices:** signing out removes this browser's subscription, so the next login doesn't receive the previous user's alerts.
 - **iOS:** push works only after the app is added to the Home Screen; Settings shows an install prompt instead of the enable button until then.
 - **Delivery:** triggers on `appointments`, `appointment_requests`, and `feedback_responses` call the `send-push` edge function asynchronously via `pg_net`. Recipients are resolved at send time from clinic membership. Subscriptions returning 404 or 410 are removed.
