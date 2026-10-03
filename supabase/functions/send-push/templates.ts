@@ -2,6 +2,7 @@ export type PushKind =
   | 'appointment_confirmed'
   | 'appointment_rescheduled'
   | 'appointment_cancelled'
+  | 'appointment_reassigned'
   | 'booking_request'
   | 'low_rating_feedback';
 
@@ -64,6 +65,8 @@ export function buildPayload(kind: PushKind, when: string | null, timeZone: stri
       return { title: 'Thera.Net', body: `Appointment rescheduled to ${at}`, tag: 'appointment', url: '/schedule?tab=bookings' };
     case 'appointment_cancelled':
       return { title: 'Thera.Net', body: `Appointment at ${at} cancelled`, tag: 'appointment', url: '/schedule?tab=bookings' };
+    case 'appointment_reassigned':
+      return { title: 'Thera.Net', body: `Appointment at ${at} moved to another therapist`, tag: 'appointment', url: '/schedule?tab=bookings' };
     case 'low_rating_feedback':
       return { title: 'Thera.Net', body: 'New low-rated feedback, open to review', tag: 'feedback', url: '/schedule?tab=feedback' };
     case 'booking_request':

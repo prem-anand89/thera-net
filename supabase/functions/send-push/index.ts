@@ -17,6 +17,7 @@ interface SendRequest {
   kind: PushKind;
   clinic_id: string;
   row_id: string;
+  previous_therapist_id?: string | null;
 }
 
 const admin = createClient(
@@ -27,6 +28,21 @@ const admin = createClient(
 
 /** Resolves recipients from the source row. The caller supplies only ids; the payload is built from the row. */
 async function resolveRecipients(req: SendRequest): Promise<{ userIds: string[]; payload: PushPayload | null }> {
+  if (req.kind === 'appointment_reassigned') {
+    if (!req.previous_therapist_id) return { userIds: [], payload: null };
+    const { data: appt } = await admin
+      .from('appointments').select('scheduled_at')
+      .eq('id', req.row_id).eq('clinic_id', req.clinic_id).maybeSingle();
+    const { data: previous } = await admin
+      .from('therapists').select('user_id')
+      .eq('id', req.previous_therapist_id).eq('clinic_id', req.clinic_id).maybeSingle();
+    if (!appt || !previous?.user_id) return { userIds: [], payload: null };
+    return {
+      userIds: [previous.user_id],
+      payload: buildPayload(req.kind, appt.scheduled_at, CLINIC_TZ),
+    };
+  }
+
   if (req.kind.startsWith('appointment_')) {
     const { data: appt } = await admin
       .from('appointments').select('scheduled_at, therapist_id')

@@ -39,3 +39,9 @@ Deno.test('booking request with no preferred date shows name only, never an inva
   const p = buildBookingRequestPayload({ patientName: 'Ravi', date: null, timeLabel: '10:00 AM' }, 'Asia/Kolkata');
   assertEquals(p.body, 'Ravi · 10:00 AM');
 });
+
+Deno.test('reassigned payload tells the previous therapist the appointment moved', () => {
+  const p = buildPayload('appointment_reassigned', '2026-10-03T10:30:00Z', 'Asia/Kolkata');
+  assertStringIncludes(p.body, 'moved to another therapist');
+  assertStringIncludes(p.body, '4:00 pm');
+});

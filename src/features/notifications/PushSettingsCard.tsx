@@ -21,7 +21,7 @@ export function PushSettingsCard() {
     setBusy(true);
     setError(null);
     try {
-      await enablePushForThisDevice(userId);
+      await enablePushForThisDevice();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not turn on notifications.');
     } finally {

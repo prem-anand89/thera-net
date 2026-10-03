@@ -30,8 +30,8 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }
 
-/** Must be called directly from a click handler (iOS rejects prompts otherwise). */
-export async function enablePushForThisDevice(userId: string): Promise<void> {
+/** Must be called directly from a click handler (iOS rejects prompts otherwise). The RPC takes the owner from the session, so a browser that changed accounts re-claims its endpoint. */
+export async function enablePushForThisDevice(): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Not connected.');
   const permission = await Notification.requestPermission();
@@ -42,17 +42,12 @@ export async function enablePushForThisDevice(userId: string): Promise<void> {
     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
   });
   const json = sub.toJSON();
-  const { error } = await supabase.from('push_subscriptions').upsert(
-    {
-      user_id: userId,
-      endpoint: sub.endpoint,
-      p256dh: json.keys?.p256dh,
-      auth: json.keys?.auth,
-      user_agent: navigator.userAgent,
-      last_seen_at: new Date().toISOString(),
-    },
-    { onConflict: 'endpoint' }
-  );
+  const { error } = await supabase.rpc('register_push_subscription', {
+    p_endpoint: sub.endpoint,
+    p_p256dh: json.keys?.p256dh,
+    p_auth: json.keys?.auth,
+    p_user_agent: navigator.userAgent,
+  });
   if (error) throw error;
 }
 
