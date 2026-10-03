@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, feedbackService } from '@/services';
 import { db } from '@/lib/db';
+import { isActiveAppointmentStatus } from '@/domain/appointmentStatus';
 import type { UUID } from '@/domain/types';
 
 /**
@@ -62,6 +63,55 @@ export function useNewLowRatingFeedbackCount(clinicId: string, enabled: boolean)
     const since = lastViewed?.value;
     return responses.filter((r) => r.rating <= 2 && (!since || r.createdAt > since)).length;
   }, [enabled, responses, lastViewed]);
+}
+
+/** Scoped per clinic AND per therapist — two therapists at the same clinic,
+ *  or the same therapist across clinics, must not share one "last viewed"
+ *  marker. */
+export function therapistAppointmentsLastViewedKey(clinicId: string, therapistId: string): string {
+  return `therapistAppointmentsLastViewedAt:${clinicId}:${therapistId}`;
+}
+
+/**
+ * A therapist's own "something new or changed landed on my schedule"
+ * count — the one in-app signal a therapist gets today besides the
+ * automatic email `notify-therapist` already sends on confirm/reschedule
+ * (see that edge function's own doc comment). `appointments` is
+ * clinic-wide readable (`is_clinic_member` RLS, not admin-only like
+ * `feedback_responses`), so a therapist's own Dexie already has every
+ * row needed here — no RLS change, same pattern as
+ * `useNewFeedbackResponseCount` just filtered to this therapist's own
+ * rows. Diffs on `updatedAt`, not `createdAt`, so a reschedule (which
+ * touches an existing row rather than inserting a new one) counts as
+ * "new" too — `isActiveAppointmentStatus` (confirmed or rescheduled)
+ * excludes cancelled/no-show/arrived, which aren't things to alert a
+ * therapist about. */
+export function useNewTherapistAppointmentCount(
+  clinicId: string,
+  therapistId: string | undefined,
+  enabled: boolean
+): number {
+  const appointments = useLiveQuery(
+    () => (enabled && therapistId ? repos.appointments.listByClinic(clinicId) : undefined),
+    [clinicId, therapistId, enabled]
+  );
+  const lastViewed = useLiveQuery(
+    () =>
+      enabled && therapistId
+        ? db.meta.get(therapistAppointmentsLastViewedKey(clinicId, therapistId))
+        : undefined,
+    [clinicId, therapistId, enabled]
+  );
+  return useMemo(() => {
+    if (!enabled || !therapistId || !appointments) return 0;
+    const since = lastViewed?.value;
+    return appointments.filter(
+      (a) =>
+        a.therapistId === therapistId &&
+        isActiveAppointmentStatus(a.status) &&
+        (!since || a.updatedAt > since)
+    ).length;
+  }, [enabled, therapistId, appointments, lastViewed]);
 }
 
 /**

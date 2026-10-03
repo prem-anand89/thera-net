@@ -81,7 +81,14 @@ export function Shell() {
     () => (clinic ? repos.therapists.list(clinic.id) : []),
     [clinic?.id]
   );
-  
+  // Same resolution useWorkspaceScope() uses — can't call that hook here,
+  // it needs ClinicContext, and this component is the one that provides
+  // it further down (same constraint noted on appointmentRequests below).
+  const myTherapistId = useMemo(
+    () => therapists?.find((t) => t.userId === session?.user?.id)?.id,
+    [therapists, session?.user?.id]
+  );
+
   const appointmentRequests = useLiveQuery(
     () => clinic && (role === 'admin' || role === 'front_desk') ? repos.appointmentRequests.listByClinic(clinic.id) : undefined,
     [clinic?.id, role]
@@ -361,6 +368,14 @@ export function Shell() {
                   clinicId={clinic.id}
                   pendingRequestsCount={pendingRequestsCount}
                   isAdmin={role === 'admin'}
+                />
+              )}
+              {role === 'therapist' && myTherapistId && (
+                <NotificationBell
+                  clinicId={clinic.id}
+                  pendingRequestsCount={0}
+                  isAdmin={false}
+                  therapistId={myTherapistId}
                 />
               )}
               <SyncBadge />

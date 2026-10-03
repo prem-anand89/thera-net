@@ -8,9 +8,11 @@ vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
 
 let newFeedbackCount = 0;
 let lowRatingCount = 0;
+let newAppointmentCount = 0;
 vi.mock('@/features/schedule/scheduleSignals', () => ({
   useNewFeedbackResponseCount: () => newFeedbackCount,
   useNewLowRatingFeedbackCount: () => lowRatingCount,
+  useNewTherapistAppointmentCount: () => newAppointmentCount,
 }));
 
 import { NotificationBell } from './NotificationBell';
@@ -21,6 +23,7 @@ describe('NotificationBell', () => {
     navigate.mockClear();
     newFeedbackCount = 0;
     lowRatingCount = 0;
+    newAppointmentCount = 0;
   });
 
   it('shows no badge when there is nothing new', () => {
@@ -57,5 +60,19 @@ describe('NotificationBell', () => {
     rerender(<NotificationBell clinicId="c1" pendingRequestsCount={2} isAdmin />);
     fireEvent.click(screen.getByRole('button'));
     expect(navigate).toHaveBeenCalledWith({ to: '/schedule', search: { tab: 'feedback' } });
+  });
+
+  it('badges a therapist viewer with their own new/changed appointment count', () => {
+    newAppointmentCount = 2;
+    render(
+      <NotificationBell clinicId="c1" pendingRequestsCount={0} isAdmin={false} therapistId="th-1" />
+    );
+    const button = screen.getByRole('button');
+    expect(button).toHaveTextContent('2');
+    expect(button.className).toContain('text-[var(--muted)]');
+    expect(button).toHaveAccessibleName('2 new or updated appointments');
+
+    fireEvent.click(button);
+    expect(navigate).toHaveBeenCalledWith({ to: '/schedule', search: { tab: 'bookings' } });
   });
 });

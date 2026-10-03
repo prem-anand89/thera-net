@@ -5,6 +5,7 @@ import { repos } from '@/services';
 import { db } from '@/lib/db';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
+import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { addDays, toLocalDateStr } from '@/domain/schedule';
 import {
@@ -18,7 +19,7 @@ import {
 import type { UUID } from '@/domain/types';
 import { ScheduleBookingsView } from './ScheduleBookingsView';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
-import { requestsLastViewedKey } from './scheduleSignals';
+import { requestsLastViewedKey, therapistAppointmentsLastViewedKey } from './scheduleSignals';
 
 /** SVG stars, replacing the old text-glyph `★★★☆☆` — same glance-first
  *  spirit as the icon+word markers on the visit row (`VisitCard.tsx`'s
@@ -111,6 +112,7 @@ export function SchedulePage() {
   const clinic = useClinic();
   const navigate = useNavigate();
   const { isAdmin, role } = usePermissions();
+  const { myTherapistId } = useWorkspaceScope();
   const canSeeBookings = isAdmin || role === 'front_desk';
   const search = useSearch({ from: '/schedule' });
   const tab = search.tab ?? 'bookings';
@@ -254,6 +256,17 @@ export function SchedulePage() {
     if (!isAdmin) return;
     void db.meta.put({ key: requestsLastViewedKey(clinic.id), value: new Date().toISOString() });
   }, [clinic.id, isAdmin]);
+
+  // Same idea, scoped to a plain therapist's own "new/changed appointment"
+  // bell count (`useNewTherapistAppointmentCount`) — opening their own
+  // schedule is what clears it.
+  useEffect(() => {
+    if (role !== 'therapist' || !myTherapistId) return;
+    void db.meta.put({
+      key: therapistAppointmentsLastViewedKey(clinic.id, myTherapistId),
+      value: new Date().toISOString(),
+    });
+  }, [clinic.id, role, myTherapistId]);
 
   // Therapists get their own schedule only — no Feedback / Bookings tab row.
   if (!isAdmin && !canSeeBookings) {
