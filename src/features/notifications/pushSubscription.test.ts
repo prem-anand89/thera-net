@@ -27,12 +27,24 @@ describe('pushState', () => {
   });
 });
 
+describe('pushState without a service worker', () => {
+  it('reports default instead of hanging when no worker is registered', async () => {
+    Object.defineProperty(window, 'PushManager', { value: function () {}, configurable: true });
+    Object.defineProperty(window, 'Notification', { value: { permission: 'granted' }, configurable: true });
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: { getRegistration: async () => undefined },
+      configurable: true,
+    });
+    expect(await pushState()).toBe('default');
+  });
+});
+
 describe('disablePushForThisDevice', () => {
   it('deletes the row for this endpoint and unsubscribes the browser', async () => {
     const unsubscribe = vi.fn().mockResolvedValue(true);
     Object.defineProperty(navigator, 'serviceWorker', {
       value: {
-        ready: Promise.resolve({
+        getRegistration: async () => ({
           pushManager: { getSubscription: async () => ({ endpoint: 'https://push.example/abc', unsubscribe }) },
         }),
       },
