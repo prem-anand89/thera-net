@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import {
   useNewFeedbackResponseCount,
@@ -43,9 +43,9 @@ export function NotificationBell({
   const alert = lowRatingCount > 0;
 
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-  const rows: { key: string; label: string; tab: 'bookings' | 'feedback' }[] = [];
+  const rows: { key: string; label: string; tab: 'bookings' | 'feedback'; view?: 'requests' }[] = [];
   if (pendingRequestsCount > 0) {
-    rows.push({ key: 'requests', label: plural(pendingRequestsCount, 'new booking request'), tab: 'bookings' });
+    rows.push({ key: 'requests', label: plural(pendingRequestsCount, 'new booking request'), tab: 'bookings', view: 'requests' });
   }
   if (newFeedbackCount > 0) {
     const low = lowRatingCount > 0 ? ` · ${lowRatingCount} low-rated` : '';
@@ -60,14 +60,30 @@ export function NotificationBell({
   }
   const summary = rows.length ? rows.map((r) => r.label).join(', ') : 'No new notifications';
 
-  function openTab(tab: 'bookings' | 'feedback') {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number; width: number } | null>(null);
+
+  function toggleMenu() {
+    if (!open) {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const width = Math.min(288, window.innerWidth - 24);
+        const right = Math.max(12, window.innerWidth - rect.right);
+        setMenuPos({ top: rect.bottom + 8, right: Math.min(right, window.innerWidth - width - 12), width });
+      }
+    }
+    setOpen(!open);
+  }
+
+  function openRow(row: { tab: 'bookings' | 'feedback'; view?: 'requests' }) {
     setOpen(false);
-    void navigate({ to: '/schedule', search: { tab } });
+    void navigate({ to: '/schedule', search: row.view ? { tab: row.tab, view: row.view } : { tab: row.tab } });
   }
 
   return (
     <div className="relative shrink-0">
       <button
+        ref={triggerRef}
         type="button"
         title={summary}
         aria-label={summary}
@@ -76,7 +92,7 @@ export function NotificationBell({
         className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-[var(--paper)] ${
           alert ? 'text-[var(--rust)]' : 'text-[var(--muted)]'
         }`}
-        onClick={() => setOpen((current) => !current)}
+        onClick={toggleMenu}
       >
         <IconBell />
         {total > 0 && (
@@ -89,12 +105,13 @@ export function NotificationBell({
           </span>
         )}
       </button>
-      {open && (
+      {open && menuPos && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
           <div
             role="menu"
-            className="absolute right-0 top-full z-20 mt-2 w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg"
+            style={{ top: menuPos.top, right: menuPos.right, width: menuPos.width }}
+            className="fixed z-20 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg"
           >
             <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
               Notifications
@@ -105,7 +122,7 @@ export function NotificationBell({
                 key={row.key}
                 type="button"
                 role="menuitem"
-                onClick={() => openTab(row.tab)}
+                onClick={() => openRow(row)}
                 className={`flex min-h-10 w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)] ${
                   row.key === 'feedback' && lowRatingCount > 0 ? 'text-[var(--rust)]' : ''
                 }`}

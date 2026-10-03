@@ -59,7 +59,7 @@ describe('NotificationBell', () => {
     expect(screen.getByRole('menuitem', { name: /1 new feedback response/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('menuitem', { name: /2 new booking requests/ }));
-    expect(navigate).toHaveBeenLastCalledWith({ to: '/schedule', search: { tab: 'bookings' } });
+    expect(navigate).toHaveBeenLastCalledWith({ to: '/schedule', search: { tab: 'bookings', view: 'requests' } });
     fireEvent.click(screen.getByRole('button'));
     fireEvent.click(screen.getByRole('menuitem', { name: /new feedback response/ }));
     expect(navigate).toHaveBeenLastCalledWith({ to: '/schedule', search: { tab: 'feedback' } });
