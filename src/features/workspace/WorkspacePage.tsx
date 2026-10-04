@@ -51,7 +51,7 @@ import {
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { SplitModal } from '@/components/SplitModal';
-import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
+
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 import { EditVisitModal } from '@/features/visits/EditVisitModal';
@@ -896,7 +896,6 @@ export function WorkspacePage() {
         )}
       </SectionCard>
 
-      {!scope.isClinicWideView && <TherapistComparisonCard />}
 
       <SectionCard title="Packages">
         <p className="mb-3 text-xs text-[var(--muted)]">

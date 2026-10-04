@@ -45,8 +45,7 @@ export function TherapistComparisonCard({
   const scope = useWorkspaceScope();
   const entitlements = useEntitlements(clinic.id);
   const compact = useCompactChart();
-  const showComparison =
-    clinic.showTherapistComparison && !scope.isFrontDesk && entitlements.can('revenueSplit');
+  const showComparison = !scope.isFrontDesk && entitlements.can('revenueSplit');
   const { partnerSplit } = clinicBillingConfig(clinic);
   const labels = clinicShareLabels(clinic);
   const showPostTax = partnerSplit;

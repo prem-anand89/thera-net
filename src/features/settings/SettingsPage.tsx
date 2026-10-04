@@ -797,7 +797,7 @@ type ProfileFields = Pick<
   | 'logoPath'
   | 'clinicType'
   | 'clinicalDocsEnabled'
-  | 'showTherapistComparison'
+
   | 'lastSplitChangeAt'
 >;
 
@@ -813,7 +813,6 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         logoPath: c.logoPath,
         clinicType: c.clinicType,
         clinicalDocsEnabled: c.clinicalDocsEnabled ?? false,
-        showTherapistComparison: c.showTherapistComparison ?? false,
       }),
       onDirtyChange
     );
@@ -956,19 +955,6 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
           <BoolToggle
             value={form.clinicalDocsEnabled ?? false}
             onChange={(v) => set({ clinicalDocsEnabled: v })}
-          />
-        </Field>
-        <Field
-          label={
-            <>
-              Therapist comparison chart
-              <InfoTip text="When on, the Revenue and Visits comparison charts on Reports are visible to therapists too, not just admins — for clinics that want that competitive visibility. Off by default." />
-            </>
-          }
-        >
-          <BoolToggle
-            value={form.showTherapistComparison ?? false}
-            onChange={(v) => set({ showTherapistComparison: v })}
           />
         </Field>
       </div>
