@@ -619,7 +619,7 @@ export function WorkspacePage() {
   };
   const visitsCell = {
     label: `${monthShort} visits`,
-    value: monthReport ? myMonthRow?.visitCount ?? 0 : '—',
+    value: monthReport === undefined || (therapistSplit && therapists === undefined) ? <LoadingValue /> : myMonthRow?.visitCount ?? 0,
     icon: <IconUserCheck />,
     tone: 'sky' as const,
   };
@@ -632,7 +632,7 @@ export function WorkspacePage() {
       : [
           collectedCell,
           visitsCell,
-          { label: `${monthShort} packages`, value: monthlyNew?.newPackages ?? '—', icon: <IconPackage />, tone: 'plum' as const },
+          { label: `${monthShort} packages`, value: monthlyNew === undefined ? <LoadingValue /> : monthlyNew.newPackages, icon: <IconPackage />, tone: 'plum' as const },
         ];
 
   return (
