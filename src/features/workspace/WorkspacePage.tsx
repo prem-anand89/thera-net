@@ -59,7 +59,6 @@ import { FirstWeekSetupLink } from '@/features/settings/FirstWeekChecklist';
 import {
   IconBook,
   IconCloud,
-  IconPackage,
   IconPen,
   IconPlus,
   IconRupee,
@@ -618,8 +617,13 @@ export function WorkspacePage() {
     onClick: () => void navigate({ to: '/ledger', search: { tab: 'visits', filter: 'not_collected' } }),
   };
   const visitsCell = {
-    label: `${monthShort} visits`,
-    value: monthReport === undefined || (therapistSplit && therapists === undefined) ? <LoadingValue /> : myMonthRow?.visitCount ?? 0,
+    label: `${monthShort} visits · packages`,
+    value:
+      monthReport === undefined || monthlyNew === undefined || (therapistSplit && therapists === undefined) ? (
+        <LoadingValue />
+      ) : (
+        `${myMonthRow?.visitCount ?? 0} · ${monthlyNew.newPackages}`
+      ),
     icon: <IconUserCheck />,
     tone: 'sky' as const,
   };
@@ -629,11 +633,7 @@ export function WorkspacePage() {
       ? // A therapist who bills: what they've collected, what's owed on their
         // visits, and their month. (Open packages are listed below.)
         [collectedCell, duesCell, visitsCell]
-      : [
-          collectedCell,
-          visitsCell,
-          { label: `${monthShort} packages`, value: monthlyNew === undefined ? <LoadingValue /> : monthlyNew.newPackages, icon: <IconPackage />, tone: 'plum' as const },
-        ];
+      : [collectedCell, visitsCell];
 
   return (
     <div className="space-y-5">
