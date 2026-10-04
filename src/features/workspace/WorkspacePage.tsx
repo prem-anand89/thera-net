@@ -64,7 +64,6 @@ import {
   IconRupee,
   IconStar,
   IconWallet,
-  IconUserCheck,
 } from '@/components/StatIcons';
 
 /** What the invoice-issuance modal needs, independent of which card opened it. */
@@ -590,7 +589,6 @@ export function WorkspacePage() {
     },
   ] as (NeedsItem | false)[]).filter((item): item is NeedsItem => Boolean(item));
   const monthCaption = now.toLocaleDateString('en-IN', { month: 'long' });
-  const monthShort = now.toLocaleDateString('en-IN', { month: 'short' });
   // Icon + hue per kind of number, the same wherever it appears: money in
   // (moss banknote), dues owed (amber), visits (sky patient-tick), packages
   // (plum stack). Reports (admin/front desk only) already carries the full
@@ -616,24 +614,7 @@ export function WorkspacePage() {
     // Straight to the unpaid visits, all dates (a therapist's own).
     onClick: () => void navigate({ to: '/ledger', search: { tab: 'visits', filter: 'not_collected' } }),
   };
-  const visitsCell = {
-    label: `${monthShort} visits · packages`,
-    value:
-      monthReport === undefined || monthlyNew === undefined || (therapistSplit && therapists === undefined) ? (
-        <LoadingValue />
-      ) : (
-        `${myMonthRow?.visitCount ?? 0} · ${monthlyNew.newPackages}`
-      ),
-    icon: <IconUserCheck />,
-    tone: 'sky' as const,
-  };
-  const statCells = scope.isClinicWideView
-    ? showDues ? [collectedCell, duesCell] : [collectedCell]
-    : showDues
-      ? // A therapist who bills: what they've collected, what's owed on their
-      // visits, and their month. (Open packages are listed below.)
-      [collectedCell, duesCell, visitsCell]
-      : [collectedCell, visitsCell];
+  const statCells = showDues ? [collectedCell, duesCell] : [collectedCell];
 
   return (
     <div className="space-y-5">
@@ -755,6 +736,17 @@ export function WorkspacePage() {
             </span>
             <span className="shrink-0 font-medium text-[var(--teal)]">Reports ›</span>
           </Link>
+        )}
+
+        {!scope.isClinicWideView && scope.scopeTherapistId && (
+          <p className="text-xs text-[var(--muted)]">
+            {monthCaption}:{' '}
+            {monthReport === undefined || monthlyNew === undefined || (therapistSplit && therapists === undefined) ? (
+              <LoadingValue />
+            ) : (
+              `${myMonthRow?.visitCount ?? 0} visits · ${monthlyNew.newPackages} packages`
+            )}
+          </p>
         )}
 
         {/* "Needs you": one line, only when something needs attention that
