@@ -354,9 +354,9 @@ export function Shell() {
                   aria-current={isNavActive(pathname, item.to) ? 'page' : undefined}
                   title={item.label}
                   activeProps={{}}
-                  className={`relative flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors motion-reduce:transition-none desktop:px-3 ${
+                  className={`flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors motion-reduce:transition-none desktop:px-3 ${
                     isNavActive(pathname, item.to)
-                      ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)] after:absolute after:inset-x-2.5 after:-bottom-2 after:h-0.5 after:rounded-full after:bg-[var(--teal)]'
+                      ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)]'
                       : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
                   }`}
                 >
