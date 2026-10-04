@@ -18,6 +18,7 @@ import { useClinicRole } from './useClinicRole';
 import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { CreateClinicForm } from '@/features/settings/CreateClinicForm';
+import { activePhoneTab, isAccountAreaActive, isNavActive, pageTitleFor } from './navActive';
 import { SyncBadge, SyncStatusBanners } from '@/components/SyncBadge';
 import { NotificationBell } from '@/components/NotificationBell';
 import {
@@ -336,6 +337,11 @@ export function Shell() {
             <Link to="/workspace" aria-label="Thera.Net — Workspace" className="flex min-h-11 shrink-0 items-center rounded-lg">
               <BrandMark size={30} wordmark wordmarkClassName="hidden text-base desktop:inline" />
             </Link>
+            {pageTitleFor(pathname) && (
+              <span className="min-w-0 truncate font-display text-base font-semibold text-[var(--ink)] sm:hidden">
+                {pageTitleFor(pathname)}
+              </span>
+            )}
             <nav className="hidden shrink-0 gap-1 sm:flex">
               {nav.map((item) => (
                 <Link
@@ -345,11 +351,17 @@ export function Shell() {
                   // come from the attribute rather than the hidden span —
                   // `hidden` is display:none, which screen readers skip.
                   aria-label={item.label}
+                  aria-current={isNavActive(pathname, item.to) ? 'page' : undefined}
                   title={item.label}
-                  className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--paper)] [&.active]:bg-[var(--teal-light)] [&.active]:font-medium [&.active]:text-[var(--teal)] desktop:px-3"
+                  activeProps={{}}
+                  className={`relative flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors motion-reduce:transition-none desktop:px-3 ${
+                    isNavActive(pathname, item.to)
+                      ? 'bg-[var(--teal-light)] font-semibold text-[var(--teal-strong)] after:absolute after:inset-x-2.5 after:-bottom-2 after:h-0.5 after:rounded-full after:bg-[var(--teal)]'
+                      : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
+                  }`}
                 >
-                  <item.Icon className="shrink-0" />
-                  <span className="hidden tab:in-[.active]:inline desktop:inline">{item.label}</span>
+                  <item.Icon className={`shrink-0 ${isNavActive(pathname, item.to) ? '[&_path]:stroke-[2.1]' : ''}`} />
+                  <span className={`${isNavActive(pathname, item.to) ? 'hidden tab:inline' : 'hidden desktop:inline'}`}>{item.label}</span>
                   {item.to === '/schedule' && pendingRequestsCount > 0 && (
                     <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--rust)] px-1 text-[10px] font-bold text-white">
                       {pendingRequestsCount}
@@ -380,6 +392,7 @@ export function Shell() {
               )}
               <SyncBadge />
               <AccountMenu
+                active={isAccountAreaActive(pathname)}
                 displayName={displayName}
                 fallbackName={fallbackName}
                 role={role}
@@ -409,13 +422,13 @@ export function Shell() {
             to="/workspace"
             label="Workspace"
             Icon={IconWorkspace}
-            active={pathname.startsWith('/workspace')}
+            active={activePhoneTab(pathname) === '/workspace'}
           />
           <PhoneTab
             to="/schedule"
             label="Schedule"
             Icon={IconCalendar}
-            active={pathname.startsWith('/schedule')}
+            active={activePhoneTab(pathname) === '/schedule'}
             badge={pendingRequestsCount}
           />
           <Link
@@ -433,18 +446,13 @@ export function Shell() {
             to="/ledger"
             label="Ledger"
             Icon={IconLedger}
-            active={pathname.startsWith('/ledger')}
+            active={activePhoneTab(pathname) === '/ledger'}
           />
           <PhoneTab
             to="/more"
             label="More"
             Icon={IconMore}
-            active={
-              pathname.startsWith('/more') ||
-              pathname.startsWith('/settings') ||
-              pathname.startsWith('/insights') ||
-              pathname.startsWith('/patients')
-            }
+            active={activePhoneTab(pathname) === '/more'}
           />
         </nav>
       </div>
@@ -469,11 +477,15 @@ function PhoneTab({
     <Link
       to={to}
       aria-current={active ? 'page' : undefined}
-      className={`relative flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium ${
-        active ? 'text-[var(--teal)]' : 'text-[var(--muted)]'
+      className={`relative flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] ${
+        active ? 'font-semibold text-[var(--teal-strong)]' : 'font-medium text-[var(--muted)]'
       }`}
     >
-      <div className="relative flex items-center justify-center">
+      <div
+        className={`relative flex h-7 w-14 items-center justify-center rounded-full transition-colors motion-reduce:transition-none ${
+          active ? 'bg-[var(--teal-light)] [&_path]:stroke-[2.1]' : ''
+        }`}
+      >
         <Icon />
         {badge !== undefined && badge > 0 && (
           <span className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-[var(--surface)] bg-[var(--rust)] px-0.5 text-[9px] font-bold text-white">

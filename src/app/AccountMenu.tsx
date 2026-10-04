@@ -207,6 +207,7 @@ function NameEditor({
  * lives in the header's clinic pill (`ClinicSwitcher`), not here.
  */
 export function AccountMenu({
+  active = false,
   displayName,
   fallbackName,
   role,
@@ -214,6 +215,8 @@ export function AccountMenu({
   clinicId,
   hasPasswordIdentity,
 }: {
+  /** True on Settings/Setup, which are reached from this menu on larger screens. */
+  active?: boolean;
   displayName: string | null;
   fallbackName: string;
   role: ClinicRole;
@@ -240,7 +243,9 @@ export function AccountMenu({
     <div className="relative">
       <button
         type="button"
-        className="flex items-center gap-2 rounded-full p-0.5 hover:bg-[var(--paper)] sm:rounded-md sm:px-1.5 sm:py-1"
+        className={`flex items-center gap-2 rounded-full p-0.5 hover:bg-[var(--paper)] sm:rounded-md sm:px-1.5 sm:py-1 ${
+          active ? 'sm:bg-[var(--teal-light)] sm:ring-1 sm:ring-[var(--teal)]/40' : ''
+        }`}
         aria-label="Account"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
