@@ -178,17 +178,17 @@ function todayRowToCardData(
     }),
     feedbackRequest: feedbackRequest
       ? {
-          id: feedbackRequest.id,
-          status: feedbackRequest.status,
-          token: feedbackRequest.token,
-          updatedAt: feedbackRequest.updatedAt,
-          // Admin gets it for free off the synced rating; front_desk (no
-          // rating available at all, see feedbackRequest field's own doc
-          // comment) falls back to the role-blind eligibility RPC result.
-          googleReviewEligible: isAdmin
-            ? (responseByRequestId.get(feedbackRequest.id)?.rating ?? 0) === 5
-            : googleReviewEligibleIds.has(feedbackRequest.id),
-        }
+        id: feedbackRequest.id,
+        status: feedbackRequest.status,
+        token: feedbackRequest.token,
+        updatedAt: feedbackRequest.updatedAt,
+        // Admin gets it for free off the synced rating; front_desk (no
+        // rating available at all, see feedbackRequest field's own doc
+        // comment) falls back to the role-blind eligibility RPC result.
+        googleReviewEligible: isAdmin
+          ? (responseByRequestId.get(feedbackRequest.id)?.rating ?? 0) === 5
+          : googleReviewEligibleIds.has(feedbackRequest.id),
+      }
       : null,
     googleReviewUrl,
     packageInvoicePending:
@@ -628,11 +628,11 @@ export function WorkspacePage() {
     tone: 'sky' as const,
   };
   const statCells = scope.isClinicWideView
-    ? [collectedCell, duesCell]
+    ? showDues ? [collectedCell, duesCell] : [collectedCell]
     : showDues
       ? // A therapist who bills: what they've collected, what's owed on their
-        // visits, and their month. (Open packages are listed below.)
-        [collectedCell, duesCell, visitsCell]
+      // visits, and their month. (Open packages are listed below.)
+      [collectedCell, duesCell, visitsCell]
       : [collectedCell, visitsCell];
 
   return (
@@ -661,9 +661,9 @@ export function WorkspacePage() {
         onStartNote={
           clinic.clinicalDocsEnabled && canViewClinicalNotes
             ? (appointment) => {
-                setOpenAppointmentId(null);
-                setStartVisit({ appointment });
-              }
+              setOpenAppointmentId(null);
+              setStartVisit({ appointment });
+            }
             : undefined
         }
       />
@@ -865,10 +865,10 @@ export function WorkspacePage() {
             onSplit={
               therapistSplit
                 ? (row) => {
-                    void repos.visits.get(row.visitId).then((v) => {
-                      if (v) setSplitting(v);
-                    });
-                  }
+                  void repos.visits.get(row.visitId).then((v) => {
+                    if (v) setSplitting(v);
+                  });
+                }
                 : undefined
             }
             onDelete={(row) => {
