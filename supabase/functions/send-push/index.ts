@@ -114,18 +114,25 @@ Deno.serve(async (request) => {
         },
         body: new Uint8Array(bodyBytes),
       });
-      return { id: s.id, status: res.status };
+      const detail = res.status === 201 ? '' : (await res.text()).slice(0, 200);
+      return { id: s.id, status: res.status, detail };
     })
   );
 
   const gone: string[] = [];
+  const failures: { status: number; detail: string }[] = [];
   let sent = 0;
   for (const r of results) {
     if (r.status !== 'fulfilled') continue;
     if (r.value.status === 201) sent++;
+    else failures.push({ status: r.value.status, detail: r.value.detail });
     if (r.value.status === 404 || r.value.status === 410) gone.push(r.value.id);
   }
   if (gone.length) await admin.from('push_subscriptions').delete().in('id', gone);
 
-  return json({ sent, removed: gone.length }, 200);
+  if (results.some((r) => r.status === 'rejected')) {
+    failures.push({ status: 0, detail: String((results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason).slice(0, 200) });
+  }
+
+  return json({ sent, removed: gone.length, failures }, 200);
 });
