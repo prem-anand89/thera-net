@@ -602,7 +602,7 @@ export function WorkspacePage() {
   const duesCount = dues?.visitCount ?? 0;
   const collectedCell = {
     label: 'Collected',
-    value: formatINR(receivedToday ?? 0),
+    value: receivedToday === undefined ? <LoadingValue /> : formatINR(receivedToday),
     icon: <IconRupee />,
     tone: 'moss' as const,
     kind: 'money' as const,
@@ -610,7 +610,7 @@ export function WorkspacePage() {
   };
   const duesCell = {
     label: duesCount > 0 ? `Dues · ${duesCount}` : 'Dues',
-    value: formatINR(dues?.totalPaise ?? 0),
+    value: dues === undefined ? <LoadingValue /> : formatINR(dues.totalPaise),
     icon: <IconWallet />,
     tone: 'amber' as const,
     kind: 'money' as const,
@@ -1167,4 +1167,9 @@ export function WorkspacePage() {
       )}
     </div>
   );
+}
+
+/** Shown while a local query is still resolving, so a not-yet-loaded total never reads as ₹0. */
+function LoadingValue() {
+  return <span aria-hidden className="inline-block h-5 w-16 animate-pulse rounded bg-[var(--border)] align-middle" />;
 }
