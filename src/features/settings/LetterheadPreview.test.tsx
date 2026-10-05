@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { LetterheadPreview } from './LetterheadPreview';
 import type { Clinic } from '@/domain/types';
@@ -30,6 +30,14 @@ vi.mock('@/app/clinicContext', () => ({
 }));
 
 describe('LetterheadPreview', () => {
+  beforeEach(() => {
+    global.ResizeObserver = vi.fn().mockImplementation(() => ({
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+      disconnect: vi.fn(),
+    }));
+  });
+
   afterEach(() => {
     cleanup();
   });
