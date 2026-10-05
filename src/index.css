@@ -40,6 +40,9 @@
   --teal: #2c5f63;
   --teal-strong: #244d50;
   --teal-light: #e4edec;
+  /* Guided setup only: the one dark surface, and a quiet fill for settled cards. */
+  --teal-deep: #173a3d;
+  --teal-mist: #f1f6f5;
   --rust: #a6552f;
   --rust-light: #f3e4dd;
   --moss: #5b7a52;

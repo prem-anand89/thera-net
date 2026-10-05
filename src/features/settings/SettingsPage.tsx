@@ -48,11 +48,8 @@ import {
   type SettingsTab,
 } from './sections';
 import { toFriendlyMessage } from '@/lib/errors';
-import {
-  FirstWeekChecklist,
-  useFirstWeekChecklistVisible,
-  lastBackupMetaKey,
-} from './FirstWeekChecklist';
+import { lastBackupMetaKey } from '@/domain/setupGuide';
+import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import { isValidUpiVpa } from '@/domain/upiPay';
 
 /** Accent hues used by the Danger zone, team cards and other in-section badges. */
@@ -377,18 +374,6 @@ export function SettingsPage() {
     el?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
   }, [activeTab]);
 
-  // First week's own two checkable gates — once both clear, the card hides
-  // instead of waiting for someone to press Hide. Held back while either
-  // query is still loading so it doesn't flash.
-  const firstWeekNotDismissed = useFirstWeekChecklistVisible(clinic.id);
-  const setupIncomplete =
-    therapists === undefined || catalog === undefined
-      ? undefined
-      : unlinkedCount > 0 || catalogEmpty;
-  const showFirstWeek =
-    firstWeekNotDismissed === undefined || setupIncomplete === undefined
-      ? false
-      : firstWeekNotDismissed && setupIncomplete;
 
   // Sections that edit the clinic row report unsaved state up here, so
   // switching tabs or leaving can warn before discarding it. Team, Services
@@ -428,7 +413,7 @@ export function SettingsPage() {
     <div className="space-y-4">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Settings</h1>
 
-      {showFirstWeek && <FirstWeekChecklist />}
+      <SetupProgressBar clinicId={clinic.id} />
 
       <SettingsSearch
         variant="compact"

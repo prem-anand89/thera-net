@@ -1018,7 +1018,7 @@ still falls through to the existing share sheet, unchanged.
     - **`BookSlotSheet`**: one sheet for "+ Book", grid/agenda/free-time clicks, request confirmation, and **reschedule** (`rescheduleAppointment` prop: patient and therapist fixed, the moved appointment is ignored when checking occupied time, submits `reschedule_appointment`). A length picker (30/45/60/90 minutes, plus the clinic slot if different — always labelled in minutes via `lengthLabel()`, never "1h"/"1h30") drives the occupied check; times that already passed, overlap the therapist's bookings for the chosen length, or would run past closing are disabled. Therapist defaults to the logged-in therapist or the only therapist, and is locked for therapist logins. Closed weekdays and holidays show a warning but can still be booked. A patient with no phone must have one entered. State resets on every open; the reschedule snapshot is taken at open time so a sync mid-edit can't reset the form. `onBooked` returns `{ kind: 'booked' | 'rescheduled', appointmentId, scheduledAt, durationMinutes, … }`; the toast offers WhatsApp and auto-dismisses after 15s.
     - **Clinic closures**: weekly closed days stay in Settings (`clinics.closed_weekdays`); one-off dates and ranges (holidays) are set from the calendar (`ClosedDaysSheet`, admin / front desk) and shown in the rail, strip, grid, booking sheet and the public `/book/$slug` form. Existing appointments on a newly closed day are kept. `isClosedDay` (holiday wins over weekday) and `groupClosedRanges` live in `src/domain/schedule.ts`.
     - **Public form layout**: time first, then details — header (clinic initial/logo, visit length, hours), step 1 "Choose a time" (clinician chips "Anyone available" / each therapist, a scrollable 14-day strip with uniform day cards and "Closed" days, "More dates" inline month, time grid), step 2 "Your details" (name, phone with compact country picker, optional email and reason), and a summary + "Request appointment" bar pinned to the bottom on phones (safe-area padded).
-    - **Workspace header**: one compact card (about 150–180px tall on a phone) — the greeting (therapist's first name when linked) with the short date ("Thu, 1 Oct") beside it on the same line, "+ Book" (opens `BookSlotSheet`; therapist-locked for therapists) and "+ New visit", the stat strip (see Today-First Workspace), then a "needs you" line **only when something needs attention that the page doesn't already list**: the therapist's notes to finish (opens the oldest draft), new feedback, and visits not synced yet (amber). Visits in progress and booking requests aren't repeated there — the Today card right below lists both (with Complete / Confirm). With nothing to show, the line is hidden rather than saying "All caught up"; the header's sync dot covers the synced state. Book / New visit carry icons. The admin's first-week setup nudge (`FirstWeekSetupLink`) is a small "Setup 3/7" progress pill on the greeting line, so it takes no extra row.
+    - **Workspace header**: one compact card (about 150–180px tall on a phone) — the greeting (therapist's first name when linked) with the short date ("Thu, 1 Oct") beside it on the same line, "+ Book" (opens `BookSlotSheet`; therapist-locked for therapists) and "+ New visit", the stat strip (see Today-First Workspace), then a "needs you" line **only when something needs attention that the page doesn't already list**: the therapist's notes to finish (opens the oldest draft), new feedback, and visits not synced yet (amber). Visits in progress and booking requests aren't repeated there — the Today card right below lists both (with Complete / Confirm). With nothing to show, the line is hidden rather than saying "All caught up"; the header's sync dot covers the synced state. Book / New visit carry icons. While setup is incomplete, an admin sees the guided-setup bar (`SetupProgressBar`) above this card.
     - **Workspace Today card**: one card with tabs "Appointments (n) | Visits (n)" (tab remembered per device) instead of separate "Expected today" and "Today's visits" cards. Appointments (`TodayAppointments`) use flat divided rows at the same density as the Visits list, coloured like the Schedule grid (`appointmentFill` in `scheduleColors.ts`: therapist-colour left edge; white = upcoming, therapist tint = arrived, grey = visit logged, rust = no-show) (time, name, therapist and length from `sm:`, a small status pill; "Next" pill on the next appointment): in-progress visits first (arrived, no visit yet, today's plus any left open in the last 7 days) with a compact "Complete visit" button, then the next 5 upcoming with "Show all", finished ones (visit logged / no-show) folded under "Done (n)". For admin / front desk, **Requests to confirm (n)** comes first: the oldest three pending public booking requests (`RequestsInbox variant="list"`, "See all" → `/schedule?view=requests`) with Confirm (Workspace's `BookSlotSheet` on the requested date if not past, with the preferred therapist, name/phone, notes and time wish — same as Schedule) and Decline (`ConfirmDialog` → `declineAppointmentRequest`); the Appointments tab count includes them.
     - **Visit in progress (notes before the service)**: a "draft visit" is an **arrived appointment with no `visit_id`**, never a row in `visits` (whose service/price/split snapshots feed invoices, payouts and reports). `StartVisitSheet` (appointment panel "Start note", New Visit's "Start a note first") finds or creates the patient, then either **Start note** — for a booked appointment it marks it arrived; for a walk-in it calls `start_walk_in` (arrived appointment now, `source = 'walk_in'`, no overlap check, accepts a not-yet-synced patient by name/phone) — and opens the Core Assessment with `?appointmentId=`, or **Log visit now** (normal New Visit). The note stores `appointment_id`; when New Visit later saves with that `appointmentId`, `consultationNoteService.linkAppointmentNotesToVisit` sets the notes' `visit_id` (and marks the visit documented if a note is completed). "Mark arrived" stays optional — logging a visit marks arrival anyway. Workspace loads appointments even with patient comms off, so a walk-in in progress shows under Today → Appointments (the tab appears only while one is open). A "New patient" created by a Start note attempt that then fails (e.g. offline) is reused on retry, not duplicated.
     - **Patient form**: Name, Phone, Age, Sex, Primary condition, Referring source, then a collapsed "More details (optional)" with Email, Alternate phone and Patient ID (blank = auto-generated; fill only to keep an old record's number) — in New Visit's create-patient step and the Edit patient modal. Search matches the alternate phone too.
@@ -2418,42 +2418,1707 @@ Team's Invite form locks (with the same informational-only copy) once
 `clinic_members.length >= maxMembers` — a client-side hint only, since
 `invite-therapist`'s own seat-cap check (Phase 2) is the real boundary.
 
-`FirstWeekChecklist.tsx` is an 8-step setup sequence (clinic profile →
-services → invite team → link therapists → log a visit → wait for Synced →
-clinical notes decision → backup), replacing what was once a flat list of
-gotcha tips with no ordering logic. Two steps get plan-aware copy
-(`invite-team`, `wait-synced`).
+**Guided setup** (`/setup`, admin-only; replaced the First-Week Checklist card). Eight steps in two groups. *Essentials:* clinic profile, price services, invite team, link every therapist. *Your first week:* log a visit, wait for Synced, decide on clinical notes, take a backup.
+- Pure logic in `src/domain/setupGuide.ts` (`buildSetupSteps`, `summarizeSetup`, `isSetupNudgeVisible`); live data in `src/features/setup/useSetupProgress.ts`.
+- **Six steps detect themselves** from real data: `clinic.address`, catalog length, `seatsUsed > 1` (a `clinic_members` row exists from the moment an invite is issued), no unlinked therapist, any visit, and the `lastBackupExportedAt:${clinicId}` meta key written by Data backup. **Two are ticked by hand** ("Wait for Synced" is a habit; "clinical notes" is a decision where on and off are both valid), stored as a JSON array of step ids in `firstWeekChecklistCompletedSteps:${clinicId}`.
+- **Keys and step ids are unchanged** from the old checklist so finished steps stay finished on real devices. All meta keys are clinic-scoped, since `db.meta` is shared by every clinic on the device.
+- **Progress is drawn as treatment-course ticks** (`SetupTicks`): filled moss for done, a teal ring for next, hollow for pending.
+- **Pinned bar** (`SetupProgressBar`, "Step 3 of 8: …"): top of Workspace, top of Settings, and in the account menu, admins only. It shows only while the clinic lacks the basics (no profile address, an empty catalog, or an unlinked therapist), so established clinics that never ticked the manual steps aren't nudged again. A clinic that dismissed the old checklist (`firstWeekChecklistDismissed:${clinicId}`) stays dismissed; `/setup` stays reachable from the menu.
+- Onboarding's Done screen offers "Continue setup" (to `/setup`) and "Go to Workspace"; either marks onboarding complete first, since Shell keeps an unfinished clinic on `/onboarding`.
 
-**Auto-detected steps, not self-reported.** Six of the eight steps derive
-their own done state from real data instead of asking the admin to
-remember to tick a box — `useFirstWeekSignals(clinicId)` reads
-`clinic.address` (clinic profile), `service_catalog.length` (services),
-`useEntitlements().seatsUsed > 1` (team invited — `clinic_members` gets a
-row the moment an invite is issued, not only once accepted), therapists
-with no unlinked roster row (therapist linking), any visit existing
-(logged a visit), and a new `db.meta` key `lastBackupExportedAt` —
-written by `DataBackup`'s export handler on a successful download — for
-the backup step. Each auto step's "Continue" link goes straight to that
-step's own screen (a specific Settings tab, or `+ New visit`), typed as a
-small closed union (`StepLink`) rather than a generic `{ to, search }`
-shape, since TanStack Router types each route's `search` against that
-route's own schema. Only two steps stay genuinely self-reported, because
-neither is a fact any query can confirm: "Wait for Synced" is a behavioral
-reminder with no completion state at all, and "Decide on clinical notes"
-is a decision where On and Off are both valid, so a boolean toggle's value
-can't distinguish "decided" from "never looked at it" — these two alone
-still use the original per-step completion flag (`db.meta` key
-`` `firstWeekChecklistCompletedSteps:${clinicId}` ``, a JSON array of
-stable step ids, not indices, so reordering the list later can't corrupt
-in-progress state). The card collapses to a "Setup complete" summary once
-all 8 read done. The single dismiss flag (`db.meta` key
-`` `firstWeekChecklistDismissed:${clinicId}` ``) still exists unchanged
-for the explicit "Hide" button, which fully removes the card regardless of
-completion. Both keys are clinic-scoped (not bare constants) for the same
-reason `lastBackupMetaKey` is below — `db.meta` is one global table shared
-by every clinic on a multi-clinic device (see "Multi-clinic accounts"),
-so an unscoped key would let dismissing/completing the checklist for one
-clinic silently do the same for every other clinic on the device.
+**Header layout budget** below — so it's the fifth now.)
+    The mobile bottom tab bar is a separate hand-built 5-item row
+    (Workspace/Schedule/+New/Ledger/More; Patients is in More), not driven by the same array,
+    so this doesn't add a 6th phone tab; mobile reaches it via **More**
+    instead (also widened to the same admin + front_desk gate), per the
+    handoff doc's own "no sixth phone tab" decision. A front_desk viewer
+    who lands on `?tab=feedback` directly is redirected to `?tab=bookings`
+    rather than shown a disabled tab, per the doc's own resolved note.
+    **Bookings is the first tab and the default landing tab for every
+    role** (including admin) — it's the busier, more actionable surface
+    day to day; the un-parameterized `/schedule` URL defaults to
+    `?tab=bookings` rather than `?tab=feedback`.
+  - **Workspace "new response" banner** — admin + module-on only, reading
+    a `db.meta` "last viewed Requests" timestamp (clinic-scoped key, same
+    pattern as `lastBackupMetaKey`) that gets stamped the moment
+    `SchedulePage` mounts; the count is exported from a small
+    `scheduleSignals.ts` module rather than `SchedulePage.tsx` itself so
+    that reading it from the eagerly-bundled `WorkspacePage.tsx` doesn't
+    pull the route-code-split Requests page into that eager bundle.
+- **Google review nudge (Phase 3)** — `clinics.google_review_url` (nullable
+  text; unset means the nudge never shows, even for a 4-5★ response). Two
+  surfaces, both gated on rating ≥ 4 **and** the URL being set — 1-3★ never
+  gets a Google button, anywhere, per the spec:
+  - **Patient-facing**: the `/f/$token` thank-you screen shows "Leave a
+    Google review" (a plain external link) when eligible.
+    `submit_feedback_response()` itself decides eligibility and returns
+    the URL (or `null`) as its result — the RPC's return type changed from
+    `void` to `text`, so the migration drops and recreates it (grants
+    don't survive a drop, re-stated explicitly same as the original). No
+    second round trip or extra client-side rating logic needed; the public
+    page just shows the button if the return value is non-null.
+  - **Staff-facing**: an "⭐ Google review" nudge on the visit row, next to
+    the "★ Responded" marker — a pure share action (`shareTextViaWhatsApp`,
+    no DB write, no `message_log` entry), gated the same way.
+    `VisitCardData.feedbackRequest.googleReviewEligible` is a bare boolean
+    (not the rating itself), populated two different ways depending on
+    role: an admin caller derives it from the synced, RLS-filtered
+    `feedback_responses.rating` (`>= 4`), the same bulk fetch the
+    "★ Responded" marker already uses. A front_desk caller has no rating
+    available at all — `feedback_responses_select` is
+    `is_clinic_admin()`-only, so the row never reaches their Dexie, not
+    even filtered client-side — so they instead call
+    `list_google_review_eligible_requests(clinic_id)`, a `security
+    definer` RPC that answers "which request_ids currently qualify"
+    without ever returning a rating or a comment. This closes the gap the
+    Phase 3 slice originally shipped with (spec's send-table lists front
+    desk as eligible to send; the first cut only worked for admins).
+    `useGoogleReviewEligibleRequestIds` (`scheduleSignals.ts`) is the
+    front_desk-only fetch — a one-shot RPC call on mount/clinic-change,
+    re-run on window focus, skipped entirely for admin.
+- **Re-engagement reminders (Phase 4)** — "No new detection" per the
+  handoff doc: both surfaces reuse existing dashboard queries rather than
+  adding a new signal. Pure `shareTextViaWhatsApp` actions, no DB write, no
+  `message_log` entry, no booking link (public booking is a later phase,
+  nothing to link to yet) — same shape as the Google review nudge.
+  - **Stale packages** — a "Send reminder" button on `OpenPackageRow`s where
+    `stale` is already `true`, in Workspace's Packages section at the bottom
+    of the page (mobile card + desktop table; Stale filter). Ledger no longer
+    duplicates a separate follow-up list. Gated on `clinic.enablePatientComms`.
+  - **Single-visit patients** — a "Send reminder" button next to the
+    existing `tel:` call link on Reports' single-visit-patients list
+    (`dashboardService.singleVisitPatients`), gated the same way plus
+    `p.phone` present — mirroring the existing call link's own gating,
+    even though the share itself doesn't target that number directly (see
+    below). Backed by `feedbackService.sendReturnReminder` (renamed from
+    `sendSingleVisitReminder` once the Patients list below started reusing
+    it for any stale patient, not just single-visit ones — the message
+    text never claimed "first visit," so nothing else needed to change).
+  - **Same reminder, reused on the Patients list** (`PatientsPage.tsx`) —
+    a "Remind" action (table + phone card) next to Book, shown whenever a
+    patient's own `visitStatsByPatient` entry is stale
+    (`isStale(lastVisitOn)`, the same `STALE_PACKAGE_DAYS` threshold as
+    the package follow-up queue) and they have a phone on file, gated on
+    `clinic.enablePatientComms` same as everywhere else. Lets front desk
+    nudge a patient they're already looking at without a detour through
+    Reports; package-specific wording (`sendStalePackageReminder`) stays
+    Ledger/Workspace-only since this view doesn't carry a per-patient
+    service name to plug into that message.
+  - **Deliberately not phone-targeted.** `SingleVisitPatientRow.phone` and
+    the `tel:` link already on that row could in principle build a
+    number-specific `wa.me/<digits>` deep link, but patient phone numbers
+    aren't stored in a guaranteed international format (no confirmed
+    country-code convention) — a malformed number there fails silently.
+    Every WhatsApp share in this module (feedback link, resend, Google
+    review, reminders) instead uses the same generic Web-Share-sheet
+    fallback (`shareTextViaWhatsApp`) and lets staff pick the recipient
+    themselves, consistent behavior across the whole feature rather than
+    a special-cased, riskier path for reminders alone.
+- **Package nearing completion** — `isNearingCompletion()` in
+  `packageTracking.ts` (2 or fewer sessions left, package still open),
+  threaded onto `OpenPackageRow.nearingCompletion` alongside the existing
+  time-based `stale` flag. Purely an in-context "Renew soon" badge
+  wherever package progress already shows (Workspace's package list/table,
+  Patient Profile's care plan, the visit-logging patient overview, New
+  Visit's package summary tile) — no separate Ledger filter yet, and
+  `stale` still takes priority over it in the one place both could apply
+  (Workspace's single status pill) since a package can't need
+  re-engaging and be actively finishing up at the same time in any way
+  staff should act on.
+- **"Remind to pay" (Invoices page)** — a seventh `message_log` kind,
+  `payment_reminder`, alongside a "Remind to pay" action next to "Record
+  payment" on any outstanding invoice, gated on `clinic.enablePatientComms`
+  same as the reminders above. Unlike those, this is staff-initiated on a
+  specific invoice rather than driven by a staleness signal, so
+  `feedbackService.sendPaymentReminder()` takes the amount due and invoice
+  number as given rather than deriving anything. When the clinic has UPI
+  collection configured (`clinicCanShowUpiQr`), the message includes a
+  `upi://pay?...` deep link pre-filled with the balance due — this opens a
+  UPI app when the *recipient* taps it on their own phone, but there's no
+  payment gateway behind it (no order tracking, no confirmation webhook),
+  so the invoice still needs to be marked paid by hand once money actually
+  arrives.
+- **Public booking, no slots (Phase 5, folding in the doc's own Phase 6)**
+  — a public form collects name/phone/optional-therapist/preferred-
+  day-time-as-text; front desk or admin confirms it by hand into a real
+  scheduled appointment, which becomes Workspace's "Expected today". No
+  slot picker/availability matrix — that's a later, separate phase the
+  doc explicitly says not to start here.
+  - **There was no legacy "Expected Today" to retire.** An earlier
+    session fully dropped `expected_visits`/`clinics.
+    enable_expected_today` (table, column, service, UI — zero
+    consumers). The doc's "retire the legacy path" framing was moot by
+    the time this phase shipped; Workspace's "Expected today" section is
+    new, not a replacement.
+  - **`clinics.booking_slug`** — nullable unique text, the public
+    `/book/$slug` segment. Not a secret (meant to live on Google/the
+    clinic's own website), unlike a feedback token — `get_booking_clinic_info`
+    and `list_booking_therapists` just need the slug to exist and the
+    module to be on, no rate-limited-oracle concern beyond the same
+    generic-error/IP-throttle discipline every public RPC in this module
+    uses.
+  - **`appointment_requests`** — one row per public submission: `name`,
+    `phone`, `email` (raw, unresolved against any patient), `preferred_
+    therapist_id` (nullable), `notes` (free text — reason for visit,
+    symptoms, anything else; deliberately its own column, not folded
+    into the time preference — an earlier version of the form did that
+    and silently dropped it whenever the patient didn't also tick
+    "flexible"), `preferred_date` + `preferred_time_text`
+    (both plain preferences — **no availability checking against either**,
+    per the doc's "do not start here" on slots; front desk still picks
+    the real `scheduled_at` by hand at confirm), `status`
+    (`pending|confirmed|declined`), `appointment_id` (set on confirm).
+    The form itself was redesigned mid-phase after reviewing a fuller
+    reference design (richer than the locked spec's plain "name, phone,
+    optional therapist, preferred day/time as text") — added email as a
+    genuinely useful optional field, and gave the date/time preference a
+    real date input plus a "flexible" quick-toggle, but deliberately did
+    not adopt that reference's "pick a date to see available times"
+    behavior, which implies real per-therapist slot availability the doc
+    reserves for a later, separate phase. A `service_catalog_id` field
+    and its `list_booking_services` RPC were added in that same redesign
+    pass and then removed shortly after (dropped, not hidden — matching
+    this repo's convention of not leaving unused scaffolding behind):
+    the service picker didn't earn its place on a form patients fill out
+    unauthenticated, and front desk already asks reason-for-visit via the
+    `notes` field.
+  - **`appointments`** — one row per confirmed expected attendance, **not**
+    a billed visit. `patient_id` is **null from confirm until arrival** —
+    identity is resolved exactly once, at arrival, reusing the existing
+    New Visit typeahead rather than a confirm-time judgment call on a raw
+    public submission. `patient_name`/`patient_phone` (the request's raw
+    values) are kept on the row throughout, so it always has something to
+    display before/without a resolved identity. `status`:
+    `confirmed|rescheduled|no_show|cancelled|arrived`. `visit_id` is set
+    only once arrival creates the real `visits` row.
+  - **Both tables are synced-but-read-only Dexie tables** — same
+    `ALL_SYNCED_TABLES`-without-`CLIENT_WRITABLE_TABLES` shape as
+    `feedback_responses`/`invoices`, for the same reason: every write is
+    an online-only RPC (public submit; confirm/decline; reschedule/
+    no-show/cancel; mark-arrived/link-visit), never a client Dexie write.
+    Both carry `updated_at` from creation (unlike `feedback_responses`,
+    which needed one added after the fact) so the sync engine's
+    hardcoded delta-pull column works from day one.
+  - **RLS is SELECT-only for staff; every mutation is a `security
+    definer` RPC with its own in-body role check**, not a matching RLS
+    write policy — confirm/decline/reschedule/no-show/cancel need *admin
+    or front_desk* (a new `is_front_desk(p_clinic)` helper, mirroring
+    `is_own_therapist`'s shape), but marking an appointment arrived or
+    linking it to a freshly-created visit needs the same broad membership
+    check `visits_insert` already uses (`is_clinic_member`) — two
+    different rules that don't map to one clean RLS policy, the same
+    reasoning `list_google_review_eligible_requests` (Phase 3's
+    front-desk-parity fix) already established. `appointment_requests`
+    SELECT is admin/front_desk-only (matches who can reach the Bookings
+    tab at all); `appointments` SELECT is clinic-member-wide, since it's
+    the day list every role needs to see.
+  - **Both tables also needed `created_by`/`updated_by`, added in a
+    follow-up migration** (bug found live, not caught in review): the
+    shared `set_updated_at()` trigger was redefined by an earlier,
+    unrelated migration to unconditionally stamp `updated_by`/`created_by`
+    on every row it fires for — it never checks whether the table
+    actually has those columns. Every other synced staff table already
+    carried them; these two were the first to attach the trigger without
+    them, so any UPDATE (confirm, decline, reschedule, ...) failed with
+    `record "new" has no field "updated_by"` until the columns were
+    added, matching `feedback_requests`' own shape.
+  - **Ten RPCs**: three public (`get_booking_clinic_info`,
+    `list_booking_therapists`,
+    `submit_appointment_request` — anon + authenticated grants,
+    rate-limited); seven staff-only
+    (`confirm_appointment_request` returns the new appointment id,
+    `decline_appointment_request`, `reschedule_appointment`,
+    `mark_appointment_no_show`, `cancel_appointment`,
+    `mark_appointment_arrived`, `link_appointment_visit` — authenticated-
+    only, explicit `revoke ... from public, anon` same grant-hygiene
+    discipline as every RPC in this module). `link_appointment_visit` is
+    the one `NewVisitPage.tsx` calls right after a visit saves, when that
+    visit was started via `?appointmentId=...` — sets `patient_id`,
+    `visit_id`, and flips `status` to `arrived` in one call. **It is
+    queued, not called inline** (`src/sync/pendingLinks.ts`, persisted in
+    `meta`): `appointments.visit_id` is a foreign key to `visits`, and the
+    visit only reaches the server on the next push, so calling the RPC right
+    after the local save failed every time (and could never work offline).
+    The sync engine sends queued links right after `push()` once the visit is
+    no longer in the outbox, drops one only on a permanent error ("already
+    linked", "not found"), keeps it through network failures, and
+    `repos.appointments.listByClinic` overlays pending links (linked,
+    arrived) so Workspace and Schedule already treat the appointment as done
+    — no "in progress" row left to log a second time.
+    **`create_appointment_staff(clinic_id, name, phone, therapist_id,
+    scheduled_at)`** was added later, alongside the manual-booking form on
+    the Bookings tab — same admin-or-front_desk check and
+    `security definer` shape as the other six, but inserts straight into
+    `appointments` with no `appointment_requests` row at all (`request_id`
+    stays null): a staff member entering a booking by hand already knows
+    the confirmed date/time/therapist, so there's no "pending" state to
+    pass through first.
+  - **Schedule MVP permission and duration rules** (`20261001100000_schedule_mvp.sql`): `appointments.duration_minutes` (5–240, backfilled from the clinic slot length) — every overlap check, client (`appointmentsOverlap`) and server (`therapist_has_overlap`), uses **each row's own length**, ignoring cancelled rows. `can_manage_appointment(clinic, therapist_id)` = admin OR front desk OR `is_own_therapist`; `confirm_booking_slot` (now with `p_duration_minutes`), `reschedule_appointment` (now with optional `p_duration_minutes`), `cancel_appointment` and `mark_appointment_no_show` all use it, and only admin / front desk may pass a `p_request_id`. Both RPCs were drop-and-recreated per pattern 3c. **Fixed**: `confirm_booking_slot` / `create_appointment_staff` used to check `p_therapist_id` (a `therapists.id`) against `clinic_members.user_id`, which rejected every booking; they now check `therapists` (same clinic, active). `create_appointment_staff` now delegates to `confirm_booking_slot`.
+  - **`bookingService.ts`'s eight staff-mutation wrappers all call
+    `syncEngine.schedule(0)` right after their RPC succeeds** — found
+    missing in the same post-ship workflow review, not present originally.
+    `appointment_requests`/`appointments` carry no outbox (see
+    `src/lib/db.ts`'s comment on why), so nothing tells the sync engine to
+    pull after one of these RPCs the way a normal Dexie write does;
+    without an explicit kick, confirming/declining/rescheduling/marking
+    no-show or cancelled or arrived/linking a visit/creating a manual
+    booking would all succeed server-side while the Bookings tab's
+    `useLiveQuery`-driven lists (and Workspace's "Expected today") kept
+    showing the pre-mutation state for up to 5 minutes — e.g. a just-
+    confirmed request still listed under "Pending requests" with its own
+    Confirm/Decline buttons, inviting a double-click. `schedule(0)` is the
+    same near-immediate debounced pull the manual "Sync now" button and
+    `CreateClinicForm`'s post-create refresh already use.
+    `feedbackService.ts` didn't need this fix — it already writes the
+    RPC's returned row straight into Dexie via `putLocal()` (see its own
+    file comment) rather than waiting on a pull, but most of the booking
+    RPCs return only void or a bare id, not a full row, so a pull kick was
+    the simpler fix here than adding `putLocal` to both booking repos.
+  - **All five appointment-mutating RPCs (reschedule/no-show/cancel/
+    mark-arrived/link-visit) row-lock and check the appointment's current
+    status before acting**, same discipline as
+    `confirm_appointment_request`/`decline_appointment_request` already
+    had — found missing during a post-ship workflow review, not shipped
+    this way originally. Without it, two staff acting on one appointment
+    at once, a stale browser tab, or a double-click could flip an
+    already-arrived appointment (with a real linked visit) back to
+    `no_show`, resurrect a cancelled one via reschedule, or double-link a
+    second visit onto one appointment row, silently overwriting the first
+    `visit_id`. The UI already only offers each action from the right
+    states; this closes the gap server-side too.
+  - **`NewVisitPage.tsx`'s existing `?prefillName=...` mechanism grew a
+    `?prefillPhone=...` sibling** (feeds `newPatient.phone` the same way
+    `prefillName` feeds `newPatient.name`) plus a new `?appointmentId=...`
+    — "Create visit" links from an appointment row pass all three, so the
+    same existing search-or-create typeahead this mechanism already
+    drives surfaces likely-existing-patient candidates for free; staff
+    still explicitly pick or create, never auto-selected (no silent
+    find-or-create by phone, per the doc's explicit-scope list).
+  - **Schedule (`/schedule`, `ScheduleBookingsView.tsx` + `features/schedule/`)** — the clinic calendar. Tablet/desktop-first for the front desk (Athena-style therapist columns, Google-Calendar details panel, Calendly-style free times); phones get an agenda list. The nav item stays "Schedule". URL state: `?view=schedule|requests|history`, `?mode=day|week`, `?date=YYYY-MM-DD`, `?therapist=<id>[,<id>…]` (empty = everyone); every change uses `replace`, so Back leaves the page.
+    - **Who sees what**: admin / front desk see every therapist plus Requests and History. A **therapist** sees "My schedule" (their own column only) and History scoped to themselves; they can book for themselves for any clinic patient or a new patient, and reschedule / cancel / mark no-show their own appointments. Requests stay admin / front desk. An unlinked therapist login gets a "ask your admin to link your login" message. The server enforces all of this (`can_manage_appointment`, below); the UI only mirrors it.
+    - **Layout by width**: from `desktop:` (1000px) a left rail (`ScheduleRail`, each section a white card on the paper page) holds a mini month (up to three teal load dots under each day by bookings — `loadDots`: 1–2 → 1, 3–5 → 2, 6+ → 3; a rust corner dot on future days that are fully booked; closed days with a fine hatch; today ringed; selected solid teal; weekends' letters dimmed), therapist toggles with the day's load ("6 · 4h30"), and upcoming closures. Below `desktop:` the Monday–Sunday `MiniCalendarStrip` replaces the month, and therapist chips replace the toggles. From `tab:` (744px) the Day view is `ResourceDayGrid` — one column per therapist, blocks absolutely positioned and sized by `duration_minutes` (`blockGeometry`, 1.6px/min), free slots tinted and clickable (opens the booking sheet prefilled with date, time and therapist), a current-time line on today, closed days hatched with their label, overlapping blocks side by side (`assignLanes`; only the synthetic Unassigned column can overlap). Below `tab:` the Day view is `AgendaList` (time-ordered rows, now divider, free gaps inline when one therapist is in view) and "Find a time" shows `FindTimePanel` (free start times as buttons per therapist). Week view exists only with one therapist in view (a therapist's own schedule, or an admin filtered to one), from `tab:`: `WeekTimeGrid` (7 day columns, drag across days). The Day/Week toggle and the `w` shortcut appear only then; with several therapists in view a `mode=week` link falls back to Day, and phones always show the day agenda (the week strip already covers the week). The old 7-card week board was removed.
+    - **Colours** (existing tokens only, never colour alone): block left bar = therapist (`therapistColor`, the `chartColors.ts` palette by roster order); fill = status (`APPOINTMENT_BLOCK_STYLE`: confirmed teal-light, rescheduled teal-light + ↻, arrived moss-light + ✓, no-show rust-light + ✕, cancelled slate-light struck through and hidden unless "Show cancelled"); free time moss-light; closed = slate hatch + label; now line rust.
+    - **`AppointmentDetailsPanel`**: tapping a block/row opens a right-side panel (tab+) or bottom sheet (phone) holding every action. Facts first, one line each: "Thu, 1 Oct · 10:00–11:00 AM · 60m" (`lengthLabel`), therapist dot + name · tap-to-call phone, condition, the patient's request note, and "Moved from" only when a reschedule actually changed the time. Then **one main action by state** — "✓ Mark arrived" (moss) before arrival; once arrived, "Complete visit" (teal) — with **Start note** and **Create visit** side by side as the secondary pair (Create visit becomes the teal Complete visit after arrival). Below a rule, a row of icon quick actions: Call, Remind (WhatsApp), Tell therapist (when they have a phone), Reschedule and No-show (manage rights only). The footer holds Copy details and, for managers, a rust "Cancel appointment" text link (via `ConfirmDialog`); a one-line hint asks managers to add the therapist's phone when it's missing. Close is an ✕ icon. Blocks and rows themselves only show name, time, length and status.
+    - **Grid behaviour**: free time is blank until hovered (a faint "+" on touch screens); the grid opens at the top and only auto-scrolls when "now" (today, within booking hours) or the first appointment would be off-screen (`initialScrollTop`), and only once per date — never while the user is scrolling. Free-time offers (agenda gaps, Find a time) start on the clinic slot grid (`freeGaps(…, { alignToSlots: true })`), not at "now" or right after a 45-minute booking. Below `desktop:` the header drops Today/‹/› (the week strip has them) and Show cancelled / Set closed days move into a ⋮ menu. Declining a request uses `ConfirmDialog`.
+    - **Patients list "Book"** opens the same `BookSlotSheet` with the patient pre-selected (`prefilledPatientId`) and their last therapist pre-picked; the old `BookAppointmentDialog` (free datetime field, "No preference" therapist the server now rejects) was removed, along with the unused `bookingService.createAppointmentStaff` wrapper — the RPC remains for older clients.
+    - **Keyboard (tab+)**: `t` today, `d` / `w` day/week, ←/→ previous/next, `?` shortcuts help, Esc closes panels and sheets.
+    - **Notifications (in-app, no calendar feed)**: WhatsApp via wa.me, one tap per recipient. Wording lives in `src/domain/bookingMessages.ts` (tested); therapist messages use the patient's first name + surname initial only. The booking/reschedule toast offers "WhatsApp patient" and "Notify therapist" (needs `therapists.phone`); the details panel has "Remind patient", "Notify therapist", and after a cancel "Tell patient" / "Tell therapist". `ReminderSheet` (header "Reminders" on desktop, ⋮ → Send reminders elsewhere; admin/front desk) lists a day's live appointments with a Send per patient and a "Send list" day summary per therapist, ticking to Sent for the session.
+    - **Install nudge**: `useInstallPrompt` + `InstallAppBanner` on Schedule and Workspace — phones only, not already installed (standalone), from the second visit, "Not now" snoozes 14 days (localStorage, per device). Android/Chrome uses the captured `beforeinstallprompt`; iPhone shows Share → Add to Home Screen.
+    - **No-show history**: `patientAttendance` (last 6 months, by patient id, else last 10 phone digits; past appointments only) feeds `AttendanceNote` in the details panel and booking sheet ("2 no-shows, 1 cancelled… consider calling to confirm"); History rows badge patients with ≥2 no-shows. The booking sheet also warns when the patient already has an upcoming appointment (`nextAppointmentFor`).
+    - **Requests inbox**: `RequestsInbox` — a collapsible "N booking requests waiting · oldest 2h" strip above the calendar below `desktop:`, and a Requests section in the rail on desktop; Confirm opens the booking sheet on the requested date (if not past) with the preferred therapist; Decline uses `ConfirmDialog`. **Chrome: two rows.** (1) `ScheduleTabs` (`src/features/schedule/ScheduleTabs.tsx`): Schedule ("My schedule" for therapists) · History · Feedback (admins) on the left, page actions on the right (My hours for therapists, Reminders from `tab:` for admin/front desk, + Book). The page title is screen-reader only. URLs are unchanged (`?tab=bookings&view=schedule|history`, `?tab=feedback`). (2) The day toolbar, in the grid column so the desktop rail lines up with it: ‹ › (from `tab:`), the date as a display-font headline ("Thu, 1 Oct" on phones) with a "Today" marker, a plain summary line ("10 booked, 5 still to come, 3 arrived, 1 no-show"), a Today button when away from today, then `TherapistFilter` (below `desktop:`, a popover of checkboxes replacing the old name-chip row), Day/Week, and ⋮ (show cancelled, send reminders on phones, closed days, working hours per therapist, keyboard shortcuts). Below `desktop:` the week strip (`MiniCalendarStrip`) is one row: ‹ days ›, with appointment counts as up to three dots (exact count in the label). **Therapist load**: each grid column header and rail row shows `LoadLine` (`src/components/schedule/LoadLine.tsx`), a capacity bar (booked ÷ working minutes) with a caption from `dayLoad()` in `src/domain/schedule.ts` that says the next useful thing. Today: "Free now, 4 slots", "Free from 2:30 PM, 3 slots", "On break until 2:00 PM" (between two working intervals), "Almost full, free from …" (one slot left), "Fully booked"; once the day's working hours are over, a quiet recap "Finished · 6 seen" (no-shows not counted) or "Finished for the day". Other days: "6 slots free", "Almost full, 1 slot free", "Fully booked". Any day: "Off today" / "Day off" (no working hours), "Closed". `tone` colours the bar and caption: the therapist's colour, amber from 70% booked or one slot left, rust when full, grey (`done`) once today's hours are over, no bar when off or closed.
+    - **Patient flags and condition** (`src/domain/patientFlags.ts`, loaded once per screen by `usePatientFlagContext` in `src/components/schedule/`): `patientFlags()` → "New patient" (unlinked, or no visits on record), "Package 3/6" (the session this appointment is), "Balance due" (an outstanding invoice, matched by patient ID), "N no-shows" (2+; a rust dot in lists). `PatientFlagPills` shows up to 2 in Today rows and the phone agenda, 1 in History, all in the details panel. `appointmentReason()` gives the condition on file (primary condition, else the latest visit's), else the booking request's note as "Patient says: …"; it's the second line of Today, agenda and History rows, line 3 of grid blocks an hour or longer (and their tooltip), and "Condition" / "Patient says" in the details panel. Grid blocks show the time range only (no "· 1h").
+    - **History** (`HistoryView`, `src/components/schedule/HistoryView.tsx`): two control rows. (1) A Past / Upcoming pill switch (teal when selected, as the Ledger's) beside the search field. (2) One row — scrolling sideways on phones — of pill selects (Last / Next 7, 30 or 90 days or a chosen date, whose date input then sits inline; status; therapist for admin / front desk) and, after a thin divider, the past's tappable outcome counters (attended / no-shows / cancelled; a zero counter is hidden unless it's the active filter). Then rows grouped by day ("Yesterday", "Tue, 29 Sept") in one bordered list with the Schedule colour code, flags and condition, and "Show more" every 50.
+    - **Phones**: the tabs row shows Schedule · History · Feedback and + Book (Reminders from `tab:`, in ⋮ on phones); "Find a time" lives in ⋮ and in the empty-day card; on a closed day with nothing booked the empty card is the closed notice ("Closed every Thursday. Public booking is off. You can still book here.") instead of a banner plus a card. **Blocks show status by fill** (`appointmentFill`, shared with Workspace's Today rows): upcoming = white card with the therapist's edge; arrived without a visit = tinted in the therapist's colour; visit logged = grey; no-show = rust; cancelled = struck through. `.chip-row` sits in `@layer components` in `index.css` so Tailwind display utilities can hide it (unlayered, it beat `desktop:hidden`). There is no Requests tab: "See all" / "All" (and `?view=requests`, e.g. Workspace's Review link) opens the full list in a `Panel`.
+    - **History**: Past / Upcoming toggle, a since/until date, day headings, outcome counts (attended / no-show / cancelled), search, status and therapist filters.
+    - **Booking sheet extras**: "First available →" (`firstAvailableSlot`, next 21 days, respects closures, working hours and length); the submit button carries the summary ("Confirm booking · Thu, 1 Oct, 10:30 AM · 30m"); sticky footer on phones.
+    - **Working hours** (`therapists.working_hours`, see schema): the grid shades non-working time (paper) and offers free slots only inside it; agenda gaps, Find a time, the mini month's fully-booked dot and First available use it; the booking sheet puts outside-hours times under a collapsed "Outside working hours (N)" (staff may still book). Edited in `WorkingHoursSheet` — several times per day, the gap is the break, "Copy to Tue–Fri" — from Settings → Team (admin), the rail's per-therapist "hours" / ⋮ menu (admin, front desk), and "My hours" (therapist, own).
+    - **Repeat bookings**: booking sheet "Repeat this booking" — weekday chips + session count (defaults to sessions left in the patient's open package via `dashboardService.openPackages`), a per-date preview (`seriesDates`, `seriesProblem`) marking clashes / outside hours / past with "Find a time" or "Skip" per date; submits via `confirm_booking_series` (all-or-nothing). The details panel shows "Session k of n" and offers "Cancel this and all following sessions" (`cancel_appointment_series`).
+    - **Drag (tab+)**: mouse/pen drag a block to move it (15-minute snaps, across therapist columns in Day view, across days in the single-therapist Week view) or drag its bottom edge to resize; a dashed ghost shows the target and turns red when it isn't free / is outside hours / closed / past (`dropAllowed`). Touch: a 450 ms long-press enters "Tap a free time to move …" mode (dragging would fight scrolling). Same-therapist drops save at once with a 10 s Undo toast; dropping on another therapist asks to confirm. Only confirmed/rescheduled appointments the viewer can manage are draggable; therapists can't reassign (server-enforced).
+    - **`BookSlotSheet` layout (phone-first)**: a fixed header (title, close ×) and footer (what will be booked, "Fri, 2 Oct, 11:00 AM · 30m · Dr Aishwarya", then a full-width action), with the body scrolling between them; 94dvh bottom sheet on phones, centred dialog from `sm:`. Sections: Patient (Existing / New toggle), Therapist and length (therapist chips with their Schedule colours, length chips), Day (7 day cards, closed days greyed, "Other date" for the calendar), Time (Morning / Afternoon / Evening groups, 4 columns on phones; taken or past times faded; "First available"), then a "Repeat this booking" switch. A request being confirmed shows what the patient asked for at the top.
+    - **`BookSlotSheet`**: one sheet for "+ Book", grid/agenda/free-time clicks, request confirmation, and **reschedule** (`rescheduleAppointment` prop: patient and therapist fixed, the moved appointment is ignored when checking occupied time, submits `reschedule_appointment`). A length picker (30/45/60/90 minutes, plus the clinic slot if different — always labelled in minutes via `lengthLabel()`, never "1h"/"1h30") drives the occupied check; times that already passed, overlap the therapist's bookings for the chosen length, or would run past closing are disabled. Therapist defaults to the logged-in therapist or the only therapist, and is locked for therapist logins. Closed weekdays and holidays show a warning but can still be booked. A patient with no phone must have one entered. State resets on every open; the reschedule snapshot is taken at open time so a sync mid-edit can't reset the form. `onBooked` returns `{ kind: 'booked' | 'rescheduled', appointmentId, scheduledAt, durationMinutes, … }`; the toast offers WhatsApp and auto-dismisses after 15s.
+    - **Clinic closures**: weekly closed days stay in Settings (`clinics.closed_weekdays`); one-off dates and ranges (holidays) are set from the calendar (`ClosedDaysSheet`, admin / front desk) and shown in the rail, strip, grid, booking sheet and the public `/book/$slug` form. Existing appointments on a newly closed day are kept. `isClosedDay` (holiday wins over weekday) and `groupClosedRanges` live in `src/domain/schedule.ts`.
+    - **Public form layout**: time first, then details — header (clinic initial/logo, visit length, hours), step 1 "Choose a time" (clinician chips "Anyone available" / each therapist, a scrollable 14-day strip with uniform day cards and "Closed" days, "More dates" inline month, time grid), step 2 "Your details" (name, phone with compact country picker, optional email and reason), and a summary + "Request appointment" bar pinned to the bottom on phones (safe-area padded).
+    - **Workspace header**: one compact card (about 150–180px tall on a phone) — the greeting (therapist's first name when linked) with the short date ("Thu, 1 Oct") beside it on the same line, "+ Book" (opens `BookSlotSheet`; therapist-locked for therapists) and "+ New visit", the stat strip (see Today-First Workspace), then a "needs you" line **only when something needs attention that the page doesn't already list**: the therapist's notes to finish (opens the oldest draft), new feedback, and visits not synced yet (amber). Visits in progress and booking requests aren't repeated there — the Today card right below lists both (with Complete / Confirm). With nothing to show, the line is hidden rather than saying "All caught up"; the header's sync dot covers the synced state. Book / New visit carry icons. While setup is incomplete, an admin sees the guided-setup bar (`SetupProgressBar`) above this card.
+    - **Workspace Today card**: one card with tabs "Appointments (n) | Visits (n)" (tab remembered per device) instead of separate "Expected today" and "Today's visits" cards. Appointments (`TodayAppointments`) use flat divided rows at the same density as the Visits list, coloured like the Schedule grid (`appointmentFill` in `scheduleColors.ts`: therapist-colour left edge; white = upcoming, therapist tint = arrived, grey = visit logged, rust = no-show) (time, name, therapist and length from `sm:`, a small status pill; "Next" pill on the next appointment): in-progress visits first (arrived, no visit yet, today's plus any left open in the last 7 days) with a compact "Complete visit" button, then the next 5 upcoming with "Show all", finished ones (visit logged / no-show) folded under "Done (n)". For admin / front desk, **Requests to confirm (n)** comes first: the oldest three pending public booking requests (`RequestsInbox variant="list"`, "See all" → `/schedule?view=requests`) with Confirm (Workspace's `BookSlotSheet` on the requested date if not past, with the preferred therapist, name/phone, notes and time wish — same as Schedule) and Decline (`ConfirmDialog` → `declineAppointmentRequest`); the Appointments tab count includes them.
+    - **Visit in progress (notes before the service)**: a "draft visit" is an **arrived appointment with no `visit_id`**, never a row in `visits` (whose service/price/split snapshots feed invoices, payouts and reports). `StartVisitSheet` (appointment panel "Start note", New Visit's "Start a note first") finds or creates the patient, then either **Start note** — for a booked appointment it marks it arrived; for a walk-in it calls `start_walk_in` (arrived appointment now, `source = 'walk_in'`, no overlap check, accepts a not-yet-synced patient by name/phone) — and opens the Core Assessment with `?appointmentId=`, or **Log visit now** (normal New Visit). The note stores `appointment_id`; when New Visit later saves with that `appointmentId`, `consultationNoteService.linkAppointmentNotesToVisit` sets the notes' `visit_id` (and marks the visit documented if a note is completed). "Mark arrived" stays optional — logging a visit marks arrival anyway. Workspace loads appointments even with patient comms off, so a walk-in in progress shows under Today → Appointments (the tab appears only while one is open). A "New patient" created by a Start note attempt that then fails (e.g. offline) is reused on retry, not duplicated.
+    - **Patient form**: Name, Phone, Age, Sex, Primary condition, Referring source, then a collapsed "More details (optional)" with Email, Alternate phone and Patient ID (blank = auto-generated; fill only to keep an old record's number) — in New Visit's create-patient step and the Edit patient modal. Search matches the alternate phone too.
+    - **App header**: the Thera.Net mark on the left (`BrandMark`, wordmark from `desktop:`, links to Workspace) — the product; nav in the middle (labels from `tab:`); on the right the **clinic pill** (`ClinicSwitcher`: the clinic's uploaded logo or its initial + name; name hidden between `tab:` and `desktop:`, where five nav labels leave no room — tooltip and menu carry it), then `SyncBadge` (a quiet green dot when synced, expanding with text when offline / syncing / pending / failed; its popover is pinned full-width under the header on phones) and the account avatar. The clinic pill is the only clinic switcher, and for admins it also has "+ Add another clinic" (a non-admin with one clinic gets a static label). No date in the header (Workspace shows it).
+    - **Thera.Net branding**: `src/components/BrandMark.tsx` — `BrandMark` (header, account menu footer "Thera.Net · v{version}" from `__APP_VERSION__`, defined in `vite.config.ts` from package.json), `AppLoading` (full-screen loading / "Preparing…" in `Shell`), `PoweredBy` ("Powered by Thera.Net" under the public booking and feedback forms). Sign-in/reset use `AuthBrandHeader`, which renders `BrandMark`. The clinic's own logo appears only in the clinic pill, on the public forms' header and on printed documents.
+    - **Public form** (`BookingFormPage.tsx`): dates more than 90 days out aren't offered (availability is only fetched that far), and a failed availability fetch no longer blocks the whole form. A start time is hidden when it overlaps the preferred therapist's bookings for their full length; with no preference, only when every therapist is busy (`isPublicSlotTaken`). Past times today are hidden.
+    - **History**: `HistorySurface` — search by name/phone, status and therapist filters (therapist filter hidden for therapist logins), 30-day paging; rows open the same details panel.
+  - **Workspace "Expected today"** — a new section (not a replacement of
+    anything, per the point above), sourced from
+    `dashboardService.todayAppointments`, scoped the same way "Seen
+    today" already is (clinic-wide for admin/front_desk, own-therapist
+    otherwise). Row actions: "Mark arrived" (any clinic member, matching
+    the RPC's own membership check), "No-show"/"Cancel"
+    (admin/front_desk only), "Create visit" (once `visit_id` is still
+    unset). Reschedule is deliberately Schedule-only, not offered inline
+    on Workspace — a more deliberate action than a single click, better
+    suited to the dedicated management surface. The Schedule's History table carries the same "Create visit" condition (found
+    missing in review — an appointment manually marked arrived without a
+    visit yet had no way back to New Visit once it wasn't "today" anymore
+    and had dropped off Workspace's list; History's table has no
+    date-scoping, so it's the recovery path for that case). A second banner
+    surfaces the pending-booking-request count for admin/front_desk, linking to
+    `/schedule?view=requests`.
+  - **Settings** gained a booking-link field in the same Patient
+    communications section (client-validated lowercase-alphanumeric-plus-
+    hyphens pattern; the DB only enforces uniqueness) with a "Copy link"
+    button, alongside the existing module toggle and Google review URL.
+  - **`message_log` gets its first writer via the Phase 9 wiring below** —
+    every send action, `shareTherapistNotify` included as of the
+    `therapists.phone` addition below, now goes through the Business API
+    path first (when a recipient phone number is known), and a successful
+    send there writes a `message_log` row server-side. Until a clinic
+    actually configures the Business API and has an approved template,
+    every send still falls through to the share sheet — which still
+    doesn't log anything, same gap as before.
+  - **A "Book" action on each Patients-list row** (`BookAppointmentDialog.tsx`)
+    — same `create_appointment_staff` RPC as the Bookings tab's own "New
+    booking" card, reachable straight from a patient's row instead of a
+    detour through Requests. Pre-fills name/phone from the patient record
+    (phone stays editable — some patients predate having one on file) and
+    defaults Therapist to whoever ran their last visit, since "book with
+    the same therapist" is the common case. Gated on
+    `clinic.enablePatientComms` **and** admin-or-front_desk (`canBook` in
+    `PatientsPage.tsx`) — the RPC itself rejects any other role, so the
+    role check isn't optional the way the comms-flag check is; a plain
+    therapist never sees the button at all, same as Requests → Bookings'
+    own gate.
+  - **Optional `patient_id` linking at booking/confirm time** — both
+    `create_appointment_staff` and `confirm_appointment_request` grew a
+    trailing `p_patient_id uuid default null` parameter (drop+create, not
+    `create or replace` — see §3c), used at exactly the two entry points
+    where identity is already unambiguous, without relaxing the documented
+    "`appointments.patient_id` stays null until arrival" rule for every
+    other path (a public form submission or a hand-typed name still
+    carries real duplicate-name risk, so it still waits for New Visit's
+    own search-or-create typeahead):
+    - The Patients-list "Book" action above always passes it —
+      `BookAppointmentDialog` opens from an already-clicked patient row,
+      so there's no name to match and no ambiguity to defer.
+    - The Bookings tab's Confirm mini-form (`SchedulePage.tsx`) grew a
+      third, optional field alongside Scheduled-for/Therapist: a
+      `SearchableSelect` "Link to existing patient · optional" picker
+      (options built from `repos.patients.list`, broadened from
+      admin-only to admin-or-front_desk for this). Left blank — the
+      default — it's exactly today's behavior, identity resolves later.
+      Staff only fill it in when they explicitly recognize the requester
+      (by the name/phone already shown on the request card) as someone
+      already on file; nothing else on the form depends on it.
+    Both RPCs check the passed id belongs to the same clinic before
+    trusting it. `bookingService.confirmAppointmentRequest` and
+    `.createAppointmentStaff` both take the new id as a trailing optional
+    parameter, defaulting to `null`, so every existing call site is
+    unaffected.
+  - **Every "Create visit" link now passes `patientId` through when the
+    appointment already has one** (Workspace's "Expected today", both
+    mobile card and desktop table, plus Requests → Bookings' Appointments
+    table) — found in review right after the two entry points above
+    shipped: `NewVisitPage.tsx`'s `?patientId=…` search param already
+    pre-selects that exact patient (`repos.patients.get`, skipping the
+    typeahead entirely — the same fast path Patient Profile's own "New
+    visit" button and the repeat-visit flow use), but every "Create
+    visit" `Link` still only passed `prefillName`/`prefillPhone`, on a
+    now-stale assumption (a comment on the desktop-table one said so
+    outright) that `patientId` is only ever set alongside `visitId`. Once
+    the Book/Confirm-picker linking above could set it earlier, that
+    assumption broke: a patient already linked at booking time would hit
+    "Create visit" and land in the create-new-patient form instead of
+    being recognized, risking a duplicate patient record for someone
+    already correctly identified.
+  - **`NewVisitPage.tsx`'s Condition/Treatments fields collapse behind a
+    "+ Add condition / treatments (optional)" disclosure for front_desk
+    only** — reception usually doesn't know either at log time (that's
+    the therapist's own read of the patient after seeing them, not
+    something a booking or walk-in carries), so their path is Patient →
+    Therapist → Service → Payment, the four things they always have,
+    without two clinical fields sitting in the middle of it. Still one
+    click away, and admin/therapist never see it collapsed — this is a
+    front_desk-only default, not a permission: the fields were never
+    access-gated, only de-prioritized in the one role that usually can't
+    fill them in yet. **Auto-expands the moment either field gets a
+    non-empty value from anywhere else** — "Repeat last visit" and the
+    `?patientId=` prefill (a patient's own `primaryCondition`) both set
+    `condition` programmatically, and without this a value could sit
+    filled in behind the still-collapsed button and get submitted without
+    front desk ever seeing it (found in review, not the shipped behavior).
+- **WhatsApp Business Cloud API — wired, pending real templates (Phase 9)**
+  — built ahead of the clinic actually having Meta credentials, so that
+  turning real sending on is a config step, not a code change.
+  - **`clinic_whatsapp_config`** — `phone_number_id`, `access_token`
+    (a real Meta secret), `enabled`. Carries **no SELECT policy for any
+    client role at all** (RLS enabled, zero policies) — only
+    `service_role`, used exclusively inside the Edge Function below,
+    can ever read it. Two RPCs give the client everything it legitimately
+    needs without exposing the token: `set_whatsapp_config(...)`
+    (admin-only write; a `null` access token argument leaves the stored
+    one untouched, so re-saving the phone number ID or flipping `enabled`
+    doesn't force re-entering the secret) and
+    `get_whatsapp_config_status(...)` (admin-only read of `enabled` /
+    `phone_number_id` / `has_token: boolean` — never the token itself).
+  - **`supabase/functions/send-whatsapp-template/index.ts`** — the one
+    place in the app that would ever call Meta's Graph API
+    (`https://graph.facebook.com/v20.0/{phone_number_id}/messages`),
+    structurally mirroring `invite-therapist/index.ts` (JWT-verified
+    caller, a `clinic_members` membership check, a service-role client
+    for the privileged read). Template-shaped from the start — the
+    caller supplies `templateName`/`languageCode`/`bodyParams`, never
+    freeform text — because Meta requires an approved template for any
+    business-initiated message outside a 24h customer-service window;
+    this function has no opinion on what a given clinic's approved
+    template actually says. Returns `{ configured: false }` (not an
+    error) when the clinic has no config row or hasn't enabled it. On a
+    successful send, writes a `message_log` row (`channel:
+    'wa_business_api'`) — see the note above.
+  - **Settings** gained a collapsed-by-default "WhatsApp Business API
+    (advanced)" sub-block in the Patient communications section
+    (`WhatsAppBusinessSubsection` in `SettingsPage.tsx`) — enable toggle,
+    phone number ID, and a password-type access-token field that's never
+    re-populated with the real value, only a "Connected ✓" / "Not
+    connected" status line. Its own small save/status state, not part of
+    the section's shared `useClinicSectionForm` dirty-tracking — this is
+    a separate table with write-only semantics, not a few more `Clinic`
+    columns.
+  - **`src/lib/whatsappSend.ts`'s `sendWhatsAppMessage()`** is now the one
+    place any send action decides *how* to send: try
+    `whatsappBusinessService.sendViaBusinessApi()` first when a recipient
+    phone number is known, and fall back to the existing
+    `shareTextViaWhatsApp` share sheet whenever the clinic hasn't
+    configured it, there's no phone number, Meta rejects the send (e.g. an
+    unrecognized template name), or the request fails outright — so
+    turning this on for real is purely a Settings config change plus a
+    template-name/param swap in `WHATSAPP_TEMPLATES`, not a code change.
+    All seven patient/staff-facing send actions (`askForFeedback`,
+    `resend`, `askForGoogleReview`, `sendStalePackageReminder`,
+    `sendReturnReminder`, `shareBookingConfirmation`,
+    `shareTherapistNotify`) go through it, reading the recipient's phone
+    off `Patient.phone` (added to `VisitCardData` as `patientPhone`,
+    `OpenPackageRow` as `phone`, and threaded through `NewVisitPage`'s
+    post-save state and `SchedulePage`'s `justConfirmed` state to reach the
+    call sites) or, for `shareTherapistNotify`, off the new
+    `therapists.phone` column (nullable text; `RosterCard`'s edit form in
+    Settings, next to Registration no. — absent still means share-sheet-
+    only for that therapist, exactly like every other action falls back
+    when its recipient's phone is unknown).
+  - **Template names are hardcoded placeholders** (`WHATSAPP_TEMPLATES` in
+    `whatsappSend.ts`, e.g. `'feedback_request_v1'`) — Meta assigns the
+    real name when a clinic's own template is approved, and it has no
+    relationship to this string; an unrecognized name is exactly what
+    makes Meta return `{ configured: true, success: false }`, which this
+    wrapper treats the same as "not configured" and falls back to the
+    share sheet. Swap these for the clinic's actual approved template
+    names (and adjust `bodyParams` ordering to match that template's own
+    `{{1}}`, `{{2}}`, ... variables) once real ones exist — there's no way
+    to know a template's variable shape in advance, so `bodyParams` here
+    is a best-effort guess at "the same information the share-sheet text
+    already sends," in the same order.
+  - **Phone numbers are normalized, not validated** —
+    `normalizePhoneForWhatsApp()` in `whatsappSend.ts` strips non-digits
+    and prepends `91` to a bare 10-digit number (this app's phone fields
+    are free text with no format enforced, and a 10-digit local number is
+    what staff overwhelmingly type); anything else passes through as-is
+    and Meta's own validation is the real backstop.
+- **Trends review print** (`/insights/trends-print?period=&year=&month=`, linked from
+  Reports → Trends as "Print / PDF review") — **internal team review** handout,
+  **not** the official **Monthly statement** (`/insights/print`, per-therapist
+  Bill/BM/TDS/split for hospitals/partners/therapists). Carries the same
+  `period` window as the on-screen trend bar, a focus-month KPI snapshot,
+  `RevenueTrendPanel`, therapist dual-bar + `TherapistComparisonTable` when
+  enabled, and live retention lists. **No** `MonthlyReportTable`, **no**
+  conditions (deferred — free-text condition field would not produce a useful
+  pie). `/insights/performance-print` redirects here. Same admin/front_desk gate
+  as Reports.
+  - **Clinic totals** — `reportService.monthly` for the focus month (revenue +
+    visits vs prior month).
+  - **Per-therapist breakdown** — dual-bar + comparison table for the focus
+    month only (retention % + packages via `repeatVisits` / `monthlyNewCounts`).
+  - **Retention follow-ups** — live `singleVisitPatients` and stale
+    `openPackages`, labeled as-of today, not historical to the focus month.
+- **Trends dashboard's "at a glance" KPI strip gained a Visits card** —
+  `ReportsOverviewPage.tsx`'s `KpiCard` strip already had month-over-month
+  trend badges on Revenue, Repeat visits, New patients, and Packages
+  (`pctChange` against the `revenueTrend` array's last two entries, no
+  extra query); raw visit count — "are we busier or quieter," not a
+  rate/quality metric like everything else in the strip — was the one gap.
+  `visitsThisMonth`/`visitsLastMonth` reuse the same already-fetched
+  `trend` array the Revenue card reads from. Grid went from 5 to 6 cards,
+  and its breakpoint moved from `lg:grid-cols-6` (1024px) to
+  `xl:grid-cols-6` (1280px) — six cards at the narrower width squeezed the
+  Revenue card's longest value ("₹1,84,500 ▲ 12%") into wrapping past its
+  own card edge; `sm:grid-cols-3` already covers every width from 640px up
+  with two comfortable rows of three in the gap between.
+
+---
+
+### 9b. Account menu (personal settings, every role)
+
+Everything about the signed-in person lives in the header avatar menu, separate from the clinic-wide, admin-only Settings page. A bottom sheet on phones, a dropdown from `sm:` up.
+- **My account** (sheet): *Profile* (display name for everyone; for a linked therapist also name on invoices, registration no., phone, photo; email read-only) and *Security* (change/set password, sign out of other devices via `auth.signOut({ scope: 'others' })`).
+- **My working hours**: a linked therapist's own `WorkingHoursSheet`.
+- **Notifications**: this device's push switch and, for a linked therapist, "Email me appointment updates".
+- **Settings**: admins only. Install app and Help & feedback for everyone.
+- The avatar shows the linked therapist's photo, otherwise initials.
+
+### 10. Push Notifications
+
+Web Push alerts reach staff and therapists when the app is closed. Opt-in per device from the account menu → Notifications, available to every role (not the admin-only Settings page).
+
+- **Therapist:** confirmed, rescheduled, or cancelled appointment on their own schedule.
+- **Admin and front desk:** every new public booking request for the clinic.
+- **Admin only:** 1–2 star feedback responses.
+- **Content rule:** therapist and feedback payloads carry no patient data (time only, or fixed text). Booking-request payloads carry the patient's name, preferred date, and the chosen slot time (`H:MM AM/PM`), since the staff member chose to see these on the lock screen. The slot is validated server-side and dropped if it isn't a slot label; the name is capped at 60 characters with control characters removed.
+- **Shared devices:** signing out removes this browser's subscription, so the next login doesn't receive the previous user's alerts.
+- **iOS:** push works only after the app is added to the Home Screen; Settings shows an install prompt instead of the enable button until then.
+- **Delivery:** triggers on `appointments`, `appointment_requests`, and `feedback_responses` call the `send-push` edge function asynchronously via `pg_net`. Recipients are resolved at send time from clinic membership. Subscriptions returning 404 or 410 are removed.
+
+## Application Architecture
+
+### Directory Structure
+
+```
+src/domain/              Pure business logic (no framework imports)
+                         Money, splits, fiscal year, clinical assessments
+                         Unit-tested, fully offline-capable
+
+src/repositories/        Data-access interfaces + Dexie implementations
+                         UI reads/writes local only; sync handles remote
+
+src/sync/                Outbox push / delta pull engine
+                         Against Supabase realtime & storage
+
+src/services/            Orchestration layer (no React imports)
+                         Visit, invoice, report, patient, dashboard,
+                         consultation-note, therapist, advance services
+
+src/features/            UI pages and components (React + TanStack Router)
+  ├── workspace/         WorkspacePage (Today, Recent, Open Packages, Pending)
+  ├── visits/            LedgerPage at /ledger (Visits/Invoices/Daybook sub-tabs); DaybookPage; NewVisitPage
+  ├── patients/          PatientsPage, PatientProfilePage, NoteEditorPage
+  ├── reports/           ReportsPage at /insights (Trends + monthly statement +
+                         performance report), MonthlyLedgerPrintPage,
+                         MonthlyPerformancePickerPage, MonthlyPerformanceReportPage
+  ├── settings/          SettingsPage at /settings; CreateClinicForm
+  ├── invoices/          InvoicePrintPage
+  ├── import/            Historical Excel visit import (preview + commit)
+  ├── auth/              Login, reset-password
+  ├── schedule/          SchedulePage at /schedule (Feedback tab, admin;
+                         Bookings tab, admin + front_desk); scheduleSignals.ts
+                         (the "new response" count + the front-desk Google-
+                         review-eligibility hook, kept out of SchedulePage
+                         itself so Workspace's eager bundle can read them
+                         without pulling in the route-code-split page)
+  ├── publicFeedback/    FeedbackFormPage at /f/$token (anonymous, no Shell)
+  ├── publicBooking/     BookingFormPage at /book/$clinicSlug (anonymous, no Shell)
+  └── more/              Mobile-only overflow nav page
+
+src/components/          Shared UI components — VisitCard (shared card/table
+                         list), BodyChart, ScaleWidget, IssueInvoiceDialog,
+                         TakePaymentDialog, SplitModal, UpiQrModal, SyncBadge,
+                         BarChart/PieChart/IndexedTrendChart, MonthlyReportTable,
+                         TherapistComparisonCard, SearchableSelect, ui.tsx
+                         (shared primitives: Pill, buttons, table cells)
+
+src/lib/                 Utilities (Supabase client, errors, image resize, db)
+
+src/app/                 Shell, router, hooks (useClinicRole, usePermissions,
+                         useVisitColumnPrefs, useWorkspaceScope)
+
+supabase/                SQL migrations, RLS policies, RPCs, realtime
+                         publications, seed data
+```
+
+### App Routes
+
+| Route | Purpose | Access |
+|-------|---------|--------|
+| `/workspace` (default) | Today's work, recent history, open packages, pending items | All roles |
+| `/visits/new` | New visit entry | All roles (billing fields gated by `canBill`) |
+| `/ledger` | Historical visit records & invoices, URL-addressable sub-tabs (`?tab=visits\|invoices`) | All roles (Invoices tab requires billing access) |
+| `/patients` | Patients list | All roles |
+| `/patients/$patientId` | Individual patient profile, visit history, payments summary, clinical notes | All roles |
+| `/patients/$patientId/notes/new`, `/patients/$patientId/notes/$noteId` | Core Assessment note editor (Initial/Follow-up) | Therapists & admins (`canViewClinicalNotes`) |
+| `/patients/$patientId/notes/$noteId/print` | Printable consultation note | Therapists & admins |
+| `/insights` | Dashboard + monthly per-therapist statement (`?tab=monthly`) + monthly performance report picker (`?tab=performance`) | Admins & front_desk (monthly statement and performance report sub-views further gated admin-only, same `canViewPayouts` check) |
+| `/insights/print` | Printable monthly ledger (portrait A4) | Admins & front_desk |
+| `/insights/performance-print` | Printable monthly performance report — clinic totals, per-therapist chart + table, referral/condition mix, retention follow-ups (portrait A4) | Admins & front_desk |
+| `/invoices/$invoiceId/print` | Printable Bill/Bill Cum Receipt (A4/A5) | Anyone who can reach the invoice |
+| `/settings` | Clinic configuration, MRNO settings, billing mode, rate setup, feature toggles | Admins only |
+| `/settings/import-visits` | Historical Excel visit import | Admins only |
+| `/more` | Mobile-only overflow nav: Patients (everyone), Reports (admin/front desk), Settings (admin) — icon rows. Booking requests aren't listed; the Schedule tab carries their badge and inbox | All roles |
+| `/schedule` (`?tab=feedback\|bookings`, `?view=schedule\|requests\|history`, `?mode=day\|week`, `?date=`, `?therapist=`) | Clinic calendar (see Patient Communications → Schedule), booking requests, appointment history; Feedback tab | Calendar + History: all roles (therapists scoped to their own appointments). Requests: admins + front_desk. Feedback: admins only |
+| `/reset-password` | Password reset | Unauthenticated |
+| `/f/$token` | Public patient feedback form (Patient Communications, Phase 0) | Unauthenticated — token-scoped, no clinic membership |
+| `/book/$clinicSlug` | Public booking request form (Patient Communications, Phase 5) | Unauthenticated — slug-scoped, no clinic membership |
+| `/archive`, `/setup`, `/setup/import-visits`, `/invoices`, `/reports`, `/reports/print` | Legacy redirects for old bookmarks | All roles |
+
+---
+
+## Database Schema
+
+*Verified against the live schema (`information_schema.columns`), not
+hand-maintained from memory — if this section and the actual database ever
+disagree again, trust the database and fix this doc, not the other way
+around.*
+
+### Core Tables
+
+#### `clinics`
+```sql
+id                          uuid PRIMARY KEY
+name                        text NOT NULL
+address, phone, email, gst_no, logo_path  text (NULLABLE)
+partner_hospital_name, partner_hospital_logo_path  text (NULLABLE)
+invoice_prefix              text NOT NULL (e.g., "BM")
+bm_split_pct                numeric NOT NULL (default 75)
+tax_pct                     numeric NOT NULL (default 10)
+tds_basis                   text NOT NULL CHECK (IN 'gross_bill', 'bm_share')
+fy_start_month              int NOT NULL (default 4 = April)
+clinic_type                 text (NULLABLE) — 'individual' | 'multiple'
+has_partner                 boolean NOT NULL
+billing_mode                text NOT NULL — legacy, maps to clinic_type+has_partner
+enable_therapist_split      boolean (NULLABLE)
+own_share_label, partner_share_label  text (NULLABLE) — default "BM"/"HV"
+last_split_change_at        timestamptz (NULLABLE) — stamped whenever an
+                             admin changes hasPartner/bmSplitPct/taxPct/
+                             tdsBasis/clinicType; Workspace shows a 14-day
+                             "your split changed on X" banner off this
+billing_enabled              boolean NOT NULL
+invoicing_access            text NOT NULL — 'everyone' | 'billing_staff'
+invoice_policy              text NOT NULL DEFAULT 'on_request' — 'on_request' | 'always' | 'never_nag'
+clinical_docs_enabled       boolean NOT NULL
+show_therapist_comparison   boolean NOT NULL
+walk_in_mrno_prefix         text (NULLABLE, default 'W')
+visit_column_prefs          jsonb (NULLABLE) — legacy, superseded by per-user
+                             Dexie prefs (useVisitColumnPrefs); no client code
+                             reads/writes this column today
+upi_vpa, upi_payee_name, upi_qr_path  text (NULLABLE)
+upi_qr_enabled               boolean (NULLABLE)
+signature_path               text (NULLABLE)
+slot_duration_minutes        integer NOT NULL (default 30) — 15|30|45|60
+booking_start_hour, booking_end_hour  integer NOT NULL (default 9, 17) — the
+                             Schedule grid and every slot picker (staff + public)
+closed_weekdays              integer[] NOT NULL (default '{}') — 0 = Sunday;
+                             weekly closed days (Settings → Online Booking)
+onboarding_completed_at      timestamptz (NULLABLE) — set when admin finishes
+                             the post–create-clinic wizard; NULL ⇒ Shell keeps
+                             redirecting to `/onboarding`
+created_by, updated_by       uuid (FOREIGN KEY → auth.users.id, NULLABLE)
+updated_at                  timestamptz NOT NULL
+```
+
+#### `clinic_members`
+```sql
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+user_id         uuid NOT NULL (FOREIGN KEY → auth.users.id)
+role            text NOT NULL CHECK (IN 'admin', 'therapist', 'front_desk')
+title           text (NULLABLE)
+display_name    text (NULLABLE)
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+PRIMARY KEY (clinic_id, user_id)
+```
+
+#### `therapists`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+name            text NOT NULL
+active          boolean NOT NULL (default true)
+user_id         uuid (FOREIGN KEY → auth.users.id, NULLABLE) — linked login
+photo_path      text (NULLABLE)
+registration_no text (NULLABLE) — printed on invoices under the therapist's name
+email_appointment_updates boolean NOT NULL DEFAULT true — when false, `notify-therapist` skips the confirmation/reschedule/cancellation email (push and the manual WhatsApp button are unaffected). The linked therapist sets it from account menu → Notifications.
+phone           text (NULLABLE) — lets `shareTherapistNotify` use the WhatsApp
+                Business API instead of always falling back to the share sheet
+profile_confirmed_at timestamptz (NULLABLE) — set when linked login finishes
+                `/onboarding/profile`; NULL triggers profile onboarding
+working_hours   jsonb (NULLABLE) — weekly hours: {"0"–"6": [[startMin, endMin], …]},
+                gaps are breaks, a missing weekday is a day off, NULL = clinic
+                booking hours. Written only via set_therapist_working_hours
+                (admin / front desk for anyone, the therapist for themselves;
+                validated by working_hours_valid). CHECK
+                therapists_working_hours_valid (NOT VALID: new writes only)
+                guards the column too, and the sync push drops working_hours
+                from therapist upserts so a stale local row can't revert it
+                (`src/sync/engine.ts`). Client `workingIntervals` reads a
+                malformed day as "not working" instead of throwing
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+```
+
+#### `service_catalog`
+```sql
+id               uuid PRIMARY KEY
+clinic_id        uuid NOT NULL (FOREIGN KEY → clinics.id)
+category         text NOT NULL — free text, autocompleted client-side
+name             text NOT NULL
+session_count    int NOT NULL (default 1, package pricing)
+base_price_paise bigint NOT NULL
+active           boolean NOT NULL (default true)
+created_by, updated_by  uuid (NULLABLE)
+updated_at       timestamptz NOT NULL
+```
+
+#### `patients`
+```sql
+id                    uuid PRIMARY KEY
+clinic_id             uuid NOT NULL (FOREIGN KEY → clinics.id)
+mrno                  text NOT NULL
+mrno_source           text NOT NULL — 'hospital' | 'auto'
+name                  text NOT NULL
+age                   int (NULLABLE)
+sex                   text (NULLABLE) — 'M' | 'F' | 'Other'
+phone                 text (NULLABLE) — searchable everywhere, but only
+                       *displayed* on Patient Profile, not the Patients list
+email                 text (NULLABLE) — "More details" section
+alt_phone             text (NULLABLE) — alternate phone; also matched by search
+primary_condition     text (NULLABLE)
+referring_source      text (NULLABLE) — legacy fixed enum, kept only so
+                       patients tagged before referring_source_catalog
+                       existed keep displaying correctly; no longer written
+referring_source_id   uuid (FOREIGN KEY → referring_source_catalog.id, NULLABLE)
+                       — current source of truth for new/edited patients
+referring_source_detail text (NULLABLE)
+no_return_reason_id   uuid (FOREIGN KEY → no_return_reason_catalog.id, NULLABLE)
+deleted_at            timestamptz (NULLABLE) — soft delete
+created_by, updated_by  uuid (NULLABLE)
+updated_at            timestamptz NOT NULL
+```
+
+#### `visits`
+```sql
+id                    uuid PRIMARY KEY
+clinic_id             uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id            uuid NOT NULL (FOREIGN KEY → patients.id)
+therapist_id          uuid NOT NULL (FOREIGN KEY → therapists.id)
+visit_date            date NOT NULL
+condition, treatment_notes  text (NULLABLE)
+treatment_ids         uuid[] NOT NULL (default '{}') — which treatment_catalog
+                       entries were performed this visit
+service_catalog_id    uuid NOT NULL (FOREIGN KEY → service_catalog.id)
+catalog_price_paise   bigint NOT NULL — snapshot at billing time
+actual_bill_paise     bigint NOT NULL
+adjustment_paise      bigint NOT NULL — actual − catalog
+adjustment_reason     text (NULLABLE)
+session_index, package_total  int (NULLABLE)
+package_group_id      uuid (NULLABLE)
+shared_therapist_id   uuid (FOREIGN KEY → therapists.id, NULLABLE) — internal
+                       revenue-split assist, reporting only
+shared_pct            numeric (NULLABLE)
+bm_split_pct, tax_pct, tds_basis  NOT NULL — rate snapshot at billing
+bm_share_paise, post_tax_paise, tds_paise, hv_paise  bigint NOT NULL — computed
+invoice_id            uuid (FOREIGN KEY → invoices.id, NULLABLE)
+pending_payment_note  text (NULLABLE) — "collect later" reason
+patient_consent_confirmed  boolean NOT NULL
+patient_signature_url text (NULLABLE)
+clinical_status       text NOT NULL — 'pending' | 'documented' | 'reviewed'
+consultation_note_id  uuid (FOREIGN KEY → consultation_notes.id, NULLABLE)
+reauthorization_required  boolean NOT NULL
+location              text (NULLABLE) — 'clinic' | 'home'
+deleted               boolean NOT NULL (default false)
+created_by, updated_by  uuid (NULLABLE)
+updated_at            timestamptz NOT NULL
+INDEXES: clinic+date, patient, clinic+updated
+```
+
+#### `invoices`
+```sql
+id                  uuid PRIMARY KEY
+clinic_id           uuid NOT NULL (FOREIGN KEY → clinics.id)
+invoice_no          text NOT NULL — `PREFIX/FY-LABEL/NNNN`
+fy_label            text NOT NULL (e.g., "26-27")
+seq                 int NOT NULL
+issued_at           timestamptz NOT NULL
+patient_snapshot    jsonb NOT NULL — patient details at issue time
+line_items          jsonb NOT NULL — see "Invoice line items (v2)" below
+total_paise         bigint NOT NULL
+payment_mode        text NOT NULL — 'Cash' | 'Card' | 'UPI' | 'Insurance'
+therapist_id        uuid (FOREIGN KEY → therapists.id, NULLABLE)
+supersedes_invoice_id uuid (FOREIGN KEY → invoices.id, NULLABLE) — set on an amendment
+clinical_snapshot   jsonb (NULLABLE) — see "Clinical context on the bill" below
+created_by, updated_by  uuid (NULLABLE)
+updated_at       timestamptz NOT NULL
+```
+Immutable once issued (DB trigger) — with one narrow exception:
+`clinical_snapshot` alone can be corrected in place afterward, see "Editing
+clinical details after issuance" below and §3d. Payment status is **not** a
+column here — see `invoice_payments` below.
+
+**Invoice line items (v2).** `line_items` is opaque jsonb — a legacy invoice's
+entries have only the original 6 fields (`serviceName`, `sessionCount`,
+`sessionDates`, `catalogPricePaise`, `adjustmentPaise`, `adjustmentReason`,
+`totalPaise`); every invoice issued or amended since the Billing & Notes
+Rebuild Phase 1 gets a v2 entry, marked by `lineItemVersion: 2`, adding
+`billedSessionCount`, `authorizedSessionCount` (null = not a package),
+`ratePerSessionPaise` (snapshotted, never re-derived from live catalog
+prices), `rateBasis`, `adjustmentReasons` (a merged group can span more than
+one), and `therapistIds` (ditto). `sessionCount`'s meaning is unchanged
+(`authorizedSessionCount ?? billedSessionCount`) so old readers of the raw
+field still work. All build- and print-side code goes through
+`src/domain/invoiceLine.ts` (`isV2Line`, `lineRatePerSessionPaise`,
+`sessionCountLabel`, `lineReconciles`, `normalizeAuthorizedCount`,
+`invoicePeriod`) rather than reading either shape directly, so the two
+sides can't drift the way the invoice-print page and the insurer-packet
+summary once did.
+
+**Bill by service, not just by package.** Invoice line grouping
+(`invoiceService.ts` → `invoiceLine.ts`'s `groupVisitsForInvoicing`) keys on
+`packageGroupId` when present, otherwise on `service + catalog price` — so
+several independently-logged (non-package) visits of the same service at
+the same price collapse into one line reading "10 sessions," not ten
+separate ₹0-context rows. A merged line's `catalogPricePaise` is always the
+**sum** of every visit's own snapshot in the group (not one visit's), which
+is what keeps `catalogPricePaise + adjustmentPaise = totalPaise` holding
+exactly for every line, by construction.
+
+**Long-running packages (e.g. post-op TKR/THR rehab, 20-30+ sessions).**
+Nothing in the schema or invoicing logic caps a package's session count —
+a 24-session package invoices through the exact same line-item build as a
+3-session one. The one place volume affects the printed layout: a line's
+"Dates of service" column would otherwise list every individual date,
+wrapping into an unreadably dense cell past a handful of sessions.
+`sessionDatesDisplay()` (`src/domain/invoiceLine.ts`) condenses to a
+"from – to (N sessions)" range once a line has more than 8 session dates;
+at or under that it still lists every date. Used by both
+`InvoicePrintPage.tsx` table variants (legacy and v2); the Insurer Packet's
+invoice summary and the issue-invoice preview step never showed the date
+list in the first place — they already use the compact `sessionCountLabel`
+— so neither needed a change. `SessionLogPrintPage`'s trend grid is
+unaffected by volume in a different way: it's one row per session with no
+condensing, since a clinical trend genuinely needs every date as its own
+row; print pagination (not this page) is what splits a long table across
+pages.
+
+**Partial-package printing.** A package billed in full but only partly
+delivered prints its real total (not a fabricated partial amount), with a
+caption under the service name whenever the row's own arithmetic doesn't
+reconcile (`lineReconciles()` — checks `billedSessionCount ×
+ratePerSessionPaise + adjustmentPaise = totalPaise` exactly, catching both
+a genuine partial delivery and a plain rounding mismatch on a fully-billed
+package). The Sessions column itself reads "N delivered of M authorised" on
+a non-reconciling row so the printed numbers don't invite the reader to
+multiply Rate × the smaller number and land on the wrong answer.
+
+**Clinical context on the bill.** `clinical_snapshot` (nullable jsonb, old
+invoices predate it) holds `diagnosis`, `diagnosisIcdCode`,
+`referringPhysician`, `physicianRegistrationNo`, `placeOfService`
+('clinic' | 'home'), `treatmentPerformed`, `sourceNoteId` (provenance), and
+`editedByBiller`. Pre-filled in `IssueInvoiceDialog` from the visit's own
+completed note, falling back to the patient's most recent completed heavy
+(initial/follow-up) note — a light session note (see Light Session Notes
+below) has no referral field to pull from. Editable before issuing, then
+frozen with the rest of the invoice (never re-read from the note
+afterward). **Known gap, by design**: Patient Profile's bulk-issue path
+(select several visits → issue one invoice) bypasses this dialog entirely
+and always issues with `clinical_snapshot: null` — giving it the same
+pre-fill would need either a second clinical form or a reshaped multi-visit
+dialog, deferred as real follow-up work rather than folded into this pass.
+
+**Preview before issuing.** `IssueInvoiceDialog` is a two-step flow: "Review
+invoice" moves from the fields form to a review screen built from
+`invoiceService.previewLineItems()` — the same line-item build
+`issueForVisits` itself calls (via the shared `buildLineItems` closure in
+`invoiceService.ts`), so the preview can never drift from what actually
+gets issued. No RPC call happens until "Confirm & issue" on the review
+screen; "← Back to edit" returns to the form with every field intact.
+
+**Editing clinical details after issuance.** Once issued, `clinical_snapshot`
+alone can still be corrected — a typo'd diagnosis, a missed physician
+registration number — without reopening the financial record. "Edit
+details" on `InvoicePrintPage` opens `EditInvoiceDetailsDialog`
+(`src/components/EditInvoiceDetailsDialog.tsx`), pre-filled from the
+invoice's existing snapshot, calling the `update_invoice_clinical_details()`
+RPC (§3d). This is deliberately narrower than an amendment: the amount,
+line items, and invoice number are untouched and no new invoice number is
+minted — for those, "Amend this invoice" (§3b) is still the only path. The
+clinical-fields form itself (`InvoiceClinicalFieldsForm`,
+`src/components/InvoiceClinicalFields.tsx`) is shared between this dialog
+and `IssueInvoiceDialog` rather than duplicated.
+
+**Share via WhatsApp.** "Share via WhatsApp" on `InvoicePrintPage` renders
+the same DOM node "Print / Save PDF" shows into an actual PDF, entirely
+on-device (`renderElementToPdf` in `src/lib/pdfShare.ts`, via `html2canvas`
++ `jsPDF` — no server round trip, matching this app's offline-first
+design), then hands that file to the Web Share API so WhatsApp — or any
+other installed app — shows up in the OS share sheet with the real PDF
+attached (`shareFileToWhatsApp`). Both libraries are dynamically imported
+only when the button is clicked (a ~180KB-gzip chunk that every invoice
+view would otherwise pay for, whether or not Share is ever used). Web
+Share API's `files` support is mobile-browser-only (recent Chrome/Android,
+Safari/iOS); on a browser without it (desktop, mainly), this falls back to
+a `wa.me` click-to-chat link carrying just a text summary — WhatsApp's own
+link scheme has no way to carry a file, so the fallback is deliberately
+text-only rather than silently doing nothing.
+
+**UPI listed and defaulted first.** `PAYMENT_MODES` in `IssueInvoiceDialog`/
+`AmendInvoiceDialog` and `PAYMENT_METHODS` in `NewVisitPage`'s direct-
+payment collector all list UPI before Cash, and `IssueInvoiceDialog`/
+`NewVisitPage` default their selection to UPI — the most common collection
+method at an Indian clinic front desk. `AmendInvoiceDialog` is the one
+exception: its default still carries over the original invoice's own
+`paymentMode` rather than defaulting to UPI, since it's correcting an
+already-issued bill's record, not starting a fresh collection.
+
+#### `invoice_counters`
+```sql
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+fy_label        text NOT NULL
+next_seq        int NOT NULL (default 1)
+PRIMARY KEY (clinic_id, fy_label)
+```
+
+---
+
+### Financial Tables
+
+#### `invoice_payments`
+```sql
+id              uuid PRIMARY KEY
+invoice_id      uuid NOT NULL (FOREIGN KEY → invoices.id)
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+status          text NOT NULL — 'paid' | 'outstanding' | 'void'
+paid_at         timestamptz (NULLABLE)
+void_reason     text (NULLABLE) — only on a void row
+voided_at       timestamptz (NULLABLE) — only on a void row
+created_by, updated_by  uuid (NULLABLE)
+created_at, updated_at  timestamptz
+```
+Lives apart from `invoices` (which is immutable once issued). A missing row
+for an invoice reads as **paid** — see the payment-state note in Key Design
+Patterns below. Deliberately has **no amount column** — flipping `status` is
+the only write this table itself supports; a partial amount toward an
+invoice is tracked via `payments` below instead (see
+`paymentService.recordInvoicePayment()`), keyed to the invoice's own
+constituent visits.
+
+`'void'` is reachable only through `void_invoice()` (see §3c): the
+`guard_invoice_void` trigger rejects a client writing it directly and makes
+it final.
+
+#### `payments`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+visit_id        uuid NOT NULL (FOREIGN KEY → visits.id)
+amount_paise    bigint NOT NULL
+method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque'
+received_date   date NOT NULL
+notes           text (NULLABLE)
+advance_id      uuid (FOREIGN KEY → patient_advances.id, NULLABLE — see below)
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+```
+A payment toward one visit's bill — cash/UPI collection recorded without
+requiring an invoice, and supports partial payments (an amount less than
+the visit's bill). No `invoice_id` column: this same table is also how a
+*partial* payment against an **invoiced** visit's bill is recorded (an
+invoice itself has no amount-paid field — see `invoice_payments` above),
+so a payment stays keyed to the visit it was collected for either way. For
+an invoice spanning several visits, one entered amount is allocated across
+those visits' `payments` rows in date order — the shared
+`allocateAcrossVisits()` helper in `src/services/advanceService.ts` (both
+`paymentService.recordInvoicePayment` and advance draw-down use it, so the
+two paths can't allocate differently). `advance_id` is set only when this
+payment was drawn down from a patient's advance balance rather than
+collected fresh; `visit_id` still stays required either way, so
+`computeVisitPaymentState` needs no special-casing for advance-funded
+payments.
+
+#### `patient_advances`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
+amount_paise    bigint NOT NULL (> 0)
+method          text NOT NULL — 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque'
+received_date   date NOT NULL
+receipt_no      text (NULLABLE) — no numbered series yet, see below
+notes           text (NULLABLE)
+status          text NOT NULL default 'open' — 'open' | 'exhausted' | 'refunded' | 'void'
+deleted         boolean NOT NULL default false
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+UNIQUE (id, clinic_id) — backs the composite FK on payments.advance_id below
+```
+Money received ahead of treatment. **Not a `payments` row until drawn
+down** — `computeVisitPaymentState` and everything derived from it (badges,
+the needs-receipt queue, dashboard KPIs) stays untouched by an advance
+until a real `payments` row is written against a real visit
+(`advanceService.applyAdvance`), which stamps that row's `advance_id` and
+flips this row's `status` to `'exhausted'` once the balance reaches zero.
+Remaining balance is computed, not stored:
+`amount_paise − Σ payments.amount_paise where advance_id = this.id`.
+`payments.advance_id` is a **composite** FK to `(id, clinic_id)` rather
+than a plain `references patient_advances(id)`, so a payment can never
+reference a different clinic's advance even by a client bug — RLS already
+scopes reads correctly, but this closes the write-side gap outright.
+`method` uses the `PaymentMethod` vocabulary (`'cash'|'upi'|…`), not the
+older `PaymentMode` (`'Cash'|'Card'|'UPI'|'Insurance'`) that belongs only
+to `Invoice.paymentMode` — easy to confuse. **No gap-free numbered receipt
+series yet** — `receipt_no` exists but is unused; the printed
+`AdvanceReceiptPrintPage` identifies a receipt by date + a short slice of
+its id instead. A real counter can be added later with no data migration
+if it turns out to matter. Entry point: Patient Profile's "Record advance"
+button; `TakePaymentDialog` also surfaces "₹X advance available — apply"
+and draws down (oldest advance first) when a patient with an open balance
+is being collected from elsewhere.
+
+#### `settlements`
+```sql
+id                     uuid PRIMARY KEY
+clinic_id              uuid NOT NULL (FOREIGN KEY → clinics.id)
+year, month            int NOT NULL
+amount_received_paise  bigint NOT NULL
+received_date          date (NULLABLE)
+notes                  text (NULLABLE)
+created_by, updated_by uuid (NULLABLE)
+updated_at             timestamptz (NULLABLE)
+```
+Per-month partner-hospital (HV) settlement record, for the Monthly Report's
+variance tracking. **Deprecated single-entry model** — superseded by
+`settlement_payments` below; left in place (not dropped) for audit/rollback,
+and its rows were backfilled into `settlement_payments` as each period's
+first tranche (migration `20260912070000_settlement_payments.sql`).
+`settlementService.get`/`.save` still read/write it for backward
+compatibility, but no UI writes new rows to it anymore.
+
+#### `settlement_payments`
+```sql
+id                     uuid PRIMARY KEY
+clinic_id              uuid NOT NULL (FOREIGN KEY → clinics.id)
+year, month            int NOT NULL
+amount_received_paise  bigint NOT NULL
+received_date          date (NULLABLE)
+notes                  text (NULLABLE)
+created_by, updated_by uuid (NULLABLE)
+updated_at             timestamptz NOT NULL
+```
+One row per partner-hospital payment **tranche** for a month — replaces
+`settlements`' assumption that a month settles in one lump sum. A real
+payout is often an advance plus a final payment, sometimes with a deduction
+that only makes sense noted against the specific tranche it applied to.
+Any number of rows can share `[clinic_id, year, month]`; the month's total
+received is their sum (`settlementService.totalReceived`), computed
+client-side, not stored. `SettlementCard` (Monthly Statement page) lists
+every tranche with edit/delete, and a form to record another.
+
+---
+
+### Clinical Documentation Tables
+
+#### `consultation_notes`
+```sql
+id                        uuid PRIMARY KEY
+clinic_id                 uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id                uuid NOT NULL (FOREIGN KEY → patients.id)
+therapist_id              uuid NOT NULL (FOREIGN KEY → therapists.id)
+visit_id                  uuid (FOREIGN KEY → visits.id, NULLABLE)
+appointment_id            uuid (FOREIGN KEY → appointments.id, NULLABLE) — note
+                           started from an appointment / walk-in before the
+                           visit existed; visit_id is filled in when it's logged
+enrollment_id             uuid (FOREIGN KEY → patient_module_enrollments.id, NULLABLE)
+note_mode                 text (NULLABLE) — 'initial' | 'followup' | 'session'
+                           ('session' = light SOAP note, everything else is
+                           the heavy Core Assessment editor; null = legacy
+                           row predating this field, treated as heavy)
+status                    text NOT NULL — 'draft' | 'completed' | 'archived'
+assessment_payload        jsonb (NULLABLE) — either the whole Core Assessment
+                           form (history, pain, PSFS, body chart, objective
+                           exam, treatment/HEP) or, when note_mode='session',
+                           domain/sessionNote.ts's small SOAP payload — one
+                           versioned/upcastable blob either way, shape keyed
+                           off note_mode, not separate columns per section
+authorized_session_count  int (NULLABLE)
+notes_text                text (NULLABLE)
+nrs_score                 int (NULLABLE) — derived, for outcome tracking
+psfs_mean                 numeric (NULLABLE) — derived
+red_flag_count            int NOT NULL — derived
+created_by, updated_by    uuid (NULLABLE)
+updated_at                timestamptz NOT NULL
+```
+
+**`visits.consultation_note_id` only ever points at a *completed* note —
+a draft never gets written back onto the visit row.**
+`consultationNoteService.saveAssessment()` deliberately updates
+`visits.clinical_status`/`consultation_note_id` only when `status ===
+'completed'` ("a draft save deliberately does not — the note isn't
+finished yet, so the visit should keep prompting until it is"). So any
+UI that wants to show a visit's note status (draft vs. completed vs.
+none) — the Ledger/Workspace/Patient-Profile visit-row "Note" column —
+can't trust the visit's own field alone; it has to join against
+`consultation_notes` on `visit_id` (`VisitCardData.consultationNoteId`/
+`noteStatus`, computed independently at each of those three call sites,
+same pattern as `packageInvoicePending` above). Ledger/Workspace fetch
+`consultationNotes.listByClinic()` once (clinic-wide, skipped for a
+viewer without `canViewClinicalNotes`) and index it by `visitId`; Patient
+Profile already loads the patient's full note history via
+`listByPatient`, so it just re-indexes what it has.
+
+#### `patient_module_enrollments`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
+module_type     text NOT NULL, CHECK in ('gut_screening', 'return_to_sport',
+                 'scoliosis_screening', 'face_scale', 'facial_palsy',
+                 'consultation_notes')
+status          text NOT NULL — episode open/closed state
+created_by, updated_by  uuid (NULLABLE)
+enrolled_at, updated_at  timestamptz NOT NULL
+```
+Only `'consultation_notes'` is actually written client-side today
+(`consultationNoteService.ts`) — the other five values are schema-permitted
+(matching the five region-module response tables above) but nothing in
+`src/` creates an enrollment with them.
+
+#### `ai_generation_log`
+```sql
+id                uuid PRIMARY KEY
+clinic_id         uuid NOT NULL (FOREIGN KEY → clinics.id)
+consultation_id   uuid NOT NULL (FOREIGN KEY → consultation_notes.id)
+raw_ai_output     text NOT NULL
+model_name        text NOT NULL
+created_at        timestamptz NOT NULL
+```
+
+#### Region-module response tables
+Each region module (opt-in extensions to Core Assessment) has its own
+response table, all following the same shape: `id`, `clinic_id`, `patient_id`,
+`enrollment_id` (FK → `patient_module_enrollments.id`, NULLABLE), a `responses
+jsonb` blob, one or two derived score/category columns, `created_by`/
+`updated_by`, `updated_at`.
+
+- **`screening_responses`** — `computed_score numeric`, `triage_level text`
+- **`return_to_sport_responses`** — `computed_score numeric`, `risk_category text`
+- **`scoliosis_screening_responses`** — `cobb_angle numeric`, `severity_level text`
+- **`face_scale_responses`** — `side_affected`, `visit_label`, `vas_movement`,
+  `vas_qol`, `domain_scores jsonb`, `total_score numeric`
+- **`facial_palsy_assessments`** — `side_affected`, `visit_label`, `hb_grade`,
+  `sunnybrook_resting/voluntary/synkinesis jsonb`, `sunnybrook_score numeric`,
+  `synkinesis_total int`
+
+None of the five has a Dexie table, repo, sync entry, or any UI anywhere in
+`src/` — they're reserved schema for modules that haven't been built, not
+available features. Only `face_scale_responses` and
+`facial_palsy_assessments` even have `can_use_module()`-gated RLS on insert/
+update (see `clinic_module_settings`/`clinic_entitlements` below); the
+other three (`screening_responses`, `return_to_sport_responses`,
+`scoliosis_screening_responses`) have no entitlement check at all — any
+clinic member can write to them.
+
+#### Consent tables
+```sql
+consent_form_templates:
+  id, clinic_id, consent_type, version, locale, title, body_text, purpose,
+  is_active, effective_from, created_by, updated_by, updated_at
+
+consents:
+  id, clinic_id, consent_type, template_id (FK), subject_type,
+  patient_id (NULLABLE), therapist_id (NULLABLE), granted, granted_at,
+  granted_via, evidence_url, withdrawn_at, withdrawn_reason, captured_by,
+  created_by, updated_by, updated_at
+```
+`current_consents` is a **view** (not a table) over `consents` exposing the
+latest, still-in-force consent per subject (`is_in_force boolean`).
+
+---
+
+### Additional Tables
+
+#### `feedback_requests` / `feedback_responses` / `message_log` (Patient Communications, Phase 0–3)
+```sql
+-- feedback_requests: one row per "ask this patient for feedback" action
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+visit_id        uuid NOT NULL (FOREIGN KEY → visits.id)
+patient_id      uuid NOT NULL (FOREIGN KEY → patients.id)
+therapist_id    uuid NOT NULL (FOREIGN KEY → therapists.id) — denormalized from the visit for RLS
+token           text NOT NULL UNIQUE — 256-bit, base64url, server-generated default
+status          text NOT NULL — 'pending' | 'responded' | 'expired'
+expires_at      timestamptz NOT NULL (default now() + 21 days)
+created_by, updated_by  uuid (NULLABLE)
+created_at, updated_at  timestamptz NOT NULL
+-- one pending request per visit — unique partial index on visit_id where status = 'pending'
+
+-- feedback_responses: the patient's submission (only written by
+-- submit_feedback_response(), a SECURITY DEFINER function — no client INSERT policy exists)
+id           uuid PRIMARY KEY
+request_id   uuid NOT NULL UNIQUE (FOREIGN KEY → feedback_requests.id)
+clinic_id    uuid NOT NULL (FOREIGN KEY → clinics.id) — denormalized so admin-only RLS needs no join
+rating       smallint NOT NULL (1-5)
+comment      text (NULLABLE)
+created_at   timestamptz NOT NULL
+updated_at   timestamptz NOT NULL (default now()) — always == created_at;
+             the row is immutable, this column exists only because the
+             sync engine hardcodes updated_at as every table's delta
+             column (Phase 2 migration)
+
+-- message_log: shared audit trail for every send action across all four
+-- patient-comms workflows (only feedback_request is wired up so far)
+id                    uuid PRIMARY KEY
+clinic_id             uuid NOT NULL (FOREIGN KEY → clinics.id)
+kind                  text NOT NULL — 'feedback_request' | 'booking_confirmation' | 'therapist_notify' |
+                        'google_review' | 'reminder_stale_package' | 'reminder_single_visit' |
+                        'payment_reminder'
+recipient_patient_id  uuid (NULLABLE, FOREIGN KEY → patients.id)
+recipient_phone       text (NULLABLE)
+channel               text NOT NULL — 'wa_share' | 'wa_business_api'
+sent_by               uuid (NULLABLE, FOREIGN KEY → auth.users.id)
+sent_at               timestamptz NOT NULL
+```
+RLS: `feedback_requests` is member-visible (status carries no rating/comment
+content) but only admin/front_desk/own-therapist can insert or update it —
+same shape as the visits table's own admin-or-own-therapist policies.
+`feedback_responses` SELECT is `is_clinic_admin()` only — front desk and
+therapists get zero visibility into ratings/comments, at the database layer,
+not just hidden in the UI. Two SECURITY DEFINER RPCs — `get_feedback_request_by_token()`
+and `submit_feedback_response()` — are explicitly granted EXECUTE to `anon`;
+every other function in this schema either relies on `is_clinic_member()`
+failing for an anonymous caller or explicitly revokes that default. A
+`public_rpc_rate_limit` table (self-pruning, no cron dependency) throttles
+both by client IP.
+
+`feedback_requests` is a synced Dexie table (`ALL_SYNCED_TABLES`, pulled
+like any other clinic data) but **not** in `CLIENT_WRITABLE_TABLES` — staff
+creation and resend both go through online-only RPCs
+(`create_feedback_request`, `rotate_feedback_request_token`) rather than
+the outbox, so the local write is always a `putLocal` caching a
+server-confirmed row, never a queued push. (An earlier version created
+through the outbox with `token` left unset for the column default to fill
+in; that meant the token — and so the ability to share it — didn't exist
+until the next sync pull, so the very first "Ask for feedback" click never
+opened a share sheet. See `create_feedback_request` below.)
+`feedback_responses` (Phase 2) is also synced, but read-only client-side —
+`ALL_SYNCED_TABLES` without `CLIENT_WRITABLE_TABLES`, same shape as
+`invoices` — since a response is only ever written by the anonymous
+patient's own SECURITY DEFINER RPC call; it needed an `updated_at` column
+added (a permanent alias for `created_at`, purely so the sync engine's
+hardcoded delta-column assumption holds) since the row is otherwise
+immutable. `message_log` has no Dexie table or repo at all — the app never
+reads or writes it directly.
+
+`create_feedback_request(p_visit_id uuid) returns table(...)` (Phase 1,
+added after the outbox-creation gap above was found) — `security invoker`,
+EXECUTE revoked from `public`/`anon` and granted only to `authenticated`.
+Derives `clinic_id`/`patient_id`/`therapist_id` from the `visits` row
+rather than trusting client-supplied values, then inserts a new
+`feedback_requests` row — or, on `ON CONFLICT (visit_id) WHERE status =
+'pending'` against the existing `feedback_requests_one_pending_per_visit`
+partial unique index (a double-click race), rotates the existing pending
+row's token instead of erroring — and returns the full row in one round
+trip. The existing `feedback_requests_insert` RLS policy is the real
+authorization boundary.
+
+`rotate_feedback_request_token(p_request_id uuid) returns text` (Phase 1) —
+`security invoker`, EXECUTE revoked from `public`/`anon` and granted only
+to `authenticated`. Rotating an existing row's token is an UPDATE, where
+column defaults never fire, so "resend" needs this small RPC rather than
+the outbox; the existing `feedback_requests_update` RLS policy is the real
+authorization boundary, same as any other invoker-security RPC in this
+schema.
+
+**`clinics.google_review_url`** (Phase 3) — nullable text; unset means the
+Google review nudge never shows, on either the public thank-you page or
+the staff visit-row action, regardless of rating.
+`submit_feedback_response(p_token text, p_rating int, p_comment text)
+returns text` (was `returns void` through Phase 0-2) — now returns the
+clinic's `google_review_url` when `p_rating >= 4` and one is configured,
+`null` otherwise; the public thank-you page conditions "Leave a Google
+review" on this return value instead of a second round trip. Return-type
+changes require dropping the function first (grants don't survive a drop,
+so the migration re-states them).
+
+`list_google_review_eligible_requests(p_clinic_id uuid) returns setof uuid`
+— `security definer` (unlike `rotate_feedback_request_token` above, this
+one must bypass RLS on purpose), EXECUTE revoked from `public`/`anon` and
+granted only to `authenticated`. Lets a front_desk caller — who has zero
+RLS visibility into `feedback_responses` at all, not just a filtered view
+of it — ask "which requests currently qualify for a Google review nudge"
+without the function ever returning a rating or a comment, just bare
+`request_id`s where `rating >= 4`. The function body re-implements its own
+narrower check (`is_clinic_member`) rather than relying on RLS, since RLS
+itself is what's being deliberately bypassed here.
+
+#### `appointments` / `appointment_requests` / `clinic_closed_dates` (Patient Communications, Phase 5 + Schedule MVP)
+```sql
+-- appointments: one confirmed expected attendance (not a billed visit)
+id                     uuid PRIMARY KEY
+clinic_id              uuid NOT NULL (FOREIGN KEY → clinics.id)
+patient_id             uuid (NULLABLE, FOREIGN KEY → patients.id) — resolved at arrival
+patient_name, patient_phone  text NOT NULL — raw values, kept after patient_id resolves
+therapist_id           uuid (NULLABLE, FOREIGN KEY → therapists.id)
+scheduled_at           timestamptz NOT NULL
+source                 text NOT NULL (default 'booking') — 'booking' | 'walk_in'
+                        (start_walk_in: a visit in progress started at the desk)
+series_id              uuid (NULLABLE, indexed) — shared by the sessions of one
+                        repeat booking (confirm_booking_series)
+duration_minutes       integer NOT NULL (default 30, CHECK 5–240) — Schedule MVP;
+                        backfilled from clinics.slot_duration_minutes
+status                 text NOT NULL — 'confirmed'|'rescheduled'|'no_show'|'cancelled'|'arrived'
+request_id             uuid (NULLABLE, FOREIGN KEY → appointment_requests.id)
+visit_id               uuid (NULLABLE, FOREIGN KEY → visits.id)
+reschedule_count       integer NOT NULL (default 0)
+previous_scheduled_at  timestamptz (NULLABLE)
+created_by, updated_by uuid (NULLABLE)
+created_at, updated_at timestamptz NOT NULL
+
+-- clinic_closed_dates: one row per closed calendar day (holiday / one-off closure)
+id           uuid PRIMARY KEY
+clinic_id    uuid NOT NULL (FOREIGN KEY → clinics.id)
+closed_date  date NOT NULL — UNIQUE (clinic_id, closed_date)
+label        text (NULLABLE) — "Diwali", "Staff training"
+removed_at   timestamptz (NULLABLE) — soft delete: the sync pull only sees
+             upserts, so "reopen" sets this instead of deleting the row
+created_at, updated_at  timestamptz NOT NULL (set_updated_at trigger)
+```
+RLS: `appointments` SELECT is clinic-member-wide; `appointment_requests`
+SELECT is admin/front_desk; `clinic_closed_dates` SELECT is clinic-member-wide
+(RLS was missing entirely on this table until `20261001100000`). None of the
+three has a write policy — every write is a SECURITY DEFINER RPC:
+`confirm_booking_slot`, `create_appointment_staff`, `reschedule_appointment`,
+`cancel_appointment`, `mark_appointment_no_show` (all gated by
+`can_manage_appointment`, overlap checked by `therapist_has_overlap` using each
+row's `duration_minutes`), `mark_appointment_arrived` / `link_appointment_visit`
+(any clinic member), `confirm_booking_series` (same rules as a single booking,
+all-or-nothing; clashes listed as UTC ISO times the client localises) /
+`cancel_appointment_series(series, from)`, `set_therapist_working_hours`,
+`start_walk_in(clinic, therapist, name, phone?, patient?)` (arrived walk-in, no
+overlap check, own therapist or admin/front desk), `restore_appointment_slot`
+(drag Undo, see Review fixes below), and
+`set_clinic_closed_dates` /
+`remove_clinic_closed_dates` (admin/front_desk, ranges up to 366 days). The
+public `get_booking_availability(slug, start, end)` returns weekly closed
+days, live (`removed_at is null`) closed dates, and non-cancelled
+appointments with their `duration_minutes`, plus `therapistHours` (id → working_hours
+for active therapists with custom hours). `reschedule_appointment(id, at, duration?, therapist?)`
+(drop-and-recreate, pattern 3c): reassigning needs `can_manage_appointment` for both the
+current and the new therapist; a pure resize (same start and therapist) doesn't bump
+`reschedule_count` or the status.
+**Review fixes** (`20261004100000_schedule_review_fixes.sql`):
+- **No double booking under concurrency**: trigger `appointments_overlap_guard`
+  (BEFORE INSERT OR UPDATE on `appointments`) takes a per-therapist
+  `pg_advisory_xact_lock` and re-runs `therapist_has_overlap`, so two bookings at the
+  same moment can't both commit. It skips walk-ins (`source = 'walk_in'`), cancelled
+  rows, unassigned rows and updates that don't change the time, length or therapist
+  (status changes, sync re-saves).
+- `confirm_booking_series` compares requested starts by position, so duplicate
+  timestamps in one request are flagged as clashes.
+- `cancel_appointment_series` requires `can_manage_appointment` for **every** session it
+  would cancel (sessions can have been moved to another therapist).
+- `restore_appointment_slot(id, at, duration, therapist|null, status, reschedule_count,
+  previous_scheduled_at)` backs the calendar's Undo after a drag. It restores the exact
+  previous state, including Unassigned (admin / front desk only), and can only wind
+  `reschedule_count` back, never forward.
+- The `clinic_closed_dates` dedup in `20261001100000` breaks `created_at` ties on
+  `ctid`, so a rebuild with duplicates from one transaction no longer aborts.
+All three are synced, read-only Dexie tables (`ALL_SYNCED_TABLES` without
+`CLIENT_WRITABLE_TABLES`); `clinic_closed_dates` arrived in Dexie `version(20)`,
+and `repos.clinicClosedDates.listByClinic` filters out soft-deleted rows.
+**Deploy order**: apply the migration before shipping the client — the sync
+pull of `clinic_closed_dates` needs its `updated_at` column.
+
+#### `audit_log`
+```sql
+id           bigint PRIMARY KEY
+clinic_id    uuid (NULLABLE, FOREIGN KEY → clinics.id)
+table_name   text NOT NULL
+row_id       uuid NOT NULL
+action       text NOT NULL — 'create' | 'update' | 'delete'
+old_data, new_data  jsonb (NULLABLE)
+changed_by   uuid (NULLABLE, FOREIGN KEY → auth.users.id)
+changed_at   timestamptz NOT NULL
+```
+
+#### `no_return_reason_catalog`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+name            text NOT NULL
+is_closed       boolean NOT NULL
+active          boolean NOT NULL (default true)
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+```
+Every clinic gets an 8-item starter set (Moved away / relocated, Discomfort
+with treatment, Cost / could not afford, Recovered — no longer needed care,
+Switched to another provider, Lost contact / unreachable, Scheduling
+conflict, Referred elsewhere) — seeded by `create_clinic_with_admin()` for
+new clinics and by a one-time backfill migration for existing ones. Fully
+editable afterward from Reports' "Manage reasons" panel (add / deactivate /
+mark "counts as closed"); the starter rows aren't locked, just pre-filled.
+
+#### `referring_source_catalog`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+name            text NOT NULL
+detail_label    text (NULLABLE) — label for the follow-up detail field this
+                source needs (e.g. "Referring doctor"), null if it needs none
+active          boolean NOT NULL (default true)
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+UNIQUE (clinic_id, name)
+```
+Clinic-editable list of referral channels shown when adding/editing a
+patient (Settings → Catalog → Referral sources), same add / deactivate-not-delete / edit
+pattern as `no_return_reason_catalog`. Seeded with the app's original six
+labels (Hospital referral, Doctor referral, Walk-in, Word of mouth, Online,
+Other) for every clinic — new via `create_clinic_with_admin()`, existing via
+a backfill migration. `patients.referring_source_id` is the source of truth
+for patients tagged after this catalog existed; the legacy
+`patients.referring_source` enum column is kept (not backfilled) so older
+patients keep displaying via the old `REFERRING_SOURCE_LABELS` fallback —
+see `dashboardService.referralSourceStats` for how both are reconciled.
+
+#### `treatment_catalog`
+```sql
+id              uuid PRIMARY KEY
+clinic_id       uuid NOT NULL (FOREIGN KEY → clinics.id)
+name            text NOT NULL
+active          boolean NOT NULL (default true)
+created_by, updated_by  uuid (NULLABLE)
+updated_at      timestamptz NOT NULL
+UNIQUE (clinic_id, name)
+```
+Clinic-editable list of treatment types (Manual Therapy, Exercise Therapy,
+Kinesio Taping, ...), managed from Settings → Treatments, its own tab
+alongside Services and Referral sources (all three used to be stacked in
+one "Services" tab; split apart so each is its own scroll). Independent of
+the billing-side `service_catalog` — one visit is
+billed under one service package but can record several treatment types
+performed via `visits.treatment_ids`, picked from the catalog on both the
+visit-logging and edit-visit forms — plus a free-text add-on
+(`visits.treatment_notes`, the same field clinical shorthand notes always
+used) for anything not in the list, grouped under one "Treatments" field
+on both forms. Displayed as a single combined "Treatments" column/cell
+everywhere the visits table shows it (Ledger, Workspace, Patient Profile)
+— catalog names joined by commas, then the free-text add-on after a dash
+if present (`treatmentsDisplayText` in `components/VisitCard.tsx`) — not
+two separate columns. Independent of Core Assessment/clinical docs too, so
+it works for every clinic regardless of `clinicalDocsEnabled`. Patient
+Profile's Care plan card shows a per-package breakdown (e.g. "Manual
+Therapy: 4 · Exercise: 6") computed client-side from the patient's own
+visits — no separate
+aggregation query. Seeded with a 6-item starter set for every clinic.
+Also shown as a toggleable "Treatments" column/row on the Visits table
+(Ledger, Workspace, Patient Profile) — a separate `VisitColumnKey` from the
+pre-existing free-text `'treatment'` (treatmentNotes) column.
+
+#### `clinic_module_settings`, `clinic_entitlements` — live at the RLS layer, zero client integration
+Not dead — `can_use_module(clinic_id, module_key)` (defined in
+`20260718000001_module_registry.sql`, revised in
+`20260721000001_entitlements_audit_log.sql`) checks `clinic_entitlements`
+(fail-open: no row = entitled) then `clinic_module_settings` (fail-closed
+otherwise, further gated by the caller's `clinic_members.role` against
+`allowed_roles`), and is called from the insert/update RLS policies on
+`consultation_notes`, `face_scale_responses`, and `facial_palsy_assessments`.
+Every write to those three tables runs through it today.
+
+What's genuinely missing is the **client side**: no Dexie table, no repo,
+no sync, no UI anywhere in `src/` reads or writes either table — so nothing
+in the app currently sets a narrower entitlement or surfaces a "this module
+is off" state. In practice every clinic reads as fully entitled, because
+nothing has ever populated `clinic_entitlements` with a restrictive row,
+and every clinic gets a `clinic_module_settings` row for `'consultation_notes'`
+seeded `enabled = true` (both the one-time backfill and the
+`seed_default_module_settings()` AFTER INSERT trigger, in
+`20260721000001_entitlements_audit_log.sql`). This is `can_use_module()`'s
+**real, always-on gate for whether a note can be written at all** — but
+there's no Settings toggle for it, so it stays on for every clinic by
+construction, indefinitely, until someone writes SQL by hand.
+
+**This is easy to conflate with `clinics.clinical_docs_enabled` (client-side,
+has a Settings toggle) — but they act at different layers and never
+conflict.** `can_use_module()` decides whether a note *can be written*
+(server-side, RLS, always on). `clinical_docs_enabled` is a client-side
+*visibility* flag deciding which clinical-documentation surfaces render.
+Four read it:
+
+| Surface | What `clinical_docs_enabled` gates |
+| --- | --- |
+| `visitService.ts` | auto-flags a new visit `clinicalStatus: 'pending'` |
+| `NewVisitPage.tsx` | the "Add clinical note" CTA on the post-save screen |
+| `LedgerPage.tsx` | the "Not documented" filter checkbox |
+| `ReportsOverviewPage.tsx` | the modality-usage chart (query, nav entry, section) |
+
+**One surface differs from those four, deliberately.**
+`PatientProfilePage`'s `ConsultationNotePanel` — "New note" / "Continue
+draft" — is gated on role (`canViewClinicalNotes`, i.e. every therapist,
+never front desk) and *not* on `clinical_docs_enabled`. **Confirmed
+intentional, not an inconsistency to fix:** notes access is role-based only
+— every therapist always has it, full stop. The `clinical_docs_enabled`
+surfaces above are a separate, opt-in layer on top of that baseline: does
+*this clinic* want the per-visit reminder, the "Not documented" filter, and
+the modality report — a workflow/reporting preference, not an access gate.
+A clinic with the flag off still has every therapist able to write notes
+from Patient Profile at any time; it just isn't nudged to do so on every
+visit or tracked for completeness.
+
+**Rule for any new consultation-notes entry point:** gate on
+`canViewClinicalNotes` for access (matches Patient Profile). Gate on
+`clinical_docs_enabled` only if the new surface is itself a reminder/filter/
+report in the same spirit as the four above — not if it's a place to
+actually write a note, which should behave like Patient Profile's baseline
+and stay available regardless of the flag.
+
+**Confirmed not tier-gated either** — no `PlanFeature` in `src/domain/plans.ts`
+covers clinical notes today, by design (its own docstring excludes
+"anything clinical-note- or advanced-module-content-shaped ... still open
+design work"). **One tier restriction is planned but not yet built:** Lite
+should not be able to print/export a note as PDF (`NotePrintPage.tsx` is
+currently unrestricted by tier for every clinic). This needs a new
+`PlanFeature` (e.g. `notePrinting`) wired into `TIER_FEATURES`,
+`useEntitlements()`, and a gate on `NotePrintPage.tsx`'s print action —
+not yet scoped or built; captured here so it isn't lost before the Phase 2
+notes work lands.
+
+Note also that no admin-facing control exists for the *real* gate: turning
+consultation notes genuinely off for a clinic means flipping
+`clinic_module_settings.enabled` for `'consultation_notes'` by hand in SQL.
+The Settings toggle does not do this, despite reading like it might.
+
+The `modules` reference table these two originally pointed to was dropped
+(`20260820000001_drop_unused_modules_table.sql`), taking its FK on
+`module_key` with it via CASCADE. Restored as a plain `CHECK` constraint
+(`20260823120000_restore_module_key_check.sql`) against the same seven
+keys the `modules` table used to hold: `'gut_screening'`,
+`'return_to_sport'`, `'scoliosis_screening'`, `'face_scale'`,
+`'facial_palsy'`, `'consultation_notes'`, `'invoicing'`. Don't build new
+gating logic on top of this without first confirming the tier-subscription
+plan is what's meant to populate it — `can_use_module()`'s fail-open
+default is backwards for a paywall and would need to change before these
+tables can gate a paid tier.
+
+#### `clinic_plans` — the tier boundary, service-role write only
+Added as Phase 0 of the tier-subscription plan
+(`20260823120001_clinic_plans.sql`). One row per clinic:
+
+```sql
+clinic_plans (
+  clinic_id             uuid PRIMARY KEY (FOREIGN KEY → clinics.id, CASCADE)
+  plan_tier             text NOT NULL, CHECK in ('lite', 'solo', 'clinic', 'clinic_plus')
+  status                text NOT NULL DEFAULT 'active', CHECK in ('active', 'past_due', 'read_only')
+  max_members           int NOT NULL       -- tunable per clinic, seeded from tier
+  visit_cap_per_month   int                -- NULL = unlimited
+  updated_at            timestamptz NOT NULL DEFAULT now()
+)
+```
+
+RLS is deliberately asymmetric: `clinic_plans_select` lets any clinic
+member read their own clinic's row, and there is **no write policy at
+all**. With RLS enabled and zero write policies, Postgres denies every
+`INSERT`/`UPDATE`/`DELETE` from the `authenticated` role outright — only
+`service_role` (which bypasses RLS) can write this table. This is the
+actual fix for the plan-tier-must-not-be-self-serve-editable problem: a
+`plan_tier` column on `clinics` itself couldn't get this property, since
+`clinics_update` already grants clinic admins unrestricted column access
+and `clinics` rides the client-writable outbox.
+
+Seeded automatically, mirroring `add_creator_as_admin()` and
+`seed_default_module_settings()` (both existing AFTER INSERT triggers on
+`clinics`): `seed_default_clinic_plan()` inserts a `lite` / `active` / 1
+seat / 50 visits-per-month row for every newly created clinic. All four
+existing clinics at migration time were backfilled as `clinic_plus` /
+`active` / unlimited — a deliberate placeholder that grandfathers today's
+de-facto behavior (nothing has ever been gated), not a real tier
+assignment; real per-clinic tiers need deciding before enforcement
+(seat cap, visit cap, invoicing gate — none of it is wired up yet) lands
+on top of this table.
+
+**Read path (Phase 1):** `useEntitlements(clinicId)` (`src/app/useEntitlements.ts`)
+is the sole read point. `clinic_plans` has no Dexie table and isn't part of
+the sync engine's generic per-table pull (`ALL_SYNCED_TABLES` in
+`src/lib/db.ts`) — that loop assumes every table has an `id` primary key,
+and this one is keyed by `clinicId`. Instead the hook fetches it directly
+via Supabase, exactly mirroring `useClinicRole`'s pattern: cached as JSON in
+Dexie's `meta` table (key `plan:${clinicId}`) so the tier survives offline,
+a fresh online fetch always wins, and an unresolved fetch never flashes the
+least-restrictive default (`lite`/1 seat/50 visits — the same fail-closed
+default `DEFAULT_PLAN` uses when nothing has loaded yet). The hook also
+returns `seatsUsed` (a live `clinic_members` count, online-only — `null`
+when unknown) and `visitsThisMonth` (computed from local Dexie visits via
+`repos.visits.list`, so it works offline). `src/domain/plans.ts` holds the
+pure tier → feature map (`tierIncludes()`) the hook's `can()` reads, plus
+`currentMonthRange()` — both unit-tested.
+
+No UI reads this yet — Phase 1 only builds the read path. Enforcement
+(Phase 2) and the Settings `plan` section (Phase 3) are what consume it.
+
+**Enforcement (Phase 2):** four gates, all reading `clinic_plans` directly
+(server-side) so none of them can be bypassed by a client that doesn't call
+`useEntitlements()`:
+
+- **Invoicing** — `issue_invoice()` checks plan status and tier *before*
+  the pre-existing `clinic_entitlements('invoicing')` /
+  `billing_enabled` / `invoicing_access` chain. Full precedence: **plan
+  status (`read_only` blocks outright) → plan tier (`lite` blocks) →
+  `clinic_entitlements` → `billing_enabled` → `invoicing_access`.** Each
+  layer raises its own distinct error message.
+- **New patients** — `enforce_clinic_plan_on_patient_insert()`, a
+  `BEFORE INSERT` trigger on `patients`, blocks while `status <> 'active'`.
+  Edits to existing patients are unaffected — only new rows are gated.
+- **New visits** — `enforce_clinic_plan_on_visit_insert()`, a
+  `BEFORE INSERT` trigger on `visits`, blocks while `status <> 'active'`,
+  and separately enforces `visit_cap_per_month` **with a +20 buffer**
+  (a hard block at the exact cap risks losing a real visit to a
+  multi-device offline-sync race — the buffer absorbs that, the client
+  pre-check below is the real day-to-day gate). Counted by the visit's own
+  `visit_date`'s calendar month, not today's date — this is also what
+  makes `importVisitsService.ts`'s bulk historical importer safe with no
+  special-casing: it writes through this exact same insert path (no
+  separate RPC to exempt), but imported rows are virtually always dated in
+  past months, so they don't touch the current month's count. A same-month
+  bulk import can still hit the buffer.
+- **Seat cap** — the `invite-therapist` edge function counts
+  `clinic_members` against `clinic_plans.max_members` before inviting or
+  re-linking an existing account to the clinic (both add a
+  `clinic_members` row, both count). Fails open if a clinic somehow has no
+  `clinic_plans` row (shouldn't happen — every clinic is seeded one).
+- **Client pre-check** — `NewVisitPage.tsx`'s `save()` reads
+  `useEntitlements(clinic.id)` and blocks before attempting to save once
+  `visitsThisMonth >= visitCapPerMonth`, so a normal user sees a clear
+  message before ever reaching the server buffer above.
+
+Deliberately **not** touched: `can_use_module()` / `consultation_notes` /
+the five assessment-module keys. `clinics.clinical_docs_enabled` and
+`clinic_module_settings('consultation_notes')` were previously suspected of
+being two conflicting gates on the same feature; traced precisely, they act
+at different layers — server-side write permission vs. client-side surface
+visibility — and never conflict. See the dead-infrastructure section above
+for the full mechanism, including a real inconsistency it surfaced (Patient
+Profile's notes entry point isn't gated by `clinical_docs_enabled` while
+three comparable surfaces are) that is still undecided. Adding a third
+(plan-tier) gate would need to go through `can_use_module()` specifically,
+since that's the one that actually governs whether a note can be written.
+The five module keys have zero client code today regardless, so gating them
+has no practical effect yet. Deferred to the still-open "advanced modules
+content" planning pass.
+
+**Bug fixed during Phase 2 testing:** `clinic_plans_updated` (Phase 0) used
+the generic `set_updated_at()` trigger function, which unconditionally sets
+`updated_by`/`created_by` — columns `clinic_plans` doesn't have (there's no
+write path through an authenticated user's own session for this table).
+Every `UPDATE` failed until `20260823130001_fix_clinic_plans_updated_trigger.sql`
+gave it its own minimal trigger function that only sets `updated_at`. Caught
+by direct testing before anything in production exercised the broken path.
+
+**Settings UI (Phase 3)** — the first user-visible part of the tier plan.
+`SettingsPage.tsx` gains an "Account" group with a read-only `plan` section
+(`PlanSection`): tier, status, seats used/limit, visits this month/cap, and
+a per-feature "what's included" list, all read from `useEntitlements()`.
+Every section resolves to one of three states, per the design in Part 3 of
+the tier plan:
+
+- **available** — normal.
+- **locked** — above the tier (`billing`, gated on `can('invoicing')`).
+  Stays visible in the rail, greyed with a lock glyph; clicking it shows
+  `LockedSectionNotice` (informational only — "Included in Solo and
+  above," no CTA button, since there's no self-serve upgrade flow yet) in
+  place of the real form.
+- **hidden** — genuinely inapplicable, not a paywall (`partner`, gated on
+  `can('revenueSplit')` — a Lite/Solo clinic can't have a hospital
+  revenue-split relationship at all under its plan). Filtered out of both
+  nav lists at render time; a mid-session redirect effect bounces `activeKey`
+  away from `partner` if the resolved plan stops including it, mirroring
+  the existing pattern `LedgerPage.tsx`/`ReportsPage.tsx` already use for a
+  role changing mid-session.
+
+`usePermissions()` folds `useEntitlements()` into `canBill` (also requires
+`can('invoicing')` now, ahead of the pre-existing `billingEnabled`/
+`invoicingAccess` checks) and `canViewPayouts` (also requires
+`can('revenueSplit')`) — since `LedgerPage.tsx`'s Invoices tab and
+`ReportsPage.tsx`'s Attribution Audit tab both already consume those two
+booleans, tier-gating happens there for free. `TherapistComparisonCard.tsx`
+needed its own `can('revenueSplit')` check instead (it's gated on
+`clinic.showTherapistComparison`, not a `usePermissions()` flag).
+
+Team's Invite form locks (with the same informational-only copy) once
+`clinic_members.length >= maxMembers` — a client-side hint only, since
+`invite-therapist`'s own seat-cap check (Phase 2) is the real boundary.
+
+See **Guided setup** above (`/setup`, `src/domain/setupGuide.ts`).
 
 **Header layout budget** (`Shell.tsx`'s `<header>`) — the desktop header
 row has a fixed width to spend (`max-w-6xl`, ~1120px usable) and five
@@ -2490,14 +4155,7 @@ initials-avatar trigger below `sm:`), replacing what used to be two
 separate, independently-built account areas: a flat always-visible
 name+Sign-out pair on desktop, and an ad-hoc hamburger-icon dropdown on
 mobile with its own copy of the same `NameEditor`. Panel contents: the
-existing click-to-edit name/role (`NameEditor`, unchanged), a First Week
-nudge for an admin who hasn't finished or dismissed the checklist above
-(`useFirstWeekChecklistSummary(clinicId)` — shares `useFirstWeekSignals`
-with the full card so both read the exact same derived state, and also
-returns `nextStep`: the first not-done step's own title and link, so the
-nudge's "Continue →" opens exactly where setup was left off — a Settings
-tab or `+ New visit` — instead of always bouncing to Settings' own default
-tab), Settings (admin), a "Change
+guided-setup bar for an admin while setup is incomplete (see Guided setup), Settings (admin), a "Change
 password" action (`ChangePasswordDialog`,
 `src/components/ChangePasswordDialog.tsx` — calls
 `supabase.auth.updateUser({ password })` directly, since the account menu
@@ -2602,7 +4260,7 @@ unlocks all of them with no changes needed in those files. Three call
 sites read `maxMembers`/`visitCapPerMonth` directly instead of through
 `can()`, so they carry an explicit `enforcementEnabled` guard: `Therapists()`'s
 `atSeatCap`, `NewVisitPage.tsx`'s visit-cap pre-check, and
-`FirstWeekChecklist.tsx`'s seat-limited copy branch. `PlanSection` shows a
+the guided setup's seat-limited copy for the invite step. `PlanSection` shows a
 "Tier limits are paused for pilot testing" note when disabled, so a future
 admin doesn't mistake fully-unlocked plans for a bug.
 

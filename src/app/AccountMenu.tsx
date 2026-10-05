@@ -14,70 +14,9 @@ import { bookingService } from '@/services';
 import { publicTherapistPhotoUrl } from '@/lib/supabase';
 import { HelpFeedbackDialog } from '@/components/HelpFeedbackDialog';
 import { IconBell, IconCalendar, IconSettings } from '@/components/NavIcons';
-import { useFirstWeekChecklistSummary } from '@/features/settings/FirstWeekChecklist';
+import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import { BrandMark } from '@/components/BrandMark';
 import { initialsFor } from './accountInitials';
-
-/**
- * The setup-nudge card inside the account menu — a real "continue where you
- * left off" link, not a static `/settings` bounce: `setup.nextStep.link`
- * names the exact first not-done step's own destination (a Settings tab, or
- * `+ New visit` for "log your first visit"), computed by
- * `useFirstWeekChecklistSummary`. Two full `<Link>` branches rather than one
- * with a dynamic `to` — TanStack Router types each route's `search` against
- * that route's own schema, so a `to` that varies at runtime can't carry a
- * correctly-typed `search` alongside it.
- */
-function SetupNudgeLink({
-  setup,
-  onNavigate,
-}: {
-  setup: NonNullable<ReturnType<typeof useFirstWeekChecklistSummary>>;
-  onNavigate: () => void;
-}) {
-  const className =
-    'mb-2 block rounded-md border border-[var(--teal-light)] bg-[var(--teal-light)] p-2 text-xs text-[var(--ink)] hover:opacity-90';
-  const content = (
-    <>
-      <div className="flex items-center justify-between font-medium">
-        <span>
-          Setup {setup.completedCount} of {setup.totalCount}
-        </span>
-        <span className="text-[var(--teal)]">Continue →</span>
-      </div>
-      {setup.nextStep && (
-        <p className="mt-0.5 truncate text-[var(--muted)]">{setup.nextStep.title}</p>
-      )}
-      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface)]">
-        <div
-          className="h-full rounded-full bg-[var(--teal)]"
-          style={{
-            width: `${Math.round((setup.completedCount / Math.max(1, setup.totalCount)) * 100)}%`,
-          }}
-        />
-      </div>
-    </>
-  );
-
-  if (setup.nextStep?.link?.kind === 'new-visit') {
-    return (
-      <Link to="/visits/new" onClick={onNavigate} className={className}>
-        {content}
-      </Link>
-    );
-  }
-  const tab = setup.nextStep?.link?.kind === 'settings' ? setup.nextStep.link.tab : undefined;
-  return (
-    <Link
-      to="/settings"
-      search={tab ? { tab } : undefined}
-      onClick={onNavigate}
-      className={className}
-    >
-      {content}
-    </Link>
-  );
-}
 
 const rowCls =
   'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]';
@@ -134,8 +73,6 @@ export function AccountMenu({
   const [helpOpen, setHelpOpen] = useState(false);
   const name = displayName ?? fallbackName;
   const roleLabel = role !== 'unknown' ? CLINIC_ROLE_LABELS[role] : '';
-  const setup = useFirstWeekChecklistSummary(clinicId);
-  const showSetupNudge = role === 'admin' && setup?.visible === true;
   const myTherapist = useMyTherapist(clinicId);
   const photoUrl = myTherapist?.photoPath ? publicTherapistPhotoUrl(myTherapist.photoPath) : null;
   const install = useInstallState();
@@ -181,9 +118,9 @@ export function AccountMenu({
                   {roleLabel && <p className="text-xs text-[var(--muted)]">{roleLabel}</p>}
                 </div>
               </div>
-              {showSetupNudge && setup && (
-                <div className="mt-2.5">
-                  <SetupNudgeLink setup={setup} onNavigate={closeMenu} />
+              {role === 'admin' && (
+                <div className="mt-2.5" onClick={closeMenu}>
+                  <SetupProgressBar clinicId={clinicId} />
                 </div>
               )}
             </div>

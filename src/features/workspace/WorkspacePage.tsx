@@ -55,7 +55,7 @@ import { SplitModal } from '@/components/SplitModal';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 import { EditVisitModal } from '@/features/visits/EditVisitModal';
-import { FirstWeekSetupLink } from '@/features/settings/FirstWeekChecklist';
+import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import {
   IconBook,
   IconCloud,
@@ -693,6 +693,7 @@ export function WorkspacePage() {
         appointments={workspaceAppointments ?? []}
         rescheduleAppointment={reschedulingAppointment ?? undefined}
       />
+      {canEditSettings && <SetupProgressBar clinicId={clinic.id} />}
       <header className="space-y-2.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-sm sm:space-y-3 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -703,7 +704,6 @@ export function WorkspacePage() {
             <span className="text-xs text-[var(--muted)]">
               {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
             </span>
-            {canEditSettings && <FirstWeekSetupLink clinicId={clinic.id} />}
           </div>
           <div className="flex shrink-0 gap-2">
             {clinic.enablePatientComms && (canManageBookings || scope.myTherapistId) && (

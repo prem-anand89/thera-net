@@ -7,7 +7,7 @@ import { useSession } from '@/app/useSession';
 import { repos } from '@/services';
 import { syncEngine } from '@/sync/engine';
 import { toFriendlyMessage } from '@/lib/errors';
-import { btnPrimary, ErrorNote } from '@/components/ui';
+import { btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
 import {
   clampOnboardingStep,
   hasPasswordIdentity,
@@ -89,7 +89,7 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
   // The clinic is only marked complete here, on the Done screen. Shell sends
   // any completed clinic away from /onboarding, so marking it earlier would
   // skip the Done screen entirely.
-  async function completeAndOpenWorkspace() {
+  async function completeAndOpen(to: '/workspace' | '/setup') {
     const current = await repos.clinics.get(clinic.id);
     if (current) {
       const now = new Date().toISOString();
@@ -97,7 +97,7 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
     }
     clearOnboardingWizardStorage(clinic.id);
     void syncEngine.schedule(0);
-    void navigate({ to: '/workspace' });
+    void navigate({ to });
   }
 
   async function finishOnboarding() {
@@ -164,11 +164,14 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
           <div>
             <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">You’re set up</h1>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              {catalogCount} {catalogCount === 1 ? 'service is' : 'services are'} priced and ready to bill. Add
-              therapists and billing details any time from Settings.
+              {catalogCount} {catalogCount === 1 ? 'service is' : 'services are'} priced and ready to bill. A few
+              more steps get your first week running smoothly.
             </p>
           </div>
-          <button type="button" className={`${btnPrimary} w-full`} onClick={() => void completeAndOpenWorkspace()}>
+          <button type="button" className={`${btnPrimary} w-full`} onClick={() => void completeAndOpen('/setup')}>
+            Continue setup
+          </button>
+          <button type="button" className={`${btnSecondary} w-full`} onClick={() => void completeAndOpen('/workspace')}>
             Go to Workspace
           </button>
           <button

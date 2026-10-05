@@ -16,6 +16,10 @@ export function isPathAllowedDuringClinicOnboarding(pathname: string): boolean {
   if (pathname === '/reset-password') return true;
   // Wizard only — roster profile comes after clinic onboarding is complete.
   if (pathname === '/onboarding') return true;
+  // The Done screen's "Continue setup" marks onboarding complete and opens
+  // /setup in one go; allowing it here avoids a redirect race while the
+  // completed clinic row is still reaching the Shell.
+  if (pathname === '/setup') return true;
   if (pathname.startsWith('/f/')) return true;
   if (pathname.startsWith('/book/')) return true;
   return false;

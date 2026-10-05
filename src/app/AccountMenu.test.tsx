@@ -12,7 +12,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 vi.mock('./clinicContext', () => ({ useClinic: () => ({ id: 'c1', bookingStartHour: 9, bookingEndHour: 17 }) }));
 vi.mock('@/features/me/useMyTherapist', () => ({ useMyTherapist: () => myTherapist }));
-vi.mock('@/features/settings/FirstWeekChecklist', () => ({ useFirstWeekChecklistSummary: () => undefined }));
+vi.mock('@/features/setup/SetupProgressBar', () => ({ SetupProgressBar: () => null }));
 vi.mock('@/features/notifications/useInstallState', () => ({
   useInstallState: () => ({ standalone: true, iosSafari: false, canPromptInstall: false, promptInstall: vi.fn() }),
 }));

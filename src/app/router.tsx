@@ -15,6 +15,9 @@ import { parseSettingsSearch, type SettingsSearch } from '@/features/settings/se
 const NewVisitPage = lazy(() =>
   import('@/features/visits/NewVisitPage').then((m) => ({ default: m.NewVisitPage }))
 );
+const SetupPage = lazy(() =>
+  import('@/features/setup/SetupPage').then((m) => ({ default: m.SetupPage }))
+);
 const LedgerPage = lazy(() =>
   import('@/features/visits/LedgerPage').then((m) => ({ default: m.LedgerPage }))
 );
@@ -438,12 +441,10 @@ const scheduleRoute = createRoute({
   component: SchedulePage,
 });
 
-const setupRedirectRoute = createRoute({
+const setupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/setup',
-  beforeLoad: () => {
-    throw redirect({ to: '/settings' });
-  },
+  component: SetupPage,
 });
 
 const importVisitsRoute = createRoute({
@@ -557,7 +558,7 @@ const routeTree = rootRoute.addChildren([
   invoicesRedirectRoute,
   settingsRoute,
   scheduleRoute,
-  setupRedirectRoute,
+  setupRoute,
   importVisitsRoute,
   importVisitsRedirectRoute,
   insightsRoute,
