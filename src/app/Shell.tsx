@@ -18,7 +18,7 @@ import { useClinicRole } from './useClinicRole';
 import { ClinicContext } from './clinicContext';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { CreateClinicForm } from '@/features/settings/CreateClinicForm';
-import { activePhoneTab, isAccountAreaActive, isNavActive, pageTitleFor } from './navActive';
+import { activePhoneTab, isAccountAreaActive, isNavActive } from './navActive';
 import { SyncBadge, SyncStatusBanners } from '@/components/SyncBadge';
 import { NotificationBell } from '@/components/NotificationBell';
 import {
