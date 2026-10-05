@@ -190,11 +190,11 @@ function LegacyLineItemsTable({
               <tr>
                 <td
                   colSpan={hasAdjustments ? 4 : 3}
-                  className="py-2 text-right font-semibold text-[var(--ink)]"
+                  className="py-2 text-right font-medium text-[var(--ink)]"
                 >
                   Balance Due
                 </td>
-                <td className="font-num py-2 text-right font-semibold text-[var(--ink)] whitespace-nowrap">
+                <td className="font-num py-2 text-right text-[var(--ink)] whitespace-nowrap">
                   {formatINR(paymentLedger.balancePaise)}
                 </td>
               </tr>
@@ -324,11 +324,11 @@ function LineItemsTable({
               <tr>
                 <td
                   colSpan={hasAdjustments ? 5 : 4}
-                  className="py-2 text-right font-semibold text-[var(--ink)]"
+                  className="py-2 text-right font-medium text-[var(--ink)]"
                 >
                   Balance Due
                 </td>
-                <td className={`font-num py-2 text-right font-semibold text-[var(--ink)] whitespace-nowrap ${hasAdjustments ? '' : 'pr-2'}`}>
+                <td className={`font-num py-2 text-right text-[var(--ink)] whitespace-nowrap ${hasAdjustments ? '' : 'pr-2'}`}>
                   {formatINR(paymentLedger.balancePaise)}
                 </td>
               </tr>
