@@ -68,7 +68,7 @@ describe('summarizeSetup', () => {
   it('starts a fresh clinic at 0 with the profile as next', () => {
     const p = summarizeSetup(steps, none, new Set());
     expect(p.done).toBe(0);
-    expect(p.total).toBe(11);
+    expect(p.total).toBe(8);
     expect(p.next?.id).toBe('clinic-profile');
     expect(p.steps.filter((s) => s.status === 'next')).toHaveLength(1);
   });
@@ -77,9 +77,15 @@ describe('summarizeSetup', () => {
     const p = summarizeSetup(steps, established, new Set(['wait-synced']));
     expect(p.done).toBe(7);
     expect(p.next?.id).toBe('clinical-notes');
-    const all = summarizeSetup(steps, established, new Set(['wait-synced', 'clinical-notes', 'billing', 'booking', 'notifications']));
+    const all = summarizeSetup(steps, established, new Set(['wait-synced', 'clinical-notes']));
     expect(all.allDone).toBe(true);
     expect(all.next).toBeNull();
+  });
+
+  it('does not let optional steps block completion or become next', () => {
+    const p = summarizeSetup(steps, established, new Set(['wait-synced', 'clinical-notes']));
+    expect(p.steps.find((s) => s.id === 'billing')?.status).toBe('pending');
+    expect(p.done).toBe(p.total);
   });
 
   it('ignores a stored tick for an auto step', () => {

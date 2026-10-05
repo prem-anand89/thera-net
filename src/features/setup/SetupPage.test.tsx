@@ -41,7 +41,7 @@ afterEach(() => {
 describe('SetupPage', () => {
   it('shows progress and marks the first unfinished step as next', () => {
     render(<SetupPage />);
-    expect(screen.getByText(/5 of 11 done/)).toBeInTheDocument();
+    expect(screen.getByText(/5 of 8 done/)).toBeInTheDocument();
     expect(screen.getByText('Next: Wait for Synced before invoicing')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Essentials' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Your first week' })).toBeInTheDocument();

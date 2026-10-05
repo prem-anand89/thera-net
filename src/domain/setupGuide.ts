@@ -148,10 +148,8 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): Setu
     {
       id: 'notifications',
       group: 'optional',
-      title: 'Set up notifications',
-      why: 'Configure email and WhatsApp alerts for appointments.',
-      link: { kind: 'settings', tab: 'general' },
-      action: 'Open notifications',
+      title: 'Turn on notifications',
+      why: 'Open My account in the menu, then Notifications, to get push alerts on this device.',
     },
   ];
 }
@@ -176,15 +174,18 @@ export function summarizeSetup(
   completed: Set<string>
 ): SetupProgress {
   const doneFlags = steps.map((s) => stepIsDone(s, signals, completed));
-  const nextIndex = doneFlags.findIndex((d) => !d);
+  // Optional steps never count toward progress, "next" or completion.
+  const isRequired = (i: number) => steps[i].group !== 'optional';
+  const nextIndex = doneFlags.findIndex((d, i) => !d && isRequired(i));
+  const requiredIdx = steps.map((_, i) => i).filter(isRequired);
   return {
     steps: steps.map((s, i) => ({
       ...s,
       manual: !s.auto,
       status: doneFlags[i] ? 'done' : i === nextIndex ? 'next' : 'pending',
     })),
-    done: doneFlags.filter(Boolean).length,
-    total: steps.length,
+    done: requiredIdx.filter((i) => doneFlags[i]).length,
+    total: requiredIdx.length,
     next: nextIndex === -1 ? null : steps[nextIndex],
     allDone: nextIndex === -1,
   };

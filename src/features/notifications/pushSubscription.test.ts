@@ -26,9 +26,9 @@ describe('pushState', () => {
       value: { getRegistration: async () => undefined },
       configurable: true,
     });
-    // mock window.matchMedia for isStandalone
+    // Not installed and no registration: denied must still win over needs-install.
     Object.defineProperty(window, 'matchMedia', {
-      value: () => ({ matches: true }),
+      value: () => ({ matches: false }),
       configurable: true,
     });
     expect(await pushState()).toBe('denied');

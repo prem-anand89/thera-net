@@ -121,7 +121,7 @@ export function SetupPage() {
           {setup.allDone ? 'Setup complete' : 'Set up your clinic'}
         </h1>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <SetupTicks statuses={setup.steps.map((s) => s.status)} size="lg" />
+          <SetupTicks statuses={setup.steps.filter((s) => s.group !== 'optional').map((s) => s.status)} size="lg" />
           <span className="font-num text-sm text-white/80">
             {setup.done} of {setup.total} done
           </span>

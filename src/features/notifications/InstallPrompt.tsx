@@ -20,7 +20,7 @@ export function InstallPrompt() {
   }
   return (
     <p className="text-xs text-[var(--muted)]">
-      To install: open your browser menu and look for "Install app" or "Add to Home Screen". You'll sign in again in the installed app.
+      To install: open your browser menu and choose "Install app" (on a phone: "Add to Home Screen"). You'll sign in again in the installed app.
     </p>
   );
 }
