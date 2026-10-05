@@ -277,7 +277,7 @@ function LineItemsTable({
                 >
                   Subtotal
                 </td>
-                <td className="font-num pt-3 pb-1 text-right text-[var(--muted)] whitespace-nowrap">
+                <td className="font-num pt-3 pb-1 text-right text-[var(--muted)] whitespace-nowrap pr-2">
                   {formatINR(lineItems.reduce((acc, li) => acc + (li.totalPaise - li.adjustmentPaise), 0))}
                 </td>
               </tr>
@@ -288,7 +288,7 @@ function LineItemsTable({
                 >
                   Total Adjustment
                 </td>
-                <td className="font-num py-1 text-right text-[var(--muted)] whitespace-nowrap">
+                <td className="font-num py-1 text-right text-[var(--muted)] whitespace-nowrap pr-2">
                   {(() => {
                     const adj = lineItems.reduce((acc, li) => acc + li.adjustmentPaise, 0);
                     return adj < 0 ? `-${formatINR(Math.abs(adj))}` : formatINR(adj);
