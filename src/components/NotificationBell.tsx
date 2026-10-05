@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import {
   useNewFeedbackResponseCount,
@@ -63,16 +63,80 @@ export function NotificationBell({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number; width: number } | null>(null);
 
-  function toggleMenu() {
-    if (!open) {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (rect) {
-        const width = Math.min(288, window.innerWidth - 24);
-        const right = Math.max(12, window.innerWidth - rect.right);
-        setMenuPos({ top: rect.bottom + 8, right: Math.min(right, window.innerWidth - width - 12), width });
-      }
+  function openMenu() {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const width = Math.min(288, window.innerWidth - 24);
+      const right = Math.max(12, window.innerWidth - rect.right);
+      setMenuPos({ top: rect.bottom + 8, right: Math.min(right, window.innerWidth - width - 12), width });
     }
-    setOpen(!open);
+    setOpen(true);
+  }
+
+  function toggleMenu() {
+    if (open) setOpen(false);
+    else openMenu();
+  }
+
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Move focus into the menu when it opens, so arrow keys work straight away.
+  useEffect(() => {
+    if (!open) return;
+    const first = menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]');
+    first?.focus();
+  }, [open]);
+
+  function closeMenuAndFocusTrigger() {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  function moveFocus(event: React.KeyboardEvent, where: 'next' | 'prev' | 'first' | 'last') {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+    if (items.length === 0) return;
+    event.preventDefault();
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    const target =
+      where === 'first'
+        ? 0
+        : where === 'last'
+          ? items.length - 1
+          : where === 'next'
+            ? (current + 1) % items.length
+            : (current - 1 + items.length) % items.length;
+    items[target]?.focus();
+  }
+
+  function onMenuKeyDown(event: React.KeyboardEvent) {
+    switch (event.key) {
+      case 'ArrowDown':
+        moveFocus(event, 'next');
+        break;
+      case 'ArrowUp':
+        moveFocus(event, 'prev');
+        break;
+      case 'Home':
+        moveFocus(event, 'first');
+        break;
+      case 'End':
+        moveFocus(event, 'last');
+        break;
+      case 'Escape':
+        event.preventDefault();
+        closeMenuAndFocusTrigger();
+        break;
+      case 'Tab':
+        setOpen(false);
+        break;
+    }
+  }
+
+  function onTriggerKeyDown(event: React.KeyboardEvent) {
+    if (event.key === 'ArrowDown' && !open) {
+      event.preventDefault();
+      openMenu();
+    }
   }
 
   function openRow(row: { tab: 'bookings' | 'feedback'; view?: 'requests' }) {
@@ -93,6 +157,7 @@ export function NotificationBell({
           alert ? 'text-[var(--rust)]' : 'text-[var(--muted)]'
         }`}
         onClick={toggleMenu}
+        onKeyDown={onTriggerKeyDown}
       >
         <IconBell />
         {total > 0 && (
@@ -109,7 +174,10 @@ export function NotificationBell({
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
           <div
+            ref={menuRef}
             role="menu"
+            aria-label="Notifications"
+            onKeyDown={onMenuKeyDown}
             style={{ top: menuPos.top, right: menuPos.right, width: menuPos.width }}
             className="fixed z-20 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg"
           >

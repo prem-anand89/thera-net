@@ -85,4 +85,33 @@ describe('NotificationBell', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /new or updated appointment/ }));
     expect(navigate).toHaveBeenCalledWith({ to: '/schedule', search: { tab: 'bookings' } });
   });
+
+  it('moves focus between items with arrow keys and closes on Escape', () => {
+    newFeedbackCount = 1;
+    render(<NotificationBell clinicId="c1" pendingRequestsCount={1} isAdmin />);
+    const trigger = screen.getByRole('button');
+    fireEvent.click(trigger);
+
+    const items = screen.getAllByRole('menuitem');
+    expect(items.length).toBe(2);
+    expect(items[0]).toHaveFocus();
+
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' });
+    expect(items[1]).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' });
+    expect(items[0]).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'End' });
+    expect(items[1]).toHaveFocus();
+
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('opens from the keyboard with ArrowDown on the bell', () => {
+    newFeedbackCount = 1;
+    render(<NotificationBell clinicId="c1" pendingRequestsCount={0} isAdmin />);
+    fireEvent.keyDown(screen.getByRole('button'), { key: 'ArrowDown' });
+    expect(screen.getByRole('menuitem')).toHaveFocus();
+  });
 });

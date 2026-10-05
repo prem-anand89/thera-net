@@ -783,6 +783,16 @@ type ProfileFields = Pick<
   | 'lastSplitChangeAt'
 >;
 
+/** Opens a set-once card for editing. Reads and writes stay the same; this
+ *  only unlocks the fields until the save goes through. */
+function SetOnceEditButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button type="button" aria-label={label} className={btnSecondary} onClick={onClick}>
+      Edit
+    </button>
+  );
+}
+
 function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =
     useClinicSectionForm<ProfileFields>(
@@ -798,6 +808,10 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
       }),
       onDirtyChange
     );
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (editing && saved && !dirty) setEditing(false);
+  }, [editing, saved, dirty]);
   const logoPreviewUrl = publicLogoUrl(form.logoPath);
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
 
@@ -841,7 +855,12 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
   }
 
   return (
-    <SectionCard id="settings-card-general-profile" title="Clinic profile">
+    <SectionCard
+      id="settings-card-general-profile"
+      title="Clinic profile"
+      action={editing ? undefined : <SetOnceEditButton label="Edit clinic profile" onClick={() => setEditing(true)} />}
+    >
+      <fieldset disabled={!editing} className="contents">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Clinic name">
           <input
@@ -941,14 +960,20 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         </Field>
       </div>
       {recomputeMsg && <p className="mt-2 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
+      </fieldset>
+      {editing && (
       <SectionSaveBar
         dirty={dirty}
         saved={saved}
         busy={busy}
         onSave={() => void saveProfile()}
-        onCancel={cancel}
+        onCancel={() => {
+          cancel();
+          setEditing(false);
+        }}
         error={error}
       />
+      )}
     </SectionCard>
   );
 }
@@ -986,6 +1011,10 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
       }),
       onDirtyChange
     );
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (editing && saved && !dirty) setEditing(false);
+  }, [editing, saved, dirty]);
   const qrPreviewUrl = publicLogoUrl(form.upiQrPath);
   const signaturePreviewUrl = publicLogoUrl(form.signaturePath);
 
@@ -1035,7 +1064,12 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   }
 
   return (
-    <SectionCard id="settings-card-billing-invoicing" title="Billing & invoicing">
+    <SectionCard
+      id="settings-card-billing-invoicing"
+      title="Billing & invoicing"
+      action={editing ? undefined : <SetOnceEditButton label="Edit billing & invoicing" onClick={() => setEditing(true)} />}
+    >
+      <fieldset disabled={!editing} className="contents">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Invoice prefix">
           <input
@@ -1219,14 +1253,25 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
           )}
         </Field>
       </div>
+      </fieldset>
+      {editing && (
+        <p className="mt-3 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--ink)]">
+          The invoice prefix, fiscal year and tax apply to invoices issued from now on. Invoices already issued keep their numbers and rates.
+        </p>
+      )}
+      {editing && (
       <SectionSaveBar
         dirty={dirty}
         saved={saved}
         busy={busy}
         onSave={() => void saveBilling()}
-        onCancel={cancel}
+        onCancel={() => {
+          cancel();
+          setEditing(false);
+        }}
         error={error}
       />
+      )}
     </SectionCard>
   );
 }
@@ -1264,6 +1309,10 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
       }),
       onDirtyChange
     );
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (editing && saved && !dirty) setEditing(false);
+  }, [editing, saved, dirty]);
   const labels = clinicShareLabels(form);
   const partnerLogoPreviewUrl = publicLogoUrl(form.partnerHospitalLogoPath);
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
@@ -1314,7 +1363,12 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   }
 
   return (
-    <SectionCard id="settings-card-billing-partner" title="Partner & split">
+    <SectionCard
+      id="settings-card-billing-partner"
+      title="Partner & split"
+      action={editing ? undefined : <SetOnceEditButton label="Edit partner & split" onClick={() => setEditing(true)} />}
+    >
+      <fieldset disabled={!editing} className="contents">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field
           label={
@@ -1435,14 +1489,20 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         billed under.
       </p>
       {recomputeMsg && <p className="mt-1 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
+      </fieldset>
+      {editing && (
       <SectionSaveBar
         dirty={dirty}
         saved={saved}
         busy={busy}
         onSave={() => void savePartner()}
-        onCancel={cancel}
+        onCancel={() => {
+          cancel();
+          setEditing(false);
+        }}
         error={error}
       />
+      )}
     </SectionCard>
   );
 }

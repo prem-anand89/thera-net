@@ -56,6 +56,7 @@ import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 import { EditVisitModal } from '@/features/visits/EditVisitModal';
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
+import { NotificationNudge } from '@/features/notifications/NotificationNudge';
 import {
   IconBook,
   IconCloud,
@@ -694,6 +695,7 @@ export function WorkspacePage() {
         rescheduleAppointment={reschedulingAppointment ?? undefined}
       />
       {canEditSettings && <SetupProgressBar clinicId={clinic.id} />}
+      <NotificationNudge />
       <header className="space-y-2.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-sm sm:space-y-3 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
