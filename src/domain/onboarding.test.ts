@@ -46,3 +46,15 @@ describe('onboarding helpers', () => {
     expect(therapistNeedsProfileConfirm(undefined, 'u1')).toBe(false);
   });
 });
+
+describe('clampOnboardingStep with the done step', () => {
+  it('keeps the Done screen on reload once services are saved', () => {
+    expect(clampOnboardingStep('done', 'done')).toBe('done');
+    expect(clampOnboardingStep(2, 'done')).toBe('done');
+  });
+
+  it("doesn't reach Done before services are saved", () => {
+    expect(clampOnboardingStep('done', 'catalog')).toBe(3);
+    expect(clampOnboardingStep('done', 'team')).toBe(2);
+  });
+});

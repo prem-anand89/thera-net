@@ -21,22 +21,25 @@ export function isPathAllowedDuringClinicOnboarding(pathname: string): boolean {
   return false;
 }
 
-export type OnboardingWizardPhase = 'team' | 'password' | 'catalog';
+export type OnboardingWizardPhase = 'team' | 'password' | 'catalog' | 'done';
 
-export type OnboardingWizardStep = 2 | 3 | 'password';
+export type OnboardingWizardStep = 2 | 3 | 'password' | 'done';
 
-/** Clamp deep-linked wizard steps to the furthest phase the user has reached. */
+/** Clamp deep-linked wizard steps to the furthest phase the user has reached.
+ *  'done' is only reachable after the services step has been saved. */
 export function clampOnboardingStep(
   requested: OnboardingWizardStep,
   phase: OnboardingWizardPhase
 ): OnboardingWizardStep {
+  if (phase === 'done') return 'done';
+  const wanted = requested === 'done' ? 3 : requested;
   if (phase === 'team') return 2;
   if (phase === 'password') {
-    if (requested === 3) return 'password';
-    return requested === 'password' ? 'password' : 2;
+    if (wanted === 3) return 'password';
+    return wanted === 'password' ? 'password' : 2;
   }
-  if (requested === 'password') return 3;
-  return requested;
+  if (wanted === 'password') return 3;
+  return wanted;
 }
 
 export function therapistNeedsProfileConfirm(

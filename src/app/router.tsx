@@ -501,9 +501,10 @@ const onboardingRoute = createRoute({
   path: '/onboarding',
   validateSearch: (
     search: Record<string, unknown>
-  ): { step: 2 | 3 | 'password' } => {
+  ): { step: 2 | 3 | 'password' | 'done' } => {
     if (search.step === 3 || search.step === '3') return { step: 3 };
     if (search.step === 'password') return { step: 'password' };
+    if (search.step === 'done') return { step: 'done' };
     return { step: 2 };
   },
   component: OnboardingRoute,

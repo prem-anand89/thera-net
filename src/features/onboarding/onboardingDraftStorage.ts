@@ -82,7 +82,7 @@ export function markPasswordNudgeSkipped(clinicId: string) {
 
 export function getOnboardingWizardPhase(clinicId: string): OnboardingWizardPhase {
   const raw = readWizardItem(clinicId, PHASE_KEY);
-  if (raw === 'password' || raw === 'catalog') return raw;
+  if (raw === 'password' || raw === 'catalog' || raw === 'done') return raw;
   return 'team';
 }
 

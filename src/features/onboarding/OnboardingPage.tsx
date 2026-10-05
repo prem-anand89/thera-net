@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useNavigate } from '@tanstack/react-router';
 import { useClinic } from '@/app/clinicContext';
 import { useClinicRole } from '@/app/useClinicRole';
@@ -43,6 +44,8 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
     loadCatalogDrafts(clinic.id) ?? createStarterCatalogDrafts()
   );
   const [finishBusy, setFinishBusy] = useState(false);
+  const catalogRows = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
+  const catalogCount = (catalogRows ?? []).filter((c) => c.active && c.basePricePaise > 0).length;
   const [finishError, setFinishError] = useState<string | null>(null);
 
   const phase = getOnboardingWizardPhase(clinic.id);
@@ -83,6 +86,20 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
     }
   }
 
+  // The clinic is only marked complete here, on the Done screen. Shell sends
+  // any completed clinic away from /onboarding, so marking it earlier would
+  // skip the Done screen entirely.
+  async function completeAndOpenWorkspace() {
+    const current = await repos.clinics.get(clinic.id);
+    if (current) {
+      const now = new Date().toISOString();
+      await repos.clinics.put({ ...current, onboardingCompletedAt: now, updatedAt: now });
+    }
+    clearOnboardingWizardStorage(clinic.id);
+    void syncEngine.schedule(0);
+    void navigate({ to: '/workspace' });
+  }
+
   async function finishOnboarding() {
     if (!catalogDraftsReadyToSave(catalogDrafts)) {
       setFinishError('Add a price to at least one included service or package.');
@@ -108,14 +125,9 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
         };
         await repos.catalog.put(item);
       }
-      await repos.clinics.put({
-        ...clinic,
-        onboardingCompletedAt: now,
-        updatedAt: now,
-      });
-      clearOnboardingWizardStorage(clinic.id);
+      setOnboardingWizardPhase(clinic.id, 'done');
       void syncEngine.schedule(0);
-      void navigate({ to: '/workspace' });
+      void navigate({ to: '/onboarding', search: { step: 'done' } });
     } catch (e) {
       setFinishError(
         `${toFriendlyMessage(e)} If this mentions a missing column, apply the latest Supabase migrations first.`
@@ -125,14 +137,14 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
     }
   }
 
-  const progressStep = clampedStep === 3 ? 3 : 2;
+  const progressStep = clampedStep === 'done' ? 4 : clampedStep === 3 ? 3 : 2;
 
   if (roleLoading || role !== 'admin') {
     return <p className="text-sm text-[var(--muted)]">Loading…</p>;
   }
 
   return (
-    <div className="mx-auto max-w-lg">
+    <div className="mx-auto max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-8">
       {clampedStep !== 'password' && <OnboardingProgress step={progressStep} />}
       {clampedStep === 2 && <OnboardingTeamStep onContinue={goAfterTeamStep} />}
       {clampedStep === 'password' && (
@@ -143,6 +155,33 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
           }}
           onDone={goToCatalogStep}
         />
+      )}
+      {clampedStep === 'done' && (
+        <div className="space-y-5 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--moss-light)] text-2xl text-[var(--moss-strong)]">
+            ✓
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-semibold text-[var(--ink)]">You’re set up</h1>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              {catalogCount} {catalogCount === 1 ? 'service is' : 'services are'} priced and ready to bill. Add
+              therapists and billing details any time from Settings.
+            </p>
+          </div>
+          <button type="button" className={`${btnPrimary} w-full`} onClick={() => void completeAndOpenWorkspace()}>
+            Go to Workspace
+          </button>
+          <button
+            type="button"
+            className="text-sm font-semibold text-[var(--teal)]"
+            onClick={() => {
+              setOnboardingWizardPhase(clinic.id, 'catalog');
+              void navigate({ to: '/onboarding', search: { step: 3 } });
+            }}
+          >
+            ← Edit services
+          </button>
+        </div>
       )}
       {clampedStep === 3 && (
         <div className="space-y-4">
