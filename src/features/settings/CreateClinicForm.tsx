@@ -224,16 +224,35 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
   if (variant === 'dialog') return formEl;
 
   return (
-    <div className="mx-auto mt-16 max-w-sm px-4">
-      <OnboardingProgress step={1} />
-      <div className="mb-6 flex flex-col items-center gap-2">
-        <img src="/apple-touch-icon.png" alt="" className="h-12 w-12 rounded-[12px]" />
-        <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Create your clinic</h1>
-        <p className="text-center text-sm text-[var(--muted)]">
-          This is what patients see on invoices. Logo and GST can wait until Settings.
-        </p>
+    <div className="mx-auto mt-10 max-w-md px-4 tab:max-w-4xl">
+      <div className="mx-auto max-w-md tab:max-w-none">
+        <OnboardingProgress step={1} />
       </div>
-      {formEl}
+      <div className="tab:grid tab:grid-cols-2 tab:items-stretch tab:gap-6">
+        <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-7">
+          <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Create your clinic</h1>
+          <p className="mb-6 mt-2 text-sm text-[var(--muted)]">
+            This is what patients see on invoices. Logo and GST can wait until Settings.
+          </p>
+          {formEl}
+        </div>
+        <aside
+          aria-label="Invoice header preview"
+          className="mt-6 flex flex-col rounded-[20px] bg-[var(--teal-deep)] p-6 text-white tab:mt-0 sm:p-7"
+        >
+          <p className="text-xs font-medium text-white/60">Invoice header preview</p>
+          <p className="mt-8 font-display text-2xl font-semibold leading-tight">
+            {form.name.trim() || 'Your clinic name'}
+          </p>
+          <p className="mt-2 text-sm text-white/75">{form.address.trim() || 'Street, city'}</p>
+          <p className="mt-1 text-sm text-white/75">
+            {[form.phone.trim(), form.email.trim()].filter(Boolean).join(' · ') || 'Phone and email'}
+          </p>
+          <p className="mt-auto border-t border-white/15 pt-6 text-xs text-white/60">
+            Each invoice is numbered in sequence, so the number never skips.
+          </p>
+        </aside>
+      </div>
     </div>
   );
 }

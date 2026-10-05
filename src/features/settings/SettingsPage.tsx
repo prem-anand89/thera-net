@@ -1535,6 +1535,10 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
       }),
       _onDirtyChange
     );
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (editing && saved && !dirty) setEditing(false);
+  }, [editing, saved, dirty]);
   const [slugCopied, setSlugCopied] = useState(false);
   const bookingUrl = form.bookingSlug ? `${window.location.origin}/book/${form.bookingSlug}` : '';
   const slugInvalid = !!form.bookingSlug && !BOOKING_SLUG_PATTERN.test(form.bookingSlug as string);
@@ -1551,7 +1555,13 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
   }
 
   return (
-    <SectionCard id="settings-card-booking-online" title="Online Booking">
+    <>
+    <SectionCard
+      id="settings-card-booking-online"
+      title="Booking page"
+      action={editing ? undefined : <SetOnceEditButton label="Edit booking page" onClick={() => setEditing(true)} />}
+    >
+      <fieldset disabled={!editing} className="contents">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field
           label={
@@ -1621,6 +1631,23 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
           </div>
         )}
       </div>
+      </fieldset>
+      {editing && (
+        <SectionSaveBar
+        dirty={dirty}
+        saved={saved}
+        busy={busy}
+        onSave={() => void save()}
+        onCancel={() => {
+          cancel();
+          setEditing(false);
+        }}
+        error={slugInvalid ? 'Fix the booking link before saving.' : error}
+        saveDisabled={slugInvalid}
+      />
+      )}
+    </SectionCard>
+    <SectionCard id="settings-card-booking-hours" title="Hours & closures">
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 pt-4 border-t border-[var(--border)]">
         <Field
           label={
@@ -1727,6 +1754,7 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
       />
       <WhatsAppBusinessSubsection clinicId={clinic.id} />
     </SectionCard>
+    </>
   );
 }
 
