@@ -50,9 +50,9 @@ export function NotificationNudge() {
   return (
     <section
       aria-label="Turn on notifications"
-      className="flex flex-col gap-3 rounded-xl border border-[var(--teal-light)] bg-[var(--teal-mist)] px-4 py-3 sm:flex-row sm:items-center"
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-[var(--teal-light)] bg-[var(--teal-mist)] px-4 py-3"
     >
-      <p className="min-w-0 flex-1 text-sm text-[var(--ink)]">
+      <p className="min-w-[14rem] flex-1 text-sm text-[var(--ink)]">
         <span className="font-medium">Get alerts on this device.</span>{' '}
         <span className="text-[var(--muted)]">
           We’ll tell you about new booking requests and schedule changes, with no patient names.
@@ -66,9 +66,11 @@ export function NotificationNudge() {
           Not now
         </button>
       </div>
-      <div className="w-full">
-        <ErrorNote message={error} />
-      </div>
+      {error && (
+        <div className="w-full">
+          <ErrorNote message={error} />
+        </div>
+      )}
     </section>
   );
 }
