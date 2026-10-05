@@ -9,7 +9,6 @@ import { formatINR } from '@/domain/money';
 import { amountInWords } from '@/domain/amountInWords';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import {
-  invoicePeriod,
   isV2Line,
   lineRatePerSessionPaise,
   lineReconciles,
@@ -88,7 +87,7 @@ function LegacyLineItemsTable({
     <div className={`mt-6 ${isSharing ? 'overflow-visible' : 'overflow-x-auto'} print:overflow-visible`}>
       <table className={`w-full ${isA5 ? 'min-w-full text-xs' : 'min-w-[560px] print:min-w-full text-sm'}`}>
         <thead>
-          <tr className={`border-b border-[var(--border)] text-left uppercase tracking-wide text-[var(--muted)] ${isA5 ? 'text-[10px]' : 'text-xs'}`}>
+          <tr className={`border-b border-[var(--border)] text-left font-medium text-[var(--muted)] ${isA5 ? 'text-[10px]' : 'text-xs'}`}>
             <th className="py-2">Service</th>
             <th className="py-2">Sessions</th>
             <th className="py-2 text-right">Catalog price</th>
@@ -104,7 +103,7 @@ function LegacyLineItemsTable({
             // package invoice (fewer session dates than the package size).
             const isPartial = li.sessionDates.length < li.sessionCount;
             return (
-              <tr key={i} className="border-b border-[var(--border)] align-top">
+              <tr key={i} className="border-b border-[var(--border)] align-top print:break-inside-avoid">
                 <td className="py-2 font-medium text-[var(--ink)]">{li.serviceName}</td>
                 <td className="py-2 text-[var(--muted)]">
                   {li.sessionCount > 1
@@ -131,7 +130,7 @@ function LegacyLineItemsTable({
             );
           })}
         </tbody>
-        <tfoot>
+        <tfoot className="print:break-inside-avoid">
           {hasAdjustments && (
             <>
               <tr>
@@ -196,7 +195,7 @@ function LineItemsTable({
     <div className={`mt-6 ${isSharing ? 'overflow-visible' : 'overflow-x-auto'} print:overflow-visible`}>
       <table className={`w-full ${isA5 ? 'min-w-full text-xs' : 'min-w-[680px] print:min-w-full text-sm table-fixed'} border-b-2 border-[var(--border)] pb-2`}>
         <thead>
-          <tr className={`border-y-2 border-[var(--border)] bg-[var(--surface)] text-left uppercase tracking-wide text-[var(--muted)] ${isA5 ? 'text-[10px]' : 'text-xs'}`}>
+          <tr className={`border-y-2 border-[var(--border)] bg-[var(--teal-mist)] text-left font-medium text-[var(--ink)] ${isA5 ? 'text-[10px]' : 'text-xs'}`}>
             <th className="py-2 w-[30%]">Service</th>
             <th className="py-2 w-[20%]">Dates of service</th>
             <th className="py-2 w-[15%]">Sessions</th>
@@ -209,7 +208,7 @@ function LineItemsTable({
           {lineItems.map((li, i) => {
             const caption = lineCaption(li);
             return (
-              <tr key={i} className="border-b border-[var(--border)] align-top">
+              <tr key={i} className="border-b border-[var(--border)] align-top print:break-inside-avoid">
                 <td className="py-2 font-medium text-[var(--ink)]">
                   {li.serviceName}
                   {caption && (
@@ -238,7 +237,7 @@ function LineItemsTable({
             );
           })}
         </tbody>
-        <tfoot>
+        <tfoot className="print:break-inside-avoid">
           {hasAdjustments && (
             <>
               <tr>
@@ -363,7 +362,6 @@ export function InvoicePrintPage() {
   const isPartial = !isPaid && !isVoid && !!balance && balance.paidPaise > 0;
   const hasAdjustments = invoice.lineItems.some((li) => li.adjustmentPaise !== 0);
   const isV2Invoice = invoice.lineItems.length > 0 && invoice.lineItems.every(isV2Line);
-  const period = invoicePeriod(invoice.lineItems);
 
   // v2: every distinct therapist across every line (a merged group can span
   // more than one) — fixes a pre-existing bug where a multi-line invoice's
@@ -578,7 +576,7 @@ export function InvoicePrintPage() {
             )}
           </div>
           <div className="text-right">
-            <p className="text-lg font-bold text-[var(--ink)]">
+            <p className="font-display text-lg font-bold text-[var(--ink)]">
               {isVoid ? 'BILL (VOID)' : isPaid ? 'BILL CUM RECEIPT' : 'BILL'}
             </p>
             <p className="text-[var(--ink)]">{invoice.invoiceNo}</p>
@@ -601,9 +599,9 @@ export function InvoicePrintPage() {
         {/* Clinical details — only when set (old invoices predate the
             field; bulk-issued invoices carry no snapshot by design, see
             the Phase 1 plan's 1.4 section). */}
-        {(invoice.clinicalSnapshot || period) && (
+        {(invoice.clinicalSnapshot) && (
           <section className="mt-4 rounded-md border border-[var(--border)] p-3 text-xs text-[var(--ink)]">
-            <p className="mb-1.5 font-semibold uppercase tracking-wide text-[var(--muted)] border-b border-[var(--border)] pb-1">
+            <p className="mb-1.5 font-medium text-[var(--muted)] border-b border-[var(--border)] pb-1">
               Clinical details
             </p>
             <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2 mt-2">
@@ -635,12 +633,6 @@ export function InvoicePrintPage() {
                 <p className="sm:col-span-2">
                   <span className="text-[var(--muted)] font-medium">Treatment performed: </span>
                   {invoice.clinicalSnapshot.treatmentPerformed}
-                </p>
-              )}
-              {period && (
-                <p>
-                  <span className="text-[var(--muted)] font-medium">Treatment period: </span>
-                  <span className="font-num">{formatDateDMY(period.from)} – {formatDateDMY(period.to)}</span>
                 </p>
               )}
             </div>
