@@ -583,11 +583,11 @@ export function InvoicePrintPage() {
             <p className="text-[var(--muted)]">{formatDateDMY(invoice.issuedAt)}</p>
             {statusLoaded && (
               <p
-                className="mt-1 inline-block rounded border px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-widest"
+                className="mt-1 inline-block rounded-full px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-widest"
                 style={
                   isPaid
-                    ? { borderColor: 'var(--moss-strong)', color: 'var(--moss-strong)' }
-                    : { borderColor: 'var(--rust)', color: 'var(--rust)' }
+                    ? { backgroundColor: 'var(--moss-light)', color: 'var(--moss-strong)' }
+                    : { backgroundColor: 'var(--rust-light)', color: 'var(--rust)' }
                 }
               >
                 {isVoid ? 'VOID' : isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE'}
