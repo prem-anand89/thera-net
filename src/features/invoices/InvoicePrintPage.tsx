@@ -196,12 +196,12 @@ function LineItemsTable({
       <table className={`w-full ${isA5 ? 'min-w-full text-xs' : 'min-w-[680px] print:min-w-full text-sm table-fixed'} border-b-2 border-[var(--border)] pb-2`}>
         <thead>
           <tr className={`border-y-2 border-[var(--border)] bg-[var(--teal-mist)] text-left font-medium text-[var(--ink)] ${isA5 ? 'text-[10px]' : 'text-xs'}`}>
-            <th className="py-2 w-[30%]">Service</th>
-            <th className="py-2 w-[20%]">Dates of service</th>
-            <th className="py-2 w-[15%]">Sessions</th>
-            <th className="py-2 w-[10%] text-right">Rate</th>
+            <th className={`py-2 ${hasAdjustments ? 'w-[35%]' : 'w-[40%]'}`}>Service</th>
+            <th className={`py-2 ${hasAdjustments ? 'w-[15%]' : 'w-[20%]'}`}>Dates of service</th>
+            <th className={`py-2 ${hasAdjustments ? 'w-[10%]' : 'w-[15%]'}`}>Sessions</th>
+            <th className={`py-2 text-right ${hasAdjustments ? 'w-[15%]' : 'w-[10%]'}`}>Unit Price</th>
             {hasAdjustments && <th className="py-2 w-[10%] text-right">Adjustment</th>}
-            <th className="py-2 w-[15%] text-right">Amount</th>
+            <th className="py-2 w-[15%] text-right pr-2">Amount</th>
           </tr>
         </thead>
         <tbody className="align-top border-b border-[var(--border)]">
@@ -219,7 +219,6 @@ function LineItemsTable({
                 <td className="py-2 text-[var(--muted)]">{sessionsCellText(li)}</td>
                 <td className="font-num py-2 text-right whitespace-nowrap">
                   {formatINR(lineRatePerSessionPaise(li))}
-                  <span className="text-xs text-[var(--muted)]">/session</span>
                 </td>
                 {hasAdjustments && (
                   <td className="font-num py-2 text-right whitespace-nowrap">
@@ -232,7 +231,7 @@ function LineItemsTable({
                     )}
                   </td>
                 )}
-                <td className="font-num py-2 text-right font-medium whitespace-nowrap">{formatINR(li.totalPaise)}</td>
+                <td className="font-num py-2 text-right font-medium whitespace-nowrap pr-2">{formatINR(li.totalPaise)}</td>
               </tr>
             );
           })}
@@ -646,42 +645,52 @@ export function InvoicePrintPage() {
             field; bulk-issued invoices carry no snapshot by design, see
             the Phase 1 plan's 1.4 section). */}
         {(invoice.clinicalSnapshot) && (
-          <section className="mt-4 rounded-md border border-[var(--border)] p-3 text-xs text-[var(--ink)]">
-            <p className="mb-1.5 font-medium text-[var(--muted)] border-b border-[var(--border)] pb-1">
+          <section className="mt-4 pt-4 border-t border-[var(--border)] text-[11px] text-[var(--ink)]">
+            <h3 className="mb-2 font-medium text-[var(--muted)] uppercase tracking-wide text-[10px]">
               Clinical details
-            </p>
-            <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2 mt-2">
-              {invoice.clinicalSnapshot?.diagnosis && (
-                <p className="sm:col-span-2">
-                  <span className="text-[var(--muted)] font-medium">Diagnosis: </span>
-                  {invoice.clinicalSnapshot.diagnosis}
-                  {invoice.clinicalSnapshot.diagnosisIcdCode &&
-                    ` (${invoice.clinicalSnapshot.diagnosisIcdCode})`}
-                </p>
-              )}
-              {invoice.clinicalSnapshot?.referringPhysician && (
-                <p>
-                  <span className="text-[var(--muted)] font-medium">Referring physician: </span>
-                  {invoice.clinicalSnapshot.referringPhysician}
-                  {invoice.clinicalSnapshot.physicianRegistrationNo &&
-                    ` (Reg. No. ${invoice.clinicalSnapshot.physicianRegistrationNo})`}
-                </p>
-              )}
-              {invoice.clinicalSnapshot?.placeOfService && (
-                <p>
-                  <span className="text-[var(--muted)] font-medium">Place of service: </span>
-                  {invoice.clinicalSnapshot.placeOfService === 'home'
-                    ? 'Home (domiciliary)'
-                    : 'Clinic'}
-                </p>
-              )}
-              {invoice.clinicalSnapshot?.treatmentPerformed && (
-                <p className="sm:col-span-2">
-                  <span className="text-[var(--muted)] font-medium">Treatment performed: </span>
-                  {invoice.clinicalSnapshot.treatmentPerformed}
-                </p>
-              )}
-            </div>
+            </h3>
+            <table className="w-full text-left table-fixed">
+              <tbody>
+                {invoice.clinicalSnapshot?.diagnosis && (
+                  <tr>
+                    <th className="w-[16.666%] py-0.5 font-medium text-[var(--muted)] align-top">Diagnosis</th>
+                    <td className="py-0.5 text-[var(--ink)] align-top">
+                      : {invoice.clinicalSnapshot.diagnosis}
+                      {invoice.clinicalSnapshot.diagnosisIcdCode &&
+                        ` (${invoice.clinicalSnapshot.diagnosisIcdCode})`}
+                    </td>
+                  </tr>
+                )}
+                {invoice.clinicalSnapshot?.referringPhysician && (
+                  <tr>
+                    <th className="w-[16.666%] py-0.5 font-medium text-[var(--muted)] align-top">Ref. Physician</th>
+                    <td className="py-0.5 text-[var(--ink)] align-top">
+                      : {invoice.clinicalSnapshot.referringPhysician}
+                      {invoice.clinicalSnapshot.physicianRegistrationNo &&
+                        ` (Reg. No. ${invoice.clinicalSnapshot.physicianRegistrationNo})`}
+                    </td>
+                  </tr>
+                )}
+                {invoice.clinicalSnapshot?.placeOfService && (
+                  <tr>
+                    <th className="w-[16.666%] py-0.5 font-medium text-[var(--muted)] align-top">Place of service</th>
+                    <td className="py-0.5 text-[var(--ink)] align-top">
+                      : {invoice.clinicalSnapshot.placeOfService === 'home'
+                        ? 'Home (domiciliary)'
+                        : 'Clinic'}
+                    </td>
+                  </tr>
+                )}
+                {invoice.clinicalSnapshot?.treatmentPerformed && (
+                  <tr>
+                    <th className="w-[16.666%] py-0.5 font-medium text-[var(--muted)] align-top">Treatment</th>
+                    <td className="py-0.5 text-[var(--ink)] align-top">
+                      : {invoice.clinicalSnapshot.treatmentPerformed}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </section>
         )}
 
