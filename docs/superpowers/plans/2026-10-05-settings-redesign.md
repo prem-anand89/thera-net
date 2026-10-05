@@ -1,160 +1,91 @@
-# Settings Redesign Implementation Plan
+# Settings: Live Letterhead Preview + Safe Modularisation
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (or subagent-driven-development). Steps use `- [ ]`.
+> **Read first:** this plan was REWRITTEN after auditing the code. The earlier version assumed a 4-tab / path-routed layout that does not exist. Do not "improve" it by reintroducing `/settings/general`-style routes.
 
-**Goal:** Refactor the monolithic Settings page into a modular, router-based layout with a left sidebar navigation to match the premium mockup, grouping settings into General, Team, Billing & Plans, and Advanced.
+**Goal:** (A) Let admins see a live preview of their invoice letterhead while editing Clinic profile, any time (not just onboarding). (B) Split the 3,280-line `SettingsPage.tsx` into files **without changing behaviour or URLs**.
 
-**Architecture:** We will convert `SettingsPage.tsx` into a layout component (`SettingsLayout.tsx`) holding the left sidebar. The individual setting sections will be extracted into separate files (`GeneralSettings.tsx`, `TeamSettings.tsx`, `BillingSettings.tsx`, `AdvancedSettings.tsx`) and wired as child routes in `@tanstack/react-router`. Legacy query parameter tabs will be replaced with clean URL paths (`/settings/general`, `/settings/team`, etc.), with a redirect from `/settings` to `/settings/general`.
+## Ground truth (verified in code — do not contradict)
 
-**Tech Stack:** React, `@tanstack/react-router`, TailwindCSS
+- Tabs are **6**: `general, team, services, booking, billing, account` (`SETTINGS_TABS` in `src/features/settings/sections.ts`). There is **no** "Advanced" tab.
+- URL state is `/settings?tab=…&catalogView=…&fromSetup=true`, validated by `parseSettingsSearch` (with `LEGACY_TABS` redirects). Route is a single `settingsRoute` in `src/app/router.tsx` (~L400).
+- Callers that depend on `?tab=`: `SetupPage.tsx` (L25), `ClosedDaysSheet.tsx` (L111, `tab:'booking'`), `e2e/settings-mobile-nav.spec.ts`, `e2e/nav-active.spec.ts` (`/settings?tab=team`), `sections.test.ts`, `navActive.ts/.test.ts`.
+- `SettingsPage` owns: active tab, dirty-form tracking (`FormKey` = profile|billing|partner|patientComms → `FORM_TAB`), the `useBlocker` leave-guard (it skips blocking when `next.pathname === '/settings'`), the discard `ConfirmDialog`, card search/anchor scrolling, default-landing logic (Team if unlinked therapists, Services if catalog empty).
+- Section components inside the file: `ClinicProfileSection`(L807) `BillingSection`(L1007) `PartnerSection`(L1307) `PatientCommsSection`(L1536, + `WhatsAppBusinessSubsection`) `Therapists`(L2335, + `RosterCard`, `MemberCard`, `RolePill`, `OnboardingBadge`) `PlanSection`(L703) `HistoricalData` `DataBackup` `DangerZone`; `CatalogSection` is already its own file.
+- Shared helpers every section uses: `useClinicSectionForm` (L551), `SectionSaveBar`(L629), `LockedSectionNotice`(L682), `SetOnceEditButton`(L799), `BoolToggle`(L1913), `toggleSet`, `Accent`/`ACCENT_VARS`.
+- Existing letterhead: `PrintLetterhead({clinic, logoUrl, partnerLogoUrl})` in `src/features/invoices/printChrome.tsx`, used by `InvoicePrintPage` and `AdvanceReceiptPrintPage`. Logo URL = `publicLogoUrl(path)` from `@/lib/supabase`. `ClinicProfileSection` already computes `logoPreviewUrl` from the **draft** `form.logoPath` (L826).
+- Note/ledger/session-log print pages have their own inline letterheads (NOT shared). Out of scope.
 
-**Spec:** The design mockup dictates a vertical sidebar ("General", "Team", "Billing & Plans", "Advanced") alongside content cards on a slightly off-white background.
+## Global constraints (hard rules)
 
-## Global Constraints
-
-- Retain existing form submission and validation logic from `SettingsPage.tsx`.
-- Follow existing codebase UI component patterns (`SectionCard`, `Field`, `Input`, `btnPrimary`).
-- Use existing Tailwind styling patterns.
-
-## Review Focus
-
-- The deep link to `/settings?tab=team` from elsewhere in the app (like `WorkspacePage.tsx` fallback) must correctly resolve or redirect to `/settings/team`.
-- The 'unsaved changes' dirty state guards (`SectionSaveBar`) must work properly within each child route independently.
-- The permissions logic (e.g. `isClinicWideView`, `canEditSettings`) must appropriately guard the routes or redirect to `/workspace`.
+1. **No URL/route changes.** `?tab=` stays the contract. Do not touch `router.tsx` or `sections.ts` tab lists. `sections.test.ts` and e2e specs must pass unmodified.
+2. **No behaviour changes in Phase B.** Moves are cut-and-paste + imports only. **Never duplicate** a helper — move it once to a shared file and import it.
+3. **Reuse `PrintLetterhead`; do not write a second letterhead.** The preview must be the same component invoices use so they cannot drift.
+4. Preview is **read-only and additive**; it must not alter the save/dirty logic of `ClinicProfileSection`.
+5. Follow existing UI (`SectionCard`, `Field`, `inputCls`, `btnPrimary`, CSS vars like `var(--border)`), Tailwind as already used. `desktop:` breakpoint is the existing wide-layout switch.
+6. Don't touch Supabase schema, sync, or services. UI only.
+7. After **every** task: `npm run typecheck && npm run lint && npm run test` must pass, then commit. The pre-push hook runs typecheck+lint; do not bypass it.
 
 ---
 
-### Task 1: Setup Settings Layout and Routing
+## Phase A — Live Letterhead Preview (do this first; small, additive)
 
-**Files:**
-- Create: `src/features/settings/SettingsLayout.tsx`
-- Modify: `src/app/router.tsx`
+### Task A1: Extract a reusable preview component
 
-**Interfaces:**
-- Produces: `SettingsLayout` component holding the sidebar and `<Outlet />`.
-- Produces: Base routes `/settings/general`, `/settings/team`, `/settings/billing`, `/settings/advanced`.
+**Files:** Create `src/features/settings/LetterheadPreview.tsx`
 
-- [ ] **Step 1: Create `SettingsLayout.tsx` with sidebar**
-```tsx
-// Implement the sidebar layout matching the mockup
-// Use <Link> from @tanstack/react-router for navigation
-// Render <Outlet /> for child content
-```
+- [ ] Props: `{ draft: Pick<Clinic,'name'|'address'|'phone'|'email'|'gstNo'|'partnerHospitalName'>; logoUrl: string|null; partnerLogoUrl: string|null }`.
+- [ ] Render `PrintLetterhead` inside a white "paper" card (`bg-white`, border, shadow, small fixed aspect, `pointer-events-none`, `aria-hidden` not needed but label with a caption "Invoice preview"). Build a full `Clinic`-shaped object by spreading the real clinic and overriding the draft fields (do not invent defaults — if name is empty show the existing placeholder text "Your clinic name" via the caller, not by editing `PrintLetterhead`).
+- [ ] Below the header, add a faint skeleton (grey bars) for patient/line items so it reads as an invoice. Static, no data.
+- [ ] Unit test (`LetterheadPreview.test.tsx`, vitest + testing-library as used by `BookSlotSheet.test.tsx`): renders clinic name/address from draft; shows logo `<img>` only when `logoUrl` given.
 
-- [ ] **Step 2: Update `router.tsx` to define nested routes**
-Modify `settingsRoute` to act as a parent using `SettingsLayout`. Add placeholder child routes for General, Team, Billing, and Advanced.
-```tsx
-const settingsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/settings',
-  component: SettingsLayout,
-});
-// Add settingsGeneralRoute, settingsTeamRoute, etc.
-```
+### Task A2: Wire into General tab
 
-- [ ] **Step 3: Handle legacy tab redirects in `router.tsx`**
-Ensure that the root `/settings` redirects to `/settings/general`, and that passing `?tab=team` redirects to `/settings/team` to preserve backward compatibility.
+**Files:** Modify `SettingsPage.tsx` (`ClinicProfileSection` only)
 
-- [ ] **Step 4: Commit**
-```bash
-git add src/features/settings/SettingsLayout.tsx src/app/router.tsx
-git commit -m "feat: setup settings layout and nested routing"
-```
+- [ ] Read `ClinicProfileSection` fully first. Pass `form.name/address/phone/email/gstNo` + `logoPreviewUrl` (already there) + `partnerLogoPreviewUrl` from `clinic` (partner lives in Billing; use saved value only).
+- [ ] Layout: on `desktop:` show preview as a sticky right column (`desktop:sticky desktop:top-20`), on smaller widths show it **collapsed under the form** as a `<details>` "Preview invoice header". Do not make the form narrower on tablet portrait (the file notes iPad portrait already has width problems).
+- [ ] Preview must update on each keystroke from the **unsaved draft** (`form`), so admins see changes before Save.
+- [ ] Do NOT add new dirty state; do not read from `repos` inside the preview.
 
-### Task 2: Extract General Settings
+### Task A3: Verify (evidence required)
 
-**Files:**
-- Create: `src/features/settings/GeneralSettings.tsx`
-- Modify: `src/app/router.tsx`
+- [ ] `npm run dev`; open `/settings?tab=general`. Type in name/address → preview updates live. Upload a logo → appears. Refresh → shows saved values.
+- [ ] Compare against `/invoices/...` print page for the same clinic: header must look identical (same component).
+- [ ] Check 390px, 768px, 1280px widths: no horizontal scroll (see `e2e/settings-mobile-nav.spec.ts` "no sideways scroll").
+- [ ] Run `npx playwright test e2e/settings-mobile-nav.spec.ts` if the env allows.
+- [ ] Commit: `feat(settings): live letterhead preview on General tab`.
 
-**Interfaces:**
-- Consumes: `ClinicProfileSection`, `PatientCommsSection` logic from legacy `SettingsPage.tsx`.
+---
 
-- [ ] **Step 1: Move Clinic Profile and Comms logic**
-Create `GeneralSettings.tsx`. Copy the `ClinicProfileSection` and `PatientCommsSection` functions and their dependencies from `SettingsPage.tsx`.
+## Phase B — Mechanical split of `SettingsPage.tsx` (only after Phase A is merged and green)
 
-- [ ] **Step 2: Combine into a single page view**
-Export a default `GeneralSettings` component that renders both sections vertically with nice spacing.
+Order matters: shared first, then leaves. One commit per task. After each, confirm the file still compiles and behaviour is unchanged.
 
-- [ ] **Step 3: Wire up in `router.tsx`**
-Import `GeneralSettings` and attach it to `settingsGeneralRoute`.
+### Task B1: Move shared helpers
 
-- [ ] **Step 4: Commit**
-```bash
-git add src/features/settings/GeneralSettings.tsx src/app/router.tsx
-git commit -m "feat: extract General Settings page"
-```
+**Files:** Create `src/features/settings/settingsShared.tsx`
 
-### Task 3: Extract Team Settings
+- [ ] Move (export) `useClinicSectionForm`, `SectionSaveBar`, `LockedSectionNotice`, `SetOnceEditButton`, `BoolToggle`, `toggleSet`, `Accent`, `ACCENT_VARS`, `FormKey`. Update imports in `SettingsPage.tsx`. No logic edits.
 
-**Files:**
-- Create: `src/features/settings/TeamSettings.tsx`
-- Modify: `src/app/router.tsx`
+### Task B2–B6: Extract sections (one task each)
 
-**Interfaces:**
-- Consumes: `TeamSection` logic from legacy `SettingsPage.tsx`.
+Create in `src/features/settings/sections/` (avoid clashing with `sections.ts`; name the folder `panels/` instead): 
+- `panels/GeneralPanel.tsx` ← `ClinicProfileSection` (+ `LetterheadPreview` usage)
+- `panels/TeamPanel.tsx` ← `Therapists`, `RosterCard`, `MemberCard`, `RolePill`, `OnboardingBadge`
+- `panels/BookingPanel.tsx` ← `PatientCommsSection`, `WhatsAppBusinessSubsection`, `BOOKING_SLUG_PATTERN`
+- `panels/BillingPanel.tsx` ← `BillingSection`, `PartnerSection`
+- `panels/AccountPanel.tsx` ← `PlanSection`, `HistoricalData`, `DataBackup`, `DangerZone`
 
-- [ ] **Step 1: Move Team logic**
-Create `TeamSettings.tsx`. Copy the `TeamSection` function and its dependencies.
+Rules: keep each component's props identical (`onDirtyChange` etc.); `SettingsPage` keeps tab state, dirty tracking, blocker, discard dialog, search, anchors. Use `React.lazy` per panel **only if** it doesn't change the tab-switch transition behaviour (`startTransition` already wraps tab swaps); otherwise plain imports. Do not move `CatalogSection`.
 
-- [ ] **Step 2: Wire up in `router.tsx`**
-Import `TeamSettings` and attach it to `settingsTeamRoute`.
+### Task B7: Final verification
 
-- [ ] **Step 3: Commit**
-```bash
-git add src/features/settings/TeamSettings.tsx src/app/router.tsx
-git commit -m "feat: extract Team Settings page"
-```
+- [ ] `SettingsPage.tsx` is now a thin shell. `grep -n "function .*Section" SettingsPage.tsx` shows none of the moved ones.
+- [ ] Manually test every tab, `?tab=partner`/`patientComms` legacy links, `fromSetup=true` "Back to setup" link, unsaved-changes prompts (edit General, click Team → discard dialog; edit then navigate away → leave confirm), card search jump + highlight, locked Billing on a lower plan.
+- [ ] `npm run typecheck && npm run lint && npm run test && npm run build`, plus the two settings/nav e2e specs.
+- [ ] Update `FEATURES_AND_SCHEMA.md` Settings section (file layout + letterhead preview). Commit.
 
-### Task 4: Extract Billing & Plans Settings
+## Out of scope (do not do)
 
-**Files:**
-- Create: `src/features/settings/BillingSettings.tsx`
-- Modify: `src/app/router.tsx`
-
-**Interfaces:**
-- Consumes: `BillingSection`, `PartnerSection`, and `PlanSection` logic from legacy `SettingsPage.tsx`.
-
-- [ ] **Step 1: Move Billing logic**
-Create `BillingSettings.tsx`. Copy the `BillingSection`, `PartnerSection`, and `PlanSection` functions and their dependencies.
-
-- [ ] **Step 2: Combine into a single page view**
-Export a default `BillingSettings` component that renders these sections.
-
-- [ ] **Step 3: Wire up in `router.tsx`**
-Import `BillingSettings` and attach it to `settingsBillingRoute`.
-
-- [ ] **Step 4: Commit**
-```bash
-git add src/features/settings/BillingSettings.tsx src/app/router.tsx
-git commit -m "feat: extract Billing Settings page"
-```
-
-### Task 5: Extract Advanced Settings & Cleanup
-
-**Files:**
-- Create: `src/features/settings/AdvancedSettings.tsx`
-- Modify: `src/app/router.tsx`
-- Modify: `src/features/settings/SettingsPage.tsx` (Delete it)
-
-**Interfaces:**
-- Consumes: `CatalogSection`, `DataSection` logic from legacy `SettingsPage.tsx`.
-
-- [ ] **Step 1: Move Advanced logic**
-Create `AdvancedSettings.tsx`. Copy the `CatalogSection` and `DataSection` functions and their dependencies.
-
-- [ ] **Step 2: Wire up in `router.tsx`**
-Import `AdvancedSettings` and attach it to `settingsAdvancedRoute`.
-
-- [ ] **Step 3: Delete legacy monolith**
-Delete `src/features/settings/SettingsPage.tsx` as all its sections have now been successfully extracted. Update any dangling imports in the app that referenced `SettingsPage.tsx`.
-
-- [ ] **Step 4: Verify navigation**
-Run the dev server and verify that clicking through the sidebar correctly loads all the sub-pages without errors.
-
-- [ ] **Step 5: Commit**
-```bash
-git rm src/features/settings/SettingsPage.tsx
-git add src/features/settings/AdvancedSettings.tsx src/app/router.tsx
-git commit -m "feat: extract Advanced Settings and remove legacy monolith"
-```
+Path-based routes, new tabs ("Advanced"), changing `sections.ts`, services-card redesign, moving logo upload, onboarding wizard preview (can reuse `LetterheadPreview` later), print pages other than invoice/receipt letterhead.
