@@ -38,14 +38,14 @@ export function OnboardingPasswordStep({
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Sign in without Google?</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Optional — you signed up with Google. Add a password to also sign in with email on shared clinic
-          devices or if Google isn&apos;t available.
+        <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Add a password</h1>
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          Optional. You signed up with Google. A password lets you sign in with email too, for example on a shared
+          clinic computer or when Google isn&apos;t available.
         </p>
       </div>
       <div className="rounded-xl border border-[var(--teal-light)] bg-[var(--teal-light)]/40 p-3 text-xs text-[var(--muted)]">
-        You can set a password anytime from your account menu (avatar → Set a password).
+        You can add one any time from your account menu, under My account.
       </div>
       <Field label="New password">
         <input

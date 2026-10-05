@@ -189,7 +189,7 @@ export function OnboardingPage({ step }: { step: OnboardingWizardStep }) {
       {clampedStep === 3 && (
         <div className="space-y-4">
           <div>
-            <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Services you bill for</h1>
+            <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Services you bill for</h1>
             <p className="mt-1 text-sm text-[var(--muted)]">
               We&apos;ve filled in common templates — edit group names, session counts, and prices. Uncheck
               anything you don&apos;t offer. You need at least one priced item to continue.

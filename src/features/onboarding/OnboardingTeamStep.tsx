@@ -30,6 +30,7 @@ export function OnboardingTeamStep({
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
   const [continueBusy, setContinueBusy] = useState(false);
+  const [sentInvites, setSentInvites] = useState<{ name: string; email: string }[]>([]);
 
   useEffect(() => {
     if (selfRow) {
@@ -92,6 +93,7 @@ export function OnboardingTeamStep({
       if (payload?.error) throw new Error(payload.error);
       const base = payload?.message || `Invitation sent to ${inviteEmail}`;
       setInviteSuccess(payload?.warning ? `${base}. ${payload.warning}` : base);
+      setSentInvites((list) => [...list, { name: inviteName.trim(), email: inviteEmail.trim() }]);
       setInviteEmail('');
       setInviteName('');
     } catch (e) {
@@ -117,52 +119,69 @@ export function OnboardingTeamStep({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
-        <h1 className="font-display text-xl font-semibold text-[var(--ink)]">Your team</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Invite colleagues now or from Settings later. If you treat patients, add yourself to the service
-          roster with this login.
+        <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Your team</h1>
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          Invite colleagues now or from Settings later. If you treat patients, add yourself to the service roster
+          with this login.
         </p>
       </div>
 
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-3">
-        <label className="flex items-center gap-2 text-sm font-medium text-[var(--ink)]">
-          <input
-            type="checkbox"
-            checked={iTreat}
-            onChange={(e) => setITreat(e.target.checked)}
-          />
-          I treat patients at this clinic
-        </label>
-        {iTreat && (
-          <>
-            <Field label="Your name on the roster">
-              <input
-                className={inputCls}
-                value={rosterName}
-                onChange={(e) => setRosterName(e.target.value)}
-                placeholder="As patients should see it"
-              />
-            </Field>
+      <div className="grid gap-4 tab:grid-cols-2 tab:gap-6">
+        <section aria-labelledby="onboarding-you" className="space-y-4 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
+          <h2 id="onboarding-you" className="font-display text-base font-semibold text-[var(--ink)]">
+            You
+          </h2>
+          <label className="flex min-h-11 items-center gap-3 text-sm font-medium text-[var(--ink)]">
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-[var(--teal)]"
+              checked={iTreat}
+              onChange={(e) => setITreat(e.target.checked)}
+            />
+            I treat patients at this clinic
+          </label>
+          {iTreat ? (
+            <>
+              <Field label="Your name on the roster">
+                <input
+                  className={inputCls}
+                  value={rosterName}
+                  onChange={(e) => setRosterName(e.target.value)}
+                  placeholder="As patients should see it"
+                />
+              </Field>
+              <p className="text-xs text-[var(--muted)]">
+                {selfRow
+                  ? 'Linked to your login. You can refine invoice details on the next screens.'
+                  : 'We will add you to the roster and link this login when you continue.'}
+              </p>
+            </>
+          ) : (
             <p className="text-xs text-[var(--muted)]">
-              {selfRow
-                ? 'Linked to your login — you can refine invoice details on the next screens.'
-                : 'We will add you to the roster and link this login when you continue.'}
+              Skipping roster linking is fine. You can manage the clinic and invite therapists later.
             </p>
-          </>
-        )}
-        {!iTreat && (
-          <p className="text-xs text-[var(--muted)]">
-            Skip roster linking — you can still manage the clinic and invite therapists later.
-          </p>
-        )}
-        <ErrorNote message={linkError} />
-      </div>
+          )}
+          <ErrorNote message={linkError} />
+        </section>
 
-      <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4">
-        <p className="mb-2 text-xs font-semibold text-[var(--muted)]">Invite a therapist</p>
-        <div className="space-y-2">
+        <section aria-labelledby="onboarding-invite" className="space-y-4 rounded-[20px] border border-[var(--border)] bg-[var(--paper)] p-5 sm:p-6">
+          <h2 id="onboarding-invite" className="font-display text-base font-semibold text-[var(--ink)]">
+            Invite a therapist
+          </h2>
+          {sentInvites.length > 0 && (
+            <ul className="flex flex-wrap gap-2" aria-label="Invites sent">
+              {sentInvites.map((invite) => (
+                <li
+                  key={invite.email}
+                  className="rounded-full bg-[var(--moss-light)] px-3 py-1 text-xs font-medium text-[var(--moss-strong)]"
+                >
+                  {invite.name} · invite sent
+                </li>
+              ))}
+            </ul>
+          )}
           <Field label="Name">
             <input
               className={inputCls}
@@ -180,20 +199,15 @@ export function OnboardingTeamStep({
               placeholder="colleague@clinic.com"
             />
           </Field>
-          <button
-            type="button"
-            className={btnSecondary}
-            disabled={inviteBusy}
-            onClick={() => void sendInvite()}
-          >
+          <button type="button" className={btnSecondary} disabled={inviteBusy} onClick={() => void sendInvite()}>
             {inviteBusy ? 'Sending…' : 'Send invite'}
           </button>
-          {inviteSuccess && <p className="text-xs text-[var(--moss)]">{inviteSuccess}</p>}
+          {inviteSuccess && <p className="text-xs text-[var(--moss-strong)]">{inviteSuccess}</p>}
           <ErrorNote message={inviteError} />
-        </div>
+        </section>
       </div>
 
-      <button type="button" className={btnPrimary} disabled={continueBusy} onClick={() => void handleContinue()}>
+      <button type="button" className={`${btnPrimary} w-full tab:w-auto`} disabled={continueBusy} onClick={() => void handleContinue()}>
         {continueBusy ? 'Saving…' : 'Continue'}
       </button>
     </div>
