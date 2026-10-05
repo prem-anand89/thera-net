@@ -38,6 +38,7 @@ import {
   StatTile,
 } from '@/components/ui';
 import { CatalogSection, type CatalogView } from './CatalogSection';
+import { LetterheadPreview } from './LetterheadPreview';
 import {
   SETTINGS_TABS,
   SETTINGS_TAB_META,
@@ -824,6 +825,7 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
     if (editing && saved && !dirty) setEditing(false);
   }, [editing, saved, dirty]);
   const logoPreviewUrl = publicLogoUrl(form.logoPath);
+  const partnerLogoPreviewUrl = publicLogoUrl(clinic.partnerHospitalLogoPath);
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
 
   async function uploadLogo(file: File) {
@@ -866,12 +868,14 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
   }
 
   return (
-    <SectionCard
-      id="settings-card-general-profile"
-      title="Clinic profile"
-      action={editing ? undefined : <SetOnceEditButton label="Edit clinic profile" onClick={() => setEditing(true)} />}
-    >
-      <fieldset disabled={!editing} className="contents">
+    <div className="desktop:flex desktop:items-start desktop:gap-6">
+      <div className="flex-1 min-w-0 space-y-6">
+        <SectionCard
+          id="settings-card-general-profile"
+          title="Clinic profile"
+          action={editing ? undefined : <SetOnceEditButton label="Edit clinic profile" onClick={() => setEditing(true)} />}
+        >
+          <fieldset disabled={!editing} className="contents">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Clinic name">
           <input
@@ -972,6 +976,27 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
       </div>
       {recomputeMsg && <p className="mt-2 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
       </fieldset>
+
+      <details className="mt-6 desktop:hidden">
+        <summary className="cursor-pointer text-sm font-medium text-[var(--teal)] hover:underline">
+          Preview invoice header
+        </summary>
+        <div className="mt-4">
+          <LetterheadPreview 
+            draft={{
+              name: form.name,
+              address: form.address,
+              phone: form.phone,
+              email: form.email,
+              gstNo: clinic.gstNo,
+              partnerHospitalName: clinic.partnerHospitalName
+            }} 
+            logoUrl={logoPreviewUrl} 
+            partnerLogoUrl={partnerLogoPreviewUrl} 
+          />
+        </div>
+      </details>
+
       {editing && (
       <SectionSaveBar
         dirty={dirty}
@@ -985,7 +1010,23 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         error={error}
       />
       )}
-    </SectionCard>
+        </SectionCard>
+      </div>
+      <div className="hidden desktop:sticky desktop:top-20 desktop:block desktop:w-[22rem] desktop:shrink-0">
+        <LetterheadPreview 
+          draft={{
+            name: form.name,
+            address: form.address,
+            phone: form.phone,
+            email: form.email,
+            gstNo: clinic.gstNo,
+            partnerHospitalName: clinic.partnerHospitalName
+          }} 
+          logoUrl={logoPreviewUrl} 
+          partnerLogoUrl={partnerLogoPreviewUrl} 
+        />
+      </div>
+    </div>
   );
 }
 
