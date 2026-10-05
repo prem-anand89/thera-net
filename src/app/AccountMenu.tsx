@@ -13,7 +13,7 @@ import { useClinic } from './clinicContext';
 import { bookingService } from '@/services';
 import { publicTherapistPhotoUrl } from '@/lib/supabase';
 import { HelpFeedbackDialog } from '@/components/HelpFeedbackDialog';
-import { IconBell, IconCalendar, IconSettings } from '@/components/NavIcons';
+import { IconBell, IconCalendar, IconSettings, IconUser } from '@/components/NavIcons';
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import { BrandMark } from '@/components/BrandMark';
 import { initialsFor } from './accountInitials';
@@ -127,9 +127,10 @@ export function AccountMenu({
 
             <div className="border-t border-[var(--border)] px-2 py-2">
               <button type="button" role="menuitem" className={rowCls} onClick={() => openSheet(setAccountOpen)}>
-                <span className="min-w-0 flex-1">
-                  <span className="block">My account</span>
-                  <span className="block text-xs text-[var(--muted)]">Profile, password</span>
+                <IconUser className={rowIcon} />
+                <span className="min-w-0 flex-1 text-left">
+                  <span className="block leading-tight">My account</span>
+                  <span className="mt-0.5 block text-xs text-[var(--muted)]">Profile, password</span>
                 </span>
               </button>
               {myTherapist && (

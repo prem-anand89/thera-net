@@ -182,3 +182,24 @@ export function IconMore({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function IconUser({ className }: { className?: string }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <circle cx="10" cy="7" r="3" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M4 17.5c.6-3.5 3-5.5 6-5.5s5.4 2 6 5.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
