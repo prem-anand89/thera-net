@@ -154,6 +154,110 @@ function toggleSet<T>(set: Set<T>, key: T, present: boolean): Set<T> {
   return next;
 }
 
+/**
+ * Settings search. A pill with a magnifier; results float over the page in a
+ * dropdown, so they never push content down. `compact` sits above the chips
+ * on phones and iPads, `rail` at the top of the desktop sidebar.
+ */
+function SettingsSearch({
+  variant,
+  className,
+  query,
+  onQueryChange,
+  onPick,
+}: {
+  variant: 'compact' | 'rail';
+  className?: string;
+  query: string;
+  onQueryChange: (q: string) => void;
+  onPick: (card: SettingsCard) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const results = matchSettingsCards(query);
+  const listId = `settings-search-results-${variant}`;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const height = variant === 'rail' ? 'h-9 text-[13px]' : 'h-10 text-sm';
+
+  return (
+    <div ref={ref} className={`relative ${className ?? ''}`}>
+      <label className="sr-only" htmlFor={`settings-search-${variant}`}>
+        Search settings
+      </label>
+      <svg
+        aria-hidden
+        viewBox="0 0 16 16"
+        fill="none"
+        className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--muted)]"
+      >
+        <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+      <input
+        id={`settings-search-${variant}`}
+        type="search"
+        role="combobox"
+        aria-expanded={open && query.trim() !== ''}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        autoComplete="off"
+        value={query}
+        placeholder="Search settings"
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          onQueryChange(e.target.value);
+          setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            onQueryChange('');
+            setOpen(false);
+          } else if (e.key === 'Enter' && results[0]) {
+            e.preventDefault();
+            onPick(results[0]);
+          }
+        }}
+        className={`${height} w-full rounded-full border border-[var(--border)] bg-[var(--surface)] pl-9 pr-3.5 text-[var(--ink)] placeholder:text-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20`}
+      />
+      {open && query.trim() && (
+        <ul
+          id={listId}
+          role="listbox"
+          className="absolute left-0 right-0 top-full z-30 mt-1.5 max-h-[60vh] min-w-56 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg"
+        >
+          {results.map((card) => (
+            <li key={card.id} role="option" aria-selected={false}>
+              <button
+                type="button"
+                className="flex min-h-10 w-full items-center justify-between gap-3 px-3 py-1.5 text-left hover:bg-[var(--paper)]"
+                onClick={() => {
+                  setOpen(false);
+                  onPick(card);
+                }}
+              >
+                <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]">{card.title}</span>
+                <span className="shrink-0 text-[11px] text-[var(--muted)]">{SETTINGS_TAB_META[card.tab].label}</span>
+              </button>
+            </li>
+          ))}
+          {results.length === 0 && (
+            <li className="px-3 py-2.5 text-sm text-[var(--muted)]">No settings match “{query.trim()}”.</li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const clinic = useClinic();
   const { canEditSettings } = usePermissions();
@@ -169,8 +273,6 @@ export function SettingsPage() {
   const [pendingTarget, setPendingTarget] = useState<Target | null>(null);
   const [anchor, setAnchor] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
@@ -250,15 +352,7 @@ export function SettingsPage() {
     return () => cancelAnimationFrame(frame);
   }, [anchor, activeTab, catalogView]);
 
-  // Close the results when clicking outside the search.
-  useEffect(() => {
-    if (!searchOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (!searchRef.current?.contains(e.target as Node)) setSearchOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [searchOpen]);
+
 
   // Default landing when no ?tab= was given: Team if anyone is unlinked,
   // Services while the catalog is empty (the week-one blocker), else General.
@@ -314,7 +408,6 @@ export function SettingsPage() {
 
   function pickCard(card: SettingsCard) {
     setQuery('');
-    setSearchOpen(false);
     goTo({ tab: card.tab, catalogView: card.catalogView, anchor: card.id });
   }
 
@@ -337,68 +430,13 @@ export function SettingsPage() {
 
       {showFirstWeek && <FirstWeekChecklist />}
 
-      <div ref={searchRef} className="relative">
-        <label className="sr-only" htmlFor="settings-search">Search settings</label>
-        <svg
-          aria-hidden
-          viewBox="0 0 16 16"
-          fill="none"
-          className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]"
-        >
-          <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-        <input
-          id="settings-search"
-          type="search"
-          role="combobox"
-          aria-expanded={searchOpen && query.trim() !== ''}
-          aria-controls="settings-search-results"
-          aria-autocomplete="list"
-          autoComplete="off"
-          value={query}
-          placeholder="Search settings"
-          onFocus={() => setSearchOpen(true)}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setSearchOpen(true);
-          }}
-          onKeyDown={(e) => {
-            const first = matchSettingsCards(query)[0];
-            if (e.key === 'Escape') {
-              setQuery('');
-              setSearchOpen(false);
-            } else if (e.key === 'Enter' && first) {
-              e.preventDefault();
-              pickCard(first);
-            }
-          }}
-          className="h-11 w-full rounded-full border border-[var(--border)] bg-[var(--surface)] pl-11 pr-4 text-sm text-[var(--ink)] shadow-sm placeholder:text-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
-        />
-        {searchOpen && query.trim() && (
-          <ul
-            id="settings-search-results"
-            role="listbox"
-            className="absolute left-0 right-0 top-full z-30 mt-2 max-h-[60vh] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] py-1.5 shadow-lg"
-          >
-            {matchSettingsCards(query).map((card) => (
-              <li key={card.id} role="option" aria-selected={false}>
-                <button
-                  type="button"
-                  className="flex min-h-11 w-full items-center justify-between gap-3 px-4 py-2 text-left hover:bg-[var(--paper)]"
-                  onClick={() => pickCard(card)}
-                >
-                  <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]">{card.title}</span>
-                  <span className="shrink-0 text-xs text-[var(--muted)]">{SETTINGS_TAB_META[card.tab].label}</span>
-                </button>
-              </li>
-            ))}
-            {matchSettingsCards(query).length === 0 && (
-              <li className="px-4 py-3 text-sm text-[var(--muted)]">No settings match “{query.trim()}”.</li>
-            )}
-          </ul>
-        )}
-      </div>
+      <SettingsSearch
+        variant="compact"
+        className="desktop:hidden"
+        query={query}
+        onQueryChange={setQuery}
+        onPick={pickCard}
+      />
 
       <div className="desktop:flex desktop:items-start desktop:gap-6">
         {/* Chips on phones and through iPad portrait; the side rail only once
@@ -420,10 +458,18 @@ export function SettingsPage() {
             />
           ))}
         </nav>
-        <nav
-          aria-label="Settings sections"
-          className="hidden desktop:sticky desktop:top-20 desktop:flex desktop:w-52 desktop:shrink-0 desktop:flex-col desktop:gap-0.5"
-        >
+        <div className="hidden desktop:sticky desktop:top-20 desktop:block desktop:w-52 desktop:shrink-0">
+          <SettingsSearch
+            variant="rail"
+            className="mb-3"
+            query={query}
+            onQueryChange={setQuery}
+            onPick={pickCard}
+          />
+          <nav
+            aria-label="Settings sections"
+            className="flex flex-col gap-0.5"
+          >
           {SETTINGS_TABS.map((tab) => (
             <SettingsTabButton
               key={tab}
@@ -434,7 +480,8 @@ export function SettingsPage() {
               variant="rail"
             />
           ))}
-        </nav>
+          </nav>
+        </div>
 
         <div className="mx-auto min-w-0 max-w-2xl flex-1 space-y-6 desktop:mx-0 desktop:max-w-none">
           <div>
