@@ -8,6 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { amountInWords } from '@/domain/amountInWords';
 import { formatDateDMY } from '@/domain/fiscalYear';
+import { buildInvoicePaymentLedger } from '@/domain/invoicePaymentLedger';
 import {
   isV2Line,
   lineRatePerSessionPaise,
@@ -319,6 +320,14 @@ export function InvoicePrintPage() {
       invoice?.supersedesInvoiceId ? repos.invoices.get(invoice.supersedesInvoiceId) : undefined,
     [invoice?.supersedesInvoiceId]
   );
+
+  const paymentLedger = useLiveQuery(async () => {
+    if (!invoice) return undefined;
+    const visits = await repos.visits.listByInvoiceId(invoice.id);
+    const payments = (await Promise.all(visits.map((v) => repos.payments.listByVisit(v.id)))).flat();
+    const ip = await repos.invoicePayments.getByInvoiceId(invoice.id);
+    return buildInvoicePaymentLedger(invoice, visits, payments, ip ?? undefined);
+  }, [invoice?.id, invoice?.totalPaise, invoice?.issuedAt, invoice?.paymentMode]);
 
   const [paper, setPaper] = useState<'A4' | 'A5'>('A4');
   const [amending, setAmending] = useState(false);
@@ -713,19 +722,69 @@ export function InvoicePrintPage() {
           />
         )}
 
-        <p className="mt-2 text-sm text-[var(--muted)]">
-          {isPaid ? 'Received with thanks: ' : 'Amount in words: '}
-          {amountInWords(invoice.totalPaise)}
-        </p>
+        {/* Payment Ledger */}
+        {paymentLedger && (
+          <div className="mt-8">
+            <p className="mb-2 font-medium text-[var(--muted)] border-b border-[var(--border)] pb-1 text-xs">
+              Payment Details
+            </p>
+            {paymentLedger.rows.length > 0 ? (
+              <table className="w-full text-left text-xs mb-4">
+                <thead>
+                  <tr className="text-[var(--muted)]">
+                    <th className="py-1 w-1/3 font-medium">Date</th>
+                    <th className="py-1 w-1/3 font-medium">Mode</th>
+                    <th className="py-1 w-1/3 font-medium text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="align-top">
+                  {paymentLedger.rows.map((row, idx) => (
+                    <tr key={idx} className="border-b border-[var(--border)] border-dashed last:border-0">
+                      <td className="py-1.5 text-[var(--ink)]">{formatDateDMY(row.date)}</td>
+                      <td className="py-1.5 text-[var(--ink)]">{row.mode}</td>
+                      <td className="py-1.5 font-num text-right text-[var(--ink)] whitespace-nowrap">
+                        {formatINR(row.amountPaise)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="mb-4 text-xs text-[var(--muted)] italic">No payments recorded</p>
+            )}
 
-        {isPartial && balance && (
-          <p className="mt-2 text-sm font-medium text-[var(--ink)]">
-            Received: <span className="font-num">{formatINR(balance.paidPaise)}</span>
-            {' · '}Balance due: <span className="font-num">{formatINR(balance.remainingPaise)}</span>
-          </p>
+            {/* Balance Details Block */}
+            <div className="flex justify-end mt-4 border-t border-[var(--border)] pt-3">
+              <table className="text-sm">
+                <tbody>
+                  <tr>
+                    <td className="py-1 pr-6 text-right text-[var(--muted)]">Gross Amount</td>
+                    <td className="py-1 font-num text-right text-[var(--ink)] whitespace-nowrap">
+                      {formatINR(paymentLedger.grossPaise)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-1 pr-6 text-right text-[var(--muted)]">Amount Paid</td>
+                    <td className="py-1 font-num text-right text-[var(--ink)] whitespace-nowrap">
+                      {formatINR(paymentLedger.paidPaise)}
+                    </td>
+                  </tr>
+                  <tr className="font-medium text-base">
+                    <td className="pt-2 pr-6 text-right text-[var(--ink)]">Balance Due</td>
+                    <td className="pt-2 font-num text-right text-[var(--ink)] whitespace-nowrap">
+                      {formatINR(paymentLedger.balancePaise)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
 
-        <p className="mt-3 text-sm text-[var(--muted)]">Payment mode: {invoice.paymentMode}</p>
+        <p className="mt-4 text-[11px] text-[var(--muted)]">
+          {paymentLedger && paymentLedger.balancePaise === 0 ? 'Received with thanks: ' : 'Amount in words: '}
+          {amountInWords(paymentLedger ? (paymentLedger.balancePaise === 0 ? paymentLedger.paidPaise : paymentLedger.grossPaise) : invoice.totalPaise)}
+        </p>
 
         <PrintSignatureFooter
           signatureUrl={signatureUrl}

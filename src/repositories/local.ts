@@ -200,6 +200,10 @@ const visits: VisitRepo = {
     const rows = await db.visits.bulkGet(ids);
     return rows.filter((v): v is Visit => Boolean(v));
   },
+  async listByInvoiceId(invoiceId) {
+    const rows = await db.visits.where('invoiceId').equals(invoiceId).toArray();
+    return rows.filter((v) => !v.deleted).sort((a, b) => a.visitDate.localeCompare(b.visitDate));
+  },
   async listByPackageGroup(packageGroupId) {
     const rows = await db.visits.where('packageGroupId').equals(packageGroupId).toArray();
     return rows.filter((v) => !v.deleted).sort((a, b) => a.visitDate.localeCompare(b.visitDate));

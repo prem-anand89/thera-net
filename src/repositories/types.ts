@@ -95,6 +95,7 @@ export interface VisitRepo {
   list(filter: VisitFilter): Promise<Visit[]>;
   listByIds(ids: UUID[]): Promise<Visit[]>;
   listByPackageGroup(packageGroupId: UUID): Promise<Visit[]>;
+  listByInvoiceId(invoiceId: UUID): Promise<Visit[]>;
   put(visit: Visit): Promise<void>;
   softDelete(id: UUID): Promise<void>;
   /** Local stamp after the server-side issue_invoice RPC succeeds */

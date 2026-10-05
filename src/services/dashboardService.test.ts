@@ -124,6 +124,8 @@ function makeFakeRepos() {
       listByIds: async (ids) => ids.map((id) => visits.get(id)!).filter(Boolean),
       listByPackageGroup: async (gid) =>
         [...visits.values()].filter((v) => v.packageGroupId === gid && !v.deleted),
+      listByInvoiceId: async (invId) =>
+        [...visits.values()].filter((v) => v.invoiceId === invId && !v.deleted),
       put: async (v) => void visits.set(v.id, v),
       softDelete: async (id) => {
         const v = visits.get(id);
