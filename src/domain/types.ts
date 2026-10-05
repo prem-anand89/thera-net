@@ -494,6 +494,7 @@ export interface InvoicePatientSnapshot {
   name: string;
   age: number | null;
   sex: string | null;
+  phone?: string | null;
 }
 
 /**

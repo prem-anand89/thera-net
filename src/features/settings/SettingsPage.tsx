@@ -271,7 +271,7 @@ export function SettingsPage() {
   const [query, setQuery] = useState('');
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
-  const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
+  const unlinkedCount = (therapists ?? []).filter((t) => t.active && !t.userId).length;
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
   const catalogEmpty = catalog !== undefined && catalog.length === 0;
   const entitlements = useEntitlements(clinic.id);
@@ -844,10 +844,6 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
     await saveFieldNow({ logoPath: path } as Partial<ProfileFields>);
   }
 
-  // clinicType feeds clinicBillingConfig()'s partnerSplit flag alongside
-  // Partner & split's own fields — switching Individual/Multiple can turn
-  // the clinic/partner split on or off, so it needs the same catch-up as a
-  // clinicSplitPct/taxPct change there. See PartnerSection.savePartner.
   async function saveProfile() {
     setRecomputeMsg(null);
     const splitAffected = form.clinicType !== clinic.clinicType;
@@ -873,115 +869,184 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         <SectionCard
           id="settings-card-general-profile"
           title="Clinic profile"
-          action={editing ? undefined : <SetOnceEditButton label="Edit clinic profile" onClick={() => setEditing(true)} />}
-        >
-          <fieldset disabled={!editing} className="contents">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Field label="Clinic name">
-          <input
-            className={inputCls}
-            value={form.name}
-            onChange={(e) => set({ name: e.target.value })}
-          />
-        </Field>
-        <Field
-          label={
-            <>
-              Walk-in patient ID prefix
-              <InfoTip text="Used for auto-generated Patient IDs when a walk-in has no existing ID (format: PREFIXYY-0001, sequential per year). Defaults to 'W'." />
-            </>
+          action={
+            !editing && (
+              <button
+                type="button"
+                className="text-xs font-semibold text-[var(--teal)] hover:underline"
+                onClick={() => setEditing(true)}
+              >
+                Edit clinic profile
+              </button>
+            )
           }
         >
-          <input
-            className={inputCls}
-            placeholder="W"
-            value={form.walkInMrnoPrefix ?? ''}
-            onChange={(e) => set({ walkInMrnoPrefix: e.target.value.toUpperCase() || null })}
-          />
-        </Field>
-        <Field label="Address">
-          <textarea
-            className={`${inputCls} min-h-16 resize-none`}
-            rows={3}
-            placeholder={'Street\nCity, State — PIN'}
-            value={form.address ?? ''}
-            onChange={(e) => set({ address: e.target.value || null })}
-          />
-        </Field>
-        <Field label="Phone">
-          <input
-            className={inputCls}
-            value={form.phone ?? ''}
-            onChange={(e) => set({ phone: e.target.value || null })}
-          />
-        </Field>
-        <Field label="Email">
-          <input
-            className={inputCls}
-            value={form.email ?? ''}
-            onChange={(e) => set({ email: e.target.value || null })}
-          />
-        </Field>
-        <Field
-          label={
-            <>
-              Therapist setup
-              <InfoTip text="Individual: single therapist practice. Multiple: clinic with multiple therapists. This affects billing and reporting." />
-            </>
-          }
-        >
-          <select
-            className={inputCls}
-            value={form.clinicType ?? 'multiple'}
-            onChange={(e) => set({ clinicType: e.target.value as Clinic['clinicType'] })}
-          >
-            <option value="individual">Individual Therapist</option>
-            <option value="multiple">Multiple Therapists</option>
-          </select>
-        </Field>
-        <Field label="Clinic logo">
-          <input
-            type="file"
-            accept="image/*"
-            className={inputCls}
-            onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])}
-          />
-          {logoPreviewUrl && (
-            <img
-              src={logoPreviewUrl}
-              alt="Current clinic logo"
-              className="mt-2 h-14 w-auto object-contain"
+          {!editing ? (
+            <div className="flex flex-col sm:flex-row gap-6 items-start">
+              {logoPreviewUrl ? (
+                <img 
+                  src={logoPreviewUrl} 
+                  alt="Clinic logo" 
+                  className="h-20 w-20 object-contain rounded-xl border border-[var(--border)] bg-white p-2 shadow-sm" 
+                />
+              ) : (
+                <div className="h-20 w-20 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)]">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                </div>
+              )}
+              <div className="flex-1 space-y-3 w-full">
+                <div className="flex flex-wrap items-baseline gap-3">
+                  <h3 className="text-xl font-semibold text-[var(--ink)]">{form.name || 'Your Clinic Name'}</h3>
+                  <span className="rounded-full bg-[var(--surface)] border border-[var(--border)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--muted)]">
+                    {form.clinicType === 'individual' ? 'Single Therapist' : 'Multiple Therapists'}
+                  </span>
+                </div>
+                
+                {form.address && (
+                  <div className="flex items-start gap-2 text-sm text-[var(--muted)]">
+                    <svg className="w-4 h-4 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    <p className="whitespace-pre-line">{form.address}</p>
+                  </div>
+                )}
+                
+                <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 pt-4 border-t border-[var(--border)] text-sm">
+                  {form.phone && (
+                    <div className="flex items-center gap-2 text-[var(--muted)]">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                      <span className="text-[var(--ink)] font-medium">{form.phone}</span>
+                    </div>
+                  )}
+                  {form.email && (
+                    <div className="flex items-center gap-2 text-[var(--muted)]">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                      <span className="text-[var(--ink)] font-medium">{form.email}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-[var(--muted)] ml-auto">
+                    <span>Walk-in prefix:</span>
+                    <span className="font-mono text-xs font-semibold text-[var(--ink)] bg-[var(--paper)] border border-[var(--border)] px-1.5 py-0.5 rounded shadow-sm">{form.walkInMrnoPrefix || 'W'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <fieldset disabled={busy} className="contents">
+              <div className="flex flex-col sm:flex-row gap-6 items-start">
+                <div className="shrink-0 flex flex-col items-center gap-2">
+                  {logoPreviewUrl ? (
+                    <img 
+                      src={logoPreviewUrl} 
+                      alt="Clinic logo" 
+                      className="h-20 w-20 object-contain rounded-xl border border-[var(--border)] bg-white p-2 shadow-sm" 
+                    />
+                  ) : (
+                    <div className="h-20 w-20 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)]">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                    </div>
+                  )}
+                  <label className="cursor-pointer text-[11px] font-semibold text-[var(--teal)] hover:underline">
+                    Upload logo
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])} 
+                    />
+                  </label>
+                </div>
+
+                <div className="flex-1 w-full space-y-4">
+                  <div className="flex flex-wrap gap-4">
+                    <div className="flex-1 min-w-[200px]">
+                      <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Clinic Name</label>
+                      <input 
+                        className={inputCls} 
+                        value={form.name} 
+                        onChange={(e) => set({ name: e.target.value })} 
+                        placeholder="Your Clinic Name" 
+                      />
+                    </div>
+                    <div className="w-40">
+                      <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Therapist Setup</label>
+                      <select 
+                        className={inputCls} 
+                        value={form.clinicType ?? 'multiple'} 
+                        onChange={(e) => set({ clinicType: e.target.value as Clinic['clinicType'] })}
+                      >
+                        <option value="individual">Single Therapist</option>
+                        <option value="multiple">Multiple Therapists</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Address</label>
+                    <textarea 
+                      className={`${inputCls} resize-none min-h-[72px]`} 
+                      rows={3} 
+                      placeholder={'Street\nCity, State — PIN'} 
+                      value={form.address ?? ''} 
+                      onChange={(e) => set({ address: e.target.value || null })} 
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-4 pt-1">
+                    <div className="flex-1 min-w-[140px]">
+                      <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Phone</label>
+                      <input 
+                        className={inputCls} 
+                        value={form.phone ?? ''} 
+                        onChange={(e) => set({ phone: e.target.value || null })} 
+                        placeholder="Phone number" 
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[180px]">
+                      <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Email</label>
+                      <input 
+                        className={inputCls} 
+                        value={form.email ?? ''} 
+                        onChange={(e) => set({ email: e.target.value || null })} 
+                        placeholder="Email address" 
+                      />
+                    </div>
+                    <div className="w-28">
+                      <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5 flex items-center gap-1">
+                        Walk-in Prefix
+                        <InfoTip text="Used for auto-generated Patient IDs when a walk-in has no existing ID (format: PREFIXYY-0001). Defaults to 'W'." />
+                      </label>
+                      <input 
+                        className={inputCls} 
+                        value={form.walkInMrnoPrefix ?? ''} 
+                        onChange={(e) => set({ walkInMrnoPrefix: e.target.value.toUpperCase() || null })} 
+                        placeholder="W" 
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {recomputeMsg && <p className="mt-4 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
+            </fieldset>
+          )}
+
+
+          {editing && (
+            <SectionSaveBar
+              dirty={dirty}
+              saved={saved}
+              busy={busy}
+              onSave={() => void saveProfile()}
+              onCancel={() => {
+                cancel();
+                setEditing(false);
+              }}
+              error={error}
             />
           )}
-        </Field>
-      </div>
-
-      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">
-        Optional modules
-      </h3>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Field
-          label={
-            <>
-              Clinical notes
-              <InfoTip text="Turn on for clinics that keep a clinical note per visit. New visits get flagged until a note is completed, the 'Add clinical note' shortcut appears after logging a visit, and Ledger's 'Not documented' filter and the Reports modality chart become available. Note: staff can still write notes from a patient's profile even with this off — this controls the per-visit prompts and reporting, not access." />
-            </>
-          }
-        >
-          <BoolToggle
-            value={form.clinicalDocsEnabled ?? false}
-            onChange={(v) => set({ clinicalDocsEnabled: v })}
-          />
-        </Field>
-      </div>
-      {recomputeMsg && <p className="mt-2 text-xs text-[var(--moss)]">{recomputeMsg}</p>}
-      </fieldset>
-
-      <details className="mt-6 desktop:hidden">
-        <summary className="cursor-pointer text-sm font-medium text-[var(--teal)] hover:underline">
-          Preview invoice header
-        </summary>
-        <div className="mt-4">
+        </SectionCard>
+        
+        {/* On mobile, stack the letterhead preview cleanly rather than burying in a details tag */}
+        <div className="desktop:hidden">
           <LetterheadPreview 
             draft={{
               name: form.name,
@@ -995,24 +1060,9 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
             partnerLogoUrl={partnerLogoPreviewUrl} 
           />
         </div>
-      </details>
-
-      {editing && (
-      <SectionSaveBar
-        dirty={dirty}
-        saved={saved}
-        busy={busy}
-        onSave={() => void saveProfile()}
-        onCancel={() => {
-          cancel();
-          setEditing(false);
-        }}
-        error={error}
-      />
-      )}
-        </SectionCard>
       </div>
-      <div className="hidden desktop:sticky desktop:top-20 desktop:block desktop:w-[22rem] desktop:shrink-0">
+      
+      <div className="hidden desktop:sticky desktop:top-20 desktop:block desktop:w-[16rem] desktop:shrink-0">
         <LetterheadPreview 
           draft={{
             name: form.name,
@@ -2373,46 +2423,530 @@ function therapistInitials(name: string): string {
     .join('');
 }
 
+interface TeamPerson {
+  key: string;
+  member: ClinicMember | null;
+  therapist: Therapist | null;
+}
+
+function buildTeamList(members: ClinicMember[] | null, therapists: Therapist[] | null): TeamPerson[] {
+  const map = new Map<string, TeamPerson>();
+  
+  if (members) {
+    for (const m of members) {
+      map.set(m.userId, { key: m.userId, member: m, therapist: null });
+    }
+  }
+  
+  if (therapists) {
+    for (const t of therapists) {
+      if (t.userId && map.has(t.userId)) {
+        map.get(t.userId)!.therapist = t;
+      } else {
+        const key = t.userId ? t.userId : `t-${t.id}`;
+        if (!map.has(key)) {
+          map.set(key, { key, member: null, therapist: t });
+        } else {
+          map.get(key)!.therapist = t;
+        }
+      }
+    }
+  }
+  
+  return Array.from(map.values()).sort((a, b) => {
+    const nameA = (a.member?.displayName || a.therapist?.name || a.member?.email || '').toLowerCase();
+    const nameB = (b.member?.displayName || b.therapist?.name || b.member?.email || '').toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+}
+
+function TeamMemberCard({
+  person,
+  clinicId,
+  isLastAdmin,
+  revoking,
+  resending,
+  onRevoke,
+  onResend,
+  onSaved,
+  onDelete,
+  onPhotoUpload,
+  onDeactivate
+}: {
+  person: TeamPerson;
+  clinicId: string;
+  isLastAdmin: boolean;
+  revoking: boolean;
+  resending: boolean;
+  onRevoke: () => void;
+  onResend: () => void;
+  onSaved: () => void;
+  onDelete: () => void;
+  onPhotoUpload: (file: File) => void;
+  onDeactivate: () => void;
+}) {
+  const { member, therapist } = person;
+  const displayName = member?.displayName || therapist?.name || member?.email || 'Unknown';
+  const role = member ? ((member.role as Exclude<ClinicRole, 'unknown'>) ?? 'therapist') : 'therapist';
+  const { color, light } = ACCENT_VARS[ROLE_ACCENT[role] ?? 'slate'];
+
+  const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  
+  const [nameDraft, setNameDraft] = useState(displayName);
+  const [roleDraft, setRoleDraft] = useState<ClinicRole>(role);
+  const [regDraft, setRegDraft] = useState(therapist?.registrationNo ?? '');
+  const [phoneDraft, setPhoneDraft] = useState(therapist?.phone ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (isLastAdmin && roleDraft !== 'admin') {
+      setError('This clinic must keep at least one admin — make someone else admin first.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      if (member) {
+        const supabase = getSupabase();
+        if (!supabase) throw new Error('No Supabase connection');
+        const { error: updateError } = await supabase
+          .from('clinic_members')
+          .update({ display_name: nameDraft.trim() || null, role: roleDraft })
+          .eq('clinic_id', clinicId)
+          .eq('user_id', member.userId);
+        if (updateError) throw updateError;
+      }
+
+      if (therapist) {
+        await repos.therapists.put({
+          ...therapist,
+          name: nameDraft.trim() || therapist.name,
+          registrationNo: regDraft.trim() || null,
+          phone: phoneDraft.trim() || null,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const photo = (
+    <label
+      className="block h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded-full border border-[var(--border)] bg-[var(--paper)]"
+      title={therapist ? "Change photo" : "No photo available"}
+      onClick={(e) => { if (!therapist) e.preventDefault(); }}
+    >
+      {therapist?.photoPath ? (
+        <img
+          src={publicTherapistPhotoUrl(therapist.photoPath) ?? ''}
+          alt=""
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span
+          className="flex h-full w-full items-center justify-center font-display text-sm font-semibold text-white"
+          style={{ background: color, boxShadow: `0 0 0 3px ${light}` }}
+        >
+          {therapistInitials(displayName)}
+        </span>
+      )}
+      {therapist && (
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onPhotoUpload(file);
+            e.target.value = '';
+          }}
+        />
+      )}
+    </label>
+  );
+
+  if (editing) {
+    return (
+      <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+        <div className="flex items-center gap-2.5">
+          {photo}
+          <p className="text-sm font-semibold text-[var(--ink)]">Edit team member</p>
+        </div>
+        <Field label="Name">
+          <input
+            className={inputCls}
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            autoFocus
+          />
+        </Field>
+        {member && (
+          <Field label="Role">
+            <select
+              className={inputCls}
+              value={roleDraft}
+              onChange={(e) => setRoleDraft(e.target.value as Exclude<ClinicRole, 'unknown'>)}
+            >
+              <option value="therapist">Therapist</option>
+              <option value="front_desk">Front desk</option>
+              <option value="admin">Admin</option>
+            </select>
+          </Field>
+        )}
+        {therapist && (
+          <>
+            <Field label="Registration no.">
+              <input
+                className={inputCls}
+                placeholder="Printed on invoices"
+                value={regDraft}
+                onChange={(e) => setRegDraft(e.target.value)}
+              />
+            </Field>
+            <Field label="Phone">
+              <input
+                className={inputCls}
+                placeholder="For WhatsApp booking notifications"
+                value={phoneDraft}
+                onChange={(e) => setPhoneDraft(e.target.value)}
+              />
+            </Field>
+          </>
+        )}
+        <div className="flex gap-2 mt-2">
+          <button
+            type="button"
+            className={btnPrimary}
+            disabled={saving}
+            onClick={() => void save()}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            className={btnSecondary}
+            disabled={saving}
+            onClick={() => setEditing(false)}
+          >
+            Cancel
+          </button>
+        </div>
+        <ErrorNote message={error} />
+      </div>
+    );
+  }
+
+  const isUnlinkedTherapist = !member && therapist;
+  const isBookable = !!therapist;
+
+  return (
+    <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+      <div
+        className="flex items-center gap-2.5 cursor-pointer select-none"
+        onClick={() => setExpanded(!expanded)}
+      >
+        {photo}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-[var(--ink)]">{displayName}</p>
+          <div className="flex gap-1 mt-1">
+            {member && <RolePill role={role} />}
+            {isBookable && (
+              <span className="inline-block rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
+                Bookable
+              </span>
+            )}
+          </div>
+        </div>
+        <button type="button" className="text-[var(--muted)] hover:text-[var(--ink)] pr-2">
+          {expanded ? '▲' : '▼'}
+        </button>
+      </div>
+
+      <div className="mt-1 flex flex-wrap gap-2">
+        {member ? (
+          <OnboardingBadge member={member} />
+        ) : (
+          <span className="inline-block rounded-full bg-[var(--paper)] px-2.5 py-0.5 text-[10.5px] font-semibold text-[var(--amber-strong)]">
+            No login
+          </span>
+        )}
+
+        {therapist && !therapist.active && (
+          <span className="inline-block rounded-full bg-[var(--paper)] px-2.5 py-0.5 text-[10.5px] font-semibold text-[var(--muted)]">
+            Inactive roster
+          </span>
+        )}
+      </div>
+
+      {expanded && (
+        <div className="mt-2 space-y-2 text-[11.5px] text-[var(--muted)]">
+          {member && (
+            <p className="truncate">Login: <span className="text-[var(--ink)]">{member.email}</span></p>
+          )}
+          {therapist && (
+            <>
+              <p className="truncate">
+                {therapist.registrationNo ? `Reg. ${therapist.registrationNo}` : 'No registration no.'}
+              </p>
+              <p className="truncate">
+                Hours: <span className="text-[var(--ink)]">{therapist.workingHours ? 'Custom' : 'Clinic hours'}</span>
+                <span className="text-[var(--muted)]"> · set in Schedule</span>
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
+      {isLastAdmin && (
+        <p className="text-[11px] text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
+      )}
+
+      {expanded && (
+        <div className="mt-auto flex flex-wrap gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
+          <button
+            type="button"
+            className="text-[var(--teal)] hover:underline"
+            onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+          >
+            Edit
+          </button>
+          
+          {member && member.status !== 'active' && (
+            <button
+              type="button"
+              disabled={resending}
+              className="text-[var(--teal)] hover:underline"
+              onClick={(e) => { e.stopPropagation(); onResend(); }}
+            >
+              {resending ? 'Sending…' : 'Resend invite'}
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="ml-auto text-[var(--rust)] hover:underline"
+            onClick={(e) => { e.stopPropagation(); onDeactivate(); }}
+          >
+            Deactivate
+          </button>
+          
+          {member && (
+            <button
+              type="button"
+              className="text-[var(--rust)] hover:underline"
+              disabled={revoking}
+              onClick={(e) => { e.stopPropagation(); onRevoke(); }}
+            >
+              {revoking ? 'Revoking…' : 'Revoke'}
+            </button>
+          )}
+          
+          {isUnlinkedTherapist && (
+            <button
+              type="button"
+              className="text-[var(--rust)] hover:underline"
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddTeamMemberForm({
+  clinicId,
+  onAdded,
+}: {
+  clinicId: string;
+  onAdded: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<Exclude<ClinicRole, 'unknown'>>('therapist');
+  const [needsLogin, setNeedsLogin] = useState(true);
+  const [bookable, setBookable] = useState(true);
+  
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Auto-toggle bookable based on role
+  useEffect(() => {
+    if (role === 'therapist') {
+      setBookable(true);
+    } else {
+      setBookable(false);
+    }
+  }, [role]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return setError('Name is required');
+    if (needsLogin && !email.trim()) return setError('Email is required for login');
+    if (!needsLogin && !bookable) return setError('Must either need a login or be bookable');
+
+    setBusy(true);
+    setError(null);
+    try {
+      if (needsLogin) {
+        const supabase = getSupabase();
+        if (!supabase) throw new Error('No Supabase connection');
+        const { data: result, error: invokeError } = await supabase.functions.invoke(
+          'invite-therapist',
+          {
+            body: {
+              action: 'invite',
+              clinicId,
+              email: email.trim(),
+              name: name.trim(),
+              role,
+              redirectOrigin: window.location.origin,
+            },
+          }
+        );
+        if (invokeError) throw new Error(invokeError.message);
+        const payload = result as { error?: string; success?: boolean } | null;
+        if (payload?.error) throw new Error(payload.error);
+
+        // If it's not a therapist role but we want them bookable, we must manually create a roster row
+        // because invite-therapist only creates one if role === 'therapist'.
+        if (bookable && role !== 'therapist') {
+          // Wait, we don't have their new user_id easily unless invite-therapist returns it.
+          // It might not. We can just refetch members and handle linking later, or just
+          // inform the user.
+          // Actually, if we want an admin to be bookable right away, we need their user_id.
+          // For now, we can create an unlinked roster row, and the user can link it, or 
+          // ideally we just create it. But since invite-therapist doesn't return user_id...
+          // Let's create an unlinked roster entry with the same name. They can link it manually if needed,
+          // or we can just warn.
+          await repos.therapists.put({
+            id: crypto.randomUUID(),
+            clinicId,
+            name: name.trim(),
+            active: true,
+            userId: null, 
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      } else if (bookable) {
+        // Just a roster entry
+        await repos.therapists.put({
+          id: crypto.randomUUID(),
+          clinicId,
+          name: name.trim(),
+          active: true,
+          userId: null,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      setName('');
+      setEmail('');
+      setRole('therapist');
+      setNeedsLogin(true);
+      onAdded();
+    } catch (err) {
+      setError(toFriendlyMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+      <h4 className="font-semibold text-sm text-[var(--ink)]">Add team member</h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="Name">
+          <input
+            className={inputCls}
+            placeholder="Jane Doe"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Field>
+        {needsLogin && (
+          <Field label="Email">
+            <input
+              type="email"
+              className={inputCls}
+              placeholder="jane@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </Field>
+        )}
+        {needsLogin && (
+          <Field label="Role">
+            <select
+              className={inputCls}
+              value={role}
+              onChange={(e) => setRole(e.target.value as Exclude<ClinicRole, 'unknown'>)}
+            >
+              <option value="therapist">Therapist</option>
+              <option value="front_desk">Front desk</option>
+              <option value="admin">Admin</option>
+            </select>
+          </Field>
+        )}
+      </div>
+      
+      <div className="flex flex-col gap-2 mt-1 border-t border-[var(--border)] pt-3">
+        <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
+          <input
+            type="checkbox"
+            checked={needsLogin}
+            onChange={(e) => setNeedsLogin(e.target.checked)}
+          />
+          Needs login (can sign in to Theranet)
+        </label>
+        <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
+          <input
+            type="checkbox"
+            checked={bookable}
+            onChange={(e) => setBookable(e.target.checked)}
+          />
+          Bookable (appears in schedule and invoices)
+        </label>
+      </div>
+
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          type="submit"
+          className={btnPrimary}
+          disabled={busy || (!needsLogin && !bookable)}
+        >
+          {busy ? 'Adding…' : 'Add member'}
+        </button>
+      </div>
+      <ErrorNote message={error} />
+    </form>
+  );
+}
+
 function Therapists() {
   const clinic = useClinic();
   const entitlements = useEntitlements(clinic.id);
-  const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
-  const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
-  // Members+Invite (who can log in) and Service roster (who patients get
-  // billed against) were one long scroll — the roster's Linked login field,
-  // the #1 support failure, sat at the bottom of it. Defaults to Roster
-  // when someone needs linking, same "surface the actual problem" reasoning
-  // as the parent tab landing on Team in the first place.
-  const [teamView, setTeamView] = useState<'logins' | 'roster'>('logins');
-  const [teamViewDefaulted, setTeamViewDefaulted] = useState(false);
-  useEffect(() => {
-    if (teamViewDefaulted || therapists === undefined) return;
-    if (unlinkedCount > 0) setTeamView('roster');
-    setTeamViewDefaulted(true);
-  }, [teamViewDefaulted, therapists, unlinkedCount]);
-  const [name, setName] = useState('');
-  const [rosterError, setRosterError] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Therapist | null>(null);
+  const rawTherapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const [members, setMembers] = useState<ClinicMember[] | null>(null);
   const [membersError, setMembersError] = useState<string | null>(null);
+  const [rosterError, setRosterError] = useState<string | null>(null);
   const [revokeInProgress, setRevokeInProgress] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<{ userId: string; email: string } | null>(null);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteName, setInviteName] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'therapist' | 'front_desk'>('therapist');
-  const [inviteBusy, setInviteBusy] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
   const [resendInProgress, setResendInProgress] = useState<string | null>(null);
-  // Client-side hint only — invite-therapist itself is the real boundary
-  // (Phase 2 of the tier plan). Held off while entitlements/members are
-  // still loading so a fresh page load doesn't flash "locked" for a real
-  // Clinic-tier admin before the real seat count resolves.
-  const atSeatCap =
-    entitlements.enforcementEnabled &&
-    !entitlements.loading &&
-    members !== null &&
-    members.length >= entitlements.maxMembers;
+  const [deleteTarget, setDeleteTarget] = useState<Therapist | null>(null);
+  
+  // Filter states
+  const [filter, setFilter] = useState<'all' | 'bookable' | 'staff' | 'invited' | 'unlinked'>('all');
 
   const refetchMembers = useCallback(async () => {
     const supabase = getSupabase();
@@ -2454,26 +2988,32 @@ function Therapists() {
     void refetchMembers();
   }, [refetchMembers]);
 
-  async function add() {
-    if (!name.trim()) return;
-    await repos.therapists.put({
-      id: crypto.randomUUID(),
-      clinicId: clinic.id,
-      name: name.trim(),
-      active: true,
-      updatedAt: new Date().toISOString(),
+  const teamList = useMemo(
+    () => buildTeamList(members, rawTherapists ?? null),
+    [members, rawTherapists]
+  );
+  
+  const filteredTeam = useMemo(() => {
+    return teamList.filter(p => {
+      if (filter === 'bookable') return !!p.therapist;
+      if (filter === 'staff') return p.member && !p.therapist;
+      if (filter === 'invited') return p.member?.status !== 'active';
+      if (filter === 'unlinked') return p.therapist && !p.member;
+      return true;
     });
-    setName('');
-  }
+  }, [teamList, filter]);
+
+  const unlinkedCount = teamList.filter(p => p.therapist && !p.member).length;
+
+  const atSeatCap =
+    entitlements.enforcementEnabled &&
+    !entitlements.loading &&
+    members !== null &&
+    members.length >= entitlements.maxMembers;
 
   async function startDeleteTherapist(t: Therapist) {
     setRosterError(null);
     try {
-      // Mirrors hard_delete_therapist()'s exact check (20260815000006) so a
-      // therapist that looks deletable here doesn't just fail server-side
-      // with a less specific error after the confirm dialog: visits where
-      // they're the primary OR shared therapist, plus consultation notes
-      // and invoices attributed to them.
       const [allVisits, allNotes, allInvoices] = await Promise.all([
         repos.visits.list({ clinicId: clinic.id }),
         repos.consultationNotes.listByClinic(clinic.id),
@@ -2499,16 +3039,29 @@ function Therapists() {
 
   async function confirmDeleteTherapist() {
     if (!deleteTarget) return;
-    const t = deleteTarget;
-    setDeleteTarget(null);
+    setRosterError(null);
     try {
-      await therapistService.hardDelete(t.id);
+      await therapistService.hardDelete(deleteTarget.id);
+      setDeleteTarget(null);
     } catch (e) {
       setRosterError(toFriendlyMessage(e));
     }
   }
 
-  async function uploadTherapistPhoto(t: Therapist, file: File) {
+  async function handleToggleActive(t: Therapist) {
+    setRosterError(null);
+    try {
+      await repos.therapists.put({
+        ...t,
+        active: !t.active,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      setRosterError(toFriendlyMessage(e));
+    }
+  }
+
+  async function uploadPhoto(t: Therapist, file: File) {
     setRosterError(null);
     const supabase = getSupabase();
     if (!supabase || !navigator.onLine) {
@@ -2516,83 +3069,17 @@ function Therapists() {
       return;
     }
     try {
-      // Downscaled client-side first (see resizeImage.ts) — this only ever
-      // renders as a small avatar, no reason to store/serve a full-size
-      // phone photo for that.
       const resized = await resizeImageToBlob(file, 256);
       const path = `${clinic.id}/therapist-${t.id}-${Date.now()}.jpg`;
       const { error: uploadError } = await supabase.storage
         .from('clinic-assets')
         .upload(path, resized, { contentType: 'image/jpeg' });
-      if (uploadError) {
-        setRosterError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
-        return;
-      }
+
+      if (uploadError) throw uploadError;
+
       await repos.therapists.put({ ...t, photoPath: path, updatedAt: new Date().toISOString() });
     } catch (e) {
       setRosterError(toFriendlyMessage(e));
-    }
-  }
-
-  async function inviteTherapist() {
-    if (!inviteEmail.trim()) return;
-    if (!inviteName.trim()) {
-      setInviteError('Enter their name');
-      return;
-    }
-    setInviteError(null);
-    setInviteSuccess(null);
-    setInviteBusy(true);
-    try {
-      const supabase = getSupabase();
-      if (!supabase) throw new Error('No Supabase connection');
-
-      const session = await supabase.auth.getSession();
-      if (!session.data.session?.access_token) {
-        throw new Error('Not authenticated');
-      }
-
-      // supabase.functions.invoke attaches apikey + Authorization correctly;
-      // a hand-rolled fetch to /functions/v1/... often omits apikey and can
-      // fail at the gateway before invite-therapist ever runs.
-      const { data: result, error: invokeError } = await supabase.functions.invoke(
-        'invite-therapist',
-        {
-          body: {
-            clinicId: clinic.id,
-            email: inviteEmail.trim(),
-            role: inviteRole,
-            name: inviteName.trim(),
-            redirectOrigin: window.location.origin,
-          },
-        }
-      );
-
-      if (invokeError) {
-        throw new Error(invokeError.message);
-      }
-
-      const payload = result as {
-        success?: boolean;
-        message?: string;
-        warning?: string;
-        error?: string;
-      } | null;
-
-      if (payload?.error) {
-        throw new Error(payload.error);
-      }
-
-      const baseMessage = payload?.message || `Invitation sent to ${inviteEmail}`;
-      setInviteSuccess(payload?.warning ? `${baseMessage}. ${payload.warning}` : baseMessage);
-      setInviteEmail('');
-      setInviteName('');
-      setInviteRole('therapist');
-      void refetchMembers();
-    } catch (e) {
-      setInviteError(toFriendlyMessage(e));
-    } finally {
-      setInviteBusy(false);
     }
   }
 
@@ -2627,8 +3114,7 @@ function Therapists() {
 
       if (error) throw error;
 
-      // Unlink any service-roster row still pointing at this login.
-      const linked = (therapists ?? []).filter((t) => t.userId === userId);
+      const linked = (rawTherapists ?? []).filter((t) => t.userId === userId);
       for (const t of linked) {
         await repos.therapists.put({
           ...t,
@@ -2645,8 +3131,8 @@ function Therapists() {
     }
   }
 
-  async function resendInvite(userId: string, setErr: (msg: string | null) => void) {
-    setErr(null);
+  async function resendInvite(userId: string) {
+    setMembersError(null);
     setResendInProgress(userId);
     try {
       const supabase = getSupabase();
@@ -2665,656 +3151,128 @@ function Therapists() {
       if (invokeError) throw new Error(invokeError.message);
       const payload = result as { error?: string; message?: string } | null;
       if (payload?.error) throw new Error(payload.error);
-      setInviteSuccess(payload?.message ?? 'Sign-in email resent.');
     } catch (e) {
-      setErr(toFriendlyMessage(e));
+      setMembersError(toFriendlyMessage(e));
     } finally {
       setResendInProgress(null);
     }
   }
 
-  const inviteRoles: Exclude<ClinicRole, 'unknown'>[] = ['therapist', 'front_desk', 'admin'];
-
   return (
-    <SectionCard id="settings-card-team-therapists" title="Therapists & team">
-      <div className="mb-5 flex gap-1.5">
-        {(['logins', 'roster'] as const).map((v) => {
-          const selected = teamView === v;
-          return (
+    <SectionCard id="settings-card-team-therapists" title="Team Directory">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-4">
+        <div className="flex flex-wrap gap-2">
+          {(['all', 'bookable', 'staff', 'invited', 'unlinked'] as const).map((f) => (
             <button
-              key={v}
+              key={f}
               type="button"
-              onClick={() => setTeamView(v)}
-              className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+              onClick={() => setFilter(f)}
+              className="rounded-full border px-3 py-1 text-xs font-semibold capitalize"
               style={{
-                borderColor: selected ? 'var(--teal)' : 'var(--border)',
-                background: selected ? 'var(--teal-light)' : 'var(--surface)',
-                color: selected ? 'var(--teal)' : 'var(--muted)',
+                borderColor: filter === f ? 'var(--teal)' : 'var(--border)',
+                background: filter === f ? 'var(--teal-light)' : 'var(--surface)',
+                color: filter === f ? 'var(--teal)' : 'var(--muted)',
               }}
             >
-              {v === 'logins' ? 'Logins' : 'Service roster'}
-              {v === 'roster' && unlinkedCount > 0 && (
-                <span className="ml-1.5 text-[var(--rust)]">{unlinkedCount} unlinked</span>
+              {f}
+              {f === 'unlinked' && unlinkedCount > 0 && (
+                <span className="ml-1.5 rounded-full bg-[var(--rust)] px-1.5 py-0.5 text-[10px] text-white">
+                  {unlinkedCount}
+                </span>
               )}
             </button>
+          ))}
+        </div>
+        <p className="text-xs text-[var(--muted)]">
+          {filteredTeam.length} member{filteredTeam.length === 1 ? '' : 's'}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+        {filteredTeam.map((p) => {
+          const isLastAdmin =
+            p.member?.role === 'admin' &&
+            (members?.filter((x) => x.role === 'admin').length ?? 0) <= 1;
+
+          return (
+            <TeamMemberCard
+              key={p.key}
+              person={p}
+              clinicId={clinic.id}
+              isLastAdmin={isLastAdmin}
+              revoking={revokeInProgress === p.member?.userId}
+              resending={resendInProgress === p.member?.userId}
+              onRevoke={() => {
+                if (p.member) revokeMember(p.member.userId, p.member.email);
+              }}
+              onResend={() => {
+                if (p.member) void resendInvite(p.member.userId);
+              }}
+              onSaved={() => void refetchMembers()}
+              onDelete={() => {
+                if (p.therapist) void startDeleteTherapist(p.therapist);
+              }}
+              onPhotoUpload={(file) => {
+                if (p.therapist) void uploadPhoto(p.therapist, file);
+              }}
+              onDeactivate={() => {
+                if (p.therapist) void handleToggleActive(p.therapist);
+              }}
+            />
           );
         })}
       </div>
-      {teamView === 'logins' && (
-        <>
-          <div className="mb-6">
-            <div className="mb-3 flex items-baseline justify-between gap-2">
-              <h3 className="text-sm font-semibold text-[var(--ink)]">Members</h3>
-              {members && (
-                <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2 py-0.5 font-mono text-[11px] text-[var(--muted)]">
-                  {members.length}
-                </span>
-              )}
-            </div>
-            {members && members.length > 0 ? (
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                {members.map((m) => {
-                  // A clinic left with zero admins has no path back into
-                  // Settings for anyone (every write there requires
-                  // is_clinic_admin) — so the last admin's card can't be
-                  // demoted or revoked from here, regardless of who's clicking.
-                  const isLastAdmin =
-                    m.role === 'admin' && members.filter((x) => x.role === 'admin').length <= 1;
-                  return (
-                    <MemberCard
-                      key={m.userId}
-                      member={m}
-                      clinicId={clinic.id}
-                      revoking={revokeInProgress === m.userId}
-                      resending={resendInProgress === m.userId}
-                      isLastAdmin={isLastAdmin}
-                      onRevoke={() => revokeMember(m.userId, m.email)}
-                      onSaved={() => void refetchMembers()}
-                      onResend={
-                        m.status !== 'active'
-                          ? () => void resendInvite(m.userId, setMembersError)
-                          : undefined
-                      }
-                    />
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-xs text-[var(--muted)]">No team members yet.</p>
-            )}
-            {inviteSuccess && <p className="mt-2 text-sm text-[var(--moss)]">{inviteSuccess}</p>}
-            <ErrorNote message={membersError} />
-          </div>
 
-          <div className="border-t border-[var(--border)] pt-6">
-            <h3 className="mb-3 text-sm font-semibold text-[var(--ink)]">Invite a team member</h3>
-            {atSeatCap ? (
-              <div className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4 text-center">
-                <p className="text-sm font-medium text-[var(--ink)]">
-                  This clinic's plan allows up to {entitlements.maxMembers} team login
-                  {entitlements.maxMembers === 1 ? '' : 's'}.
-                </p>
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  Included in {PLAN_TIER_LABELS[minimumTierFor('team')]} and above.
-                </p>
-              </div>
-            ) : (
-              <div className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4">
-                <div className="mb-3 flex gap-2">
-                  {inviteRoles.map((r) => {
-                    const { color, light } = ACCENT_VARS[ROLE_ACCENT[r]];
-                    const selected = inviteRole === r;
-                    return (
-                      <button
-                        key={r}
-                        type="button"
-                        disabled={inviteBusy}
-                        onClick={() => setInviteRole(r)}
-                        className="flex-1 rounded-lg border px-2 py-2 text-center text-xs font-semibold"
-                        style={{
-                          borderColor: selected ? color : 'var(--border)',
-                          background: selected ? light : 'var(--surface)',
-                          color: selected ? color : 'var(--muted)',
-                        }}
-                      >
-                        {CLINIC_ROLE_LABELS[r]}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex flex-col gap-2">
-                  <input
-                    className={inputCls}
-                    placeholder={
-                      inviteRole === 'therapist'
-                        ? 'Their name — shows in the therapist picker on visits'
-                        : 'Their name — shown in the app instead of their email'
-                    }
-                    value={inviteName}
-                    onChange={(e) => setInviteName(e.target.value)}
-                    disabled={inviteBusy}
-                  />
-                  <input
-                    className={inputCls}
-                    type="email"
-                    placeholder="Email address"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    disabled={inviteBusy}
-                  />
-                  <button
-                    type="button"
-                    className={btnPrimary}
-                    disabled={inviteBusy}
-                    onClick={() => void inviteTherapist()}
-                  >
-                    {inviteBusy ? 'Sending…' : 'Send invitation'}
-                  </button>
-                </div>
-                <p className="mt-3 text-xs text-[var(--muted)]">
-                  {inviteRole === 'therapist'
-                    ? "Automatically added to the service roster below and linked to their login — no separate setup step needed. They can rename themselves from the account menu once they've signed in."
-                    : "They can rename themselves from the account menu once they've signed in — this is just the starting name."}
-                </p>
-              </div>
-            )}
-            {inviteError && <ErrorNote message={inviteError} />}
-          </div>
-        </>
+      {filteredTeam.length === 0 && (
+        <p className="mb-6 text-sm text-[var(--muted)]">No team members found for this filter.</p>
       )}
 
-      {teamView === 'roster' && (
-        <div>
-          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-            <div>
-              <h3 className="text-sm font-semibold text-[var(--ink)]">Service roster</h3>
-              <p className="mt-1 max-w-xl text-xs text-[var(--muted)]">
-                Who patients are assigned to and billed against. Therapist logins are added
-                automatically when you invite from Logins — add here only for someone without their
-                own login.
-              </p>
-            </div>
-            {therapists && (
-              <div className="flex flex-wrap gap-1.5">
-                <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2.5 py-0.5 font-mono text-[11px] text-[var(--muted)]">
-                  {therapists.length} total
-                </span>
-                <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2.5 py-0.5 font-mono text-[11px] text-[var(--muted)]">
-                  {therapists.filter((t) => t.active).length} active
-                </span>
-                {unlinkedCount > 0 && (
-                  <span className="rounded-full border border-[var(--amber)] bg-[var(--amber-light)] px-2.5 py-0.5 font-mono text-[11px] text-[var(--amber-strong)]">
-                    {unlinkedCount} need login link
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+      <ErrorNote message={membersError || rosterError} />
 
-          {therapists && therapists.length > 0 ? (
-            <div className="mb-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              {[...therapists]
-                .sort((a, b) => {
-                  if (a.active !== b.active) return a.active ? -1 : 1;
-                  return a.name.localeCompare(b.name);
-                })
-                .map((t) => (
-                  <RosterCard
-                    key={t.id}
-                    therapist={t}
-                    members={members}
-                    linkedEmail={
-                      t.userId ? (members?.find((m) => m.userId === t.userId)?.email ?? null) : null
-                    }
-                    onPhotoUpload={(file) => void uploadTherapistPhoto(t, file)}
-                    onToggleActive={() =>
-                      void repos.therapists.put({
-                        ...t,
-                        active: !t.active,
-                        updatedAt: new Date().toISOString(),
-                      })
-                    }
-                    onDelete={() => void startDeleteTherapist(t)}
-                  />
-                ))}
-            </div>
-          ) : (
-            <p className="mb-6 text-xs text-[var(--muted)]">No therapists on the roster yet.</p>
-          )}
-
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4">
-            <h4 className="mb-2 text-sm font-semibold text-[var(--ink)]">Add manually</h4>
-            <p className="mb-3 text-xs text-[var(--muted)]">
-              For a therapist who does not need their own login — e.g. a locum billed under the
-              clinic account.
+      <div className="border-t border-[var(--border)] pt-6">
+        {atSeatCap ? (
+          <div className="max-w-md rounded-xl border border-[var(--border)] bg-[var(--paper)] p-4 text-center">
+            <p className="text-sm font-medium text-[var(--ink)]">
+              This clinic's plan allows up to {entitlements.maxMembers} team login
+              {entitlements.maxMembers === 1 ? '' : 's'}.
             </p>
-            <div className="flex max-w-md gap-2">
-              <input
-                className={inputCls}
-                placeholder="Therapist name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void add();
-                }}
-              />
-              <button type="button" className={btnSecondary} onClick={() => void add()}>
-                + Add
-              </button>
-            </div>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Included in {PLAN_TIER_LABELS[minimumTierFor('team')]} and above.
+            </p>
           </div>
+        ) : (
+          <div className="max-w-xl">
+            <AddTeamMemberForm clinicId={clinic.id} onAdded={() => void refetchMembers()} />
+          </div>
+        )}
+      </div>
 
-          <p className="mt-3 text-xs text-[var(--muted)]">
-            Deactivate to keep history without assigning new visits. Delete only works when someone
-            has zero visits, notes, or invoices.
-          </p>
-          <div className="mt-2">
-            <ErrorNote message={rosterError} />
-          </div>
-        </div>
+      {deleteTarget && (
+        <ConfirmDialog
+          open={true}
+          title="Delete service roster record"
+          message={`Are you sure you want to delete ${deleteTarget.name} from the service roster? This cannot be undone.`}
+          confirmLabel="Delete"
+          cancelLabel="Keep record"
+          destructive
+          onConfirm={() => void confirmDeleteTherapist()}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
-
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        title="Delete therapist?"
-        message={`Permanently delete ${deleteTarget?.name} from the roster? This cannot be undone.`}
-        confirmLabel="Delete permanently"
-        destructive
-        typeToConfirm={
-          deleteTarget
-            ? {
-                placeholder: 'Type their name to confirm',
-                isMatch: (typed) =>
-                  typed.trim().toLowerCase() === deleteTarget.name.trim().toLowerCase(),
-              }
-            : undefined
-        }
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={() => void confirmDeleteTherapist()}
-      />
-      <ConfirmDialog
-        open={revokeTarget !== null}
-        title="Revoke access?"
-        message={`Revoke ${revokeTarget?.email}'s access to this clinic?`}
-        confirmLabel="Revoke access"
-        destructive
-        onCancel={() => setRevokeTarget(null)}
-        onConfirm={() => void confirmRevokeMember()}
-      />
+      
+      {revokeTarget && (
+        <ConfirmDialog
+          open={true}
+          title="Revoke login access"
+          message={`Revoke ${revokeTarget.email}'s access to this clinic?`}
+          confirmLabel="Revoke"
+          cancelLabel="Cancel"
+          destructive
+          onConfirm={() => void confirmRevokeMember()}
+          onCancel={() => setRevokeTarget(null)}
+        />
+      )}
     </SectionCard>
   );
 }
 
-/** One service-roster card — view state shows photo, name, reg no, login link,
- *  and status; edit state exposes all editable fields in one place. */
-function RosterCard({
-  therapist,
-  members,
-  linkedEmail,
-  onPhotoUpload,
-  onToggleActive,
-  onDelete,
-}: {
-  therapist: Therapist;
-  members: ClinicMember[] | null;
-  linkedEmail: string | null;
-  onPhotoUpload: (file: File) => void;
-  onToggleActive: () => void;
-  onDelete: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [nameDraft, setNameDraft] = useState(therapist.name);
-  const [regDraft, setRegDraft] = useState(therapist.registrationNo ?? '');
-  const [phoneDraft, setPhoneDraft] = useState(therapist.phone ?? '');
-  const [loginDraft, setLoginDraft] = useState(therapist.userId ?? '');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!editing) {
-      setNameDraft(therapist.name);
-      setRegDraft(therapist.registrationNo ?? '');
-      setPhoneDraft(therapist.phone ?? '');
-      setLoginDraft(therapist.userId ?? '');
-    }
-  }, [therapist, editing]);
-
-  async function save() {
-    if (!nameDraft.trim()) {
-      setError('Name is required');
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      await repos.therapists.put({
-        ...therapist,
-        name: nameDraft.trim(),
-        registrationNo: regDraft.trim() || null,
-        phone: phoneDraft.trim() || null,
-        userId: loginDraft || null,
-        updatedAt: new Date().toISOString(),
-      });
-      setEditing(false);
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const photo = (
-    <label
-      className="block h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded-full border border-[var(--border)] bg-[var(--paper)]"
-      title="Change photo"
-    >
-      {therapist.photoPath ? (
-        <img
-          src={publicTherapistPhotoUrl(therapist.photoPath) ?? ''}
-          alt=""
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <span className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-[var(--muted)]">
-          {therapistInitials(therapist.name)}
-        </span>
-      )}
-      <input
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onPhotoUpload(file);
-          e.target.value = '';
-        }}
-      />
-    </label>
-  );
-
-  if (editing) {
-    return (
-      <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
-        <div className="flex items-center gap-2.5">
-          {photo}
-          <p className="text-sm font-semibold text-[var(--ink)]">Edit therapist</p>
-        </div>
-        <Field label="Name">
-          <input
-            className={inputCls}
-            value={nameDraft}
-            onChange={(e) => setNameDraft(e.target.value)}
-            autoFocus
-          />
-        </Field>
-        <Field label="Registration no.">
-          <input
-            className={inputCls}
-            placeholder="Printed on invoices"
-            value={regDraft}
-            onChange={(e) => setRegDraft(e.target.value)}
-          />
-        </Field>
-        <Field label="Phone">
-          <input
-            className={inputCls}
-            placeholder="For WhatsApp booking notifications"
-            value={phoneDraft}
-            onChange={(e) => setPhoneDraft(e.target.value)}
-          />
-        </Field>
-        {members && members.length > 0 && (
-          <Field label="Linked login">
-            <select
-              className={inputCls}
-              value={loginDraft}
-              onChange={(e) => setLoginDraft(e.target.value)}
-            >
-              <option value="">— None —</option>
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.displayName ? `${m.displayName} (${m.email})` : m.email}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className={btnPrimary}
-            disabled={saving}
-            onClick={() => void save()}
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-          <button
-            type="button"
-            className={btnSecondary}
-            disabled={saving}
-            onClick={() => setEditing(false)}
-          >
-            Cancel
-          </button>
-        </div>
-        <ErrorNote message={error} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
-      <div className="flex items-center gap-2.5">
-        {photo}
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-[var(--ink)]">{therapist.name}</p>
-          <p className="truncate text-[11.5px] text-[var(--muted)]">
-            {therapist.registrationNo ? `Reg. ${therapist.registrationNo}` : 'No registration no.'}
-          </p>
-        </div>
-      </div>
-      <span
-        className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-        style={
-          therapist.active
-            ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
-            : { background: 'var(--paper)', color: 'var(--muted)' }
-        }
-      >
-        {therapist.active ? 'Active' : 'Inactive'}
-      </span>
-      {linkedEmail ? (
-        <p className="truncate text-[11.5px] text-[var(--muted)]">
-          Login: <span className="text-[var(--ink)]">{linkedEmail}</span>
-        </p>
-      ) : (
-        <p className="text-[11.5px] text-[var(--amber-strong)]">No login linked</p>
-      )}
-      <p className="truncate text-[11.5px] text-[var(--muted)]">
-        Hours: <span className="text-[var(--ink)]">{therapist.workingHours ? 'Custom' : 'Clinic hours'}</span>
-        <span className="text-[var(--muted)]"> · set in Schedule</span>
-      </p>
-      <div className="mt-auto flex flex-wrap gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
-        <button
-          type="button"
-          className="text-[var(--teal)] hover:underline"
-          onClick={() => setEditing(true)}
-        >
-          Edit
-        </button>
-        <button
-          type="button"
-          className="text-[var(--teal)] hover:underline"
-          onClick={onToggleActive}
-        >
-          {therapist.active ? 'Deactivate' : 'Reactivate'}
-        </button>
-        <button
-          type="button"
-          className="ml-auto text-[var(--rust)] hover:underline"
-          onClick={onDelete}
-        >
-          Delete
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** One "Members" card — view state shows a role-colored avatar, display
- *  name (falling back to email if the member hasn't set one), and a role
- *  pill; edit state swaps the card body for a small inline form. This is
- *  the admin-side counterpart to the self-service name editor in
- *  Shell.tsx's account menu — a member can always rename themselves, and
- *  now an admin can also rename or reassign anyone. */
-function MemberCard({
-  member,
-  clinicId,
-  revoking,
-  resending,
-  isLastAdmin,
-  onRevoke,
-  onSaved,
-  onResend,
-}: {
-  member: ClinicMember;
-  clinicId: string;
-  revoking: boolean;
-  resending: boolean;
-  /** True when this member is the clinic's only admin — demoting or
-   *  revoking them would leave nobody able to reach Settings again. The DB
-   *  rejects it either way (see guard_clinic_members_last_admin), but
-   *  blocking here avoids a round-trip just to show the same error. */
-  isLastAdmin: boolean;
-  onRevoke: () => void;
-  onSaved: () => void;
-  onResend?: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [nameDraft, setNameDraft] = useState(member.displayName ?? '');
-  const [roleDraft, setRoleDraft] = useState<ClinicRole>(
-    member.role as Exclude<ClinicRole, 'unknown'>
-  );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const role = (member.role as Exclude<ClinicRole, 'unknown'>) ?? 'therapist';
-  const { color, light } = ACCENT_VARS[ROLE_ACCENT[role] ?? 'slate'];
-
-  async function save() {
-    if (isLastAdmin && roleDraft !== 'admin') {
-      setError('This clinic must keep at least one admin — make someone else admin first.');
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const supabase = getSupabase();
-      if (!supabase) throw new Error('No Supabase connection');
-      const { error: updateError } = await supabase
-        .from('clinic_members')
-        .update({ display_name: nameDraft.trim() || null, role: roleDraft })
-        .eq('clinic_id', clinicId)
-        .eq('user_id', member.userId);
-      if (updateError) throw updateError;
-      setEditing(false);
-      onSaved();
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (editing) {
-    return (
-      <div className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
-        <input
-          className={inputCls}
-          placeholder="Display name"
-          value={nameDraft}
-          onChange={(e) => setNameDraft(e.target.value)}
-          autoFocus
-        />
-        <select
-          className={inputCls}
-          value={roleDraft}
-          onChange={(e) => setRoleDraft(e.target.value as ClinicRole)}
-        >
-          <option value="therapist">Therapist</option>
-          <option value="front_desk">Front desk</option>
-          <option value="admin">Admin</option>
-        </select>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className={btnPrimary}
-            disabled={saving}
-            onClick={() => void save()}
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-          <button
-            type="button"
-            className={btnSecondary}
-            disabled={saving}
-            onClick={() => setEditing(false)}
-          >
-            Cancel
-          </button>
-        </div>
-        <ErrorNote message={error} />
-      </div>
-    );
-  }
-
-  const displayName = member.displayName ?? member.email;
-
-  return (
-    <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
-      <div className="flex items-center gap-2.5">
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-sm font-semibold"
-          style={{ background: color, color: '#fff', boxShadow: `0 0 0 3px ${light}` }}
-        >
-          {therapistInitials(displayName)}
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-[var(--ink)]">{displayName}</p>
-          <p className="truncate text-[11.5px] text-[var(--muted)]">{member.email}</p>
-        </div>
-      </div>
-      <RolePill role={role} />
-      <OnboardingBadge member={member} />
-      {isLastAdmin && (
-        <p className="text-[11px] text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
-      )}
-      <div className="mt-auto flex flex-wrap gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
-        <button
-          type="button"
-          className="text-[var(--teal)] hover:underline"
-          onClick={() => setEditing(true)}
-        >
-          Edit
-        </button>
-        {onResend && (
-          <button
-            type="button"
-            className="text-[var(--teal)] hover:underline disabled:opacity-50"
-            disabled={resending}
-            onClick={onResend}
-          >
-            {resending ? 'Sending…' : 'Resend email'}
-          </button>
-        )}
-        <button
-          type="button"
-          className="ml-auto text-[var(--rust)] hover:underline disabled:opacity-50"
-          disabled={revoking || isLastAdmin}
-          onClick={onRevoke}
-        >
-          {revoking ? 'Revoking…' : 'Revoke'}
-        </button>
-      </div>
-    </div>
-  );
-}

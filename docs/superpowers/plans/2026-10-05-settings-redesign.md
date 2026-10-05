@@ -28,7 +28,7 @@
 
 ---
 
-## Phase A — Live Letterhead Preview (do this first; small, additive)
+## Phase A — Live Letterhead Preview [COMPLETED]
 
 ### Task A1: Extract a reusable preview component
 
@@ -58,26 +58,62 @@
 
 ---
 
-## Phase B — Mechanical split of `SettingsPage.tsx` (only after Phase A is merged and green)
+## Phase B — Mechanical split of `SettingsPage.tsx` [DEFERRED for later handover to Claude]
 
 Order matters: shared first, then leaves. One commit per task. After each, confirm the file still compiles and behaviour is unchanged.
+
+**Guard Rails (Non-Negotiable):**
+1. **Move-only:** no copy changes, no “while we’re here” UX tweaks, no new features, no schema/migrations.
+2. **No Catalog move** (and no splitting catalog across panels). Do not move `FirstWeekChecklist` or catalog-related hooks.
+3. **Button `type`:** every `<button>` keeps explicit `type`.
+4. **Do not change** tab order, tab labels, permission gates, or which roles see which sections.
+5. **Dependency direction:** `SettingsPage` → `panels/*` → `settingsShared` → `@/services`, `@/domain`, `@/components`. No panel imports another panel.
+6. **`settingsShared` must not import `SettingsPage`.**
+7. **No `React.lazy`** during Phase B (use plain imports to avoid behavior change).
+8. **One commit per task** (B1a, B1b, B2 ... B6b). Each commit must be green (`npm run typecheck && npm run lint && npm run test && npm run build`).
+9. **Stop conditions:** if a move needs a logic edit (prop, hook signature, dependency array) or causes a circular import, STOP and ask. Never "just fix it" inside a refactor commit.
+
+**Execution method (mandatory):**
+- Move code with commands, not hand-retyping: locate range with `grep -n`, copy with `sed -n 'X,Yp' > new file`, delete with `sed -i 'X,Yd'`. Large inline edit-tool replacements are forbidden.
+- New file gets the parent's full import block; remove unused imports only as `npm run lint` flags them.
+- Before moving a symbol: `grep -n "<Symbol>" SettingsPage.tsx` to find cross-panel users. Any helper used by 2+ panels goes to `settingsShared.tsx`, never imported panel-to-panel.
+- Before/after each panel move, diff the list of `id="..."` attributes in the moved range; they must be identical.
+- After each move, `git diff --stat`: lines added in new file ≈ lines removed from parent (only import/export lines differ).
+
+**Per-commit guard check (paste output as evidence):**
+```bash
+grep -rn "from './panels\|from \"./panels" src/features/settings/panels   # expect none
+grep -n "SettingsPage" src/features/settings/settingsShared.tsx            # expect none
+grep -rn "React.lazy\|lazy(" src/features/settings                          # expect none
+```
 
 ### Task B1: Move shared helpers
 
 **Files:** Create `src/features/settings/settingsShared.tsx`
 
-- [ ] Move (export) `useClinicSectionForm`, `SectionSaveBar`, `LockedSectionNotice`, `SetOnceEditButton`, `BoolToggle`, `toggleSet`, `Accent`, `ACCENT_VARS`, `FormKey`. Update imports in `SettingsPage.tsx`. No logic edits.
+- [ ] **B1a (commit 1):** move pure constants/types only: `ACCENT_VARS`, `Accent`, `FormKey`, `toggleSet`. Update imports in `SettingsPage.tsx`.
+- [ ] **B1b (commit 2):** move `useClinicSectionForm`, `SectionSaveBar`, `LockedSectionNotice`, `SetOnceEditButton`, `BoolToggle`. No logic edits.
+- [ ] If `settingsShared.tsx` exceeds 400 lines, split immediately into `settingsFormPrimitives.tsx` vs `useClinicSectionForm.ts`.
+- [ ] Export only what panels need.
+- [ ] **B1c (smoke test, before B2):** add a render-smoke test mounting each panel and asserting its heading `id` exists (extend as panels land). Committed separately.
 
-### Task B2–B6: Extract sections (one task each)
+### Task B2–B6: Extract sections (one task each, easiest → hardest)
 
-Create in `src/features/settings/sections/` (avoid clashing with `sections.ts`; name the folder `panels/` instead): 
-- `panels/GeneralPanel.tsx` ← `ClinicProfileSection` (+ `LetterheadPreview` usage)
-- `panels/TeamPanel.tsx` ← `Therapists`, `RosterCard`, `MemberCard`, `RolePill`, `OnboardingBadge`
-- `panels/BookingPanel.tsx` ← `PatientCommsSection`, `WhatsAppBusinessSubsection`, `BOOKING_SLUG_PATTERN`
-- `panels/BillingPanel.tsx` ← `BillingSection`, `PartnerSection`
-- `panels/AccountPanel.tsx` ← `PlanSection`, `HistoricalData`, `DataBackup`, `DangerZone`
+Create in `src/features/settings/panels/` (avoid clashing with `sections.ts`). Order is deliberate: low-coupling panels validate the pattern first; Team (most sub-components) goes last.
+- **B2** `panels/AccountPanel.tsx` ← `PlanSection`, `HistoricalData`, `DataBackup`, `DangerZone` (strictly no lazy loading).
+- **B3** `panels/BillingPanel.tsx` ← `BillingSection`, `PartnerSection`.
+- **B4** `panels/BookingPanel.tsx` ← `PatientCommsSection`, `WhatsAppBusinessSubsection` (keep in same file, separate mini-forms), `BOOKING_SLUG_PATTERN`.
+- **B5** `panels/GeneralPanel.tsx` ← `ClinicProfileSection` (+ `LetterheadPreview` usage; stays with General).
+  - **Manual checkpoint after B5:** edit General → click another tab → discard dialog appears; navigate away → leave confirm.
+- **B6a/B6b** `panels/TeamPanel.tsx` ← `Therapists`, `RosterCard`, `MemberCard`, `RolePill`, `OnboardingBadge`. Two commits (B6a: shared sub-components; B6b: `Therapists` + wiring).
+  - **Manual checkpoint after B6b:** run the full B7 manual checklist.
 
-Rules: keep each component's props identical (`onDirtyChange` etc.); `SettingsPage` keeps tab state, dirty tracking, blocker, discard dialog, search, anchors. Use `React.lazy` per panel **only if** it doesn't change the tab-switch transition behaviour (`startTransition` already wraps tab swaps); otherwise plain imports. Do not move `CatalogSection`.
+Rules: 
+- Keep each component's props identical (`onDirtyChange` etc.); `SettingsPage` keeps tab state, dirty tracking, blocker, discard dialog, search, anchors. 
+- Use **plain imports** (No `React.lazy`). 
+- Do not move `CatalogSection`.
+- Pass **the same callback references** (`useCallback` in parent) so child `useEffect` deps don’t change behaviour.
+- Panel files must use **the same `id=` attributes** on headings as before.
 
 ### Task B7: Final verification
 
@@ -92,7 +128,7 @@ Path-based routes, new tabs ("Advanced"), changing `sections.ts`, services-card 
 
 ---
 
-## Phase C — Enterprise Invoice Upgrade (InvoicePrintPage)
+## Phase C — Enterprise Invoice Upgrade (InvoicePrintPage) [COMPLETED]
 
 ### Task C1: Strict 2-Column Metadata Grid
 - **File:** `src/features/invoices/InvoicePrintPage.tsx`

@@ -230,8 +230,8 @@ function LineItemsTable({
             <th className={`py-2 ${hasAdjustments ? 'w-[25%]' : 'w-[25%]'}`}>Service</th>
             <th className={`py-2 ${hasAdjustments ? 'w-[20%]' : 'w-[25%]'}`}>Dates of service</th>
             <th className={`py-2 ${hasAdjustments ? 'w-[15%]' : 'w-[15%]'}`}>Sessions</th>
-            <th className={`py-2 text-right ${hasAdjustments ? 'w-[15%]' : 'w-[15%]'}`}>Unit Price</th>
-            {hasAdjustments && <th className="py-2 w-[10%] text-right">Adjustment</th>}
+            <th className={`py-2 text-right ${hasAdjustments ? 'w-[15%]' : 'w-[15%]'} pr-4`}>Unit Price</th>
+            {hasAdjustments && <th className="py-2 w-[10%] text-right pr-4">Adjustment</th>}
             <th className="py-2 w-[15%] text-right pr-2">Amount</th>
           </tr>
         </thead>
@@ -248,11 +248,11 @@ function LineItemsTable({
                 </td>
                 <td className="py-2 text-xs text-[var(--muted)]">{sessionDatesCellText(li)}</td>
                 <td className="py-2 text-[var(--muted)]">{sessionsCellText(li)}</td>
-                <td className="font-num py-2 text-right whitespace-nowrap">
+                <td className="font-num py-2 text-right whitespace-nowrap pr-4">
                   {formatINR(lineRatePerSessionPaise(li))}
                 </td>
                 {hasAdjustments && (
-                  <td className="font-num py-2 text-right whitespace-nowrap">
+                  <td className="font-num py-2 text-right whitespace-nowrap pr-4">
                     {li.adjustmentPaise !== 0 ? (
                       <>
                         {formatINR(li.adjustmentPaise)}
@@ -657,6 +657,14 @@ export function InvoicePrintPage() {
                       ]
                         .filter(Boolean)
                         .join(' / ')}
+                    </td>
+                  </tr>
+                )}
+                {invoice.patientSnapshot.phone && (
+                  <tr>
+                    <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Phone</th>
+                    <td className="py-0.5 text-[var(--ink)] align-top">
+                      : {invoice.patientSnapshot.phone}
                     </td>
                   </tr>
                 )}

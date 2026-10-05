@@ -145,6 +145,7 @@ export function createInvoiceService(repos: Repos) {
           name: patient.name,
           age: patient.age,
           sex: patient.sex,
+          phone: patient.phone,
         },
         p_line_items: lineItems,
         p_total_paise: totalPaise,
