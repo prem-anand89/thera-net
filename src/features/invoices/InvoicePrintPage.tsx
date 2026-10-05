@@ -8,7 +8,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { formatINR } from '@/domain/money';
 import { amountInWords } from '@/domain/amountInWords';
 import { formatDateDMY } from '@/domain/fiscalYear';
-import { buildInvoicePaymentLedger } from '@/domain/invoicePaymentLedger';
+import { buildInvoicePaymentLedger, type InvoiceLedger } from '@/domain/invoicePaymentLedger';
 import {
   isV2Line,
   lineRatePerSessionPaise,
@@ -72,12 +72,14 @@ function LegacyLineItemsTable({
   totalPaise,
   paper,
   isSharing,
+  paymentLedger,
 }: {
   lineItems: InvoiceLineItem[];
   hasAdjustments: boolean;
   totalPaise: number;
   paper: 'A4' | 'A5';
   isSharing?: boolean;
+  paymentLedger?: InvoiceLedger;
 }) {
   const isA5 = paper === 'A5';
   return (
@@ -164,14 +166,40 @@ function LegacyLineItemsTable({
           <tr>
             <td
               colSpan={hasAdjustments ? 4 : 3}
-              className="py-3 text-right font-semibold text-[var(--ink)]"
+              className={`py-3 text-right font-semibold text-[var(--ink)] ${paymentLedger && paymentLedger.paidPaise > 0 ? 'border-b border-[var(--border)] border-dashed' : ''}`}
             >
               Total
             </td>
-            <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap">
+            <td className={`font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap ${paymentLedger && paymentLedger.paidPaise > 0 ? 'border-b border-[var(--border)] border-dashed' : ''}`}>
               {formatINR(totalPaise)}
             </td>
           </tr>
+          {paymentLedger && paymentLedger.paidPaise > 0 && (
+            <>
+              <tr>
+                <td
+                  colSpan={hasAdjustments ? 4 : 3}
+                  className="py-2 text-right font-medium text-[var(--muted)]"
+                >
+                  Amount Paid
+                </td>
+                <td className="font-num py-2 text-right text-[var(--ink)] whitespace-nowrap">
+                  {formatINR(paymentLedger.paidPaise)}
+                </td>
+              </tr>
+              <tr>
+                <td
+                  colSpan={hasAdjustments ? 4 : 3}
+                  className="py-2 text-right font-semibold text-[var(--ink)]"
+                >
+                  Balance Due
+                </td>
+                <td className="font-num py-2 text-right font-semibold text-[var(--ink)] whitespace-nowrap">
+                  {formatINR(paymentLedger.balancePaise)}
+                </td>
+              </tr>
+            </>
+          )}
         </tfoot>
       </table>
     </div>
@@ -184,12 +212,14 @@ function LineItemsTable({
   totalPaise,
   paper,
   isSharing,
+  paymentLedger,
 }: {
   lineItems: InvoiceLineItem[];
   hasAdjustments: boolean;
   totalPaise: number;
   paper: 'A4' | 'A5';
   isSharing?: boolean;
+  paymentLedger?: InvoiceLedger;
 }) {
   const isA5 = paper === 'A5';
   return (
@@ -270,14 +300,40 @@ function LineItemsTable({
           <tr>
             <td
               colSpan={hasAdjustments ? 5 : 4}
-              className="py-3 text-right font-semibold text-[var(--ink)]"
+              className={`py-3 text-right font-semibold text-[var(--ink)] ${paymentLedger && paymentLedger.paidPaise > 0 ? 'border-b border-[var(--border)] border-dashed' : ''}`}
             >
               Total
             </td>
-            <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap">
+            <td className={`font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap ${paymentLedger && paymentLedger.paidPaise > 0 ? 'border-b border-[var(--border)] border-dashed' : ''} ${hasAdjustments ? '' : 'pr-2'}`}>
               {formatINR(totalPaise)}
             </td>
           </tr>
+          {paymentLedger && paymentLedger.paidPaise > 0 && (
+            <>
+              <tr>
+                <td
+                  colSpan={hasAdjustments ? 5 : 4}
+                  className="py-2 text-right font-medium text-[var(--muted)]"
+                >
+                  Amount Paid
+                </td>
+                <td className={`font-num py-2 text-right text-[var(--ink)] whitespace-nowrap ${hasAdjustments ? '' : 'pr-2'}`}>
+                  {formatINR(paymentLedger.paidPaise)}
+                </td>
+              </tr>
+              <tr>
+                <td
+                  colSpan={hasAdjustments ? 5 : 4}
+                  className="py-2 text-right font-semibold text-[var(--ink)]"
+                >
+                  Balance Due
+                </td>
+                <td className={`font-num py-2 text-right font-semibold text-[var(--ink)] whitespace-nowrap ${hasAdjustments ? '' : 'pr-2'}`}>
+                  {formatINR(paymentLedger.balancePaise)}
+                </td>
+              </tr>
+            </>
+          )}
         </tfoot>
       </table>
     </div>
@@ -711,6 +767,7 @@ export function InvoicePrintPage() {
             totalPaise={invoice.totalPaise}
             paper={paper}
             isSharing={sharing}
+            paymentLedger={paymentLedger}
           />
         ) : (
           <LegacyLineItemsTable
@@ -719,64 +776,35 @@ export function InvoicePrintPage() {
             totalPaise={invoice.totalPaise}
             paper={paper}
             isSharing={sharing}
+            paymentLedger={paymentLedger}
           />
         )}
 
         {/* Payment Ledger */}
-        {paymentLedger && (
+        {paymentLedger && paymentLedger.rows.length > 0 && (
           <div className="mt-8 flex justify-between items-start">
             <div className="w-[55%] pr-8">
               <p className="mb-2 font-medium text-[var(--muted)] border-b border-[var(--border)] pb-1 text-xs">
                 Payment Details
               </p>
-              {paymentLedger.rows.length > 0 ? (
-                <table className="w-full text-left text-[11px] mb-4">
-                  <thead>
-                    <tr className="text-[var(--muted)]">
-                      <th className="py-1 w-[30%] font-medium">Date</th>
-                      <th className="py-1 w-[40%] font-medium">Mode</th>
-                      <th className="py-1 w-[30%] font-medium text-right pr-2">Amount</th>
+              <table className="w-full text-left text-[11px] mb-4">
+                <thead>
+                  <tr className="text-[var(--muted)]">
+                    <th className="py-1 w-[30%] font-medium">Date</th>
+                    <th className="py-1 w-[40%] font-medium">Mode</th>
+                    <th className="py-1 w-[30%] font-medium text-right pr-2">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="align-top">
+                  {paymentLedger.rows.map((row, idx) => (
+                    <tr key={idx} className="border-b border-[var(--border)] border-dashed last:border-0">
+                      <td className="py-1.5 text-[var(--ink)]">{formatDateDMY(row.date)}</td>
+                      <td className="py-1.5 text-[var(--ink)]">{row.mode}</td>
+                      <td className="py-1.5 font-num text-right text-[var(--ink)] whitespace-nowrap pr-2">
+                        {formatINR(row.amountPaise)}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="align-top">
-                    {paymentLedger.rows.map((row, idx) => (
-                      <tr key={idx} className="border-b border-[var(--border)] border-dashed last:border-0">
-                        <td className="py-1.5 text-[var(--ink)]">{formatDateDMY(row.date)}</td>
-                        <td className="py-1.5 text-[var(--ink)]">{row.mode}</td>
-                        <td className="py-1.5 font-num text-right text-[var(--ink)] whitespace-nowrap pr-2">
-                          {formatINR(row.amountPaise)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p className="mb-4 text-xs text-[var(--muted)] italic">No payments recorded</p>
-              )}
-            </div>
-
-            {/* Balance Details Block */}
-            <div className="w-[45%] flex justify-end">
-              <table className="text-sm">
-                <tbody>
-                  <tr>
-                    <td className="py-1 pr-6 text-right text-[var(--muted)]">Gross Amount</td>
-                    <td className="py-1 font-num text-right text-[var(--ink)] whitespace-nowrap pr-2">
-                      {formatINR(paymentLedger.grossPaise)}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="py-1 pr-6 text-right text-[var(--muted)] border-b border-[var(--border)]">Amount Paid</td>
-                    <td className="py-1 font-num text-right text-[var(--ink)] whitespace-nowrap border-b border-[var(--border)] pr-2">
-                      {formatINR(paymentLedger.paidPaise)}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="pt-2 pr-6 text-right text-[var(--ink)]">Balance Due</td>
-                    <td className="pt-2 font-num text-right text-[var(--ink)] whitespace-nowrap pr-2">
-                      {formatINR(paymentLedger.balancePaise)}
-                    </td>
-                  </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
