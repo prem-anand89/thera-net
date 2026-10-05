@@ -6,7 +6,7 @@ const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string;
 
 function isStandalone(): boolean {
   return (
-    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
     (window.navigator as Navigator & { standalone?: boolean }).standalone === true
   );
 }

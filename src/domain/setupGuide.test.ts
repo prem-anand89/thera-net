@@ -59,13 +59,16 @@ describe('summarizeSetup', () => {
       'wait-synced',
       'clinical-notes',
       'backup',
+      'billing',
+      'booking',
+      'notifications',
     ]);
   });
 
   it('starts a fresh clinic at 0 with the profile as next', () => {
     const p = summarizeSetup(steps, none, new Set());
     expect(p.done).toBe(0);
-    expect(p.total).toBe(8);
+    expect(p.total).toBe(11);
     expect(p.next?.id).toBe('clinic-profile');
     expect(p.steps.filter((s) => s.status === 'next')).toHaveLength(1);
   });
@@ -74,7 +77,7 @@ describe('summarizeSetup', () => {
     const p = summarizeSetup(steps, established, new Set(['wait-synced']));
     expect(p.done).toBe(7);
     expect(p.next?.id).toBe('clinical-notes');
-    const all = summarizeSetup(steps, established, new Set(['wait-synced', 'clinical-notes']));
+    const all = summarizeSetup(steps, established, new Set(['wait-synced', 'clinical-notes', 'billing', 'booking', 'notifications']));
     expect(all.allDone).toBe(true);
     expect(all.next).toBeNull();
   });

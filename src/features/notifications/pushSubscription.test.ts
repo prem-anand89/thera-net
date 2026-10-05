@@ -22,20 +22,32 @@ describe('pushState', () => {
   it('reports denied when the browser has denied permission', async () => {
     Object.defineProperty(window, 'PushManager', { value: function () {}, configurable: true });
     Object.defineProperty(window, 'Notification', { value: { permission: 'denied' }, configurable: true });
-    Object.defineProperty(navigator, 'serviceWorker', { value: {}, configurable: true });
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: { getRegistration: async () => undefined },
+      configurable: true,
+    });
+    // mock window.matchMedia for isStandalone
+    Object.defineProperty(window, 'matchMedia', {
+      value: () => ({ matches: true }),
+      configurable: true,
+    });
     expect(await pushState()).toBe('denied');
   });
 });
 
 describe('pushState without a service worker', () => {
-  it('reports default instead of hanging when no worker is registered', async () => {
+  it('reports needs-install instead of hanging when no worker is registered', async () => {
     Object.defineProperty(window, 'PushManager', { value: function () {}, configurable: true });
     Object.defineProperty(window, 'Notification', { value: { permission: 'granted' }, configurable: true });
     Object.defineProperty(navigator, 'serviceWorker', {
       value: { getRegistration: async () => undefined },
       configurable: true,
     });
-    expect(await pushState()).toBe('default');
+    Object.defineProperty(window, 'matchMedia', {
+      value: () => ({ matches: false }),
+      configurable: true,
+    });
+    expect(await pushState()).toBe('needs-install');
   });
 });
 

@@ -35,7 +35,7 @@ export interface SetupSignals {
 }
 
 export type SetupStepLink =
-  | { kind: 'settings'; tab: 'general' | 'team' | 'services' | 'account' }
+  | { kind: 'settings'; tab: 'general' | 'team' | 'services' | 'account' | 'billing' | 'booking' }
   | { kind: 'new-visit' };
 
 export type SetupGroup = 'essentials' | 'first-week' | 'optional';
