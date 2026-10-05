@@ -337,11 +337,6 @@ export function Shell() {
             <Link to="/workspace" aria-label="Thera.Net — Workspace" className="flex min-h-11 shrink-0 items-center rounded-lg">
               <BrandMark size={30} wordmark wordmarkClassName="hidden text-base desktop:inline" />
             </Link>
-            {pageTitleFor(pathname) && (
-              <span className="min-w-0 truncate font-display text-base font-semibold text-[var(--ink)] sm:hidden">
-                {pageTitleFor(pathname)}
-              </span>
-            )}
             <nav className="hidden shrink-0 gap-1 sm:flex">
               {nav.map((item) => (
                 <Link

@@ -41,6 +41,7 @@ export async function enablePushForThisDevice(): Promise<void> {
   if (permission !== 'granted') throw new Error('Notifications are not allowed.');
   const reg = await navigator.serviceWorker.getRegistration();
   if (!reg) throw new Error('Notifications work in the installed or production build only.');
+  if (!VAPID_PUBLIC_KEY) throw new Error('Push notifications are not configured on this server.');
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
