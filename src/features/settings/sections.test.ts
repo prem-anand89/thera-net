@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSettingsSearch } from './sections';
+import { matchSettingsTabs, parseSettingsSearch } from './sections';
 
 describe('parseSettingsSearch', () => {
   it('accepts the six current tabs', () => {
@@ -30,5 +30,18 @@ describe('parseSettingsSearch', () => {
     expect(parseSettingsSearch({ tab: 'nope' })).toEqual({});
     expect(parseSettingsSearch({ tab: 'billing', catalogView: 'packages' })).toEqual({ tab: 'billing' });
     expect(parseSettingsSearch({})).toEqual({});
+  });
+});
+
+describe('matchSettingsTabs', () => {
+  it('finds the tab that owns a setting by keyword', () => {
+    expect(matchSettingsTabs('gst')).toEqual(['billing']);
+    expect(matchSettingsTabs('whatsapp')).toEqual(['booking']);
+    expect(matchSettingsTabs('  Backup ')).toEqual(['account']);
+  });
+
+  it('returns nothing for an empty or unknown query', () => {
+    expect(matchSettingsTabs('')).toEqual([]);
+    expect(matchSettingsTabs('zzzz')).toEqual([]);
   });
 });

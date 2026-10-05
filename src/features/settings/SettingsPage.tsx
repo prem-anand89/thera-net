@@ -40,7 +40,7 @@ import {
   StatTile,
 } from '@/components/ui';
 import { CatalogSection, type CatalogView } from './CatalogSection';
-import { SETTINGS_TABS, SETTINGS_TAB_META, type SettingsTab } from './sections';
+import { SETTINGS_TABS, SETTINGS_TAB_META, matchSettingsTabs, type SettingsTab } from './sections';
 import { toFriendlyMessage } from '@/lib/errors';
 import {
   FirstWeekChecklist,
@@ -158,6 +158,7 @@ export function SettingsPage() {
   const [, startTransition] = useTransition();
   const [dirtyForms, setDirtyForms] = useState<Set<FormKey>>(new Set());
   const [pendingTab, setPendingTab] = useState<SettingsTab | null>(null);
+  const [query, setQuery] = useState('');
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
@@ -277,6 +278,40 @@ export function SettingsPage() {
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Settings</h1>
 
       {showFirstWeek && <FirstWeekChecklist />}
+
+      <div className="space-y-2">
+        <label className="sr-only" htmlFor="settings-search">Search settings</label>
+        <input
+          id="settings-search"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search settings, e.g. GST, WhatsApp, backup"
+          className={inputCls}
+        />
+        {query.trim() && (
+          <ul className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+            {matchSettingsTabs(query).map((tab) => (
+              <li key={tab}>
+                <button
+                  type="button"
+                  className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
+                  onClick={() => {
+                    setQuery('');
+                    selectTab(tab);
+                  }}
+                >
+                  <span>{SETTINGS_TAB_META[tab].label}</span>
+                  <span className="text-xs text-[var(--muted)]">{SETTINGS_TAB_META[tab].description}</span>
+                </button>
+              </li>
+            ))}
+            {matchSettingsTabs(query).length === 0 && (
+              <li className="px-3 py-3 text-sm text-[var(--muted)]">No settings match “{query.trim()}”.</li>
+            )}
+          </ul>
+        )}
+      </div>
 
       <div className="desktop:flex desktop:items-start desktop:gap-6">
         {/* Chips on phones and through iPad portrait; the side rail only once
@@ -1899,7 +1934,13 @@ function DangerZone() {
   const otherClinicCount = (clinics ?? []).filter((c) => c.id !== clinic.id).length;
 
   return (
-    <SectionCard title="Danger zone">
+    <details className="group rounded-2xl border border-[var(--rust-light)] bg-[var(--surface)] open:pb-4">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-[var(--rust)] [&::-webkit-details-marker]:hidden">
+        Danger zone
+        <span className="text-xs font-medium text-[var(--muted)] group-open:hidden">Show</span>
+        <span className="hidden text-xs font-medium text-[var(--muted)] group-open:inline">Hide</span>
+      </summary>
+      <div className="px-4">
       <p className="mb-3 text-xs text-[var(--muted)]">
         For test-data cleanup and troubleshooting. Wiping is admin-only and enforced by the server.
       </p>
@@ -1994,7 +2035,8 @@ function DangerZone() {
         onCancel={() => setConfirmingDeleteClinic(false)}
         onConfirm={() => void doDeleteClinic()}
       />
-    </SectionCard>
+      </div>
+    </details>
   );
 }
 

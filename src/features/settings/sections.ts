@@ -55,3 +55,26 @@ export function parseSettingsSearch(search: Record<string, unknown>): SettingsSe
   const catalogView = rawView ?? legacy?.catalogView;
   return catalogView && tab === 'services' ? { tab, catalogView } : { tab };
 }
+
+/** Words a clinic admin is likely to type when looking for a setting. Each
+ *  entry points at the tab that owns it; the search matches the tab label,
+ *  its description and these keywords. */
+export const SETTINGS_KEYWORDS: Record<SettingsTab, string[]> = {
+  general: ['clinic name', 'logo', 'address', 'phone', 'email', 'walk-in', 'mrno', 'prefix', 'modules'],
+  team: ['therapist', 'roster', 'invite', 'login', 'linked login', 'role', 'working hours', 'photo'],
+  services: ['price', 'package', 'session', 'treatment', 'referral', 'catalog', 'service'],
+  booking: ['whatsapp', 'feedback', 'google review', 'closed day', 'holiday', 'booking page', 'slug'],
+  billing: ['gst', 'tax', 'invoice', 'prefix', 'upi', 'signature', 'fiscal year', 'tds', 'partner', 'split'],
+  account: ['plan', 'backup', 'restore', 'import', 'historical', 'wipe', 'delete', 'danger'],
+};
+
+/** Tabs whose label, description or keywords contain the query, in tab order. */
+export function matchSettingsTabs(query: string): SettingsTab[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  return SETTINGS_TABS.filter((tab) => {
+    const meta = SETTINGS_TAB_META[tab];
+    const haystack = [meta.label, meta.description, ...SETTINGS_KEYWORDS[tab]].join(' ').toLowerCase();
+    return haystack.includes(q);
+  });
+}
