@@ -6,6 +6,17 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 
 **Multi-clinic from day one** with configurable revenue-split models (simple or hospital partnership), enforced server-side role-based access control, and complete offline-first capability.
 
+
+### Recent Updates (October 2026 Settings Redesign)
+- **Settings Architecture**: Transitioned to a 6-tab system (`general`, `team`, `services`, `booking`, `billing`, `account`) with a side-rail navigation layout. Replaced edit modes with set-once cards for simplicity.
+- **Account Menu**: Personal settings (Profile, Password, Working Hours, Notifications) moved out of admin Settings into a global "Me" dropdown menu accessible by all roles.
+- **Booking & Hours Split**: Online booking configuration moved to `Settings -> Booking`. Clinic working hours and closed days moved to the Schedule tab.
+- **Workspace**: Added a notification setup reminder block.
+- **Accessibility**: Added bell keyboard support for notifications.
+- **Setup & Onboarding**: 
+  - **Guided Setup (`/setup`)**: Replaced the "First week checklist" with a dedicated dashboard to track onboarding essentials (Pricing, Team invites, Logging first visit) and optional tasks.
+  - **Onboarding Polish**: Expanded Team step to side-by-side layout with inline sent-invite chips; simplified the Password step phrasing.
+
 ---
 
 ## Features

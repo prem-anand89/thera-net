@@ -35,6 +35,7 @@ const LEGACY_TABS: Record<string, { tab: SettingsTab; catalogView?: CatalogViewK
 export interface SettingsSearch {
   tab?: SettingsTab;
   catalogView?: CatalogViewKey;
+  fromSetup?: boolean;
 }
 
 export function parseSettingsSearch(search: Record<string, unknown>): SettingsSearch {
@@ -50,10 +51,13 @@ export function parseSettingsSearch(search: Record<string, unknown>): SettingsSe
     : rawTab && (SETTINGS_TABS as readonly string[]).includes(rawTab)
       ? (rawTab as SettingsTab)
       : undefined;
-  if (!tab) return {};
+  if (!tab) return search.fromSetup ? { fromSetup: true } : {};
 
   const catalogView = rawView ?? legacy?.catalogView;
-  return catalogView && tab === 'services' ? { tab, catalogView } : { tab };
+  const fromSetup = search.fromSetup === true || search.fromSetup === 'true' ? true : undefined;
+  
+  if (catalogView && tab === 'services') return { tab, catalogView, fromSetup };
+  return fromSetup ? { tab, fromSetup } : { tab };
 }
 
 export interface SettingsCard {

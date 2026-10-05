@@ -311,7 +311,10 @@ export function SettingsPage() {
       setActiveTabState(tab);
     });
     void navigate({
-      search: () => (tab === 'services' && view ? { tab, catalogView: view } : { tab }),
+      search: (prev) => {
+        const next = tab === 'services' && view ? { tab, catalogView: view } : { tab };
+        return prev.fromSetup ? { ...next, fromSetup: true } : next;
+      },
       replace: true,
     });
   }
@@ -409,7 +412,17 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Settings</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Settings</h1>
+        {search.fromSetup && (
+          <Link
+            to="/setup"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[var(--teal-light)] px-3 py-1 text-sm font-medium text-[var(--teal-strong)] hover:bg-[var(--teal)]/20"
+          >
+            ← Back to setup
+          </Link>
+        )}
+      </div>
 
       <SetupProgressBar clinicId={clinic.id} />
 

@@ -38,7 +38,7 @@ export type SetupStepLink =
   | { kind: 'settings'; tab: 'general' | 'team' | 'services' | 'account' }
   | { kind: 'new-visit' };
 
-export type SetupGroup = 'essentials' | 'first-week';
+export type SetupGroup = 'essentials' | 'first-week' | 'optional';
 
 export interface SetupStep {
   id: string;
@@ -128,6 +128,30 @@ export function buildSetupSteps(seatLimited: boolean, canInvoice: boolean): Setu
       link: { kind: 'settings', tab: 'account' },
       action: 'Open backup',
       auto: (s) => s.backedUp,
+    },
+    {
+      id: 'billing',
+      group: 'optional',
+      title: 'Configure billing',
+      why: 'Set up GST, tax preferences, and invoice prefixes.',
+      link: { kind: 'settings', tab: 'billing' },
+      action: 'Open billing',
+    },
+    {
+      id: 'booking',
+      group: 'optional',
+      title: 'Configure online booking',
+      why: 'Set up your booking link and availability rules.',
+      link: { kind: 'settings', tab: 'booking' },
+      action: 'Open booking',
+    },
+    {
+      id: 'notifications',
+      group: 'optional',
+      title: 'Set up notifications',
+      why: 'Configure email and WhatsApp alerts for appointments.',
+      link: { kind: 'settings', tab: 'general' },
+      action: 'Open notifications',
     },
   ];
 }

@@ -9,6 +9,7 @@ import { SetupTicks } from './SetupTicks';
 const GROUP_TITLES: Record<SetupGroup, string> = {
   essentials: 'Essentials',
   'first-week': 'Your first week',
+  optional: 'Optional setup',
 };
 
 function StepAction({ link, label, primary }: { link: SetupStepLink; label: string; primary: boolean }) {
@@ -21,7 +22,7 @@ function StepAction({ link, label, primary }: { link: SetupStepLink; label: stri
     );
   }
   return (
-    <Link to="/settings" search={{ tab: link.tab }} className={className}>
+    <Link to="/settings" search={{ tab: link.tab as any, fromSetup: true }} className={className}>
       {label}
     </Link>
   );
@@ -110,7 +111,7 @@ export function SetupPage() {
 
   if (!setup) return <p className="text-sm text-[var(--muted)]">Loading…</p>;
 
-  const groups: SetupGroup[] = ['essentials', 'first-week'];
+  const groups: SetupGroup[] = ['essentials', 'first-week', 'optional'];
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
