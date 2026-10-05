@@ -89,3 +89,29 @@ Rules: keep each component's props identical (`onDirtyChange` etc.); `SettingsPa
 ## Out of scope (do not do)
 
 Path-based routes, new tabs ("Advanced"), changing `sections.ts`, services-card redesign, moving logo upload, onboarding wizard preview (can reuse `LetterheadPreview` later), print pages other than invoice/receipt letterhead.
+
+---
+
+## Phase C — Enterprise Invoice Upgrade (InvoicePrintPage)
+
+### Task C1: Strict 2-Column Metadata Grid
+- **File:** `src/features/invoices/InvoicePrintPage.tsx`
+- **Action:** Replace the flexbox header (patient/invoice metadata) with a strict `grid grid-cols-2`. Add print-specific typography (`text-[11px]`, label/value rows).
+- **Left Column:** `Patient Name`, `Patient ID`, `Age / Gender` (mapped from `invoice.patientSnapshot`).
+- **Right Column:** `Bill No` (from `invoice.invoiceNo`), `Billing Date` (from `invoice.issuedAt`), `Consultant` (joined names from the locally computed `footerTherapists` which maps `invoice.therapistId` or `lineItems.therapistIds`), `Status`.
+- **Action:** Add the centered `BILL CUM RECEIPT` title above the grid.
+
+### Task C2: Formal Payment Details Ledger
+- **Files:** `src/repositories/types.ts`, `src/repositories/local.ts`, `src/features/invoices/InvoicePrintPage.tsx`
+- **Action:**
+  1. Add `listByInvoiceId(invoiceId: UUID): Promise<Visit[]>` to `VisitRepo` (using Dexie's `where('invoiceId')` index) to avoid fetching all clinic visits.
+  2. Create a pure helper `buildInvoicePaymentLedger(invoice, visits, payments, invoicePayment)` in `src/domain/` to cleanly resolve the ledger rows and balance logic.
+  3. Replace the single `Payment mode:` line with a formal table (`Date | Mode | Amount`). If no payment rows exist but the invoice is paid at issue, gracefully fallback to one row using `invoice.paymentMode`.
+  4. Under the ledger, print a clear **Balance Details** block (`Gross amount`, `Amount Paid`, `Balance To Pay`).
+
+### Task C3: Amount in Words & Footer Elements
+- **File:** `src/features/invoices/InvoicePrintPage.tsx`
+- **Action:** 
+  1. Ensure `(Received with thanks a sum of Rupees {amountInWords(invoice.totalPaise)} only)` is rendered correctly using the existing `src/domain/amountInWords.ts`. [COMPLETED]
+  2. Implement an optional "Terms & Conditions" static UI block above the signature. [COMPLETED]
+  3. Implement a formal page footer. Use a flexible `min-h-[calc(100vh-...)]` column with `mt-auto` rather than absolute positioning, to ensure it gracefully handles multi-page prints without overlapping the line items. [COMPLETED]

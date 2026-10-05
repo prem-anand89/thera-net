@@ -3,6 +3,8 @@ import { PrintLetterhead, PrintSignatureFooter } from '@/features/invoices/print
 import { publicLogoUrl } from '@/lib/supabase';
 import type { Clinic } from '@/domain/types';
 
+import { useEffect, useRef } from 'react';
+
 export interface LetterheadPreviewProps {
   draft: Pick<Clinic, 'name' | 'address' | 'phone' | 'email' | 'gstNo' | 'partnerHospitalName'>;
   logoUrl: string | null;
@@ -11,6 +13,20 @@ export interface LetterheadPreviewProps {
 
 export function LetterheadPreview({ draft, logoUrl, partnerLogoUrl }: LetterheadPreviewProps) {
   const realClinic = useClinic();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || !contentRef.current) return;
+    const updateScale = () => {
+      const parentWidth = containerRef.current!.offsetWidth;
+      contentRef.current!.style.transform = `scale(${parentWidth / 794})`;
+    };
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(containerRef.current);
+    updateScale();
+    return () => observer.disconnect();
+  }, []);
 
   // Spread the real clinic to get all required fields, then override with the draft fields
   const previewClinic: Clinic = {
@@ -25,9 +41,14 @@ export function LetterheadPreview({ draft, logoUrl, partnerLogoUrl }: Letterhead
         Invoice preview
       </div>
       <div
-        className="pointer-events-none overflow-hidden rounded-xl border border-[var(--border)] bg-white p-6 shadow-sm"
+        ref={containerRef}
+        className="pointer-events-none overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-sm relative w-full aspect-[210/297]"
         aria-hidden="true"
       >
+        <div 
+          ref={contentRef}
+          className="absolute top-0 left-0 origin-top-left w-[794px] h-[1123px] bg-white p-12 flex flex-col"
+        >
         <PrintLetterhead
           clinic={previewClinic}
           logoUrl={logoUrl}
@@ -96,8 +117,9 @@ export function LetterheadPreview({ draft, logoUrl, partnerLogoUrl }: Letterhead
           </table>
         </div>
 
-        <div className="opacity-80">
+        <div className="opacity-80 mt-auto">
           <PrintSignatureFooter left={<>Prepared by {realClinic.name}</>} signatureUrl={realClinic.signaturePath ? publicLogoUrl(realClinic.signaturePath) : null} />
+        </div>
         </div>
       </div>
     </div>
