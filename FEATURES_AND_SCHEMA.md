@@ -546,7 +546,7 @@ Admin-only, clinic-wide. One route, `/settings?tab=…`, with six sections in a 
 | `general` | Clinic profile |
 | `team` | Therapists, invites, logins |
 | `services` | Catalog (`catalogView` = packages / treatments / referrals) |
-| `booking` | Online booking page, WhatsApp, closed days, feedback |
+| `booking` | Online booking page, WhatsApp, feedback |
 | `billing` | Billing & invoicing (locked below the invoicing tier), Partner & split (hidden without `revenueSplit`) |
 | `account` | Plan, historical data import, backup, danger zone |
 
@@ -565,8 +565,7 @@ Old tab values still resolve: `profile` → general, `patientComms` → booking,
 
 #### Catalog (Settings → Services)
 Single settings section with three sub-tabs — **Services & packages**, **Treatments
-performed**, and **Referral sources** — each using the same card + **Edit**
-(Save/Cancel) pattern as Team → Logins. Legacy `?tab=services|treatments|referrals`
+performed**, and **Referral sources** — each using a set-once card pattern. Legacy `?tab=services|treatments|referrals`
 URLs redirect to `?tab=catalog&catalogView=…`.
 
 #### Clinic onboarding wizard (new self-service clinics)
@@ -2429,7 +2428,7 @@ Team's Invite form locks (with the same informational-only copy) once
 `clinic_members.length >= maxMembers` — a client-side hint only, since
 `invite-therapist`'s own seat-cap check (Phase 2) is the real boundary.
 
-**Guided setup** (`/setup`, admin-only; replaced the First-Week Checklist card). Eight steps in two groups. *Essentials:* clinic profile, price services, invite team, link every therapist. *Your first week:* log a visit, wait for Synced, decide on clinical notes, take a backup.
+**Guided setup** (`/setup`, admin-only; replaced the First-Week Checklist card). Eleven steps in three groups. *Essentials:* clinic profile, price services, invite team, link every therapist. *Your first week:* log a visit, wait for Synced, decide on clinical notes, take a backup. *Optional setup:* configure billing, configure online booking, turn on notifications. Optional steps do not count towards progress or completion.
 - Pure logic in `src/domain/setupGuide.ts` (`buildSetupSteps`, `summarizeSetup`, `isSetupNudgeVisible`); live data in `src/features/setup/useSetupProgress.ts`.
 - **Six steps detect themselves** from real data: `clinic.address`, catalog length, `seatsUsed > 1` (a `clinic_members` row exists from the moment an invite is issued), no unlinked therapist, any visit, and the `lastBackupExportedAt:${clinicId}` meta key written by Data backup. **Two are ticked by hand** ("Wait for Synced" is a habit; "clinical notes" is a decision where on and off are both valid), stored as a JSON array of step ids in `firstWeekChecklistCompletedSteps:${clinicId}`.
 - **Keys and step ids are unchanged** from the old checklist so finished steps stay finished on real devices. All meta keys are clinic-scoped, since `db.meta` is shared by every clinic on the device.
