@@ -66,7 +66,7 @@ export function PrintSignatureFooter({
   signatureUrl: string | null;
 }) {
   return (
-    <footer className="mt-12 flex items-end justify-between border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
+    <footer className="mt-8 flex items-end justify-between border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
       <div>{left}</div>
       <div className="text-center">
         {signatureUrl ? (

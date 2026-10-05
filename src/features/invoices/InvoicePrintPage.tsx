@@ -607,7 +607,7 @@ export function InvoicePrintPage() {
 
       <div
         ref={contentRef}
-        className={`relative mx-auto max-w-3xl bg-[var(--surface)] p-4 sm:p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm]' : 'print:max-w-[178mm]'}`}
+        className={`relative mx-auto flex flex-col max-w-3xl min-h-[calc(100vh-80px)] print:min-h-0 bg-[var(--surface)] p-4 sm:p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm] print:min-h-[190mm]' : 'print:max-w-[178mm] print:min-h-[277mm]'}`}
       >
         {isVoid && (
           <div
@@ -816,26 +816,39 @@ export function InvoicePrintPage() {
           {amountInWords(paymentLedger ? (paymentLedger.balancePaise === 0 ? paymentLedger.paidPaise : paymentLedger.grossPaise) : invoice.totalPaise)}
         </p>
 
-        <PrintSignatureFooter
-          signatureUrl={signatureUrl}
-          left={
-            <>
-              <p>
-                {invoice.invoiceNo} · issued {formatDateDMY(invoice.issuedAt)}
-              </p>
-              {footerTherapists.length > 0 && (
+        {/* Push everything below this to the bottom of the page */}
+        <div className="mt-auto pt-12">
+          {/* Terms & Conditions */}
+          <div className="mb-8 border-t border-[var(--border)] pt-4 text-[10px] text-[var(--muted)]">
+            <h4 className="font-semibold text-[var(--ink)] mb-1">Terms & Conditions</h4>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>All payments are final and non-refundable.</li>
+              <li>Please retain this bill for your records and future reference.</li>
+              <li>For any queries regarding this bill, please contact the clinic administration.</li>
+            </ul>
+          </div>
+
+          <PrintSignatureFooter
+            signatureUrl={signatureUrl}
+            left={
+              <>
                 <p>
-                  {footerTherapists.length === 1 ? 'Therapist: ' : 'Therapists: '}
-                  {footerTherapists
-                    .map(
-                      (t) => `${t.name}${t.registrationNo ? ` (Reg. No. ${t.registrationNo})` : ''}`
-                    )
-                    .join(', ')}
+                  {invoice.invoiceNo} · issued {formatDateDMY(invoice.issuedAt)}
                 </p>
-              )}
-            </>
-          }
-        />
+                {footerTherapists.length > 0 && (
+                  <p>
+                    {footerTherapists.length === 1 ? 'Therapist: ' : 'Therapists: '}
+                    {footerTherapists
+                      .map(
+                        (t) => `${t.name}${t.registrationNo ? ` (Reg. No. ${t.registrationNo})` : ''}`
+                      )
+                      .join(', ')}
+                  </p>
+                )}
+              </>
+            }
+          />
+        </div>
       </div>
     </div>
   );
