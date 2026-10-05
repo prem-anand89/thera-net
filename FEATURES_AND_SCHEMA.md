@@ -1219,9 +1219,18 @@ still falls through to the existing share sheet, unchanged.
 
 ---
 
+### 9b. Account menu (personal settings, every role)
+
+Everything about the signed-in person lives in the header avatar menu, separate from the clinic-wide, admin-only Settings page. A bottom sheet on phones, a dropdown from `sm:` up.
+- **My account** (sheet): *Profile* (display name for everyone; for a linked therapist also name on invoices, registration no., phone, photo; email read-only) and *Security* (change/set password, sign out of other devices via `auth.signOut({ scope: 'others' })`).
+- **My working hours**: a linked therapist's own `WorkingHoursSheet`.
+- **Notifications**: this device's push switch and, for a linked therapist, "Email me appointment updates".
+- **Settings**: admins only. Install app and Help & feedback for everyone.
+- The avatar shows the linked therapist's photo, otherwise initials.
+
 ### 10. Push Notifications
 
-Web Push alerts reach staff and therapists when the app is closed. Opt-in per device from Settings → Data (Notifications on this device).
+Web Push alerts reach staff and therapists when the app is closed. Opt-in per device from the account menu → Notifications, available to every role (not the admin-only Settings page).
 
 - **Therapist:** confirmed, rescheduled, or cancelled appointment on their own schedule.
 - **Admin and front desk:** every new public booking request for the clinic.
@@ -1387,6 +1396,7 @@ active          boolean NOT NULL (default true)
 user_id         uuid (FOREIGN KEY → auth.users.id, NULLABLE) — linked login
 photo_path      text (NULLABLE)
 registration_no text (NULLABLE) — printed on invoices under the therapist's name
+email_appointment_updates boolean NOT NULL DEFAULT true — when false, `notify-therapist` skips the confirmation/reschedule/cancellation email (push and the manual WhatsApp button are unaffected). The linked therapist sets it from account menu → Notifications.
 phone           text (NULLABLE) — lets `shareTherapistNotify` use the WhatsApp
                 Business API instead of always falling back to the share sheet
 profile_confirmed_at timestamptz (NULLABLE) — set when linked login finishes

@@ -241,6 +241,10 @@ export interface Therapist {
    *  midnight; gaps are breaks, a missing day is a day off). Null/absent =
    *  the clinic's booking hours. Written only via set_therapist_working_hours. */
   workingHours?: WorkingHours | null;
+  /** Whether the linked login gets the confirmation/reschedule/cancellation
+   *  email from `notify-therapist`. Absent or true = on (the column default);
+   *  the therapist switches it from their own Notifications settings. */
+  emailAppointmentUpdates?: boolean;
   updatedAt: string;
 }
 

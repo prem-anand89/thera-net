@@ -142,7 +142,7 @@ export default async function handler(req: Request): Promise<Response> {
     const [{ data: therapist }, { data: clinic }] = await Promise.all([
       serviceClient
         .from('therapists')
-        .select('user_id, name')
+        .select('user_id, name, email_appointment_updates')
         .eq('id', payload.therapist_id)
         .maybeSingle(),
       serviceClient.from('clinics').select('name').eq('id', payload.clinic_id).maybeSingle(),
@@ -151,6 +151,12 @@ export default async function handler(req: Request): Promise<Response> {
     if (!therapist?.user_id) {
       // Roster entry with no linked login — nobody to email.
       return json({ skipped: 'therapist has no linked login' }, 200);
+    }
+
+    // The therapist switched off appointment emails in their own settings
+    // (null from an older row counts as on, matching the column default).
+    if (therapist.email_appointment_updates === false) {
+      return json({ skipped: 'therapist opted out of appointment emails' }, 200);
     }
 
     const { data: userData } = await serviceClient.auth.admin.getUserById(therapist.user_id);
