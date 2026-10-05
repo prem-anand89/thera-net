@@ -18,11 +18,14 @@ function isIOS(): boolean {
 export async function pushState(): Promise<PushState> {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
   if (isIOS() && !isStandalone()) return 'needs-install';
+  
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (!reg && !isStandalone()) return 'needs-install';
+
   if (Notification.permission === 'denied') return 'denied';
   if (Notification.permission !== 'granted') return 'default';
-  const reg = await navigator.serviceWorker.getRegistration();
-  if (!reg) return 'default';
-  return (await reg.pushManager.getSubscription()) ? 'on' : 'default';
+  
+  return reg && (await reg.pushManager.getSubscription()) ? 'on' : 'default';
 }
 
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
