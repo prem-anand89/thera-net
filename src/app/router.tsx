@@ -6,6 +6,7 @@ import {
   trendsPrintSearch,
   validateInsightsSearch,
 } from '@/features/reports/insightsTrendPeriod';
+import { parseSettingsSearch, type SettingsSearch } from '@/features/settings/sections';
 
 // Code-split every route except the default post-login landing page
 // (Workspace) — that one stays eager so the most common path pays no extra
@@ -393,51 +394,10 @@ const invoicePrintRoute = createRoute({
   component: InvoicePrintPage,
 });
 
-// Kept in sync with SettingsPage's own SectionKey by hand — a route file
-// shouldn't import a feature's internal type just to validate a search
-// param, and the two rarely change.
-const SETTINGS_TABS = [
-  'plan',
-  'profile',
-  'billing',
-  'partner',
-  'patientComms',
-  'team',
-  'catalog',
-  'data',
-] as const;
-
-const CATALOG_VIEWS = ['packages', 'treatments', 'referrals'] as const;
-
-const LEGACY_CATALOG_TABS: Record<string, (typeof CATALOG_VIEWS)[number]> = {
-  services: 'packages',
-  treatments: 'treatments',
-  referrals: 'referrals',
-};
-
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
-  validateSearch: (
-    search: Record<string, unknown>
-  ): { tab?: (typeof SETTINGS_TABS)[number]; catalogView?: (typeof CATALOG_VIEWS)[number] } => {
-    const tab = typeof search.tab === 'string' ? search.tab : undefined;
-    if (tab && tab in LEGACY_CATALOG_TABS) {
-      return { tab: 'catalog', catalogView: LEGACY_CATALOG_TABS[tab] };
-    }
-    const catalogView =
-      typeof search.catalogView === 'string' &&
-      (CATALOG_VIEWS as readonly string[]).includes(search.catalogView)
-        ? (search.catalogView as (typeof CATALOG_VIEWS)[number])
-        : undefined;
-    if (typeof tab === 'string' && (SETTINGS_TABS as readonly string[]).includes(tab)) {
-      return {
-        tab: tab as (typeof SETTINGS_TABS)[number],
-        ...(catalogView ? { catalogView } : {}),
-      };
-    }
-    return {};
-  },
+  validateSearch: (search: Record<string, unknown>): SettingsSearch => parseSettingsSearch(search),
   component: SettingsPage,
 });
 

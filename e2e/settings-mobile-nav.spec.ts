@@ -30,20 +30,53 @@ test.describe('settings mobile navigation', () => {
 
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('shows tap chips instead of a dropdown on phone', async ({ page }) => {
+  test('shows six section chips and switches tabs', async ({ page }) => {
     await login(page);
     await page.goto('/settings');
 
-    await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Clinic profile/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Data & maintenance/ })).toBeVisible();
+    const nav = page.getByRole('navigation', { name: 'Settings sections' });
+    await expect(nav).toBeVisible();
+    for (const label of ['General', 'Team', 'Services', 'Booking', 'Billing', 'Account']) {
+      await expect(nav.getByRole('button', { name: new RegExp(`^${label}`) })).toBeVisible();
+    }
 
-    await page.getByRole('button', { name: /Billing & invoicing/ }).click();
-    await expect(page.getByRole('heading', { name: 'Billing & invoicing' })).toBeVisible();
+    await nav.getByRole('button', { name: /^Billing/ }).click();
+    await expect(page.getByRole('heading', { name: 'Billing', exact: true })).toBeVisible();
     expect(page.url()).toContain('tab=billing');
 
-    await page.getByRole('button', { name: /^Team/ }).click();
+    await nav.getByRole('button', { name: /^Team/ }).click();
     await expect(page.getByRole('heading', { name: 'Therapists & team' })).toBeVisible();
     expect(page.url()).toContain('tab=team');
   });
+
+  test('old tab links land on the new section', async ({ page }) => {
+    await login(page);
+    await page.goto('/settings?tab=partner');
+    await expect(page.getByRole('heading', { name: 'Billing', exact: true })).toBeVisible();
+    await page.goto('/settings?tab=patientComms');
+    await expect(page.getByRole('heading', { name: 'Booking', exact: true })).toBeVisible();
+  });
 });
+
+for (const viewport of [
+  { name: 'phone', width: 375, height: 812 },
+  { name: 'ipad-portrait', width: 744, height: 1024 },
+  { name: 'desktop', width: 1280, height: 800 },
+]) {
+  test.describe(`settings has no sideways scroll (${viewport.name})`, () => {
+    test.skip(!creds, 'needs VITE_SUPABASE_URL plus E2E_EMAIL/E2E_PASSWORD');
+    test.use({ viewport: { width: viewport.width, height: viewport.height } });
+
+    test('every tab fits the screen width', async ({ page }) => {
+      await login(page);
+      for (const tab of ['general', 'team', 'services', 'booking', 'billing', 'account']) {
+        await page.goto(`/settings?tab=${tab}`);
+        await page.waitForLoadState('networkidle');
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+        );
+        expect(overflow, `${tab} overflows by ${overflow}px`).toBeLessThanOrEqual(0);
+      }
+    });
+  });
+}

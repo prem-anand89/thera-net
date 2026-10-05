@@ -108,8 +108,8 @@ export function ClosedDaysSheet({
         </div>
         <p className="mt-3 text-xs text-[var(--muted)]">
           Closed every week on the same day? Set that in{' '}
-          <Link to="/settings" className="text-[var(--teal)] hover:underline">
-            Settings → Online Booking
+          <Link to="/settings" search={{ tab: 'booking' }} className="text-[var(--teal)] hover:underline">
+            Settings → Booking
           </Link>
           .
         </p>

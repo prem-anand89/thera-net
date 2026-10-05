@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { Link, useBlocker, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   repos,
@@ -40,6 +40,7 @@ import {
   StatTile,
 } from '@/components/ui';
 import { CatalogSection, type CatalogView } from './CatalogSection';
+import { SETTINGS_TABS, SETTINGS_TAB_META, type SettingsTab } from './sections';
 import { toFriendlyMessage } from '@/lib/errors';
 import {
   FirstWeekChecklist,
@@ -48,86 +49,8 @@ import {
 } from './FirstWeekChecklist';
 import { isValidUpiVpa } from '@/domain/upiPay';
 
-type SectionKey =
-  'plan' | 'profile' | 'billing' | 'partner' | 'patientComms' | 'team' | 'catalog' | 'data';
-
-/**
- * Grouped into the three jobs an admin actually comes here to do, rather
- * than one flat list of eight peers where "Clinic profile" and "Danger
- * zone" sat at the same level. Data and Danger zone also merged into one
- * "Data & maintenance" section — import, backup/restore, cache reset, and
- * wipe are all the same occasional-maintenance job, and splitting them
- * meant an admin looking for "restore a backup" had to guess which of two
- * adjacent tabs held it.
- */
-const SECTION_GROUPS: { label: string; keys: SectionKey[] }[] = [
-  { label: 'Account', keys: ['plan'] },
-  { label: 'Clinic', keys: ['profile', 'billing', 'partner', 'patientComms'] },
-  { label: 'People & services', keys: ['team', 'catalog'] },
-  { label: 'System', keys: ['data'] },
-];
-
-/** One accent color per section, matching the reviewed Team-panel mockup's
- *  rail — an icon badge next to every rail item, colored per section
- *  rather than a single uniform gray. */
+/** Accent hues used by the Danger zone, team cards and other in-section badges. */
 type Accent = 'teal' | 'amber' | 'rust' | 'moss' | 'slate';
-
-const SECTIONS: { key: SectionKey; label: string; description: string; accent: Accent }[] = [
-  {
-    key: 'plan',
-    label: 'Plan',
-    description: 'Your current tier, what it includes, and seat/visit limits.',
-    accent: 'slate',
-  },
-  {
-    key: 'profile',
-    label: 'Clinic profile',
-    description: 'Name, address, contact info, logo, walk-in ID prefix, optional modules.',
-    accent: 'teal',
-  },
-  {
-    key: 'billing',
-    label: 'Billing & invoicing',
-    description: 'Invoice numbering, GST, fiscal year, who can bill, UPI QR.',
-    accent: 'amber',
-  },
-  {
-    key: 'partner',
-    label: 'Partner & split',
-    description: 'Revenue share with a partner (therapist, hospital, etc.), splits, TDS.',
-    accent: 'rust',
-  },
-  {
-    key: 'patientComms',
-    label: 'Online Booking',
-    description: 'Ask patients for feedback after a visit, with a link to a public feedback form.',
-    accent: 'teal',
-  },
-  {
-    key: 'team',
-    label: 'Team',
-    description: 'Invite and manage logins, therapist roster.',
-    accent: 'moss',
-  },
-  {
-    key: 'catalog',
-    label: 'Catalog',
-    description: 'Billing packages, treatments performed, and patient referral sources.',
-    accent: 'teal',
-  },
-  {
-    key: 'data',
-    label: 'Data & maintenance',
-    description:
-      'Import historical visits, back up or restore, reset this device, wipe clinic data.',
-    accent: 'slate',
-  },
-];
-
-// Same two-lists-must-agree guard as the note editor's jump-nav.
-if (SECTION_GROUPS.flatMap((g) => g.keys).length !== SECTIONS.length) {
-  throw new Error('SECTION_GROUPS is out of sync with SECTIONS');
-}
 
 const ACCENT_VARS: Record<Accent, { color: string; light: string }> = {
   teal: { color: 'var(--teal)', light: 'var(--teal-light)' },
@@ -137,127 +60,79 @@ const ACCENT_VARS: Record<Accent, { color: string; light: string }> = {
   slate: { color: 'var(--slate)', light: 'var(--slate-light)' },
 };
 
-const SECTION_ICON_PATHS: Record<SectionKey, string> = {
-  plan: 'M3 12.5V3.5h10v9M3 12.5h10M6 6.5h4M6 9h2.5',
-  profile: 'M2.5 3h11v10h-11zM5.5 6h5M5.5 8.3h5M5.5 10.6h3',
-  billing: 'M2.5 6.5L8 2.8l5.5 3.7M3.7 5.8V12a1 1 0 001 1h6.6a1 1 0 001-1V5.8',
-  partner: 'M8 2.5l1.4 3.1 3.4.4-2.5 2.3.7 3.4L8 10l-3 1.7.7-3.4-2.5-2.3 3.4-.4L8 2.5z',
-  patientComms: 'M2.5 4.5h11v6.5h-6.2L4.5 13.5V11h-2zM5 7h6M5 9h4',
-  team: 'M2.3 13c.4-2.5 2-3.9 3.9-3.9s3.5 1.4 3.9 3.9M9.9 9.5c1.6.2 2.8 1.4 3.1 3.5',
-  catalog: 'M3 4h10M3 8h10M3 12h6',
-  data: 'M3 5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2zM3 5v6c0 1.1 2.2 2 5 2s5-.9 5-2V5M3 8c0 1.1 2.2 2 5 2s5-.9 5-2',
+/** Sections that edit a slice of the clinic row and report unsaved edits.
+ *  A tab can hold more than one (Billing holds billing + partner). */
+type FormKey = 'profile' | 'billing' | 'partner' | 'patientComms';
+
+const FORM_TAB: Record<FormKey, SettingsTab> = {
+  profile: 'general',
+  billing: 'billing',
+  partner: 'billing',
+  patientComms: 'booking',
 };
 
-/** Small colored icon badge for a settings section — same 28px rounded
- *  square + accent-tinted background as the rail-nav mockup. `team` and
- *  `partner` need an extra circle for their people/star glyphs since a
- *  single path can't express both. */
-function SectionIcon({ sectionKey, accent }: { sectionKey: SectionKey; accent: Accent }) {
-  const { color, light } = ACCENT_VARS[accent];
+const TAB_ICON_PATHS: Record<SettingsTab, string> = {
+  general: 'M2.5 3h11v10h-11zM5.5 6h5M5.5 8.3h5M5.5 10.6h3',
+  team: 'M2.3 13c.4-2.5 2-3.9 3.9-3.9s3.5 1.4 3.9 3.9M9.9 9.5c1.6.2 2.8 1.4 3.1 3.5',
+  services: 'M3 4h10M3 8h10M3 12h6',
+  booking: 'M2.5 4.5h11v6.5h-6.2L4.5 13.5V11h-2zM5 7h6M5 9h4',
+  billing: 'M2.5 6.5L8 2.8l5.5 3.7M3.7 5.8V12a1 1 0 001 1h6.6a1 1 0 001-1V5.8',
+  account: 'M3 5c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2zM3 5v6c0 1.1 2.2 2 5 2s5-.9 5-2V5M3 8c0 1.1 2.2 2 5 2s5-.9 5-2',
+};
+
+function TabIcon({ tab }: { tab: SettingsTab }) {
   return (
-    <span
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
-      style={{ background: light, color }}
-    >
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-        {sectionKey === 'team' && (
-          <circle cx="6" cy="5.3" r="2" stroke="currentColor" strokeWidth="1.4" />
-        )}
-        {sectionKey === 'partner' ? (
-          <path
-            d={SECTION_ICON_PATHS[sectionKey]}
-            stroke="currentColor"
-            strokeWidth="1.2"
-            strokeLinejoin="round"
-          />
-        ) : (
-          <path
-            d={SECTION_ICON_PATHS[sectionKey]}
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
-      </svg>
-    </span>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden className="shrink-0">
+      {tab === 'team' && <circle cx="6" cy="5.3" r="2" stroke="currentColor" strokeWidth="1.4" />}
+      <path
+        d={TAB_ICON_PATHS[tab]}
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
-function SettingsSectionNavButton({
-  section,
+function SettingsTabButton({
+  tab,
   active,
   dirty,
-  locked,
   onSelect,
   variant,
 }: {
-  section: (typeof SECTIONS)[number];
+  tab: SettingsTab;
   active: boolean;
   dirty: boolean;
-  /** Section is above the clinic's plan tier — stays clickable (shows a
-   *  locked notice instead of the real content) and stays in the rail for
-   *  discoverability, just greyed with a lock glyph. See Part 3 of the
-   *  tier plan: "locked ≠ irrelevant" — hiding a paid feature is how you
-   *  get zero upgrades. */
-  locked?: boolean;
   onSelect: () => void;
-  variant: 'mobile' | 'rail';
+  variant: 'chip' | 'rail';
 }) {
-  const accent = ACCENT_VARS[section.accent];
-  const mobile = variant === 'mobile';
+  const label = SETTINGS_TAB_META[tab].label;
+  const base =
+    variant === 'chip'
+      ? 'flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-sm font-medium'
+      : 'flex min-h-10 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm font-medium';
+  const state = active
+    ? variant === 'chip'
+      ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]'
+      : 'bg-[var(--teal-light)] text-[var(--teal-strong)]'
+    : variant === 'chip'
+      ? 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:text-[var(--ink)]'
+      : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]';
   return (
     <button
       type="button"
-      data-section={section.key}
+      data-section={tab}
+      aria-current={active ? 'page' : undefined}
       onClick={onSelect}
-      className={
-        (mobile
-          ? 'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-2 text-xs font-medium'
-          : 'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm font-medium desktop:w-full') +
-        (locked && !active ? ' opacity-60' : '')
-      }
-      style={
-        active
-          ? {
-              ...(mobile ? { borderColor: accent.color } : {}),
-              background: accent.light,
-              color: accent.color,
-            }
-          : mobile
-            ? { borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--muted)' }
-            : { color: 'var(--muted)' }
-      }
+      className={`${base} ${state}`}
     >
-      <SectionIcon sectionKey={section.key} accent={section.accent} />
-      {section.label}
-      {locked && (
-        <svg
-          width="11"
-          height="11"
-          viewBox="0 0 16 16"
-          fill="none"
-          aria-label="Locked"
-          className="shrink-0"
-        >
-          <rect
-            x="3.5"
-            y="7"
-            width="9"
-            height="6.5"
-            rx="1.2"
-            stroke="currentColor"
-            strokeWidth="1.3"
-          />
-          <path
-            d="M5.5 7V5a2.5 2.5 0 015 0v2"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinecap="round"
-          />
-        </svg>
+      <TabIcon tab={tab} />
+      <span className={variant === 'rail' ? 'flex-1' : undefined}>{label}</span>
+      {dirty && (
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--rust)]" aria-label="Unsaved changes" />
       )}
-      {dirty && <span className="text-[var(--rust)]">•</span>}
     </button>
   );
 }
@@ -278,84 +153,82 @@ export function SettingsPage() {
   const { canEditSettings } = usePermissions();
   const search = useSearch({ from: '/settings' });
   const navigate = useNavigate({ from: '/settings' });
-  const [activeKey, setActiveKeyState] = useState<SectionKey>(search.tab ?? 'profile');
+  const [activeTab, setActiveTabState] = useState<SettingsTab>(search.tab ?? 'general');
   const catalogView: CatalogView = search.catalogView ?? 'packages';
   const [, startTransition] = useTransition();
-  const [dirtyKeys, setDirtyKeys] = useState<Set<SectionKey>>(new Set());
-  const [pendingSectionKey, setPendingSectionKey] = useState<SectionKey | null>(null);
+  const [dirtyForms, setDirtyForms] = useState<Set<FormKey>>(new Set());
+  const [pendingTab, setPendingTab] = useState<SettingsTab | null>(null);
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
   const catalogEmpty = catalog !== undefined && catalog.length === 0;
   const entitlements = useEntitlements(clinic.id);
-  // partner is hidden (not locked) below Clinic — a Lite/Solo clinic can't
-  // have a partner revenue-split relationship at all under its plan, so
-  // showing it as a purchasable upsell would be a lie (Part 3 of the tier
-  // plan). billing stays visible everywhere, just locked — hiding a paid
+  // Partner is hidden (not locked) below the Clinic tier — a Lite/Solo
+  // clinic can't have a partner split under its plan, so offering it as an
+  // upsell would mislead. Billing stays visible but locked: hiding a paid
   // feature is how you get zero upgrades.
   const canSeePartner = entitlements.can('revenueSplit');
   const canSeeBilling = entitlements.can('invoicing');
 
-  // `replace` so switching tabs doesn't spam browser history — a `?tab=`
-  // link is meant to be bookmarkable/shareable, not a Back-button stepper.
-  //
-  // The state update itself is wrapped in startTransition: swapping section
-  // renders a whole new heavy tab (Team's roster + member cards, Services'
-  // catalog table, ...) in one synchronous commit, which is exactly the
-  // "Event handlers ... blocked UI updates" INP warning Chrome flags on the
-  // rail nav button's click — the click handler is trivial, but the browser
-  // still attributes the render it triggers to that same input. Marking the
-  // update as a transition lets React deprioritize/interrupt that render
-  // instead of blocking the next paint on it.
+  const tabDirty = (tab: SettingsTab) => [...dirtyForms].some((k) => FORM_TAB[k] === tab);
+  const anyDirtyRef = useRef(false);
+  anyDirtyRef.current = dirtyForms.size > 0;
+
+  // Leaving Settings entirely (another page, reload, closing the tab) with
+  // unsaved edits. Switching tabs inside Settings has its own dialog below.
+  useBlocker({
+    shouldBlockFn: ({ next }) => {
+      if (!anyDirtyRef.current || next.pathname === '/settings') return false;
+      return !confirm('You have unsaved changes in Settings. Leave without saving?');
+    },
+    enableBeforeUnload: () => anyDirtyRef.current,
+  });
+
   function setCatalogView(view: CatalogView) {
     void navigate({
-      search: (prev) => ({ ...prev, tab: 'catalog', catalogView: view }),
+      search: (prev) => ({ ...prev, tab: 'services', catalogView: view }),
       replace: true,
     });
   }
 
-  function setActiveKey(key: SectionKey) {
+  // `replace` so switching tabs doesn't fill browser history. The state
+  // update runs in a transition: a tab swap renders a whole heavy section in
+  // one commit, which otherwise shows up as a slow-input (INP) warning on
+  // the nav click.
+  function setActiveTab(tab: SettingsTab) {
     startTransition(() => {
-      setActiveKeyState(key);
+      setActiveTabState(tab);
     });
-    void navigate({ search: (prev) => ({ ...prev, tab: key }), replace: true });
+    void navigate({ search: () => ({ tab }), replace: true });
   }
 
-  // Default landing, only when nobody already told us where to go via
-  // ?tab=: Team if anyone is unlinked (existing behavior, kept), otherwise
-  // Services while the catalog is still empty (that's the actual week-one
-  // blocker), otherwise Profile.
+  // Default landing when no ?tab= was given: Team if anyone is unlinked,
+  // Services while the catalog is empty (the week-one blocker), else General.
   const [landedOnDefault, setLandedOnDefault] = useState(!!search.tab);
   useEffect(() => {
     if (landedOnDefault || therapists === undefined || catalog === undefined) return;
-    setActiveKey(unlinkedCount > 0 ? 'team' : catalogEmpty ? 'catalog' : 'profile');
+    setActiveTab(unlinkedCount > 0 ? 'team' : catalogEmpty ? 'services' : 'general');
     setLandedOnDefault(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landedOnDefault, therapists, catalog, unlinkedCount, catalogEmpty]);
 
-  // Keep the active chip visible in the horizontal mobile strip.
+  // A link (setup step, closed-days sheet) can change ?tab= while Settings is
+  // already open; follow it.
   useEffect(() => {
-    const el = mobileNavRef.current?.querySelector(`[data-section="${activeKey}"]`);
-    el?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
-  }, [activeKey]);
-
-  // partner disappears from the rail once the resolved plan doesn't include
-  // it — same "don't strand someone on a tab that just vanished" reasoning
-  // as Ledger's Invoices tab and Reports' Attribution Audit tab already use
-  // for a mid-session role change. Held off while entitlements are still
-  // loading so a fresh page load doesn't bounce a real Clinic/Clinic+ admin
-  // off partner before the real tier resolves.
-  useEffect(() => {
-    if (activeKey === 'partner' && !entitlements.loading && !canSeePartner) setActiveKey('profile');
+    if (search.tab && search.tab !== activeTab) setActiveTabState(search.tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeKey, entitlements.loading, canSeePartner]);
+  }, [search.tab]);
 
-  // First week's own two checkable gates (the rest of its steps are
-  // behavioral tips, not something Dexie can confirm) — once both clear,
-  // the card auto-hides instead of sitting there until someone notices the
-  // Hide button. Held back while either query is still loading so it
-  // doesn't flash visible-then-hidden on a fast setup.
+  // Keep the active chip visible in the horizontal strip.
+  useEffect(() => {
+    const el = mobileNavRef.current?.querySelector(`[data-section="${activeTab}"]`);
+    el?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+  }, [activeTab]);
+
+  // First week's own two checkable gates — once both clear, the card hides
+  // instead of waiting for someone to press Hide. Held back while either
+  // query is still loading so it doesn't flash.
   const firstWeekNotDismissed = useFirstWeekChecklistVisible(clinic.id);
   const setupIncomplete =
     therapists === undefined || catalog === undefined
@@ -366,48 +239,35 @@ export function SettingsPage() {
       ? false
       : firstWeekNotDismissed && setupIncomplete;
 
-  // Left-rail sections that edit the clinic row report their dirty state up
-  // here, so switching tabs with unsaved changes can warn before discarding
-  // them — the risk splitting one big form into independently-saved
-  // sections actually introduces (there was nowhere to "navigate away to"
-  // before). Team/Services/Data/Danger zone act immediately per row/button
-  // and never register as dirty.
-  const setProfileDirty = useCallback(
-    (d: boolean) => setDirtyKeys((s) => toggleSet(s, 'profile', d)),
-    []
-  );
-  const setBillingDirty = useCallback(
-    (d: boolean) => setDirtyKeys((s) => toggleSet(s, 'billing', d)),
-    []
-  );
-  const setPartnerDirty = useCallback(
-    (d: boolean) => setDirtyKeys((s) => toggleSet(s, 'partner', d)),
-    []
-  );
+  // Sections that edit the clinic row report unsaved state up here, so
+  // switching tabs or leaving can warn before discarding it. Team, Services
+  // and Account act immediately per row or button and never report dirty.
+  const setProfileDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'profile', d)), []);
+  const setBillingDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'billing', d)), []);
+  const setPartnerDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'partner', d)), []);
   const setPatientCommsDirty = useCallback(
-    (d: boolean) => setDirtyKeys((s) => toggleSet(s, 'patientComms', d)),
+    (d: boolean) => setDirtyForms((s) => toggleSet(s, 'patientComms', d)),
     []
   );
 
-  function selectSection(key: SectionKey) {
-    if (key === activeKey) return;
-    if (dirtyKeys.has(activeKey)) {
-      setPendingSectionKey(key);
+  function selectTab(tab: SettingsTab) {
+    if (tab === activeTab) return;
+    if (tabDirty(activeTab)) {
+      setPendingTab(tab);
       return;
     }
-    setActiveKey(key);
+    setActiveTab(tab);
   }
 
-  // Nav already hides the Settings link for non-admins (`Shell.tsx`); this
-  // guard covers a direct URL hit (old bookmark, typed link) instead of
-  // silently rendering the full clinic-configuration form. The real access
-  // boundary is RLS on `clinics`/`therapists`/`service_catalog` — this is
-  // just so a non-admin doesn't see a form that would fail to save.
+  // Nav already hides Settings for non-admins; this covers a direct URL hit.
+  // The real boundary is RLS on clinics/therapists/service_catalog.
   if (!canEditSettings) {
     return (
       <div className="space-y-4">
         <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Settings</h1>
-        <p className="text-sm text-[var(--muted)]">Settings are managed by your clinic admin.</p>
+        <p className="text-sm text-[var(--muted)]">
+          Settings are managed by your clinic admin. Your own profile and notifications are in the account menu.
+        </p>
       </div>
     );
   }
@@ -419,93 +279,50 @@ export function SettingsPage() {
       {showFirstWeek && <FirstWeekChecklist />}
 
       <div className="desktop:flex desktop:items-start desktop:gap-6">
-        {/* Horizontal scroll chips (one tap per section) instead of a
-            grouped <select> — used on phones AND the whole tablet range
-            (through iPad portrait) so the persistent side rail below only
-            claims width once there's a laptop-width screen to give it;
-            gating the rail at `tab:` left iPad portrait with a ~500px-wide
-            content column. Sits under the page title, above the bottom tab
-            bar — same icon + label language as the vertical rail. */}
+        {/* Chips on phones and through iPad portrait; the side rail only once
+            there's laptop width to spare (a `tab:` rail left iPad portrait
+            with a ~500px content column). */}
         <nav
           ref={mobileNavRef}
           aria-label="Settings sections"
-          className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 desktop:hidden"
+          className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] desktop:hidden"
         >
-          {SECTION_GROUPS.map((group, groupIndex) => (
-            <div key={group.label} className="flex shrink-0 items-center gap-2">
-              {groupIndex > 0 && (
-                <div className="h-8 w-px shrink-0 bg-[var(--border)]" aria-hidden />
-              )}
-              {group.keys
-                .filter((key) => key !== 'partner' || canSeePartner)
-                .map((key) => {
-                  const s = SECTIONS.find((x) => x.key === key)!;
-                  return (
-                    <SettingsSectionNavButton
-                      key={s.key}
-                      section={s}
-                      active={activeKey === s.key}
-                      dirty={dirtyKeys.has(s.key)}
-                      locked={s.key === 'billing' && !canSeeBilling}
-                      onSelect={() => selectSection(s.key)}
-                      variant="mobile"
-                    />
-                  );
-                })}
-            </div>
+          {SETTINGS_TABS.map((tab) => (
+            <SettingsTabButton
+              key={tab}
+              tab={tab}
+              active={activeTab === tab}
+              dirty={tabDirty(tab)}
+              onSelect={() => selectTab(tab)}
+              variant="chip"
+            />
           ))}
         </nav>
-        <nav className="mb-4 hidden gap-1 overflow-x-auto desktop:mb-0 desktop:flex desktop:w-48 desktop:shrink-0 desktop:flex-col desktop:gap-0.5 desktop:overflow-visible">
-          {SECTION_GROUPS.map((group) => (
-            <div key={group.label} className="contents desktop:mb-1.5 desktop:block">
-              <p className="hidden px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]/70 desktop:block">
-                {group.label}
-              </p>
-              {group.keys
-                .filter((key) => key !== 'partner' || canSeePartner)
-                .map((key) => {
-                  const s = SECTIONS.find((x) => x.key === key)!;
-                  return (
-                    <SettingsSectionNavButton
-                      key={s.key}
-                      section={s}
-                      active={activeKey === s.key}
-                      dirty={dirtyKeys.has(s.key)}
-                      locked={s.key === 'billing' && !canSeeBilling}
-                      onSelect={() => selectSection(s.key)}
-                      variant="rail"
-                    />
-                  );
-                })}
-            </div>
+        <nav
+          aria-label="Settings sections"
+          className="hidden desktop:sticky desktop:top-20 desktop:flex desktop:w-52 desktop:shrink-0 desktop:flex-col desktop:gap-0.5"
+        >
+          {SETTINGS_TABS.map((tab) => (
+            <SettingsTabButton
+              key={tab}
+              tab={tab}
+              active={activeTab === tab}
+              dirty={tabDirty(tab)}
+              onSelect={() => selectTab(tab)}
+              variant="rail"
+            />
           ))}
         </nav>
 
-        <div className="min-w-0 flex-1 space-y-6">
-          {/* Tailwind v4's space-y-6 applies margin-bottom to this <p> (not
-              margin-top to the next sibling, unlike v3) via a zero-specificity
-              :where() rule — a same-element margin class here doesn't add to
-              that, it overrides it outright. The old `-mb-2` therefore wasn't
-              "8px less than the 24px default," it replaced the 24px with a
-              literal -8px, pulling the card's border up into the text. */}
-          <p className="mb-2 text-xs text-[var(--muted)]">
-            {SECTIONS.find((s) => s.key === activeKey)?.description}
-          </p>
-          {activeKey === 'plan' && <PlanSection />}
-          {activeKey === 'profile' && <ClinicProfileSection onDirtyChange={setProfileDirty} />}
-          {activeKey === 'billing' &&
-            (canSeeBilling ? (
-              <BillingSection onDirtyChange={setBillingDirty} />
-            ) : (
-              <LockedSectionNotice feature="invoicing" sectionLabel="Billing & invoicing" />
-            ))}
-          {activeKey === 'partner' && canSeePartner && (
-            <PartnerSection onDirtyChange={setPartnerDirty} />
-          )}
-          {activeKey === 'patientComms' && (
-            <PatientCommsSection onDirtyChange={setPatientCommsDirty} />
-          )}
-          {activeKey === 'team' && (
+        <div className="mx-auto min-w-0 max-w-2xl flex-1 space-y-6 desktop:mx-0 desktop:max-w-none">
+          <div>
+            <h2 className="font-display text-xl font-semibold text-[var(--ink)]">
+              {SETTINGS_TAB_META[activeTab].label}
+            </h2>
+            <p className="mt-0.5 text-sm text-[var(--muted)]">{SETTINGS_TAB_META[activeTab].description}</p>
+          </div>
+          {activeTab === 'general' && <ClinicProfileSection onDirtyChange={setProfileDirty} />}
+          {activeTab === 'team' && (
             <>
               {unlinkedCount > 0 && (
                 <div className="rounded-2xl border border-[var(--amber)] bg-[var(--amber-light)] px-4 py-3 text-sm text-[var(--ink)]">
@@ -516,11 +333,21 @@ export function SettingsPage() {
               <Therapists />
             </>
           )}
-          {activeKey === 'catalog' && (
-            <CatalogSection view={catalogView} onViewChange={setCatalogView} />
-          )}
-          {activeKey === 'data' && (
+          {activeTab === 'services' && <CatalogSection view={catalogView} onViewChange={setCatalogView} />}
+          {activeTab === 'booking' && <PatientCommsSection onDirtyChange={setPatientCommsDirty} />}
+          {activeTab === 'billing' && (
             <>
+              {canSeeBilling ? (
+                <BillingSection onDirtyChange={setBillingDirty} />
+              ) : (
+                <LockedSectionNotice feature="invoicing" sectionLabel="Billing & invoicing" />
+              )}
+              {canSeePartner && <PartnerSection onDirtyChange={setPartnerDirty} />}
+            </>
+          )}
+          {activeTab === 'account' && (
+            <>
+              <PlanSection />
               <HistoricalData />
               <DataBackup />
               <DangerZone />
@@ -530,15 +357,15 @@ export function SettingsPage() {
       </div>
 
       <ConfirmDialog
-        open={pendingSectionKey !== null}
+        open={pendingTab !== null}
         title="Discard unsaved changes?"
         message="This section has unsaved changes. Discard them and switch?"
-        confirmLabel="Discard & switch"
+        confirmLabel="Discard and switch"
         destructive
-        onCancel={() => setPendingSectionKey(null)}
+        onCancel={() => setPendingTab(null)}
         onConfirm={() => {
-          if (pendingSectionKey) setActiveKey(pendingSectionKey);
-          setPendingSectionKey(null);
+          if (pendingTab) setActiveTab(pendingTab);
+          setPendingTab(null);
         }}
       />
     </div>

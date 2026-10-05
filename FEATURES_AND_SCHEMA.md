@@ -528,6 +528,19 @@ queued with a visible error.
 
 ### 8. Settings & Configuration
 
+Admin-only, clinic-wide. One route, `/settings?tab=…`, with six sections in a fixed order (identity, then operations, then money, then system). The list lives once in `src/features/settings/sections.ts`; the router validates `?tab=` with its `parseSettingsSearch`.
+
+| Tab | Contains |
+|---|---|
+| `general` | Clinic profile |
+| `team` | Therapists, invites, logins |
+| `services` | Catalog (`catalogView` = packages / treatments / referrals) |
+| `booking` | Online booking page, WhatsApp, closed days, feedback |
+| `billing` | Billing & invoicing (locked below the invoicing tier), Partner & split (hidden without `revenueSplit`) |
+| `account` | Plan, historical data import, backup, danger zone |
+
+Old tab values still resolve: `profile` → general, `patientComms` → booking, `partner` → billing, `catalog` → services, `plan` / `data` → account, `treatments` / `referrals` → services with that view. Chips on phones and iPad portrait, a side rail from `desktop:`. Unsaved edits warn when switching tabs (in-page dialog) and when leaving Settings or reloading (`useBlocker` + `beforeunload`). Personal settings (profile, password, notifications, working hours) are not here; they're in the account menu.
+
 #### Clinic Profile
 - Name, address, phone, email, GST number
 - Logo upload
@@ -539,7 +552,7 @@ queued with a visible error.
 - Fiscal year start month (default April → FY 26-27)
 - **Walk-in MRNO prefix** (configurable, defaults to 'W')
 
-#### Catalog (Settings → Catalog)
+#### Catalog (Settings → Services)
 Single settings section with three sub-tabs — **Services & packages**, **Treatments
 performed**, and **Referral sources** — each using the same card + **Edit**
 (Save/Cancel) pattern as Team → Logins. Legacy `?tab=services|treatments|referrals`

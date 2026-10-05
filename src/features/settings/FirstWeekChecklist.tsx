@@ -56,7 +56,7 @@ export interface FirstWeekSignals {
  *  variant's `search` stays typed against that route's own schema instead
  *  of widened to `Record<string, string>`. */
 type StepLink =
-  { kind: 'settings'; tab: 'profile' | 'team' | 'catalog' | 'data' } | { kind: 'new-visit' };
+  { kind: 'settings'; tab: 'general' | 'team' | 'services' | 'account' } | { kind: 'new-visit' };
 
 /**
  * Real setup sequence, an admin's actual order of operations — not the
@@ -90,7 +90,7 @@ function buildSteps(seatLimited: boolean, canInvoice: boolean): Step[] {
       id: 'clinic-profile',
       title: 'Set up your clinic profile',
       body: 'Name, address, invoice prefix, tax %, revenue split. Everything else — every invoice, every split calculation — reads from this.',
-      link: { kind: 'settings', tab: 'profile' },
+      link: { kind: 'settings', tab: 'general' },
       linkLabel: 'Go to Clinic profile',
       auto: (s) => s.clinicProfileSet,
     },
@@ -98,7 +98,7 @@ function buildSteps(seatLimited: boolean, canInvoice: boolean): Step[] {
       id: 'price-services',
       title: 'Price your services',
       body: 'Set the catalog before logging visits; a visit billed against an unpriced service can’t invoice cleanly later.',
-      link: { kind: 'settings', tab: 'catalog' },
+      link: { kind: 'settings', tab: 'services' },
       linkLabel: 'Go to Services',
       auto: (s) => s.servicesPriced,
     },
@@ -139,14 +139,14 @@ function buildSteps(seatLimited: boolean, canInvoice: boolean): Step[] {
       id: 'clinical-notes',
       title: 'Decide on clinical notes for your team',
       body: 'Clinic profile → Optional modules. First week should be ledger + billing only. Turn clinical notes on for one willing therapist, not the whole roster.',
-      link: { kind: 'settings', tab: 'profile' },
+      link: { kind: 'settings', tab: 'general' },
       linkLabel: 'Go to Clinic profile',
     },
     {
       id: 'backup',
       title: 'Take a backup this week',
       body: 'Data & maintenance → Data backup. Export once after the first real day so you know the restore path before you need it.',
-      link: { kind: 'settings', tab: 'data' },
+      link: { kind: 'settings', tab: 'account' },
       linkLabel: 'Go to Data & maintenance',
       auto: (s) => s.backedUp,
     },

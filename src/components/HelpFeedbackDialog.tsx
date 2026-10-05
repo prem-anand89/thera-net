@@ -243,7 +243,7 @@ export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps)
                       <details className="group">
                         <summary className="cursor-pointer font-medium text-[var(--teal)] hover:underline">How do I give billing access to staff?</summary>
                         <p className="mt-1 pl-4 text-xs leading-relaxed text-[var(--muted)]">
-                          Go to <strong>Settings &rarr; Features</strong>. You can toggle whether "Everyone" or only "Billing Staff / Admins" are allowed to issue invoices. 
+                          Go to <strong>Settings &rarr; Billing</strong>. You can toggle whether "Everyone" or only "Billing Staff / Admins" are allowed to issue invoices. 
                         </p>
                       </details>
 
