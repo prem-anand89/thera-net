@@ -404,3 +404,14 @@ body {
   .screen-body { max-width: 1000px; padding: 22px 0; gap: 22px; }
   .modal-card { max-width: 500px; }
 }
+
+/* Settings search: the card you jumped to. A short ring, no motion. */
+.settings-card-highlight {
+  box-shadow: 0 0 0 2px var(--teal);
+  transition: box-shadow 0.3s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-card-highlight {
+    transition: none;
+  }
+}

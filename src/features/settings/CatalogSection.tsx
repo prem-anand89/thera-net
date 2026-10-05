@@ -161,7 +161,7 @@ function ServiceCatalog() {
   );
 
   return (
-    <SectionCard title="Services & packages">
+    <SectionCard id="settings-card-services-packages" title="Services & packages">
       <p className="mb-3 text-xs text-[var(--muted)]">
         Organize billable items into <strong>service groups</strong> (e.g. Consultation, Treatment).
         Each row is a single-session service (<strong>1 session</strong>) or a multi-session{' '}
@@ -672,7 +672,7 @@ function TreatmentCatalog() {
   const itemList = itemsRaw ?? [];
 
   return (
-    <SectionCard title="Treatments performed">
+    <SectionCard id="settings-card-services-treatments" title="Treatments performed">
       <p className="mb-3 text-xs text-[var(--muted)]">
         Clinical checklist on each visit, independent of billing. Deactivate instead of deleting so
         past visits keep displaying correctly.
@@ -851,7 +851,7 @@ function ReferringSourcesCatalog() {
   const activeCount = itemList.filter((i) => i.active).length;
 
   return (
-    <SectionCard title="Referral sources">
+    <SectionCard id="settings-card-services-referrals" title="Referral sources">
       <p className="mb-3 text-xs text-[var(--muted)]">
         Shown when adding or editing a patient. Deactivate instead of deleting so existing patients
         keep displaying correctly. Optionally add a <strong>detail field label</strong> — when staff pick

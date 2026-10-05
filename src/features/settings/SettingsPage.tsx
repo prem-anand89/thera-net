@@ -40,7 +40,13 @@ import {
   StatTile,
 } from '@/components/ui';
 import { CatalogSection, type CatalogView } from './CatalogSection';
-import { SETTINGS_TABS, SETTINGS_TAB_META, matchSettingsTabs, type SettingsTab } from './sections';
+import {
+  SETTINGS_TABS,
+  SETTINGS_TAB_META,
+  matchSettingsCards,
+  type SettingsCard,
+  type SettingsTab,
+} from './sections';
 import { toFriendlyMessage } from '@/lib/errors';
 import {
   FirstWeekChecklist,
@@ -157,8 +163,14 @@ export function SettingsPage() {
   const catalogView: CatalogView = search.catalogView ?? 'packages';
   const [, startTransition] = useTransition();
   const [dirtyForms, setDirtyForms] = useState<Set<FormKey>>(new Set());
-  const [pendingTab, setPendingTab] = useState<SettingsTab | null>(null);
+  // A jump target: the tab (plus Services sub-view) and optionally the card to
+  // scroll to. Used for tab clicks, search results and the discard dialog.
+  type Target = { tab: SettingsTab; catalogView?: CatalogView; anchor?: string };
+  const [pendingTarget, setPendingTarget] = useState<Target | null>(null);
+  const [anchor, setAnchor] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const unlinkedCount = (therapists ?? []).filter((t) => !t.userId).length;
@@ -197,12 +209,56 @@ export function SettingsPage() {
   // update runs in a transition: a tab swap renders a whole heavy section in
   // one commit, which otherwise shows up as a slow-input (INP) warning on
   // the nav click.
-  function setActiveTab(tab: SettingsTab) {
+  function setActiveTab(tab: SettingsTab, view?: CatalogView) {
     startTransition(() => {
       setActiveTabState(tab);
     });
-    void navigate({ search: () => ({ tab }), replace: true });
+    void navigate({
+      search: () => (tab === 'services' && view ? { tab, catalogView: view } : { tab }),
+      replace: true,
+    });
   }
+
+  function goTo(target: Target) {
+    if (target.tab !== activeTab && tabDirty(activeTab)) {
+      setPendingTarget(target);
+      return;
+    }
+    setAnchor(target.anchor ?? null);
+    setActiveTab(target.tab, target.catalogView);
+  }
+
+  // After a card jump, the target tab may still be loading its data, so the
+  // card can appear a few frames late. Retry briefly, then highlight it.
+  useEffect(() => {
+    if (!anchor) return;
+    let tries = 0;
+    let frame = 0;
+    const attempt = () => {
+      const el = document.getElementById(anchor);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        el.classList.add('settings-card-highlight');
+        window.setTimeout(() => el.classList.remove('settings-card-highlight'), 1600);
+        setAnchor(null);
+        return;
+      }
+      if (tries++ < 60) frame = requestAnimationFrame(attempt);
+      else setAnchor(null);
+    };
+    frame = requestAnimationFrame(attempt);
+    return () => cancelAnimationFrame(frame);
+  }, [anchor, activeTab, catalogView]);
+
+  // Close the results when clicking outside the search.
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!searchRef.current?.contains(e.target as Node)) setSearchOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [searchOpen]);
 
   // Default landing when no ?tab= was given: Team if anyone is unlinked,
   // Services while the catalog is empty (the week-one blocker), else General.
@@ -253,11 +309,13 @@ export function SettingsPage() {
 
   function selectTab(tab: SettingsTab) {
     if (tab === activeTab) return;
-    if (tabDirty(activeTab)) {
-      setPendingTab(tab);
-      return;
-    }
-    setActiveTab(tab);
+    goTo({ tab });
+  }
+
+  function pickCard(card: SettingsCard) {
+    setQuery('');
+    setSearchOpen(false);
+    goTo({ tab: card.tab, catalogView: card.catalogView, anchor: card.id });
   }
 
   // Nav already hides Settings for non-admins; this covers a direct URL hit.
@@ -279,35 +337,64 @@ export function SettingsPage() {
 
       {showFirstWeek && <FirstWeekChecklist />}
 
-      <div className="space-y-2">
+      <div ref={searchRef} className="relative">
         <label className="sr-only" htmlFor="settings-search">Search settings</label>
+        <svg
+          aria-hidden
+          viewBox="0 0 16 16"
+          fill="none"
+          className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]"
+        >
+          <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
         <input
           id="settings-search"
           type="search"
+          role="combobox"
+          aria-expanded={searchOpen && query.trim() !== ''}
+          aria-controls="settings-search-results"
+          aria-autocomplete="list"
+          autoComplete="off"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search settings, e.g. GST, WhatsApp, backup"
-          className={inputCls}
+          placeholder="Search settings"
+          onFocus={() => setSearchOpen(true)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setSearchOpen(true);
+          }}
+          onKeyDown={(e) => {
+            const first = matchSettingsCards(query)[0];
+            if (e.key === 'Escape') {
+              setQuery('');
+              setSearchOpen(false);
+            } else if (e.key === 'Enter' && first) {
+              e.preventDefault();
+              pickCard(first);
+            }
+          }}
+          className="h-11 w-full rounded-full border border-[var(--border)] bg-[var(--surface)] pl-11 pr-4 text-sm text-[var(--ink)] shadow-sm placeholder:text-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
         />
-        {query.trim() && (
-          <ul className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-            {matchSettingsTabs(query).map((tab) => (
-              <li key={tab}>
+        {searchOpen && query.trim() && (
+          <ul
+            id="settings-search-results"
+            role="listbox"
+            className="absolute left-0 right-0 top-full z-30 mt-2 max-h-[60vh] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] py-1.5 shadow-lg"
+          >
+            {matchSettingsCards(query).map((card) => (
+              <li key={card.id} role="option" aria-selected={false}>
                 <button
                   type="button"
-                  className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
-                  onClick={() => {
-                    setQuery('');
-                    selectTab(tab);
-                  }}
+                  className="flex min-h-11 w-full items-center justify-between gap-3 px-4 py-2 text-left hover:bg-[var(--paper)]"
+                  onClick={() => pickCard(card)}
                 >
-                  <span>{SETTINGS_TAB_META[tab].label}</span>
-                  <span className="text-xs text-[var(--muted)]">{SETTINGS_TAB_META[tab].description}</span>
+                  <span className="min-w-0 truncate text-sm font-medium text-[var(--ink)]">{card.title}</span>
+                  <span className="shrink-0 text-xs text-[var(--muted)]">{SETTINGS_TAB_META[card.tab].label}</span>
                 </button>
               </li>
             ))}
-            {matchSettingsTabs(query).length === 0 && (
-              <li className="px-3 py-3 text-sm text-[var(--muted)]">No settings match “{query.trim()}”.</li>
+            {matchSettingsCards(query).length === 0 && (
+              <li className="px-4 py-3 text-sm text-[var(--muted)]">No settings match “{query.trim()}”.</li>
             )}
           </ul>
         )}
@@ -392,15 +479,18 @@ export function SettingsPage() {
       </div>
 
       <ConfirmDialog
-        open={pendingTab !== null}
+        open={pendingTarget !== null}
         title="Discard unsaved changes?"
         message="This section has unsaved changes. Discard them and switch?"
         confirmLabel="Discard and switch"
         destructive
-        onCancel={() => setPendingTab(null)}
+        onCancel={() => setPendingTarget(null)}
         onConfirm={() => {
-          if (pendingTab) setActiveTab(pendingTab);
-          setPendingTab(null);
+          if (pendingTarget) {
+            setAnchor(pendingTarget.anchor ?? null);
+            setActiveTab(pendingTarget.tab, pendingTarget.catalogView);
+          }
+          setPendingTarget(null);
         }}
       />
     </div>
@@ -590,7 +680,7 @@ function PlanSection() {
 
   return (
     <div className="space-y-4">
-      <SectionCard title="Your plan">
+      <SectionCard id="settings-card-account-plan" title="Your plan">
         <div className="flex flex-wrap items-center gap-3">
           <span className="font-display text-lg font-semibold text-[var(--ink)]">
             {loading ? '…' : PLAN_TIER_LABELS[tier]}
@@ -624,7 +714,7 @@ function PlanSection() {
           />
         </div>
       </SectionCard>
-      <SectionCard title="What's included">
+      <SectionCard id="settings-card-account-included" title="What's included">
         <ul className="divide-y divide-[var(--border)]">
           {features.map((f) => (
             <li
@@ -719,7 +809,7 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
   }
 
   return (
-    <SectionCard title="Clinic profile">
+    <SectionCard id="settings-card-general-profile" title="Clinic profile">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Clinic name">
           <input
@@ -913,7 +1003,7 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   }
 
   return (
-    <SectionCard title="Billing & invoicing">
+    <SectionCard id="settings-card-billing-invoicing" title="Billing & invoicing">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Invoice prefix">
           <input
@@ -1192,7 +1282,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   }
 
   return (
-    <SectionCard title="Partner & split">
+    <SectionCard id="settings-card-billing-partner" title="Partner & split">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field
           label={
@@ -1371,7 +1461,7 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
   }
 
   return (
-    <SectionCard title="Online Booking">
+    <SectionCard id="settings-card-booking-online" title="Online Booking">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field
           label={
@@ -1713,7 +1803,7 @@ function BoolToggle({ value, onChange }: { value: boolean; onChange: (v: boolean
 
 function HistoricalData() {
   return (
-    <SectionCard title="Historical data">
+    <SectionCard id="settings-card-account-historical" title="Historical data">
       <p className="mb-3 text-xs text-[var(--muted)]">
         One-time import of visits logged before go-live in the Excel ledger.
       </p>
@@ -1775,7 +1865,7 @@ function DataBackup() {
   }
 
   return (
-    <SectionCard title="Data backup">
+    <SectionCard id="settings-card-account-backup" title="Data backup">
       <p className="mb-3 text-xs text-[var(--muted)]">
         Download a full snapshot of this clinic's data (patients, visits, invoices, payments,
         catalog, therapists) any time — a safety net before a wipe, a device change, or just as a
@@ -1934,7 +2024,7 @@ function DangerZone() {
   const otherClinicCount = (clinics ?? []).filter((c) => c.id !== clinic.id).length;
 
   return (
-    <details className="group rounded-2xl border border-[var(--rust-light)] bg-[var(--surface)] open:pb-4">
+    <details id="settings-card-account-danger" className="group scroll-mt-24 rounded-2xl border border-[var(--rust-light)] bg-[var(--surface)] open:pb-4">
       <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-[var(--rust)] [&::-webkit-details-marker]:hidden">
         Danger zone
         <span className="text-xs font-medium text-[var(--muted)] group-open:hidden">Show</span>
@@ -2411,7 +2501,7 @@ function Therapists() {
   const inviteRoles: Exclude<ClinicRole, 'unknown'>[] = ['therapist', 'front_desk', 'admin'];
 
   return (
-    <SectionCard title="Therapists & team">
+    <SectionCard id="settings-card-team-therapists" title="Therapists & team">
       <div className="mb-5 flex gap-1.5">
         {(['logins', 'roster'] as const).map((v) => {
           const selected = teamView === v;

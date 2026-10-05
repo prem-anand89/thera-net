@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchSettingsTabs, parseSettingsSearch } from './sections';
+import { SETTINGS_CARDS, matchSettingsCards, parseSettingsSearch } from './sections';
 
 describe('parseSettingsSearch', () => {
   it('accepts the six current tabs', () => {
@@ -33,15 +33,23 @@ describe('parseSettingsSearch', () => {
   });
 });
 
-describe('matchSettingsTabs', () => {
-  it('finds the tab that owns a setting by keyword', () => {
-    expect(matchSettingsTabs('gst')).toEqual(['billing']);
-    expect(matchSettingsTabs('whatsapp')).toEqual(['booking']);
-    expect(matchSettingsTabs('  Backup ')).toEqual(['account']);
+describe('matchSettingsCards', () => {
+  it('finds the exact card that owns a setting', () => {
+    expect(matchSettingsCards('gst').map((c) => c.id)).toEqual(['settings-card-billing-invoicing']);
+    expect(matchSettingsCards('whatsapp').map((c) => c.id)).toEqual(['settings-card-booking-online']);
+    expect(matchSettingsCards('backup').map((c) => c.id)).toEqual(['settings-card-account-backup']);
   });
 
   it('returns nothing for an empty or unknown query', () => {
-    expect(matchSettingsTabs('')).toEqual([]);
-    expect(matchSettingsTabs('zzzz')).toEqual([]);
+    expect(matchSettingsCards('')).toEqual([]);
+    expect(matchSettingsCards('zzzz')).toEqual([]);
+  });
+
+  it('gives every card an id that exists on the page', () => {
+    const ids = new Set<string>();
+    for (const card of SETTINGS_CARDS) {
+      expect(ids.has(card.id)).toBe(false);
+      ids.add(card.id);
+    }
   });
 });

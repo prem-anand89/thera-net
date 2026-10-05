@@ -61,16 +61,19 @@ export function Field({
 }
 
 export function SectionCard({
+  id,
   title,
   action,
   children,
 }: {
+  /** Anchor for Settings search: the card scrolls into view at this id. */
+  id?: string;
   title: string;
   action?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
+    <section id={id} className="scroll-mt-24 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="font-display text-base font-semibold text-[var(--ink)]">{title}</h2>
         {action}
