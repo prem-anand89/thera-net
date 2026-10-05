@@ -557,42 +557,88 @@ export function InvoicePrintPage() {
         )}
         <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} />
 
-        {/* Invoice meta + patient */}
-        <section className="mt-4 flex flex-wrap justify-between gap-x-4 gap-y-2 text-sm">
+        {/* Document Title */}
+        <div className="mt-6 text-center">
+          <h2 className="font-display text-lg font-bold uppercase tracking-wide text-[var(--ink)]">
+            {isVoid ? 'BILL (VOID)' : isPaid ? 'BILL CUM RECEIPT' : 'BILL'}
+          </h2>
+        </div>
+
+        {/* Invoice meta + patient grid */}
+        <section className="mt-6 grid grid-cols-2 gap-x-8 gap-y-1 text-[11px]">
+          {/* Left Column: Patient Info */}
           <div>
-            <p className="font-display font-semibold text-[var(--ink)]">
-              {invoice.patientSnapshot.name}
-            </p>
-            <p className="text-[var(--muted)]">Patient ID: {invoice.patientSnapshot.mrno}</p>
-            {(invoice.patientSnapshot.age != null || invoice.patientSnapshot.sex) && (
-              <p className="text-[var(--muted)]">
-                {[
-                  invoice.patientSnapshot.age != null ? `${invoice.patientSnapshot.age}y` : null,
-                  invoice.patientSnapshot.sex,
-                ]
-                  .filter(Boolean)
-                  .join(' / ')}
-              </p>
-            )}
+            <table className="w-full text-left table-fixed">
+              <tbody>
+                <tr>
+                  <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Patient Name</th>
+                  <td className="py-0.5 text-[var(--ink)] align-top font-semibold truncate">
+                    : {invoice.patientSnapshot.name}
+                  </td>
+                </tr>
+                <tr>
+                  <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Patient ID</th>
+                  <td className="py-0.5 text-[var(--ink)] align-top">
+                    : {invoice.patientSnapshot.mrno}
+                  </td>
+                </tr>
+                {(invoice.patientSnapshot.age != null || invoice.patientSnapshot.sex) && (
+                  <tr>
+                    <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Age / Gender</th>
+                    <td className="py-0.5 text-[var(--ink)] align-top">
+                      :{' '}
+                      {[
+                        invoice.patientSnapshot.age != null ? `${invoice.patientSnapshot.age} Y` : null,
+                        invoice.patientSnapshot.sex,
+                      ]
+                        .filter(Boolean)
+                        .join(' / ')}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-          <div className="text-right">
-            <p className="font-display text-lg font-bold text-[var(--ink)]">
-              {isVoid ? 'BILL (VOID)' : isPaid ? 'BILL CUM RECEIPT' : 'BILL'}
-            </p>
-            <p className="text-[var(--ink)]">{invoice.invoiceNo}</p>
-            <p className="text-[var(--muted)]">{formatDateDMY(invoice.issuedAt)}</p>
-            {statusLoaded && (
-              <p
-                className="mt-1 inline-block rounded-full border px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-widest"
-                style={
-                  isPaid
-                    ? { backgroundColor: 'var(--moss-light)', borderColor: 'var(--moss-strong)', color: 'var(--moss-strong)' }
-                    : { backgroundColor: 'var(--rust-light)', borderColor: 'var(--rust)', color: 'var(--rust)' }
-                }
-              >
-                {isVoid ? 'VOID' : isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE'}
-              </p>
-            )}
+
+          {/* Right Column: Bill Info */}
+          <div>
+            <table className="w-full text-left table-fixed">
+              <tbody>
+                <tr>
+                  <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Bill No</th>
+                  <td className="py-0.5 text-[var(--ink)] align-top">
+                    : {invoice.invoiceNo}
+                  </td>
+                </tr>
+                <tr>
+                  <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Billing Date</th>
+                  <td className="py-0.5 text-[var(--ink)] align-top">
+                    : {formatDateDMY(invoice.issuedAt)}
+                  </td>
+                </tr>
+                {footerTherapists.length > 0 && (
+                  <tr>
+                    <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">
+                      {footerTherapists.length === 1 ? 'Consultant' : 'Consultants'}
+                    </th>
+                    <td className="py-0.5 text-[var(--ink)] align-top truncate">
+                      : {footerTherapists.map((t) => t.name).join(', ')}
+                    </td>
+                  </tr>
+                )}
+                {statusLoaded && (
+                  <tr>
+                    <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Status</th>
+                    <td className="py-0.5 font-semibold align-top">
+                      :{' '}
+                      <span className={isPaid ? 'text-[var(--moss-strong)]' : 'text-[var(--rust)]'}>
+                        {isVoid ? 'VOID' : isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE'}
+                      </span>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
 
