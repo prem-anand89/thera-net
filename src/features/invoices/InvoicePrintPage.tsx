@@ -724,54 +724,56 @@ export function InvoicePrintPage() {
 
         {/* Payment Ledger */}
         {paymentLedger && (
-          <div className="mt-8">
-            <p className="mb-2 font-medium text-[var(--muted)] border-b border-[var(--border)] pb-1 text-xs">
-              Payment Details
-            </p>
-            {paymentLedger.rows.length > 0 ? (
-              <table className="w-full text-left text-xs mb-4">
-                <thead>
-                  <tr className="text-[var(--muted)]">
-                    <th className="py-1 w-1/3 font-medium">Date</th>
-                    <th className="py-1 w-1/3 font-medium">Mode</th>
-                    <th className="py-1 w-1/3 font-medium text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="align-top">
-                  {paymentLedger.rows.map((row, idx) => (
-                    <tr key={idx} className="border-b border-[var(--border)] border-dashed last:border-0">
-                      <td className="py-1.5 text-[var(--ink)]">{formatDateDMY(row.date)}</td>
-                      <td className="py-1.5 text-[var(--ink)]">{row.mode}</td>
-                      <td className="py-1.5 font-num text-right text-[var(--ink)] whitespace-nowrap">
-                        {formatINR(row.amountPaise)}
-                      </td>
+          <div className="mt-8 flex justify-between items-start">
+            <div className="w-[55%] pr-8">
+              <p className="mb-2 font-medium text-[var(--muted)] border-b border-[var(--border)] pb-1 text-xs">
+                Payment Details
+              </p>
+              {paymentLedger.rows.length > 0 ? (
+                <table className="w-full text-left text-[11px] mb-4">
+                  <thead>
+                    <tr className="text-[var(--muted)]">
+                      <th className="py-1 w-[30%] font-medium">Date</th>
+                      <th className="py-1 w-[40%] font-medium">Mode</th>
+                      <th className="py-1 w-[30%] font-medium text-right pr-2">Amount</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p className="mb-4 text-xs text-[var(--muted)] italic">No payments recorded</p>
-            )}
+                  </thead>
+                  <tbody className="align-top">
+                    {paymentLedger.rows.map((row, idx) => (
+                      <tr key={idx} className="border-b border-[var(--border)] border-dashed last:border-0">
+                        <td className="py-1.5 text-[var(--ink)]">{formatDateDMY(row.date)}</td>
+                        <td className="py-1.5 text-[var(--ink)]">{row.mode}</td>
+                        <td className="py-1.5 font-num text-right text-[var(--ink)] whitespace-nowrap pr-2">
+                          {formatINR(row.amountPaise)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="mb-4 text-xs text-[var(--muted)] italic">No payments recorded</p>
+              )}
+            </div>
 
             {/* Balance Details Block */}
-            <div className="flex justify-end mt-4 border-t border-[var(--border)] pt-3">
+            <div className="w-[45%] flex justify-end">
               <table className="text-sm">
                 <tbody>
                   <tr>
                     <td className="py-1 pr-6 text-right text-[var(--muted)]">Gross Amount</td>
-                    <td className="py-1 font-num text-right text-[var(--ink)] whitespace-nowrap">
+                    <td className="py-1 font-num text-right text-[var(--ink)] whitespace-nowrap pr-2">
                       {formatINR(paymentLedger.grossPaise)}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-1 pr-6 text-right text-[var(--muted)]">Amount Paid</td>
-                    <td className="py-1 font-num text-right text-[var(--ink)] whitespace-nowrap">
+                    <td className="py-1 pr-6 text-right text-[var(--muted)] border-b border-[var(--border)]">Amount Paid</td>
+                    <td className="py-1 font-num text-right text-[var(--ink)] whitespace-nowrap border-b border-[var(--border)] pr-2">
                       {formatINR(paymentLedger.paidPaise)}
                     </td>
                   </tr>
-                  <tr className="font-medium text-base">
+                  <tr>
                     <td className="pt-2 pr-6 text-right text-[var(--ink)]">Balance Due</td>
-                    <td className="pt-2 font-num text-right text-[var(--ink)] whitespace-nowrap">
+                    <td className="pt-2 font-num text-right text-[var(--ink)] whitespace-nowrap pr-2">
                       {formatINR(paymentLedger.balancePaise)}
                     </td>
                   </tr>
