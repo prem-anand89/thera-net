@@ -162,8 +162,6 @@ function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clini
           <h4 className="font-semibold text-[var(--ink)] mb-1">Terms & Conditions</h4>
           <ul className="list-disc pl-4 space-y-0.5">
             <li>All payments are final and non-refundable.</li>
-            <li>Please retain this bill for your records and future reference.</li>
-            <li>For any queries regarding this bill, please contact the clinic administration.</li>
           </ul>
         </div>
         <PrintSignatureFooter 

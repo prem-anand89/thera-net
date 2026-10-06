@@ -607,7 +607,7 @@ export function InvoicePrintPage() {
 
       <div
         ref={contentRef}
-        className={`relative mx-auto flex flex-col max-w-3xl min-h-[calc(100vh-80px)] print:min-h-0 bg-[var(--surface)] p-4 sm:p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm] print:min-h-[175mm]' : 'print:max-w-[178mm] print:min-h-[255mm]'}`}
+        className={`relative mx-auto flex flex-col max-w-3xl min-h-[calc(100vh-80px)] print:min-h-0 bg-[var(--surface)] p-4 sm:p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm]' : 'print:max-w-[178mm]'}`}
       >
         {isVoid && (
           <div
@@ -831,8 +831,6 @@ export function InvoicePrintPage() {
             <h4 className="font-semibold text-[var(--ink)] mb-1">Terms & Conditions</h4>
             <ul className="list-disc pl-4 space-y-0.5">
               <li>All payments are final and non-refundable.</li>
-              <li>Please retain this bill for your records and future reference.</li>
-              <li>For any queries regarding this bill, please contact the clinic administration.</li>
             </ul>
           </div>
 
