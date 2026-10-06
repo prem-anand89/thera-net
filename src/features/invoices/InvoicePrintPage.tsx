@@ -227,11 +227,11 @@ function LineItemsTable({
       <table className={`w-full ${isA5 ? 'min-w-full text-xs' : 'min-w-[680px] print:min-w-full text-sm table-fixed'} border-b-2 border-[var(--border)] pb-2`}>
         <thead>
           <tr className={`border-y-2 border-[var(--border)] bg-[var(--teal-mist)] text-left font-medium text-[var(--ink)] ${isA5 ? 'text-[10px]' : 'text-xs'}`}>
-            <th className={`py-2 ${hasAdjustments ? 'w-[30%]' : 'w-[35%]'}`}>Service</th>
-            <th className={`py-2 ${hasAdjustments ? 'w-[22%]' : 'w-[25%]'}`}>Dates of service</th>
-            <th className={`py-2 ${hasAdjustments ? 'w-[12%]' : 'w-[12%]'}`}>Sessions</th>
-            <th className={`py-2 text-right ${hasAdjustments ? 'w-[12%]' : 'w-[14%]'} pr-4`}>Unit Price</th>
-            {hasAdjustments && <th className="py-2 w-[10%] text-right pr-4">Adjustment</th>}
+            <th className={`py-2 ${hasAdjustments ? 'w-[28%]' : 'w-[35%]'}`}>Service</th>
+            <th className={`py-2 ${hasAdjustments ? 'w-[20%]' : 'w-[25%]'}`}>Dates of service</th>
+            <th className={`py-2 ${hasAdjustments ? 'w-[11%]' : 'w-[12%]'}`}>Sessions</th>
+            <th className={`py-2 text-right ${hasAdjustments ? 'w-[14%]' : 'w-[14%]'} pr-4`}>Unit Price</th>
+            {hasAdjustments && <th className="py-2 w-[13%] text-right pr-4">Adjustment</th>}
             <th className={`py-2 text-right ${hasAdjustments ? 'w-[14%]' : 'w-[14%]'} pr-2`}>Amount</th>
           </tr>
         </thead>
