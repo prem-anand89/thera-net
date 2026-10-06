@@ -1,5 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { UUID } from '@/domain/types';
+
+function therapistInitials(name: string) {
+  const parts = name.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return '';
+}
 import { addDays, toLocalDateStr, type ClosedDayInfo, type ClosedRange } from '@/domain/schedule';
 import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
 import { LoadLine, type LoadSummary } from './LoadLine';
@@ -74,41 +81,68 @@ export function ScheduleRail({
               const on = visibleIds.length === 0 || visibleIds.includes(therapist.id);
               return (
                 <li key={therapist.id} className="group relative">
-                  <label className="flex min-h-10 cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--teal-light)]">
+                  <label className="flex cursor-pointer items-start gap-3.5 rounded-xl px-2.5 py-2 hover:bg-[var(--paper)] transition-colors">
                     <input
                       type="checkbox"
                       checked={on}
                       onChange={() => onToggleTherapist(therapist.id)}
-                      className="mt-0.5 h-4 w-4 shrink-0 rounded"
-                      style={{ accentColor: therapist.color }}
+                      className="sr-only"
                     />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm text-[var(--ink)]">{therapist.name}</span>
+                    
+                    <div className="relative shrink-0 mt-0.5">
+                      <div
+                        className={`flex h-10 w-10 items-center justify-center rounded-full border-[2px] bg-[var(--surface)] text-[13px] font-semibold transition-all ${
+                          on ? 'text-[var(--ink)]' : 'border-transparent text-[var(--muted)] opacity-70 bg-[var(--paper)]'
+                        }`}
+                        style={on ? { borderColor: therapist.color } : {}}
+                      >
+                        {therapistInitials(therapist.name)}
+                      </div>
+                      
+                      {on && (
+                        <div
+                          className="absolute -bottom-0.5 -right-0.5 flex h-[15px] w-[15px] items-center justify-center rounded-full border-2 border-[var(--surface)] text-white"
+                          style={{ backgroundColor: therapist.color }}
+                        >
+                          <svg viewBox="0 0 14 14" fill="none" className="h-2.5 w-2.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 7.5L5.5 10L11 4" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+
+                    <span className="min-w-0 flex-1 pt-0.5">
+                      <span className="block truncate text-[13.5px] font-medium text-[var(--ink)]">{therapist.name}</span>
                       <LoadLine summary={therapist.summary} color={therapist.color} />
                     </span>
                   </label>
-                  <span className="invisible absolute right-2 top-1.5 flex gap-1 rounded bg-[var(--teal-light)] group-hover:visible group-focus-within:visible">
+                  <div className="absolute right-3 top-2.5 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                     {onEditHours && (
                       <button
                         type="button"
-                        className="rounded px-1.5 text-[11px] font-medium text-[var(--teal)] hover:underline"
+                        className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--surface)] text-[var(--muted)] shadow-sm hover:text-[var(--teal)] transition-colors border border-[var(--border)]"
                         onClick={() => onEditHours(therapist.id)}
                         aria-label={`Working hours for ${therapist.name}`}
                       >
-                        hours
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                       </button>
                     )}
                     {onOnlyTherapist && (
                       <button
                         type="button"
-                        className="rounded px-1.5 text-[11px] font-medium text-[var(--teal)] hover:underline"
+                        className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--surface)] text-[var(--muted)] shadow-sm hover:text-[var(--teal)] transition-colors border border-[var(--border)]"
                         onClick={() => onOnlyTherapist(therapist.id)}
                         aria-label={`Show only ${therapist.name}`}
                       >
-                        only
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
                       </button>
                     )}
-                  </span>
+                  </div>
                 </li>
               );
             })}

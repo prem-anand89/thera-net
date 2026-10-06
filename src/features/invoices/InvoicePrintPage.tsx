@@ -607,7 +607,7 @@ export function InvoicePrintPage() {
 
       <div
         ref={contentRef}
-        className={`relative mx-auto flex flex-col max-w-3xl min-h-[calc(100vh-80px)] print:min-h-0 bg-[var(--surface)] p-4 sm:p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm] print:min-h-[190mm]' : 'print:max-w-[178mm] print:min-h-[277mm]'}`}
+        className={`relative mx-auto flex flex-col max-w-3xl min-h-[calc(100vh-80px)] print:min-h-0 bg-[var(--surface)] p-4 sm:p-8 print:p-0 ${paper === 'A5' ? 'print:max-w-[128mm] print:min-h-[175mm]' : 'print:max-w-[178mm] print:min-h-[255mm]'}`}
       >
         {isVoid && (
           <div

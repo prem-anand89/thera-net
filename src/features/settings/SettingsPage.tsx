@@ -9,6 +9,7 @@ import {
   whatsappBusinessService,
 } from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
+import { therapistColor } from '@/components/schedule/scheduleColors';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
@@ -790,7 +791,10 @@ type ProfileFields = Pick<
   | 'walkInMrnoPrefix'
   | 'logoPath'
   | 'clinicType'
-  | 'clinicalDocsEnabled'
+  | 'hasPartner'
+  | 'partnerHospitalName'
+  | 'partnerHospitalLogoPath'
+  | 'signaturePath'
 
   | 'lastSplitChangeAt'
 >;
@@ -799,7 +803,13 @@ type ProfileFields = Pick<
  *  only unlocks the fields until the save goes through. */
 function SetOnceEditButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button type="button" aria-label={label} className={btnSecondary} onClick={onClick}>
+    <button 
+      type="button" 
+      aria-label={label} 
+      className="flex items-center gap-1.5 min-h-[36px] rounded-lg bg-[var(--paper)] px-3.5 py-1.5 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--border)] transition-colors border border-[var(--border)] shadow-sm" 
+      onClick={onClick}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
       Edit
     </button>
   );
@@ -816,7 +826,10 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
         walkInMrnoPrefix: c.walkInMrnoPrefix,
         logoPath: c.logoPath,
         clinicType: c.clinicType,
-        clinicalDocsEnabled: c.clinicalDocsEnabled ?? false,
+        hasPartner: c.hasPartner,
+        partnerHospitalName: c.partnerHospitalName,
+        partnerHospitalLogoPath: c.partnerHospitalLogoPath,
+        signaturePath: c.signaturePath,
       }),
       onDirtyChange
     );
@@ -825,7 +838,8 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
     if (editing && saved && !dirty) setEditing(false);
   }, [editing, saved, dirty]);
   const logoPreviewUrl = publicLogoUrl(form.logoPath);
-  const partnerLogoPreviewUrl = publicLogoUrl(clinic.partnerHospitalLogoPath);
+  const partnerLogoPreviewUrl = publicLogoUrl(form.partnerHospitalLogoPath);
+  const signaturePreviewUrl = publicLogoUrl(form.signaturePath);
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
 
   async function uploadLogo(file: File) {
@@ -842,6 +856,38 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
       return;
     }
     await saveFieldNow({ logoPath: path } as Partial<ProfileFields>);
+  }
+
+  async function uploadPartnerLogo(file: File) {
+    setError(null);
+    const supabase = getSupabase();
+    if (!supabase || !navigator.onLine) {
+      setError('Logo upload needs a connection.');
+      return;
+    }
+    const path = `${clinic.id}/partner-logo-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, file);
+    if (uploadError) {
+      setError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
+      return;
+    }
+    await saveFieldNow({ partnerHospitalLogoPath: path } as Partial<ProfileFields>);
+  }
+
+  async function uploadSignature(file: File) {
+    setError(null);
+    const supabase = getSupabase();
+    if (!supabase || !navigator.onLine) {
+      setError('Signature upload needs a connection.');
+      return;
+    }
+    const path = `${clinic.id}/signature-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, file);
+    if (uploadError) {
+      setError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
+      return;
+    }
+    await saveFieldNow({ signaturePath: path } as Partial<ProfileFields>);
   }
 
   async function saveProfile() {
@@ -882,144 +928,254 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
           }
         >
           {!editing ? (
-            <div className="flex flex-col sm:flex-row gap-6 items-start">
-              {logoPreviewUrl ? (
-                <img 
-                  src={logoPreviewUrl} 
-                  alt="Clinic logo" 
-                  className="h-20 w-20 object-contain rounded-xl border border-[var(--border)] bg-white p-2 shadow-sm" 
-                />
-              ) : (
-                <div className="h-20 w-20 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)]">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-                </div>
-              )}
-              <div className="flex-1 space-y-3 w-full">
-                <div className="flex flex-wrap items-baseline gap-3">
-                  <h3 className="text-xl font-semibold text-[var(--ink)]">{form.name || 'Your Clinic Name'}</h3>
-                  <span className="rounded-full bg-[var(--surface)] border border-[var(--border)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--muted)]">
-                    {form.clinicType === 'individual' ? 'Single Therapist' : 'Multiple Therapists'}
-                  </span>
-                </div>
-                
-                {form.address && (
-                  <div className="flex items-start gap-2 text-sm text-[var(--muted)]">
-                    <svg className="w-4 h-4 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                    <p className="whitespace-pre-line">{form.address}</p>
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row gap-6 items-start">
+                {logoPreviewUrl ? (
+                  <img 
+                    src={logoPreviewUrl} 
+                    alt="Clinic logo" 
+                    className="h-20 w-20 object-contain rounded-xl border border-[var(--border)] bg-white p-2 shadow-sm" 
+                  />
+                ) : (
+                  <div className="h-20 w-20 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)]">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                   </div>
                 )}
-                
-                <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 pt-4 border-t border-[var(--border)] text-sm">
-                  {form.phone && (
-                    <div className="flex items-center gap-2 text-[var(--muted)]">
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-                      <span className="text-[var(--ink)] font-medium">{form.phone}</span>
+                <div className="flex-1 space-y-3 w-full">
+                  <div className="flex flex-wrap items-baseline gap-3">
+                    <h3 className="text-xl font-semibold text-[var(--ink)]">{form.name || 'Your Clinic Name'}</h3>
+                    <span className="rounded-full bg-[var(--surface)] border border-[var(--border)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--muted)]">
+                      {form.clinicType === 'individual' ? 'Single Therapist' : 'Multiple Therapists'}
+                    </span>
+                  </div>
+                  
+                  {form.address && (
+                    <div className="flex items-start gap-2 text-sm text-[var(--muted)]">
+                      <svg className="w-4 h-4 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                      <p className="whitespace-pre-line">{form.address}</p>
                     </div>
                   )}
-                  {form.email && (
-                    <div className="flex items-center gap-2 text-[var(--muted)]">
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                      <span className="text-[var(--ink)] font-medium">{form.email}</span>
+                  
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 pt-4 border-t border-[var(--border)] text-sm">
+                    {form.phone && (
+                      <div className="flex items-center gap-2 text-[var(--muted)]">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                        <span className="text-[var(--ink)] font-medium">{form.phone}</span>
+                      </div>
+                    )}
+                    {form.email && (
+                      <div className="flex items-center gap-2 text-[var(--muted)]">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        <span className="text-[var(--ink)] font-medium">{form.email}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-[var(--muted)] ml-auto">
+                      <span>Patient ID Prefix:</span>
+                      <span className="font-mono text-xs font-semibold text-[var(--ink)] bg-[var(--paper)] border border-[var(--border)] px-1.5 py-0.5 rounded shadow-sm">{form.walkInMrnoPrefix || 'W'}</span>
                     </div>
-                  )}
-                  <div className="flex items-center gap-2 text-[var(--muted)] ml-auto">
-                    <span>Walk-in prefix:</span>
-                    <span className="font-mono text-xs font-semibold text-[var(--ink)] bg-[var(--paper)] border border-[var(--border)] px-1.5 py-0.5 rounded shadow-sm">{form.walkInMrnoPrefix || 'W'}</span>
                   </div>
                 </div>
               </div>
+
+              {(clinic.hasPartner || signaturePreviewUrl) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-[var(--border)]">
+                  {clinic.hasPartner && clinic.partnerHospitalName && (
+                    <div className="flex items-center gap-3">
+                      {partnerLogoPreviewUrl && (
+                        <img src={partnerLogoPreviewUrl} className="h-10 w-10 object-contain rounded border border-[var(--border)] p-1 bg-white" alt="Partner Logo" />
+                      )}
+                      <div>
+                        <div className="text-[11px] font-semibold text-[var(--muted)]">Partner Organization</div>
+                        <div className="text-[var(--ink)] font-medium">{clinic.partnerHospitalName}</div>
+                      </div>
+                    </div>
+                  )}
+                  {signaturePreviewUrl && (
+                    <div className="flex items-center gap-3 md:border-l md:border-[var(--border)] md:pl-6">
+                      <img src={signaturePreviewUrl} className="h-10 w-20 object-contain rounded border border-[var(--border)] p-1 bg-white" alt="Signature" />
+                      <div>
+                        <div className="text-[11px] font-semibold text-[var(--muted)]">Authorized Signature</div>
+                        <div className="text-[var(--ink)] font-medium">Included on invoices</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <fieldset disabled={busy} className="contents">
-              <div className="flex flex-col sm:flex-row gap-6 items-start">
-                <div className="shrink-0 flex flex-col items-center gap-2">
-                  {logoPreviewUrl ? (
-                    <img 
-                      src={logoPreviewUrl} 
-                      alt="Clinic logo" 
-                      className="h-20 w-20 object-contain rounded-xl border border-[var(--border)] bg-white p-2 shadow-sm" 
-                    />
-                  ) : (
-                    <div className="h-20 w-20 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)]">
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row gap-6 items-start">
+                  <div className="shrink-0 flex flex-col items-center gap-2">
+                    {logoPreviewUrl ? (
+                      <img 
+                        src={logoPreviewUrl} 
+                        alt="Clinic logo" 
+                        className="h-20 w-20 object-contain rounded-xl border border-[var(--border)] bg-white p-2 shadow-sm" 
+                      />
+                    ) : (
+                      <div className="h-20 w-20 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)]">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                      </div>
+                    )}
+                    <label className="cursor-pointer text-[11px] font-semibold text-[var(--teal)] hover:underline">
+                      Upload logo
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])} 
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex-1 w-full space-y-4">
+                    <div className="flex flex-wrap gap-4">
+                      <div className="flex-1 min-w-[200px]">
+                        <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Clinic Name</label>
+                        <input 
+                          className={inputCls} 
+                          value={form.name} 
+                          onChange={(e) => set({ name: e.target.value })} 
+                          placeholder="Your Clinic Name" 
+                        />
+                      </div>
+                      <div className="w-40">
+                        <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Therapist Setup</label>
+                        <select 
+                          className={inputCls} 
+                          value={form.clinicType ?? 'multiple'} 
+                          onChange={(e) => set({ clinicType: e.target.value as Clinic['clinicType'] })}
+                        >
+                          <option value="individual">Single Therapist</option>
+                          <option value="multiple">Multiple Therapists</option>
+                        </select>
+                      </div>
                     </div>
-                  )}
-                  <label className="cursor-pointer text-[11px] font-semibold text-[var(--teal)] hover:underline">
-                    Upload logo
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={(e) => e.target.files?.[0] && void uploadLogo(e.target.files[0])} 
-                    />
-                  </label>
+                    
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Address</label>
+                      <textarea 
+                        className={`${inputCls} resize-none min-h-[72px]`} 
+                        rows={3} 
+                        placeholder={'Street\nCity, State — PIN'} 
+                        value={form.address ?? ''} 
+                        onChange={(e) => set({ address: e.target.value || null })} 
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-4 pt-1">
+                      <div className="flex-1 min-w-[140px]">
+                        <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Phone</label>
+                        <input 
+                          className={inputCls} 
+                          value={form.phone ?? ''} 
+                          onChange={(e) => set({ phone: e.target.value || null })} 
+                          placeholder="Phone number" 
+                        />
+                      </div>
+                      <div className="flex-1 min-w-[180px]">
+                        <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Email</label>
+                        <input 
+                          className={inputCls} 
+                          value={form.email ?? ''} 
+                          onChange={(e) => set({ email: e.target.value || null })} 
+                          placeholder="Email address" 
+                        />
+                      </div>
+                      <div className="w-28">
+                        <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5 flex items-center gap-1">
+                          Patient ID Prefix
+                          <InfoTip text="Used for auto-generated Patient IDs when a walk-in has no existing ID (format: PREFIXYY-0001). Defaults to 'W'." />
+                        </label>
+                        <input 
+                          className={inputCls} 
+                          value={form.walkInMrnoPrefix ?? ''} 
+                          onChange={(e) => set({ walkInMrnoPrefix: e.target.value.toUpperCase() || null })} 
+                          placeholder="W" 
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex-1 w-full space-y-4">
-                  <div className="flex flex-wrap gap-4">
-                    <div className="flex-1 min-w-[200px]">
-                      <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Clinic Name</label>
-                      <input 
-                        className={inputCls} 
-                        value={form.name} 
-                        onChange={(e) => set({ name: e.target.value })} 
-                        placeholder="Your Clinic Name" 
-                      />
-                    </div>
-                    <div className="w-40">
-                      <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Therapist Setup</label>
-                      <select 
-                        className={inputCls} 
-                        value={form.clinicType ?? 'multiple'} 
-                        onChange={(e) => set({ clinicType: e.target.value as Clinic['clinicType'] })}
-                      >
-                        <option value="individual">Single Therapist</option>
-                        <option value="multiple">Multiple Therapists</option>
-                      </select>
-                    </div>
-                  </div>
-                  
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6 border-t border-[var(--border)]">
+                  {/* Partner Column */}
                   <div>
-                    <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Address</label>
-                    <textarea 
-                      className={`${inputCls} resize-none min-h-[72px]`} 
-                      rows={3} 
-                      placeholder={'Street\nCity, State — PIN'} 
-                      value={form.address ?? ''} 
-                      onChange={(e) => set({ address: e.target.value || null })} 
-                    />
+                    <div className="flex items-center gap-2 mb-4">
+                      <input 
+                        type="checkbox" 
+                        id="hasPartner" 
+                        checked={form.hasPartner ?? false} 
+                        onChange={(e) => set({ hasPartner: e.target.checked })} 
+                        className="rounded border-[var(--border)] text-[var(--teal)] focus:ring-[var(--teal)]" 
+                      />
+                      <label htmlFor="hasPartner" className="text-sm font-medium text-[var(--ink)]">Has Partner Organization</label>
+                    </div>
+                    {form.hasPartner && (
+                      <div className="flex flex-col sm:flex-row gap-4 items-start bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)]">
+                        <div className="shrink-0 flex flex-col items-center gap-2">
+                          {partnerLogoPreviewUrl ? (
+                            <img 
+                              src={partnerLogoPreviewUrl} 
+                              alt="Partner logo" 
+                              className="h-14 w-14 object-contain rounded border border-[var(--border)] bg-white p-1 shadow-sm" 
+                            />
+                          ) : (
+                            <div className="h-14 w-14 rounded bg-white border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)] text-[10px]">
+                              None
+                            </div>
+                          )}
+                          <label className="cursor-pointer text-[10px] font-semibold text-[var(--teal)] hover:underline">
+                            Upload logo
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              className="hidden" 
+                              onChange={(e) => e.target.files?.[0] && void uploadPartnerLogo(e.target.files[0])} 
+                            />
+                          </label>
+                        </div>
+                        <div className="flex-1 w-full">
+                          <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Partner Name</label>
+                          <input 
+                            className={inputCls} 
+                            value={form.partnerHospitalName ?? ''} 
+                            onChange={(e) => set({ partnerHospitalName: e.target.value || null })} 
+                            placeholder="e.g. City Hospital" 
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="flex flex-wrap gap-4 pt-1">
-                    <div className="flex-1 min-w-[140px]">
-                      <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Phone</label>
-                      <input 
-                        className={inputCls} 
-                        value={form.phone ?? ''} 
-                        onChange={(e) => set({ phone: e.target.value || null })} 
-                        placeholder="Phone number" 
-                      />
-                    </div>
-                    <div className="flex-1 min-w-[180px]">
-                      <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Email</label>
-                      <input 
-                        className={inputCls} 
-                        value={form.email ?? ''} 
-                        onChange={(e) => set({ email: e.target.value || null })} 
-                        placeholder="Email address" 
-                      />
-                    </div>
-                    <div className="w-28">
-                      <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5 flex items-center gap-1">
-                        Walk-in Prefix
-                        <InfoTip text="Used for auto-generated Patient IDs when a walk-in has no existing ID (format: PREFIXYY-0001). Defaults to 'W'." />
+                  {/* Signature Column */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[var(--muted)] mb-2">Authorized Signature</label>
+                    <p className="text-[11px] text-[var(--muted)] mb-4 leading-relaxed">
+                      A one-time uploaded signature image, printed on every invoice in place of the blank "Authorised signature" line.
+                    </p>
+                    <div className="flex flex-col items-start gap-2">
+                      {signaturePreviewUrl ? (
+                        <img 
+                          src={signaturePreviewUrl} 
+                          alt="Signature" 
+                          className="h-16 w-32 object-contain rounded border border-[var(--border)] bg-white p-1 shadow-sm" 
+                        />
+                      ) : (
+                        <div className="h-16 w-32 rounded bg-white border border-[var(--border)] shadow-sm flex items-center justify-center text-[var(--muted)] text-[10px]">
+                          No signature
+                        </div>
+                      )}
+                      <label className="cursor-pointer text-[11px] font-semibold text-[var(--teal)] hover:underline">
+                        Upload signature
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => e.target.files?.[0] && void uploadSignature(e.target.files[0])} 
+                        />
                       </label>
-                      <input 
-                        className={inputCls} 
-                        value={form.walkInMrnoPrefix ?? ''} 
-                        onChange={(e) => set({ walkInMrnoPrefix: e.target.value.toUpperCase() || null })} 
-                        placeholder="W" 
-                      />
                     </div>
                   </div>
                 </div>
@@ -1085,6 +1241,7 @@ type BillingFields = Pick<
   | 'invoicePrefix'
   | 'gstNo'
   | 'fyStartMonth'
+  | 'clinicalDocsEnabled'
   | 'billingEnabled'
   | 'invoicingAccess'
   | 'invoicePolicy'
@@ -1092,7 +1249,6 @@ type BillingFields = Pick<
   | 'upiPayeeName'
   | 'upiQrPath'
   | 'upiQrEnabled'
-  | 'signaturePath'
 >;
 
 function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
@@ -1102,6 +1258,7 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         invoicePrefix: c.invoicePrefix,
         gstNo: c.gstNo,
         fyStartMonth: c.fyStartMonth,
+        clinicalDocsEnabled: c.clinicalDocsEnabled ?? false,
         billingEnabled: c.billingEnabled ?? true,
         invoicingAccess: c.invoicingAccess ?? 'everyone',
         invoicePolicy: c.invoicePolicy ?? 'on_request',
@@ -1109,7 +1266,6 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         upiPayeeName: c.upiPayeeName ?? '',
         upiQrPath: c.upiQrPath ?? null,
         upiQrEnabled: c.upiQrEnabled ?? false,
-        signaturePath: c.signaturePath ?? null,
       }),
       onDirtyChange
     );
@@ -1118,7 +1274,6 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
     if (editing && saved && !dirty) setEditing(false);
   }, [editing, saved, dirty]);
   const qrPreviewUrl = publicLogoUrl(form.upiQrPath);
-  const signaturePreviewUrl = publicLogoUrl(form.signaturePath);
 
   async function uploadUpiQr(file: File) {
     setError(null);
@@ -1136,21 +1291,7 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
     await saveFieldNow({ upiQrPath: path } as Partial<BillingFields>);
   }
 
-  async function uploadSignature(file: File) {
-    setError(null);
-    const supabase = getSupabase();
-    if (!supabase || !navigator.onLine) {
-      setError('Signature upload needs a connection.');
-      return;
-    }
-    const path = `${clinic.id}/signature-${Date.now()}.${file.name.split('.').pop()}`;
-    const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, file);
-    if (uploadError) {
-      setError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
-      return;
-    }
-    await saveFieldNow({ signaturePath: path } as Partial<BillingFields>);
-  }
+
 
   async function saveBilling() {
     const vpa = (form.upiVpa ?? '').trim();
@@ -1168,8 +1309,8 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   return (
     <SectionCard
       id="settings-card-billing-invoicing"
-      title="Billing & invoicing"
-      action={editing ? undefined : <SetOnceEditButton label="Edit billing & invoicing" onClick={() => setEditing(true)} />}
+      title="Modules & invoicing"
+      action={editing ? undefined : <SetOnceEditButton label="Edit modules & invoicing" onClick={() => setEditing(true)} />}
     >
       <fieldset disabled={!editing} className="contents">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1206,6 +1347,19 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
               </option>
             ))}
           </select>
+        </Field>
+        <Field
+          label={
+            <>
+              Clinical documentation module
+              <InfoTip text="Enables clinical notes for visits. When off, therapists can still access notes from a patient's profile, but visit workflows won't prompt for them." />
+            </>
+          }
+        >
+          <BoolToggle
+            value={form.clinicalDocsEnabled ?? false}
+            onChange={(v) => set({ clinicalDocsEnabled: v })}
+          />
         </Field>
         <Field
           label={
@@ -1330,31 +1484,7 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
         )}
       </div>
 
-      <h3 className="font-display mt-6 mb-3 text-sm font-semibold text-[var(--ink)]">
-        Invoice signature
-      </h3>
-      <p className="mb-3 text-xs text-[var(--muted)]">
-        A one-time uploaded signature image, printed on every invoice in place of the blank
-        "Authorised signature" line. Not a cryptographic e-signature — a photo or scan of a hand
-        signature is fine.
-      </p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Field label="Signature image (optional)">
-          <input
-            type="file"
-            accept="image/*"
-            className={inputCls}
-            onChange={(e) => e.target.files?.[0] && void uploadSignature(e.target.files[0])}
-          />
-          {signaturePreviewUrl && (
-            <img
-              src={signaturePreviewUrl}
-              alt="Uploaded signature"
-              className="mt-2 h-16 w-40 object-contain"
-            />
-          )}
-        </Field>
-      </div>
+
       </fieldset>
       {editing && (
         <p className="mt-3 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--ink)]">
@@ -1380,10 +1510,7 @@ function BillingSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
 
 type PartnerFields = Pick<
   Clinic,
-  | 'hasPartner'
   | 'enableTherapistSplit'
-  | 'partnerHospitalName'
-  | 'partnerHospitalLogoPath'
   | 'ownShareLabel'
   | 'partnerShareLabel'
   | 'clinicSplitPct'
@@ -1396,13 +1523,11 @@ type PartnerFields = Pick<
 // partnerSplit/therapistSplit — kept in one section/save so they can never
 // go out of sync with each other mid-edit.
 function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const clinic_ctx = useClinic();
   const { clinic, form, set, save, cancel, saveFieldNow, dirty, saved, busy, error, setError } =
     useClinicSectionForm<PartnerFields>(
       (c) => ({
-        hasPartner: c.hasPartner,
         enableTherapistSplit: c.enableTherapistSplit,
-        partnerHospitalName: c.partnerHospitalName,
-        partnerHospitalLogoPath: c.partnerHospitalLogoPath,
         ownShareLabel: c.ownShareLabel,
         partnerShareLabel: c.partnerShareLabel,
         clinicSplitPct: c.clinicSplitPct,
@@ -1416,8 +1541,9 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
     if (editing && saved && !dirty) setEditing(false);
   }, [editing, saved, dirty]);
   const labels = clinicShareLabels(form);
-  const partnerLogoPreviewUrl = publicLogoUrl(form.partnerHospitalLogoPath);
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
+
+  if (!clinic_ctx.hasPartner) return null;
 
   // hasPartner/clinicSplitPct/taxPct/tdsBasis all feed clinicBillingConfig() and
   // computeVisitSplit() — a change to any of them means visits already
@@ -1428,7 +1554,6 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   async function savePartner() {
     setRecomputeMsg(null);
     const splitAffected =
-      (form.hasPartner ?? false) !== (clinic.hasPartner ?? false) ||
       form.clinicSplitPct !== clinic.clinicSplitPct ||
       form.taxPct !== clinic.taxPct ||
       form.tdsBasis !== clinic.tdsBasis;
@@ -1448,21 +1573,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
     }
   }
 
-  async function uploadPartnerLogo(file: File) {
-    setError(null);
-    const supabase = getSupabase();
-    if (!supabase || !navigator.onLine) {
-      setError('Logo upload needs a connection.');
-      return;
-    }
-    const path = `${clinic.id}/partner-logo-${Date.now()}.${file.name.split('.').pop()}`;
-    const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, file);
-    if (uploadError) {
-      setError(`Upload failed: ${toFriendlyMessage(uploadError)}`);
-      return;
-    }
-    await saveFieldNow({ partnerHospitalLogoPath: path } as Partial<PartnerFields>);
-  }
+
 
   return (
     <SectionCard
@@ -1472,81 +1583,30 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
     >
       <fieldset disabled={!editing} className="contents">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Field
-          label={
-            <>
-              Partner with therapist/external org
-              <InfoTip text="Enable if your clinic partners with a therapist or external organization (hospital, etc.) for revenue sharing, tax deduction, or other arrangements." />
-            </>
-          }
-        >
-          <BoolToggle value={form.hasPartner ?? false} onChange={(v) => set({ hasPartner: v })} />
+        <Field label="Your share label (report column, e.g. Clinic)">
+          <input
+            className={inputCls}
+            placeholder="Clinic"
+            value={form.ownShareLabel ?? ''}
+            onChange={(e) => set({ ownShareLabel: e.target.value || null })}
+          />
         </Field>
-        {(clinic.clinicType ?? 'multiple') === 'multiple' && (
-          <Field
-            label={
-              <>
-                Track therapist splits
-                <InfoTip text="Lets a visit's revenue be credited between two therapists (a Split action + Shared/Net report columns). Turn off if you don't attribute revenue across therapists." />
-              </>
-            }
-          >
-            <BoolToggle
-              value={form.enableTherapistSplit !== false}
-              onChange={(v) => set({ enableTherapistSplit: v })}
-            />
-          </Field>
-        )}
-        {form.hasPartner && (
-          <>
-            <Field label="Partner name (prints on invoices if set)">
-              <input
-                className={inputCls}
-                value={form.partnerHospitalName ?? ''}
-                onChange={(e) => set({ partnerHospitalName: e.target.value || null })}
-              />
-            </Field>
-            <Field label="Your share label (report column, e.g. Clinic)">
-              <input
-                className={inputCls}
-                placeholder="Clinic"
-                value={form.ownShareLabel ?? ''}
-                onChange={(e) => set({ ownShareLabel: e.target.value || null })}
-              />
-            </Field>
-            <Field label="Partner share label (report column, e.g. Hospital)">
-              <input
-                className={inputCls}
-                placeholder="Hospital"
-                value={form.partnerShareLabel ?? ''}
-                onChange={(e) => set({ partnerShareLabel: e.target.value || null })}
-              />
-            </Field>
-            <Field label={`Your share % (${labels.own} split)`}>
-              <input
-                type="number"
-                className={inputCls}
-                value={form.clinicSplitPct}
-                onChange={(e) => set({ clinicSplitPct: Number(e.target.value) })}
-              />
-            </Field>
-            <Field label="Partner logo">
-              <input
-                type="file"
-                accept="image/*"
-                className={inputCls}
-                onChange={(e) => e.target.files?.[0] && void uploadPartnerLogo(e.target.files[0])}
-              />
-              {partnerLogoPreviewUrl && (
-                <img
-                  src={partnerLogoPreviewUrl}
-                  alt="Current partner logo"
-                  className="mt-2 h-14 w-auto object-contain"
-                />
-              )}
-            </Field>
-          </>
-        )}
+        <Field label="Partner share label (report column, e.g. Hospital)">
+          <input
+            className={inputCls}
+            placeholder="Hospital"
+            value={form.partnerShareLabel ?? ''}
+            onChange={(e) => set({ partnerShareLabel: e.target.value || null })}
+          />
+        </Field>
+        <Field label={`Your share % (${labels.own} split)`}>
+          <input
+            type="number"
+            className={inputCls}
+            value={form.clinicSplitPct}
+            onChange={(e) => set({ clinicSplitPct: Number(e.target.value) })}
+          />
+        </Field>
         <Field
           label={
             <>
@@ -1563,7 +1623,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
             onChange={(e) => set({ taxPct: e.target.value === '' ? 0 : Number(e.target.value) })}
           />
         </Field>
-        {form.hasPartner && form.taxPct > 0 && (
+        {form.taxPct > 0 && (
           <Field
             label={
               <>
@@ -2011,7 +2071,7 @@ function BoolToggle({ value, onChange }: { value: boolean; onChange: (v: boolean
             key={String(v)}
             type="button"
             onClick={() => onChange(v)}
-            className="flex-1 rounded-lg border px-2 py-1.5 text-center text-xs font-semibold"
+            className="flex-1 rounded-lg border px-2 py-1.5 text-center text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-opacity"
             style={{
               borderColor: selected ? 'var(--teal)' : 'var(--border)',
               background: selected ? 'var(--teal-light)' : 'var(--surface)',
@@ -2416,11 +2476,18 @@ function OnboardingBadge({ member }: { member: ClinicMember }) {
  *  NoteEditorPage) — matched here rather than introducing a shared helper
  *  for a one-line computation. */
 function therapistInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
+  let text = name;
+  if (text.includes('@')) {
+    text = text.split('@')[0];
+  }
+  const parts = text.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return '';
 }
 
 interface TeamPerson {
@@ -2490,13 +2557,14 @@ function TeamMemberCard({
   const role = member ? ((member.role as Exclude<ClinicRole, 'unknown'>) ?? 'therapist') : 'therapist';
   const { color, light } = ACCENT_VARS[ROLE_ACCENT[role] ?? 'slate'];
 
-  const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   
   const [nameDraft, setNameDraft] = useState(displayName);
   const [roleDraft, setRoleDraft] = useState<ClinicRole>(role);
+  const [emailDraft, setEmailDraft] = useState('');
   const [regDraft, setRegDraft] = useState(therapist?.registrationNo ?? '');
   const [phoneDraft, setPhoneDraft] = useState(therapist?.phone ?? '');
+  const [colorDraft, setColorDraft] = useState(therapist?.color ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -2508,12 +2576,36 @@ function TeamMemberCard({
     setSaving(true);
     setError(null);
     try {
-      if (member) {
+      if (!member && therapist && emailDraft.trim()) {
+        const supabase = getSupabase();
+        if (!supabase) throw new Error('No Supabase connection');
+        const { data: result, error: invokeError } = await supabase.functions.invoke(
+          'invite-therapist',
+          {
+            body: {
+              action: 'invite',
+              clinicId,
+              email: emailDraft.trim(),
+              name: nameDraft.trim(),
+              role: roleDraft,
+              redirectOrigin: window.location.origin,
+            },
+          }
+        );
+        if (invokeError) throw new Error(invokeError.message);
+        const payload = result as { error?: string; success?: boolean } | null;
+        if (payload?.error) throw new Error(payload.error);
+      } else if (member) {
         const supabase = getSupabase();
         if (!supabase) throw new Error('No Supabase connection');
         const { error: updateError } = await supabase
           .from('clinic_members')
-          .update({ display_name: nameDraft.trim() || null, role: roleDraft })
+          .update({
+            display_name: nameDraft.trim() || null,
+            // Only touch role when the admin actually changed it; a stale
+            // draft must never silently demote/promote a member.
+            ...(roleDraft !== role ? { role: roleDraft } : {}),
+          })
           .eq('clinic_id', clinicId)
           .eq('user_id', member.userId);
         if (updateError) throw updateError;
@@ -2525,6 +2617,7 @@ function TeamMemberCard({
           name: nameDraft.trim() || therapist.name,
           registrationNo: regDraft.trim() || null,
           phone: phoneDraft.trim() || null,
+          color: colorDraft.trim() || null,
           updatedAt: new Date().toISOString(),
         });
       }
@@ -2538,9 +2631,9 @@ function TeamMemberCard({
     }
   }
 
-  const photo = (
+  const renderPhoto = (sizeClass: string) => (
     <label
-      className="block h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded-full border border-[var(--border)] bg-[var(--paper)]"
+      className={`block shrink-0 cursor-pointer overflow-hidden rounded-full border border-[var(--border)] bg-[var(--paper)] ${sizeClass}`}
       title={therapist ? "Change photo" : "No photo available"}
       onClick={(e) => { if (!therapist) e.preventDefault(); }}
     >
@@ -2573,147 +2666,90 @@ function TeamMemberCard({
     </label>
   );
 
-  if (editing) {
-    return (
-      <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
-        <div className="flex items-center gap-2.5">
-          {photo}
-          <p className="text-sm font-semibold text-[var(--ink)]">Edit team member</p>
-        </div>
-        <Field label="Name">
-          <input
-            className={inputCls}
-            value={nameDraft}
-            onChange={(e) => setNameDraft(e.target.value)}
-            autoFocus
-          />
-        </Field>
-        {member && (
-          <Field label="Role">
-            <select
-              className={inputCls}
-              value={roleDraft}
-              onChange={(e) => setRoleDraft(e.target.value as Exclude<ClinicRole, 'unknown'>)}
-            >
-              <option value="therapist">Therapist</option>
-              <option value="front_desk">Front desk</option>
-              <option value="admin">Admin</option>
-            </select>
-          </Field>
-        )}
-        {therapist && (
-          <>
-            <Field label="Registration no.">
-              <input
-                className={inputCls}
-                placeholder="Printed on invoices"
-                value={regDraft}
-                onChange={(e) => setRegDraft(e.target.value)}
-              />
-            </Field>
-            <Field label="Phone">
-              <input
-                className={inputCls}
-                placeholder="For WhatsApp booking notifications"
-                value={phoneDraft}
-                onChange={(e) => setPhoneDraft(e.target.value)}
-              />
-            </Field>
-          </>
-        )}
-        <div className="flex gap-2 mt-2">
-          <button
-            type="button"
-            className={btnPrimary}
-            disabled={saving}
-            onClick={() => void save()}
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-          <button
-            type="button"
-            className={btnSecondary}
-            disabled={saving}
-            onClick={() => setEditing(false)}
-          >
-            Cancel
-          </button>
-        </div>
-        <ErrorNote message={error} />
-      </div>
-    );
-  }
+
 
   const isUnlinkedTherapist = !member && therapist;
   const isBookable = !!therapist;
 
   return (
-    <div className="flex h-full flex-col gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
-      <div
-        className="flex items-center gap-2.5 cursor-pointer select-none"
-        onClick={() => setExpanded(!expanded)}
-      >
-        {photo}
+    <div className={`flex h-full flex-col gap-3 rounded-2xl border ${therapist && therapist.active === false ? 'border-dashed border-[var(--border)] bg-[var(--paper)] opacity-80' : 'border-[var(--border)] bg-[var(--surface)] shadow-sm'} p-4 transition-all`}>
+      {/* Header section */}
+      <div className="flex items-start gap-3">
+        <div className="shrink-0">{renderPhoto('h-10 w-10')}</div>
+        
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-[var(--ink)]">{displayName}</p>
-          <div className="flex gap-1 mt-1">
-            {member && <RolePill role={role} />}
-            {isBookable && (
-              <span className="inline-block rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
-                Bookable
-              </span>
-            )}
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <h3 className="truncate text-base font-bold text-[var(--ink)] tracking-tight">{displayName}</h3>
+            
+            <div className="flex flex-wrap items-center gap-1.5">
+              {member && <RolePill role={role} />}
+              {member && member.status !== 'active' && <OnboardingBadge member={member} />}
+              {isBookable && (
+                <span className="inline-block rounded-full bg-[var(--sky-light)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--sky)]">
+                  Bookable
+                </span>
+              )}
+              {!member && therapist && (
+                <span className="inline-block rounded-full bg-[var(--amber-light)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--amber-strong)]">
+                  No login
+                </span>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex items-start gap-1.5 mt-1.5 text-xs text-[var(--muted)]">
+            <div className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${(!therapist || therapist.active) ? 'bg-[var(--moss-strong)]' : 'bg-[var(--muted)]'}`} />
+            <span className="leading-tight">
+              {(!therapist || therapist.active) ? 'Active' : 'Inactive roster'}
+              {member?.lastSignInAt && ` · Last seen ${new Date(member.lastSignInAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
+            </span>
           </div>
         </div>
-        <button type="button" className="text-[var(--muted)] hover:text-[var(--ink)] pr-2">
-          {expanded ? '▲' : '▼'}
-        </button>
       </div>
 
-      <div className="mt-1 flex flex-wrap gap-2">
-        {member ? (
-          <OnboardingBadge member={member} />
-        ) : (
-          <span className="inline-block rounded-full bg-[var(--paper)] px-2.5 py-0.5 text-[10.5px] font-semibold text-[var(--amber-strong)]">
-            No login
-          </span>
-        )}
-
-        {therapist && !therapist.active && (
-          <span className="inline-block rounded-full bg-[var(--paper)] px-2.5 py-0.5 text-[10.5px] font-semibold text-[var(--muted)]">
-            Inactive roster
-          </span>
-        )}
-      </div>
-
-      {expanded && (
-        <div className="mt-2 space-y-2 text-[11.5px] text-[var(--muted)]">
-          {member && (
-            <p className="truncate">Login: <span className="text-[var(--ink)]">{member.email}</span></p>
-          )}
-          {therapist && (
-            <>
-              <p className="truncate">
-                {therapist.registrationNo ? `Reg. ${therapist.registrationNo}` : 'No registration no.'}
-              </p>
-              <p className="truncate">
-                Hours: <span className="text-[var(--ink)]">{therapist.workingHours ? 'Custom' : 'Clinic hours'}</span>
-                <span className="text-[var(--muted)]"> · set in Schedule</span>
-              </p>
-            </>
-          )}
+      <div className="space-y-2.5 text-xs text-[var(--ink)] mt-2">
+        {member && (
+            <div className="flex items-center gap-2.5">
+                <svg className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span className="truncate">{member.email}</span>
+              </div>
+            )}
+            
+            {therapist && (
+              <>
+                <div className="flex items-center gap-2.5">
+                  <svg className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                  <span className="truncate">
+                    {therapist.registrationNo ? `Reg. ${therapist.registrationNo}` : 'No registration no.'}
+                  </span>
+                </div>
+                
+                {therapist.workingHours && (
+                  <div className="flex items-center gap-2.5">
+                    <svg className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="truncate">Custom schedule</span>
+                  </div>
+                )}
+              </>
+            )}
         </div>
-      )}
+        
+        <div className="flex-1" />
 
-      {isLastAdmin && (
-        <p className="text-[11px] text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
-      )}
+        {isLastAdmin && (
+          <p className="text-[11px] text-[var(--muted)]">Last admin — can't be revoked or demoted.</p>
+        )}
 
-      {expanded && (
-        <div className="mt-auto flex flex-wrap gap-3.5 border-t border-[var(--border)] pt-2.5 text-xs font-medium">
+        <div className="flex flex-wrap items-center gap-3 pt-3 mt-1 border-t border-[var(--border)]">
           <button
             type="button"
-            className="text-[var(--teal)] hover:underline"
+            className="text-xs font-medium text-[var(--teal)] hover:underline"
             onClick={(e) => { e.stopPropagation(); setEditing(true); }}
           >
             Edit
@@ -2723,43 +2759,177 @@ function TeamMemberCard({
             <button
               type="button"
               disabled={resending}
-              className="text-[var(--teal)] hover:underline"
+              className="text-xs font-medium text-[var(--teal)] hover:underline"
               onClick={(e) => { e.stopPropagation(); onResend(); }}
             >
               {resending ? 'Sending…' : 'Resend invite'}
             </button>
           )}
 
-          <button
-            type="button"
-            className="ml-auto text-[var(--rust)] hover:underline"
-            onClick={(e) => { e.stopPropagation(); onDeactivate(); }}
-          >
-            Deactivate
-          </button>
-          
-          {member && (
-            <button
-              type="button"
-              className="text-[var(--rust)] hover:underline"
-              disabled={revoking}
-              onClick={(e) => { e.stopPropagation(); onRevoke(); }}
-            >
-              {revoking ? 'Revoking…' : 'Revoke'}
-            </button>
-          )}
-          
-          {isUnlinkedTherapist && (
-            <button
-              type="button"
-              className="text-[var(--rust)] hover:underline"
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            >
-              Delete
-            </button>
-          )}
+          <div className="ml-auto flex flex-wrap gap-3 items-center justify-end">
+            {therapist && (
+              <button
+                type="button"
+                className={`text-xs font-medium hover:underline ${therapist.active !== false ? 'text-[var(--rust)]' : 'text-[var(--teal)]'}`}
+                onClick={(e) => { e.stopPropagation(); onDeactivate(); }}
+              >
+                {therapist.active !== false ? 'Deactivate' : 'Reactivate'}
+              </button>
+            )}
+            
+            {member && (
+              <button
+                type="button"
+                className={`text-xs font-medium hover:underline ${isLastAdmin ? 'text-[var(--muted)] opacity-70' : 'text-[var(--rust)]'}`}
+                disabled={revoking}
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  if (isLastAdmin) {
+                    alert('This clinic must keep at least one admin — make someone else admin first to unlock this button.');
+                    return;
+                  }
+                  onRevoke(); 
+                }}
+              >
+                {revoking ? 'Revoking…' : 'Revoke access'}
+              </button>
+            )}
+            
+            {isUnlinkedTherapist && (
+              <button
+                type="button"
+                className="text-xs font-medium text-[var(--rust)] hover:underline"
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              >
+                Delete record
+              </button>
+            )}
+          </div>
         </div>
-      )}
+
+        {/* Modal Portal */}
+        {editing && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/40 p-4 backdrop-blur-sm">
+            <div 
+              className="w-full max-w-[500px] rounded-2xl bg-[var(--surface)] p-6 shadow-2xl overflow-hidden flex flex-col sm:flex-row gap-6 relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Left Column: Avatar & Quick Info */}
+              <div className="flex flex-col items-center gap-2 sm:w-1/3 text-center sm:border-r border-[var(--border)] pr-4">
+                {renderPhoto('h-24 w-24 mb-2')}
+                <div className="font-semibold text-[var(--ink)] break-words w-full px-2 leading-tight">
+                  {nameDraft || 'New Member'}
+                </div>
+                <div className="text-xs text-[var(--muted)]">
+                  {roleDraft !== 'unknown' ? CLINIC_ROLE_LABELS[roleDraft] : 'Therapist'}
+                </div>
+              </div>
+
+              {/* Right Column: Form Fields */}
+              <div className="flex-1 flex flex-col gap-4">
+                <Field label={
+                  <>
+                    Name
+                    <InfoTip text="This clinic-wide name is printed on invoices and shown on schedules. The therapist's personal profile name is separate and only visible to them." />
+                  </>
+                }>
+                  <input
+                    className={inputCls}
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    autoFocus
+                  />
+                </Field>
+                
+                {(member || (!member && therapist)) && (
+                  <Field label="Role">
+                    <select
+                      className={inputCls}
+                      value={roleDraft}
+                      onChange={(e) => setRoleDraft(e.target.value as Exclude<ClinicRole, 'unknown'>)}
+                    >
+                      <option value="therapist">Therapist</option>
+                      <option value="front_desk">Front desk</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </Field>
+                )}
+
+                {!member && therapist && (
+                  <Field label="Email address (Link to login)">
+                    <input
+                      type="email"
+                      className={inputCls}
+                      placeholder="Optional"
+                      value={emailDraft}
+                      onChange={(e) => setEmailDraft(e.target.value)}
+                    />
+                  </Field>
+                )}
+
+                {therapist && (
+                  <>
+                    <Field label="Registration no.">
+                      <input
+                        className={inputCls}
+                        placeholder="Printed on invoices"
+                        value={regDraft}
+                        onChange={(e) => setRegDraft(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Phone">
+                      <input
+                        className={inputCls}
+                        placeholder="For WhatsApp booking notifications"
+                        value={phoneDraft}
+                        onChange={(e) => setPhoneDraft(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Schedule Color">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="color"
+                          className="h-9 w-14 cursor-pointer rounded border border-[var(--border)] bg-transparent p-1"
+                          value={colorDraft || therapistColor(therapist.id, therapist.color)}
+                          onChange={(e) => setColorDraft(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+                          onClick={() => setColorDraft('')}
+                        >
+                          Reset to default
+                        </button>
+                      </div>
+                    </Field>
+                  </>
+                )}
+                
+                <ErrorNote message={error} />
+
+                <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-[var(--border)]">
+                  <button
+                    type="button"
+                    className="text-sm font-medium text-[var(--muted)] hover:text-[var(--ink)] px-2"
+                    disabled={saving}
+                    onClick={() => setEditing(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--teal-strong)] disabled:opacity-50"
+                    disabled={saving}
+                    onClick={() => void save()}
+                  >
+                    {saving ? 'Saving…' : 'Save changes'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
     </div>
   );
 }
@@ -2944,9 +3114,10 @@ function Therapists() {
   const [revokeTarget, setRevokeTarget] = useState<{ userId: string; email: string } | null>(null);
   const [resendInProgress, setResendInProgress] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Therapist | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<{ therapist: Therapist; upcoming: number } | null>(null);
   
   // Filter states
-  const [filter, setFilter] = useState<'all' | 'bookable' | 'staff' | 'invited' | 'unlinked'>('all');
+  const [filter, setFilter] = useState<'all' | 'bookable' | 'staff' | 'invited' | 'inactive' | 'unlinked'>('all');
 
   const refetchMembers = useCallback(async () => {
     const supabase = getSupabase();
@@ -2995,6 +3166,11 @@ function Therapists() {
   
   const filteredTeam = useMemo(() => {
     return teamList.filter(p => {
+      if (filter === 'inactive') return p.therapist?.active === false;
+      
+      // Hide inactive therapists from all other views
+      if (p.therapist && p.therapist.active === false) return false;
+
       if (filter === 'bookable') return !!p.therapist;
       if (filter === 'staff') return p.member && !p.therapist;
       if (filter === 'invited') return p.member?.status !== 'active';
@@ -3003,7 +3179,7 @@ function Therapists() {
     });
   }, [teamList, filter]);
 
-  const unlinkedCount = teamList.filter(p => p.therapist && !p.member).length;
+  const unlinkedCount = teamList.filter(p => p.therapist && p.therapist.active !== false && !p.member).length;
 
   const atSeatCap =
     entitlements.enforcementEnabled &&
@@ -3043,6 +3219,28 @@ function Therapists() {
     try {
       await therapistService.hardDelete(deleteTarget.id);
       setDeleteTarget(null);
+    } catch (e) {
+      setRosterError(toFriendlyMessage(e));
+    }
+  }
+
+  async function requestToggleActive(t: Therapist) {
+    if (t.active === false) {
+      await handleToggleActive(t);
+      return;
+    }
+    setRosterError(null);
+    try {
+      const now = Date.now();
+      const rows = await repos.appointments.listByClinic(clinic.id);
+      const upcoming = rows.filter(
+        (a) =>
+          a.therapistId === t.id &&
+          a.status !== 'cancelled' &&
+          a.status !== 'no_show' &&
+          new Date(a.scheduledAt).getTime() >= now
+      ).length;
+      setDeactivateTarget({ therapist: t, upcoming });
     } catch (e) {
       setRosterError(toFriendlyMessage(e));
     }
@@ -3162,7 +3360,7 @@ function Therapists() {
     <SectionCard id="settings-card-team-therapists" title="Team Directory">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-4">
         <div className="flex flex-wrap gap-2">
-          {(['all', 'bookable', 'staff', 'invited', 'unlinked'] as const).map((f) => (
+          {(['all', 'bookable', 'staff', 'invited', 'inactive', 'unlinked'] as const).map((f) => (
             <button
               key={f}
               type="button"
@@ -3188,7 +3386,7 @@ function Therapists() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 mb-6 items-start">
         {filteredTeam.map((p) => {
           const isLastAdmin =
             p.member?.role === 'admin' &&
@@ -3216,7 +3414,7 @@ function Therapists() {
                 if (p.therapist) void uploadPhoto(p.therapist, file);
               }}
               onDeactivate={() => {
-                if (p.therapist) void handleToggleActive(p.therapist);
+                if (p.therapist) void requestToggleActive(p.therapist);
               }}
             />
           );
@@ -3260,6 +3458,27 @@ function Therapists() {
         />
       )}
       
+      {deactivateTarget && (
+        <ConfirmDialog
+          open={true}
+          title="Deactivate therapist"
+          message={`${deactivateTarget.therapist.name} will no longer be bookable or shown in schedule filters. Past records stay intact; you can reactivate anytime.${
+            deactivateTarget.upcoming > 0
+              ? ` They still have ${deactivateTarget.upcoming} upcoming appointment(s) — reassign or cancel those separately.`
+              : ''
+          }`}
+          confirmLabel="Deactivate"
+          cancelLabel="Cancel"
+          destructive
+          onConfirm={() => {
+            const t = deactivateTarget.therapist;
+            setDeactivateTarget(null);
+            void handleToggleActive(t);
+          }}
+          onCancel={() => setDeactivateTarget(null)}
+        />
+      )}
+
       {revokeTarget && (
         <ConfirmDialog
           open={true}

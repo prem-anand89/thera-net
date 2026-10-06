@@ -2,10 +2,17 @@ import type { Appointment } from '@/domain/types';
 import { SERIES_COLORS } from '@/components/chartColors';
 
 /** The app's validated categorical palette (`chartColors.ts`), assigned by
- *  roster order. Past 8 therapists the hues repeat; the column header name
- *  stays the real identifier. */
-export function therapistColor(index: number): string {
-  return SERIES_COLORS[((index % SERIES_COLORS.length) + SERIES_COLORS.length) % SERIES_COLORS.length];
+ *  a deterministic hash of the therapist's ID so colors never change on roster edits.
+ *  If a therapist has explicitly chosen a color, that is used instead. */
+export function therapistColor(id: string, color?: string | null): string {
+  if (color) return color;
+  
+  // Deterministic hash so color remains stable across sessions
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return SERIES_COLORS[Math.abs(hash) % SERIES_COLORS.length];
 }
 
 export const UNASSIGNED_COLOR = 'var(--slate)';

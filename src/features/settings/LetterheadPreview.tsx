@@ -13,7 +13,7 @@ export interface LetterheadPreviewProps {
 
 function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clinic, logoUrl: string | null, partnerLogoUrl: string | null }) {
   return (
-    <div className="w-[794px] h-[1123px] bg-white p-12 flex flex-col relative text-[var(--ink)]">
+    <div className="w-[794px] h-[1123px] bg-[var(--surface)] p-12 flex flex-col relative text-[var(--ink)]">
       <PrintLetterhead clinic={clinic} logoUrl={logoUrl} partnerLogoUrl={partnerLogoUrl} />
 
       <div className="mt-6 text-center">
@@ -41,6 +41,18 @@ function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clini
               <tr>
                 <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Phone</th>
                 <td className="py-0.5 text-[var(--ink)] align-top">: 9876543210</td>
+              </tr>
+              <tr>
+                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Ref. Physician</th>
+                <td className="py-0.5 text-[var(--ink)] align-top">: Dr. Sarah Connor (Reg. No. 12345)</td>
+              </tr>
+              <tr>
+                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Place of service</th>
+                <td className="py-0.5 text-[var(--ink)] align-top">: Clinic</td>
+              </tr>
+              <tr>
+                <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Treatment</th>
+                <td className="py-0.5 text-[var(--ink)] align-top">: Post-Op Care</td>
               </tr>
             </tbody>
           </table>
@@ -114,14 +126,6 @@ function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clini
             <tr>
               <td colSpan={5} className="py-3 text-right font-semibold text-[var(--ink)] border-b border-[var(--border)] border-dashed">Total</td>
               <td className="font-num py-3 text-right text-base font-bold text-[var(--ink)] whitespace-nowrap border-b border-[var(--border)] border-dashed">₹8,250</td>
-            </tr>
-            <tr>
-              <td colSpan={5} className="py-2 text-right font-medium text-[var(--muted)]">Amount Paid</td>
-              <td className="font-num py-2 text-right text-[var(--ink)] whitespace-nowrap">₹8,250</td>
-            </tr>
-            <tr>
-              <td colSpan={5} className="py-2 text-right font-medium text-[var(--ink)]">Balance Due</td>
-              <td className="font-num py-2 text-right text-[var(--ink)] whitespace-nowrap">₹0</td>
             </tr>
           </tfoot>
         </table>

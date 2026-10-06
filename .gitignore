@@ -10,3 +10,6 @@ test-results/
 .DS_Store
 supabase/.temp/
 deno.lock
+
+# local scratch files
+scratch/

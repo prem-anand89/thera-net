@@ -70,3 +70,17 @@ This document outlines the architecture and design for integrating clinic-level 
 - **User Interface:**
   - **Manual Bonuses (Phase 1):** When the Admin runs the end-of-month Payroll Generator, the UI includes an "Add Bonus/Incentive" button for each therapist. Admins can manually type in a bonus amount (e.g., "Hit target revenue: ₹5000") before finalizing the payslip.
   - **Automated Incentives (Phase 2):** During payroll generation, the system checks `incentive_rules`. If a therapist crossed a threshold (e.g., > 80 visits this month), it automatically injects the bonus line item into the payroll preview for admin approval.
+
+## 7. Time Utilization & Productivity Dashboard
+**Goal:** Give Admins and HODs a real-time view of how clinical time is utilized, accounting for walk-ins and actual work done (not just bookings).
+
+- **Data Model:**
+  - **Catalog Upgrade:** Add `duration_mins` to `billing_packages` (Settings -> Catalog).
+  - **Visits Upgrade:** Add `clinical_duration_mins` to the `visits` table.
+- **User Interface:**
+  - **Visit Logging (Therapist):** When a visit is logged, the time automatically defaults to the catalog's service duration. The therapist can manually override this (e.g., "Time spent: 30 mins") if the session ran long or short.
+  - **HOD Dashboard (Admin):** A visual daily/weekly heatmap in the Team section showing:
+    - `Available Hours` (from Attendance/Clock-ins)
+    - `Clinical Hours` (Sum of `visits.clinical_duration_mins`)
+    - `Utilization Rate` (`Clinical Hours` / `Available Hours`)
+  - **Impact:** This accurately tracks true productivity because every logged visit (including pure walk-ins) counts toward the therapist's utilization, giving the clinic head a precise picture of efficiency.

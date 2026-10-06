@@ -258,7 +258,7 @@ export function WorkspacePage() {
       new Map(
         [...(workspaceTherapists ?? [])]
           .sort((a, b) => a.name.localeCompare(b.name))
-          .map((t, index) => [t.id, { name: t.name, phone: t.phone ?? null, color: therapistColor(index) }] as const)
+          .map((t) => [t.id, { name: t.name, phone: t.phone ?? null, color: therapistColor(t.id, t.color) }] as const)
       ),
     [workspaceTherapists]
   );

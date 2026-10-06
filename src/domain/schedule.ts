@@ -676,7 +676,7 @@ export function dayLoad(
   const lastEnd = Math.max(...working.map((w) => w.end));
   if (now >= lastEnd) {
     const seen = live.filter((a) => a.status !== 'no_show').length;
-    return { ...base, freeSlots, ratio, tone: 'done', text: seen ? `Finished · ${seen} seen` : 'Finished for the day' };
+    return { ...base, freeSlots, ratio, tone: 'done', text: seen ? `Done · ${seen} seen` : 'Done for today' };
   }
   if (freeSlots === 0) return result(live.length === 0 ? 'No more slots today' : 'Fully booked');
 

@@ -403,7 +403,10 @@ export function BookSlotSheet({
     ? `${displayDate(selectedDate)}, ${timeLabel} · ${lengthLabel(lengthMinutes)}${therapistName ? ` · ${therapistName}` : ''}`
     : null;
   const roster = [...(therapists ?? [])].sort((a, b) => a.name.localeCompare(b.name));
-  const colorOf = (id: string) => therapistColor(Math.max(0, roster.findIndex((t) => t.id === id)));
+  const colorOf = (id: string) => {
+    const t = roster.find((t) => t.id === id);
+    return t ? therapistColor(t.id, t.color) : 'var(--slate)';
+  };
   const dayParts = [
     { label: 'Morning', slots: workingSlots.filter((slot) => slot.minutes < 12 * 60) },
     { label: 'Afternoon', slots: workingSlots.filter((slot) => slot.minutes >= 12 * 60 && slot.minutes < 17 * 60) },

@@ -102,7 +102,7 @@ export function WorkingHoursSheet({
             Working hours · {therapistName}
           </h2>
           <p className="text-sm text-[var(--muted)]">
-            Add a second time on a day to leave a break between them. Only these times are offered for booking.
+            Set the start and end of the day, and optionally add a break. Only the available time is offered for booking.
           </p>
           <div className="mt-3 flex rounded-lg border border-[var(--border)] p-0.5" role="radiogroup" aria-label="Hours">
             {[false, true].map((candidate) => (
@@ -164,62 +164,111 @@ export function WorkingHoursSheet({
                         </button>
                       )}
                     </div>
-                    {working && (
-                      <div className="mt-2 space-y-2">
-                        {intervals.map(([start, end], index) => (
-                          <div key={index} className="flex items-center gap-2">
-                            <input
-                              type="time"
-                              step={300}
-                              aria-label={`${WEEKDAY_NAMES[Number(day)]} start ${index + 1}`}
-                              className="min-h-10 rounded-lg border border-[var(--border)] px-2 text-sm"
-                              value={minutesToTime(start)}
-                              onChange={(event) => {
-                                const next = intervals.map((i) => [...i] as [number, number]);
-                                next[index][0] = toMinutes(event.target.value);
-                                update(day, next);
-                              }}
-                            />
-                            <span className="text-xs text-[var(--muted)]">to</span>
-                            <input
-                              type="time"
-                              step={300}
-                              aria-label={`${WEEKDAY_NAMES[Number(day)]} end ${index + 1}`}
-                              className="min-h-10 rounded-lg border border-[var(--border)] px-2 text-sm"
-                              value={minutesToTime(end)}
-                              onChange={(event) => {
-                                const next = intervals.map((i) => [...i] as [number, number]);
-                                next[index][1] = toMinutes(event.target.value);
-                                update(day, next);
-                              }}
-                            />
-                            {intervals.length > 1 && (
-                              <button
-                                type="button"
-                                aria-label="Remove this time"
-                                className="min-h-10 min-w-10 rounded-lg text-[var(--muted)] hover:bg-[var(--paper)]"
-                                onClick={() => update(day, intervals.filter((_, i) => i !== index))}
-                              >
-                                ×
-                              </button>
-                            )}
+                    {working && (() => {
+                      const overallStart = intervals[0][0];
+                      const overallEnd = intervals[intervals.length - 1][1];
+                      const breaks: [number, number][] = [];
+                      for (let i = 0; i < intervals.length - 1; i++) {
+                        breaks.push([intervals[i][1], intervals[i + 1][0]]);
+                      }
+                      
+                      const rebuild = (newStart: number, newEnd: number, newBreaks: [number, number][]) => {
+                        const sorted = [...newBreaks].sort((a, b) => a[0] - b[0]);
+                        const result: [number, number][] = [];
+                        let cur = newStart;
+                        for (const b of sorted) {
+                          if (b[0] > cur && b[0] < newEnd) {
+                            result.push([cur, b[0]]);
+                            cur = Math.min(b[1], newEnd);
+                          }
+                        }
+                        if (cur < newEnd) {
+                          result.push([cur, newEnd]);
+                        }
+                        if (result.length === 0) result.push([newStart, newEnd]);
+                        update(day, result);
+                      };
+
+                      return (
+                        <div className="mt-3 space-y-4 rounded-lg bg-[var(--paper)] p-3">
+                          <div className="flex flex-col gap-1.5">
+                            <span className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Working Hours</span>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="time"
+                                step={300}
+                                className="min-h-10 w-full max-w-[140px] rounded-lg border border-[var(--border)] px-2 text-sm bg-[var(--surface)]"
+                                value={minutesToTime(overallStart)}
+                                onChange={(e) => rebuild(toMinutes(e.target.value), overallEnd, breaks)}
+                              />
+                              <span className="text-xs text-[var(--muted)]">to</span>
+                              <input
+                                type="time"
+                                step={300}
+                                className="min-h-10 w-full max-w-[140px] rounded-lg border border-[var(--border)] px-2 text-sm bg-[var(--surface)]"
+                                value={minutesToTime(overallEnd)}
+                                onChange={(e) => rebuild(overallStart, toMinutes(e.target.value), breaks)}
+                              />
+                            </div>
                           </div>
-                        ))}
-                        {intervals.length < 4 && (
-                          <button
-                            type="button"
-                            className="text-xs font-medium text-[var(--teal)] hover:underline"
-                            onClick={() => {
-                              const lastEnd = intervals[intervals.length - 1][1];
-                              const start = Math.min(lastEnd + 60, 23 * 60);
-                              update(day, [...intervals, [start, Math.min(start + 180, 1440)]]);
-                            }}
-                          >
-                            + Add time after a break
-                          </button>
-                        )}
-                      </div>
-                    )}
+
+                          {breaks.map((b, index) => (
+                            <div key={index} className="flex flex-col gap-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold text-[var(--amber-strong)] uppercase tracking-wider">Break Time</span>
+                                <button
+                                  type="button"
+                                  className="text-[11px] font-medium text-[var(--rust)] hover:underline"
+                                  onClick={() => rebuild(overallStart, overallEnd, breaks.filter((_, i) => i !== index))}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="time"
+                                  step={300}
+                                  className="min-h-10 w-full max-w-[140px] rounded-lg border border-[var(--amber-strong)]/30 px-2 text-sm bg-[var(--amber-light)] text-[var(--amber-strong)] focus:ring-[var(--amber)]"
+                                  value={minutesToTime(b[0])}
+                                  onChange={(e) => {
+                                    const next = [...breaks];
+                                    next[index] = [toMinutes(e.target.value), b[1]];
+                                    rebuild(overallStart, overallEnd, next);
+                                  }}
+                                />
+                                <span className="text-xs text-[var(--muted)]">to</span>
+                                <input
+                                  type="time"
+                                  step={300}
+                                  className="min-h-10 w-full max-w-[140px] rounded-lg border border-[var(--amber-strong)]/30 px-2 text-sm bg-[var(--amber-light)] text-[var(--amber-strong)] focus:ring-[var(--amber)]"
+                                  value={minutesToTime(b[1])}
+                                  onChange={(e) => {
+                                    const next = [...breaks];
+                                    next[index] = [b[0], toMinutes(e.target.value)];
+                                    rebuild(overallStart, overallEnd, next);
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                          
+                          {breaks.length === 0 && (
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-[var(--teal)] hover:underline"
+                              onClick={() => {
+                                const mid = Math.floor((overallStart + overallEnd) / 2);
+                                const breakStart = Math.max(overallStart, mid - 30);
+                                const breakEnd = Math.min(overallEnd, mid + 30);
+                                rebuild(overallStart, overallEnd, [[breakStart, breakEnd]]);
+                              }}
+                            >
+                              + Add a break
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </li>
                 );
               })}

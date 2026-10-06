@@ -301,7 +301,7 @@ export function SchedulePage() {
                 aria-label="Filter by therapist"
               >
                 <option value="">All therapists</option>
-                {(therapists ?? []).map((t) => (
+                {(therapists ?? []).filter((t) => t.active !== false).map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
                   </option>

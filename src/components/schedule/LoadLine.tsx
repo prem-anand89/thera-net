@@ -21,7 +21,14 @@ export function LoadLine({ summary, color }: { summary: LoadSummary; color: stri
   const barColor = tone === 'full' ? 'var(--rust)' : tone === 'busy' ? 'var(--amber)' : tone === 'done' ? 'var(--slate)' : color;
   return (
     <span className="mt-1 block">
-      <span className={`block truncate text-[11px] ${CAPTION[tone]}`}>{summary.text}</span>
+      <span className={`flex items-center gap-1.5 truncate text-[11px] ${CAPTION[tone]}`}>
+        {tone === 'done' && (
+          <svg className="h-[11px] w-[11px] shrink-0 opacity-70" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+          </svg>
+        )}
+        <span className="truncate">{summary.text}</span>
+      </span>
       {summary.ratio !== null && (
         <span
           className="mt-1 block h-1 overflow-hidden rounded-full bg-[var(--border)]"

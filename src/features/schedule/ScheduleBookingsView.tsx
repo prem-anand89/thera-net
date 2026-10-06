@@ -156,7 +156,7 @@ export function ScheduleBookingsView({
     () =>
       [...(therapists ?? [])]
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((therapist, index) => ({ id: therapist.id, name: therapist.name, phone: therapist.phone ?? null, workingHours: therapist.workingHours ?? null, color: therapistColor(index) })),
+        .map((therapist) => ({ id: therapist.id, name: therapist.name, active: therapist.active, phone: therapist.phone ?? null, workingHours: therapist.workingHours ?? null, color: therapistColor(therapist.id, therapist.color) })),
     [therapists]
   );
   const rosterById = useMemo(() => new Map(roster.map((t) => [t.id, t])), [roster]);
@@ -180,22 +180,6 @@ export function ScheduleBookingsView({
     if (isTherapist) return myTherapistId ? [myTherapistId] : [];
     return (search.therapist ?? '').split(',').filter((id) => rosterById.has(id));
   }, [isTherapist, myTherapistId, search.therapist, rosterById]);
-  const visibleRoster = useMemo(
-    () =>
-      isTherapist
-        ? roster.filter((t) => t.id === myTherapistId)
-        : selectedIds.length
-          ? roster.filter((t) => selectedIds.includes(t.id))
-          : roster,
-    [isTherapist, myTherapistId, selectedIds, roster]
-  );
-  const singleTherapist = visibleRoster.length === 1 ? visibleRoster[0] : null;
-  // Week is a real time grid only with one therapist in view (tab+); with
-  // several it was a list of names the week strip already gives, so a
-  // `mode=week` link falls back to Day.
-  const weekAvailable = singleTherapist !== null;
-  const mode = weekAvailable ? search.mode ?? 'day' : 'day';
-
   const [showCancelled, setShowCancelled] = useState(false);
   const scopedAppointments = useMemo(() => {
     const rows = allAppointments ?? [];
@@ -220,6 +204,22 @@ export function ScheduleBookingsView({
     return map;
   }, [visibleAppointments]);
   const dayAppointments = useMemo(() => byDate.get(date) ?? [], [byDate, date]);
+
+  const visibleRoster = useMemo(
+    () =>
+      isTherapist
+        ? roster.filter((t) => t.id === myTherapistId)
+        : selectedIds.length
+          ? roster.filter((t) => selectedIds.includes(t.id) && (t.active !== false || dayAppointments.some((a) => a.therapistId === t.id)))
+          : roster.filter((t) => t.active !== false || dayAppointments.some(a => a.therapistId === t.id)),
+    [isTherapist, myTherapistId, selectedIds, roster, dayAppointments]
+  );
+  const singleTherapist = visibleRoster.length === 1 ? visibleRoster[0] : null;
+  // Week is a real time grid only with one therapist in view (tab+); with
+  // several it was a list of names the week strip already gives, so a
+  // `mode=week` link falls back to Day.
+  const weekAvailable = singleTherapist !== null;
+  const mode = weekAvailable ? search.mode ?? 'day' : 'day';
 
   const closedFor = useCallback(
     (day: string) => isClosedDay(day, clinic.closedWeekdays, closedDates ?? []),
@@ -523,7 +523,7 @@ export function ScheduleBookingsView({
               today={today}
               onSelectDate={(selected) => setSchedule({ date: selected })}
               dayState={dayState}
-              therapists={roster.map((t) => ({ ...t, summary: summaryFor(t.id) }))}
+              therapists={roster.filter(t => t.active !== false).map((t) => ({ ...t, summary: summaryFor(t.id) }))}
               visibleIds={selectedIds}
               onToggleTherapist={toggleTherapist}
               onShowAll={() => setTherapists([])}
@@ -599,7 +599,7 @@ export function ScheduleBookingsView({
               <div className="flex items-center gap-2">
                 {canManageAll && roster.length > 1 && (
                   <div className="desktop:hidden">
-                    <TherapistFilter therapists={roster} visibleIds={selectedIds} onToggle={toggleTherapist} onShowAll={() => setTherapists([])} />
+                    <TherapistFilter therapists={roster.filter(t => t.active !== false)} visibleIds={selectedIds} onToggle={toggleTherapist} onShowAll={() => setTherapists([])} />
                   </div>
                 )}
                 {weekAvailable && (
@@ -781,7 +781,7 @@ export function ScheduleBookingsView({
       {activeView === 'history' && (
         <HistoryView
           appointments={scopedAppointments}
-          therapists={canManageAll ? roster : []}
+          therapists={canManageAll ? roster.filter(t => t.active !== false) : []}
           today={today}
           colorFor={colorFor}
           therapistNameFor={therapistNameFor}
@@ -902,7 +902,7 @@ export function ScheduleBookingsView({
         initialDate={addDays(today, 1)}
         clinicName={clinic.name}
         appointments={allAppointments ?? []}
-        therapists={roster}
+        therapists={roster.filter(t => t.active !== false)}
         slotMinutes={slotMinutes}
         onClose={() => setReminderOpen(false)}
       />
