@@ -85,12 +85,12 @@ function InvoiceMockContent({ clinic, logoUrl, partnerLogoUrl }: { clinic: Clini
         <table className="w-full min-w-[680px] print:min-w-full text-sm table-fixed border-b-2 border-[var(--border)] pb-2">
           <thead>
             <tr className="border-y-2 border-[var(--border)] bg-[var(--teal-mist)] text-left font-medium text-[var(--ink)] text-xs">
-              <th className="py-2 w-[25%]">Service</th>
-              <th className="py-2 w-[20%]">Dates of service</th>
-              <th className="py-2 w-[15%]">Sessions</th>
-              <th className="py-2 text-right w-[15%] pr-4">Unit Price</th>
+              <th className="py-2 w-[30%]">Service</th>
+              <th className="py-2 w-[22%]">Dates of service</th>
+              <th className="py-2 w-[12%]">Sessions</th>
+              <th className="py-2 text-right w-[12%] pr-4">Unit Price</th>
               <th className="py-2 w-[10%] text-right pr-4">Adjustment</th>
-              <th className="py-2 w-[15%] text-right pr-2">Amount</th>
+              <th className="py-2 w-[14%] text-right pr-2">Amount</th>
             </tr>
           </thead>
           <tbody className="align-top border-b border-[var(--border)]">
