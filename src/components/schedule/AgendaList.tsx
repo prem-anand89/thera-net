@@ -51,6 +51,7 @@ export function AgendaList({
   flagContext?: PatientFlagContext;
 }) {
   let nowSortAt = nowMinutes;
+  let isNowInsideItem = false;
   if (nowMinutes !== null) {
     let bestSortAt: number = nowMinutes;
     for (const appt of appointments) {
@@ -58,6 +59,7 @@ export function AgendaList({
       const end = at + appointmentMinutes(appt, slotMinutes);
       // If the appointment is currently ongoing, we want the "now" line to sit above it
       if (at <= nowMinutes && end > nowMinutes) {
+        isNowInsideItem = true;
         if (bestSortAt === nowMinutes || at < bestSortAt) {
           bestSortAt = at - 0.1;
         }
@@ -65,6 +67,7 @@ export function AgendaList({
     }
     for (const gap of gaps) {
       if (gap.start <= nowMinutes && gap.end > nowMinutes) {
+        isNowInsideItem = true;
         if (bestSortAt === nowMinutes || gap.start < bestSortAt) {
           bestSortAt = gap.start - 0.1;
         }
@@ -84,7 +87,7 @@ export function AgendaList({
       };
     }),
     ...gaps.map((gap) => ({ kind: 'gap' as const, at: gap.start, sortAt: gap.start, gap })),
-    ...(nowMinutes !== null && nowSortAt !== null ? [{ kind: 'now' as const, at: nowMinutes, sortAt: nowSortAt }] : []),
+    ...(nowMinutes !== null && nowSortAt !== null && !isNowInsideItem ? [{ kind: 'now' as const, at: nowMinutes, sortAt: nowSortAt }] : []),
   ].sort((a, b) => a.sortAt - b.sortAt || (a.kind === 'now' ? -1 : b.kind === 'now' ? 1 : 0));
 
   return (
@@ -100,8 +103,10 @@ export function AgendaList({
           );
         }
         if (row.kind === 'gap') {
+          const isOngoing = nowMinutes !== null && row.gap.start <= nowMinutes && row.gap.end > nowMinutes;
+          const progressPercent = isOngoing ? Math.max(0, Math.min(100, ((nowMinutes! - row.gap.start) / (row.gap.end - row.gap.start)) * 100)) : 0;
           return (
-            <li key={`gap-${row.gap.start}`}>
+            <li key={`gap-${row.gap.start}`} className="relative">
               <button
                 type="button"
                 disabled={!onBookGap}
@@ -113,6 +118,16 @@ export function AgendaList({
                 </span>
                 {onBookGap && <span className="font-medium">+ Book</span>}
               </button>
+              {isOngoing && (
+                <div 
+                  className="absolute left-[-4px] right-0 z-10 flex items-center gap-2 pointer-events-none"
+                  style={{ top: `${progressPercent}%`, transform: 'translateY(-50%)' }}
+                >
+                  <span className="h-2 w-2 rounded-full bg-[var(--rust)]" aria-hidden />
+                  <span className="h-px flex-1 bg-[var(--rust)]" aria-hidden />
+                  <span className="text-[11px] font-medium text-[var(--rust)] text-shadow-sm">{minutesLabel(nowMinutes!)}</span>
+                </div>
+              )}
             </li>
           );
         }
@@ -124,8 +139,10 @@ export function AgendaList({
         const fill = appointmentFill(appointment, color);
         const flags = patientFlags(appointment, flagContext);
         const reason = appointmentReason(appointment, flagContext)?.text;
+        const isOngoing = nowMinutes !== null && row.at <= nowMinutes && (row.at + minutes) > nowMinutes;
+        const progressPercent = isOngoing ? Math.max(0, Math.min(100, ((nowMinutes! - row.at) / minutes) * 100)) : 0;
         return (
-          <li key={appointment.id}>
+          <li key={appointment.id} className="relative">
             <button
               type="button"
               onClick={() => onSelect(appointment)}
@@ -152,6 +169,16 @@ export function AgendaList({
                 </span>
               </span>
             </button>
+            {isOngoing && (
+              <div 
+                className="absolute left-[-4px] right-0 z-10 flex items-center gap-2 pointer-events-none"
+                style={{ top: `${progressPercent}%`, transform: 'translateY(-50%)' }}
+              >
+                <span className="h-2 w-2 rounded-full bg-[var(--rust)]" aria-hidden />
+                <span className="h-px flex-1 bg-[var(--rust)]" aria-hidden />
+                <span className="text-[11px] font-medium text-[var(--rust)] text-shadow-sm">{minutesLabel(nowMinutes!)}</span>
+              </div>
+            )}
           </li>
         );
       })}
