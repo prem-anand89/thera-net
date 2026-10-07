@@ -7,6 +7,7 @@ import {
   validateInsightsSearch,
 } from '@/features/reports/insightsTrendPeriod';
 import { parseSettingsSearch, type SettingsSearch } from '@/features/settings/sections';
+import { RouterErrorFallback } from './ErrorBoundary';
 
 // Code-split every route except the default post-login landing page
 // (Workspace) — that one stays eager so the most common path pays no extra
@@ -570,7 +571,10 @@ const routeTree = rootRoute.addChildren([
   bookingFormRoute,
 ]);
 
-export const router = createRouter({ routeTree });
+export const router = createRouter({ 
+  routeTree,
+  defaultErrorComponent: RouterErrorFallback,
+});
 
 declare module '@tanstack/react-router' {
   interface Register {

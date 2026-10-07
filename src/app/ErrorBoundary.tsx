@@ -1,4 +1,4 @@
-import { Component, type ReactNode } from 'react';
+import { Component, useEffect, type ReactNode } from 'react';
 import { reportError } from '@/lib/errorReporting';
 import { btnPrimary } from '@/components/ui';
 
@@ -51,19 +51,35 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.error) {
-      return (
-        <div className="mx-auto mt-24 max-w-md space-y-3 rounded-[10px] border border-[var(--rust)] bg-[var(--rust-light)] p-6 text-center text-sm text-[var(--rust)]">
-          <p className="text-base font-medium">Something went wrong.</p>
-          <p>
-            Try reloading the page. If it keeps happening, tell your admin — nothing you've saved
-            has been lost.
-          </p>
-          <button type="button" className={`${btnPrimary} w-full`} onClick={() => location.reload()}>
-            Reload
-          </button>
-        </div>
-      );
+      return <ErrorFallbackUI />;
     }
     return this.props.children;
   }
+}
+
+export function ErrorFallbackUI() {
+  return (
+    <div className="mx-auto mt-24 max-w-md space-y-3 rounded-[10px] border border-[var(--rust)] bg-[var(--rust-light)] p-6 text-center text-sm text-[var(--rust)]">
+      <p className="text-base font-medium">Something went wrong.</p>
+      <p>
+        Try reloading the page. If it keeps happening, tell your admin — nothing you've saved
+        has been lost.
+      </p>
+      <button type="button" className={`${btnPrimary} w-full`} onClick={() => location.reload()}>
+        Reload
+      </button>
+    </div>
+  );
+}
+
+export function RouterErrorFallback({ error }: { error: Error }) {
+  useEffect(() => {
+    reportError(error, 'router-error');
+    if (isStaleChunkError(error) && !sessionStorage.getItem(RELOAD_GUARD_KEY)) {
+      sessionStorage.setItem(RELOAD_GUARD_KEY, '1');
+      location.reload();
+    }
+  }, [error]);
+
+  return <ErrorFallbackUI />;
 }
