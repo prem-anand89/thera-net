@@ -102,7 +102,7 @@ export function WorkingHoursSheet({
             Working hours · {therapistName}
           </h2>
           <p className="text-sm text-[var(--muted)]">
-            Set the start and end of the day, and optionally add a break. Only the available time is offered for booking.
+            Set the start and end of the day, and optionally add one or more breaks. Only the available time is offered for booking.
           </p>
           <div className="mt-3 flex rounded-lg border border-[var(--border)] p-0.5" role="radiogroup" aria-label="Hours">
             {[false, true].map((candidate) => (
@@ -252,20 +252,25 @@ export function WorkingHoursSheet({
                             </div>
                           ))}
                           
-                          {breaks.length === 0 && (
-                            <button
-                              type="button"
-                              className="text-xs font-medium text-[var(--teal)] hover:underline"
-                              onClick={() => {
-                                const mid = Math.floor((overallStart + overallEnd) / 2);
-                                const breakStart = Math.max(overallStart, mid - 30);
-                                const breakEnd = Math.min(overallEnd, mid + 30);
-                                rebuild(overallStart, overallEnd, [[breakStart, breakEnd]]);
-                              }}
-                            >
-                              + Add a break
-                            </button>
-                          )}
+                          {(() => {
+                            const lastEnd = breaks.length ? breaks[breaks.length - 1][1] : overallStart;
+                            const noRoom = lastEnd >= overallEnd;
+                            return (
+                              <button
+                                type="button"
+                                className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:text-[var(--muted)] disabled:no-underline"
+                                disabled={noRoom}
+                                onClick={() => {
+                                  const remaining = overallEnd - lastEnd;
+                                  const breakStart = remaining > 60 ? lastEnd + Math.floor((remaining - 60) / 2) : lastEnd;
+                                  const breakEnd = Math.min(overallEnd, breakStart + 30);
+                                  rebuild(overallStart, overallEnd, [...breaks, [breakStart, breakEnd]]);
+                                }}
+                              >
+                                {breaks.length === 0 ? '+ Add a break' : '+ Add another break'}
+                              </button>
+                            );
+                          })()}
                         </div>
                       );
                     })()}
