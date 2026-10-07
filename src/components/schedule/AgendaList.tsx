@@ -50,15 +50,40 @@ export function AgendaList({
   /** Patient flags + condition (`usePatientFlagContext`). */
   flagContext?: PatientFlagContext;
 }) {
-  const rows: Row[] = [
-    ...appointments.map((appointment) => ({
-      kind: 'appointment' as const,
-      at: minutesOfDay(appointment.scheduledAt),
-      appointment,
-    })),
-    ...gaps.map((gap) => ({ kind: 'gap' as const, at: gap.start, gap })),
-    ...(nowMinutes !== null ? [{ kind: 'now' as const, at: nowMinutes }] : []),
-  ].sort((a, b) => a.at - b.at || (a.kind === 'now' ? -1 : b.kind === 'now' ? 1 : 0));
+  let nowSortAt = nowMinutes;
+  if (nowMinutes !== null) {
+    for (const appt of appointments) {
+      const at = minutesOfDay(appt.scheduledAt);
+      const end = at + appointmentMinutes(appt, slotMinutes);
+      // If the appointment is currently ongoing, we want the "now" line to sit above it
+      if (at <= nowMinutes && end > nowMinutes) {
+        if (nowSortAt === nowMinutes || at < nowSortAt) {
+          nowSortAt = at - 0.1;
+        }
+      }
+    }
+    for (const gap of gaps) {
+      if (gap.start <= nowMinutes && gap.end > nowMinutes) {
+        if (nowSortAt === nowMinutes || gap.start < nowSortAt) {
+          nowSortAt = gap.start - 0.1;
+        }
+      }
+    }
+  }
+
+  const rows: (Row & { sortAt: number })[] = [
+    ...appointments.map((appointment) => {
+      const at = minutesOfDay(appointment.scheduledAt);
+      return {
+        kind: 'appointment' as const,
+        at,
+        sortAt: at,
+        appointment,
+      };
+    }),
+    ...gaps.map((gap) => ({ kind: 'gap' as const, at: gap.start, sortAt: gap.start, gap })),
+    ...(nowMinutes !== null ? [{ kind: 'now' as const, at: nowMinutes, sortAt: nowSortAt }] : []),
+  ].sort((a, b) => a.sortAt - b.sortAt || (a.kind === 'now' ? -1 : b.kind === 'now' ? 1 : 0));
 
   return (
     <ol className="space-y-2">
