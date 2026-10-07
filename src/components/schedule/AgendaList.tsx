@@ -52,23 +52,25 @@ export function AgendaList({
 }) {
   let nowSortAt = nowMinutes;
   if (nowMinutes !== null) {
+    let bestSortAt: number = nowMinutes;
     for (const appt of appointments) {
       const at = minutesOfDay(appt.scheduledAt);
       const end = at + appointmentMinutes(appt, slotMinutes);
       // If the appointment is currently ongoing, we want the "now" line to sit above it
       if (at <= nowMinutes && end > nowMinutes) {
-        if (nowSortAt === nowMinutes || at < nowSortAt) {
-          nowSortAt = at - 0.1;
+        if (bestSortAt === nowMinutes || at < bestSortAt) {
+          bestSortAt = at - 0.1;
         }
       }
     }
     for (const gap of gaps) {
       if (gap.start <= nowMinutes && gap.end > nowMinutes) {
-        if (nowSortAt === nowMinutes || gap.start < nowSortAt) {
-          nowSortAt = gap.start - 0.1;
+        if (bestSortAt === nowMinutes || gap.start < bestSortAt) {
+          bestSortAt = gap.start - 0.1;
         }
       }
     }
+    nowSortAt = bestSortAt;
   }
 
   const rows: (Row & { sortAt: number })[] = [
@@ -82,7 +84,7 @@ export function AgendaList({
       };
     }),
     ...gaps.map((gap) => ({ kind: 'gap' as const, at: gap.start, sortAt: gap.start, gap })),
-    ...(nowMinutes !== null ? [{ kind: 'now' as const, at: nowMinutes, sortAt: nowSortAt }] : []),
+    ...(nowMinutes !== null && nowSortAt !== null ? [{ kind: 'now' as const, at: nowMinutes, sortAt: nowSortAt }] : []),
   ].sort((a, b) => a.sortAt - b.sortAt || (a.kind === 'now' ? -1 : b.kind === 'now' ? 1 : 0));
 
   return (
