@@ -391,7 +391,7 @@ describe('dayLoad', () => {
     expect(almost).toMatchObject({ text: 'Almost full, free from 12:30 PM', tone: 'busy' });
     expect(dayLoad([at9(240)], 't1', d, hours, 30, working, 9 * 60)).toMatchObject({ text: 'Fully booked', tone: 'full' });
     expect(dayLoad([], 't1', d, hours, 30, working, 13 * 60)).toMatchObject({ text: 'Done for today', tone: 'done' });
-    expect(dayLoad([at9(60), { ...at9(30), id: 'x', status: 'no_show' }], 't1', d, hours, 30, working, 13 * 60).text).toBe('Finished · 1 seen');
+    expect(dayLoad([at9(60), { ...at9(30), id: 'x', status: 'no_show' }], 't1', d, hours, 30, working, 13 * 60).text).toBe('Done · 1 seen');
   });
 
   it('today: on a break between two working intervals', () => {

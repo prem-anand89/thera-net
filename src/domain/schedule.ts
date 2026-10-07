@@ -625,7 +625,7 @@ export interface DayLoad {
   tone: DayLoadTone;
   /** The next useful thing to know, in plain words: "Free now, 4 slots",
    *  "Free from 2:30 PM, 3 slots", "On break until 2:00 PM", "Almost full",
-   *  "Fully booked", "Finished · 6 seen", "No more slots today", "6 slots free",
+   *  "Fully booked", "Done · 6 seen", "No more slots today", "6 slots free",
    *  "Off today", "Closed". */
   text: string;
 }

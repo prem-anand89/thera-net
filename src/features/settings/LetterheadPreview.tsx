@@ -209,11 +209,11 @@ export function LetterheadPreview({ draft, logoUrl, partnerLogoUrl }: Letterhead
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="group relative block w-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] rounded-xl"
+        className="group relative block w-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--teal)] rounded-xl"
       >
         <div
           ref={containerRef}
-          className="pointer-events-none overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-sm relative w-full aspect-[210/297] transition-all group-hover:shadow-md group-hover:border-[var(--brand-muted)]"
+          className="pointer-events-none overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-sm relative w-full aspect-[210/297] transition-all group-hover:shadow-md group-hover:border-[var(--teal)]/40"
           aria-hidden="true"
         >
           <div 
