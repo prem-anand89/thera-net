@@ -689,7 +689,7 @@ export function LedgerPage() {
                   onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
                 />
                 {patientMatches.length > 0 && (
-                  <div className="absolute right-0 z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+                  <div className="absolute left-0 sm:left-auto sm:right-0 z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm">
                     {patientMatches.map((p) => (
                       <button
                         key={p.id}
