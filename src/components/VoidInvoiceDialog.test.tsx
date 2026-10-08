@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Invoice } from '@/domain/types';
 
+vi.mock('@/lib/env', () => ({ hasSupabaseConfig: true }));
 const voidInvoice = vi.fn();
 vi.mock('@/services', () => ({ invoiceService: { voidInvoice: (...args: unknown[]) => voidInvoice(...args) } }));
 
