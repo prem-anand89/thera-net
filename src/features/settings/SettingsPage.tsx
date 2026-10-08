@@ -19,6 +19,7 @@ import { getSupabase, publicTherapistPhotoUrl, publicLogoUrl } from '@/lib/supab
 import { resizeImageToBlob } from '@/lib/resizeImage';
 import { db } from '@/lib/db';
 import { MONTH_NAMES, formatDateDM } from '@/domain/fiscalYear';
+import { toLocalDateStr } from '@/domain/schedule';
 import { clinicShareLabels, type Clinic, type InvoicePolicy, type Therapist, type UUID } from '@/domain/types';
 import {
   memberOnboardingStatus,
@@ -2423,6 +2424,7 @@ interface ClinicMember {
   status: MemberOnboardingStatus;
   invitedAt: string | null;
   lastSignInAt: string | null;
+  lastActiveAt: string | null;
 }
 
 /** Same accent per role everywhere a role shows up as a colored pill or
@@ -2684,6 +2686,11 @@ function TeamMemberCard({
             <div className="flex flex-wrap items-center gap-1.5">
               {member && <RolePill role={role} />}
               {member && member.status !== 'active' && <OnboardingBadge member={member} />}
+              {member?.lastActiveAt && toLocalDateStr(new Date(member.lastActiveAt)) === toLocalDateStr(new Date()) && (
+                <span className="inline-block rounded-full bg-[var(--moss-light)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--moss)]">
+                  Active today
+                </span>
+              )}
               {isBookable && (
                 <span className="inline-block rounded-full bg-[var(--sky-light)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--sky)]">
                   Bookable
@@ -3139,6 +3146,7 @@ function Therapists() {
           invited_at: string | null;
           last_sign_in_at: string | null;
           require_password_setup: boolean | null;
+          last_active_at: string | null;
         }[]
       ).map((m) => ({
         userId: m.user_id,
@@ -3151,6 +3159,7 @@ function Therapists() {
         }),
         invitedAt: m.invited_at,
         lastSignInAt: m.last_sign_in_at,
+        lastActiveAt: m.last_active_at,
       }))
     );
   }, [clinic.id]);

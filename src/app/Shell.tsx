@@ -10,7 +10,9 @@ import {
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, ALL_SYNCED_TABLES } from '@/lib/db';
-import { publicLogoUrl } from '@/lib/supabase';
+import { getSupabase, publicLogoUrl } from '@/lib/supabase';
+import { toLocalDateStr } from '@/domain/schedule';
+import { lastActivePingKey, shouldPingLastActive } from '@/domain/presence';
 import { syncEngine } from '@/sync/engine';
 import { syncStatus } from '@/sync/status';
 import { useSession } from './useSession';
@@ -170,6 +172,27 @@ export function Shell() {
       void db.meta.put({ key: 'activeClinicId', value: clinics[0].id });
     }
   }, [clinics, activeClinicKnown]);
+
+  // Staff "Active today" presence — once per device per (clinic, user) per
+  // day, so a shared front-desk kiosk logged into by two staff members on
+  // the same day still records each of them. Fire-and-forget: this is
+  // non-critical telemetry, never worth blocking the UI or showing an
+  // error toast for.
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!clinic?.id || !userId) return;
+    const key = lastActivePingKey(clinic.id, userId);
+    const today = toLocalDateStr(new Date());
+    void (async () => {
+      const stored = (await db.meta.get(key))?.value as string | undefined;
+      if (!shouldPingLastActive(stored, today)) return;
+      const supabase = getSupabase();
+      if (!supabase) return;
+      const { error } = await supabase.rpc('touch_last_active', { p_clinic_id: clinic.id });
+      if (error) return;
+      await db.meta.put({ key, value: today });
+    })();
+  }, [clinic?.id, session?.user?.id]);
 
   // Invited members who haven't chosen a password yet — Shell would otherwise
   // drop them straight into Workspace with a session but no password set.
