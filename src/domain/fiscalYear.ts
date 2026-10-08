@@ -58,6 +58,32 @@ export function monthDateRange({ year, month }: FyMonth): { from: string; to: st
   return { from, to };
 }
 
+/** The prior calendar month's range, clipped to the same number of elapsed
+ *  days as `today` is into `current`'s month — a fair "apples to apples"
+ *  comparison for month-to-date figures (e.g. today is the 8th of the
+ *  current month -> the prior month's 1st through its 8th, or its last day
+ *  if the prior month is shorter). */
+export function pacingMonthDateRange(current: FyMonth, today: Date): { from: string; to: string } {
+  const elapsedDays = today.getFullYear() === current.year && today.getMonth() + 1 === current.month ? today.getDate() : new Date(current.year, current.month, 0).getDate();
+  const priorMonth0 = current.month - 1 === 0 ? 12 : current.month - 1;
+  const priorYear = current.month - 1 === 0 ? current.year - 1 : current.year;
+  const priorLastDay = new Date(priorYear, priorMonth0, 0).getDate();
+  const day = Math.min(elapsedDays, priorLastDay);
+  const from = `${priorYear}-${String(priorMonth0).padStart(2, '0')}-01`;
+  const to = `${priorYear}-${String(priorMonth0).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  return { from, to };
+}
+
+/** Linear end-of-month projection from a month-to-date total: the daily
+ *  average so far, extrapolated across the whole month. Only a reasonable
+ *  fit for smooth/cumulative metrics (revenue, visit counts) — not for
+ *  ratios (an average, a rate) or lumpy/event-driven counts, which the
+ *  caller should exclude rather than project. */
+export function projectMonthly(valueSoFar: number, dayOfMonth: number, daysInMonth: number): number {
+  if (dayOfMonth <= 0) return 0;
+  return (valueSoFar / dayOfMonth) * daysInMonth;
+}
+
 /** First/last ISO dates spanning a whole fiscal year — the `from` of its
  *  first month through the `to` of its last, for filters where "no specific
  *  month picked" should mean "the whole selected FY," not "no filter." */

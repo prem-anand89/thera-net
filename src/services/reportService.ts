@@ -140,9 +140,19 @@ async function packageAttributionDeltas(
  * these sums always reconcile with each other.
  */
 export function createReportService(repos: Repos) {
-  return {
-    async monthly(clinicId: UUID, month: FyMonth): Promise<MonthlyReport> {
-      const { from, to } = monthDateRange(month);
+  /** The same billed/post-tax/split rollup `monthly` produces, for an
+   *  arbitrary date range rather than a whole calendar month — used by
+   *  comparison modes that need a non-month-aligned range (e.g. "the same
+   *  elapsed days last month" for a fair month-to-date comparison). Shares
+   *  every bit of split/package-attribution logic with `monthly` so the
+   *  numbers stay reconcilable with it; only the month-shaped `month`/
+   *  `title` fields are omitted since a custom range isn't one calendar
+   *  month. */
+  async function totalsForRange(
+    clinicId: UUID,
+    from: string,
+    to: string
+  ): Promise<Pick<MonthlyReport, 'rows' | 'total'>> {
       const [visits, therapists] = await Promise.all([
         repos.visits.list({ clinicId, from, to }),
         repos.therapists.list(clinicId, true),
@@ -236,6 +246,13 @@ export function createReportService(repos: Repos) {
       const rows = [...rowsById.values()].sort((a, b) =>
         a.therapistName.localeCompare(b.therapistName)
       );
+      return { rows, total };
+  }
+
+  return {
+    async monthly(clinicId: UUID, month: FyMonth): Promise<MonthlyReport> {
+      const { from, to } = monthDateRange(month);
+      const { rows, total } = await totalsForRange(clinicId, from, to);
       return {
         month,
         title: `${monthName(month.month)} ${month.year}`,
@@ -243,6 +260,11 @@ export function createReportService(repos: Repos) {
         total,
       };
     },
+
+    /** For comparison modes needing a non-month-aligned range (e.g. Pacing's
+     *  "same elapsed days last month"). Returns just the totals — no
+     *  `month`/`title`, since a custom range isn't one calendar month. */
+    totalsForRange,
 
     toCsv(
       report: MonthlyReport,

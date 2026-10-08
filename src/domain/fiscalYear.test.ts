@@ -3,6 +3,8 @@ import {
   fiscalYearOf,
   monthsOfFiscalYear,
   monthDateRange,
+  pacingMonthDateRange,
+  projectMonthly,
   fiscalYearDateRange,
   fiscalYearToDateRange,
   currentWeekRange,
@@ -43,6 +45,48 @@ describe('monthDateRange', () => {
       from: '2028-02-01',
       to: '2028-02-29',
     });
+  });
+});
+
+describe('pacingMonthDateRange', () => {
+  it('clips the prior month to the same elapsed day count', () => {
+    expect(pacingMonthDateRange({ year: 2026, month: 10 }, new Date(2026, 9, 8))).toEqual({
+      from: '2026-09-01',
+      to: '2026-09-08',
+    });
+  });
+  it('clamps to the prior month\'s last day when it is shorter (March MTD vs February)', () => {
+    expect(pacingMonthDateRange({ year: 2026, month: 3 }, new Date(2026, 2, 31))).toEqual({
+      from: '2026-02-01',
+      to: '2026-02-28',
+    });
+  });
+  it('clamps correctly for a leap February as the prior month', () => {
+    expect(pacingMonthDateRange({ year: 2028, month: 3 }, new Date(2028, 2, 30))).toEqual({
+      from: '2028-02-01',
+      to: '2028-02-29',
+    });
+  });
+  it('rolls over the year when the current month is January', () => {
+    expect(pacingMonthDateRange({ year: 2027, month: 1 }, new Date(2027, 0, 5))).toEqual({
+      from: '2026-12-01',
+      to: '2026-12-05',
+    });
+  });
+  it('handles day 1 of the month', () => {
+    expect(pacingMonthDateRange({ year: 2026, month: 10 }, new Date(2026, 9, 1))).toEqual({
+      from: '2026-09-01',
+      to: '2026-09-01',
+    });
+  });
+});
+
+describe('projectMonthly', () => {
+  it('extrapolates the daily average across the full month', () => {
+    expect(projectMonthly(8000, 8, 31)).toBeCloseTo(31000, 5);
+  });
+  it('returns 0 for day 0 instead of dividing by zero', () => {
+    expect(projectMonthly(0, 0, 30)).toBe(0);
   });
 });
 

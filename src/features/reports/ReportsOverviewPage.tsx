@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { dashboardService, repos, feedbackService } from '@/services';
+import { dashboardService, reportService, repos, feedbackService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import {
   monthName,
   formatDateDMY,
+  pacingMonthDateRange,
+  projectMonthly,
 } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
@@ -27,6 +29,8 @@ import {
   trendPeriodLabel,
   type InsightsTrendPeriodMode,
 } from './insightsTrendPeriod';
+
+type KpiComparisonMode = 'standard' | 'pacing' | 'projected';
 
 /** Jump-nav sections, in the order they appear on the page — the "Full page
  *  restructure" this became: a long undifferentiated scroll of 6 cards had
@@ -60,6 +64,7 @@ function KpiCard({
   trendPct,
   trendLabel,
   lastMonthValue,
+  projected = false,
 }: {
   label: string;
   value: ReactNode;
@@ -68,12 +73,20 @@ function KpiCard({
   /** The prior month's raw value, e.g. "₹38,200" — the ▲/▼ badge alone
    *  never showed what it was a percentage OF. */
   lastMonthValue?: ReactNode;
+  /** Projected-mode visual safety cue — a dotted underline + tooltip, so
+   *  an extrapolated figure is never mistaken for a settled one. */
+  projected?: boolean;
 }) {
   return (
     <div className="min-w-[140px] flex-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-sm">
       <div className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
       <div className="mt-1 flex items-baseline gap-2">
-        <span className="font-num text-2xl font-semibold text-[var(--ink)]">{value}</span>
+        <span
+          className={`font-num text-2xl font-semibold text-[var(--ink)] ${projected ? 'border-b border-dotted border-[var(--muted)]' : ''}`}
+          title={projected ? 'Projected — not a settled figure' : undefined}
+        >
+          {value}
+        </span>
         {trendPct != null && (
           <span
             className="font-num text-xs font-semibold"
@@ -206,6 +219,21 @@ export function ReportsOverviewPage() {
   // feed the query deps, so a re-render mid-month doesn't refetch.
   const now = new Date();
   const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  // KPI comparison mode — Standard compares to the full prior month (the
+  // figures above); Pacing compares to the same elapsed days last month
+  // (a fairer "apples to apples" trend early in the month); Projected
+  // extrapolates the current daily average across the rest of the month.
+  // Scoped to Revenue and Visits only — the other 4 cards are either
+  // ratios (Avg charge/session, Repeat-visit rate) or lumpy/event-driven
+  // counts (New patients, Packages) that a pacing/extrapolation treatment
+  // would misrepresent rather than clarify.
+  const [kpiMode, setKpiMode] = useState<KpiComparisonMode>('standard');
+  const pacingRange = pacingMonthDateRange({ year: now.getFullYear(), month: now.getMonth() + 1 }, now);
+  const pacingReport = useLiveQuery(
+    () => reportService.totalsForRange(clinic.id, pacingRange.from, pacingRange.to),
+    [clinic.id, pacingRange.from, pacingRange.to]
+  );
   const repeatVisitsThisMonth = useLiveQuery(
     () =>
       dashboardService.repeatVisits(
@@ -306,7 +334,7 @@ export function ReportsOverviewPage() {
   // (postTaxPaise === actualBillPaise there) — so revenueLabel's
   // "Post-Tax {own}" / "Revenue" split above already describes it
   // accurately in both modes.
-  const revenueRow = (report: MonthlyReport | undefined) => {
+  const revenueRow = (report: Pick<MonthlyReport, 'rows' | 'total'> | undefined) => {
     if (!report) return null;
     if (scope.isClinicWideView)
       return partnerSplit ? report.total.postTaxPaise : report.total.billPaise;
@@ -314,19 +342,39 @@ export function ReportsOverviewPage() {
   };
   const revenueThisMonth = trend ? revenueRow(trend[trend.length - 1]) : null;
   const revenueLastMonth = trend && trend.length > 1 ? revenueRow(trend[trend.length - 2]) : null;
+  const revenuePacing = revenueRow(pacingReport);
 
   // Visit count vs last month — the one raw activity number ("are we
   // busier or quieter") the KPI strip didn't carry at all before; every
   // other card here answers a rate/quality question (repeat rate, avg
   // charge), not "how much work happened." Same trend-array reuse as
   // revenue above, no extra query.
-  const visitsRow = (report: MonthlyReport | undefined) => {
+  const visitsRow = (report: Pick<MonthlyReport, 'rows' | 'total'> | undefined) => {
     if (!report) return null;
     if (scope.isClinicWideView) return report.total.visitCount;
     return myMonthRow(report.rows).visitCount;
   };
   const visitsThisMonth = trend ? visitsRow(trend[trend.length - 1]) : null;
   const visitsLastMonth = trend && trend.length > 1 ? visitsRow(trend[trend.length - 2]) : null;
+  const visitsPacing = visitsRow(pacingReport);
+
+  // Projected mode — linear extrapolation of the current daily average
+  // across the rest of the month. Only sound for smooth/cumulative
+  // metrics; see the scope note above `kpiMode`.
+  const daysInCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const revenueProjected = revenueThisMonth != null ? Math.round(projectMonthly(revenueThisMonth, now.getDate(), daysInCurrentMonth)) : null;
+  const visitsProjected = visitsThisMonth != null ? Math.round(projectMonthly(visitsThisMonth, now.getDate(), daysInCurrentMonth)) : null;
+
+  const revenueDisplay =
+    kpiMode === 'projected' ? revenueProjected : revenueThisMonth;
+  const revenueCompareValue = kpiMode === 'pacing' ? revenuePacing : revenueLastMonth;
+  const revenueCompareLabel = kpiMode === 'pacing' ? 'vs same days last month' : kpiMode === 'projected' ? 'projected · vs last month' : 'vs last month';
+
+  const visitsDisplay = kpiMode === 'projected' ? visitsProjected : visitsThisMonth;
+  const visitsCompareValue = kpiMode === 'pacing' ? visitsPacing : visitsLastMonth;
+  const visitsCompareLabel = kpiMode === 'pacing' ? 'vs same days last month' : kpiMode === 'projected' ? 'projected · vs last month' : 'vs last month';
+
+  const notProjectable = kpiMode !== 'standard' ? ' (not available in this mode)' : '';
 
   // Average charge/session — always the clinic-wide figure, not scoped to
   // just one therapist (per request: "a clinic overall metric"), from the
@@ -464,70 +512,95 @@ export function ReportsOverviewPage() {
           trend badge past its own card edge (the longest value + widest
           label of the six). sm:grid-cols-3 already gives every width from
           640px up two comfortable rows of 3 in the meantime. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Compare</span>
+        <div className="flex flex-wrap gap-1.5">
+          {([
+            { key: 'standard', label: 'Standard' },
+            { key: 'pacing', label: 'Pacing' },
+            { key: 'projected', label: 'Projected' },
+          ] as { key: KpiComparisonMode; label: string }[]).map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setKpiMode(opt.key)}
+              className="rounded-full border px-3 py-1 text-xs font-medium"
+              style={{
+                background: kpiMode === opt.key ? 'var(--teal-light)' : 'var(--paper)',
+                borderColor: kpiMode === opt.key ? 'transparent' : 'var(--border)',
+                color: kpiMode === opt.key ? 'var(--teal)' : 'var(--muted)',
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label={scope.isClinicWideView ? revenueLabel : `My ${revenueLabel}`}
-          value={revenueThisMonth != null ? formatINR(revenueThisMonth) : '—'}
+          value={revenueDisplay != null ? formatINR(revenueDisplay) : '—'}
+          projected={kpiMode === 'projected'}
           trendPct={
-            revenueThisMonth != null && revenueLastMonth != null
-              ? pctChange(revenueThisMonth, revenueLastMonth)
+            revenueDisplay != null && revenueCompareValue != null
+              ? pctChange(revenueDisplay, revenueCompareValue)
               : null
           }
-          trendLabel="vs last month"
-          lastMonthValue={revenueLastMonth != null ? formatINR(revenueLastMonth) : undefined}
+          trendLabel={revenueCompareLabel}
+          lastMonthValue={revenueCompareValue != null ? formatINR(revenueCompareValue) : undefined}
         />
         <KpiCard
           label={scope.isClinicWideView ? 'Visits' : 'My visits'}
-          value={visitsThisMonth ?? '—'}
+          value={visitsDisplay ?? '—'}
+          projected={kpiMode === 'projected'}
           trendPct={
-            visitsThisMonth != null && visitsLastMonth != null
-              ? pctChange(visitsThisMonth, visitsLastMonth)
+            visitsDisplay != null && visitsCompareValue != null
+              ? pctChange(visitsDisplay, visitsCompareValue)
               : null
           }
-          trendLabel="vs last month"
-          lastMonthValue={visitsLastMonth ?? undefined}
+          trendLabel={visitsCompareLabel}
+          lastMonthValue={visitsCompareValue ?? undefined}
         />
         <KpiCard
           label="Avg charge/session"
           value={avgChargePerSession != null ? formatINR(avgChargePerSession) : '—'}
-          trendLabel="clinic-wide, this month"
+          trendLabel={`clinic-wide, this month${notProjectable}`}
         />
         <KpiCard
           label={scope.isClinicWideView ? 'Repeat visits (30d)' : 'My repeat visits (30d)'}
           value={repeatVisitsThisMonth?.ratePct != null ? `${repeatVisitsThisMonth.ratePct}%` : '—'}
           trendPct={
-            repeatVisitsThisMonth?.ratePct != null && repeatVisitsLastMonth?.ratePct != null
+            kpiMode === 'standard' && repeatVisitsThisMonth?.ratePct != null && repeatVisitsLastMonth?.ratePct != null
               ? pctChange(repeatVisitsThisMonth.ratePct, repeatVisitsLastMonth.ratePct)
               : null
           }
           trendLabel={
             repeatVisitsThisMonth
-              ? `${repeatVisitsThisMonth.repeatCount} of ${repeatVisitsThisMonth.totalVisits} visits`
+              ? `${repeatVisitsThisMonth.repeatCount} of ${repeatVisitsThisMonth.totalVisits} visits${notProjectable}`
               : undefined
           }
           lastMonthValue={
-            repeatVisitsLastMonth?.ratePct != null ? `${repeatVisitsLastMonth.ratePct}%` : undefined
+            kpiMode === 'standard' && repeatVisitsLastMonth?.ratePct != null ? `${repeatVisitsLastMonth.ratePct}%` : undefined
           }
         />
         <KpiCard
           label={scope.isClinicWideView ? 'New patients' : 'My new patients'}
           value={newPatientsThisMonth?.newPatients ?? '—'}
           trendPct={
-            newPatientsThisMonth && newPatientsLastMonth
+            kpiMode === 'standard' && newPatientsThisMonth && newPatientsLastMonth
               ? pctChange(newPatientsThisMonth.newPatients, newPatientsLastMonth.newPatients)
               : null
           }
-          trendLabel="vs last month"
-          lastMonthValue={newPatientsLastMonth ? newPatientsLastMonth.newPatients : undefined}
+          trendLabel={`vs last month${notProjectable}`}
+          lastMonthValue={kpiMode === 'standard' && newPatientsLastMonth ? newPatientsLastMonth.newPatients : undefined}
         />
         <KpiCard
           label={scope.isClinicWideView ? 'Packages this month' : 'My packages this month'}
           value={newPatientsThisMonth?.newPackages ?? '—'}
-          lastMonthValue={newPatientsLastMonth ? newPatientsLastMonth.newPackages : undefined}
+          trendLabel={notProjectable ? notProjectable.trim() : undefined}
+          lastMonthValue={kpiMode === 'standard' && newPatientsLastMonth ? newPatientsLastMonth.newPackages : undefined}
         />
       </div>
-
-
 
       {/* Jump-nav — sticky under Shell's own header, same pattern the note
           editor uses. A horizontal chip row at every width now (used to be
