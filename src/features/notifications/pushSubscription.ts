@@ -15,6 +15,23 @@ function isIOS(): boolean {
   return /iPad|iPhone|iPod/.test(navigator.userAgent);
 }
 
+/** A local subscription can exist on this device while the server-side row
+ *  has been reassigned to a different user — see `register_push_subscription`'s
+ *  intentional "last registration wins" (a single browser subscription
+ *  object can only ever belong to one user, so re-registering on a shared
+ *  kiosk correctly hands it to whoever's signed in now). Without this
+ *  check, `pushState()` would keep reporting "on" for whoever enabled it
+ *  first, even after a different user on the same device took over the
+ *  endpoint — a stale, incorrect status. RLS already scopes `select` to
+ *  the caller's own rows, so this simply returns no row once ownership has
+ *  moved elsewhere. */
+async function subscriptionOwnedByCurrentUser(endpoint: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  const { data } = await supabase.from('push_subscriptions').select('endpoint').eq('endpoint', endpoint).maybeSingle();
+  return data != null;
+}
+
 export async function pushState(): Promise<PushState> {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
   if (isIOS() && !isStandalone()) return 'needs-install';
@@ -24,7 +41,10 @@ export async function pushState(): Promise<PushState> {
   if (!reg && !isStandalone()) return 'needs-install';
 
   if (Notification.permission !== 'granted') return 'default';
-  return reg && (await reg.pushManager.getSubscription()) ? 'on' : 'default';
+  if (!reg) return 'default';
+  const sub = await reg.pushManager.getSubscription();
+  if (!sub) return 'default';
+  return (await subscriptionOwnedByCurrentUser(sub.endpoint)) ? 'on' : 'default';
 }
 
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
