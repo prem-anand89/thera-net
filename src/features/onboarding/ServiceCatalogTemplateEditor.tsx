@@ -253,10 +253,10 @@ function TemplateRow({
           <RupeeInput
             valuePaise={row.basePricePaise}
             onChange={(p) => onUpdate({ basePricePaise: p })}
-            className="font-num w-32 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-lg font-semibold text-[var(--ink)]"
+            className="w-32 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-lg font-semibold text-[var(--ink)]"
           />
           {perSession && isPackage && (
-            <span className="font-num text-[11px] text-[var(--muted)]">≈ {perSession}/session</span>
+            <span className="text-[11px] text-[var(--muted)]">≈ {perSession}/session</span>
           )}
         </div>
       </div>

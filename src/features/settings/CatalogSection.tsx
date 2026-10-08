@@ -511,26 +511,21 @@ function ServiceCatalogItemRow({ item }: { item: CatalogItem }) {
           {!item.active && <InactivePill />}
           {savedFlash && <span className="text-xs text-[var(--moss)]">Saved</span>}
         </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <div className="flex flex-col items-end">
-          <span className="font-num text-base font-semibold text-[var(--ink)]">
-            {formatINR(item.basePricePaise)}
-          </span>
+        <p className="text-xs text-[var(--muted)]">
+          {item.sessionCount} session{item.sessionCount === 1 ? '' : 's'} · {formatINR(item.basePricePaise)}{' '}
+          total
           {item.sessionCount > 1 && (
-            <span className="font-num text-[11px] text-[var(--muted)]">
-              {formatINR(effectivePricePerSession(item))}/session
-            </span>
+            <> · {formatINR(effectivePricePerSession(item))}/session</>
           )}
-        </div>
-        <div className="flex flex-wrap gap-3 text-xs font-medium">
-          <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setEditing(true)}>
-            Edit
-          </button>
-          <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => void toggleActive()}>
-            {item.active ? 'Deactivate' : 'Reactivate'}
-          </button>
-        </div>
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-3 text-xs font-medium">
+        <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setEditing(true)}>
+          Edit
+        </button>
+        <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => void toggleActive()}>
+          {item.active ? 'Deactivate' : 'Reactivate'}
+        </button>
       </div>
     </div>
   );
