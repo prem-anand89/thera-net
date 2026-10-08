@@ -911,8 +911,12 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
   }
 
   return (
-    <div className="desktop:flex desktop:items-start desktop:gap-6">
-      <div className="flex-1 min-w-0 space-y-6">
+    // Both columns pin to row 1 explicitly (same reasoning as
+    // PatientProfilePage.tsx's identical grid): without `desktop:row-start-1`
+    // on both, grid auto-placement would put the side column (first in DOM,
+    // at col-start-2) in row 1, then drop the main column to row 2.
+    <div className="grid grid-cols-1 gap-6 desktop:grid-cols-[minmax(0,1fr)_16rem] desktop:items-start">
+      <div className="order-1 min-w-0 space-y-6 desktop:order-none desktop:col-start-1 desktop:row-start-1">
         <SectionCard
           id="settings-card-general-profile"
           title="Clinic profile"
@@ -1201,26 +1205,14 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
             />
           )}
         </SectionCard>
-        
-        {/* On mobile, stack the letterhead preview cleanly rather than burying in a details tag */}
-        <div className="desktop:hidden">
-          <LetterheadPreview 
-            draft={{
-              name: form.name,
-              address: form.address,
-              phone: form.phone,
-              email: form.email,
-              gstNo: clinic.gstNo,
-              partnerHospitalName: clinic.partnerHospitalName
-            }} 
-            logoUrl={logoPreviewUrl} 
-            partnerLogoUrl={partnerLogoPreviewUrl} 
-          />
-        </div>
       </div>
-      
-      <div className="hidden desktop:sticky desktop:top-20 desktop:block desktop:w-[16rem] desktop:shrink-0">
-        <LetterheadPreview 
+
+      {/* One mounted instance — stacks inline below the form on mobile,
+          sits as a sticky sidebar on desktop, via the grid order/placement
+          above rather than mounting (and re-rendering, and double-fetching
+          images for) two separate copies. */}
+      <div className="order-2 desktop:order-none desktop:sticky desktop:top-20 desktop:col-start-2 desktop:row-start-1 desktop:w-[16rem] desktop:shrink-0">
+        <LetterheadPreview
           draft={{
             name: form.name,
             address: form.address,
@@ -1228,9 +1220,9 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
             email: form.email,
             gstNo: clinic.gstNo,
             partnerHospitalName: clinic.partnerHospitalName
-          }} 
-          logoUrl={logoPreviewUrl} 
-          partnerLogoUrl={partnerLogoPreviewUrl} 
+          }}
+          logoUrl={logoPreviewUrl}
+          partnerLogoUrl={partnerLogoPreviewUrl}
         />
       </div>
     </div>
