@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { db } from '@/lib/db';
 import { OnboardingProgress } from '@/features/onboarding/OnboardingProgress';
@@ -42,6 +42,26 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Held locally — the clinic (and the id the storage path needs) doesn't
+  // exist until the RPC below resolves, so the actual upload happens right
+  // after that, not on file selection.
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const logoPreviewRef = useRef<string | null>(null);
+
+  function pickLogo(file: File | null) {
+    setLogoFile(file);
+    setLogoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      const next = file ? URL.createObjectURL(file) : null;
+      logoPreviewRef.current = next;
+      return next;
+    });
+  }
+
+  useEffect(() => () => {
+    if (logoPreviewRef.current) URL.revokeObjectURL(logoPreviewRef.current);
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -116,6 +136,18 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         updated_at: string;
       };
 
+      // Best-effort: the clinic is already created at this point, so a
+      // failed logo upload shouldn't block onboarding — it can always be
+      // added later in Settings. Uses the same bucket/path convention as
+      // Settings' own uploadLogo.
+      let logoPath = row.logo_path;
+      if (logoFile) {
+        const path = `${row.id}/logo-${Date.now()}.${logoFile.name.split('.').pop()}`;
+        const { error: uploadError } = await supabase.storage.from('clinic-assets').upload(path, logoFile);
+        if (!uploadError) logoPath = path;
+        else console.error('Clinic logo upload failed:', uploadError);
+      }
+
       const clinic: Clinic = {
         id: row.id,
         name: row.name,
@@ -124,7 +156,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         phone: row.phone,
         address: row.address,
         gstNo: row.gst_no,
-        logoPath: row.logo_path,
+        logoPath,
         partnerHospitalName: row.partner_hospital_name,
         partnerHospitalLogoPath: row.partner_hospital_logo_path,
         invoicePrefix: row.invoice_prefix,
@@ -142,6 +174,13 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
       // same transaction) — cache it locally without re-queuing an outbox
       // push of our own.
       await repos.clinics.putLocal(clinic);
+      // The uploaded logo path exists only in storage and this local cache
+      // so far — the RPC's row has `logo_path: null` since it predates the
+      // upload. A normal `put` (not `putLocal`) queues this one field for
+      // the usual outbox sync, same as any later edit in Settings.
+      if (logoFile && logoPath !== row.logo_path) {
+        await repos.clinics.put(clinic);
+      }
       await db.meta.put({ key: 'activeClinicId', value: clinic.id });
 
       setBusy(false);
@@ -176,6 +215,36 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
           value={form.name}
           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
         />
+      </Field>
+      <Field
+        label="Logo (optional)"
+        hint={!logoFile && 'No logo yet? Skip this — you can add one later in Settings.'}
+      >
+        <div className="flex items-center gap-3">
+          {logoPreview ? (
+            <img src={logoPreview} alt="" className="h-14 w-14 shrink-0 rounded-xl border border-[var(--border)] bg-white object-contain p-1.5" />
+          ) : (
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--paper)] text-[var(--muted)]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            </div>
+          )}
+          <div className="flex flex-col items-start gap-1 text-xs">
+            <label className="cursor-pointer font-semibold text-[var(--teal)] hover:underline">
+              {logoFile ? 'Change' : 'Upload a logo'}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => pickLogo(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            {logoFile && (
+              <button type="button" className="text-[var(--muted)] hover:underline" onClick={() => pickLogo(null)}>
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
       </Field>
       <Field label="Email">
         <input
@@ -232,7 +301,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
         <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-7">
           <h1 className="font-display text-2xl font-semibold leading-tight text-[var(--ink)]">Create your clinic</h1>
           <p className="mb-6 mt-2 text-sm text-[var(--muted)]">
-            This is what patients see on invoices. Logo and GST can wait until Settings.
+            This is what patients see on invoices. GST can wait until Settings.
           </p>
           {formEl}
         </div>
@@ -241,7 +310,10 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
           className="mt-6 flex flex-col rounded-[20px] bg-[var(--teal-deep)] p-6 text-white tab:mt-0 sm:p-7"
         >
           <p className="text-xs font-medium text-white/60">Invoice header preview</p>
-          <p className="mt-8 font-display text-2xl font-semibold leading-tight">
+          {logoPreview && (
+            <img src={logoPreview} alt="" className="mt-4 h-12 w-12 rounded-lg border border-white/20 bg-white object-contain p-1" />
+          )}
+          <p className={`font-display text-2xl font-semibold leading-tight ${logoPreview ? 'mt-3' : 'mt-8'}`}>
             {form.name.trim() || 'Your clinic name'}
           </p>
           <p className="mt-2 text-sm text-white/75">{form.address.trim() || 'Street, city'}</p>
