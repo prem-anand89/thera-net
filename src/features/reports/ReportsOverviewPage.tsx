@@ -231,8 +231,8 @@ export function ReportsOverviewPage() {
   const [kpiMode, setKpiMode] = useState<KpiComparisonMode>('standard');
   const pacingRange = pacingMonthDateRange({ year: now.getFullYear(), month: now.getMonth() + 1 }, now);
   const pacingReport = useLiveQuery(
-    () => reportService.totalsForRange(clinic.id, pacingRange.from, pacingRange.to),
-    [clinic.id, pacingRange.from, pacingRange.to]
+    () => (kpiMode === 'pacing' ? reportService.totalsForRange(clinic.id, pacingRange.from, pacingRange.to) : undefined),
+    [clinic.id, pacingRange.from, pacingRange.to, kpiMode]
   );
   const repeatVisitsThisMonth = useLiveQuery(
     () =>
@@ -564,7 +564,7 @@ export function ReportsOverviewPage() {
         <KpiCard
           label="Avg charge/session"
           value={avgChargePerSession != null ? formatINR(avgChargePerSession) : '—'}
-          trendLabel={`clinic-wide, this month${notProjectable}`}
+          trendLabel="clinic-wide, this month"
         />
         <KpiCard
           label={scope.isClinicWideView ? 'Repeat visits (30d)' : 'My repeat visits (30d)'}

@@ -177,7 +177,11 @@ export function Shell() {
   // day, so a shared front-desk kiosk logged into by two staff members on
   // the same day still records each of them. Fire-and-forget: this is
   // non-critical telemetry, never worth blocking the UI or showing an
-  // error toast for.
+  // error toast for. `pathname` is in the deps purely so a tab left open
+  // across midnight re-checks (and re-pings for the new day) on the next
+  // navigation, rather than only once per clinic/session for the device's
+  // entire lifetime — the check itself is a cheap no-op once already
+  // pinged today.
   useEffect(() => {
     const userId = session?.user?.id;
     if (!clinic?.id || !userId) return;
@@ -192,7 +196,7 @@ export function Shell() {
       if (error) return;
       await db.meta.put({ key, value: today });
     })();
-  }, [clinic?.id, session?.user?.id]);
+  }, [clinic?.id, session?.user?.id, pathname]);
 
   // Invited members who haven't chosen a password yet — Shell would otherwise
   // drop them straight into Workspace with a session but no password set.
