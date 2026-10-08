@@ -4304,6 +4304,23 @@ Triggers `appointments_push`, `appointment_requests_push`, and `feedback_respons
 
 ## Key Design Patterns
 
+### 0. Deploys and open tabs (`src/app/appUpdate.ts`)
+`src/sw.ts` calls `skipWaiting()` + `clients.claim()` + `cleanupOutdatedCaches()`,
+so on every deploy the new service worker takes over tabs that are already
+open and deletes the previous precache. Every route except Workspace is
+`React.lazy()`, so the page on screen still references old chunk hashes: the
+next tab the user clicks fails to load (the host's SPA rewrite answers the
+missing file with `index.html`) and the app crashed until a manual reload.
+`installAppUpdateHandling(router)` (called from `main.tsx`) handles it before
+the user sees an error: `vite:preloadError` triggers a silent reload, and when
+a new worker takes control of a page that already had one, the *next in-app
+navigation* becomes a full page load of its target (immediate reload if the
+tab is hidden) so no in-progress form is interrupted. `reloadForNewVersion()`
+is the single reload entry point; its guard is a 60-second cooldown, not a
+once-per-tab flag, so a later deploy in the same tab can still self-heal while
+a broken deploy can't loop. `ErrorBoundary`/`RouterErrorFallback` remain as
+the fallback and use the same helper.
+
 ### 1. Offline-First with Outbox Sync
 - **Dexie** for local IndexedDB storage
 - **Outbox table** (in Supabase) for tracking changes made offline
