@@ -127,13 +127,21 @@ export function DayColumn({
     if (!working || closed.closed) return [];
     const open = hours.startHour * 60;
     const close = hours.endHour * 60;
-    const result: Interval[] = [];
-    let cursor = open;
-    for (const interval of [...working].sort((a, b) => a.start - b.start)) {
-      if (interval.start > cursor) result.push({ start: cursor, end: Math.min(interval.start, close) });
-      cursor = Math.max(cursor, interval.end);
+    type OffRange = Interval & { kind: 'before' | 'break' | 'after' | 'allDay' };
+    if (working.length === 0) {
+      return close > open ? [{ start: open, end: close, kind: 'allDay' as const }] : [];
     }
-    if (cursor < close) result.push({ start: cursor, end: close });
+    const result: OffRange[] = [];
+    let cursor = open;
+    [...working]
+      .sort((a, b) => a.start - b.start)
+      .forEach((interval, index) => {
+        if (interval.start > cursor) {
+          result.push({ start: cursor, end: Math.min(interval.start, close), kind: index === 0 ? 'before' : 'break' });
+        }
+        cursor = Math.max(cursor, interval.end);
+      });
+    if (cursor < close) result.push({ start: cursor, end: close, kind: 'after' });
     return result.filter((r) => r.end > r.start);
   }, [working, closed.closed, hours.startHour, hours.endHour]);
 
@@ -154,10 +162,15 @@ export function DayColumn({
       {offHours.map((range) => (
         <div
           key={range.start}
-          className="pointer-events-none absolute inset-x-0 bg-[var(--paper)]"
+          className={
+            range.kind === 'break'
+              ? 'pointer-events-none absolute inset-x-0 border-y border-dashed border-[var(--border)] bg-[var(--amber-light)]/40'
+              : 'pointer-events-none absolute inset-x-0 bg-[var(--paper)]'
+          }
           style={{ top: (range.start - hours.startHour * 60) * PX_PER_MINUTE, height: (range.end - range.start) * PX_PER_MINUTE }}
           aria-hidden
           data-off-hours
+          data-break={range.kind === 'break' ? true : undefined}
         />
       ))}
       {closed.closed && (

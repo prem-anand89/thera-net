@@ -4,7 +4,7 @@ import { hasSupabaseConfig } from '@/lib/env';
 import { bookingService } from '@/services';
 import type { UUID, WorkingHours } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
-import { addDays, generateScheduleSlots, isPublicSlotTaken, toLocalDateStr } from '@/domain/schedule';
+import { addDays, generateScheduleSlots, isPublicSlotTaken, toLocalDateStr, workingIntervals } from '@/domain/schedule';
 import { PoweredBy } from '@/components/BrandMark';
 
 type AvailabilityData = {
@@ -27,7 +27,13 @@ function isoDate(d: Date) {
  *  checked for closures, so they aren't offered. */
 const BOOKING_WINDOW_DAYS = 90;
 
-function getDayStatus(d: Date, today: Date, availability: AvailabilityData | null) {
+function getDayStatus(
+  d: Date,
+  today: Date,
+  availability: AvailabilityData | null,
+  preferredTherapistId: string,
+  clinicHours: { startHour: number; endHour: number }
+) {
   const iso = isoDate(d);
   const isPast = iso < isoDate(today);
   if (isPast) return 'past';
@@ -36,9 +42,15 @@ function getDayStatus(d: Date, today: Date, availability: AvailabilityData | nul
   if (!availability) return 'available'; // Default while loading
 
   if (availability.closedWeekdays.includes(d.getDay())) return 'closed';
-  
+
   const closedDate = availability.closedDates.find(cd => cd.date === iso);
   if (closedDate) return 'holiday';
+
+  // A preferred clinician's own day off — distinct from the clinic being closed.
+  if (preferredTherapistId) {
+    const hours = availability.therapistHours?.[preferredTherapistId];
+    if (hours && workingIntervals(hours, iso, clinicHours).length === 0) return 'therapistOff';
+  }
 
   // For fully booked days, we'll let the user click it and see empty slots.
   return 'available';
@@ -48,10 +60,14 @@ function MiniCalendar({
   selectedDate,
   onSelect,
   availability,
+  preferredTherapistId,
+  clinicHours,
 }: {
   selectedDate: string | null;
   onSelect: (date: string) => void;
   availability: AvailabilityData | null;
+  preferredTherapistId: string;
+  clinicHours: { startHour: number; endHour: number };
 }) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -124,7 +140,7 @@ function MiniCalendar({
 
           const cellDate = new Date(viewYear, viewMonth, day);
           const iso = isoDate(cellDate);
-          const status = getDayStatus(cellDate, today, availability);
+          const status = getDayStatus(cellDate, today, availability, preferredTherapistId, clinicHours);
           const isSelected = iso === selectedDate;
 
           let btnCls = "h-10 w-full rounded-xl font-semibold text-sm flex items-center justify-center transition-all ";
@@ -143,6 +159,9 @@ function MiniCalendar({
           } else if (status === 'holiday') {
             btnCls += "bg-orange-50/50 text-orange-800/80 cursor-not-allowed";
             title = "Holiday / Clinic Closure";
+          } else if (status === 'therapistOff') {
+            btnCls += "bg-[#F9FAFB] text-[var(--muted)] opacity-60 cursor-not-allowed";
+            title = "Not available with this clinician — other clinicians may still have time";
           } else {
             btnCls += "hover:bg-[var(--paper)] text-[var(--ink)]";
             title = "Available";
@@ -394,7 +413,9 @@ export function BookingFormPage() {
     { label: 'Evening', slots: daySlots.filter((slot) => slot.minutes >= 17 * 60) },
   ];
   const todayDate = new Date(`${todayIso}T00:00:00`);
-  const dayOpen = (date: string) => getDayStatus(new Date(`${date}T00:00:00`), todayDate, availability) === 'available';
+  const clinicHours = { startHour, endHour };
+  const dayStatusOf = (date: string) => getDayStatus(new Date(`${date}T00:00:00`), todayDate, availability, preferredTherapistId, clinicHours);
+  const dayOpen = (date: string) => dayStatusOf(date) === 'available';
   // When the chosen day is full, offer the next day that still has a time.
   const nextOpenDay =
     preferredDate && openSlots.length === 0
@@ -487,21 +508,31 @@ export function BookingFormPage() {
               </div>
               {calendarOpen ? (
                 <div className="rounded-2xl border border-[var(--border)] p-3">
-                  <MiniCalendar selectedDate={preferredDate} availability={availability} onSelect={pickDate} />
+                  <MiniCalendar
+                    selectedDate={preferredDate}
+                    availability={availability}
+                    onSelect={pickDate}
+                    preferredTherapistId={preferredTherapistId}
+                    clinicHours={clinicHours}
+                  />
                 </div>
               ) : (
                 <div className="-mx-5 flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6" role="group" aria-label="Choose a day">
                   {stripDates.map((date, index) => {
                     const value = new Date(`${date}T00:00:00`);
-                    const open = dayOpen(date);
+                    const status = dayStatusOf(date);
+                    const open = status === 'available';
                     const selected = preferredDate === date;
+                    const closedCaption = status === 'therapistOff' ? 'Off' : 'Closed';
+                    const closedAriaSuffix = status === 'therapistOff' ? ', not available with this clinician' : ', closed';
                     return (
                       <button
                         key={date}
                         type="button"
                         disabled={!open}
                         aria-pressed={selected}
-                        aria-label={`${value.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}${open ? '' : ', closed'}`}
+                        title={status === 'therapistOff' ? 'Not available with this clinician — other clinicians may still have time' : undefined}
+                        aria-label={`${value.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}${open ? '' : closedAriaSuffix}`}
                         onClick={() => pickDate(date)}
                         className={`flex h-[72px] w-[60px] shrink-0 snap-start flex-col items-center justify-center rounded-2xl border text-center transition-colors ${
                           selected
@@ -516,7 +547,7 @@ export function BookingFormPage() {
                         </span>
                         <span className="text-lg font-semibold leading-tight">{value.getDate()}</span>
                         <span className={`text-[10px] ${selected ? 'text-white/80' : 'text-[var(--muted)]'}`}>
-                          {open ? value.toLocaleDateString('en-IN', { month: 'short' }) : 'Closed'}
+                          {open ? value.toLocaleDateString('en-IN', { month: 'short' }) : closedCaption}
                         </span>
                       </button>
                     );

@@ -307,6 +307,9 @@ describe('working hours', () => {
     expect(workingHoursProblem(hours)).toBeNull();
     expect(workingHoursProblem({ '1': [[600, 540]] })).toMatch(/Monday: each start/);
     expect(workingHoursProblem({ '1': [[540, 700], [650, 800]] })).toMatch(/overlap/);
+    expect(
+      workingHoursProblem({ '1': [[0, 60], [70, 100], [110, 140], [150, 180], [190, 1440]] })
+    ).toMatch(/no more than 3 breaks/);
   });
 
   it('public form: a therapist outside their hours counts as unavailable', () => {

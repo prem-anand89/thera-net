@@ -254,7 +254,7 @@ export function WorkingHoursSheet({
                           
                           {(() => {
                             const lastEnd = breaks.length ? breaks[breaks.length - 1][1] : overallStart;
-                            const noRoom = lastEnd >= overallEnd;
+                            const noRoom = lastEnd >= overallEnd || breaks.length >= 3;
                             return (
                               <button
                                 type="button"

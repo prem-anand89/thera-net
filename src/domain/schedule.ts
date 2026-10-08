@@ -477,6 +477,7 @@ export function clipToWorking(gaps: Interval[], working: Interval[], minMinutes 
 /** Validates the editor's value the same way the server does. */
 export function workingHoursProblem(hours: WorkingHours): string | null {
   for (const [day, intervals] of Object.entries(hours)) {
+    if ((intervals?.length ?? 0) > 4) return `${WEEKDAY_NAMES[Number(day)]}: no more than 3 breaks per day.`;
     let previousEnd = -1;
     for (const [start, end] of intervals ?? []) {
       if (start < 0 || end > 1440 || start >= end) return `${WEEKDAY_NAMES[Number(day)]}: each start must be before its end.`;

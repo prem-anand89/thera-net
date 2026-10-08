@@ -25,10 +25,11 @@ import {
   minutesOfDay,
   toLocalDateStr,
   weekDays,
+  withinWorking,
   type ClosedRange,
   dayLoad,
 } from '@/domain/schedule';
-import type { Appointment, AppointmentRequest, UUID } from '@/domain/types';
+import type { Appointment, AppointmentRequest, UUID, WorkingHours } from '@/domain/types';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
 import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { usePermissions } from '@/app/usePermissions';
@@ -271,6 +272,37 @@ export function ScheduleBookingsView({
   const [reminderOpen, setReminderOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [hoursTherapistId, setHoursTherapistId] = useState<UUID | null>(null);
+  const [pendingHoursSave, setPendingHoursSave] = useState<{
+    therapistId: UUID;
+    value: WorkingHours | null;
+    count: number;
+    resolve: () => void;
+    reject: (error: unknown) => void;
+  } | null>(null);
+  const handleHoursSave = useCallback(
+    (value: WorkingHours | null) =>
+      new Promise<void>((resolve, reject) => {
+        const therapistId = hoursTherapistId;
+        if (!therapistId) {
+          reject(new Error('No therapist selected.'));
+          return;
+        }
+        const todayIso = toLocalDateStr(new Date());
+        const conflicts = (allAppointments ?? []).filter((a) => {
+          if (a.therapistId !== therapistId || a.status === 'cancelled') return false;
+          const apptDate = toLocalDateStr(new Date(a.scheduledAt));
+          if (apptDate < todayIso) return false;
+          const intervals = workingIntervals(value, apptDate, hours);
+          return !withinWorking(intervals, minutesOfDay(a.scheduledAt), appointmentMinutes(a, slotMinutes));
+        });
+        if (conflicts.length === 0) {
+          bookingService.setWorkingHours(therapistId, value).then(resolve, reject);
+          return;
+        }
+        setPendingHoursSave({ therapistId, value, count: conflicts.length, resolve, reject });
+      }),
+    [hoursTherapistId, allAppointments, hours, slotMinutes]
+  );
   const [startNoteFor, setStartNoteFor] = useState<Appointment | null>(null);
   const [pendingMove, setPendingMove] = useState<{ appointment: Appointment; target: MoveTarget } | null>(null);
   const [undo, setUndo] = useState<{ message: string; run: () => Promise<void> } | null>(null);
@@ -912,7 +944,7 @@ export function ScheduleBookingsView({
         therapistName={hoursTherapistId ? rosterById.get(hoursTherapistId)?.name ?? '' : ''}
         value={hoursTherapistId ? rosterById.get(hoursTherapistId)?.workingHours : null}
         clinic={{ ...hours, closedWeekdays: clinic.closedWeekdays }}
-        onSave={(value) => bookingService.setWorkingHours(hoursTherapistId!, value)}
+        onSave={handleHoursSave}
         onClose={() => setHoursTherapistId(null)}
       />
 
@@ -963,6 +995,27 @@ export function ScheduleBookingsView({
           const request = declining;
           setDeclining(null);
           if (request) void decline(request.id);
+        }}
+      />
+
+      <ConfirmDialog
+        open={pendingHoursSave !== null}
+        title="Save these hours anyway?"
+        message={
+          pendingHoursSave
+            ? `${pendingHoursSave.count} upcoming appointment${pendingHoursSave.count === 1 ? '' : 's'} fall outside these new hours. Save anyway?`
+            : ''
+        }
+        confirmLabel="Save anyway"
+        onCancel={() => {
+          const pending = pendingHoursSave;
+          setPendingHoursSave(null);
+          pending?.reject(new Error('Not saved — adjust the hours or save again to confirm.'));
+        }}
+        onConfirm={() => {
+          const pending = pendingHoursSave;
+          setPendingHoursSave(null);
+          if (pending) void bookingService.setWorkingHours(pending.therapistId, pending.value).then(pending.resolve, pending.reject);
         }}
       />
 
