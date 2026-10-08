@@ -6,7 +6,7 @@ import {
 } from '@/domain/onboardingCatalogTemplates';
 import { effectivePricePerSession } from '@/domain/types';
 import { formatINR } from '@/domain/money';
-import { Field, inputCls, btnSecondary, ErrorNote, RupeeInput } from '@/components/ui';
+import { inputCls, btnSecondary, ErrorNote, RupeeInput } from '@/components/ui';
 
 type AddKind = 'single' | 'package';
 
@@ -208,55 +208,58 @@ function TemplateRow({
       : null;
 
   return (
-    <div className={`space-y-2 p-3 ${row.enabled ? '' : 'opacity-50'}`}>
-      <div className="flex flex-wrap items-start gap-2">
-        <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
-          <input
-            type="checkbox"
-            checked={row.enabled}
-            onChange={(e) => onUpdate({ enabled: e.target.checked })}
-          />
-          Include
-        </label>
+    <div className={`p-3 ${row.enabled ? '' : 'opacity-50'}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="checkbox"
+          checked={row.enabled}
+          onChange={(e) => onUpdate({ enabled: e.target.checked })}
+          aria-label="Include this service"
+        />
+        <input
+          className="min-w-[140px] flex-1 border-0 bg-transparent px-0 text-sm font-medium text-[var(--ink)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-0"
+          value={row.name}
+          onChange={(e) => onUpdate({ name: e.target.value })}
+          placeholder="Service name on visits & invoices"
+          aria-label="Service name"
+        />
         <span
-          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+          className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
           style={
             isPackage
               ? { background: 'var(--teal-light)', color: 'var(--teal-strong)' }
               : { background: 'var(--paper)', border: '1px solid var(--border)', color: 'var(--muted)' }
           }
         >
-          {isPackage ? `Package · ${row.sessionCount} sessions` : 'Single session'}
+          {isPackage ? `${row.sessionCount} sessions` : 'Single visit'}
         </span>
       </div>
-      <Field label="Name">
-        <input
-          className={inputCls}
-          value={row.name}
-          onChange={(e) => onUpdate({ name: e.target.value })}
-          placeholder="Service name on visits & invoices"
-        />
-      </Field>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <Field label="Session count">
-          <input
-            type="number"
-            min={1}
-            className={inputCls}
-            value={String(row.sessionCount)}
-            onChange={(e) => onUpdate({ sessionCount: Math.max(1, Number(e.target.value) || 1) })}
-          />
-        </Field>
-        <Field label="Total price">
+      <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+        {isPackage ? (
+          <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+            Sessions
+            <input
+              type="number"
+              min={1}
+              className="w-16 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--ink)]"
+              value={String(row.sessionCount)}
+              onChange={(e) => onUpdate({ sessionCount: Math.max(1, Number(e.target.value) || 1) })}
+            />
+          </label>
+        ) : (
+          <span />
+        )}
+        <div className="flex flex-col items-end gap-0.5">
           <RupeeInput
             valuePaise={row.basePricePaise}
             onChange={(p) => onUpdate({ basePricePaise: p })}
+            className="font-num w-32 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-right text-lg font-semibold text-[var(--ink)]"
           />
-        </Field>
+          {perSession && isPackage && (
+            <span className="font-num text-[11px] text-[var(--muted)]">≈ {perSession}/session</span>
+          )}
+        </div>
       </div>
-      {perSession && isPackage && (
-        <p className="text-[11px] text-[var(--muted)]">≈ {perSession} per session</p>
-      )}
     </div>
   );
 }
