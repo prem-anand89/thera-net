@@ -1259,7 +1259,7 @@ Web Push alerts reach staff and therapists when the app is closed. Opt-in per de
 - **Admin and front desk:** every new public booking request for the clinic.
 - **Admin only:** 1–2 star feedback responses.
 - **Content rule:** therapist and feedback payloads carry no patient data (time only, or fixed text). Booking-request payloads carry the patient's name, preferred date, and the chosen slot time (`H:MM AM/PM`), since the staff member chose to see these on the lock screen. The slot is validated server-side and dropped if it isn't a slot label; the name is capped at 60 characters with control characters removed.
-- **Shared devices:** signing out removes this browser's subscription, so the next login doesn't receive the previous user's alerts.
+- **Shared devices:** signing out removes this browser's subscription, so the next login doesn't receive the previous user's alerts. A single browser subscription can only ever belong to one user, so `register_push_subscription` intentionally reassigns it to whoever enables push most recently on that device — correct for a kiosk, but it used to leave the *previous* user's Settings screen claiming "On for this device" even though their alerts had silently stopped. `pushState()` (`src/features/notifications/pushSubscription.ts`) now also checks that the server-side `push_subscriptions` row for this device's endpoint still belongs to the signed-in user (RLS scopes the check to their own rows) before reporting "on", so a bumped-off user correctly sees the enable prompt again instead of a stale "on" status.
 - **iOS:** push works only after the app is added to the Home Screen; Settings shows an install prompt instead of the enable button until then.
 - **Delivery:** triggers on `appointments`, `appointment_requests`, and `feedback_responses` call the `send-push` edge function asynchronously via `pg_net`. Recipients are resolved at send time from clinic membership. Subscriptions returning 404 or 410 are removed.
 
@@ -1405,6 +1405,13 @@ user_id         uuid NOT NULL (FOREIGN KEY → auth.users.id)
 role            text NOT NULL CHECK (IN 'admin', 'therapist', 'front_desk')
 title           text (NULLABLE)
 display_name    text (NULLABLE)
+last_active_at  timestamptz (NULLABLE) — set by touch_last_active(p_clinic_id) RPC,
+                called at most once per device per calendar day (Dexie db.meta
+                throttle keyed by BOTH clinic and user id, so a staff member's
+                ping on a shared/kiosk device never suppresses a second staff
+                member's ping that same day). Settings → Team shows a plain
+                "Active today" badge from it — no "N minutes ago" granularity,
+                since a once-daily write can't honestly support that precision.
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 PRIMARY KEY (clinic_id, user_id)
@@ -2959,7 +2966,7 @@ Web Push alerts reach staff and therapists when the app is closed. Opt-in per de
 - **Admin and front desk:** every new public booking request for the clinic.
 - **Admin only:** 1–2 star feedback responses.
 - **Content rule:** therapist and feedback payloads carry no patient data (time only, or fixed text). Booking-request payloads carry the patient's name, preferred date, and the chosen slot time (`H:MM AM/PM`), since the staff member chose to see these on the lock screen. The slot is validated server-side and dropped if it isn't a slot label; the name is capped at 60 characters with control characters removed.
-- **Shared devices:** signing out removes this browser's subscription, so the next login doesn't receive the previous user's alerts.
+- **Shared devices:** signing out removes this browser's subscription, so the next login doesn't receive the previous user's alerts. A single browser subscription can only ever belong to one user, so `register_push_subscription` intentionally reassigns it to whoever enables push most recently on that device — correct for a kiosk, but it used to leave the *previous* user's Settings screen claiming "On for this device" even though their alerts had silently stopped. `pushState()` (`src/features/notifications/pushSubscription.ts`) now also checks that the server-side `push_subscriptions` row for this device's endpoint still belongs to the signed-in user (RLS scopes the check to their own rows) before reporting "on", so a bumped-off user correctly sees the enable prompt again instead of a stale "on" status.
 - **iOS:** push works only after the app is added to the Home Screen; Settings shows an install prompt instead of the enable button until then.
 - **Delivery:** triggers on `appointments`, `appointment_requests`, and `feedback_responses` call the `send-push` edge function asynchronously via `pg_net`. Recipients are resolved at send time from clinic membership. Subscriptions returning 404 or 410 are removed.
 
@@ -3105,6 +3112,13 @@ user_id         uuid NOT NULL (FOREIGN KEY → auth.users.id)
 role            text NOT NULL CHECK (IN 'admin', 'therapist', 'front_desk')
 title           text (NULLABLE)
 display_name    text (NULLABLE)
+last_active_at  timestamptz (NULLABLE) — set by touch_last_active(p_clinic_id) RPC,
+                called at most once per device per calendar day (Dexie db.meta
+                throttle keyed by BOTH clinic and user id, so a staff member's
+                ping on a shared/kiosk device never suppresses a second staff
+                member's ping that same day). Settings → Team shows a plain
+                "Active today" badge from it — no "N minutes ago" granularity,
+                since a once-daily write can't honestly support that precision.
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 PRIMARY KEY (clinic_id, user_id)
