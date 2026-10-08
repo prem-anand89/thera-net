@@ -78,17 +78,16 @@ function CatalogStats({ items }: { items: { label: string; value: string | numbe
   );
 }
 
-function ActivePill({ active }: { active: boolean }) {
+/** Only ever rendered for the exception (inactive) — an active item is
+ *  already the default, unflagged state, so badging it on every row added
+ *  no information and just cluttered the common case. */
+function InactivePill() {
   return (
     <span
       className="inline-block self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold"
-      style={
-        active
-          ? { background: 'var(--moss-light)', color: 'var(--moss-strong)' }
-          : { background: 'var(--paper)', color: 'var(--muted)' }
-      }
+      style={{ background: 'var(--paper)', color: 'var(--muted)' }}
     >
-      {active ? 'Active' : 'Inactive'}
+      Inactive
     </span>
   );
 }
@@ -133,10 +132,14 @@ function ServiceCatalog() {
   const clinic = useClinic();
   const items = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
   const [showInactive, setShowInactive] = useState(false);
+  const [search, setSearch] = useState('');
+  const searching = search.trim().length > 0;
   const groups = useMemo(() => {
+    const query = search.trim().toLowerCase();
     const map = new Map<string, CatalogItem[]>();
     for (const item of items ?? []) {
       if (!showInactive && !item.active) continue;
+      if (query && !item.name.toLowerCase().includes(query)) continue;
       const key = groupKey(item.category);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(item);
@@ -145,7 +148,7 @@ function ServiceCatalog() {
       list.sort((a, b) => a.name.localeCompare(b.name));
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [items, showInactive]);
+  }, [items, showInactive, search]);
   const stats = useMemo(() => {
     const all = items ?? [];
     const active = all.filter((i) => i.active).length;
@@ -178,6 +181,13 @@ function ServiceCatalog() {
           ...(stats.inactive > 0 ? [{ label: 'inactive', value: stats.inactive, warn: true }] : []),
         ]}
       />
+      <input
+        type="search"
+        className={`${inputCls} mb-3`}
+        placeholder="Search services…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
       {stats.inactive > 0 && (
         <label className="mb-4 flex items-center gap-2 text-xs text-[var(--muted)]">
           <input
@@ -197,11 +207,13 @@ function ServiceCatalog() {
       {groups.length > 0 ? (
         <div className="mb-6 space-y-4">
           {groups.map(([category, catItems]) => (
-            <ServiceGroupPanel key={category} category={category} items={catItems} />
+            <ServiceGroupPanel key={category} category={category} items={catItems} forceOpen={searching} />
           ))}
         </div>
       ) : (
-        <p className="mb-6 text-xs text-[var(--muted)]">No services yet — add a category below.</p>
+        <p className="mb-6 text-xs text-[var(--muted)]">
+          {searching ? `No services match "${search.trim()}".` : 'No services yet — add a category below.'}
+        </p>
       )}
 
       <NewServiceGroupForm existingGroupNames={groupNames} />
@@ -227,12 +239,25 @@ function SessionKindPill({ sessionCount }: { sessionCount: number }) {
   );
 }
 
-function ServiceGroupPanel({ category, items }: { category: string; items: CatalogItem[] }) {
+function ServiceGroupPanel({
+  category,
+  items,
+  forceOpen = false,
+}: {
+  category: string;
+  items: CatalogItem[];
+  /** While searching, every matching category stays expanded regardless
+   *  of its own remembered collapsed state, so a result is never hidden
+   *  behind a collapsed panel. */
+  forceOpen?: boolean;
+}) {
   const [editingGroupName, setEditingGroupName] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(category);
   const [groupRenameBusy, setGroupRenameBusy] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
   const [addKind, setAddKind] = useState<CatalogAddKind | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const open = forceOpen || !collapsed;
 
   useEffect(() => {
     if (!editingGroupName) setGroupNameDraft(category);
@@ -272,6 +297,15 @@ function ServiceGroupPanel({ category, items }: { category: string; items: Catal
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
       <div className="flex flex-col gap-2 border-b border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 sm:flex-row sm:items-center">
+        <button
+          type="button"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--surface)] sm:order-first"
+          aria-expanded={open}
+          aria-label={open ? `Collapse ${category}` : `Expand ${category}`}
+          onClick={() => setCollapsed((c) => !c)}
+        >
+          <span style={{ transform: open ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.15s' }}>›</span>
+        </button>
         <div className="min-w-0 flex-1">
           {editingGroupName ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -323,25 +357,33 @@ function ServiceGroupPanel({ category, items }: { category: string; items: Catal
           <button
             type="button"
             className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--ink)] hover:bg-[var(--paper)]"
-            onClick={() => setAddKind('single')}
+            onClick={() => {
+              setCollapsed(false);
+              setAddKind('single');
+            }}
           >
             + Single session
           </button>
           <button
             type="button"
             className="rounded-lg border border-[var(--teal)] bg-[var(--teal-light)] px-2.5 py-1 text-[11px] font-semibold text-[var(--teal-strong)] hover:opacity-90"
-            onClick={() => setAddKind('package')}
+            onClick={() => {
+              setCollapsed(false);
+              setAddKind('package');
+            }}
           >
             + Package
           </button>
         </div>
       </div>
-      <div className="divide-y divide-[var(--border)]">
-        {items.map((item) => (
-          <ServiceCatalogItemRow key={item.id} item={item} />
-        ))}
-      </div>
-      {addKind && (
+      {open && (
+        <div className="divide-y divide-[var(--border)]">
+          {items.map((item) => (
+            <ServiceCatalogItemRow key={item.id} item={item} />
+          ))}
+        </div>
+      )}
+      {open && addKind && (
         <div className="border-t border-[var(--border)] bg-[var(--paper)] p-3">
           <ServiceCatalogInlineAdd
             category={category}
@@ -466,24 +508,29 @@ function ServiceCatalogItemRow({ item }: { item: CatalogItem }) {
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium text-[var(--ink)]">{item.name}</p>
           <SessionKindPill sessionCount={item.sessionCount} />
-          <ActivePill active={item.active} />
+          {!item.active && <InactivePill />}
           {savedFlash && <span className="text-xs text-[var(--moss)]">Saved</span>}
         </div>
-        <p className="text-xs text-[var(--muted)]">
-          {item.sessionCount} session{item.sessionCount === 1 ? '' : 's'} · {formatINR(item.basePricePaise)}{' '}
-          total
-          {item.sessionCount > 1 && (
-            <> · {formatINR(effectivePricePerSession(item))}/session</>
-          )}
-        </p>
       </div>
-      <div className="flex shrink-0 flex-wrap gap-3 text-xs font-medium">
-        <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setEditing(true)}>
-          Edit
-        </button>
-        <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => void toggleActive()}>
-          {item.active ? 'Deactivate' : 'Reactivate'}
-        </button>
+      <div className="flex shrink-0 items-center gap-3">
+        <div className="flex flex-col items-end">
+          <span className="font-num text-base font-semibold text-[var(--ink)]">
+            {formatINR(item.basePricePaise)}
+          </span>
+          {item.sessionCount > 1 && (
+            <span className="font-num text-[11px] text-[var(--muted)]">
+              {formatINR(effectivePricePerSession(item))}/session
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-3 text-xs font-medium">
+          <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => setEditing(true)}>
+            Edit
+          </button>
+          <button type="button" className="text-[var(--teal)] hover:underline" onClick={() => void toggleActive()}>
+            {item.active ? 'Deactivate' : 'Reactivate'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -784,7 +831,7 @@ function TreatmentCard({ item }: { item: TreatmentItem }) {
       }
     >
       <p className="text-sm font-medium text-[var(--ink)]">{item.name}</p>
-      <ActivePill active={item.active} />
+      {!item.active && <InactivePill />}
     </CatalogCardShell>
   );
 }
@@ -982,7 +1029,7 @@ function ReferralSourceCard({ item }: { item: ReferringSourceItem }) {
       }
     >
       <p className="text-sm font-medium text-[var(--ink)]">{item.name}</p>
-      <ActivePill active={item.active} />
+      {!item.active && <InactivePill />}
       {item.detailLabel ? (
         <p className="text-[11.5px] text-[var(--muted)]">
           Detail field: <span className="text-[var(--ink)]">{item.detailLabel}</span>
