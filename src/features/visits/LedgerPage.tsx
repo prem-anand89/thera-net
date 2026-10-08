@@ -775,6 +775,15 @@ export function LedgerPage() {
             <StatTile label="Invoiced, unpaid" value={formatINR(outstanding.totalPaise)} />
             <StatTile label="Invoices" value={outstanding.count} />
           </div>
+          {canBill && (
+            <button
+              type="button"
+              className="mb-3 text-sm font-medium text-[var(--teal)] hover:underline"
+              onClick={() => setRecordsView('invoices')}
+            >
+              Take payment on the Invoices tab →
+            </button>
+          )}
           {/* Below tab: — boxed cards instead of forcing this 5-column
               table to scroll sideways on a phone. */}
           <div className="tab:hidden space-y-2">

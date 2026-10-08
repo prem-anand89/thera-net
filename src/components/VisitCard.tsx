@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Pill, PackageThread, TherapistPill } from '@/components/ui';
 import { formatINR, type Paise } from '@/domain/money';
 import { formatDateDM } from '@/domain/fiscalYear';
+import { toLocalDateStr } from '@/domain/schedule';
 import { isPackageContinuation, paymentActions, paymentBadge } from '@/domain/paymentState';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 import type { PatientProfileBackTarget } from '@/app/router';
@@ -261,8 +262,11 @@ interface DateGroupedRows {
  *  view has always used — table mode drops the group headers in favor of
  *  a plain Date column, which is where a table naturally carries that
  *  same information. */
-function groupRowsByDate(rows: VisitCardData[], today: Date): DateGroupedRows[] {
-  const toIso = (d: Date) => d.toISOString().slice(0, 10);
+export function groupRowsByDate(rows: VisitCardData[], today: Date): DateGroupedRows[] {
+  // Local Y/M/D, not toISOString(): that converts to UTC, which in IST puts
+  // local midnight on the 1st into the previous day and files the last day of
+  // the previous month under "This month".
+  const toIso = toLocalDateStr;
   const todayStr = toIso(today);
   const startOfWeek = new Date(today);
   startOfWeek.setDate(today.getDate() - today.getDay());
