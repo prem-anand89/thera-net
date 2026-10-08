@@ -163,7 +163,7 @@ function ServiceCatalog() {
   return (
     <SectionCard id="settings-card-services-packages" title="Services & packages">
       <p className="mb-3 text-xs text-[var(--muted)]">
-        Organize billable items into <strong>service groups</strong> (e.g. Consultation, Treatment).
+        Organize billable items into <strong>categories</strong> (e.g. Consultation, Treatment).
         Each row is a single-session service (<strong>1 session</strong>) or a multi-session{' '}
         <strong>package</strong> (2+ sessions, one total price). Price changes affect{' '}
         <strong>future</strong> visits only — deactivate instead of deleting so history keeps resolving.
@@ -172,7 +172,7 @@ function ServiceCatalog() {
         items={[
           { label: 'items', value: stats.total },
           { label: 'active', value: stats.active },
-          { label: 'groups', value: stats.groupCount },
+          { label: 'categories', value: stats.groupCount },
           { label: 'single-session', value: stats.singles },
           { label: 'packages', value: stats.packages },
           ...(stats.inactive > 0 ? [{ label: 'inactive', value: stats.inactive, warn: true }] : []),
@@ -201,7 +201,7 @@ function ServiceCatalog() {
           ))}
         </div>
       ) : (
-        <p className="mb-6 text-xs text-[var(--muted)]">No services yet — add a group below.</p>
+        <p className="mb-6 text-xs text-[var(--muted)]">No services yet — add a category below.</p>
       )}
 
       <NewServiceGroupForm existingGroupNames={groupNames} />
@@ -245,7 +245,7 @@ function ServiceGroupPanel({ category, items }: { category: string; items: Catal
   async function saveGroupRename() {
     const trimmed = groupNameDraft.trim();
     if (!trimmed) {
-      setGroupError('Group name is required');
+      setGroupError('Category name is required');
       return;
     }
     if (trimmed === category) {
@@ -279,7 +279,7 @@ function ServiceGroupPanel({ category, items }: { category: string; items: Catal
                 className={`${inputCls} max-w-xs text-sm font-semibold`}
                 value={groupNameDraft}
                 onChange={(e) => setGroupNameDraft(e.target.value)}
-                aria-label="Service group name"
+                aria-label="Category name"
                 autoFocus
               />
               <button
@@ -313,7 +313,7 @@ function ServiceGroupPanel({ category, items }: { category: string; items: Catal
                 className="text-xs font-semibold text-[var(--teal)] hover:underline"
                 onClick={() => setEditingGroupName(true)}
               >
-                Edit group name
+                Rename category
               </button>
             </div>
           )}
@@ -415,7 +415,7 @@ function ServiceCatalogItemRow({ item }: { item: CatalogItem }) {
     return (
       <div className={`space-y-2 p-3 ${item.active ? '' : 'opacity-60'}`}>
         <p className="text-xs font-semibold text-[var(--ink)]">Edit service</p>
-        <Field label="Service group">
+        <Field label="Category">
           <input
             className={inputCls}
             list="catalog-service-groups"
@@ -546,7 +546,7 @@ function ServiceCatalogInlineAdd({
   return (
     <div className="space-y-2">
       <p className="text-xs font-semibold text-[var(--ink)]">
-        {kind === 'package' ? 'Add package to this group' : 'Add single-session service'}
+        {kind === 'package' ? 'Add package to this category' : 'Add single-session service'}
       </p>
       <Field label="Name">
         <input
@@ -596,11 +596,11 @@ function NewServiceGroupForm({ existingGroupNames }: { existingGroupNames: strin
 
   function startAdd(kind: CatalogAddKind) {
     if (!trimmed) {
-      setError('Enter a group name first');
+      setError('Enter a category name first');
       return;
     }
     if (duplicate) {
-      setError('That group already exists — pick it from the list above or use a different name.');
+      setError('That category already exists — pick it from the list above or use a different name.');
       return;
     }
     setError(null);
@@ -609,10 +609,10 @@ function NewServiceGroupForm({ existingGroupNames }: { existingGroupNames: strin
 
   return (
     <CatalogAddCard
-      title="Add a service group"
-      hint="Groups organize the visit picker (Consultation, Assessment, Treatment, …). Add at least one service or package in the group."
+      title="Add another category"
+      hint="Categories organize the visit picker (Consultation, Assessment, Treatment, …). Add at least one service or package inside it."
     >
-      <Field label="Group name">
+      <Field label="Category name">
         <input
           className={inputCls}
           list="catalog-service-groups"

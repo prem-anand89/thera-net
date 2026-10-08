@@ -42,11 +42,11 @@ export function ServiceCatalogTemplateEditor({
   function addGroup() {
     const name = newGroupName.trim();
     if (!name) {
-      setNewGroupError('Enter a group name');
+      setNewGroupError('Enter a category name');
       return;
     }
     if (drafts.some((d) => d.group.toLowerCase() === name.toLowerCase())) {
-      setNewGroupError('That group already exists');
+      setNewGroupError('That category already exists');
       return;
     }
     setNewGroupError(null);
@@ -78,9 +78,9 @@ export function ServiceCatalogTemplateEditor({
       ))}
 
       <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--paper)] p-4">
-        <p className="text-sm font-semibold text-[var(--ink)]">Add a service group</p>
+        <p className="text-sm font-semibold text-[var(--ink)]">Add another category</p>
         <p className="mt-1 mb-3 text-xs text-[var(--muted)]">
-          Creates an empty group — add services with the buttons inside the group.
+          Categories group related services together, like "Consultation" or "Physiotherapy." After adding one, use its "Single session" / "Package" buttons to add services inside it.
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
@@ -93,7 +93,7 @@ export function ServiceCatalogTemplateEditor({
             }}
           />
           <button type="button" className={`${btnSecondary} shrink-0 sm:w-auto`} onClick={() => addGroup()}>
-            + Group
+            + Add category
           </button>
         </div>
         <ErrorNote message={newGroupError} />
@@ -128,7 +128,7 @@ function ServiceTemplateGroupPanel({
                 className={`${inputCls} max-w-xs text-sm font-semibold`}
                 value={nameDraft}
                 onChange={(e) => setNameDraft(e.target.value)}
-                aria-label="Service group name"
+                aria-label="Category name"
               />
               <button
                 type="button"
@@ -163,7 +163,7 @@ function ServiceTemplateGroupPanel({
                   setEditingName(true);
                 }}
               >
-                Edit group name
+                Rename category
               </button>
             </div>
           )}
