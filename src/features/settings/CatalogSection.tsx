@@ -297,61 +297,63 @@ function ServiceGroupPanel({
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
       <div className="flex flex-col gap-2 border-b border-[var(--border)] bg-[var(--paper)] px-3 py-2.5 sm:flex-row sm:items-center">
-        <button
-          type="button"
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--surface)] sm:order-first"
-          aria-expanded={open}
-          aria-label={open ? `Collapse ${category}` : `Expand ${category}`}
-          onClick={() => setCollapsed((c) => !c)}
-        >
-          <span style={{ transform: open ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.15s' }}>›</span>
-        </button>
-        <div className="min-w-0 flex-1">
-          {editingGroupName ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className={`${inputCls} max-w-xs text-sm font-semibold`}
-                value={groupNameDraft}
-                onChange={(e) => setGroupNameDraft(e.target.value)}
-                aria-label="Category name"
-                autoFocus
-              />
-              <button
-                type="button"
-                className={btnPrimary}
-                disabled={groupRenameBusy}
-                onClick={() => void saveGroupRename()}
-              >
-                {groupRenameBusy ? 'Saving…' : 'Save name'}
-              </button>
-              <button
-                type="button"
-                className={btnSecondary}
-                disabled={groupRenameBusy}
-                onClick={() => {
-                  setEditingGroupName(false);
-                  setGroupError(null);
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold text-[var(--ink)]">{category}</h3>
-              <span className="text-[11px] text-[var(--muted)]">
-                {items.length} item{items.length === 1 ? '' : 's'}
-              </span>
-              <button
-                type="button"
-                className="text-xs font-semibold text-[var(--teal)] hover:underline"
-                onClick={() => setEditingGroupName(true)}
-              >
-                Rename category
-              </button>
-            </div>
-          )}
-          <ErrorNote message={groupError} />
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <button
+            type="button"
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--surface)]"
+            aria-expanded={open}
+            aria-label={open ? `Collapse ${category}` : `Expand ${category}`}
+            onClick={() => setCollapsed((c) => !c)}
+          >
+            <span style={{ transform: open ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.15s' }}>›</span>
+          </button>
+          <div className="min-w-0 flex-1">
+            {editingGroupName ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  className={`${inputCls} max-w-xs text-sm font-semibold`}
+                  value={groupNameDraft}
+                  onChange={(e) => setGroupNameDraft(e.target.value)}
+                  aria-label="Category name"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className={btnPrimary}
+                  disabled={groupRenameBusy}
+                  onClick={() => void saveGroupRename()}
+                >
+                  {groupRenameBusy ? 'Saving…' : 'Save name'}
+                </button>
+                <button
+                  type="button"
+                  className={btnSecondary}
+                  disabled={groupRenameBusy}
+                  onClick={() => {
+                    setEditingGroupName(false);
+                    setGroupError(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold text-[var(--ink)]">{category}</h3>
+                <span className="text-[11px] text-[var(--muted)]">
+                  {items.length} item{items.length === 1 ? '' : 's'}
+                </span>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-[var(--teal)] hover:underline"
+                  onClick={() => setEditingGroupName(true)}
+                >
+                  Rename category
+                </button>
+              </div>
+            )}
+            <ErrorNote message={groupError} />
+          </div>
         </div>
         <div className="flex flex-wrap gap-1.5 sm:shrink-0">
           <button
