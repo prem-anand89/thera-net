@@ -69,3 +69,14 @@ describe('AccountMenu rows by role', () => {
     expect(screen.queryByRole('menuitem', { name: 'Settings' })).not.toBeInTheDocument();
   });
 });
+
+describe('Refresh app', () => {
+  it('reloads the page when clicked', async () => {
+    const reload = vi.fn();
+    vi.stubGlobal('location', { ...window.location, reload });
+    openMenu('admin');
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh app' }));
+    await vi.waitFor(() => expect(reload).toHaveBeenCalled());
+    vi.unstubAllGlobals();
+  });
+});

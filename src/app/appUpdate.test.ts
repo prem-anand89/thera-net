@@ -8,12 +8,17 @@ describe('isStaleChunkError', () => {
     'Importing a module script failed.',
     'error loading dynamically imported module',
     'Failed to load module script: Expected a JavaScript module script',
+    'Load failed', // Safari/WebKit's generic fetch-rejection wording for the same failure
   ])('matches %s', (msg) => {
     expect(isStaleChunkError(new Error(msg))).toBe(true);
   });
 
   it('ignores ordinary errors', () => {
     expect(isStaleChunkError(new Error('Cannot read properties of undefined'))).toBe(false);
+  });
+
+  it('does not match "Load failed" as a substring of an unrelated message', () => {
+    expect(isStaleChunkError(new Error('Load failed to parse the response body'))).toBe(false);
   });
 });
 

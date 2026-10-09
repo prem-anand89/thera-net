@@ -1,10 +1,17 @@
 const RELOAD_GUARD_KEY = 'theranet:chunk-reload-attempted';
 const RELOAD_COOLDOWN_MS = 60_000;
 
-/** A lazy route's JS file no longer exists — the open tab is running an older deploy. */
+/** A lazy route's JS file no longer exists — the open tab is running an older deploy.
+ *  Browsers report this very differently: Chrome/Edge say "Failed to fetch
+ *  dynamically imported module", Firefox "error loading dynamically imported
+ *  module", and Safari/WebKit either "Importing a module script failed" or,
+ *  for the plain network-level failure case, just "Load failed" — WebKit's
+ *  generic fetch-rejection message, not module-import-specific wording.
+ *  Matched as an exact message (anchored), not a substring, since on its own
+ *  it's generic enough to otherwise risk matching an unrelated crash. */
 export function isStaleChunkError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /dynamically imported module|Importing a module script failed|Failed to load module script|error loading dynamically imported module/i.test(
+  return /dynamically imported module|Importing a module script failed|Failed to load module script|error loading dynamically imported module|^Load failed$/i.test(
     message
   );
 }

@@ -86,6 +86,23 @@ export function AccountMenu({
     set(true);
   }
 
+  /** Proactive version of what auto-update already does in the background
+   *  (see appUpdate.ts) — gives a user who's unsure whether they're on the
+   *  latest deploy a way to check and reload on demand, rather than only
+   *  ever recovering after a crash via the error screen's own Reload. Asks
+   *  the service worker to check for a new version right now (instead of
+   *  waiting for its own periodic check) before reloading. */
+  async function refreshApp() {
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration();
+      await reg?.update();
+    } catch {
+      // Ignore — reload regardless; a plain refresh still picks up
+      // whatever the server currently serves.
+    }
+    location.reload();
+  }
+
   return (
     <div className="relative">
       <button
@@ -172,9 +189,13 @@ export function AccountMenu({
                 Sign out
               </button>
             </div>
-            <div className="flex items-center justify-center gap-1.5 border-t border-[var(--border)] px-3 py-2 text-[11px] text-[var(--muted)]">
+            <div className="flex items-center justify-center gap-2 border-t border-[var(--border)] px-3 py-2 text-[11px] text-[var(--muted)]">
               <BrandMark size={14} decorative />
               <span>Thera.Net v{__APP_VERSION__}</span>
+              <span aria-hidden>·</span>
+              <button type="button" className="font-medium text-[var(--teal)] hover:underline" onClick={() => void refreshApp()}>
+                Refresh app
+              </button>
             </div>
           </div>
         </>
