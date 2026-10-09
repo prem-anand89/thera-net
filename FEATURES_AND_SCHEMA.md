@@ -1498,7 +1498,15 @@ therapist_id          uuid NOT NULL (FOREIGN KEY → therapists.id)
 visit_date            date NOT NULL
 condition, treatment_notes  text (NULLABLE)
 treatment_ids         uuid[] NOT NULL (default '{}') — which treatment_catalog
-                       entries were performed this visit
+                       entries were performed this visit. The visit-entry
+                       picker (NewVisitPage, EditVisitModal) ranks a clinic's
+                       treatments by how often each was tagged in the last 90
+                       days (dashboardService.treatmentUsageCounts, via
+                       domain/treatmentUsage.ts's rankTreatmentsByUsage) into
+                       a "Frequently used" group plus an alphabetical "All
+                       treatments" rest — only once there are enough
+                       treatments (8+) and some usage history to rank by;
+                       otherwise it's a single alphabetical list as before.
 service_catalog_id    uuid NOT NULL (FOREIGN KEY → service_catalog.id)
 catalog_price_paise   bigint NOT NULL — snapshot at billing time
 actual_bill_paise     bigint NOT NULL
@@ -3205,7 +3213,15 @@ therapist_id          uuid NOT NULL (FOREIGN KEY → therapists.id)
 visit_date            date NOT NULL
 condition, treatment_notes  text (NULLABLE)
 treatment_ids         uuid[] NOT NULL (default '{}') — which treatment_catalog
-                       entries were performed this visit
+                       entries were performed this visit. The visit-entry
+                       picker (NewVisitPage, EditVisitModal) ranks a clinic's
+                       treatments by how often each was tagged in the last 90
+                       days (dashboardService.treatmentUsageCounts, via
+                       domain/treatmentUsage.ts's rankTreatmentsByUsage) into
+                       a "Frequently used" group plus an alphabetical "All
+                       treatments" rest — only once there are enough
+                       treatments (8+) and some usage history to rank by;
+                       otherwise it's a single alphabetical list as before.
 service_catalog_id    uuid NOT NULL (FOREIGN KEY → service_catalog.id)
 catalog_price_paise   bigint NOT NULL — snapshot at billing time
 actual_bill_paise     bigint NOT NULL

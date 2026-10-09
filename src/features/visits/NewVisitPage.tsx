@@ -22,12 +22,15 @@ import { toLocalDateStr } from '@/domain/schedule';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { DUPLICATE_NAME_THRESHOLD, nameSimilarity } from '@/domain/nameSimilarity';
 import { isNearingCompletion } from '@/domain/packageTracking';
+import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
 import {
   effectivePricePerSession,
   type Patient,
   type PaymentMethod,
+  type TreatmentItem,
   type UUID,
 } from '@/domain/types';
+import type { TreatmentUsageRow } from '@/services/dashboardService';
 import { toFriendlyMessage } from '@/lib/errors';
 import {
   Field,
@@ -76,6 +79,12 @@ interface OpenPackage {
 // UPI first — the most common collection method at an Indian clinic front
 // desk, so it's both the default (see paymentMethod's useState below) and
 // the top option here instead of making staff scroll past Cash every time.
+// Stable references for useLiveQuery's loading-state fallback — a fresh
+// `?? []` literal on every render would change identity each time and
+// defeat the useMemo that ranks treatments by usage.
+const EMPTY_TREATMENTS: TreatmentItem[] = [];
+const EMPTY_TREATMENT_USAGE: TreatmentUsageRow[] = [];
+
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: 'upi', label: 'UPI' },
   { value: 'cash', label: 'Cash' },
@@ -262,7 +271,15 @@ export function NewVisitPage() {
     [therapists, session?.user?.id]
   );
   const catalog = useLiveQuery(() => repos.catalog.list(clinic.id), [clinic.id]);
-  const treatments = useLiveQuery(() => repos.treatmentCatalog.list(clinic.id), [clinic.id]) ?? [];
+  const treatments =
+    useLiveQuery(() => repos.treatmentCatalog.list(clinic.id), [clinic.id]) ?? EMPTY_TREATMENTS;
+  const treatmentUsage =
+    useLiveQuery(() => dashboardService.treatmentUsageCounts(clinic.id), [clinic.id]) ??
+    EMPTY_TREATMENT_USAGE;
+  const rankedTreatments = useMemo(
+    () => rankTreatmentsByUsage(treatments, treatmentUsage),
+    [treatments, treatmentUsage]
+  );
   const matches = useLiveQuery(
     () => (patient ? Promise.resolve([]) : repos.patients.search(clinic.id, query)),
     [clinic.id, query, patient]
@@ -1244,12 +1261,27 @@ export function NewVisitPage() {
               </Field>
               <Field label="Treatments">
                 <div className="space-y-2">
-                  {treatments.length > 0 && (
-                    <MultiToggle
-                      options={treatments.map((t) => ({ value: t.id, label: t.name }))}
-                      value={treatmentIds}
-                      onChange={setTreatmentIds}
-                    />
+                  {rankedTreatments.frequent.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-medium text-[var(--muted)]">Frequently used</p>
+                      <MultiToggle
+                        options={rankedTreatments.frequent.map((t) => ({ value: t.id, label: t.name }))}
+                        value={treatmentIds}
+                        onChange={setTreatmentIds}
+                      />
+                    </div>
+                  )}
+                  {rankedTreatments.rest.length > 0 && (
+                    <div className="space-y-1">
+                      {rankedTreatments.frequent.length > 0 && (
+                        <p className="text-[11px] font-medium text-[var(--muted)]">All treatments</p>
+                      )}
+                      <MultiToggle
+                        options={rankedTreatments.rest.map((t) => ({ value: t.id, label: t.name }))}
+                        value={treatmentIds}
+                        onChange={setTreatmentIds}
+                      />
+                    </div>
                   )}
                   <input
                     className={inputCls}

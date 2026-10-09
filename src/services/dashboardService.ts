@@ -113,6 +113,11 @@ export interface ModalityUsageRow {
   count: number;
 }
 
+export interface TreatmentUsageRow {
+  treatmentId: UUID;
+  count: number;
+}
+
 export interface ConditionUsagePatientRow {
   patientId: UUID;
   patientName: string;
@@ -638,6 +643,31 @@ export function createDashboardService(repos: Repos) {
       }
       return [...counts.entries()]
         .map(([modality, count]) => ({ modality, count }))
+        .sort((a, b) => b.count - a.count);
+    },
+
+    /**
+     * How often each catalog treatment (Visit.treatmentIds, the clinic's own
+     * configurable list from Settings → Treatments — a different concept
+     * from modalityUsage's hardcoded assessment-note list above) was tagged
+     * on a visit, over the last `days` (default 90 — recent practice, not
+     * all-time, so the ranking adapts as a clinic's usage shifts; also lets
+     * this go through the indexed [clinicId+visitDate] range query instead
+     * of a full-table scan). Feeds the "frequently used" grouping in the
+     * visit-entry treatment picker.
+     */
+    async treatmentUsageCounts(clinicId: UUID, days = 90): Promise<TreatmentUsageRow[]> {
+      const to = toLocalDateStr(new Date());
+      const from = toLocalDateStr(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+      const visits = await repos.visits.list({ clinicId, from, to });
+      const counts = new Map<UUID, number>();
+      for (const v of visits) {
+        for (const id of v.treatmentIds ?? []) {
+          counts.set(id, (counts.get(id) ?? 0) + 1);
+        }
+      }
+      return [...counts.entries()]
+        .map(([treatmentId, count]) => ({ treatmentId, count }))
         .sort((a, b) => b.count - a.count);
     },
 

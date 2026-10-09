@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { repos, visitService } from '@/services';
+import { repos, visitService, dashboardService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import { formatDateDM } from '@/domain/fiscalYear';
-import type { UUID } from '@/domain/types';
+import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
+import type { TreatmentItem, UUID } from '@/domain/types';
+import type { TreatmentUsageRow } from '@/services/dashboardService';
 import { Field, inputCls, btnPrimary, btnSecondary, MultiToggle } from '@/components/ui';
 import {
   BillAdjustmentFields,
@@ -15,6 +17,12 @@ import {
   type BillAdjustmentMode,
   type BillAdjustmentValueType,
 } from '@/domain/billAdjustment';
+
+// Stable references for useLiveQuery's loading-state fallback — a fresh
+// `?? []` literal on every render would change identity each time and
+// defeat the useMemo that ranks treatments by usage.
+const EMPTY_TREATMENTS: TreatmentItem[] = [];
+const EMPTY_TREATMENT_USAGE: TreatmentUsageRow[] = [];
 
 /** Edits a visit's billing, therapist assignment, and clinical notes.
  *  If the visit is invoiced, only clinical fields (condition, treatmentNotes)
@@ -48,7 +56,16 @@ export function EditVisitModal({
   const treatments = useLiveQuery(
     () => (visit ? repos.treatmentCatalog.list(visit.clinicId) : undefined),
     [visit?.clinicId]
-  ) ?? [];
+  ) ?? EMPTY_TREATMENTS;
+  const treatmentUsage =
+    useLiveQuery(
+      () => (visit ? dashboardService.treatmentUsageCounts(visit.clinicId) : undefined),
+      [visit?.clinicId]
+    ) ?? EMPTY_TREATMENT_USAGE;
+  const rankedTreatments = useMemo(
+    () => rankTreatmentsByUsage(treatments, treatmentUsage),
+    [treatments, treatmentUsage]
+  );
 
   const [therapistId, setTherapistId] = useState('');
   const [visitDate, setVisitDate] = useState('');
@@ -156,12 +173,27 @@ export function EditVisitModal({
 
           <Field label="Treatments">
             <div className="space-y-2">
-              {treatments.length > 0 && (
-                <MultiToggle
-                  options={treatments.map((t) => ({ value: t.id, label: t.name }))}
-                  value={treatmentIds}
-                  onChange={setTreatmentIds}
-                />
+              {rankedTreatments.frequent.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-[var(--muted)]">Frequently used</p>
+                  <MultiToggle
+                    options={rankedTreatments.frequent.map((t) => ({ value: t.id, label: t.name }))}
+                    value={treatmentIds}
+                    onChange={setTreatmentIds}
+                  />
+                </div>
+              )}
+              {rankedTreatments.rest.length > 0 && (
+                <div className="space-y-1">
+                  {rankedTreatments.frequent.length > 0 && (
+                    <p className="text-[11px] font-medium text-[var(--muted)]">All treatments</p>
+                  )}
+                  <MultiToggle
+                    options={rankedTreatments.rest.map((t) => ({ value: t.id, label: t.name }))}
+                    value={treatmentIds}
+                    onChange={setTreatmentIds}
+                  />
+                </div>
               )}
               <textarea
                 className={`${inputCls} min-h-20 resize-none`}
