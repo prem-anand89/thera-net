@@ -98,6 +98,9 @@ const catalog: CatalogRepo = {
   },
   get: (id) => db.service_catalog.get(id),
   put: (item) => putWithOutbox('service_catalog', item),
+  removeLocal: async (id) => {
+    await db.service_catalog.delete(id);
+  },
 };
 
 const noReturnReasonCatalog: NoReturnReasonCatalogRepo = {
@@ -208,6 +211,8 @@ const visits: VisitRepo = {
     const rows = await db.visits.where('packageGroupId').equals(packageGroupId).toArray();
     return rows.filter((v) => !v.deleted).sort((a, b) => a.visitDate.localeCompare(b.visitDate));
   },
+  countByService: (serviceCatalogId) =>
+    db.visits.where('serviceCatalogId').equals(serviceCatalogId).count(),
   put: (v) => putWithOutbox('visits', v),
   async softDelete(id) {
     const visit = await db.visits.get(id);

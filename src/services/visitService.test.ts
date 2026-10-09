@@ -74,6 +74,7 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       list: async () => catalog,
       get: async (id) => catalog.find((c) => c.id === id),
       put: async () => {},
+      removeLocal: async () => {},
     },
     noReturnReasonCatalog: {
       list: async () => [],
@@ -111,6 +112,8 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
         [...visits.values()].filter((v) => v.packageGroupId === gid && !v.deleted),
       listByInvoiceId: async (invId) =>
         [...visits.values()].filter((v) => v.invoiceId === invId && !v.deleted),
+      countByService: async (serviceCatalogId) =>
+        [...visits.values()].filter((v) => v.serviceCatalogId === serviceCatalogId).length,
       put: async (v) => void visits.set(v.id, v),
       softDelete: async (id) => {
         const v = visits.get(id);

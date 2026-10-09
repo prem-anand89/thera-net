@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
-import { repos } from '@/services';
+import { repos, catalogService } from '@/services';
 import { formatINR } from '@/domain/money';
 import {
   effectivePricePerSession,
@@ -9,7 +9,7 @@ import {
   type ReferringSourceItem,
   type TreatmentItem,
 } from '@/domain/types';
-import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote, RupeeInput, SectionCard } from '@/components/ui';
+import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote, RupeeInput, SectionCard, ConfirmDialog } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
 
 export type CatalogView = 'packages' | 'treatments' | 'referrals';
@@ -159,14 +159,18 @@ function groupKey(category: string) {
 function ServiceCatalog() {
   const clinic = useClinic();
   const items = useLiveQuery(() => repos.catalog.list(clinic.id, true), [clinic.id]);
-  const [showInactive, setShowInactive] = useState(false);
   const [search, setSearch] = useState('');
   const searching = search.trim().length > 0;
-  const groups = useMemo(() => {
+
+  // Active and inactive items are shown in two separate places — active
+  // ones grouped by category as before, inactive ones in their own
+  // cleanup-focused section below (where Delete, gated on zero usage,
+  // lives) — rather than interspersed dimmed rows inside their old group.
+  const activeGroups = useMemo(() => {
     const query = search.trim().toLowerCase();
     const map = new Map<string, CatalogItem[]>();
     for (const item of items ?? []) {
-      if (!showInactive && !item.active) continue;
+      if (!item.active) continue;
       if (query && !item.name.toLowerCase().includes(query)) continue;
       const key = groupKey(item.category);
       if (!map.has(key)) map.set(key, []);
@@ -176,7 +180,16 @@ function ServiceCatalog() {
       list.sort((a, b) => a.name.localeCompare(b.name));
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [items, showInactive, search]);
+  }, [items, search]);
+
+  const inactiveItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return (items ?? [])
+      .filter((i) => !i.active)
+      .filter((i) => !query || i.name.toLowerCase().includes(query))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [items, search]);
+
   const stats = useMemo(() => {
     const all = items ?? [];
     const active = all.filter((i) => i.active).length;
@@ -194,16 +207,17 @@ function ServiceCatalog() {
   return (
     <SectionCard id="settings-card-services-packages" title="Services & packages">
       <p className="mb-3 text-xs text-[var(--muted)]">
-        Organize billable items into <strong>categories</strong> (e.g. Consultation, Treatment).
+        Organize billable items into <strong>service groups</strong> (e.g. Consultation, Treatment).
         Each row is a single-session service (<strong>1 session</strong>) or a multi-session{' '}
         <strong>package</strong> (2+ sessions, one total price). Price changes affect{' '}
-        <strong>future</strong> visits only — deactivate instead of deleting so history keeps resolving.
+        <strong>future</strong> visits only — deactivate a service you've stopped offering, then
+        delete it for good once it's never been used.
       </p>
       <CatalogStats
         items={[
           { label: 'items', value: stats.total },
           { label: 'active', value: stats.active },
-          { label: 'categories', value: stats.groupCount },
+          { label: 'groups', value: stats.groupCount },
           { label: 'single-session', value: stats.singles },
           { label: 'packages', value: stats.packages },
           ...(stats.inactive > 0 ? [{ label: 'inactive', value: stats.inactive, warn: true }] : []),
@@ -211,41 +225,81 @@ function ServiceCatalog() {
       />
       <input
         type="search"
-        className={`${inputCls} mb-3`}
+        className={`${inputCls} mb-4`}
         placeholder="Search services…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
-      {stats.inactive > 0 && (
-        <label className="mb-4 flex items-center gap-2 text-xs text-[var(--muted)]">
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
-          />
-          Show inactive items
-        </label>
-      )}
       <datalist id="catalog-service-groups">
         {groupNames.map((c) => (
           <option key={c} value={c} />
         ))}
       </datalist>
 
-      {groups.length > 0 ? (
+      {activeGroups.length > 0 ? (
         <div className="mb-6 space-y-4">
-          {groups.map(([category, catItems]) => (
-            <ServiceGroupPanel key={category} category={category} items={catItems} forceOpen={searching} />
+          {activeGroups.map(([category, catItems]) => (
+            <ServiceGroupPanel
+              key={category}
+              category={category}
+              items={catItems}
+              forceOpen={searching}
+              groupNames={groupNames}
+            />
           ))}
         </div>
       ) : (
         <p className="mb-6 text-xs text-[var(--muted)]">
-          {searching ? `No services match "${search.trim()}".` : 'No services yet — add a category below.'}
+          {searching ? `No active services match "${search.trim()}".` : 'No services yet — add a group below.'}
         </p>
+      )}
+
+      {inactiveItems.length > 0 && (
+        <InactiveServicesSection items={inactiveItems} groupNames={groupNames} forceOpen={searching} />
       )}
 
       <NewServiceGroupForm existingGroupNames={groupNames} />
     </SectionCard>
+  );
+}
+
+function InactiveServicesSection({
+  items,
+  groupNames,
+  forceOpen,
+}: {
+  items: CatalogItem[];
+  groupNames: string[];
+  forceOpen: boolean;
+}) {
+  const [collapsed, setCollapsed] = useState(true);
+  const open = forceOpen || !collapsed;
+
+  return (
+    <div className="mb-6 overflow-hidden rounded-xl border border-dashed border-[var(--border)] bg-[var(--paper)]">
+      <div className="flex items-center gap-1.5 px-3 py-2.5">
+        <button
+          type="button"
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:bg-[var(--surface)]"
+          aria-expanded={open}
+          aria-label={open ? 'Collapse inactive services' : 'Expand inactive services'}
+          onClick={() => setCollapsed((c) => !c)}
+        >
+          <span style={{ transform: open ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.15s' }}>›</span>
+        </button>
+        <h3 className="text-sm font-semibold text-[var(--ink)]">Inactive services</h3>
+        <span className="text-[11px] text-[var(--muted)]">
+          {items.length} item{items.length === 1 ? '' : 's'}
+        </span>
+      </div>
+      {open && (
+        <div className="divide-y divide-[var(--border)] bg-[var(--surface)]">
+          {items.map((item) => (
+            <ServiceCatalogItemRow key={item.id} item={item} groupNames={groupNames} showCategory />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -271,13 +325,17 @@ function ServiceGroupPanel({
   category,
   items,
   forceOpen = false,
+  groupNames,
 }: {
   category: string;
   items: CatalogItem[];
-  /** While searching, every matching category stays expanded regardless
+  /** While searching, every matching group stays expanded regardless
    *  of its own remembered collapsed state, so a result is never hidden
    *  behind a collapsed panel. */
   forceOpen?: boolean;
+  /** Every existing group name clinic-wide, for the per-item "move to a
+   *  different group" dropdown. */
+  groupNames: string[];
 }) {
   const [editingGroupName, setEditingGroupName] = useState(false);
   const [groupNameDraft, setGroupNameDraft] = useState(category);
@@ -298,7 +356,7 @@ function ServiceGroupPanel({
   async function saveGroupRename() {
     const trimmed = groupNameDraft.trim();
     if (!trimmed) {
-      setGroupError('Category name is required');
+      setGroupError('Group name is required');
       return;
     }
     if (trimmed === category) {
@@ -342,7 +400,7 @@ function ServiceGroupPanel({
                   className={`${inputCls} max-w-xs text-sm font-semibold`}
                   value={groupNameDraft}
                   onChange={(e) => setGroupNameDraft(e.target.value)}
-                  aria-label="Category name"
+                  aria-label="Service group name"
                   autoFocus
                 />
                 <button
@@ -371,7 +429,7 @@ function ServiceGroupPanel({
                 <span className="text-[11px] text-[var(--muted)]">
                   {items.length} item{items.length === 1 ? '' : 's'}
                 </span>
-                <CatalogActionButton onClick={() => setEditingGroupName(true)}>Rename category</CatalogActionButton>
+                <CatalogActionButton onClick={() => setEditingGroupName(true)}>Rename group</CatalogActionButton>
               </div>
             )}
             <ErrorNote message={groupError} />
@@ -403,7 +461,7 @@ function ServiceGroupPanel({
       {open && (
         <div className="divide-y divide-[var(--border)]">
           {items.map((item) => (
-            <ServiceCatalogItemRow key={item.id} item={item} />
+            <ServiceCatalogItemRow key={item.id} item={item} groupNames={groupNames} />
           ))}
         </div>
       )}
@@ -421,9 +479,20 @@ function ServiceGroupPanel({
   );
 }
 
-function ServiceCatalogItemRow({ item }: { item: CatalogItem }) {
+function ServiceCatalogItemRow({
+  item,
+  groupNames,
+  showCategory = false,
+}: {
+  item: CatalogItem;
+  groupNames: string[];
+  /** Shown in the Inactive services section, where the item is no longer
+   *  nested inside its group's own panel, so the group needs restating. */
+  showCategory?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [category, setCategory] = useState(item.category);
+  const [creatingNewGroup, setCreatingNewGroup] = useState(false);
   const [name, setName] = useState(item.name);
   const [sessionCount, setSessionCount] = useState(String(item.sessionCount));
   const [pricePaise, setPricePaise] = useState<number | null>(item.basePricePaise);
@@ -431,10 +500,33 @@ function ServiceCatalogItemRow({ item }: { item: CatalogItem }) {
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
   const savedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Indexed count, not a full fetch — resolves near-instantly from the
+  // local Dexie cache. Only ever consulted for inactive items.
+  const usageCount = useLiveQuery(
+    () => (item.active ? undefined : repos.visits.countByService(item.id)),
+    [item.id, item.active]
+  );
+
+  async function confirmDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await catalogService.hardDelete(item.id);
+      setDeleteConfirm(false);
+    } catch (e) {
+      setDeleteError(toFriendlyMessage(e));
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   useEffect(() => {
     if (!editing) {
       setCategory(item.category);
+      setCreatingNewGroup(false);
       setName(item.name);
       setSessionCount(String(item.sessionCount));
       setPricePaise(item.basePricePaise);
@@ -477,22 +569,71 @@ function ServiceCatalogItemRow({ item }: { item: CatalogItem }) {
     });
   }
 
+  // Live per-session readout while editing — recomputed from the draft
+  // fields on every keystroke, same math as the read-only row, so a
+  // price/session-count edit shows its real per-session effect before
+  // Save is even clicked.
+  const draftSessionCount = Math.max(1, Number(sessionCount) || 1);
+  const livePerSession =
+    pricePaise != null && draftSessionCount > 1
+      ? formatINR(effectivePricePerSession({ basePricePaise: pricePaise, sessionCount: draftSessionCount }))
+      : null;
+
   if (editing) {
     return (
-      <div className={`space-y-2 p-3 ${item.active ? '' : 'opacity-60'}`}>
-        <p className="text-xs font-semibold text-[var(--ink)]">Edit service</p>
-        <Field label="Category">
-          <input
-            className={inputCls}
-            list="catalog-service-groups"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          />
-        </Field>
-        <Field label="Name on visits & invoices">
-          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-        </Field>
-        <div className="flex flex-col gap-2 sm:flex-row">
+      <div
+        className={`space-y-4 rounded-xl border border-[var(--teal)]/30 bg-[var(--surface)] p-4 shadow-[var(--shadow-2)] ${item.active ? '' : 'opacity-60'}`}
+      >
+        <p className="text-sm font-semibold text-[var(--ink)]">Edit service</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Service group">
+            {creatingNewGroup ? (
+              <div className="flex gap-2">
+                <input
+                  className={inputCls}
+                  placeholder="New group name"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className={btnSecondary}
+                  onClick={() => {
+                    setCreatingNewGroup(false);
+                    setCategory(item.category);
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <select
+                className={inputCls}
+                value={category}
+                onChange={(e) => {
+                  if (e.target.value === '__new__') {
+                    setCreatingNewGroup(true);
+                    setCategory('');
+                  } else {
+                    setCategory(e.target.value);
+                  }
+                }}
+              >
+                {groupNames.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+                <option value="__new__">+ Create a new group…</option>
+              </select>
+            )}
+          </Field>
+          <Field label="Name on visits & invoices">
+            <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </Field>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Session count">
             <input
               type="number"
@@ -501,18 +642,26 @@ function ServiceCatalogItemRow({ item }: { item: CatalogItem }) {
               value={sessionCount}
               onChange={(e) => setSessionCount(e.target.value)}
             />
-            <p className="mt-1 text-[11px] text-[var(--muted)]">
-              Use <strong>1</strong> for a single visit. Use <strong>2+</strong> for a package (one line
-              item, sessions tracked on visits).
-            </p>
           </Field>
-          <Field label="Total price">
+          <Field
+            label="Total price"
+            hint={
+              livePerSession && (
+                <>
+                  {livePerSession} per session, across {draftSessionCount} sessions
+                </>
+              )
+            }
+          >
             <RupeeInput valuePaise={pricePaise} onChange={setPricePaise} />
           </Field>
         </div>
-        <p className="text-[11px] text-[var(--muted)]">New price applies to future visits only.</p>
+        <p className="text-[11px] text-[var(--muted)]">
+          Use <strong>1</strong> for a single visit, <strong>2+</strong> for a package (one line item,
+          sessions tracked on visits). New price applies to future visits only.
+        </p>
         <ErrorNote message={error} />
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 pt-1">
           <button type="button" className={btnPrimary} disabled={saving} onClick={() => void save()}>
             {saving ? 'Saving…' : 'Save'}
           </button>
@@ -525,29 +674,53 @@ function ServiceCatalogItemRow({ item }: { item: CatalogItem }) {
   }
 
   return (
-    <div
-      className={`flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between ${item.active ? '' : 'opacity-60'}`}
-    >
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium text-[var(--ink)]">{item.name}</p>
-          <SessionKindPill sessionCount={item.sessionCount} />
-          {!item.active && <InactivePill />}
-          {savedFlash && <span className="text-xs text-[var(--moss)]">Saved</span>}
-        </div>
-        <p className="text-xs text-[var(--muted)]">
-          {formatINR(item.basePricePaise)} total
-          {item.sessionCount > 1 && (
-            <> · {formatINR(effectivePricePerSession(item))}/session</>
+    <div className={`space-y-1.5 px-3 py-2.5 ${item.active ? '' : 'opacity-60'}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-medium text-[var(--ink)]">{item.name}</p>
+        <span className="text-[var(--muted)]" aria-hidden>
+          ·
+        </span>
+        <span className="text-sm font-semibold text-[var(--ink)]">
+          {formatINR(item.basePricePaise)}
+        </span>
+        {item.sessionCount > 1 && (
+          <span className="text-xs text-[var(--muted)]">
+            · {formatINR(effectivePricePerSession(item))}/session
+          </span>
+        )}
+        <div className="ml-auto flex shrink-0 flex-wrap gap-2">
+          <CatalogActionButton onClick={() => setEditing(true)}>Edit</CatalogActionButton>
+          <CatalogActionButton tone={item.active ? 'rust' : 'teal'} onClick={() => void toggleActive()}>
+            {item.active ? 'Deactivate' : 'Reactivate'}
+          </CatalogActionButton>
+          {!item.active && usageCount === 0 && (
+            <CatalogActionButton tone="rust" onClick={() => setDeleteConfirm(true)}>
+              Delete
+            </CatalogActionButton>
           )}
-        </p>
+        </div>
       </div>
-      <div className="flex shrink-0 flex-wrap gap-2">
-        <CatalogActionButton onClick={() => setEditing(true)}>Edit</CatalogActionButton>
-        <CatalogActionButton tone={item.active ? 'rust' : 'teal'} onClick={() => void toggleActive()}>
-          {item.active ? 'Deactivate' : 'Reactivate'}
-        </CatalogActionButton>
+      <div className="flex flex-wrap items-center gap-2">
+        {showCategory && <span className="text-xs text-[var(--muted)]">{item.category}</span>}
+        <SessionKindPill sessionCount={item.sessionCount} />
+        {!item.active && !showCategory && <InactivePill />}
+        {!item.active && usageCount != null && usageCount > 0 && (
+          <span className="text-[11px] text-[var(--muted)]">
+            Used on {usageCount} visit{usageCount === 1 ? '' : 's'} — can't delete
+          </span>
+        )}
+        {savedFlash && <span className="text-xs text-[var(--moss)]">Saved</span>}
       </div>
+      <ErrorNote message={deleteError} />
+      <ConfirmDialog
+        open={deleteConfirm}
+        title="Delete this service?"
+        message={`Permanently delete "${item.name}"? This cannot be undone.`}
+        confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+        destructive
+        onCancel={() => setDeleteConfirm(false)}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }
@@ -609,7 +782,7 @@ function ServiceCatalogInlineAdd({
   return (
     <div className="space-y-2">
       <p className="text-xs font-semibold text-[var(--ink)]">
-        {kind === 'package' ? 'Add package to this category' : 'Add single-session service'}
+        {kind === 'package' ? 'Add package to this group' : 'Add single-session service'}
       </p>
       <Field label="Name">
         <input
@@ -659,11 +832,11 @@ function NewServiceGroupForm({ existingGroupNames }: { existingGroupNames: strin
 
   function startAdd(kind: CatalogAddKind) {
     if (!trimmed) {
-      setError('Enter a category name first');
+      setError('Enter a group name first');
       return;
     }
     if (duplicate) {
-      setError('That category already exists — pick it from the list above or use a different name.');
+      setError('That group already exists — pick it from the list above or use a different name.');
       return;
     }
     setError(null);
@@ -672,10 +845,10 @@ function NewServiceGroupForm({ existingGroupNames }: { existingGroupNames: strin
 
   return (
     <CatalogAddCard
-      title="Add another category"
-      hint="Categories organize the visit picker (Consultation, Assessment, Treatment, …). Add at least one service or package inside it."
+      title="Add a service group"
+      hint="Groups organize the visit picker (Consultation, Assessment, Treatment, …). Add at least one service or package in the group."
     >
-      <Field label="Category name">
+      <Field label="Group name">
         <input
           className={inputCls}
           list="catalog-service-groups"

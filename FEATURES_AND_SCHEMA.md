@@ -601,7 +601,12 @@ URLs redirect to `?tab=catalog&catalogView=…`.
 - Name per item — autocompleted group names via datalist when moving a row between groups
 - Session count — editable after create; 1 = one visit, 2+ = package line on invoices
 - Base price (in paise) — price changes affect future visits only
-- Active toggle (deactivate, not delete)
+- Active toggle (deactivate, not delete) — inactive items are shown in their own
+  collapsed "Inactive services" section below the active groups, not interspersed
+- **Permanent delete** (`hard_delete_catalog_item` RPC) — admin-only, zero-history
+  items only (blocked if any visit references the row, same shape as
+  `hard_delete_therapist`/`hard_delete_patient`); only offered once deactivated.
+  A service with any usage must stay on Deactivate.
 - Unique constraint per clinic
 
 #### No-Return Reason Catalog

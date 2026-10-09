@@ -50,6 +50,9 @@ export interface CatalogRepo {
   list(clinicId: UUID, includeInactive?: boolean): Promise<CatalogItem[]>;
   get(id: UUID): Promise<CatalogItem | undefined>;
   put(item: CatalogItem): Promise<void>;
+  /** Local cache cleanup after the server-side hard_delete_catalog_item
+   *  RPC succeeds — deletes don't travel through the offline outbox. */
+  removeLocal(id: UUID): Promise<void>;
 }
 
 export interface NoReturnReasonCatalogRepo {
@@ -96,6 +99,9 @@ export interface VisitRepo {
   listByIds(ids: UUID[]): Promise<Visit[]>;
   listByPackageGroup(packageGroupId: UUID): Promise<Visit[]>;
   listByInvoiceId(invoiceId: UUID): Promise<Visit[]>;
+  /** Indexed count, not a full fetch — gates whether a catalog item has
+   *  ever been used (and so can only be deactivated, not hard-deleted). */
+  countByService(serviceCatalogId: UUID): Promise<number>;
   put(visit: Visit): Promise<void>;
   softDelete(id: UUID): Promise<void>;
   /** Local stamp after the server-side issue_invoice RPC succeeds */

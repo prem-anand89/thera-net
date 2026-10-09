@@ -271,6 +271,13 @@ export class ClinicDB extends Dexie {
       // Pull-only, like appointments — writes go through RPCs.
       clinic_closed_dates: 'id, clinicId, closedDate',
     });
+    this.version(21).stores({
+      // serviceCatalogId added so "has this service ever been used"
+      // (gating the hard-delete option) is an indexed count, not a full
+      // scan of the clinic's visit history.
+      visits:
+        'id, clinicId, visitDate, patientId, therapistId, packageGroupId, invoiceId, [clinicId+visitDate], serviceCatalogId',
+    });
   }
 }
 
