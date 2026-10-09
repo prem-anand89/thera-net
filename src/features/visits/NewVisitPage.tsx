@@ -1,6 +1,6 @@
 import { StartVisitSheet } from '@/components/StartVisitSheet';
 import type { NewVisitBackTarget } from '@/app/router';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
@@ -502,6 +502,26 @@ export function NewVisitPage() {
       setMode('new');
     }
   }, [repeatVisit, openPackages]);
+
+  // An ordinary patient pick (not the "repeat visit" shortcut above, which
+  // already resolves its own package) with exactly one open package is, in
+  // practice, almost always here for the next session of it — defaulting to
+  // an empty "New service" picker made the common case the extra-click one.
+  // Two or more open packages isn't guessed at; the front desk picks
+  // deliberately via the toggle. Runs once per patient (tracked by id, not
+  // by re-deriving "untouched" state), so a manual switch back to New isn't
+  // silently reverted if openPackages happens to re-emit.
+  const autoContinuationForPatientRef = useRef<UUID | null>(null);
+  useEffect(() => {
+    if (!patient || repeatVisit || openPackages === undefined) return;
+    if (autoContinuationForPatientRef.current === patient.id) return;
+    autoContinuationForPatientRef.current = patient.id;
+    if (openPackages.length === 1) {
+      setMode('continuation');
+      setOpenPackageId(openPackages[0].packageGroupId);
+      resetBillAdjustment();
+    }
+  }, [patient, repeatVisit, openPackages]);
 
   // Default therapist to current user's therapist when creating a new patient
   // or selecting a patient for 'new' mode (unless therapist is already selected)
