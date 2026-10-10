@@ -41,11 +41,13 @@ import { TherapistFilter } from '@/components/schedule/TherapistFilter';
 import { HistoryView } from '@/components/schedule/HistoryView';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
 import { appointmentReason, patientFlags } from '@/domain/patientFlags';
+import { matchingWaitlistEntries, timeOfDayFor } from '@/domain/waitlistMatch';
 import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
 import { AgendaList } from '@/components/schedule/AgendaList';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
 import { ClosedDaysSheet } from '@/components/schedule/ClosedDaysSheet';
+import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
 import { FindTimePanel } from '@/components/schedule/FindTimePanel';
 import { ScheduleRail, rangeLabel } from '@/components/schedule/ScheduleRail';
 import { ResourceDayGrid, WeekTimeGrid, type GridDragOptions, type GridTherapist, type LoadSummary, type MoveTarget } from '@/components/schedule/TimeGrid';
@@ -236,6 +238,23 @@ export function ScheduleBookingsView({
     [clinic.closedWeekdays, closedDates]
   );
   const closedToday = closedFor(date);
+  const dayNow = date === today ? now.minutes : null;
+  // Hook must run unconditionally on every render (rules-of-hooks) — kept
+  // above the component's early returns below, not beside the other derived
+  // day state it logically belongs with.
+  const dayGaps = useMemo(() => {
+    if (closedToday.closed || date < today) return [];
+    const activeIds = selectedIds.length ? selectedIds : roster.map((t) => t.id);
+    if (activeIds.length > 3) return []; // Don't overwhelm the mobile view if too many therapists
+    return activeIds
+      .flatMap((id) => {
+        const t = rosterById.get(id);
+        if (!t || t.active === false) return [];
+        const gaps = freeGaps(dayAppointments, id, date, hours, slotMinutes, { notBefore: dayNow ?? undefined, alignToSlots: true, working: workingFor(id, date) });
+        return gaps.map((g) => ({ ...g, therapistId: id, therapistName: t.name }));
+      })
+      .sort((a, b) => a.start - b.start);
+  }, [closedToday.closed, date, today, selectedIds, roster, rosterById, dayAppointments, hours, slotMinutes, dayNow, workingFor]);
   const closures = useMemo(
     () => groupClosedRanges(closedDates ?? []).filter((range) => range.to >= today).slice(0, 8),
     [closedDates, today]
@@ -272,10 +291,31 @@ export function ScheduleBookingsView({
   );
   const requestById = useMemo(() => new Map((requests ?? []).map((r) => [r.id, r])), [requests]);
 
+  // Pending requests that now fit an opening on the day currently being
+  // viewed — reuses the same free-gap data already computed for the phone
+  // agenda's "+ Book" rows (dayGaps), so this is live, not tied to a
+  // specific cancel/reschedule event.
+  const waitlistMatches = useMemo(() => {
+    if (!dayGaps.length || !pendingRequests.length) return [];
+    const seen = new Set<string>();
+    const matches: AppointmentRequest[] = [];
+    for (const gap of dayGaps) {
+      for (const r of matchingWaitlistEntries(pendingRequests, { date, therapistId: gap.therapistId, timeOfDay: timeOfDayFor(gap.start) })) {
+        if (!seen.has(r.id)) {
+          seen.add(r.id);
+          matches.push(r);
+        }
+      }
+    }
+    return matches;
+  }, [dayGaps, pendingRequests, date]);
+  const [dismissedWaitlistBannerDate, setDismissedWaitlistBannerDate] = useState<string | null>(null);
+
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [findTime, setFindTime] = useState(false);
   const [closedSheetOpen, setClosedSheetOpen] = useState(false);
+  const [addWaitlistOpen, setAddWaitlistOpen] = useState(false);
   const [removing, setRemoving] = useState<ClosedRange | null>(null);
   const [declining, setDeclining] = useState<{ id: UUID; name: string } | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
@@ -506,10 +546,6 @@ export function ScheduleBookingsView({
   // not a tab; ?view=requests (old links) opens that panel.
   const activeView = view === 'requests' ? 'schedule' : view;
   const requestsPanelOpen = canManageAll && view === 'requests';
-  const dayNow = date === today ? now.minutes : null;
-  const dayGaps = singleTherapist && !closedToday.closed && date >= today
-    ? freeGaps(dayAppointments, singleTherapist.id, date, hours, slotMinutes, { notBefore: dayNow ?? undefined, alignToSlots: true, working: workingFor(singleTherapist.id, date) })
-    : [];
   const liveDay = dayAppointments.filter((a) => a.status !== 'cancelled');
   const upcoming = liveDay.filter((a) => (a.status === 'confirmed' || a.status === 'rescheduled') && (date > today || (date === today && minutesOfDay(a.scheduledAt) >= now.minutes))).length;
   const arrived = liveDay.filter((a) => a.status === 'arrived').length;
@@ -628,15 +664,17 @@ export function ScheduleBookingsView({
                     ) : (
                       `Week of ${shortDate(getWeekStart(date))}`
                     )}
-                    {mode === 'day' && date === today && <span className="hidden font-sans text-xs font-medium text-[var(--teal)] sm:inline">Today</span>}
                   </h2>
                   {mode === 'day' && <p className="truncate text-xs text-[var(--muted)]">{daySummary}</p>}
                 </div>
-                {!(mode === 'day' ? date === today : getWeekStart(date) === getWeekStart(today)) && (
-                  <button type="button" className="ml-1 min-h-9 shrink-0 rounded-lg border border-[var(--border)] px-2.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]" onClick={() => setSchedule({ date: today })}>
-                    Today
-                  </button>
-                )}
+                <button 
+                  type="button" 
+                  disabled={mode === 'day' ? date === today : getWeekStart(date) === getWeekStart(today)}
+                  className="ml-1 min-h-9 shrink-0 rounded-lg border border-[var(--border)] px-2.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)] disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent" 
+                  onClick={() => setSchedule({ date: today })}
+                >
+                  Today
+                </button>
               </div>
               <div className="flex items-center gap-2">
                 {canManageAll && roster.length > 1 && (
@@ -670,6 +708,11 @@ export function ScheduleBookingsView({
                       {canManageAll && (
                         <button type="button" className={menuItem} onClick={() => { setClosedSheetOpen(true); close(); }}>
                           Set closed days
+                        </button>
+                      )}
+                      {canManageAll && (
+                        <button type="button" className={menuItem} onClick={() => { setAddWaitlistOpen(true); close(); }}>
+                          Add to waitlist
                         </button>
                       )}
                       {canManageAll &&
@@ -752,6 +795,7 @@ export function ScheduleBookingsView({
               {mode === 'week' && singleTherapist ? (
                 <WeekTimeGrid
                   reasonFor={reasonFor}
+                  flagContext={flagContext}
                   days={weekDays(date)}
                   today={today}
                   nowMinutes={now.minutes}
@@ -770,6 +814,7 @@ export function ScheduleBookingsView({
               ) : (
                 <ResourceDayGrid
                   reasonFor={reasonFor}
+                  flagContext={flagContext}
                   date={date}
                   today={today}
                   nowMinutes={now.minutes}
@@ -826,7 +871,11 @@ export function ScheduleBookingsView({
                   gaps={dayGaps}
                   nowMinutes={dayNow}
                   onSelect={(a) => setSelectedId(a.id)}
-                  onBookGap={singleTherapist && canBookFor(singleTherapist.id) ? (time) => openBooking({ date, time, therapistId: singleTherapist.id }) : undefined}
+                  onBookGap={(time, therapistId) => {
+                    const targetId = therapistId ?? (singleTherapist ? singleTherapist.id : undefined);
+                    if (targetId && !canBookFor(targetId)) return;
+                    openBooking({ date, time, therapistId: targetId });
+                  }}
                 />
               )}
             </div>
@@ -1000,6 +1049,14 @@ export function ScheduleBookingsView({
       />
 
       <ClosedDaysSheet open={closedSheetOpen} clinicId={clinic.id} initialDate={date < today ? today : date} onClose={() => setClosedSheetOpen(false)} />
+
+      <AddToWaitlistSheet
+        open={addWaitlistOpen}
+        clinicId={clinic.id}
+        initialDate={date < today ? today : date}
+        therapists={roster.filter((t) => t.active !== false)}
+        onClose={() => setAddWaitlistOpen(false)}
+      />
 
       {undo && (
         <div role="status" className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-20 flex items-center justify-between gap-3 rounded-xl bg-[var(--ink)] p-3 text-sm text-white shadow-lg sm:bottom-4 sm:left-auto sm:max-w-md">
