@@ -1440,12 +1440,16 @@ working_hours   jsonb (NULLABLE) — weekly hours: {"0"–"6": [[startMin, endMi
                 gaps are breaks, a missing weekday is a day off, NULL = clinic
                 booking hours. Admin/front desk can still write it directly
                 via `set_therapist_working_hours` (a therapist can no longer
-                write their own — see Shift-based scheduling below). Every
-                other path (`assign_shift`, `assign_custom_hours`,
-                `approve_shift_assignment`, `set_break_placement`) derives
-                this same JSON shape via `derive_working_hours()` and writes
-                it through that function too, so it stays the single source
-                of truth every downstream consumer (TimeGrid, booking form,
+                write their own — see Shift-based scheduling below). The
+                shift-template paths (`assign_shift`,
+                `approve_shift_assignment` on a shift request,
+                `set_break_placement`, `update_shift_template`'s cascade)
+                derive this same JSON shape via `derive_working_hours()`;
+                the custom-hours paths (`assign_custom_hours`,
+                `approve_shift_assignment` on a custom-hours request) write
+                the submitted `custom_hours` JSON verbatim, or NULL for
+                "Clinic hours". Either way it stays the single source of
+                truth every downstream consumer (TimeGrid, booking form,
                 slot generation) already reads — those never needed to
                 change. Always validated by `working_hours_valid`. CHECK
                 therapists_working_hours_valid (NOT VALID: new writes only)
@@ -1482,7 +1486,12 @@ shift_template_id   uuid (FOREIGN KEY → shift_templates.id, NULLABLE) — exac
                     of this or custom_hours is set
 custom_hours        jsonb (NULLABLE) — same shape as therapists.working_hours;
                     replaces it wholesale on approval (unlike a shift
-                    assignment, which merges by weekday)
+                    assignment, which merges by weekday). The JSON-null
+                    literal 'null'::jsonb is a sentinel used only on a
+                    *pending request* for "Clinic hours" (SQL NULL would
+                    violate the exactly-one-of check); the client sees it
+                    as `customHours === null` with `shiftTemplateId === null`
+                    and labels it "Reset to clinic hours"
 weekdays            integer[] (NULLABLE) — required iff shift_template_id is set;
                     NULL on the custom_hours path (weekdays live inside that JSON)
 break_start_minute  integer (NULLABLE) — shift-template path only; NULL = the
@@ -1497,7 +1506,15 @@ decided_at          timestamptz (NULLABLE)
 created_at, updated_at  timestamptz NOT NULL
 ```
 
-RPCs (all `security definer`, revoked from `anon`): `create_shift_template`/`update_shift_template` (admin/front_desk; the latter cascades — re-derives `working_hours` for every `approved` assignment bound to the edited template, resetting a break placement to the template's new default if it no longer fits), `assign_shift`/`assign_custom_hours` (admin/front_desk, immediate — the admin is already the approver), `request_shift_assignment`/`request_custom_hours` (`is_own_therapist` only, pending; a new request supersedes an existing unactioned one), `approve_shift_assignment`/`decline_shift_assignment` (admin/front_desk), `set_break_placement` (`is_own_therapist` or admin/front_desk, immediate, only on an `approved` shift-template assignment — bounds re-validated against the template's current `start_minute`/`end_minute`/`break_duration_minutes` at call time, never cached). A newly-approved assignment's weekdays supersede any overlap on the therapist's other approved shift assignments (`supersede_overlapping_weekdays`); approving a custom-hours assignment supersedes every other approved assignment for that therapist, and vice versa (`supersede_all_assignments`) — custom hours and shift templates are mutually exclusive per therapist.
+RPCs (all `security definer`, revoked from `anon`): `create_shift_template`/`update_shift_template` (admin/front_desk; the latter cascades — re-derives `working_hours` for every `approved` assignment bound to the edited template, resetting a break placement to the template's new default if it no longer fits), `assign_shift`/`assign_custom_hours` (admin/front_desk, immediate — the admin is already the approver), `request_shift_assignment`/`request_custom_hours` (`is_own_therapist` only, pending; a new request supersedes an existing unactioned one), `approve_shift_assignment`/`decline_shift_assignment` (admin/front_desk), `set_break_placement` (`is_own_therapist` or admin/front_desk, immediate, only on an `approved` shift-template assignment — bounds re-validated against the template's current `start_minute`/`end_minute`/`break_duration_minutes` at call time, never cached). A newly-approved assignment's weekdays supersede any overlap on the therapist's other approved shift assignments (`supersede_overlapping_weekdays`); approving a custom-hours assignment supersedes every other approved assignment for that therapist (`supersede_all_assignments`), and assigning/approving a shift supersedes an approved custom-hours row (`apply_shift_hours` checks for one first; if found it is superseded and the shift's hours are derived from `'{}'` rather than merged into the old custom hours — safe because an approved custom-hours row can never coexist with an approved shift row) — custom hours and shift templates are mutually exclusive per therapist.
+
+**"Clinic hours" (NULL working hours).** `WorkingHoursSheet`'s "Clinic hours" option sends `null`. `assign_custom_hours(therapist, null)` inserts no assignment row: it supersedes every approved assignment and sets `therapists.working_hours = NULL` directly, returning NULL (a therapist with zero approved assignments simply uses whatever `working_hours` is). `request_custom_hours(therapist, null)` stores the `'null'::jsonb` sentinel on the pending row; approving it does the same supersede-all + `working_hours = NULL`, never passing the sentinel to `apply_custom_hours`.
+
+**Internal helpers are not callable by clients.** `derive_working_hours`, `supersede_overlapping_weekdays`, `supersede_all_assignments`, `apply_shift_hours`, `apply_custom_hours` have no authorization check of their own, so `execute` is revoked from `public`/`anon`/`authenticated`; the authorized `security definer` RPCs call them as the function owner. `set_break_placement` rejects a NULL break start (it would otherwise delete the break — a capacity increase with no approval).
+
+**Sync.** Both tables carry a `before update` trigger (`set_shift_scheduling_updated_at()` — updated_at only; the shared `set_updated_at()` also writes `updated_by`/`created_by`, which these tables don't have), and every RPC UPDATE also sets `updated_at = now()`, so the sync engine's `updated_at > cursor` pull sees approve/decline/supersede changes. Client mirror: Dexie `version(22)` adds `shift_templates` (`id, clinicId, active`) and `therapist_shift_assignments` (`id, clinicId, therapistId, status, shiftTemplateId`), read-only sync like `appointment_requests`.
+
+**UI.** Settings → Team: `ShiftTemplatesSection` (template CRUD/deactivate) and `ShiftAssignmentsSection` (per-therapist current assignment, a pending-request badge showing the requested shift + weekdays or the actual custom hours / "Reset to clinic hours", the therapist's note, Approve, and Decline with an optional reason). Schedule view: admin/front desk see a "N pending shift request(s). Review" banner linking to Settings → Team whenever any request is pending. Therapist side: `ShiftRequestSheet` (account menu → My working hours), whose custom-hours fallback opens `WorkingHoursSheet` pre-filled with the therapist's current hours and confirms "Submitted — waiting on approval" on save; `BreakPlacementControl` alongside it.
 
 #### `service_catalog`
 ```sql
@@ -3210,12 +3227,16 @@ working_hours   jsonb (NULLABLE) — weekly hours: {"0"–"6": [[startMin, endMi
                 gaps are breaks, a missing weekday is a day off, NULL = clinic
                 booking hours. Admin/front desk can still write it directly
                 via `set_therapist_working_hours` (a therapist can no longer
-                write their own — see Shift-based scheduling below). Every
-                other path (`assign_shift`, `assign_custom_hours`,
-                `approve_shift_assignment`, `set_break_placement`) derives
-                this same JSON shape via `derive_working_hours()` and writes
-                it through that function too, so it stays the single source
-                of truth every downstream consumer (TimeGrid, booking form,
+                write their own — see Shift-based scheduling below). The
+                shift-template paths (`assign_shift`,
+                `approve_shift_assignment` on a shift request,
+                `set_break_placement`, `update_shift_template`'s cascade)
+                derive this same JSON shape via `derive_working_hours()`;
+                the custom-hours paths (`assign_custom_hours`,
+                `approve_shift_assignment` on a custom-hours request) write
+                the submitted `custom_hours` JSON verbatim, or NULL for
+                "Clinic hours". Either way it stays the single source of
+                truth every downstream consumer (TimeGrid, booking form,
                 slot generation) already reads — those never needed to
                 change. Always validated by `working_hours_valid`. CHECK
                 therapists_working_hours_valid (NOT VALID: new writes only)
@@ -3252,7 +3273,12 @@ shift_template_id   uuid (FOREIGN KEY → shift_templates.id, NULLABLE) — exac
                     of this or custom_hours is set
 custom_hours        jsonb (NULLABLE) — same shape as therapists.working_hours;
                     replaces it wholesale on approval (unlike a shift
-                    assignment, which merges by weekday)
+                    assignment, which merges by weekday). The JSON-null
+                    literal 'null'::jsonb is a sentinel used only on a
+                    *pending request* for "Clinic hours" (SQL NULL would
+                    violate the exactly-one-of check); the client sees it
+                    as `customHours === null` with `shiftTemplateId === null`
+                    and labels it "Reset to clinic hours"
 weekdays            integer[] (NULLABLE) — required iff shift_template_id is set;
                     NULL on the custom_hours path (weekdays live inside that JSON)
 break_start_minute  integer (NULLABLE) — shift-template path only; NULL = the
@@ -3267,7 +3293,15 @@ decided_at          timestamptz (NULLABLE)
 created_at, updated_at  timestamptz NOT NULL
 ```
 
-RPCs (all `security definer`, revoked from `anon`): `create_shift_template`/`update_shift_template` (admin/front_desk; the latter cascades — re-derives `working_hours` for every `approved` assignment bound to the edited template, resetting a break placement to the template's new default if it no longer fits), `assign_shift`/`assign_custom_hours` (admin/front_desk, immediate — the admin is already the approver), `request_shift_assignment`/`request_custom_hours` (`is_own_therapist` only, pending; a new request supersedes an existing unactioned one), `approve_shift_assignment`/`decline_shift_assignment` (admin/front_desk), `set_break_placement` (`is_own_therapist` or admin/front_desk, immediate, only on an `approved` shift-template assignment — bounds re-validated against the template's current `start_minute`/`end_minute`/`break_duration_minutes` at call time, never cached). A newly-approved assignment's weekdays supersede any overlap on the therapist's other approved shift assignments (`supersede_overlapping_weekdays`); approving a custom-hours assignment supersedes every other approved assignment for that therapist, and vice versa (`supersede_all_assignments`) — custom hours and shift templates are mutually exclusive per therapist.
+RPCs (all `security definer`, revoked from `anon`): `create_shift_template`/`update_shift_template` (admin/front_desk; the latter cascades — re-derives `working_hours` for every `approved` assignment bound to the edited template, resetting a break placement to the template's new default if it no longer fits), `assign_shift`/`assign_custom_hours` (admin/front_desk, immediate — the admin is already the approver), `request_shift_assignment`/`request_custom_hours` (`is_own_therapist` only, pending; a new request supersedes an existing unactioned one), `approve_shift_assignment`/`decline_shift_assignment` (admin/front_desk), `set_break_placement` (`is_own_therapist` or admin/front_desk, immediate, only on an `approved` shift-template assignment — bounds re-validated against the template's current `start_minute`/`end_minute`/`break_duration_minutes` at call time, never cached). A newly-approved assignment's weekdays supersede any overlap on the therapist's other approved shift assignments (`supersede_overlapping_weekdays`); approving a custom-hours assignment supersedes every other approved assignment for that therapist (`supersede_all_assignments`), and assigning/approving a shift supersedes an approved custom-hours row (`apply_shift_hours` checks for one first; if found it is superseded and the shift's hours are derived from `'{}'` rather than merged into the old custom hours — safe because an approved custom-hours row can never coexist with an approved shift row) — custom hours and shift templates are mutually exclusive per therapist.
+
+**"Clinic hours" (NULL working hours).** `WorkingHoursSheet`'s "Clinic hours" option sends `null`. `assign_custom_hours(therapist, null)` inserts no assignment row: it supersedes every approved assignment and sets `therapists.working_hours = NULL` directly, returning NULL (a therapist with zero approved assignments simply uses whatever `working_hours` is). `request_custom_hours(therapist, null)` stores the `'null'::jsonb` sentinel on the pending row; approving it does the same supersede-all + `working_hours = NULL`, never passing the sentinel to `apply_custom_hours`.
+
+**Internal helpers are not callable by clients.** `derive_working_hours`, `supersede_overlapping_weekdays`, `supersede_all_assignments`, `apply_shift_hours`, `apply_custom_hours` have no authorization check of their own, so `execute` is revoked from `public`/`anon`/`authenticated`; the authorized `security definer` RPCs call them as the function owner. `set_break_placement` rejects a NULL break start (it would otherwise delete the break — a capacity increase with no approval).
+
+**Sync.** Both tables carry a `before update` trigger (`set_shift_scheduling_updated_at()` — updated_at only; the shared `set_updated_at()` also writes `updated_by`/`created_by`, which these tables don't have), and every RPC UPDATE also sets `updated_at = now()`, so the sync engine's `updated_at > cursor` pull sees approve/decline/supersede changes. Client mirror: Dexie `version(22)` adds `shift_templates` (`id, clinicId, active`) and `therapist_shift_assignments` (`id, clinicId, therapistId, status, shiftTemplateId`), read-only sync like `appointment_requests`.
+
+**UI.** Settings → Team: `ShiftTemplatesSection` (template CRUD/deactivate) and `ShiftAssignmentsSection` (per-therapist current assignment, a pending-request badge showing the requested shift + weekdays or the actual custom hours / "Reset to clinic hours", the therapist's note, Approve, and Decline with an optional reason). Schedule view: admin/front desk see a "N pending shift request(s). Review" banner linking to Settings → Team whenever any request is pending. Therapist side: `ShiftRequestSheet` (account menu → My working hours), whose custom-hours fallback opens `WorkingHoursSheet` pre-filled with the therapist's current hours and confirms "Submitted — waiting on approval" on save; `BreakPlacementControl` alongside it.
 
 #### `service_catalog`
 ```sql
