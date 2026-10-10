@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
@@ -35,6 +35,7 @@ import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { usePermissions } from '@/app/usePermissions';
 import { ReminderSheet } from '@/components/schedule/ReminderSheet';
 import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
+import { AssignShiftSheet } from '@/components/schedule/AssignShiftSheet';
 import { RequestsInbox } from '@/components/schedule/RequestsInbox';
 import { TherapistFilter } from '@/components/schedule/TherapistFilter';
 import { HistoryView } from '@/components/schedule/HistoryView';
@@ -152,6 +153,14 @@ export function ScheduleBookingsView({
     [canManageAll, clinic.id]
   );
   const closedDates = useLiveQuery(() => repos.clinicClosedDates.listByClinic(clinic.id), [clinic.id]);
+  const shiftAssignments = useLiveQuery(
+    () => (canManageAll ? repos.therapistShiftAssignments.listByClinic(clinic.id) : undefined),
+    [canManageAll, clinic.id]
+  );
+  const pendingShiftRequestCount = useMemo(
+    () => (shiftAssignments ?? []).filter((a) => a.status === 'pending').length,
+    [shiftAssignments]
+  );
 
   const roster = useMemo(
     () =>
@@ -272,6 +281,7 @@ export function ScheduleBookingsView({
   const [reminderOpen, setReminderOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [hoursTherapistId, setHoursTherapistId] = useState<UUID | null>(null);
+  const [assignShiftTherapistId, setAssignShiftTherapistId] = useState<UUID | null>(null);
   const [pendingHoursSave, setPendingHoursSave] = useState<{
     therapistId: UUID;
     value: WorkingHours | null;
@@ -296,7 +306,7 @@ export function ScheduleBookingsView({
           return !withinWorking(intervals, minutesOfDay(a.scheduledAt), appointmentMinutes(a, slotMinutes));
         });
         if (conflicts.length === 0) {
-          bookingService.setWorkingHours(therapistId, value).then(resolve, reject);
+          bookingService.assignCustomHours(therapistId, value).then(() => resolve(), reject);
           return;
         }
         setPendingHoursSave({ therapistId, value, count: conflicts.length, resolve, reject });
@@ -664,7 +674,13 @@ export function ScheduleBookingsView({
                       )}
                       {canManageAll &&
                         roster.map((t) => (
-                          <button key={t.id} type="button" className={menuItem} onClick={() => { setHoursTherapistId(t.id); close(); }}>
+                          <button key={t.id} type="button" className={menuItem} onClick={() => { setAssignShiftTherapistId(t.id); close(); }}>
+                            Assign shift, {t.name}
+                          </button>
+                        ))}
+                      {canManageAll &&
+                        roster.map((t) => (
+                          <button key={`hours-${t.id}`} type="button" className={menuItem} onClick={() => { setHoursTherapistId(t.id); close(); }}>
                             Working hours, {t.name}
                           </button>
                         ))}
@@ -701,6 +717,17 @@ export function ScheduleBookingsView({
                     Reopen
                   </button>
                 )}
+              </div>
+            )}
+
+            {canManageAll && pendingShiftRequestCount > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--teal-strong)]">
+                <span>
+                  <strong>{pendingShiftRequestCount}</strong> pending shift request{pendingShiftRequestCount === 1 ? '' : 's'}.
+                </span>
+                <Link to="/settings" search={{ tab: 'team' }} className="text-xs font-medium underline hover:no-underline">
+                  Review
+                </Link>
               </div>
             )}
 
@@ -948,6 +975,14 @@ export function ScheduleBookingsView({
         onClose={() => setHoursTherapistId(null)}
       />
 
+      <AssignShiftSheet
+        open={assignShiftTherapistId !== null}
+        therapistId={assignShiftTherapistId ?? ''}
+        therapistName={assignShiftTherapistId ? rosterById.get(assignShiftTherapistId)?.name ?? '' : ''}
+        clinicId={clinic.id}
+        onClose={() => setAssignShiftTherapistId(null)}
+      />
+
       <ClosedDaysSheet open={closedSheetOpen} clinicId={clinic.id} initialDate={date < today ? today : date} onClose={() => setClosedSheetOpen(false)} />
 
       {undo && (
@@ -1015,7 +1050,7 @@ export function ScheduleBookingsView({
         onConfirm={() => {
           const pending = pendingHoursSave;
           setPendingHoursSave(null);
-          if (pending) void bookingService.setWorkingHours(pending.therapistId, pending.value).then(pending.resolve, pending.reject);
+          if (pending) void bookingService.assignCustomHours(pending.therapistId, pending.value).then(() => pending.resolve(), pending.reject);
         }}
       />
 
