@@ -278,6 +278,136 @@ export const bookingService = {
     syncEngine.schedule(0);
   },
 
+  async createShiftTemplate(params: {
+    clinicId: UUID;
+    name: string;
+    startMinute: number;
+    endMinute: number;
+    breakDurationMinutes?: number;
+    defaultBreakStartMinute?: number | null;
+  }): Promise<UUID> {
+    const supabase = supabaseOrThrow();
+    const { data, error } = await supabase.rpc('create_shift_template', {
+      p_clinic_id: params.clinicId,
+      p_name: params.name,
+      p_start_minute: params.startMinute,
+      p_end_minute: params.endMinute,
+      p_break_duration_minutes: params.breakDurationMinutes ?? 0,
+      p_default_break_start_minute: params.defaultBreakStartMinute ?? null,
+    });
+    if (error) throw new Error(`Could not create shift template: ${error.message}`);
+    syncEngine.schedule(0);
+    return data as UUID;
+  },
+
+  async updateShiftTemplate(params: {
+    templateId: UUID;
+    name: string;
+    startMinute: number;
+    endMinute: number;
+    breakDurationMinutes: number;
+    defaultBreakStartMinute: number | null;
+    active: boolean;
+  }): Promise<void> {
+    const supabase = supabaseOrThrow();
+    const { error } = await supabase.rpc('update_shift_template', {
+      p_template_id: params.templateId,
+      p_name: params.name,
+      p_start_minute: params.startMinute,
+      p_end_minute: params.endMinute,
+      p_break_duration_minutes: params.breakDurationMinutes,
+      p_default_break_start_minute: params.defaultBreakStartMinute,
+      p_active: params.active,
+    });
+    if (error) throw new Error(`Could not update shift template: ${error.message}`);
+    syncEngine.schedule(0);
+  },
+
+  async assignShift(params: {
+    therapistId: UUID;
+    shiftTemplateId: UUID;
+    weekdays: number[];
+    breakStartMinute?: number | null;
+  }): Promise<UUID> {
+    const supabase = supabaseOrThrow();
+    const { data, error } = await supabase.rpc('assign_shift', {
+      p_therapist_id: params.therapistId,
+      p_shift_template_id: params.shiftTemplateId,
+      p_weekdays: params.weekdays,
+      p_break_start_minute: params.breakStartMinute ?? null,
+    });
+    if (error) throw new Error(`Could not assign shift: ${error.message}`);
+    syncEngine.schedule(0);
+    return data as UUID;
+  },
+
+  async assignCustomHours(therapistId: UUID, hours: WorkingHours | null): Promise<UUID> {
+    const supabase = supabaseOrThrow();
+    const { data, error } = await supabase.rpc('assign_custom_hours', {
+      p_therapist_id: therapistId,
+      p_custom_hours: hours,
+    });
+    if (error) throw new Error(`Could not assign custom hours: ${error.message}`);
+    syncEngine.schedule(0);
+    return data as UUID;
+  },
+
+  async requestShiftAssignment(params: {
+    therapistId: UUID;
+    shiftTemplateId: UUID;
+    weekdays: number[];
+    breakStartMinute?: number | null;
+    note?: string | null;
+  }): Promise<UUID> {
+    const supabase = supabaseOrThrow();
+    const { data, error } = await supabase.rpc('request_shift_assignment', {
+      p_therapist_id: params.therapistId,
+      p_shift_template_id: params.shiftTemplateId,
+      p_weekdays: params.weekdays,
+      p_break_start_minute: params.breakStartMinute ?? null,
+      p_note: params.note ?? null,
+    });
+    if (error) throw new Error(`Could not submit shift request: ${error.message}`);
+    syncEngine.schedule(0);
+    return data as UUID;
+  },
+
+  async requestCustomHours(therapistId: UUID, hours: WorkingHours | null, note?: string | null): Promise<UUID> {
+    const supabase = supabaseOrThrow();
+    const { data, error } = await supabase.rpc('request_custom_hours', {
+      p_therapist_id: therapistId,
+      p_custom_hours: hours,
+      p_note: note ?? null,
+    });
+    if (error) throw new Error(`Could not submit hours request: ${error.message}`);
+    syncEngine.schedule(0);
+    return data as UUID;
+  },
+
+  async approveShiftAssignment(requestId: UUID): Promise<void> {
+    const supabase = supabaseOrThrow();
+    const { error } = await supabase.rpc('approve_shift_assignment', { p_request_id: requestId });
+    if (error) throw new Error(`Could not approve request: ${error.message}`);
+    syncEngine.schedule(0);
+  },
+
+  async declineShiftAssignment(requestId: UUID, note?: string | null): Promise<void> {
+    const supabase = supabaseOrThrow();
+    const { error } = await supabase.rpc('decline_shift_assignment', { p_request_id: requestId, p_note: note ?? null });
+    if (error) throw new Error(`Could not decline request: ${error.message}`);
+    syncEngine.schedule(0);
+  },
+
+  async setBreakPlacement(assignmentId: UUID, breakStartMinute: number): Promise<void> {
+    const supabase = supabaseOrThrow();
+    const { error } = await supabase.rpc('set_break_placement', {
+      p_assignment_id: assignmentId,
+      p_break_start_minute: breakStartMinute,
+    });
+    if (error) throw new Error(`Could not move break: ${error.message}`);
+    syncEngine.schedule(0);
+  },
+
   /** Marks every day in [from, to] closed (holiday / one-off closure). */
   async setClosedDates(clinicId: UUID, from: string, to: string, label: string | null): Promise<void> {
     const supabase = supabaseOrThrow();
