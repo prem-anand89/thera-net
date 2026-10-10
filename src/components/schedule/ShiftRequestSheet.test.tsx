@@ -14,6 +14,7 @@ vi.mock('./WorkingHoursSheet', () => ({
     return <div>custom-hours-sheet</div>;
   },
 }));
+vi.mock('./BreakPlacementControl', () => ({ BreakPlacementControl: () => null }));
 const requestShiftAssignment = vi.fn();
 const requestCustomHours = vi.fn();
 vi.mock('@/services', () => ({

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService } from '@/services';
 import { WorkingHoursSheet } from './WorkingHoursSheet';
+import { BreakPlacementControl } from './BreakPlacementControl';
 import { ErrorNote, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
 import type { UUID, WorkingHours } from '@/domain/types';
@@ -91,6 +92,9 @@ export function ShiftRequestSheet({
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full rounded-t-2xl bg-[var(--surface)] p-4 sm:max-w-md sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
         <h2 id={titleId} className="font-display text-lg font-semibold text-[var(--ink)]">My working hours</h2>
+        <div className="mt-3">
+          <BreakPlacementControl therapistId={therapistId} clinicId={clinicId} />
+        </div>
         {submitted ? (
           <p className="mt-3 text-sm text-[var(--ink)]">Submitted — waiting on approval. Your current hours stay in effect until then.</p>
         ) : (templates ?? []).length === 0 ? (
