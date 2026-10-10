@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
-import { Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
+import { ErrorNote, Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
+import { toFriendlyMessage } from '@/lib/errors';
 import type { ShiftTemplate } from '@/domain/types';
 
 function minutesToTimeInput(m: number): string {
@@ -35,9 +36,11 @@ function ShiftTemplateCard({ template }: { template: ShiftTemplate }) {
     template.defaultBreakStartMinute !== null ? minutesToTimeInput(template.defaultBreakStartMinute) : ''
   );
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function save() {
     setSaving(true);
+    setError(null);
     try {
       await bookingService.updateShiftTemplate({
         templateId: template.id,
@@ -49,21 +52,31 @@ function ShiftTemplateCard({ template }: { template: ShiftTemplate }) {
         active: template.active,
       });
       setEditing(false);
+    } catch (err) {
+      setError(toFriendlyMessage(err));
     } finally {
       setSaving(false);
     }
   }
 
   async function toggleActive() {
-    await bookingService.updateShiftTemplate({
-      templateId: template.id,
-      name: template.name,
-      startMinute: template.startMinute,
-      endMinute: template.endMinute,
-      breakDurationMinutes: template.breakDurationMinutes,
-      defaultBreakStartMinute: template.defaultBreakStartMinute,
-      active: !template.active,
-    });
+    setSaving(true);
+    setError(null);
+    try {
+      await bookingService.updateShiftTemplate({
+        templateId: template.id,
+        name: template.name,
+        startMinute: template.startMinute,
+        endMinute: template.endMinute,
+        breakDurationMinutes: template.breakDurationMinutes,
+        defaultBreakStartMinute: template.defaultBreakStartMinute,
+        active: !template.active,
+      });
+    } catch (err) {
+      setError(toFriendlyMessage(err));
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (editing) {
@@ -78,8 +91,9 @@ function ShiftTemplateCard({ template }: { template: ShiftTemplate }) {
           <Field label="Break (minutes)"><input type="number" min={0} className={inputCls} value={breakDuration} onChange={(e) => setBreakDuration(e.target.value)} /></Field>
           <Field label="Default break start"><input type="time" className={inputCls} value={breakStart} onChange={(e) => setBreakStart(e.target.value)} /></Field>
         </div>
+        <ErrorNote message={error} />
         <div className="flex justify-end gap-2">
-          <button type="button" className={btnSecondary} onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
+          <button type="button" className={btnSecondary} onClick={() => { setEditing(false); setError(null); }} disabled={saving}>Cancel</button>
           <button type="button" className={btnPrimary} onClick={() => void save()} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
@@ -108,10 +122,12 @@ function ShiftTemplateCard({ template }: { template: ShiftTemplate }) {
           type="button"
           className="inline-flex min-h-11 items-center px-1 text-[var(--rust)]"
           onClick={() => void toggleActive()}
+          disabled={saving}
         >
           {template.active ? 'Deactivate' : 'Reactivate'}
         </button>
       </div>
+      <ErrorNote message={error} />
     </div>
   );
 }
@@ -123,10 +139,12 @@ function ShiftTemplateAddForm({ clinicId }: { clinicId: string }) {
   const [breakDuration, setBreakDuration] = useState('0');
   const [breakStart, setBreakStart] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function add() {
     if (!name.trim()) return;
     setSaving(true);
+    setError(null);
     try {
       await bookingService.createShiftTemplate({
         clinicId,
@@ -137,6 +155,8 @@ function ShiftTemplateAddForm({ clinicId }: { clinicId: string }) {
         defaultBreakStartMinute: breakStart ? timeInputToMinutes(breakStart) : null,
       });
       setName(''); setBreakDuration('0'); setBreakStart('');
+    } catch (err) {
+      setError(toFriendlyMessage(err));
     } finally {
       setSaving(false);
     }
@@ -153,6 +173,7 @@ function ShiftTemplateAddForm({ clinicId }: { clinicId: string }) {
         <Field label="Break (minutes)"><input type="number" min={0} className={inputCls} value={breakDuration} onChange={(e) => setBreakDuration(e.target.value)} /></Field>
         <Field label="Default break start"><input type="time" className={inputCls} value={breakStart} onChange={(e) => setBreakStart(e.target.value)} /></Field>
       </div>
+      <ErrorNote message={error} />
       <button type="button" className={btnPrimary} onClick={() => void add()} disabled={saving || !name.trim()}>
         {saving ? 'Adding…' : '+ Add shift template'}
       </button>

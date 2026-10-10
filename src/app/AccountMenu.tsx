@@ -232,6 +232,7 @@ export function AccountMenu({
           therapistId={myTherapist.id}
           therapistName={myTherapist.name}
           clinicId={clinicId}
+          currentWorkingHours={myTherapist.workingHours ?? null}
           clinic={{
             startHour: clinic.bookingStartHour ?? 9,
             endHour: clinic.bookingEndHour ?? 17,

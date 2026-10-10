@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService } from '@/services';
 import { WorkingHoursSheet } from './WorkingHoursSheet';
 import { ErrorNote, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
-import type { UUID } from '@/domain/types';
+import type { UUID, WorkingHours } from '@/domain/types';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -18,12 +18,14 @@ const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
  * custom hours instead of saving them directly.
  */
 export function ShiftRequestSheet({
-  open, therapistId, therapistName, clinicId, clinic, onClose,
+  open, therapistId, therapistName, clinicId, clinic, currentWorkingHours, onClose,
 }: {
   open: boolean;
   therapistId: UUID;
   therapistName: string;
   clinicId: UUID;
+  /** The therapist's hours in effect now — pre-fills the custom-hours fallback. */
+  currentWorkingHours: WorkingHours | null;
   clinic: { startHour: number; endHour: number; closedWeekdays?: number[] };
   onClose: () => void;
 }) {
@@ -34,6 +36,7 @@ export function ShiftRequestSheet({
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const titleId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -56,9 +59,15 @@ export function ShiftRequestSheet({
       <WorkingHoursSheet
         open
         therapistName={therapistName}
-        value={null}
+        value={currentWorkingHours}
         clinic={clinic}
-        onSave={async (hours) => { await bookingService.requestCustomHours(therapistId, hours); setSubmitted(true); }}
+        onSave={async (hours) => {
+          await bookingService.requestCustomHours(therapistId, hours);
+          setSubmitted(true);
+          // WorkingHoursSheet closes itself right after onSave resolves (other
+          // callers rely on that), so confirm here before it does.
+          window.alert('Submitted — waiting on approval. Your current hours stay in effect until then.');
+        }}
         onClose={onClose}
       />
     );
@@ -80,8 +89,8 @@ export function ShiftRequestSheet({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={onClose}>
-      <div role="dialog" aria-modal="true" className="w-full rounded-t-2xl bg-[var(--surface)] p-4 sm:max-w-md sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display text-lg font-semibold text-[var(--ink)]">My working hours</h2>
+      <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full rounded-t-2xl bg-[var(--surface)] p-4 sm:max-w-md sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 id={titleId} className="font-display text-lg font-semibold text-[var(--ink)]">My working hours</h2>
         {submitted ? (
           <p className="mt-3 text-sm text-[var(--ink)]">Submitted — waiting on approval. Your current hours stay in effect until then.</p>
         ) : (templates ?? []).length === 0 ? (
@@ -92,7 +101,7 @@ export function ShiftRequestSheet({
         ) : (
           <>
             <div className="mt-3 flex flex-col gap-3">
-              <select className={inputCls} value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
+              <select className={inputCls} aria-label="Shift" value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
                 <option value="">Pick a shift…</option>
                 {(templates ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>

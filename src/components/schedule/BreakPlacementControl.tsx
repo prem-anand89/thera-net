@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService } from '@/services';
-import { inputCls } from '@/components/ui';
+import { ErrorNote, inputCls } from '@/components/ui';
+import { toFriendlyMessage } from '@/lib/errors';
 import type { UUID } from '@/domain/types';
 
 function minutesToTimeInput(m: number): string {
@@ -11,6 +12,7 @@ function minutesToTimeInput(m: number): string {
   const min = (m % 60).toString().padStart(2, '0');
   return `${h}:${min}`;
 }
+/** NaN for an empty/partial value (a cleared <input type="time">). */
 function timeInputToMinutes(t: string): number {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
@@ -30,6 +32,24 @@ export function BreakPlacementControl({ therapistId, clinicId }: { therapistId: 
   const assignments = useLiveQuery(() => repos.therapistShiftAssignments.listByTherapist(therapistId), [therapistId]);
   const templates = useLiveQuery(() => repos.shiftTemplates.list(clinicId), [clinicId]);
   const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<{ id: string; message: string } | null>(null);
+
+  async function save(assignmentId: UUID, value: string) {
+    const minutes = timeInputToMinutes(value);
+    if (!Number.isFinite(minutes)) {
+      // Never send a cleared value: it would reach the RPC as null.
+      setError({ id: assignmentId, message: 'Enter a break start time.' });
+      return;
+    }
+    setError(null);
+    try {
+      await bookingService.setBreakPlacement(assignmentId, minutes);
+      setSaved(assignmentId);
+      setTimeout(() => setSaved((s) => (s === assignmentId ? null : s)), 2000);
+    } catch (err) {
+      setError({ id: assignmentId, message: toFriendlyMessage(err) });
+    }
+  }
 
   const templateById = new Map((templates ?? []).map((t) => [t.id, t]));
   const movable = (assignments ?? []).filter((a) => {
@@ -47,19 +67,19 @@ export function BreakPlacementControl({ therapistId, clinicId }: { therapistId: 
         const t = templateById.get(a.shiftTemplateId!)!;
         const current = a.breakStartMinute ?? t.defaultBreakStartMinute ?? t.startMinute;
         return (
-          <div key={a.id} className="flex items-center gap-2 text-sm">
-            <span className="text-[var(--muted)]">{t.name}</span>
-            <input
-              type="time"
-              className={inputCls}
-              defaultValue={minutesToTimeInput(current)}
-              onBlur={async (e) => {
-                await bookingService.setBreakPlacement(a.id, timeInputToMinutes(e.target.value));
-                setSaved(a.id);
-                setTimeout(() => setSaved((s) => (s === a.id ? null : s)), 2000);
-              }}
-            />
-            {saved === a.id && <span className="text-xs text-[var(--teal)]">Saved</span>}
+          <div key={a.id} className="space-y-1">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-[var(--muted)]">{t.name}</span>
+              <input
+                type="time"
+                className={inputCls}
+                aria-label={`Break start, ${t.name}`}
+                defaultValue={minutesToTimeInput(current)}
+                onBlur={(e) => void save(a.id, e.target.value)}
+              />
+              {saved === a.id && <span className="text-xs text-[var(--teal)]">Saved</span>}
+            </div>
+            <ErrorNote message={error?.id === a.id ? error.message : null} />
           </div>
         );
       })}

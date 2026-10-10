@@ -341,7 +341,9 @@ export const bookingService = {
     return data as UUID;
   },
 
-  async assignCustomHours(therapistId: UUID, hours: WorkingHours | null): Promise<UUID> {
+  /** Returns the new assignment id, or null for "Clinic hours" (hours = null),
+   *  which creates no assignment row — it supersedes all and sets working_hours = null. */
+  async assignCustomHours(therapistId: UUID, hours: WorkingHours | null): Promise<UUID | null> {
     const supabase = supabaseOrThrow();
     const { data, error } = await supabase.rpc('assign_custom_hours', {
       p_therapist_id: therapistId,
@@ -349,7 +351,7 @@ export const bookingService = {
     });
     if (error) throw new Error(`Could not assign custom hours: ${error.message}`);
     syncEngine.schedule(0);
-    return data as UUID;
+    return (data as UUID | null) ?? null;
   },
 
   async requestShiftAssignment(params: {

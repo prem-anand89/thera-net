@@ -9,6 +9,7 @@ let templates: ShiftTemplate[];
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (query: () => unknown) => query() }));
 vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1' }) }));
 const createShiftTemplate = vi.fn();
+vi.mock('@/lib/errors', () => ({ toFriendlyMessage: (e: Error) => e.message }));
 const updateShiftTemplate = vi.fn();
 vi.mock('@/services', () => ({
   // useLiveQuery is mocked to call the querier synchronously (see
@@ -42,5 +43,31 @@ describe('ShiftTemplatesSection', () => {
     render(<ShiftTemplatesSection />);
     fireEvent.click(screen.getByRole('button', { name: 'Deactivate' }));
     expect(updateShiftTemplate).toHaveBeenCalledWith(expect.objectContaining({ templateId: 't1', active: false }));
+  });
+
+  it('shows an error when creating a template fails', async () => {
+    templates = [];
+    createShiftTemplate.mockRejectedValueOnce(new Error('Could not create shift template: boom'));
+    render(<ShiftTemplatesSection />);
+    fireEvent.change(screen.getByPlaceholderText('Morning shift'), { target: { value: 'Evening' } });
+    fireEvent.click(screen.getByRole('button', { name: /add shift template/i }));
+    expect(await screen.findByText(/boom/)).toBeInTheDocument();
+  });
+
+  it('shows an error when deactivating fails', async () => {
+    templates = [{ id: 't1', clinicId: 'c1', name: 'Morning', startMinute: 540, endMinute: 780, breakDurationMinutes: 0, defaultBreakStartMinute: null, active: true, updatedAt: '' }];
+    updateShiftTemplate.mockRejectedValueOnce(new Error('offline'));
+    render(<ShiftTemplatesSection />);
+    fireEvent.click(screen.getByRole('button', { name: 'Deactivate' }));
+    expect(await screen.findByText('offline')).toBeInTheDocument();
+  });
+
+  it('shows an error when saving an edit fails', async () => {
+    templates = [{ id: 't1', clinicId: 'c1', name: 'Morning', startMinute: 540, endMinute: 780, breakDurationMinutes: 0, defaultBreakStartMinute: null, active: true, updatedAt: '' }];
+    updateShiftTemplate.mockRejectedValueOnce(new Error('bad bounds'));
+    render(<ShiftTemplatesSection />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('bad bounds')).toBeInTheDocument();
   });
 });

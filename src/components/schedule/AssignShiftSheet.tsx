@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService } from '@/services';
 import { ErrorNote, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
@@ -29,6 +29,7 @@ export function AssignShiftSheet({
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const titleId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -62,14 +63,14 @@ export function AssignShiftSheet({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={onClose}>
-      <div role="dialog" aria-modal="true" className="w-full rounded-t-2xl bg-[var(--surface)] p-4 sm:max-w-md sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display text-lg font-semibold text-[var(--ink)]">Assign shift, {therapistName}</h2>
+      <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full rounded-t-2xl bg-[var(--surface)] p-4 sm:max-w-md sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 id={titleId} className="font-display text-lg font-semibold text-[var(--ink)]">Assign shift, {therapistName}</h2>
         {(templates ?? []).length === 0 ? (
           <p className="mt-2 text-sm text-[var(--muted)]">No shift templates set up yet. Use "Working hours, {therapistName}" to set custom hours instead.</p>
         ) : (
           <>
             <div className="mt-3 flex flex-col gap-3">
-              <select className={inputCls} value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
+              <select className={inputCls} aria-label="Shift" value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
                 <option value="">Pick a shift…</option>
                 {(templates ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
