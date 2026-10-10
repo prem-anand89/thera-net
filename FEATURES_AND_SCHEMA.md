@@ -1026,7 +1026,7 @@ still falls through to the existing share sheet, unchanged.
     - **Phones**: the tabs row shows Schedule · History · Feedback and + Book (Reminders from `tab:`, in ⋮ on phones); "Find a time" lives in ⋮ and in the empty-day card; on a closed day with nothing booked the empty card is the closed notice ("Closed every Thursday. Public booking is off. You can still book here.") instead of a banner plus a card. **Blocks show status by fill** (`appointmentFill`, shared with Workspace's Today rows): upcoming = white card with the therapist's edge; arrived without a visit = tinted in the therapist's colour; visit logged = grey; no-show = rust; cancelled = struck through. `.chip-row` sits in `@layer components` in `index.css` so Tailwind display utilities can hide it (unlayered, it beat `desktop:hidden`). There is no Requests tab: "See all" / "All" (and `?view=requests`, e.g. Workspace's Review link) opens the full list in a `Panel`.
     - **History**: Past / Upcoming toggle, a since/until date, day headings, outcome counts (attended / no-show / cancelled), search, status and therapist filters.
     - **Booking sheet extras**: "First available →" (`firstAvailableSlot`, next 21 days, respects closures, working hours and length); the submit button carries the summary ("Confirm booking · Thu, 1 Oct, 10:30 AM · 30m"); sticky footer on phones.
-    - **Working hours** (`therapists.working_hours`, see schema): the grid shades non-working time (paper) and offers free slots only inside it; agenda gaps, Find a time, the mini month's fully-booked dot and First available use it; the booking sheet puts outside-hours times under a collapsed "Outside working hours (N)" (staff may still book). Edited in `WorkingHoursSheet` — several times per day, the gap is the break, "Copy to Tue–Fri" — from Settings → Team (admin), the rail's per-therapist "hours" / ⋮ menu (admin, front desk), and "My hours" (therapist, own).
+    - **Working hours** (`therapists.working_hours`, see schema): the grid shades non-working time (paper) and offers free slots only inside it; agenda gaps, Find a time, the mini month's fully-booked dot and First available use it; the booking sheet puts outside-hours times under a collapsed "Outside working hours (N)" (staff may still book). Admin/front desk assign a shift template or custom hours directly (immediate) from Settings → Team or the schedule's kebab "Assign shift" / "Working hours, {name}" — see **Shift-based scheduling** below for the full model, which replaced a therapist's own direct `WorkingHoursSheet` editing with a request/approval flow.
     - **Repeat bookings**: booking sheet "Repeat this booking" — weekday chips + session count (defaults to sessions left in the patient's open package via `dashboardService.openPackages`), a per-date preview (`seriesDates`, `seriesProblem`) marking clashes / outside hours / past with "Find a time" or "Skip" per date; submits via `confirm_booking_series` (all-or-nothing). The details panel shows "Session k of n" and offers "Cancel this and all following sessions" (`cancel_appointment_series`).
     - **Drag (tab+)**: mouse/pen drag a block to move it (15-minute snaps, across therapist columns in Day view, across days in the single-therapist Week view) or drag its bottom edge to resize; a dashed ghost shows the target and turns red when it isn't free / is outside hours / closed / past (`dropAllowed`). Touch: a 450 ms long-press enters "Tap a free time to move …" mode (dragging would fight scrolling). Same-therapist drops save at once with a 10 s Undo toast; dropping on another therapist asks to confirm. Only confirmed/rescheduled appointments the viewer can manage are draggable; therapists can't reassign (server-enforced).
     - **`BookSlotSheet` layout (phone-first)**: a fixed header (title, close ×) and footer (what will be booked, "Fri, 2 Oct, 11:00 AM · 30m · Dr Aishwarya", then a full-width action), with the body scrolling between them; 94dvh bottom sheet on phones, centred dialog from `sm:`. Sections: Patient (Existing / New toggle), Therapist and length (therapist chips with their Schedule colours, length chips), Day (7 day cards, closed days greyed, "Other date" for the calendar), Time (Morning / Afternoon / Evening groups, 4 columns on phones; taken or past times faded; "First available"), then a "Repeat this booking" switch. A request being confirmed shows what the patient asked for at the top.
@@ -1251,7 +1251,7 @@ still falls through to the existing share sheet, unchanged.
 
 Everything about the signed-in person lives in the header avatar menu, separate from the clinic-wide, admin-only Settings page. A bottom sheet on phones, a dropdown from `sm:` up.
 - **My account** (sheet): *Profile* (display name for everyone; for a linked therapist also name on invoices, registration no., phone, photo; email read-only) and *Security* (change/set password, sign out of other devices via `auth.signOut({ scope: 'others' })`).
-- **My working hours**: a linked therapist's own `WorkingHoursSheet`.
+- **My working hours**: a linked therapist's `ShiftRequestSheet` — pick a shift template + weekdays (submits a pending request for admin approval) or fall through to `WorkingHoursSheet` for custom hours that don't match any template (also a request). A therapist can no longer write `working_hours` directly; see **Shift-based scheduling**. A separate `BreakPlacementControl`, shown alongside it, lets a therapist move their break within an already-approved shift immediately, no approval needed.
 - **Notifications**: this device's push switch and, for a linked therapist, "Email me appointment updates".
 - **Settings**: admins only. Install app and Help & feedback for everyone.
 - The avatar shows the linked therapist's photo, otherwise initials.
@@ -1438,9 +1438,16 @@ profile_confirmed_at timestamptz (NULLABLE) — set when linked login finishes
                 `/onboarding/profile`; NULL triggers profile onboarding
 working_hours   jsonb (NULLABLE) — weekly hours: {"0"–"6": [[startMin, endMin], …]},
                 gaps are breaks, a missing weekday is a day off, NULL = clinic
-                booking hours. Written only via set_therapist_working_hours
-                (admin / front desk for anyone, the therapist for themselves;
-                validated by working_hours_valid). CHECK
+                booking hours. Admin/front desk can still write it directly
+                via `set_therapist_working_hours` (a therapist can no longer
+                write their own — see Shift-based scheduling below). Every
+                other path (`assign_shift`, `assign_custom_hours`,
+                `approve_shift_assignment`, `set_break_placement`) derives
+                this same JSON shape via `derive_working_hours()` and writes
+                it through that function too, so it stays the single source
+                of truth every downstream consumer (TimeGrid, booking form,
+                slot generation) already reads — those never needed to
+                change. Always validated by `working_hours_valid`. CHECK
                 therapists_working_hours_valid (NOT VALID: new writes only)
                 guards the column too, and the sync push drops working_hours
                 from therapist upserts so a stale local row can't revert it
@@ -1449,6 +1456,48 @@ working_hours   jsonb (NULLABLE) — weekly hours: {"0"–"6": [[startMin, endMi
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 ```
+
+#### Shift-based scheduling (`shift_templates`, `therapist_shift_assignments`)
+
+Replaces a therapist's own direct editing of `working_hours` with an admin-controlled model: admin assigns (immediately) a reusable shift template or custom hours; a therapist can request a change (admin-approved) and self-service move their break's placement within an already-approved shift, no approval needed (moving a fixed-duration break never changes total capacity). Both tables are RPC-gated like `appointment_requests` — reads sync normally, no insert/update/delete RLS policy exists on either, every write goes through a `security definer` RPC. A single `derive_working_hours()` function builds the exact same JSON shape `therapists.working_hours` already held, so every downstream consumer (TimeGrid, the booking form, slot generation) needed zero changes.
+
+```sql
+-- shift_templates: clinic-defined, reusable envelopes (admin CRUD, Settings → Team).
+id                          uuid PRIMARY KEY
+clinic_id                   uuid NOT NULL (FOREIGN KEY → clinics.id)
+name                        text NOT NULL
+start_minute                integer NOT NULL
+end_minute                  integer NOT NULL
+break_duration_minutes      integer NOT NULL (default 0)
+default_break_start_minute  integer (NULLABLE; required whenever break_duration_minutes > 0)
+active                      boolean NOT NULL (default true) — deactivated, not deleted
+created_at, updated_at      timestamptz NOT NULL
+
+-- therapist_shift_assignments: one row per "which shift (or custom hours) +
+-- which weekdays", request/approval history kept, not deleted.
+id                  uuid PRIMARY KEY
+clinic_id           uuid NOT NULL (FOREIGN KEY → clinics.id)
+therapist_id        uuid NOT NULL (FOREIGN KEY → therapists.id)
+shift_template_id   uuid (FOREIGN KEY → shift_templates.id, NULLABLE) — exactly one
+                    of this or custom_hours is set
+custom_hours        jsonb (NULLABLE) — same shape as therapists.working_hours;
+                    replaces it wholesale on approval (unlike a shift
+                    assignment, which merges by weekday)
+weekdays            integer[] (NULLABLE) — required iff shift_template_id is set;
+                    NULL on the custom_hours path (weekdays live inside that JSON)
+break_start_minute  integer (NULLABLE) — shift-template path only; NULL = the
+                    template's own default_break_start_minute
+status              text NOT NULL — 'pending' | 'approved' | 'declined' | 'superseded'
+                    (superseded: another approved assignment claimed some/all
+                    of this row's weekdays, or a custom-hours assignment
+                    replaced it entirely — kept as history, not deleted)
+note                text (NULLABLE)
+requested_by, decided_by  uuid (FOREIGN KEY → auth.users.id, NULLABLE)
+decided_at          timestamptz (NULLABLE)
+created_at, updated_at  timestamptz NOT NULL
+```
+
+RPCs (all `security definer`, revoked from `anon`): `create_shift_template`/`update_shift_template` (admin/front_desk; the latter cascades — re-derives `working_hours` for every `approved` assignment bound to the edited template, resetting a break placement to the template's new default if it no longer fits), `assign_shift`/`assign_custom_hours` (admin/front_desk, immediate — the admin is already the approver), `request_shift_assignment`/`request_custom_hours` (`is_own_therapist` only, pending; a new request supersedes an existing unactioned one), `approve_shift_assignment`/`decline_shift_assignment` (admin/front_desk), `set_break_placement` (`is_own_therapist` or admin/front_desk, immediate, only on an `approved` shift-template assignment — bounds re-validated against the template's current `start_minute`/`end_minute`/`break_duration_minutes` at call time, never cached). A newly-approved assignment's weekdays supersede any overlap on the therapist's other approved shift assignments (`supersede_overlapping_weekdays`); approving a custom-hours assignment supersedes every other approved assignment for that therapist, and vice versa (`supersede_all_assignments`) — custom hours and shift templates are mutually exclusive per therapist.
 
 #### `service_catalog`
 ```sql
@@ -2093,7 +2142,13 @@ three has a write policy — every write is a SECURITY DEFINER RPC:
 row's `duration_minutes`), `mark_appointment_arrived` / `link_appointment_visit`
 (any clinic member), `confirm_booking_series` (same rules as a single booking,
 all-or-nothing; clashes listed as UTC ISO times the client localises) /
-`cancel_appointment_series(series, from)`, `set_therapist_working_hours`,
+`cancel_appointment_series(series, from)`, `set_therapist_working_hours`
+(admin/front_desk only — see **Shift-based scheduling** for
+`create_shift_template`, `update_shift_template`, `assign_shift`,
+`assign_custom_hours`, `request_shift_assignment`, `request_custom_hours`,
+`approve_shift_assignment`, `decline_shift_assignment`, `set_break_placement`,
+all on `shift_templates`/`therapist_shift_assignments`, the same RPC-gated,
+no-direct-write pattern as this table),
 `start_walk_in(clinic, therapist, name, phone?, patient?)` (arrived walk-in, no
 overlap check, own therapist or admin/front desk), `restore_appointment_slot`
 (drag Undo, see Review fixes below), and
@@ -2741,7 +2796,7 @@ Team's Invite form locks (with the same informational-only copy) once
     - **Phones**: the tabs row shows Schedule · History · Feedback and + Book (Reminders from `tab:`, in ⋮ on phones); "Find a time" lives in ⋮ and in the empty-day card; on a closed day with nothing booked the empty card is the closed notice ("Closed every Thursday. Public booking is off. You can still book here.") instead of a banner plus a card. **Blocks show status by fill** (`appointmentFill`, shared with Workspace's Today rows): upcoming = white card with the therapist's edge; arrived without a visit = tinted in the therapist's colour; visit logged = grey; no-show = rust; cancelled = struck through. `.chip-row` sits in `@layer components` in `index.css` so Tailwind display utilities can hide it (unlayered, it beat `desktop:hidden`). There is no Requests tab: "See all" / "All" (and `?view=requests`, e.g. Workspace's Review link) opens the full list in a `Panel`.
     - **History**: Past / Upcoming toggle, a since/until date, day headings, outcome counts (attended / no-show / cancelled), search, status and therapist filters.
     - **Booking sheet extras**: "First available →" (`firstAvailableSlot`, next 21 days, respects closures, working hours and length); the submit button carries the summary ("Confirm booking · Thu, 1 Oct, 10:30 AM · 30m"); sticky footer on phones.
-    - **Working hours** (`therapists.working_hours`, see schema): the grid shades non-working time (paper) and offers free slots only inside it; agenda gaps, Find a time, the mini month's fully-booked dot and First available use it; the booking sheet puts outside-hours times under a collapsed "Outside working hours (N)" (staff may still book). Edited in `WorkingHoursSheet` — several times per day, the gap is the break, "Copy to Tue–Fri" — from Settings → Team (admin), the rail's per-therapist "hours" / ⋮ menu (admin, front desk), and "My hours" (therapist, own).
+    - **Working hours** (`therapists.working_hours`, see schema): the grid shades non-working time (paper) and offers free slots only inside it; agenda gaps, Find a time, the mini month's fully-booked dot and First available use it; the booking sheet puts outside-hours times under a collapsed "Outside working hours (N)" (staff may still book). Admin/front desk assign a shift template or custom hours directly (immediate) from Settings → Team or the schedule's kebab "Assign shift" / "Working hours, {name}" — see **Shift-based scheduling** below for the full model, which replaced a therapist's own direct `WorkingHoursSheet` editing with a request/approval flow.
     - **Repeat bookings**: booking sheet "Repeat this booking" — weekday chips + session count (defaults to sessions left in the patient's open package via `dashboardService.openPackages`), a per-date preview (`seriesDates`, `seriesProblem`) marking clashes / outside hours / past with "Find a time" or "Skip" per date; submits via `confirm_booking_series` (all-or-nothing). The details panel shows "Session k of n" and offers "Cancel this and all following sessions" (`cancel_appointment_series`).
     - **Drag (tab+)**: mouse/pen drag a block to move it (15-minute snaps, across therapist columns in Day view, across days in the single-therapist Week view) or drag its bottom edge to resize; a dashed ghost shows the target and turns red when it isn't free / is outside hours / closed / past (`dropAllowed`). Touch: a 450 ms long-press enters "Tap a free time to move …" mode (dragging would fight scrolling). Same-therapist drops save at once with a 10 s Undo toast; dropping on another therapist asks to confirm. Only confirmed/rescheduled appointments the viewer can manage are draggable; therapists can't reassign (server-enforced).
     - **`BookSlotSheet` layout (phone-first)**: a fixed header (title, close ×) and footer (what will be booked, "Fri, 2 Oct, 11:00 AM · 30m · Dr Aishwarya", then a full-width action), with the body scrolling between them; 94dvh bottom sheet on phones, centred dialog from `sm:`. Sections: Patient (Existing / New toggle), Therapist and length (therapist chips with their Schedule colours, length chips), Day (7 day cards, closed days greyed, "Other date" for the calendar), Time (Morning / Afternoon / Evening groups, 4 columns on phones; taken or past times faded; "First available"), then a "Repeat this booking" switch. A request being confirmed shows what the patient asked for at the top.
@@ -2966,7 +3021,7 @@ Team's Invite form locks (with the same informational-only copy) once
 
 Everything about the signed-in person lives in the header avatar menu, separate from the clinic-wide, admin-only Settings page. A bottom sheet on phones, a dropdown from `sm:` up.
 - **My account** (sheet): *Profile* (display name for everyone; for a linked therapist also name on invoices, registration no., phone, photo; email read-only) and *Security* (change/set password, sign out of other devices via `auth.signOut({ scope: 'others' })`).
-- **My working hours**: a linked therapist's own `WorkingHoursSheet`.
+- **My working hours**: a linked therapist's `ShiftRequestSheet` — pick a shift template + weekdays (submits a pending request for admin approval) or fall through to `WorkingHoursSheet` for custom hours that don't match any template (also a request). A therapist can no longer write `working_hours` directly; see **Shift-based scheduling**. A separate `BreakPlacementControl`, shown alongside it, lets a therapist move their break within an already-approved shift immediately, no approval needed.
 - **Notifications**: this device's push switch and, for a linked therapist, "Email me appointment updates".
 - **Settings**: admins only. Install app and Help & feedback for everyone.
 - The avatar shows the linked therapist's photo, otherwise initials.
@@ -3153,9 +3208,16 @@ profile_confirmed_at timestamptz (NULLABLE) — set when linked login finishes
                 `/onboarding/profile`; NULL triggers profile onboarding
 working_hours   jsonb (NULLABLE) — weekly hours: {"0"–"6": [[startMin, endMin], …]},
                 gaps are breaks, a missing weekday is a day off, NULL = clinic
-                booking hours. Written only via set_therapist_working_hours
-                (admin / front desk for anyone, the therapist for themselves;
-                validated by working_hours_valid). CHECK
+                booking hours. Admin/front desk can still write it directly
+                via `set_therapist_working_hours` (a therapist can no longer
+                write their own — see Shift-based scheduling below). Every
+                other path (`assign_shift`, `assign_custom_hours`,
+                `approve_shift_assignment`, `set_break_placement`) derives
+                this same JSON shape via `derive_working_hours()` and writes
+                it through that function too, so it stays the single source
+                of truth every downstream consumer (TimeGrid, booking form,
+                slot generation) already reads — those never needed to
+                change. Always validated by `working_hours_valid`. CHECK
                 therapists_working_hours_valid (NOT VALID: new writes only)
                 guards the column too, and the sync push drops working_hours
                 from therapist upserts so a stale local row can't revert it
@@ -3164,6 +3226,48 @@ working_hours   jsonb (NULLABLE) — weekly hours: {"0"–"6": [[startMin, endMi
 created_by, updated_by  uuid (NULLABLE)
 updated_at      timestamptz NOT NULL
 ```
+
+#### Shift-based scheduling (`shift_templates`, `therapist_shift_assignments`)
+
+Replaces a therapist's own direct editing of `working_hours` with an admin-controlled model: admin assigns (immediately) a reusable shift template or custom hours; a therapist can request a change (admin-approved) and self-service move their break's placement within an already-approved shift, no approval needed (moving a fixed-duration break never changes total capacity). Both tables are RPC-gated like `appointment_requests` — reads sync normally, no insert/update/delete RLS policy exists on either, every write goes through a `security definer` RPC. A single `derive_working_hours()` function builds the exact same JSON shape `therapists.working_hours` already held, so every downstream consumer (TimeGrid, the booking form, slot generation) needed zero changes.
+
+```sql
+-- shift_templates: clinic-defined, reusable envelopes (admin CRUD, Settings → Team).
+id                          uuid PRIMARY KEY
+clinic_id                   uuid NOT NULL (FOREIGN KEY → clinics.id)
+name                        text NOT NULL
+start_minute                integer NOT NULL
+end_minute                  integer NOT NULL
+break_duration_minutes      integer NOT NULL (default 0)
+default_break_start_minute  integer (NULLABLE; required whenever break_duration_minutes > 0)
+active                      boolean NOT NULL (default true) — deactivated, not deleted
+created_at, updated_at      timestamptz NOT NULL
+
+-- therapist_shift_assignments: one row per "which shift (or custom hours) +
+-- which weekdays", request/approval history kept, not deleted.
+id                  uuid PRIMARY KEY
+clinic_id           uuid NOT NULL (FOREIGN KEY → clinics.id)
+therapist_id        uuid NOT NULL (FOREIGN KEY → therapists.id)
+shift_template_id   uuid (FOREIGN KEY → shift_templates.id, NULLABLE) — exactly one
+                    of this or custom_hours is set
+custom_hours        jsonb (NULLABLE) — same shape as therapists.working_hours;
+                    replaces it wholesale on approval (unlike a shift
+                    assignment, which merges by weekday)
+weekdays            integer[] (NULLABLE) — required iff shift_template_id is set;
+                    NULL on the custom_hours path (weekdays live inside that JSON)
+break_start_minute  integer (NULLABLE) — shift-template path only; NULL = the
+                    template's own default_break_start_minute
+status              text NOT NULL — 'pending' | 'approved' | 'declined' | 'superseded'
+                    (superseded: another approved assignment claimed some/all
+                    of this row's weekdays, or a custom-hours assignment
+                    replaced it entirely — kept as history, not deleted)
+note                text (NULLABLE)
+requested_by, decided_by  uuid (FOREIGN KEY → auth.users.id, NULLABLE)
+decided_at          timestamptz (NULLABLE)
+created_at, updated_at  timestamptz NOT NULL
+```
+
+RPCs (all `security definer`, revoked from `anon`): `create_shift_template`/`update_shift_template` (admin/front_desk; the latter cascades — re-derives `working_hours` for every `approved` assignment bound to the edited template, resetting a break placement to the template's new default if it no longer fits), `assign_shift`/`assign_custom_hours` (admin/front_desk, immediate — the admin is already the approver), `request_shift_assignment`/`request_custom_hours` (`is_own_therapist` only, pending; a new request supersedes an existing unactioned one), `approve_shift_assignment`/`decline_shift_assignment` (admin/front_desk), `set_break_placement` (`is_own_therapist` or admin/front_desk, immediate, only on an `approved` shift-template assignment — bounds re-validated against the template's current `start_minute`/`end_minute`/`break_duration_minutes` at call time, never cached). A newly-approved assignment's weekdays supersede any overlap on the therapist's other approved shift assignments (`supersede_overlapping_weekdays`); approving a custom-hours assignment supersedes every other approved assignment for that therapist, and vice versa (`supersede_all_assignments`) — custom hours and shift templates are mutually exclusive per therapist.
 
 #### `service_catalog`
 ```sql
@@ -3808,7 +3912,13 @@ three has a write policy — every write is a SECURITY DEFINER RPC:
 row's `duration_minutes`), `mark_appointment_arrived` / `link_appointment_visit`
 (any clinic member), `confirm_booking_series` (same rules as a single booking,
 all-or-nothing; clashes listed as UTC ISO times the client localises) /
-`cancel_appointment_series(series, from)`, `set_therapist_working_hours`,
+`cancel_appointment_series(series, from)`, `set_therapist_working_hours`
+(admin/front_desk only — see **Shift-based scheduling** for
+`create_shift_template`, `update_shift_template`, `assign_shift`,
+`assign_custom_hours`, `request_shift_assignment`, `request_custom_hours`,
+`approve_shift_assignment`, `decline_shift_assignment`, `set_break_placement`,
+all on `shift_templates`/`therapist_shift_assignments`, the same RPC-gated,
+no-direct-write pattern as this table),
 `start_walk_in(clinic, therapist, name, phone?, patient?)` (arrived walk-in, no
 overlap check, own therapist or admin/front desk), `restore_appointment_slot`
 (drag Undo, see Review fixes below), and
