@@ -19,10 +19,9 @@ vi.mock('@/features/notifications/useInstallState', () => ({
 vi.mock('@/features/notifications/InstallPrompt', () => ({ InstallPrompt: () => null }));
 vi.mock('@/features/me/MyAccountSheet', () => ({ MyAccountSheet: () => null }));
 vi.mock('@/features/me/MyNotificationsSheet', () => ({ MyNotificationsSheet: () => null }));
-vi.mock('@/components/schedule/WorkingHoursSheet', () => ({ WorkingHoursSheet: () => null }));
+vi.mock('@/components/schedule/ShiftRequestSheet', () => ({ ShiftRequestSheet: () => null }));
 vi.mock('@/components/ChangePasswordDialog', () => ({ ChangePasswordDialog: () => null }));
 vi.mock('@/components/HelpFeedbackDialog', () => ({ HelpFeedbackDialog: () => null }));
-vi.mock('@/services', () => ({ bookingService: { setWorkingHours: vi.fn() } }));
 vi.mock('@/lib/supabase', () => ({ publicTherapistPhotoUrl: () => null }));
 vi.mock('./signOut', () => ({ signOutSafely: vi.fn() }));
 

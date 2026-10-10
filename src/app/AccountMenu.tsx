@@ -3,14 +3,13 @@ import { Link } from '@tanstack/react-router';
 import { signOutSafely } from './signOut';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
-import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
+import { ShiftRequestSheet } from '@/components/schedule/ShiftRequestSheet';
 import { InstallPrompt } from '@/features/notifications/InstallPrompt';
 import { useInstallState } from '@/features/notifications/useInstallState';
 import { MyAccountSheet } from '@/features/me/MyAccountSheet';
 import { MyNotificationsSheet } from '@/features/me/MyNotificationsSheet';
 import { useMyTherapist } from '@/features/me/useMyTherapist';
 import { useClinic } from './clinicContext';
-import { bookingService } from '@/services';
 import { publicTherapistPhotoUrl } from '@/lib/supabase';
 import { HelpFeedbackDialog } from '@/components/HelpFeedbackDialog';
 import { IconBell, IconCalendar, IconSettings, IconUser } from '@/components/NavIcons';
@@ -222,16 +221,16 @@ export function AccountMenu({
         therapist={myTherapist}
       />
       {myTherapist && (
-        <WorkingHoursSheet
+        <ShiftRequestSheet
           open={hoursOpen}
+          therapistId={myTherapist.id}
           therapistName={myTherapist.name}
-          value={myTherapist.workingHours}
+          clinicId={clinicId}
           clinic={{
             startHour: clinic.bookingStartHour ?? 9,
             endHour: clinic.bookingEndHour ?? 17,
             closedWeekdays: clinic.closedWeekdays,
           }}
-          onSave={(hours) => bookingService.setWorkingHours(myTherapist.id, hours)}
           onClose={() => setHoursOpen(false)}
         />
       )}
