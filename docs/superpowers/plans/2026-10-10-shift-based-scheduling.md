@@ -425,6 +425,17 @@ begin
   update therapist_shift_assignments set status = 'superseded', updated_at = now()
     where therapist_id = p_therapist_id and status = 'pending';
 
+  -- Supersede/derive BEFORE inserting the new row: apply_shift_hours's
+  -- internal supersede_overlapping_weekdays() scans all currently-approved
+  -- shift-based rows for this therapist. Running it before the insert
+  -- keeps the brand-new assignment out of that scan, so it can't supersede
+  -- itself (it would otherwise find its own weekdays as a 100% overlap and
+  -- immediately flip the new row to 'superseded').
+  perform apply_shift_hours(
+    p_therapist_id, p_weekdays, v_shift.start_minute, v_shift.end_minute,
+    coalesce(p_break_start_minute, v_shift.default_break_start_minute), v_shift.break_duration_minutes
+  );
+
   insert into therapist_shift_assignments (
     clinic_id, therapist_id, shift_template_id, weekdays, break_start_minute,
     status, decided_by, decided_at
@@ -432,11 +443,6 @@ begin
     v_clinic_id, p_therapist_id, p_shift_template_id, p_weekdays,
     p_break_start_minute, 'approved', auth.uid(), now()
   ) returning id into v_id;
-
-  perform apply_shift_hours(
-    p_therapist_id, p_weekdays, v_shift.start_minute, v_shift.end_minute,
-    coalesce(p_break_start_minute, v_shift.default_break_start_minute), v_shift.break_duration_minutes
-  );
 
   return v_id;
 end $$;
@@ -462,13 +468,17 @@ begin
   update therapist_shift_assignments set status = 'superseded', updated_at = now()
     where therapist_id = p_therapist_id and status = 'pending';
 
+  -- Supersede/write BEFORE inserting the new row, for the same reason as
+  -- assign_shift: apply_custom_hours's supersede_all_assignments() marks
+  -- every currently-approved row 'superseded'. Running it first keeps the
+  -- new row out of that sweep.
+  perform apply_custom_hours(p_therapist_id, p_custom_hours);
+
   insert into therapist_shift_assignments (
     clinic_id, therapist_id, custom_hours, status, decided_by, decided_at
   ) values (
     v_clinic_id, p_therapist_id, p_custom_hours, 'approved', auth.uid(), now()
   ) returning id into v_id;
-
-  perform apply_custom_hours(p_therapist_id, p_custom_hours);
 
   return v_id;
 end $$;
