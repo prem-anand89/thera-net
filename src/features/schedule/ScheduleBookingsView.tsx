@@ -322,6 +322,17 @@ export function ScheduleBookingsView({
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [hoursTherapistId, setHoursTherapistId] = useState<UUID | null>(null);
   const [assignShiftTherapistId, setAssignShiftTherapistId] = useState<UUID | null>(null);
+  const [pickingFor, setPickingFor] = useState<'shift' | 'hours' | null>(null);
+  function openFor(kind: 'shift' | 'hours', id: UUID) {
+    if (kind === 'shift') setAssignShiftTherapistId(id);
+    else setHoursTherapistId(id);
+  }
+  function chooseTherapist(kind: 'shift' | 'hours') {
+    const active = roster.filter((t) => t.active !== false);
+    if (active.length === 1) openFor(kind, active[0].id);
+    else if (singleTherapist) openFor(kind, singleTherapist.id);
+    else setPickingFor(kind);
+  }
   const [pendingHoursSave, setPendingHoursSave] = useState<{
     therapistId: UUID;
     value: WorkingHours | null;
@@ -715,18 +726,16 @@ export function ScheduleBookingsView({
                           Add to waitlist
                         </button>
                       )}
-                      {canManageAll &&
-                        roster.map((t) => (
-                          <button key={t.id} type="button" className={menuItem} onClick={() => { setAssignShiftTherapistId(t.id); close(); }}>
-                            Assign shift, {t.name}
-                          </button>
-                        ))}
-                      {canManageAll &&
-                        roster.map((t) => (
-                          <button key={`hours-${t.id}`} type="button" className={menuItem} onClick={() => { setHoursTherapistId(t.id); close(); }}>
-                            Working hours, {t.name}
-                          </button>
-                        ))}
+                      {canManageAll && (
+                        <button type="button" className={menuItem} onClick={() => { chooseTherapist('shift'); close(); }}>
+                          Assign shift…
+                        </button>
+                      )}
+                      {canManageAll && (
+                        <button type="button" className={menuItem} onClick={() => { chooseTherapist('hours'); close(); }}>
+                          Working hours…
+                        </button>
+                      )}
                       <button type="button" className={`${menuItem} hidden pointer-fine:block`} onClick={() => { setShortcutsOpen(true); close(); }}>
                         Keyboard shortcuts
                       </button>
@@ -1047,6 +1056,23 @@ export function ScheduleBookingsView({
         clinicId={clinic.id}
         onClose={() => setAssignShiftTherapistId(null)}
       />
+
+      <Panel open={pickingFor !== null} onClose={() => setPickingFor(null)} title={pickingFor === 'shift' ? 'Assign shift to…' : 'Working hours for…'}>
+        <ul className="divide-y divide-[var(--border)]">
+          {roster.filter((t) => t.active !== false).map((t) => (
+            <li key={t.id}>
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center gap-2 px-1 text-left text-sm text-[var(--ink)] hover:bg-[var(--paper)]"
+                onClick={() => { const kind = pickingFor; setPickingFor(null); if (kind) openFor(kind, t.id); }}
+              >
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: t.color }} />
+                {t.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Panel>
 
       <ClosedDaysSheet open={closedSheetOpen} clinicId={clinic.id} initialDate={date < today ? today : date} onClose={() => setClosedSheetOpen(false)} />
 
