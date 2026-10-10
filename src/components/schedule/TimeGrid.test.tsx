@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import type { Appointment } from '@/domain/types';
+import type { PatientFlagContext } from '@/domain/patientFlags';
 import { DayColumn } from './TimeGrid';
 
 afterEach(cleanup);
@@ -37,5 +38,31 @@ describe('DayColumn off-hours classification', () => {
     const { container } = render(<DayColumn {...baseProps} working={[]} />);
     expect(container.querySelectorAll('[data-break]')).toHaveLength(0);
     expect(container.querySelectorAll('[data-off-hours]')).toHaveLength(1);
+  });
+});
+
+describe('DayColumn flag badges', () => {
+  const appointment: Appointment = {
+    id: 'a1', clinicId: 'c1', patientId: 'p1', patientName: 'Priya', patientPhone: '+91 98200 00001',
+    therapistId: 't1', scheduledAt: '2026-10-01T04:30:00Z', durationMinutes: 30, status: 'confirmed',
+    requestId: null, visitId: null, rescheduleCount: 0, previousScheduledAt: null, createdAt: '', updatedAt: '',
+  };
+  const flagContext: PatientFlagContext = {
+    patientIdsWithVisits: new Set(['p1']),
+    packages: new Map(),
+    balanceDue: new Set(['p1']),
+    noShows: new Map(),
+    conditionByPatient: new Map(),
+    requestNotes: new Map(),
+  };
+
+  it('renders a flag badge when the appointment matches a flag', () => {
+    const { container } = render(<DayColumn {...baseProps} appointments={[appointment]} flagContext={flagContext} />);
+    expect(container.querySelectorAll('[class*="h-1.5"]')).toHaveLength(1);
+  });
+
+  it('renders no badge without a flagContext', () => {
+    const { container } = render(<DayColumn {...baseProps} appointments={[appointment]} />);
+    expect(container.querySelectorAll('[class*="h-1.5"]')).toHaveLength(0);
   });
 });

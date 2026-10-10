@@ -770,11 +770,21 @@ export interface AppointmentRequest {
    *  wants front desk to know. Distinct from `preferredTimeText`, which
    *  is purely about scheduling. */
   notes: string | null;
-  /** Real calendar date, informational only — not checked against any
-   *  therapist's actual availability. See this file's own note on why
-   *  there's no slot-checking logic anywhere in this module yet. */
+  /** Real calendar date, informational only at submission time — not
+   *  checked against any therapist's actual availability then. Matched
+   *  against newly-freed slots later, see `domain/waitlistMatch.ts`. */
   preferredDate: string | null;
   preferredTimeText: string | null;
+  /** Structured time-of-day preference, for waitlist matching — distinct
+   *  from the free-text `preferredTimeText` above, which stays for notes
+   *  a patient adds in their own words. Optional: older rows lack it. */
+  preferredTimeOfDay?: 'morning' | 'afternoon' | 'evening' | 'any' | null;
+  /** Set when the patient joined specifically because their preferred day
+   *  was full (`BookingFormPage`'s "Join the waitlist" path) rather than a
+   *  plain request — cosmetic (copy, filtering), not a different lifecycle:
+   *  matching and auto-resolve treat every pending request the same way,
+   *  see `domain/waitlistMatch.ts`. Optional: older rows lack it. */
+  isWaitlist?: boolean;
   status: AppointmentRequestStatus;
   appointmentId: UUID | null;
   createdAt: string;

@@ -19,7 +19,8 @@ export interface PatientFlagContext {
   packages: Map<string, { logged: number; total: number }>;
   /** Patients with an outstanding invoice. */
   balanceDue: Set<string>;
-  /** No-shows per patient key (`patientKey`). */
+  /** No-shows and cancellations per patient key (`patientKey`), combined —
+   *  both predict the same risk: this slot may not happen. */
   noShows: Map<string, number>;
   /** Short clinical reason per patient: primary condition, else the latest visit's condition. */
   conditionByPatient: Map<string, string>;
@@ -47,7 +48,7 @@ export function patientFlags(appointment: Appointment, ctx: PatientFlagContext |
   }
   if (id && ctx.balanceDue.has(id)) flags.push({ key: 'balance', label: 'Balance due' });
   const noShows = ctx.noShows.get(patientKey(appointment)) ?? 0;
-  if (noShows >= NO_SHOW_FLAG_AT) flags.push({ key: 'noshow', label: `${noShows} no-shows`, count: noShows });
+  if (noShows >= NO_SHOW_FLAG_AT) flags.push({ key: 'noshow', label: `${noShows} missed/cancelled`, count: noShows });
   return flags;
 }
 
@@ -68,11 +69,13 @@ export function appointmentReason(
   return null;
 }
 
-/** Counts no-shows per patient key across a list of appointments. */
+/** Counts no-shows and cancellations per patient key across a list of
+ *  appointments — both feed the same `noshow` flag, since either predicts
+ *  the same risk: this slot may not happen. */
 export function countNoShows(appointments: Appointment[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const a of appointments) {
-    if (a.status !== 'no_show') continue;
+    if (a.status !== 'no_show' && a.status !== 'cancelled') continue;
     const key = patientKey(a);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }

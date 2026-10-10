@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService, dashboardService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -187,6 +187,31 @@ export function BookSlotSheet({
       : therapists.length === 1 ? therapists[0].id : '';
     if (fallback) setTherapistId(fallback);
   }, [isOpen, therapistTouched, therapistId, therapists, myTherapistId]);
+
+  const lastPatientIdRef = useRef<string | null>(null);
+
+  // Smart follow-up auto-fill: remember this patient's last therapist and length.
+  useEffect(() => {
+    if (!isOpen || rescheduleAppointment || !patientId || !appointments?.length) {
+      lastPatientIdRef.current = patientId || null;
+      return;
+    }
+    if (patientId === lastPatientIdRef.current) return;
+    lastPatientIdRef.current = patientId;
+
+    const lastAppt = appointments
+      .filter((a) => a.patientId === patientId && a.status !== 'cancelled' && a.status !== 'no_show' && a.scheduledAt < new Date().toISOString())
+      .sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt))[0];
+    
+    if (lastAppt) {
+      if (lastAppt.therapistId && !therapistTouched && !lockTherapist) {
+        setTherapistId(lastAppt.therapistId);
+      }
+      const pastLength = appointmentMinutes(lastAppt, slotMinutes);
+      setLengthMinutes(pastLength);
+      setSelectedTime(null);
+    }
+  }, [isOpen, patientId, rescheduleAppointment, appointments, therapistTouched, lockTherapist, slotMinutes]);
 
   useEffect(() => {
     if (!isOpen) return;

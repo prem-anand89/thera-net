@@ -1,4 +1,5 @@
 import type { UUID, WorkingHours } from '@/domain/types';
+import type { TimeOfDay } from '@/domain/waitlistMatch';
 import { getSupabase } from '@/lib/supabase';
 import { openPatientWhatsAppChat } from '@/lib/pdfShare';
 import {
@@ -90,7 +91,9 @@ export const bookingService = {
     preferredTherapistId: UUID | null,
     notes: string | null,
     preferredDate: string | null,
-    preferredTimeText: string | null
+    preferredTimeText: string | null,
+    preferredTimeOfDay?: TimeOfDay | 'any' | null,
+    isWaitlist?: boolean
   ): Promise<void> {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase is not configured');
@@ -103,8 +106,37 @@ export const bookingService = {
       p_notes: notes,
       p_preferred_date: preferredDate,
       p_preferred_time_text: preferredTimeText,
+      p_preferred_time_of_day: preferredTimeOfDay ?? null,
+      p_is_waitlist: isWaitlist ?? false,
     });
     if (error) throw new Error(error.message);
+  },
+
+  /** Staff-entered waitlist join (e.g. a phone call-in) — same shape as
+   *  `submitAppointmentRequest`, without the public booking-slug lookup. */
+  async addWaitlistEntry(params: {
+    clinicId: UUID;
+    name: string;
+    phone: string;
+    email: string | null;
+    preferredTherapistId: UUID | null;
+    notes: string | null;
+    preferredDate: string | null;
+    preferredTimeOfDay?: TimeOfDay | 'any' | null;
+  }): Promise<UUID> {
+    const supabase = supabaseOrThrow();
+    const { data, error } = await supabase.rpc('add_waitlist_entry', {
+      p_clinic_id: params.clinicId,
+      p_name: params.name,
+      p_phone: params.phone,
+      p_email: params.email,
+      p_preferred_therapist_id: params.preferredTherapistId,
+      p_notes: params.notes,
+      p_preferred_date: params.preferredDate,
+      p_preferred_time_of_day: params.preferredTimeOfDay ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return data as UUID;
   },
 
   // ---- Staff (Requests → Bookings, Workspace "Expected today") ----------

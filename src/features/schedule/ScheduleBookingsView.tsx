@@ -731,6 +731,22 @@ export function ScheduleBookingsView({
               </div>
             )}
 
+            {mode === 'day' && waitlistMatches.length > 0 && dismissedWaitlistBannerDate !== date && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--teal-strong)]">
+                <span>
+                  <strong>{waitlistMatches.length} waiting patient{waitlistMatches.length === 1 ? '' : 's'}</strong> could take an opening today.
+                </span>
+                <span className="flex items-center gap-3">
+                  <button type="button" className="text-xs font-medium underline" onClick={() => setSchedule({ view: 'requests' })}>
+                    See requests
+                  </button>
+                  <button type="button" className="text-xs font-medium text-[var(--teal-strong)]/70 hover:text-[var(--teal-strong)]" onClick={() => setDismissedWaitlistBannerDate(date)}>
+                    Dismiss
+                  </button>
+                </span>
+              </div>
+            )}
+
             {/* Phones always show the day (agenda); Week is tab+ only. */}
             <div className="hidden tab:block">
               {mode === 'week' && singleTherapist ? (

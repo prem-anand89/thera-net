@@ -284,6 +284,7 @@ export function BookingFormPage() {
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [joinedWaitlist, setJoinedWaitlist] = useState(false);
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -332,8 +333,11 @@ export function BookingFormPage() {
         preferredTherapistId || null,
         notes.trim() || null,
         preferredDate || null,
-        preferredTime || null
+        preferredTime || null,
+        dayFull ? 'any' : null,
+        dayFull
       );
+      setJoinedWaitlist(dayFull);
       setDone(true);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
@@ -375,9 +379,11 @@ export function BookingFormPage() {
             ✓
           </div>
           <div>
-            <p className="text-base font-semibold text-[var(--ink)]">Request sent!</p>
+            <p className="text-base font-semibold text-[var(--ink)]">{joinedWaitlist ? "You're on the waitlist!" : 'Request sent!'}</p>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              Thanks! {clinicName} will confirm your appointment shortly.
+              {joinedWaitlist
+                ? `Thanks! Your chosen day is fully booked, but ${clinicName} will reach out if a slot opens up.`
+                : `Thanks! ${clinicName} will confirm your appointment shortly.`}
             </p>
           </div>
         </div>
@@ -400,6 +406,11 @@ export function BookingFormPage() {
       return !isPublicSlotTaken(date, slot.minutes, slotDuration, booked, therapists.map((t) => t.id), preferredTherapistId || null, availability?.therapistHours ?? {}, { startHour, endHour });
     });
   const openSlots = preferredDate ? openSlotsOn(preferredDate) : [];
+  // Every open slot on the day is gone — not just the one the patient
+  // wanted. The whole day has no finer time-of-day breakdown to offer at
+  // that point, so a waitlist join is always 'any' time-of-day for this
+  // entry point (a staff-entered one can still be more specific).
+  const dayFull = preferredDate !== null && openSlots.length === 0;
   const openLabels = new Set(openSlots.map((slot) => slot.label));
   // Every time still ahead on the chosen day; booked / off-hours ones are shown greyed.
   const daySlots = preferredDate
@@ -576,6 +587,7 @@ export function BookingFormPage() {
                 {openSlots.length === 0 ? (
                   <div className="rounded-2xl bg-[var(--paper)] p-4 text-center text-sm text-[var(--muted)]">
                     <p>No times left {therapistName ? `with ${therapistName} ` : ''}on this day.</p>
+                    <p className="mt-1">Fill in your details below to join the waitlist — we'll reach out if a slot opens up.</p>
                     {nextOpenDay && (
                       <button type="button" onClick={() => pickDate(nextOpenDay)} className="mt-2 min-h-10 rounded-full border border-[var(--teal)] bg-white px-4 text-sm font-medium text-[var(--teal)]">
                         Try {new Date(`${nextOpenDay}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} →
@@ -654,7 +666,7 @@ export function BookingFormPage() {
               disabled={busy}
               className="min-h-12 w-full rounded-full bg-[var(--teal)] text-base font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
             >
-              {busy ? 'Sending…' : 'Request appointment'}
+              {busy ? 'Sending…' : dayFull ? 'Join the waitlist' : 'Request appointment'}
             </button>
             <p className="mt-2 text-center text-xs text-[var(--muted)]">{clinicName} will confirm by phone or WhatsApp.</p>
           </div>

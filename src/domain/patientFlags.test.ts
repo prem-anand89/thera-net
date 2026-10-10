@@ -25,7 +25,7 @@ describe('patientFlags', () => {
     expect(patientFlags(appt({}), ctx())).toEqual([]);
   });
 
-  it('shows the package session this appointment is, balance due and repeated no-shows', () => {
+  it('shows the package session this appointment is, balance due and repeated misses', () => {
     const flags = patientFlags(
       appt({}),
       ctx({
@@ -34,7 +34,7 @@ describe('patientFlags', () => {
         noShows: new Map([['p1', 3]]),
       })
     );
-    expect(flags.map((f) => f.label)).toEqual(['Package 3/6', 'Balance due', '3 no-shows']);
+    expect(flags.map((f) => f.label)).toEqual(['Package 3/6', 'Balance due', '3 missed/cancelled']);
     // Once the visit is logged, it counts as one already logged.
     expect(patientFlags(appt({ visitId: 'v' }), ctx({ packages: new Map([['p1', { logged: 3, total: 6 }]]) }))[0].label).toBe('Package 3/6');
   });
@@ -61,5 +61,14 @@ describe('countNoShows', () => {
       appt({ id: '3', status: 'arrived' }),
     ]);
     expect(counts.get('phone:9820000001')).toBe(2);
+  });
+
+  it('counts cancellations alongside no-shows, toward the same total', () => {
+    const counts = countNoShows([
+      appt({ id: '1', status: 'no_show' }),
+      appt({ id: '2', status: 'cancelled' }),
+      appt({ id: '3', status: 'confirmed' }),
+    ]);
+    expect(counts.get('p1')).toBe(2);
   });
 });

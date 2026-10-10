@@ -14,12 +14,11 @@ import { appointmentReason, patientFlags, type PatientFlagContext } from '@/doma
 
 type Row =
   | { kind: 'appointment'; at: number; appointment: Appointment }
-  | { kind: 'gap'; at: number; gap: Interval }
+  | { kind: 'gap'; at: number; gap: Interval; therapistName?: string; therapistId?: string }
   | { kind: 'now'; at: number };
 
 /**
- * Phone day view: time-ordered rows, a "now" divider, and — when a single
- * therapist is in view — free gaps inline so booking is one tap.
+ * Phone day view: time-ordered rows, a "now" divider, and free gaps inline so booking is one tap.
  */
 export function AgendaList({
   appointments,
@@ -39,12 +38,12 @@ export function AgendaList({
   colorFor: (appointment: Appointment) => string;
   therapistNameFor: (appointment: Appointment) => string;
   showTherapist: boolean;
-  /** Free intervals to list inline; empty when several therapists are shown. */
-  gaps: Interval[];
+  /** Free intervals to list inline. */
+  gaps: (Interval & { therapistName?: string; therapistId?: string })[];
   /** Minutes after midnight when the day is today, else null. */
   nowMinutes: number | null;
   onSelect: (appointment: Appointment) => void;
-  onBookGap?: (time: string) => void;
+  onBookGap?: (time: string, therapistId?: string) => void;
   /** Marks one row as "Next up". */
   highlightId?: string | null;
   /** Patient flags + condition (`usePatientFlagContext`). */
@@ -86,7 +85,7 @@ export function AgendaList({
         appointment,
       };
     }),
-    ...gaps.map((gap) => ({ kind: 'gap' as const, at: gap.start, sortAt: gap.start, gap })),
+    ...gaps.map((gap) => ({ kind: 'gap' as const, at: gap.start, sortAt: gap.start, gap, therapistName: gap.therapistName, therapistId: gap.therapistId })),
     ...(nowMinutes !== null && nowSortAt !== null && !isNowInsideItem ? [{ kind: 'now' as const, at: nowMinutes, sortAt: nowSortAt }] : []),
   ].sort((a, b) => a.sortAt - b.sortAt || (a.kind === 'now' ? -1 : b.kind === 'now' ? 1 : 0));
 
@@ -106,15 +105,15 @@ export function AgendaList({
           const isOngoing = nowMinutes !== null && row.gap.start <= nowMinutes && row.gap.end > nowMinutes;
           const progressPercent = isOngoing ? Math.max(0, Math.min(100, ((nowMinutes! - row.gap.start) / (row.gap.end - row.gap.start)) * 100)) : 0;
           return (
-            <li key={`gap-${row.gap.start}`} className="relative">
+            <li key={`gap-${row.gap.start}-${row.therapistId ?? 'any'}`} className="relative">
               <button
                 type="button"
                 disabled={!onBookGap}
-                onClick={() => onBookGap?.(minutesToTime(row.gap.start))}
+                onClick={() => onBookGap?.(minutesToTime(row.gap.start), row.therapistId)}
                 className="flex min-h-11 w-full items-center justify-between rounded-xl border border-dashed border-[var(--moss)]/40 bg-[var(--moss-light)]/50 px-3 text-left text-sm text-[var(--moss-strong)]"
               >
                 <span>
-                  {minutesLabel(row.gap.start)} · free {formatMinutes(row.gap.end - row.gap.start)}
+                  {minutesLabel(row.gap.start)} · {row.therapistName ? `${row.therapistName} free ` : 'free '}{formatMinutes(row.gap.end - row.gap.start)}
                 </span>
                 {onBookGap && <span className="font-medium">+ Book</span>}
               </button>

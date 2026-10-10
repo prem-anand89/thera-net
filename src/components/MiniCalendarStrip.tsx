@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { addDays, addWeeks, toLocalDateStr, weekDays, type ClosedDayInfo } from '@/domain/schedule';
 import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
 
@@ -30,14 +30,33 @@ export function MiniCalendarStrip({
   }, [appointmentDates]);
   const today = toLocalDateStr(new Date());
 
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
     onSelectDate(addDays(selectedDate, event.key === 'ArrowRight' ? 1 : -1));
   }
 
+  function handleTouchStart(e: React.TouchEvent) {
+    setTouchStart(e.targetTouches[0].clientX);
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (touchStart === null) return;
+    const touchEnd = e.changedTouches[0].clientX;
+    const distance = touchStart - touchEnd;
+    
+    if (distance > 50) {
+      onSelectDate(addWeeks(selectedDate, 1)); // Swipe left -> Next week
+    } else if (distance < -50) {
+      onSelectDate(addWeeks(selectedDate, -1)); // Swipe right -> Prev week
+    }
+    setTouchStart(null);
+  }
+
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <button
         type="button"
         className="flex h-11 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--paper)]"
