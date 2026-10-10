@@ -20,6 +20,7 @@ vi.mock('@/features/notifications/InstallPrompt', () => ({ InstallPrompt: () => 
 vi.mock('@/features/me/MyAccountSheet', () => ({ MyAccountSheet: () => null }));
 vi.mock('@/features/me/MyNotificationsSheet', () => ({ MyNotificationsSheet: () => null }));
 vi.mock('@/components/schedule/ShiftRequestSheet', () => ({ ShiftRequestSheet: () => null }));
+vi.mock('@/components/schedule/BreakPlacementControl', () => ({ BreakPlacementControl: () => null }));
 vi.mock('@/components/ChangePasswordDialog', () => ({ ChangePasswordDialog: () => null }));
 vi.mock('@/components/HelpFeedbackDialog', () => ({ HelpFeedbackDialog: () => null }));
 vi.mock('@/lib/supabase', () => ({ publicTherapistPhotoUrl: () => null }));

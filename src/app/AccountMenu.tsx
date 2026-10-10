@@ -4,6 +4,7 @@ import { signOutSafely } from './signOut';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { ShiftRequestSheet } from '@/components/schedule/ShiftRequestSheet';
+import { BreakPlacementControl } from '@/components/schedule/BreakPlacementControl';
 import { InstallPrompt } from '@/features/notifications/InstallPrompt';
 import { useInstallState } from '@/features/notifications/useInstallState';
 import { MyAccountSheet } from '@/features/me/MyAccountSheet';
@@ -150,10 +151,15 @@ export function AccountMenu({
                 </span>
               </button>
               {myTherapist && (
-                <button type="button" role="menuitem" className={rowCls} onClick={() => openSheet(setHoursOpen)}>
-                  <IconCalendar className={rowIcon} />
-                  My working hours
-                </button>
+                <>
+                  <button type="button" role="menuitem" className={rowCls} onClick={() => openSheet(setHoursOpen)}>
+                    <IconCalendar className={rowIcon} />
+                    My working hours
+                  </button>
+                  <div className="px-2.5 py-1.5">
+                    <BreakPlacementControl therapistId={myTherapist.id} clinicId={clinicId} />
+                  </div>
+                </>
               )}
               <button type="button" role="menuitem" className={rowCls} onClick={() => openSheet(setNotificationsOpen)}>
                 <IconBell className={rowIcon} />
