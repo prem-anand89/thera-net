@@ -191,6 +191,13 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
     clinicClosedDates: {
       listByClinic: async () => [],
     },
+    shiftTemplates: {
+      list: async () => [],
+    },
+    therapistShiftAssignments: {
+      listByClinic: async () => [],
+      listByTherapist: async () => [],
+    },
   };
   return { repos, visits };
 }

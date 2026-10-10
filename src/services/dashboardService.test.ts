@@ -210,6 +210,13 @@ function makeFakeRepos() {
     clinicClosedDates: {
       listByClinic: async () => [],
     },
+    shiftTemplates: {
+      list: async () => [],
+    },
+    therapistShiftAssignments: {
+      listByClinic: async () => [],
+      listByTherapist: async () => [],
+    },
   };
   return {
     repos,

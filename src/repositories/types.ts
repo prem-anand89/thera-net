@@ -22,6 +22,8 @@ import type {
   ClinicClosedDate,
   NoteMode,
   UUID,
+  ShiftTemplate,
+  TherapistShiftAssignment,
 } from '@/domain/types';
 
 /**
@@ -256,6 +258,15 @@ export interface ClinicClosedDateRepo {
   listByClinic(clinicId: UUID): Promise<ClinicClosedDate[]>;
 }
 
+export interface ShiftTemplatesRepo {
+  list(clinicId: UUID, includeInactive?: boolean): Promise<ShiftTemplate[]>;
+}
+
+export interface TherapistShiftAssignmentsRepo {
+  listByClinic(clinicId: UUID): Promise<TherapistShiftAssignment[]>;
+  listByTherapist(therapistId: UUID): Promise<TherapistShiftAssignment[]>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -278,4 +289,6 @@ export interface Repos {
   appointmentRequests: AppointmentRequestRepo;
   appointments: AppointmentRepo;
   clinicClosedDates: ClinicClosedDateRepo;
+  shiftTemplates: ShiftTemplatesRepo;
+  therapistShiftAssignments: TherapistShiftAssignmentsRepo;
 }

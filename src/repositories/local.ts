@@ -41,6 +41,8 @@ import type {
   AppointmentRequestRepo,
   AppointmentRepo,
   ClinicClosedDateRepo,
+  ShiftTemplatesRepo,
+  TherapistShiftAssignmentsRepo,
   Repos,
 } from './types';
 
@@ -413,6 +415,19 @@ const clinicClosedDates: ClinicClosedDateRepo = {
     ),
 };
 
+const shiftTemplates: ShiftTemplatesRepo = {
+  async list(clinicId, includeInactive = false) {
+    const all = await db.shift_templates.where('clinicId').equals(clinicId).toArray();
+    return all.filter((t) => includeInactive || t.active).sort((a, b) => a.name.localeCompare(b.name));
+  },
+};
+
+const therapistShiftAssignments: TherapistShiftAssignmentsRepo = {
+  listByClinic: (clinicId) => db.therapist_shift_assignments.where('clinicId').equals(clinicId).toArray(),
+  listByTherapist: (therapistId) =>
+    db.therapist_shift_assignments.where('therapistId').equals(therapistId).toArray(),
+};
+
 export const repos: Repos = {
   clinics,
   therapists,
@@ -435,6 +450,8 @@ export const repos: Repos = {
   appointmentRequests,
   appointments,
   clinicClosedDates,
+  shiftTemplates,
+  therapistShiftAssignments,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers

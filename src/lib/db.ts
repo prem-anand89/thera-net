@@ -21,6 +21,8 @@ import type {
   AppointmentRequest,
   Appointment,
   ClinicClosedDate,
+  ShiftTemplate,
+  TherapistShiftAssignment,
 } from '@/domain/types';
 
 /**
@@ -71,7 +73,9 @@ export type SyncedTable =
   | 'feedback_responses'
   | 'appointment_requests'
   | 'appointments'
-  | 'clinic_closed_dates';
+  | 'clinic_closed_dates'
+  | 'shift_templates'
+  | 'therapist_shift_assignments';
 
 /**
  * Every table the sync engine pushes/pulls — the single source of truth
@@ -104,6 +108,8 @@ export const ALL_SYNCED_TABLES = [
   'appointment_requests',
   'appointments',
   'clinic_closed_dates',
+  'shift_templates',
+  'therapist_shift_assignments',
 ] as const satisfies readonly SyncedTable[];
 type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number]
   ? true
@@ -170,6 +176,8 @@ export class ClinicDB extends Dexie {
   appointment_requests!: Table<AppointmentRequest, string>;
   appointments!: Table<Appointment, string>;
   clinic_closed_dates!: Table<ClinicClosedDate, string>;
+  shift_templates!: Table<ShiftTemplate, string>;
+  therapist_shift_assignments!: Table<TherapistShiftAssignment, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 
@@ -277,6 +285,10 @@ export class ClinicDB extends Dexie {
       // scan of the clinic's visit history.
       visits:
         'id, clinicId, visitDate, patientId, therapistId, packageGroupId, invoiceId, [clinicId+visitDate], serviceCatalogId',
+    });
+    this.version(22).stores({
+      shift_templates: 'id, clinicId, active',
+      therapist_shift_assignments: 'id, clinicId, therapistId, status, shiftTemplateId',
     });
   }
 }

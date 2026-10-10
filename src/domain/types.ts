@@ -252,6 +252,44 @@ export interface Therapist {
 
 export type WorkingHours = Partial<Record<'0' | '1' | '2' | '3' | '4' | '5' | '6', [number, number][]>>;
 
+export interface ShiftTemplate {
+  id: UUID;
+  clinicId: UUID;
+  name: string;
+  startMinute: number;
+  endMinute: number;
+  breakDurationMinutes: number;
+  defaultBreakStartMinute: number | null;
+  active: boolean;
+  updatedAt: string;
+}
+
+export type ShiftAssignmentStatus = 'pending' | 'approved' | 'declined' | 'superseded';
+
+/**
+ * A therapist's shift (or custom-hours) assignment/request. Exactly one
+ * of shiftTemplateId / customHours is set. Writes are RPC-only (assign/
+ * request/approve/decline/set_break_placement) — mirrors AppointmentRequest's
+ * "no client INSERT policy exists" convention, see that type's own doc
+ * comment. Read-only sync, same as AppointmentRequest.
+ */
+export interface TherapistShiftAssignment {
+  id: UUID;
+  clinicId: UUID;
+  therapistId: UUID;
+  shiftTemplateId: UUID | null;
+  customHours: WorkingHours | null;
+  weekdays: number[] | null;
+  breakStartMinute: number | null;
+  status: ShiftAssignmentStatus;
+  note: string | null;
+  requestedBy: UUID | null;
+  decidedBy: UUID | null;
+  decidedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CatalogItem {
   id: UUID;
   clinicId: UUID;
