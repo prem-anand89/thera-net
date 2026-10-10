@@ -41,6 +41,7 @@ import {
 } from '@/components/ui';
 import { CatalogSection, type CatalogView } from './CatalogSection';
 import { LetterheadPreview } from './LetterheadPreview';
+import { ShiftTemplatesSection } from './ShiftTemplatesSection';
 import {
   SETTINGS_TABS,
   SETTINGS_TAB_META,
@@ -499,6 +500,7 @@ export function SettingsPage() {
                 </div>
               )}
               <Therapists />
+              <ShiftTemplatesSection />
             </>
           )}
           {activeTab === 'services' && <CatalogSection view={catalogView} onViewChange={setCatalogView} />}
