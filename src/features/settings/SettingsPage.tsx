@@ -42,6 +42,7 @@ import {
 import { CatalogSection, type CatalogView } from './CatalogSection';
 import { LetterheadPreview } from './LetterheadPreview';
 import { ShiftTemplatesSection } from './ShiftTemplatesSection';
+import { ShiftAssignmentsSection } from './ShiftAssignmentsSection';
 import {
   SETTINGS_TABS,
   SETTINGS_TAB_META,
@@ -501,6 +502,7 @@ export function SettingsPage() {
               )}
               <Therapists />
               <ShiftTemplatesSection />
+              <ShiftAssignmentsSection />
             </>
           )}
           {activeTab === 'services' && <CatalogSection view={catalogView} onViewChange={setCatalogView} />}
