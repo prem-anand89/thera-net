@@ -61,7 +61,7 @@ Modified files:
 - Create: `supabase/migrations/20261011090000_shift_scheduling_schema.sql`
 
 **Interfaces:**
-- Produces: tables `public.shift_templates`, `public.therapist_shift_assignments`; functions `public.derive_working_hours(jsonb, integer[], integer, integer, integer, integer) returns jsonb`, `public.supersede_overlapping_weekdays(uuid, integer[]) returns void`, `public.supersede_all_assignments(uuid) returns void`.
+- Produces: tables `public.shift_templates`, `public.therapist_shift_assignments`; functions `public.derive_working_hours(jsonb, integer[], integer, integer, integer, integer) returns jsonb`, `public.supersede_overlapping_weekdays(uuid, integer[]) returns void`, `public.supersede_all_assignments(uuid) returns void`, `public.apply_shift_hours(uuid, integer[], integer, integer, integer, integer) returns void`, `public.apply_custom_hours(uuid, jsonb) returns void`.
 
 - [ ] **Step 1: Write the migration**
 
@@ -202,9 +202,52 @@ begin
     where therapist_id = p_therapist_id and status = 'approved';
 end $$;
 
+-- Shared by assign_shift (Task 2) and approve_shift_assignment's
+-- shift-template path (Task 3) — both reach the same "supersede, derive,
+-- validate, write" sequence, one directly and one via the request queue.
+-- Caller has already authorized and validated the shift/break-placement
+-- bounds before calling this.
+create or replace function public.apply_shift_hours(
+  p_therapist_id uuid,
+  p_weekdays integer[],
+  p_shift_start integer,
+  p_shift_end integer,
+  p_break_start integer,
+  p_break_duration integer
+) returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_hours jsonb;
+begin
+  perform supersede_overlapping_weekdays(p_therapist_id, p_weekdays);
+  select working_hours into v_hours from therapists where id = p_therapist_id;
+  v_hours := derive_working_hours(v_hours, p_weekdays, p_shift_start, p_shift_end, p_break_start, p_break_duration);
+  if not working_hours_valid(v_hours) then
+    raise exception 'Derived working hours are invalid.';
+  end if;
+  update therapists set working_hours = v_hours, updated_at = now() where id = p_therapist_id;
+end $$;
+
+-- Shared by assign_custom_hours (Task 2) and approve_shift_assignment's
+-- custom-hours path (Task 3).
+create or replace function public.apply_custom_hours(
+  p_therapist_id uuid,
+  p_custom_hours jsonb
+) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not working_hours_valid(p_custom_hours) then
+    raise exception 'Working hours must be non-overlapping times within the day, earliest first.';
+  end if;
+  perform supersede_all_assignments(p_therapist_id);
+  update therapists set working_hours = p_custom_hours, updated_at = now() where id = p_therapist_id;
+end $$;
+
 revoke execute on function public.derive_working_hours(jsonb, integer[], integer, integer, integer, integer) from public, anon;
 revoke execute on function public.supersede_overlapping_weekdays(uuid, integer[]) from public, anon;
 revoke execute on function public.supersede_all_assignments(uuid) from public, anon;
+revoke execute on function public.apply_shift_hours(uuid, integer[], integer, integer, integer, integer) from public, anon;
+revoke execute on function public.apply_custom_hours(uuid, jsonb) from public, anon;
+grant execute on function public.apply_shift_hours(uuid, integer[], integer, integer, integer, integer) to authenticated;
+grant execute on function public.apply_custom_hours(uuid, jsonb) to authenticated;
 grant execute on function public.derive_working_hours(jsonb, integer[], integer, integer, integer, integer) to authenticated;
 grant execute on function public.supersede_overlapping_weekdays(uuid, integer[]) to authenticated;
 grant execute on function public.supersede_all_assignments(uuid) to authenticated;
@@ -255,7 +298,7 @@ git commit -m "feat(schedule): add shift-template schema, RLS, and working-hours
 - Create: `supabase/migrations/20261011091000_shift_scheduling_admin_rpcs.sql`
 
 **Interfaces:**
-- Consumes: `derive_working_hours`, `supersede_overlapping_weekdays`, `supersede_all_assignments` (Task 1); `working_hours_valid`, `is_clinic_admin`, `is_front_desk` (existing).
+- Consumes: `apply_shift_hours`, `apply_custom_hours` (Task 1); `working_hours_valid`, `is_clinic_admin`, `is_front_desk` (existing).
 - Produces: `create_shift_template(uuid, text, integer, integer, integer, integer) returns uuid`, `update_shift_template(uuid, text, integer, integer, integer, integer, boolean) returns void`, `assign_shift(uuid, uuid, integer[], integer) returns uuid`, `assign_custom_hours(uuid, jsonb) returns uuid`.
 
 - [ ] **Step 1: Write the migration**
@@ -361,7 +404,6 @@ declare
   v_clinic_id uuid;
   v_shift record;
   v_id uuid;
-  v_hours jsonb;
 begin
   select clinic_id into v_clinic_id from therapists where id = p_therapist_id for update;
   if not found then raise exception 'Therapist not found.'; end if;
@@ -380,7 +422,6 @@ begin
     raise exception 'Break placement must fit within the shift.';
   end if;
 
-  perform supersede_overlapping_weekdays(p_therapist_id, p_weekdays);
   update therapist_shift_assignments set status = 'superseded', updated_at = now()
     where therapist_id = p_therapist_id and status = 'pending';
 
@@ -392,15 +433,10 @@ begin
     p_break_start_minute, 'approved', auth.uid(), now()
   ) returning id into v_id;
 
-  select working_hours into v_hours from therapists where id = p_therapist_id;
-  v_hours := derive_working_hours(
-    v_hours, p_weekdays, v_shift.start_minute, v_shift.end_minute,
+  perform apply_shift_hours(
+    p_therapist_id, p_weekdays, v_shift.start_minute, v_shift.end_minute,
     coalesce(p_break_start_minute, v_shift.default_break_start_minute), v_shift.break_duration_minutes
   );
-  if not working_hours_valid(v_hours) then
-    raise exception 'Derived working hours are invalid.';
-  end if;
-  update therapists set working_hours = v_hours, updated_at = now() where id = p_therapist_id;
 
   return v_id;
 end $$;
@@ -422,11 +458,7 @@ begin
   if not (is_clinic_admin(v_clinic_id) or is_front_desk(v_clinic_id)) then
     raise exception 'Not authorized.';
   end if;
-  if not working_hours_valid(p_custom_hours) then
-    raise exception 'Working hours must be non-overlapping times within the day, earliest first.';
-  end if;
 
-  perform supersede_all_assignments(p_therapist_id);
   update therapist_shift_assignments set status = 'superseded', updated_at = now()
     where therapist_id = p_therapist_id and status = 'pending';
 
@@ -436,7 +468,7 @@ begin
     v_clinic_id, p_therapist_id, p_custom_hours, 'approved', auth.uid(), now()
   ) returning id into v_id;
 
-  update therapists set working_hours = p_custom_hours, updated_at = now() where id = p_therapist_id;
+  perform apply_custom_hours(p_therapist_id, p_custom_hours);
 
   return v_id;
 end $$;
@@ -514,7 +546,7 @@ git commit -m "feat(schedule): add shift-template CRUD and immediate admin-assig
 - Create: `supabase/migrations/20261011092000_shift_scheduling_request_rpcs.sql`
 
 **Interfaces:**
-- Consumes: `derive_working_hours`, `supersede_overlapping_weekdays`, `supersede_all_assignments`, `working_hours_valid`, `is_own_therapist`.
+- Consumes: `apply_shift_hours`, `apply_custom_hours` (Task 1); `working_hours_valid`, `is_own_therapist`, `is_clinic_admin`, `is_front_desk` (existing).
 - Produces: `request_shift_assignment(uuid, uuid, integer[], integer, text) returns uuid`, `request_custom_hours(uuid, jsonb, text) returns uuid`, `approve_shift_assignment(uuid) returns void`, `decline_shift_assignment(uuid, text) returns void`.
 
 - [ ] **Step 1: Write the migration**
@@ -595,15 +627,15 @@ begin
 end $$;
 
 -- Approves either path (shift or custom hours) — branches on
--- shift_template_id. Mirrors assign_shift/assign_custom_hours's
--- derive-and-write logic exactly, since approving IS the same effect as
--- an admin assigning it directly, just reached via the request queue.
+-- shift_template_id, then delegates to the same apply_shift_hours/
+-- apply_custom_hours helpers (Task 1) that assign_shift/assign_custom_hours
+-- (Task 2) use directly, since approving IS the same effect as an admin
+-- assigning it directly, just reached via the request queue.
 create or replace function public.approve_shift_assignment(p_request_id uuid) returns void
 language plpgsql security definer set search_path = public as $$
 declare
   v_req record;
   v_shift record;
-  v_hours jsonb;
 begin
   select * into v_req from therapist_shift_assignments where id = p_request_id for update;
   if not found then raise exception 'Request not found.'; end if;
@@ -623,22 +655,14 @@ begin
     ) then
       raise exception 'Break placement no longer fits the shift.';
     end if;
-
-    perform supersede_overlapping_weekdays(v_req.therapist_id, v_req.weekdays);
-    select working_hours into v_hours from therapists where id = v_req.therapist_id;
-    v_hours := derive_working_hours(
-      v_hours, v_req.weekdays, v_shift.start_minute, v_shift.end_minute,
+    perform apply_shift_hours(
+      v_req.therapist_id, v_req.weekdays, v_shift.start_minute, v_shift.end_minute,
       coalesce(v_req.break_start_minute, v_shift.default_break_start_minute), v_shift.break_duration_minutes
     );
   else
-    if not working_hours_valid(v_req.custom_hours) then
-      raise exception 'Working hours must be non-overlapping times within the day, earliest first.';
-    end if;
-    perform supersede_all_assignments(v_req.therapist_id);
-    v_hours := v_req.custom_hours;
+    perform apply_custom_hours(v_req.therapist_id, v_req.custom_hours);
   end if;
 
-  update therapists set working_hours = v_hours, updated_at = now() where id = v_req.therapist_id;
   update therapist_shift_assignments set status = 'approved', decided_by = auth.uid(), decided_at = now()
     where id = p_request_id;
 end $$;
