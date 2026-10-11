@@ -178,6 +178,44 @@ export function TherapistComparisonCard({
 
   if (!showComparison) return null;
 
+  const totalMonthRevenue = useMemo(() => {
+    return (chartMonth?.rows ?? []).reduce((sum, r) => sum + (r.netPostTaxPaise ?? 0), 0);
+  }, [chartMonth]);
+
+  const totalMonthVisits = useMemo(() => {
+    return (chartMonth?.rows ?? []).reduce((sum, r) => sum + (r.visitCount ?? 0), 0);
+  }, [chartMonth]);
+
+  const maxTherapistRevenue = useMemo(() => {
+    return Math.max(1, ...therapistRevenuePaise);
+  }, [therapistRevenuePaise]);
+
+  const maxTherapistVisits = useMemo(() => {
+    return Math.max(1, ...therapistVisitCounts);
+  }, [therapistVisitCounts]);
+
+  const therapistRevenueRanking = useMemo(() => {
+    return therapistNames
+      .map((name, i) => {
+        const revenue = therapistRevenuePaise[i] ?? 0;
+        const sharePct = totalMonthRevenue > 0 ? Math.round((revenue / totalMonthRevenue) * 100) : 0;
+        const barPct = Math.round((revenue / maxTherapistRevenue) * 100);
+        return { name, revenue, sharePct, barPct };
+      })
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [therapistNames, therapistRevenuePaise, totalMonthRevenue, maxTherapistRevenue]);
+
+  const therapistVisitRanking = useMemo(() => {
+    return therapistNames
+      .map((name, i) => {
+        const visits = therapistVisitCounts[i] ?? 0;
+        const sharePct = totalMonthVisits > 0 ? Math.round((visits / totalMonthVisits) * 100) : 0;
+        const barPct = Math.round((visits / maxTherapistVisits) * 100);
+        return { name, visits, sharePct, barPct };
+      })
+      .sort((a, b) => b.visits - a.visits);
+  }, [therapistNames, therapistVisitCounts, totalMonthVisits, maxTherapistVisits]);
+
   return (
     <SectionCard title="Therapist comparison">
       {trend && !hasEnoughTrendHistory && (
@@ -188,44 +226,98 @@ export function TherapistComparisonCard({
       )}
       {trend && therapistNames.length > 0 && (
         <div className="border-t border-[var(--border)] pt-4 first:border-t-0 first:pt-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">By month</p>
-          <h3 className="font-display text-sm font-semibold text-[var(--ink)]">
-            Visits and {revenueLabel.toLowerCase()} per therapist
-          </h3>
-          <p className="mt-1 text-xs text-[var(--muted)]">
-            Same layout as the revenue trend chart — orange = visits, blue = revenue (dual scale).
-          </p>
-          {categories.length > 1 && (
-            <div className="mb-3 mt-3 flex gap-1.5 overflow-x-auto pb-1">
-              {categories.map((label, i) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => setChartMonthIndex(i)}
-                  className="shrink-0 rounded-full border px-3 py-1 text-xs font-medium"
-                  style={{
-                    background: chartMonthIndex === i ? 'var(--teal-light)' : 'var(--surface)',
-                    borderColor: chartMonthIndex === i ? 'transparent' : 'var(--border)',
-                    color: chartMonthIndex === i ? 'var(--teal)' : 'var(--muted)',
-                  }}
-                >
-                  {label}
-                  {i === categories.length - 1 && chartMonthIsInProgress && i === chartMonthIndex ? ' · live' : ''}
-                </button>
-              ))}
+          <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">By month</p>
+              <h3 className="font-display text-sm font-semibold text-[var(--ink)]">
+                Performance comparison per therapist
+              </h3>
             </div>
-          )}
-          <VisitsRevenueTrendChart
-            categories={therapistChartCategories}
-            fullCategories={therapistNames}
-            visitCounts={therapistVisitCounts}
-            revenuePaise={therapistRevenuePaise}
-            visitsColor={SERIES_COLORS[1]}
-            revenueColor={SERIES_COLORS[0]}
-            formatRevenue={formatINR}
-            compact={compact}
-            currentMonthIndices={[]}
-          />
+            {categories.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {categories.map((label, i) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setChartMonthIndex(i)}
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                      chartMonthIndex === i
+                        ? 'bg-[var(--teal-light)] text-[var(--teal-strong)] font-semibold ring-1 ring-[var(--teal)]/30'
+                        : 'bg-[var(--surface)] text-[var(--muted)] border border-[var(--border)] hover:bg-[var(--paper)]'
+                    }`}
+                  >
+                    {label}
+                    {i === categories.length - 1 && chartMonthIsInProgress && i === chartMonthIndex ? ' · live' : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Two Side-by-Side Comparative Ranking Cards */}
+          <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Revenue Ranking Card */}
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xs">
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+                  {revenueLabel}
+                </span>
+                <span className="font-num text-xs font-semibold text-[var(--ink)]">
+                  Total: {formatINR(totalMonthRevenue)}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {therapistRevenueRanking.map((item) => (
+                  <div key={item.name} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-[var(--ink)]">{item.name}</span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-num font-semibold text-[var(--ink)]">{formatINR(item.revenue)}</span>
+                        <span className="font-num text-[11px] text-[var(--muted)]">{item.sharePct}%</span>
+                      </div>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--paper)]">
+                      <div
+                        className="h-full rounded-full bg-[var(--teal)] transition-all"
+                        style={{ width: `${item.barPct}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Visits Ranking Card */}
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xs">
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+                  Patient Visits
+                </span>
+                <span className="font-num text-xs font-semibold text-[var(--ink)]">
+                  Total: {totalMonthVisits} visits
+                </span>
+              </div>
+              <div className="space-y-3">
+                {therapistVisitRanking.map((item) => (
+                  <div key={item.name} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-[var(--ink)]">{item.name}</span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-num font-semibold text-[var(--ink)]">{item.visits} visits</span>
+                        <span className="font-num text-[11px] text-[var(--muted)]">{item.sharePct}%</span>
+                      </div>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--paper)]">
+                      <div
+                        className="h-full rounded-full bg-[#d97706] transition-all"
+                        style={{ width: `${item.barPct}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
       {trend && therapistNames.length === 0 && (
