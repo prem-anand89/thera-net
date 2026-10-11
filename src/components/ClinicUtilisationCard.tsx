@@ -143,6 +143,35 @@ export function ClinicUtilisationView({
     return rows;
   }, [active, previous, selectedPractitionerId]);
 
+  const selectedPractitionerName = useMemo(() => {
+    return allPractitioners.find((p) => p.id === selectedPractitionerId)?.name ?? null;
+  }, [allPractitioners, selectedPractitionerId]);
+
+  const displayedReports: BucketReport[] = useMemo(() => {
+    if (!report) return [];
+    if (!selectedPractitionerId) return report;
+
+    const modified = report.map((b) => {
+      const row = b.rows.find((r) => r.therapistId === selectedPractitionerId);
+      return {
+        ...b,
+        clinicRatio: row?.utilisation.ratio ?? null,
+        clinicRevenuePaise: row?.revenuePaise ?? 0,
+        priorClinicRatio: null,
+        priorClinicRevenuePaise: null,
+      };
+    });
+
+    return modified.map((b, i) => {
+      const prior = i > 0 ? modified[i - 1] : null;
+      return {
+        ...b,
+        priorClinicRatio: prior ? prior.clinicRatio : null,
+        priorClinicRevenuePaise: prior ? prior.clinicRevenuePaise : null,
+      };
+    });
+  }, [report, selectedPractitionerId]);
+
   const hasAnyData =
     report?.some(
       (b) => (b.clinicRatio != null && b.clinicRatio > 0) || b.clinicRevenuePaise > 0
@@ -179,16 +208,28 @@ export function ClinicUtilisationView({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <UtilisationTrendCard
-              reports={report}
+              reports={displayedReports}
               activeIndex={activeIndex}
               onSelectBucket={(i) => setSelectedKey(report[i]?.bucket.key ?? null)}
               compareMode={compareMode}
+              title={selectedPractitionerName ? `${selectedPractitionerName} Utilisation` : 'Utilisation'}
+              subtitle={
+                selectedPractitionerName
+                  ? `${selectedPractitionerName} booked time vs capacity`
+                  : 'Percentage of available time utilised'
+              }
             />
             <RevenueVolumeCard
-              reports={report}
+              reports={displayedReports}
               activeIndex={activeIndex}
               onSelectBucket={(i) => setSelectedKey(report[i]?.bucket.key ?? null)}
               compareMode={compareMode}
+              title={selectedPractitionerName ? `${selectedPractitionerName} Revenue` : 'Revenue'}
+              subtitle={
+                selectedPractitionerName
+                  ? `${selectedPractitionerName} appointment billing`
+                  : 'Total clinic appointment billing'
+              }
             />
           </div>
 

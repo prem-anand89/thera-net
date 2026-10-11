@@ -6,11 +6,15 @@ export function RevenueVolumeCard({
   activeIndex,
   onSelectBucket,
   compareMode = false,
+  title = 'Revenue',
+  subtitle = 'Total clinic appointment billing',
 }: {
   reports: BucketReport[];
   activeIndex: number;
   onSelectBucket: (index: number) => void;
   compareMode?: boolean;
+  title?: string;
+  subtitle?: string;
 }) {
   const activeReport = reports[activeIndex] ?? reports[reports.length - 1];
   const activeRevenue = activeReport?.clinicRevenuePaise ?? 0;
@@ -24,13 +28,24 @@ export function RevenueVolumeCard({
     ...reports.map((r) => Math.max(r.clinicRevenuePaise, r.priorClinicRevenuePaise ?? 0))
   );
 
+  // SVG Geometry
+  const width = 360;
+  const height = 120;
+  const paddingX = 16;
+  const paddingTop = 14;
+  const baseline = 96;
+  const plotH = baseline - paddingTop;
+  const plotW = width - paddingX * 2;
+  const groupW = reports.length > 0 ? plotW / reports.length : plotW;
+  const barW = Math.max(8, Math.min(18, groupW - 6));
+
   return (
     <div className="flex flex-col justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs">
       <div>
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="font-display text-sm font-semibold text-[var(--ink)]">Revenue</h3>
-            <p className="text-xs text-[var(--muted)]">Total clinic appointment billing</p>
+            <h3 className="font-display text-sm font-semibold text-[var(--ink)]">{title}</h3>
+            <p className="text-xs text-[var(--muted)]">{subtitle}</p>
           </div>
           <span className="rounded-full bg-[var(--paper)] px-2 py-0.5 text-[11px] font-semibold text-[var(--muted)]">
             {activeReport?.bucket.label ?? '—'}
@@ -54,65 +69,124 @@ export function RevenueVolumeCard({
         </div>
       </div>
 
-      {/* Bar Chart Area */}
-      <div className="mt-4 flex h-28 items-end gap-2 px-1">
-        {reports.map((r, i) => {
-          const isSelected = i === activeIndex;
-          const heightPct = Math.max(8, Math.round((r.clinicRevenuePaise / maxRevenue) * 100));
-          const priorHeightPct =
-            r.priorClinicRevenuePaise != null
-              ? Math.max(8, Math.round((r.priorClinicRevenuePaise / maxRevenue) * 100))
-              : 0;
+      {/* SVG Bar Chart Area */}
+      <div className="relative mt-3">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="h-28 w-full overflow-visible"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          {/* Baseline rule */}
+          <line
+            x1={paddingX}
+            y1={baseline}
+            x2={width - paddingX}
+            y2={baseline}
+            stroke="var(--border)"
+            strokeWidth="1"
+          />
 
-          return (
+          {reports.map((r, i) => {
+            const isSelected = i === activeIndex;
+            const centerX = paddingX + i * groupW + groupW / 2;
+            const barX = centerX - barW / 2;
+            const val = r.clinicRevenuePaise;
+            const h = val > 0 ? Math.max(6, Math.round((val / maxRevenue) * plotH)) : 0;
+            const y = baseline - h;
+
+            // Prior period bar
+            const priorVal = r.priorClinicRevenuePaise ?? 0;
+            const priorH =
+              compareMode && priorVal > 0 ? Math.max(6, Math.round((priorVal / maxRevenue) * plotH)) : 0;
+            const priorY = baseline - priorH;
+
+            return (
+              <g key={r.bucket.key}>
+                {/* Compare mode prior bar */}
+                {compareMode && priorH > 0 && (
+                  <rect
+                    x={barX - 2}
+                    y={priorY}
+                    width={barW}
+                    height={priorH}
+                    rx="2"
+                    fill="var(--paper)"
+                    stroke="var(--muted)"
+                    strokeWidth="1"
+                    strokeDasharray="2 2"
+                    opacity="0.75"
+                  />
+                )}
+
+                {/* Main revenue bar */}
+                {val > 0 ? (
+                  <rect
+                    x={barX}
+                    y={y}
+                    width={barW}
+                    height={h}
+                    rx="3"
+                    fill="var(--teal)"
+                    opacity={isSelected ? 1 : 0.6}
+                    className="transition-all hover:opacity-90"
+                  />
+                ) : (
+                  /* 2px baseline tick for zero revenue */
+                  <rect
+                    x={barX}
+                    y={baseline - 2}
+                    width={barW}
+                    height="2"
+                    rx="1"
+                    fill="var(--muted)"
+                    opacity="0.35"
+                  />
+                )}
+
+                {/* Active selection indicator on top of bar */}
+                {isSelected && val > 0 && (
+                  <circle
+                    cx={centerX}
+                    cy={Math.max(8, y - 5)}
+                    r="2.5"
+                    fill="var(--teal)"
+                  />
+                )}
+
+                {/* Month label underneath */}
+                <text
+                  x={centerX}
+                  y={baseline + 16}
+                  textAnchor="middle"
+                  className={`text-[10px] transition-colors ${
+                    isSelected ? 'fill-[var(--ink)] font-bold' : 'fill-[var(--muted)] font-medium'
+                  }`}
+                >
+                  {r.bucket.label.slice(0, 3)}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* HTML Accessible Click Overlay */}
+        <div className="pointer-events-auto absolute inset-0 flex items-stretch">
+          {reports.map((r, i) => (
             <button
               key={r.bucket.key}
               type="button"
               aria-label={`${r.bucket.label}: ${formatINR(r.clinicRevenuePaise)}`}
               onClick={() => onSelectBucket(i)}
-              className="group relative flex flex-1 flex-col items-center justify-end h-full focus:outline-hidden"
-            >
-              {/* Tooltip on hover */}
-              <div className="pointer-events-none absolute -top-7 hidden rounded-md bg-[var(--ink)] px-1.5 py-0.5 text-[10px] text-white shadow-xs group-hover:block whitespace-nowrap z-10">
-                {r.bucket.label}: {formatINR(r.clinicRevenuePaise)}
-              </div>
-
-              <div className="flex w-full items-end justify-center gap-1">
-                {/* Prior period comparison bar */}
-                {compareMode && r.priorClinicRevenuePaise != null && (
-                  <div
-                    style={{ height: `${priorHeightPct}%` }}
-                    className="w-2.5 rounded-t-sm border border-dashed border-[var(--muted)] bg-[var(--paper)] opacity-70 transition-all group-hover:opacity-100"
-                    title={`Prior: ${formatINR(r.priorClinicRevenuePaise)}`}
-                  />
-                )}
-
-                {/* Main active bar */}
-                <div
-                  style={{ height: `${heightPct}%` }}
-                  className={`w-4 rounded-t-sm transition-all ${
-                    isSelected
-                      ? 'bg-[var(--teal)] shadow-xs ring-2 ring-[var(--teal-light)]'
-                      : 'bg-[var(--teal)] opacity-50 group-hover:opacity-85'
-                  }`}
-                />
-              </div>
-
-              {/* Bucket short label underneath bar */}
-              <span
-                className={`mt-1.5 block text-[10px] font-medium transition-colors ${
-                  isSelected ? 'font-semibold text-[var(--ink)]' : 'text-[var(--muted)]'
-                }`}
-              >
-                {r.bucket.label.slice(0, 3)}
-              </span>
-            </button>
-          );
-        })}
+              className="flex-1 focus:outline-hidden focus:ring-1 focus:ring-[var(--teal)]/40 rounded-sm cursor-pointer"
+              title={`${r.bucket.label}: ${formatINR(r.clinicRevenuePaise)}`}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Legend Footer */}
-      <div className="mt-3 flex items-center justify-between border-t border-[var(--border)] pt-2 text-[10px] text-[var(--muted)]">
+      <div className="mt-2 flex items-center justify-between border-t border-[var(--border)] pt-2 text-[10px] text-[var(--muted)]">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
             <span className="inline-block h-2 w-2 rounded-xs bg-[var(--teal)]" />
