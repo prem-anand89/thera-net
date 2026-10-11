@@ -491,8 +491,10 @@ export function ScheduleBookingsView({
     canDrag: (appointment) =>
       (appointment.status === 'confirmed' || appointment.status === 'rescheduled') && canManageAppointment(appointment),
     onMove: (appointment, target) => {
-      if (target.therapistId && target.therapistId !== appointment.therapistId) {
-        if (!canManageAll) return;
+      const isDifferentTherapist = Boolean(target.therapistId && target.therapistId !== appointment.therapistId);
+      const isDifferentDate = target.date !== appointment.scheduledAt.slice(0, 10);
+      if (isDifferentTherapist || isDifferentDate) {
+        if (isDifferentTherapist && !canManageAll) return;
         setPendingMove({ appointment, target });
       } else {
         void commitMove(appointment, target);
@@ -855,6 +857,7 @@ export function ScheduleBookingsView({
                     }}
                     onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
                     workingFor={(therapistId, day) => workingFor(therapistId, day)}
+                    drag={dragOptions}
                   />
                 )
               ) : (
@@ -1140,10 +1143,18 @@ export function ScheduleBookingsView({
 
       <ConfirmDialog
         open={pendingMove !== null}
-        title="Move to another therapist?"
+        title={
+          pendingMove && pendingMove.target.therapistId !== pendingMove.appointment.therapistId
+            ? 'Move to another therapist?'
+            : 'Move to another date?'
+        }
         message={
           pendingMove
-            ? `${pendingMove.appointment.patientName} → ${rosterById.get(pendingMove.target.therapistId ?? '')?.name ?? 'another therapist'}, ${longDate(pendingMove.target.date)} at ${minutesLabel(pendingMove.target.start)}.`
+            ? `${pendingMove.appointment.patientName} → ${
+                pendingMove.target.therapistId !== pendingMove.appointment.therapistId
+                  ? `${rosterById.get(pendingMove.target.therapistId ?? '')?.name ?? 'another therapist'}, `
+                  : ''
+              }${longDate(pendingMove.target.date)} at ${minutesLabel(pendingMove.target.start)}.`
             : ''
         }
         confirmLabel="Move"

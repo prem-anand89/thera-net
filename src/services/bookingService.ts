@@ -355,6 +355,15 @@ export const bookingService = {
     syncEngine.schedule(0);
   },
 
+  async deleteShiftTemplate(templateId: UUID): Promise<void> {
+    const supabase = supabaseOrThrow();
+    const { error } = await supabase.rpc('delete_shift_template', {
+      p_template_id: templateId,
+    });
+    if (error) throw new Error(`Could not delete shift template: ${error.message}`);
+    syncEngine.schedule(0);
+  },
+
   async assignShift(params: {
     therapistId: UUID;
     shiftTemplateId: UUID;

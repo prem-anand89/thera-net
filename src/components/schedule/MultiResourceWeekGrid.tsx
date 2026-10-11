@@ -9,8 +9,11 @@ import {
   DayColumn,
   TimeAxis,
   initialScrollTop,
+  type GridColumn,
+  type GridDragOptions,
   type GridHours,
   type GridTherapist,
+  useGridDrag,
 } from './TimeGrid';
 import type { PatientFlagContext } from '@/domain/patientFlags';
 
@@ -31,6 +34,7 @@ export type MultiResourceWeekGridProps = {
   onBook?: (input: { date: string; time: string; therapistId: string }) => void;
   onOpenDay?: (date: string) => void;
   workingFor?: (therapistId: string, date: string) => Interval[];
+  drag?: GridDragOptions;
 };
 
 /** Extracts a short name for compact sub-headers (e.g. "Dr. Priya" -> "Priya", "Prem Anand" -> "Prem"). */
@@ -61,6 +65,7 @@ export function MultiResourceWeekGrid({
   onBook,
   onOpenDay,
   workingFor,
+  drag,
 }: MultiResourceWeekGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrolledOnceRef = useRef(false);
@@ -98,6 +103,62 @@ export function MultiResourceWeekGrid({
     }
     return map;
   }, [appointments]);
+
+  // Columns specification for drag-and-drop operations
+  const dragColumns = useMemo<GridColumn[]>(() => {
+    const list: GridColumn[] = [];
+    for (const day of days) {
+      const closed = closedFor(day);
+      if (closed.closed) {
+        list.push({
+          key: `closed:${day}`,
+          label: `Closed, ${day}`,
+          date: day,
+          header: null,
+          appointments: [],
+          closed,
+          therapistId: '',
+        });
+        continue;
+      }
+      if (activeTherapists.length === 0) {
+        list.push({
+          key: `empty:${day}`,
+          label: `Empty, ${day}`,
+          date: day,
+          header: null,
+          appointments: [],
+          closed,
+          therapistId: '',
+        });
+        continue;
+      }
+      for (const therapist of activeTherapists) {
+        const key = `${day}:${therapist.id}`;
+        list.push({
+          key,
+          label: `${therapist.name}, ${day}`,
+          date: day,
+          header: null,
+          appointments: appointmentsByDayAndTherapist.get(key) ?? [],
+          closed,
+          therapistId: therapist.id,
+          working: workingFor ? workingFor(therapist.id, day) : undefined,
+          onBook: onBook ? (time) => onBook({ date: day, time, therapistId: therapist.id }) : undefined,
+        });
+      }
+    }
+    return list;
+  }, [days, closedFor, activeTherapists, appointmentsByDayAndTherapist, workingFor, onBook]);
+
+  const { columnDrag, placing, cancelPlacing } = useGridDrag({
+    columns: dragColumns,
+    hours,
+    slotMinutes,
+    today,
+    nowMinutes,
+    options: drag,
+  });
 
   // Build the CSS Grid template columns
   const gridTemplate = useMemo(() => {
@@ -273,6 +334,7 @@ export function MultiResourceWeekGrid({
           const isToday = day === today;
 
           if (closed.closed) {
+            const colDef = dragColumns.find((c) => c.key === `closed:${day}`);
             return (
               <DayColumn
                 key={`col-closed-${day}`}
@@ -289,11 +351,13 @@ export function MultiResourceWeekGrid({
                 onSelect={onSelect}
                 dense={true}
                 minimalBlocks={true}
+                drag={colDef ? columnDrag(colDef) : undefined}
               />
             );
           }
 
           if (activeTherapists.length === 0) {
+            const colDef = dragColumns.find((c) => c.key === `empty:${day}`);
             return (
               <DayColumn
                 key={`col-empty-${day}`}
@@ -310,6 +374,7 @@ export function MultiResourceWeekGrid({
                 onSelect={onSelect}
                 dense={true}
                 minimalBlocks={true}
+                drag={colDef ? columnDrag(colDef) : undefined}
               />
             );
           }
@@ -318,6 +383,7 @@ export function MultiResourceWeekGrid({
             const key = `${day}:${therapist.id}`;
             const colAppointments = appointmentsByDayAndTherapist.get(key) ?? [];
             const workingIntervals = workingFor ? workingFor(therapist.id, day) : undefined;
+            const colDef = dragColumns.find((c) => c.key === key);
 
             return (
               <DayColumn
@@ -343,11 +409,25 @@ export function MultiResourceWeekGrid({
                 dense={true}
                 minimalBlocks={true}
                 working={workingIntervals}
+                drag={colDef ? columnDrag(colDef) : undefined}
               />
             );
           });
         })}
       </div>
+
+      {placing && (
+        <div className="fixed inset-x-4 bottom-20 z-30 flex items-center justify-between rounded-xl bg-[var(--ink)] px-4 py-2.5 text-xs text-white shadow-xl sm:left-auto sm:right-4 sm:max-w-md">
+          <span>Tap a free slot to move {placing.appointment.patientName}</span>
+          <button
+            type="button"
+            className="rounded px-2 py-0.5 font-medium text-[var(--teal-light)] hover:underline"
+            onClick={cancelPlacing}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   );
 }

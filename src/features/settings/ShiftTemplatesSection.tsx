@@ -87,6 +87,25 @@ function ShiftTemplateCard({
     }
   }
 
+  async function handleDelete() {
+    if (usedByTherapistNames.length > 0) {
+      setError(`Cannot delete template while assigned to ${usedByTherapistNames.join(', ')}.`);
+      return;
+    }
+    if (!window.confirm(`Permanently delete "${template.name}"? This cannot be undone.`)) {
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await bookingService.deleteShiftTemplate(template.id);
+    } catch (err) {
+      setError(toFriendlyMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (editing) {
     const liveWorkingMinutes = Math.max(0, endMin - startMin - breakMin);
     const liveWorkingHours = (liveWorkingMinutes / 60).toFixed(
@@ -233,16 +252,29 @@ function ShiftTemplateCard({
         >
           Edit
         </button>
-        <button
-          type="button"
-          className={`inline-flex min-h-8 items-center px-1 ${
-            template.active ? 'text-[var(--rust)]' : 'text-[var(--ink)]'
-          } hover:opacity-80`}
-          onClick={() => void toggleActive()}
-          disabled={saving}
-        >
-          {template.active ? 'Deactivate' : 'Reactivate'}
-        </button>
+        <div className="flex items-center gap-2">
+          {(!template.active || usedByTherapistNames.length === 0) && (
+            <button
+              type="button"
+              className="text-[var(--rust)] hover:opacity-80 inline-flex min-h-8 items-center px-1"
+              onClick={() => void handleDelete()}
+              disabled={saving}
+              title="Delete this template"
+            >
+              Delete
+            </button>
+          )}
+          <button
+            type="button"
+            className={`inline-flex min-h-8 items-center px-1 ${
+              template.active ? 'text-[var(--muted)]' : 'text-[var(--teal)]'
+            } hover:opacity-80`}
+            onClick={() => void toggleActive()}
+            disabled={saving}
+          >
+            {template.active ? 'Deactivate' : 'Reactivate'}
+          </button>
+        </div>
       </div>
       <ErrorNote message={error} />
     </div>

@@ -2563,6 +2563,7 @@ function TeamMemberCard({
   const [regDraft, setRegDraft] = useState(therapist?.registrationNo ?? '');
   const [phoneDraft, setPhoneDraft] = useState(therapist?.phone ?? '');
   const [colorDraft, setColorDraft] = useState(therapist?.color ?? '');
+  const [activeDraft, setActiveDraft] = useState(therapist ? therapist.active !== false : true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -2616,6 +2617,7 @@ function TeamMemberCard({
           registrationNo: regDraft.trim() || null,
           phone: phoneDraft.trim() || null,
           color: colorDraft.trim() || null,
+          active: activeDraft,
           updatedAt: new Date().toISOString(),
         });
       }
@@ -2753,7 +2755,16 @@ function TeamMemberCard({
           <button
             type="button"
             className="text-xs font-medium text-[var(--teal)] hover:underline"
-            onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setNameDraft(displayName);
+              setRoleDraft(role);
+              setRegDraft(therapist?.registrationNo ?? '');
+              setPhoneDraft(therapist?.phone ?? '');
+              setColorDraft(therapist?.color ?? '');
+              setActiveDraft(therapist ? therapist.active !== false : true);
+              setEditing(true);
+            }}
           >
             Edit
           </button>
@@ -2905,6 +2916,31 @@ function TeamMemberCard({
                         </button>
                       </div>
                     </Field>
+
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)]/60 p-3 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="pr-2">
+                          <label htmlFor="active-on-schedule-toggle" className="text-xs font-semibold text-[var(--ink)] cursor-pointer">
+                            Active on schedule (Bookable)
+                          </label>
+                          <p className="text-[11px] text-[var(--muted)] leading-tight">
+                            Shows this therapist on the booking schedule and weekly shift coverage grid.
+                          </p>
+                        </div>
+                        <input
+                          id="active-on-schedule-toggle"
+                          type="checkbox"
+                          checked={activeDraft}
+                          onChange={(e) => setActiveDraft(e.target.checked)}
+                          className="h-4 w-4 rounded accent-[var(--teal)] cursor-pointer"
+                        />
+                      </div>
+                      {!activeDraft && (
+                        <p className="text-[11px] text-[var(--rust)] font-medium">
+                          ⚠️ Inactive: Removed from bookable schedule and shift grid. Existing records stay intact.
+                        </p>
+                      )}
+                    </div>
                   </>
                 )}
                 

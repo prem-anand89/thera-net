@@ -99,7 +99,7 @@ export function ShiftCoverageGrid({
         <table className="w-full text-left border-collapse text-xs" role="grid">
           <thead>
             <tr className="border-b border-[var(--border)] bg-[var(--paper)]">
-              <th className="sticky top-0 z-10 bg-[var(--paper)] p-3 font-semibold text-[var(--ink)] w-44">
+              <th className="sticky top-0 left-0 z-30 bg-[var(--paper)] p-3 font-semibold text-[var(--ink)] w-44 border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                 Staff Member
               </th>
               {WEEKDAY_ORDER.map((day) => {
@@ -117,7 +117,7 @@ export function ShiftCoverageGrid({
                   </th>
                 );
               })}
-              <th className="sticky top-0 z-10 bg-[var(--paper)] p-3 text-right font-semibold text-[var(--ink)] w-36">
+              <th className="sticky top-0 right-0 z-30 bg-[var(--paper)] p-3 text-right font-semibold text-[var(--ink)] w-36 border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                 Weekly Total
               </th>
             </tr>
@@ -137,10 +137,10 @@ export function ShiftCoverageGrid({
                 return (
                   <tr
                     key={therapist.id}
-                    className="hover:bg-[var(--paper)]/50 transition-colors"
+                    className="group hover:bg-[var(--paper)]/50 transition-colors"
                   >
-                    {/* Therapist Name */}
-                    <td className="p-3">
+                    {/* Therapist Name - Sticky Left */}
+                    <td className="sticky left-0 z-20 bg-[var(--surface)] group-hover:bg-[var(--paper)] p-3 border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                       <div className="flex items-center gap-2">
                         <span
                           className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -167,7 +167,7 @@ export function ShiftCoverageGrid({
                             onClick={() => handleCellClick(therapist.id, weekday)}
                             title={cell.tooltip}
                             aria-label={`${therapist.name}, ${WEEKDAY_META[weekday]?.full}: ${cell.label}`}
-                            className="group flex w-full flex-col items-center justify-center rounded-xl p-2 transition hover:ring-2 hover:ring-[var(--teal)] focus-visible:ring-2 focus-visible:ring-[var(--teal)] min-h-[52px]"
+                            className="group/btn flex w-full flex-col items-center justify-center rounded-xl p-2 transition hover:ring-2 hover:ring-[var(--teal)] focus-visible:ring-2 focus-visible:ring-[var(--teal)] min-h-[52px]"
                           >
                             {cell.type === 'template' && (
                               <div className="flex flex-col gap-1 w-full items-center">
@@ -204,7 +204,7 @@ export function ShiftCoverageGrid({
                             )}
 
                             {cell.type === 'clinic_default' && (
-                              <span className="inline-block truncate rounded-lg border border-transparent px-2 py-0.5 text-[10px] font-normal text-[var(--muted)] group-hover:bg-[var(--paper)] w-full text-center">
+                              <span className="inline-block truncate rounded-lg border border-transparent px-2 py-0.5 text-[10px] font-normal text-[var(--muted)] group-hover/btn:bg-[var(--paper)] w-full text-center">
                                 Default (9–6)
                               </span>
                             )}
@@ -213,8 +213,8 @@ export function ShiftCoverageGrid({
                       );
                     })}
 
-                    {/* Weekly Total Badge */}
-                    <td className="p-3 text-right">
+                    {/* Weekly Total Badge - Sticky Right */}
+                    <td className="sticky right-0 z-20 bg-[var(--surface)] group-hover:bg-[var(--paper)] p-3 text-right border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${
                           weekly.isAllDefault
@@ -235,7 +235,9 @@ export function ShiftCoverageGrid({
           {activeTherapists.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-[var(--border)] bg-[var(--paper)]/80 text-[11px] font-semibold text-[var(--ink)]">
-                <td className="p-3">Clinic Daily Capacity</td>
+                <td className="sticky left-0 z-20 bg-[var(--paper)] p-3 border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                  Clinic Daily Capacity
+                </td>
                 {WEEKDAY_ORDER.map((weekday) => {
                   const isClosed = closedDays.has(weekday);
                   const daily = calculateDailyCoverage(weekday, coverageMap, isClosed);
@@ -243,6 +245,13 @@ export function ShiftCoverageGrid({
                     <td key={weekday} className="p-2 text-center">
                       {isClosed ? (
                         <span className="text-[var(--muted)]">Closed</span>
+                      ) : daily.staffCount === 0 ? (
+                        <div className="flex flex-col items-center rounded-lg bg-[var(--amber-light)]/40 px-1.5 py-0.5 border border-[var(--amber)]/30">
+                          <span className="font-bold text-[var(--amber-strong)]">0 on duty</span>
+                          <span className="text-[10px] font-medium text-[var(--amber-strong)]">
+                            No coverage
+                          </span>
+                        </div>
                       ) : (
                         <div className="flex flex-col items-center">
                           <span className="text-[var(--teal)]">{daily.staffCount} on duty</span>
@@ -254,7 +263,9 @@ export function ShiftCoverageGrid({
                     </td>
                   );
                 })}
-                <td className="p-3 text-right text-[var(--muted)] font-normal">—</td>
+                <td className="sticky right-0 z-20 bg-[var(--paper)] p-3 text-right border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)] text-[var(--muted)] font-normal">
+                  —
+                </td>
               </tr>
             </tfoot>
           )}

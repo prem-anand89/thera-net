@@ -274,7 +274,21 @@ export function DayColumn({
                 )}
               </>
             ) : (
-              flags.length > 0 && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[var(--ink)]/40" />
+              <div className="flex h-full w-full flex-col justify-start overflow-hidden px-1 py-0.5 leading-tight text-left">
+                <div className="flex items-center justify-between gap-0.5 w-full">
+                  <span className="truncate text-[10px] font-semibold text-[var(--ink)]">
+                    {appointment.patientName}
+                  </span>
+                  {flags.length > 0 && (
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--ink)]/40" />
+                  )}
+                </div>
+                {geometry.height >= 26 && (
+                  <span className="truncate text-[9px] font-medium opacity-75">
+                    {minutesLabel(start)}
+                  </span>
+                )}
+              </div>
             )}
           </button>
         );
@@ -368,7 +382,7 @@ function useInitialScroll(
   }, [ref, key, compute]);
 }
 
-type GridColumn = {
+export type GridColumn = {
   key: string;
   label: string;
   date: string;
@@ -395,7 +409,7 @@ const LONG_PRESS_MS = 450;
  * column too), or drag its bottom edge to resize. Touch: dragging would fight
  * scrolling, so a long-press enters "tap a free time to move it" mode.
  */
-function useGridDrag(input: {
+export function useGridDrag(input: {
   columns: GridColumn[];
   hours: GridHours;
   slotMinutes: number;
