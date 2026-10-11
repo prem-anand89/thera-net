@@ -15,6 +15,7 @@ import {
 import { therapistStatus } from '@/domain/therapistStatus';
 import { PerformanceFilterBar } from './PerformanceFilterBar';
 import { UtilisationTrendCard } from './UtilisationTrendCard';
+import { CapacityHoursCard } from './CapacityHoursCard';
 import { RevenueVolumeCard } from './RevenueVolumeCard';
 import {
   PractitionerPerformanceTable,
@@ -156,8 +157,12 @@ export function ClinicUtilisationView({
       return {
         ...b,
         clinicRatio: row?.utilisation.ratio ?? null,
+        clinicWorkedMinutes: row?.utilisation.workedMinutes ?? 0,
+        clinicAvailableMinutes: row?.utilisation.availableMinutes ?? 0,
         clinicRevenuePaise: row?.revenuePaise ?? 0,
         priorClinicRatio: null,
+        priorClinicWorkedMinutes: null,
+        priorClinicAvailableMinutes: null,
         priorClinicRevenuePaise: null,
       };
     });
@@ -167,6 +172,8 @@ export function ClinicUtilisationView({
       return {
         ...b,
         priorClinicRatio: prior ? prior.clinicRatio : null,
+        priorClinicWorkedMinutes: prior ? prior.clinicWorkedMinutes : null,
+        priorClinicAvailableMinutes: prior ? prior.clinicAvailableMinutes : null,
         priorClinicRevenuePaise: prior ? prior.clinicRevenuePaise : null,
       };
     });
@@ -180,7 +187,7 @@ export function ClinicUtilisationView({
   return (
     <SectionCard title="Clinic utilisation & performance">
       <p className="mb-4 text-xs text-[var(--muted)]">
-        Capacity utilisation and appointment billing volume overview, with practitioner breakdowns.
+        Capacity utilisation and appointment booking volume overview, with practitioner breakdowns.
       </p>
 
       {!report && <p className="py-8 text-center text-sm text-[var(--muted)]">Loading…</p>}
@@ -219,16 +226,16 @@ export function ClinicUtilisationView({
                   : 'Percentage of available time utilised'
               }
             />
-            <RevenueVolumeCard
+            <CapacityHoursCard
               reports={displayedReports}
               activeIndex={activeIndex}
               onSelectBucket={(i) => setSelectedKey(report[i]?.bucket.key ?? null)}
               compareMode={compareMode}
-              title={selectedPractitionerName ? `${selectedPractitionerName} Revenue` : 'Revenue'}
+              title={selectedPractitionerName ? `${selectedPractitionerName} Capacity` : 'Capacity & Hours'}
               subtitle={
                 selectedPractitionerName
-                  ? `${selectedPractitionerName} appointment billing`
-                  : 'Total clinic appointment billing'
+                  ? `${selectedPractitionerName} booked time vs available capacity`
+                  : 'Booked time vs available capacity'
               }
             />
           </div>

@@ -36,16 +36,24 @@ const report: BucketReport[] = [
   {
     bucket: { key: 'sep', label: 'Sep 26', from: '2026-09-01', to: '2026-09-30' },
     clinicRatio: 0.6,
+    clinicWorkedMinutes: 576,
+    clinicAvailableMinutes: 960,
     clinicRevenuePaise: 10000000,
     priorClinicRatio: null,
+    priorClinicWorkedMinutes: null,
+    priorClinicAvailableMinutes: null,
     priorClinicRevenuePaise: null,
     rows: [row('a', 'Priya', 0.62, 35, 4500000), row('b', 'Kiran', 0.58, 30, 4000000)],
   },
   {
     bucket: { key: 'oct', label: 'Oct 26', from: '2026-10-01', to: '2026-10-31' },
     clinicRatio: 0.55,
+    clinicWorkedMinutes: 768,
+    clinicAvailableMinutes: 1440,
     clinicRevenuePaise: 13500000,
     priorClinicRatio: 0.6,
+    priorClinicWorkedMinutes: 576,
+    priorClinicAvailableMinutes: 960,
     priorClinicRevenuePaise: 10000000,
     rows: [
       row('a', 'Priya', 0.8, 45, 6000000),
@@ -65,9 +73,10 @@ describe('ClinicUtilisationView (Splose-inspired redesign)', () => {
 
     // Dual Hero Cards
     expect(screen.getByRole('heading', { name: 'Utilisation' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Revenue' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Capacity & Hours' })).toBeInTheDocument();
     expect(screen.getByText('55%')).toBeInTheDocument(); // Oct 26 utilisation
-    expect(screen.getByText('₹1,35,000')).toBeInTheDocument(); // Oct 26 revenue
+    expect(screen.getByText('12.8 hrs')).toBeInTheDocument(); // Oct 26 booked hours
+    expect(screen.getByText(/of 24 hrs total capacity/i)).toBeInTheDocument();
 
     // Practitioner table elements via test-id
     const names = screen.getAllByTestId('therapist-name').map((el) => el.textContent);
