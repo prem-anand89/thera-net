@@ -12,14 +12,9 @@ import {
   clinicUtilisationReport,
   type BucketReport,
 } from '@/domain/utilisationReport';
-import { therapistStatus } from '@/domain/therapistStatus';
 import { PerformanceFilterBar } from './PerformanceFilterBar';
 import { UtilisationTrendCard } from './UtilisationTrendCard';
 import { CapacityHoursCard } from './CapacityHoursCard';
-import {
-  PractitionerPerformanceTable,
-  type PractitionerPerformanceRow,
-} from './PractitionerPerformanceTable';
 
 /**
  * Modern Splose-inspired clinic performance & utilisation overview.
@@ -102,7 +97,6 @@ export function ClinicUtilisationView({
   }, [report, selectedKey]);
 
   const active = activeIndex >= 0 ? report?.[activeIndex] : undefined;
-  const previous = activeIndex > 0 ? report?.[activeIndex - 1] : undefined;
 
   // Extract all distinct therapists across the reports for filter bar picker
   const allPractitioners = useMemo(() => {
@@ -117,31 +111,6 @@ export function ClinicUtilisationView({
     }
     return [...map.entries()].map(([id, name]) => ({ id, name }));
   }, [report]);
-
-  const tableRows: PractitionerPerformanceRow[] = useMemo(() => {
-    if (!active) return [];
-    const rows = active.rows.map((row) => {
-      const prior =
-        previous?.rows.find((r) => r.therapistId === row.therapistId)?.utilisation.ratio ?? null;
-      const verdict = therapistStatus({
-        utilisation: row.utilisation.ratio,
-        clinicUtilisation: active.clinicRatio,
-        previousUtilisation: prior,
-        visitCount: row.visitCount,
-      });
-      return {
-        ...row,
-        priorRatio: prior,
-        status: verdict.status,
-        reason: verdict.reason,
-      };
-    });
-
-    if (selectedPractitionerId) {
-      return rows.filter((r) => r.therapistId === selectedPractitionerId);
-    }
-    return rows;
-  }, [active, previous, selectedPractitionerId]);
 
   const selectedPractitionerName = useMemo(() => {
     return allPractitioners.find((p) => p.id === selectedPractitionerId)?.name ?? null;
@@ -184,9 +153,9 @@ export function ClinicUtilisationView({
     ) ?? false;
 
   return (
-    <SectionCard title="Clinic utilisation & performance">
+    <SectionCard title="Clinic utilisation">
       <p className="mb-4 text-xs text-[var(--muted)]">
-        Capacity utilisation and clinical work hours overview, with practitioner breakdowns.
+        Capacity utilisation and clinical work hours overview across time. Detailed practitioner metrics and utilisation bars are consolidated in the Therapist Comparison section above.
       </p>
 
       {!report && <p className="py-8 text-center text-sm text-[var(--muted)]">Loading…</p>}
@@ -238,36 +207,6 @@ export function ClinicUtilisationView({
               }
             />
           </div>
-
-          <div className="mt-6">
-            <div className="mb-2.5 flex items-baseline justify-between">
-              <div>
-                <h3 className="font-display text-sm font-semibold text-[var(--ink)]">
-                  Practitioner Performance
-                </h3>
-                <p className="text-xs text-[var(--muted)]">
-                  Utilisation rate and revenue attribution for {active.bucket.label}
-                </p>
-              </div>
-              <span className="text-xs font-semibold text-[var(--muted)]">
-                Clinic Avg:{' '}
-                {active.clinicRatio != null ? `${Math.round(active.clinicRatio * 100)}%` : '—'}
-              </span>
-            </div>
-
-            <PractitionerPerformanceTable
-              rows={tableRows}
-              selectedTherapistId={selectedPractitionerId}
-              onSelectTherapist={(id) =>
-                setSelectedPractitionerId(id === selectedPractitionerId ? null : id)
-              }
-            />
-          </div>
-
-          <p className="pt-1 text-xs text-[var(--muted)]">
-            Strong: 70%+ and at or above clinic average. Needs attention: under 50%, 15+ points under
-            clinic, or a 10+ point drop while below it.
-          </p>
         </div>
       )}
     </SectionCard>

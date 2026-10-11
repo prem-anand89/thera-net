@@ -115,7 +115,7 @@ export function RevenueTrendMonthTable({
 
   return (
     <div>
-      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xs">
+      <div className="isolate overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xs">
         <div className="overflow-x-auto overscroll-x-contain">
           <table className="min-w-full divide-y divide-[var(--border)]">
             <thead className="bg-[var(--paper)]">

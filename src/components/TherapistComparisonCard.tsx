@@ -168,6 +168,16 @@ export function TherapistComparisonCard({
 
   const comparisonTotal = useMemo((): TherapistComparisonRow | undefined => {
     if (!chartMonth) return undefined;
+    let totalWorked = 0;
+    let totalAvailable = 0;
+    if (utilisationById) {
+      for (const u of utilisationById.values()) {
+        totalWorked += u.workedMinutes ?? 0;
+        totalAvailable += u.availableMinutes ?? 0;
+      }
+    }
+    const clinicUtilRatio = totalAvailable > 0 ? totalWorked / totalAvailable : null;
+
     return {
       therapistName: 'Total',
       billPaise: chartMonth.total.billPaise,
@@ -176,8 +186,9 @@ export function TherapistComparisonCard({
       visitCount: chartMonth.total.visitCount,
       retentionPct: null,
       newPackages: (therapistLiveStats ?? []).reduce((s, t) => s + t.newPackages, 0),
+      utilisation: clinicUtilRatio,
     };
-  }, [chartMonth, therapistLiveStats]);
+  }, [chartMonth, therapistLiveStats, utilisationById]);
 
   const totalMonthRevenue = useMemo(() => {
     return (chartMonth?.rows ?? []).reduce((sum, r) => sum + (r.netPostTaxPaise ?? 0), 0);

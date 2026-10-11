@@ -585,7 +585,7 @@ export function ReportsOverviewPage() {
           space on desktop) — the rail cost more room than a page of
           reference cards, glanced at rather than edited, actually needed. */}
       {/* Jump-nav row with fixed Print button */}
-      <div className="sticky top-14 z-[1] -mx-4 flex items-center border-b border-[var(--border)] bg-[var(--paper)]">
+      <div className="sticky top-14 z-20 -mx-4 flex items-center border-b border-[var(--border)] bg-[var(--paper)]">
         {/* Scrollable Jump Targets */}
         <nav className="flex flex-1 gap-1.5 overflow-x-auto px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {jumpTargets.map(({ key, label }) => (

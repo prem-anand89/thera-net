@@ -146,7 +146,7 @@ describe('SingleVisitPatientsCard', () => {
     expect(screen.getAllByText('Priya Sharma').length).toBeGreaterThan(0);
   });
 
-  it('displays service name and calls onSetPatientReason on dropdown change', () => {
+  it('calls onSetPatientReason on dropdown change', () => {
     const onSetPatientReason = vi.fn();
     render(
       <SingleVisitPatientsCard
@@ -159,9 +159,6 @@ describe('SingleVisitPatientsCard', () => {
         clinicName="Physio Plus"
       />
     );
-
-    // Initial assessment service is displayed
-    expect(screen.getAllByText(/Initial Assessment/i).length).toBeGreaterThan(0);
 
     // Find the select dropdown for Aarav (the first one)
     const selects = screen.getAllByRole('combobox');

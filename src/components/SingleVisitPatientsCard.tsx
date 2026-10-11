@@ -326,7 +326,7 @@ export function SingleVisitPatientsCard({
                 <thead className="bg-[var(--paper)] text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
                   <tr>
                     <th scope="col" className="px-4 py-3 text-left">
-                      Patient & Service
+                      Patient
                     </th>
                     <th scope="col" className="px-4 py-3 text-left">
                       Last Visit
@@ -345,7 +345,7 @@ export function SingleVisitPatientsCard({
                 <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)]">
                   {filteredRows.slice(0, 50).map((p) => (
                     <tr key={p.patientId} className="hover:bg-[var(--paper)]/50 transition-colors">
-                      {/* Patient & Service */}
+                      {/* Patient */}
                       <td className="px-4 py-3">
                         <div className="min-w-0">
                           <Link
@@ -355,16 +355,8 @@ export function SingleVisitPatientsCard({
                           >
                             {p.patientName}
                           </Link>
-                          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                            <span className="font-num font-mono">{p.mrno}</span>
-                            {p.serviceName && p.serviceName !== '—' && (
-                              <>
-                                <span>·</span>
-                                <span className="truncate max-w-[140px] text-[var(--muted)]" title={p.serviceName}>
-                                  {p.serviceName}
-                                </span>
-                              </>
-                            )}
+                          <div className="mt-0.5 text-xs font-num font-mono text-[var(--muted)]">
+                            {p.mrno}
                           </div>
                         </div>
                       </td>
@@ -462,8 +454,8 @@ export function SingleVisitPatientsCard({
                       >
                         {p.patientName}
                       </Link>
-                      <div className="text-xs text-[var(--muted)]">
-                        {p.mrno} · {p.serviceName}
+                      <div className="text-xs font-num font-mono text-[var(--muted)]">
+                        {p.mrno}
                       </div>
                     </div>
                     {getRecencyBadge(p.daysSince)}

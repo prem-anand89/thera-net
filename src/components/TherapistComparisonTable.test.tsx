@@ -47,6 +47,21 @@ describe('TherapistComparisonTable utilisation column', () => {
     expect(screen.getByText('50%*')).toBeInTheDocument();
     expect(screen.getByText(/No personal working hours set/)).toBeInTheDocument();
   });
+
+  it('renders a progress bar for utilisation in row and in the total footer', () => {
+    render(
+      <TherapistComparisonTable
+        rows={[row({ utilisation: 0.724 })]}
+        total={row({ therapistName: 'Total', utilisation: 0.65 })}
+        showPostTax={false}
+        ownLabel="BM"
+      />
+    );
+    const progressBars = screen.getAllByRole('progressbar');
+    expect(progressBars.length).toBe(2);
+    expect(progressBars[0]).toHaveAttribute('aria-valuenow', '72');
+    expect(progressBars[1]).toHaveAttribute('aria-valuenow', '65');
+  });
 });
 
 describe('TherapistComparisonTable ranking', () => {

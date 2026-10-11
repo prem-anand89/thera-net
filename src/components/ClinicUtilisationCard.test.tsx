@@ -64,7 +64,7 @@ const report: BucketReport[] = [
 ];
 
 describe('ClinicUtilisationView (Splose-inspired redesign)', () => {
-  it('renders top filter bar, dual KPI cards, and practitioner performance table', () => {
+  it('renders top filter bar and dual KPI cards', () => {
     render(<ClinicUtilisationView report={report} granularity="month" onGranularityChange={() => {}} />);
 
     // Filter bar elements
@@ -77,14 +77,6 @@ describe('ClinicUtilisationView (Splose-inspired redesign)', () => {
     expect(screen.getByText('55%')).toBeInTheDocument(); // Oct 26 utilisation
     expect(screen.getByText('12.8 hrs')).toBeInTheDocument(); // Oct 26 booked hours
     expect(screen.getByText(/of 24 hrs total capacity/i)).toBeInTheDocument();
-
-    // Practitioner table elements via test-id
-    const names = screen.getAllByTestId('therapist-name').map((el) => el.textContent);
-    expect(names).toContain('Priya');
-    expect(names).toContain('Kiran');
-    expect(names).toContain('Newbie');
-    expect(screen.getByText('Strong')).toBeInTheDocument();
-    expect(screen.getByText('Needs attention')).toBeInTheDocument();
   });
 
   it('reports the chosen granularity when clicking pill', () => {
@@ -102,25 +94,19 @@ describe('ClinicUtilisationView (Splose-inspired redesign)', () => {
     const sepPoint = screen.getByRole('button', { name: /Sep 26: 60%/i });
     fireEvent.click(sepPoint);
 
-    // Headline and table should reflect Sep 26 (Priya & Kiran only, no Newbie)
+    // Headline should reflect Sep 26
     expect(screen.getByText('60%')).toBeInTheDocument();
-    const names = screen.getAllByTestId('therapist-name').map((el) => el.textContent);
-    expect(names).toContain('Priya');
-    expect(names).toContain('Kiran');
-    expect(names).not.toContain('Newbie');
   });
 
-  it('filters table by selected practitioner from filter bar dropdown', () => {
+  it('filters charts by selected practitioner from filter bar dropdown', () => {
     render(<ClinicUtilisationView report={report} granularity="month" onGranularityChange={() => {}} />);
 
     const select = screen.getByRole('combobox', { name: 'Filter by practitioner' });
     fireEvent.change(select, { target: { value: 'a' } });
 
-    // Only Priya should be shown in table
-    const names = screen.getAllByTestId('therapist-name').map((el) => el.textContent);
-    expect(names).toContain('Priya');
-    expect(names).not.toContain('Kiran');
-    expect(names).not.toContain('Newbie');
+    // Chart titles update to reflect selected practitioner Priya
+    expect(screen.getByRole('heading', { name: 'Priya Utilisation' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Priya Work Hours' })).toBeInTheDocument();
   });
 
   it('shows an empty state when no visits are logged', () => {

@@ -89,7 +89,7 @@ export function TherapistComparisonTable({
       </span>
     ) : null;
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xs">
+    <div className="isolate overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xs">
       <div className="overflow-x-auto overscroll-x-contain">
         <table className="min-w-full divide-y divide-[var(--border)]">
           <thead className="bg-[var(--paper)]">
@@ -108,10 +108,10 @@ export function TherapistComparisonTable({
               )}
               <TableColumnHead title="Net" detail="After splits & package attribution" onSort={() => toggleSort('net')} sorted={sortBy === 'net'} />
               <TableColumnHead title="Visits" detail="Sessions in period" onSort={() => toggleSort('visits')} sorted={sortBy === 'visits'} />
-              <TableColumnHead title="Retention" detail="Repeat visits within 30 days, % of visits" onSort={() => toggleSort('retention')} sorted={sortBy === 'retention'} />
               <TableColumnHead title="Packages" detail="New packages started in period" />
+              <TableColumnHead title="Retention" detail="Repeat visits within 30 days, % of visits" onSort={() => toggleSort('retention')} sorted={sortBy === 'retention'} />
               {showUtilisation && (
-                <TableColumnHead title="Utilisation" detail="Visits × slot time ÷ available hours" onSort={() => toggleSort('utilisation')} sorted={sortBy === 'utilisation'} />
+                <TableColumnHead title="Utilisation" detail="Work hours ÷ available capacity" onSort={() => toggleSort('utilisation')} sorted={sortBy === 'utilisation'} />
               )}
             </tr>
           </thead>
@@ -127,19 +127,47 @@ export function TherapistComparisonTable({
                 {showPostTax && <td className={tdNum}>{formatINR(row.postTaxPaise)}</td>}
                 <td className={tdNum}>{formatINR(row.netPostTaxPaise)}{lead('net', row.therapistName)}</td>
                 <td className={tdNum}>{row.visitCount}{lead('visits', row.therapistName)}</td>
+                <td className={tdNum}>{row.newPackages}</td>
                 <td className={tdNum}>
                   {row.retentionPct != null ? `${row.retentionPct}%` : '—'}
                   {lead('retention', row.therapistName)}
                 </td>
-                <td className={tdNum}>{row.newPackages}</td>
                 {showUtilisation && (
                   <td
                     className={tdNum}
                     title={row.utilisationClinicHours ? 'Based on clinic hours — no personal hours set' : undefined}
                   >
-                    {row.utilisation != null ? `${Math.round(row.utilisation * 100)}%` : '—'}
-                    {row.utilisation != null && row.utilisationClinicHours ? '*' : ''}
-                    {lead('utilisation', row.therapistName)}
+                    <div className="flex items-center justify-end gap-2.5">
+                      {row.utilisation != null ? (
+                        <>
+                          <div
+                            role="progressbar"
+                            aria-valuenow={Math.round(row.utilisation * 100)}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            className="h-2 w-14 sm:w-20 rounded-full bg-[var(--paper)] overflow-hidden shrink-0 border border-[var(--border)]/50"
+                          >
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                row.utilisation >= 0.7
+                                  ? 'bg-[var(--teal)]'
+                                  : row.utilisation >= 0.5
+                                    ? 'bg-[#d97706]'
+                                    : 'bg-[var(--rust)]'
+                              }`}
+                              style={{ width: `${Math.min(100, Math.max(3, Math.round(row.utilisation * 100)))}%` }}
+                            />
+                          </div>
+                          <span className="font-num text-xs font-semibold text-[var(--ink)] min-w-[34px] text-right">
+                            {Math.round(row.utilisation * 100)}%
+                            {row.utilisationClinicHours ? '*' : ''}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-[var(--muted)] font-num text-xs">—</span>
+                      )}
+                      {lead('utilisation', row.therapistName)}
+                    </div>
                   </td>
                 )}
               </tr>
@@ -149,7 +177,7 @@ export function TherapistComparisonTable({
             <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold text-sm">
               <tr>
                 <td
-                  className={`${td} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-semibold text-[var(--ink)]`}
+                  className={`${td} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-bold text-[var(--ink)]`}
                 >
                   Total
                 </td>
@@ -157,9 +185,39 @@ export function TherapistComparisonTable({
                 {showPostTax && <td className={`${tdNum} font-bold text-[var(--ink)]`}>{formatINR(total.postTaxPaise)}</td>}
                 <td className={`${tdNum} font-bold text-[var(--ink)]`}>{formatINR(total.netPostTaxPaise)}</td>
                 <td className={`${tdNum} font-bold text-[var(--ink)]`}>{total.visitCount}</td>
-                <td className={tdNum}>—</td>
                 <td className={`${tdNum} font-bold text-[var(--ink)]`}>{total.newPackages}</td>
-                {showUtilisation && <td className={tdNum}>—</td>}
+                <td className={tdNum}>—</td>
+                {showUtilisation && (
+                  <td className={tdNum}>
+                    {total.utilisation != null ? (
+                      <div className="flex items-center justify-end gap-2.5">
+                        <div
+                          role="progressbar"
+                          aria-valuenow={Math.round(total.utilisation * 100)}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          className="h-2 w-14 sm:w-20 rounded-full bg-[var(--surface)] overflow-hidden shrink-0 border border-[var(--border)]/60"
+                        >
+                          <div
+                            className={`h-full rounded-full ${
+                              total.utilisation >= 0.7
+                                ? 'bg-[var(--teal)]'
+                                : total.utilisation >= 0.5
+                                  ? 'bg-[#d97706]'
+                                  : 'bg-[var(--rust)]'
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(3, Math.round(total.utilisation * 100)))}%` }}
+                          />
+                        </div>
+                        <span className="font-num text-xs font-bold text-[var(--ink)] min-w-[34px] text-right">
+                          {Math.round(total.utilisation * 100)}%
+                        </span>
+                      </div>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                )}
               </tr>
             </tfoot>
           )}
