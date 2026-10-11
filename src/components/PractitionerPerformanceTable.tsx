@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { initialsFor } from '@/app/accountInitials';
 import { formatINR } from '@/domain/money';
+import { publicTherapistPhotoUrl } from '@/lib/supabase';
 import type { Utilisation } from '@/domain/utilisation';
 import type { TherapistStatus } from '@/domain/therapistStatus';
 
@@ -17,6 +18,31 @@ export const STATUS_STYLE: Record<TherapistStatus, string> = {
   attention: 'bg-[var(--rust)]/10 text-[var(--rust)]',
   insufficient: 'bg-[var(--paper)] text-[var(--muted)]',
 };
+
+function PractitionerAvatar({ name, photoPath }: { name: string; photoPath?: string | null }) {
+  const [hasError, setHasError] = useState(false);
+  const photoUrl = photoPath ? publicTherapistPhotoUrl(photoPath) : null;
+
+  if (photoUrl && !hasError) {
+    return (
+      <img
+        src={photoUrl}
+        alt=""
+        onError={() => setHasError(true)}
+        className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-[var(--border)]"
+      />
+    );
+  }
+
+  return (
+    <div
+      aria-hidden="true"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal-strong)] ring-1 ring-[var(--border)]"
+    >
+      {initialsFor(name)}
+    </div>
+  );
+}
 
 export type PractitionerPerformanceRow = {
   therapistId: string;
@@ -167,20 +193,7 @@ export function PractitionerPerformanceTable({
                   {/* Practitioner info with avatar & status */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      {row.photoPath ? (
-                        <img
-                          src={row.photoPath}
-                          alt={row.name}
-                          className="h-9 w-9 rounded-full object-cover ring-1 ring-[var(--border)]"
-                        />
-                      ) : (
-                        <div
-                          aria-hidden="true"
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--teal-light)] font-display text-xs font-semibold text-[var(--teal-strong)] ring-1 ring-[var(--border)]"
-                        >
-                          {initialsFor(row.name)}
-                        </div>
-                      )}
+                      <PractitionerAvatar name={row.name} photoPath={row.photoPath} />
                       <div>
                         <div
                           data-testid="therapist-name"

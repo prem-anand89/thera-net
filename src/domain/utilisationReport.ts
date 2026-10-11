@@ -25,10 +25,18 @@ export type BucketReport = {
   bucket: UtilisationBucket;
   /** Clinic-wide: total work done / total available time across included therapists. */
   clinicRatio: number | null;
+  /** Clinic-wide: total booked worked minutes in the bucket. */
+  clinicWorkedMinutes: number;
+  /** Clinic-wide: total available minutes across included therapists in the bucket. */
+  clinicAvailableMinutes: number;
   /** Clinic-wide: total billed revenue in paise in the bucket. */
   clinicRevenuePaise: number;
   /** Prior bucket clinic utilisation ratio (for period-over-period comparison). */
   priorClinicRatio: number | null;
+  /** Prior bucket clinic worked minutes (for period-over-period comparison). */
+  priorClinicWorkedMinutes: number | null;
+  /** Prior bucket clinic available minutes (for period-over-period comparison). */
+  priorClinicAvailableMinutes: number | null;
   /** Prior bucket clinic revenue in paise (for period-over-period comparison). */
   priorClinicRevenuePaise: number | null;
   rows: TherapistBucketRow[];
@@ -93,6 +101,8 @@ export function clinicUtilisationReport(input: {
     return {
       bucket,
       clinicRatio,
+      clinicWorkedMinutes: done,
+      clinicAvailableMinutes: available,
       clinicRevenuePaise,
       rows,
     };
@@ -103,6 +113,8 @@ export function clinicUtilisationReport(input: {
     return {
       ...report,
       priorClinicRatio: prior ? prior.clinicRatio : null,
+      priorClinicWorkedMinutes: prior ? prior.clinicWorkedMinutes : null,
+      priorClinicAvailableMinutes: prior ? prior.clinicAvailableMinutes : null,
       priorClinicRevenuePaise: prior ? prior.clinicRevenuePaise : null,
     };
   });

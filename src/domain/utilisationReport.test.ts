@@ -86,5 +86,29 @@ describe('clinicUtilisationReport', () => {
     expect(r[1].priorClinicRatio).toBe(r[0].clinicRatio);
     expect(r[1].priorClinicRevenuePaise).toBe(100000);
   });
+
+  it('computes clinicWorkedMinutes and clinicAvailableMinutes with prior comparisons', () => {
+    const bucket1 = { key: 'sep', label: 'Sep', from: '2026-09-14', to: '2026-09-14' };
+    const bucket2 = { key: 'oct', label: 'Oct', from: '2026-10-12', to: '2026-10-12' };
+    // A: 4 visits = 120 mins worked; B: 0 visits; each 480 mins available -> 120 worked of 960 available
+    const visits = [
+      ...Array.from({ length: 4 }, () => visit('a', '2026-09-14')),
+      ...Array.from({ length: 8 }, () => visit('a', '2026-10-12')), // 240 mins worked
+    ];
+    const r = clinicUtilisationReport({
+      ...common,
+      buckets: [bucket1, bucket2],
+      visits,
+    });
+    expect(r[0].clinicWorkedMinutes).toBe(120);
+    expect(r[0].clinicAvailableMinutes).toBe(960);
+    expect(r[0].priorClinicWorkedMinutes).toBeNull();
+    expect(r[0].priorClinicAvailableMinutes).toBeNull();
+
+    expect(r[1].clinicWorkedMinutes).toBe(240);
+    expect(r[1].clinicAvailableMinutes).toBe(960);
+    expect(r[1].priorClinicWorkedMinutes).toBe(120);
+    expect(r[1].priorClinicAvailableMinutes).toBe(960);
+  });
 });
 
