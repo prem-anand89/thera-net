@@ -492,7 +492,7 @@ export function ScheduleBookingsView({
       (appointment.status === 'confirmed' || appointment.status === 'rescheduled') && canManageAppointment(appointment),
     onMove: (appointment, target) => {
       const isDifferentTherapist = Boolean(target.therapistId && target.therapistId !== appointment.therapistId);
-      const isDifferentDate = target.date !== appointment.scheduledAt.slice(0, 10);
+      const isDifferentDate = target.date !== dateForAppointment(appointment);
       if (isDifferentTherapist || isDifferentDate) {
         if (isDifferentTherapist && !canManageAll) return;
         setPendingMove({ appointment, target });

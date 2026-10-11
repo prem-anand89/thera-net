@@ -4,6 +4,7 @@ import {
   type ClosedDayInfo,
   type Interval,
   minutesOfDay,
+  toLocalDateStr,
 } from '@/domain/schedule';
 import {
   DayColumn,
@@ -80,8 +81,7 @@ export function MultiResourceWeekGrid({
   const appointmentsByDayAndTherapist = useMemo(() => {
     const map = new Map<string, Appointment[]>();
     for (const appt of appointments) {
-      if (appt.status === 'cancelled') continue;
-      const apptDate = appt.scheduledAt.slice(0, 10);
+      const apptDate = toLocalDateStr(new Date(appt.scheduledAt));
       const key = `${apptDate}:${appt.therapistId ?? 'unassigned'}`;
       const list = map.get(key);
       if (list) {
@@ -93,12 +93,12 @@ export function MultiResourceWeekGrid({
     return map;
   }, [appointments]);
 
-  // Appointment count per day for the day header badge
+  // Appointment count per day for the day header badge (active appointments only)
   const dayAppointmentCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const appt of appointments) {
       if (appt.status === 'cancelled') continue;
-      const apptDate = appt.scheduledAt.slice(0, 10);
+      const apptDate = toLocalDateStr(new Date(appt.scheduledAt));
       map.set(apptDate, (map.get(apptDate) ?? 0) + 1);
     }
     return map;

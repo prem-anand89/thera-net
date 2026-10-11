@@ -46,6 +46,14 @@ export function ShiftCoverageGrid({
     [clinic.closedWeekdays]
   );
 
+  const defaultHourLabel = useMemo(() => {
+    const start = clinic.bookingStartHour ?? 9;
+    const end = clinic.bookingEndHour ?? 18;
+    const start12 = start % 12 || 12;
+    const end12 = end % 12 || 12;
+    return `Default (${start12}–${end12})`;
+  }, [clinic.bookingStartHour, clinic.bookingEndHour]);
+
   // Build the complete coverage matrix
   const coverageMap = useMemo(
     () => buildCoverage(activeTherapists, approvedAssignments, templates, clinic),
@@ -205,7 +213,7 @@ export function ShiftCoverageGrid({
 
                             {cell.type === 'clinic_default' && (
                               <span className="inline-block truncate rounded-lg border border-transparent px-2 py-0.5 text-[10px] font-normal text-[var(--muted)] group-hover/btn:bg-[var(--paper)] w-full text-center">
-                                Default (9–6)
+                                {defaultHourLabel}
                               </span>
                             )}
                           </button>

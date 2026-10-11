@@ -418,7 +418,9 @@ const clinicClosedDates: ClinicClosedDateRepo = {
 const shiftTemplates: ShiftTemplatesRepo = {
   async list(clinicId, includeInactive = false) {
     const all = await db.shift_templates.where('clinicId').equals(clinicId).toArray();
-    return all.filter((t) => includeInactive || t.active).sort((a, b) => a.name.localeCompare(b.name));
+    return all
+      .filter((t) => !t.removedAt && (includeInactive || t.active))
+      .sort((a, b) => a.name.localeCompare(b.name));
   },
 };
 

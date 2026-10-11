@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '@/lib/db';
 import { repos, bookingService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { ErrorNote, Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
@@ -99,6 +100,10 @@ function ShiftTemplateCard({
     setError(null);
     try {
       await bookingService.deleteShiftTemplate(template.id);
+      await db.shift_templates.update(template.id, {
+        removedAt: new Date().toISOString(),
+        active: false,
+      });
     } catch (err) {
       setError(toFriendlyMessage(err));
     } finally {

@@ -265,6 +265,7 @@ export interface ShiftTemplate {
   breakDurationMinutes: number;
   defaultBreakStartMinute: number | null;
   active: boolean;
+  removedAt?: string | null;
   updatedAt: string;
 }
 

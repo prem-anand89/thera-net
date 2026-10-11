@@ -12,8 +12,17 @@ let therapists: Therapist[];
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (query: () => unknown) => query() }));
 vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1' }) }));
 const createShiftTemplate = vi.fn();
-vi.mock('@/lib/errors', () => ({ toFriendlyMessage: (e: Error) => e.message }));
 const updateShiftTemplate = vi.fn();
+const deleteShiftTemplate = vi.fn();
+const dbUpdate = vi.fn();
+vi.mock('@/lib/errors', () => ({ toFriendlyMessage: (e: Error) => e.message }));
+vi.mock('@/lib/db', () => ({
+  db: {
+    shift_templates: {
+      update: (...args: unknown[]) => dbUpdate(...args),
+    },
+  },
+}));
 
 vi.mock('@/services', () => ({
   repos: {
@@ -24,6 +33,7 @@ vi.mock('@/services', () => ({
   bookingService: {
     createShiftTemplate: (...args: unknown[]) => createShiftTemplate(...args),
     updateShiftTemplate: (...args: unknown[]) => updateShiftTemplate(...args),
+    deleteShiftTemplate: (...args: unknown[]) => deleteShiftTemplate(...args),
   },
 }));
 
@@ -226,5 +236,37 @@ describe('ShiftTemplatesSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('bad bounds')).toBeInTheDocument();
+  });
+
+  it('calls bookingService.deleteShiftTemplate and updates local db with removedAt when deleting', async () => {
+    templates = [
+      {
+        id: 't-delete',
+        clinicId: 'c1',
+        name: 'Obsolete Shift',
+        startMinute: 540,
+        endMinute: 780,
+        breakDurationMinutes: 0,
+        defaultBreakStartMinute: null,
+        active: false,
+        updatedAt: '',
+      },
+    ];
+    deleteShiftTemplate.mockResolvedValueOnce(undefined);
+    dbUpdate.mockResolvedValueOnce(1);
+    vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
+
+    render(<ShiftTemplatesSection />);
+    // Template is inactive, expand inactive section first
+    fireEvent.click(screen.getByRole('button', { name: /Show inactive templates/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await vi.waitFor(() => {
+      expect(deleteShiftTemplate).toHaveBeenCalledWith('t-delete');
+      expect(dbUpdate).toHaveBeenCalledWith('t-delete', expect.objectContaining({
+        active: false,
+        removedAt: expect.any(String),
+      }));
+    });
   });
 });

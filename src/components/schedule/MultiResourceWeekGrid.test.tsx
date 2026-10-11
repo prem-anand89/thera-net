@@ -134,4 +134,35 @@ describe('MultiResourceWeekGrid', () => {
     // Open days should show "No staff"
     expect(screen.getAllByText('No staff').length).toBeGreaterThanOrEqual(1);
   });
+
+  it('renders cancelled appointment when passed and does not include it in day count badge', () => {
+    const activeAppt1 = appointment({ id: 'a1', patientName: 'Active Patient 1' });
+    const activeAppt2 = appointment({
+      id: 'a2',
+      patientName: 'Active Patient 2',
+      therapistId: 't2',
+      scheduledAt: localDateTime('2026-10-01', '10:30').toISOString(),
+    });
+    const cancelledAppt = appointment({
+      id: 'a3',
+      patientName: 'Cancelled Patient',
+      status: 'cancelled',
+      scheduledAt: localDateTime('2026-10-01', '11:00').toISOString(),
+    });
+
+    render(
+      <MultiResourceWeekGrid
+        {...baseProps({ appointments: [activeAppt1, activeAppt2, cancelledAppt] })}
+      />
+    );
+
+    // All appointments should be rendered in the grid
+    expect(screen.getByRole('button', { name: /Active Patient 1/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Active Patient 2/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Cancelled Patient/i })).toBeInTheDocument();
+
+    // The badge for 2026-10-01 should reflect only the 2 active appointments
+    const dayHeader = screen.getByRole('button', { name: /Open 2026-10-01 in day view/i });
+    expect(dayHeader).toHaveTextContent('2');
+  });
 });
