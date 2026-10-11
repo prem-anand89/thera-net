@@ -176,8 +176,6 @@ export function TherapistComparisonCard({
     };
   }, [chartMonth, therapistLiveStats]);
 
-  if (!showComparison) return null;
-
   const totalMonthRevenue = useMemo(() => {
     return (chartMonth?.rows ?? []).reduce((sum, r) => sum + (r.netPostTaxPaise ?? 0), 0);
   }, [chartMonth]);
@@ -215,6 +213,8 @@ export function TherapistComparisonCard({
       })
       .sort((a, b) => b.visits - a.visits);
   }, [therapistNames, therapistVisitCounts, totalMonthVisits, maxTherapistVisits]);
+
+  if (!showComparison) return null;
 
   return (
     <SectionCard title="Therapist comparison">
