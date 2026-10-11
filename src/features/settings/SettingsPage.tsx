@@ -6,7 +6,6 @@ import {
   backupService,
   therapistService,
   visitService,
-  whatsappBusinessService,
 } from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
 import { therapistColor } from '@/components/schedule/scheduleColors';
@@ -1978,124 +1977,10 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
  * the client), so it doesn't fit the "read the clinic row, diff, save"
  * shape that hook is built for.
  */
-function WhatsAppBusinessSubsection({ clinicId }: { clinicId: UUID }) {
+function WhatsAppBusinessSubsection({ clinicId: _clinicId }: { clinicId: UUID }) {
   // HIDDEN: The Meta API integration is currently too complex for average users to setup (requires Meta Business Verification). 
   // We are hiding this UI to prevent confusion and sticking to wa.me deep links.
   return null;
-  
-  const [expanded, setExpanded] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [enabled, setEnabled] = useState(false);
-  const [phoneNumberId, setPhoneNumberId] = useState('');
-  const [hasToken, setHasToken] = useState(false);
-  const [accessTokenInput, setAccessTokenInput] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!expanded || loaded) return;
-    void whatsappBusinessService
-      .getConfigStatus(clinicId)
-      .then((status) => {
-        if (status) {
-          setEnabled(status.enabled);
-          setPhoneNumberId(status.phoneNumberId ?? '');
-          setHasToken(status.hasToken);
-        }
-        setLoaded(true);
-      })
-      .catch((e) => setError(toFriendlyMessage(e)));
-  }, [expanded, loaded, clinicId]);
-
-  async function onSave() {
-    setBusy(true);
-    setError(null);
-    try {
-      await whatsappBusinessService.setConfig(
-        clinicId,
-        phoneNumberId.trim() || null,
-        accessTokenInput.trim() || null,
-        enabled
-      );
-      if (accessTokenInput.trim()) setHasToken(true);
-      setAccessTokenInput('');
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1500);
-    } catch (e) {
-      setError(toFriendlyMessage(e));
-    }
-    setBusy(false);
-  }
-
-  return (
-    <div className="mt-4 border-t border-[var(--border)] pt-4">
-      <button
-        type="button"
-        className="text-sm font-medium text-[var(--muted)] hover:text-[var(--ink)]"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        {expanded ? '▾' : '▸'} WhatsApp Business API (advanced)
-      </button>
-      {expanded && (
-        <div className="mt-3 space-y-3">
-          <p className="text-xs text-[var(--muted)]">
-            Reserved for future automated sends from the clinic&rsquo;s WhatsApp Business number.
-            Feedback, booking confirmations, and bill reminders always open the staff
-            member&rsquo;s WhatsApp via wa.me today — this toggle does not change those actions
-            yet.
-          </p>
-          {!loaded ? (
-            <p className="text-xs text-[var(--muted)]">Loading…</p>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="Enable">
-                  <BoolToggle value={enabled} onChange={setEnabled} />
-                </Field>
-                <Field label="Status">
-                  <span className="text-xs text-[var(--muted)]">
-                    {hasToken ? 'Connected ✓' : 'Not connected'}
-                  </span>
-                </Field>
-                <Field label="Phone number ID">
-                  <input
-                    type="text"
-                    className={inputCls}
-                    placeholder="Meta phone_number_id"
-                    value={phoneNumberId}
-                    onChange={(e) => setPhoneNumberId(e.target.value)}
-                  />
-                </Field>
-                <Field label="Access token">
-                  <input
-                    type="password"
-                    className={inputCls}
-                    placeholder={
-                      hasToken ? '•••• (leave blank to keep the current one)' : 'Meta access token'
-                    }
-                    value={accessTokenInput}
-                    onChange={(e) => setAccessTokenInput(e.target.value)}
-                  />
-                </Field>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="rounded-full bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
-                  onClick={() => void onSave()}
-                >
-                  {busy ? 'Saving…' : saved ? 'Saved!' : 'Save'}
-                </button>
-                {error && <p className="text-xs text-[var(--rust)]">{error}</p>}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
 }
 
 

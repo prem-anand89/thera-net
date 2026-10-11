@@ -288,84 +288,91 @@ export function ShiftCoverageGrid({
           Touch-friendly, compact, clear day-by-day status.
           ========================================================================= */}
       <div className="space-y-2.5 md:hidden">
-        {activeTherapists.map((therapist) => {
-          const dayMap = coverageMap.get(therapist.id);
-          const weekly = calculateWeeklyTotal(therapist.id, coverageMap);
+        {activeTherapists.length === 0 ? (
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 text-center text-xs text-[var(--muted)]">
+            No active team members found.
+          </div>
+        ) : (
+          activeTherapists.map((therapist) => {
+            const dayMap = coverageMap.get(therapist.id);
+            const weekly = calculateWeeklyTotal(therapist.id, coverageMap);
 
-          return (
-            <div
-              key={therapist.id}
-              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 space-y-2 shadow-2xs"
-            >
-              {/* Header: Therapist Name + Total Hours Badge */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ background: therapist.color ?? '#2c5f63' }}
-                    aria-hidden
-                  />
-                  <h3 className="font-semibold text-xs text-[var(--ink)] truncate max-w-[180px]">
-                    {therapist.name}
-                  </h3>
+            return (
+              <div
+                key={therapist.id}
+                className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 space-y-2 shadow-2xs"
+              >
+                {/* Header: Therapist Name + Total Hours Badge */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ background: therapist.color ?? '#2c5f63' }}
+                      aria-hidden
+                    />
+                    <h3 className="font-semibold text-xs text-[var(--ink)] truncate max-w-[180px]">
+                      {therapist.name}
+                    </h3>
+                  </div>
+                  <span className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10.5px] font-bold text-[var(--teal)]">
+                    {weekly.totalHours}h {weekly.isAllDefault ? '• Default' : `• ${weekly.shiftsCount} shifts`}
+                  </span>
                 </div>
-                <span className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10.5px] font-bold text-[var(--teal)]">
-                  {weekly.totalHours}h {weekly.isAllDefault ? '• Default' : `• ${weekly.shiftsCount} shifts`}
-                </span>
-              </div>
 
-              {/* 7-Day Touch Strip */}
-              <div className="grid grid-cols-7 gap-1">
-                {WEEKDAY_ORDER.map((weekday) => {
-                  const cell = dayMap?.get(weekday);
-                  const meta = WEEKDAY_META[weekday];
+                {/* 7-Day Touch Strip */}
+                <div className="grid grid-cols-7 gap-1">
+                  {WEEKDAY_ORDER.map((weekday) => {
+                    const cell = dayMap?.get(weekday);
+                    const meta = WEEKDAY_META[weekday];
 
-                  let pillContent = defaultHourLabel;
-                  let pillStyle = 'border-transparent text-[var(--muted)] bg-transparent';
+                    let pillContent = defaultHourLabel;
+                    let pillStyle = 'border-transparent text-[var(--muted)] bg-transparent';
 
-                  if (cell) {
-                    if (cell.type === 'template' && cell.templates.length > 0) {
-                      const pal = getTemplatePalette(cell.templates[0].template.id);
-                      pillContent = cell.templates[0].template.name.slice(0, 6);
-                      pillStyle = `${pal.bg} ${pal.text} ${pal.border}`;
-                    } else if (cell.type === 'custom') {
-                      pillContent = 'Cust';
-                      pillStyle = 'border-[var(--border)] bg-[var(--paper)] text-[var(--ink)]';
-                    } else if (cell.type === 'off') {
-                      pillContent = 'Off';
-                      pillStyle = 'border-dashed border-[var(--border)] text-[var(--muted)]';
-                    } else if (cell.type === 'clinic_closed') {
-                      pillContent = 'Close';
-                      pillStyle = 'border-dashed border-[var(--border)]/70 text-[var(--muted)]/60 bg-[var(--paper)]/40';
+                    if (cell) {
+                      if (cell.type === 'template' && cell.templates.length > 0) {
+                        const pal = getTemplatePalette(cell.templates[0].template.id);
+                        pillContent = cell.templates[0].template.name.slice(0, 6);
+                        pillStyle = `${pal.bg} ${pal.text} ${pal.border}`;
+                      } else if (cell.type === 'custom') {
+                        pillContent = 'Cust';
+                        pillStyle = 'border-[var(--border)] bg-[var(--paper)] text-[var(--ink)]';
+                      } else if (cell.type === 'off') {
+                        pillContent = 'Off';
+                        pillStyle = 'border-dashed border-[var(--border)] text-[var(--muted)]';
+                      } else if (cell.type === 'clinic_closed') {
+                        pillContent = 'Close';
+                        pillStyle = 'border-dashed border-[var(--border)]/70 text-[var(--muted)]/60 bg-[var(--paper)]/40';
+                      }
                     }
-                  }
 
-                  return (
-                    <button
-                      key={weekday}
-                      type="button"
-                      onClick={() => handleCellClick(therapist.id, weekday)}
-                      title={cell?.tooltip}
-                      className="flex flex-col items-center justify-center rounded-lg border border-[var(--border)]/80 p-1 text-center min-h-[44px] hover:border-[var(--teal)] active:scale-95 transition"
-                    >
-                      <span className="text-[9.5px] font-bold text-[var(--muted)] leading-none mb-1">
-                        {meta.short}
-                      </span>
-                      <span className={`inline-block truncate rounded px-1 py-0.5 text-[9px] font-semibold leading-tight w-full border ${pillStyle}`}>
-                        {pillContent}
-                      </span>
-                    </button>
-                  );
-                })}
+                    return (
+                      <button
+                        key={weekday}
+                        type="button"
+                        onClick={() => handleCellClick(therapist.id, weekday)}
+                        title={cell?.tooltip}
+                        className="flex flex-col items-center justify-center rounded-lg border border-[var(--border)]/80 p-1 text-center min-h-[44px] hover:border-[var(--teal)] active:scale-95 transition"
+                      >
+                        <span className="text-[9.5px] font-bold text-[var(--muted)] leading-none mb-1">
+                          {meta.short}
+                        </span>
+                        <span className={`inline-block truncate rounded px-1 py-0.5 text-[9px] font-semibold leading-tight w-full border ${pillStyle}`}>
+                          {pillContent}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
       {/* Direct Cell / Assign Shift Dialog */}
       {dialogState.isOpen && (
         <AssignShiftDialog
+          key={`${dialogState.therapistId ?? 'all'}-${dialogState.weekday ?? 'all'}`}
           isOpen={dialogState.isOpen}
           onClose={() => setDialogState({ isOpen: false })}
           initialTherapistId={dialogState.therapistId}
