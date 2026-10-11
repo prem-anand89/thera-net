@@ -168,6 +168,11 @@ describe('shiftUtils', () => {
       expect(premTue.type).toBe('clinic_default');
       expect(premTue.workingMinutes).toBe(540); // 9h
 
+      // Dr Kiran Wed: has stored hours that omit Wednesday → a day off, not clinic default
+      const kiranWed = coverage.get('th-2')!.get(3)!;
+      expect(kiranWed.type).toBe('off');
+      expect(kiranWed.workingMinutes).toBe(0);
+
       // Dr Prem Sun: Clinic Closed
       const premSun = coverage.get('th-1')!.get(0)!;
       expect(premSun.type).toBe('clinic_closed');

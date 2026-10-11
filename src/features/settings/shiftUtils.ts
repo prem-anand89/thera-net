@@ -268,7 +268,23 @@ export function buildCoverage(
         continue;
       }
 
-      // 3. Fallback to clinic hours
+      // 3. A therapist with any stored hours works only the listed days — the
+      //    schedule treats a missing weekday as a day off, so the grid must too.
+      if (wh && typeof wh === 'object') {
+        dayMap.set(weekday, {
+          therapistId: therapist.id,
+          weekday,
+          type: 'off',
+          templates: [],
+          customIntervals: [],
+          label: 'Off',
+          tooltip: `${WEEKDAY_META[weekday]?.full}: Not scheduled`,
+          workingMinutes: 0,
+        });
+        continue;
+      }
+
+      // 4. No stored hours at all: clinic hours
       if (closedDays.has(weekday)) {
         dayMap.set(weekday, {
           therapistId: therapist.id,
