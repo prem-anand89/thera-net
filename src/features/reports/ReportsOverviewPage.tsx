@@ -1,24 +1,24 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { dashboardService, reportService, repos, feedbackService } from '@/services';
+import { dashboardService, reportService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { formatINR } from '@/domain/money';
 import {
   monthName,
-  formatDateDMY,
   pacingMonthDateRange,
   projectMonthly,
 } from '@/domain/fiscalYear';
 import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
-import { SectionCard, Pill, th, td, tdNum, thNum } from '@/components/ui';
+import { SectionCard, th, td, tdNum, thNum } from '@/components/ui';
 import { BarChart } from '@/components/BarChart';
 import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
 import { ClinicUtilisationCard } from '@/components/ClinicUtilisationCard';
+import { SingleVisitPatientsCard } from '@/components/SingleVisitPatientsCard';
 import { SERIES_COLORS } from '@/components/chartColors';
 import { InsightsTrendPeriodBar } from './InsightsTrendPeriodBar';
 import {
@@ -453,39 +453,11 @@ export function ReportsOverviewPage() {
     return [...byDetail.entries()].sort((a, b) => b[1].revenuePaise - a[1].revenuePaise);
   }, [referralActive, referralNeedsDetail]);
 
-  const [hideClosedReasons, setHideClosedReasons] = useState(false);
-  const filteredSingleVisit = useMemo(() => {
-    let rows = singleVisitPatients ?? [];
-    if (hideClosedReasons) rows = rows.filter((p) => !p.noReturnReasonClosed);
-    return rows;
-  }, [singleVisitPatients, hideClosedReasons]);
-
-  // The clinic's own "why didn't they come back" list — same editable-list
-  // shape as the service catalog (see Catalog() in Settings), managed
-  // inline here rather than routed through Settings since it's only ever
-  // used from this one spot.
+  // The clinic's own "why didn't they come back" list
   const noReturnReasons = useLiveQuery(
     () => repos.noReturnReasonCatalog.list(clinic.id, true),
     [clinic.id]
   );
-  const [manageReasonsOpen, setManageReasonsOpen] = useState(false);
-  const [reasonDraftName, setReasonDraftName] = useState('');
-  const [reasonDraftClosed, setReasonDraftClosed] = useState(false);
-
-  async function addReason() {
-    const name = reasonDraftName.trim();
-    if (!name) return;
-    await repos.noReturnReasonCatalog.put({
-      id: crypto.randomUUID(),
-      clinicId: clinic.id,
-      name,
-      isClosed: reasonDraftClosed,
-      active: true,
-      updatedAt: new Date().toISOString(),
-    });
-    setReasonDraftName('');
-    setReasonDraftClosed(false);
-  }
 
   async function toggleReasonActive(item: NoReturnReasonItem) {
     await repos.noReturnReasonCatalog.put({
@@ -647,199 +619,29 @@ export function ReportsOverviewPage() {
       </div>
 
       <div className="space-y-6">
-        <div
-          ref={(el) => {
+        <SingleVisitPatientsCard
+          patients={singleVisitPatients}
+          noReturnReasons={noReturnReasons}
+          onSetPatientReason={setPatientReason}
+          onToggleReasonActive={toggleReasonActive}
+          onAddReason={async (name, isClosed) => {
+            await repos.noReturnReasonCatalog.put({
+              id: crypto.randomUUID(),
+              clinicId: clinic.id,
+              name,
+              isClosed,
+              active: true,
+              updatedAt: new Date().toISOString(),
+            });
+          }}
+          enablePatientComms={clinic.enablePatientComms}
+          clinicId={clinic.id}
+          clinicName={clinic.name}
+          sectionRefCallback={(el) => {
             if (el) sectionRefs.current.set('singleVisit', el);
             else sectionRefs.current.delete('singleVisit');
           }}
-          className="scroll-mt-28 md:scroll-mt-20"
-        >
-          <SectionCard
-            title="Single-visit patients"
-            action={
-              singleVisitPatients && singleVisitPatients.length > 0 ? (
-                <div className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1">
-                  <div className="text-[9px] font-medium uppercase leading-tight tracking-wide text-[var(--muted)]">
-                    Total
-                  </div>
-                  <div className="text-sm font-semibold leading-tight tabular-nums text-[var(--ink)]">
-                    {singleVisitPatients.length}
-                  </div>
-                </div>
-              ) : undefined
-            }
-          >
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <p className="text-xs text-[var(--muted)]">
-                Exactly one visit on record, more than 14 days ago — click a bar to filter, call
-                from the list, or log why they didn't return once you know.
-              </p>
-              <button
-                type="button"
-                onClick={() => setManageReasonsOpen((o) => !o)}
-                className="shrink-0 text-xs font-medium text-[var(--teal)] hover:underline"
-              >
-                {manageReasonsOpen ? 'Done' : 'Manage reasons'}
-              </button>
-            </div>
-            {manageReasonsOpen && (
-              <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-3">
-                <p className="mb-2 text-xs text-[var(--muted)]">
-                  Your clinic's own list — turn ones you don't use off, or add your own. "Counts as
-                  closed" reasons (e.g. Resolved, Relocated) can be hidden from the list below with
-                  the checkbox.
-                </p>
-                <div className="mb-3 flex flex-wrap gap-1.5">
-                  {(noReturnReasons ?? []).map((r) => (
-                    <span
-                      key={r.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 pl-2.5 pr-1 text-xs"
-                      style={r.active ? {} : { opacity: 0.5, textDecoration: 'line-through' }}
-                    >
-                      {r.name}
-                      {r.isClosed && <span className="text-[var(--muted)]">(closed)</span>}
-                      <button
-                        type="button"
-                        onClick={() => void toggleReasonActive(r)}
-                        className="rounded-full px-1.5 text-[var(--muted)] hover:bg-[var(--paper)]"
-                        title={r.active ? 'Deactivate' : 'Reactivate'}
-                      >
-                        {r.active ? '×' : '+'}
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="text"
-                    value={reasonDraftName}
-                    onChange={(e) => setReasonDraftName(e.target.value)}
-                    placeholder="Add a reason…"
-                    className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-sm"
-                  />
-                  <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                    <input
-                      type="checkbox"
-                      checked={reasonDraftClosed}
-                      onChange={(e) => setReasonDraftClosed(e.target.checked)}
-                    />
-                    Counts as closed
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => void addReason()}
-                    className="rounded-md bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white"
-                  >
-                    + Add
-                  </button>
-                </div>
-              </div>
-            )}
-            {singleVisitPatients === undefined ? null : singleVisitPatients.length === 0 ? (
-              <p className="py-6 text-center text-sm text-[var(--muted)]">
-                No lapsed single-visit patients right now.
-              </p>
-            ) : (
-              <>
-                <div className="mb-2 flex justify-end">
-                  <label className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                    <input
-                      type="checkbox"
-                      checked={hideClosedReasons}
-                      onChange={(e) => setHideClosedReasons(e.target.checked)}
-                    />
-                    Hide closed reasons
-                  </label>
-                </div>
-                <div className="max-h-96 divide-y divide-[var(--border)] overflow-y-auto rounded-lg border border-[var(--border)]">
-                  {filteredSingleVisit.slice(0, 50).map((p) => (
-                    <div
-                      key={p.patientId}
-                      className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <Link
-                          to="/ledger"
-                          search={{ patientId: p.patientId }}
-                          className="text-sm font-medium text-[var(--ink)] hover:underline"
-                        >
-                          {p.patientName}
-                        </Link>
-                        <div className="text-xs text-[var(--muted)]">
-                          {p.mrno} · last seen {formatDateDMY(p.visitDate)} · {p.daysSince}d ago
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 flex-wrap items-center gap-2">
-                        {p.primaryCondition && <Pill tone="slate">{p.primaryCondition}</Pill>}
-                        <select
-                          value={p.noReturnReasonId ?? ''}
-                          onChange={(e) => void setPatientReason(p.patientId, e.target.value)}
-                          className="rounded-full border px-2 py-1 text-xs font-medium"
-                          style={
-                            p.noReturnReasonName
-                              ? p.noReturnReasonClosed
-                                ? {
-                                    background: 'var(--moss-light)',
-                                    color: 'var(--moss-strong)',
-                                    borderColor: 'transparent',
-                                  }
-                                : {
-                                    background: 'var(--amber-light)',
-                                    color: 'var(--amber)',
-                                    borderColor: 'transparent',
-                                  }
-                              : {
-                                  background: 'var(--surface)',
-                                  color: 'var(--muted)',
-                                  borderStyle: 'dashed',
-                                }
-                          }
-                        >
-                          <option value="">+ Reason</option>
-                          {(noReturnReasons ?? [])
-                            .filter((r) => r.active || r.id === p.noReturnReasonId)
-                            .map((r) => (
-                              <option key={r.id} value={r.id}>
-                                {r.name}
-                              </option>
-                            ))}
-                        </select>
-                        {p.phone && (
-                          <a
-                            href={`tel:${p.phone}`}
-                            className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
-                          >
-                            📞 {p.phone}
-                          </a>
-                        )}
-                        {clinic.enablePatientComms && p.phone && (
-                          <button
-                            type="button"
-                            className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
-                            onClick={() => {
-                              void feedbackService
-                                .sendReturnReminder(clinic.id, p.patientName, p.phone, clinic.name)
-                                .catch((e) =>
-                                  alert(e instanceof Error ? e.message : String(e))
-                                );
-                            }}
-                          >
-                            Send reminder
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {filteredSingleVisit.length > 50 && (
-                  <p className="mt-2 text-center text-xs text-[var(--muted)]">
-                    Showing 50 of {filteredSingleVisit.length}.
-                  </p>
-                )}
-              </>
-            )}
-          </SectionCard>
-        </div>
+        />
 
         <div
           ref={(el) => {
@@ -1017,53 +819,80 @@ export function ReportsOverviewPage() {
                         ))}
                   </div>
 
-                  <div className="hidden tab:block overflow-x-auto rounded-lg border border-[var(--border)]">
-                    <table className="min-w-full divide-y divide-[var(--border)]">
-                      {referralNeedsDetail ? (
-                        <>
-                          <thead className="bg-[var(--paper)]">
-                            <tr>
-                              <th className={th}>{referralActive.detailLabel ?? 'Name'}</th>
-                              <th className={thNum}>Patients</th>
-                              <th className={thNum}>Visits</th>
-                              <th className={thNum}>Revenue</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-[var(--border)]">
-                            {referralDetailGroups.map(([name, g]) => (
-                              <tr key={name}>
-                                <td className={td}>{name}</td>
-                                <td className={tdNum}>{g.patients}</td>
-                                <td className={tdNum}>{g.visits}</td>
-                                <td className={tdNum}>{formatINR(g.revenuePaise)}</td>
+                  <div className="hidden tab:block overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xs">
+                    <div className="overflow-x-auto overscroll-x-contain">
+                      <table className="min-w-full divide-y divide-[var(--border)]">
+                        {referralNeedsDetail ? (
+                          <>
+                            <thead className="bg-[var(--paper)]">
+                              <tr>
+                                <th className={th}>{referralActive.detailLabel ?? 'Name'}</th>
+                                <th className={thNum}>Patients</th>
+                                <th className={thNum}>Visits</th>
+                                <th className={thNum}>Revenue</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </>
-                      ) : (
-                        <>
-                          <thead className="bg-[var(--paper)]">
-                            <tr>
-                              <th className={th}>Patient</th>
-                              <th className={thNum}>Visits</th>
-                              <th className={thNum}>Revenue</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-[var(--border)]">
-                            {referralActive.patients.map((p) => (
-                              <tr key={p.patientId}>
-                                <td className={td}>
-                                  {p.patientName}{' '}
-                                  <span className="text-[var(--muted)]">{p.mrno}</span>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)]">
+                              {referralDetailGroups.map(([name, g]) => (
+                                <tr key={name} className="hover:bg-[var(--paper)]/50 transition-colors">
+                                  <td className={`${td} font-medium`}>{name}</td>
+                                  <td className={tdNum}>{g.patients}</td>
+                                  <td className={tdNum}>{g.visits}</td>
+                                  <td className={tdNum}>{formatINR(g.revenuePaise)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold text-sm">
+                              <tr>
+                                <td className={`${td} font-bold text-[var(--ink)]`}>Total</td>
+                                <td className={`${tdNum} font-bold text-[var(--ink)]`}>
+                                  {referralDetailGroups.reduce((s, [, g]) => s + g.patients, 0)}
                                 </td>
-                                <td className={tdNum}>{p.visitCount}</td>
-                                <td className={tdNum}>{formatINR(p.revenuePaise)}</td>
+                                <td className={`${tdNum} font-bold text-[var(--ink)]`}>
+                                  {referralDetailGroups.reduce((s, [, g]) => s + g.visits, 0)}
+                                </td>
+                                <td className={`${tdNum} font-bold text-[var(--ink)]`}>
+                                  {formatINR(referralDetailGroups.reduce((s, [, g]) => s + g.revenuePaise, 0))}
+                                </td>
                               </tr>
-                            ))}
-                          </tbody>
-                        </>
-                      )}
-                    </table>
+                            </tfoot>
+                          </>
+                        ) : (
+                          <>
+                            <thead className="bg-[var(--paper)]">
+                              <tr>
+                                <th className={th}>Patient</th>
+                                <th className={thNum}>Visits</th>
+                                <th className={thNum}>Revenue</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)]">
+                              {referralActive.patients.map((p) => (
+                                <tr key={p.patientId} className="hover:bg-[var(--paper)]/50 transition-colors">
+                                  <td className={td}>
+                                    <span className="font-medium">{p.patientName}</span>{' '}
+                                    <span className="text-[var(--muted)]">{p.mrno}</span>
+                                  </td>
+                                  <td className={tdNum}>{p.visitCount}</td>
+                                  <td className={tdNum}>{formatINR(p.revenuePaise)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold text-sm">
+                              <tr>
+                                <td className={`${td} font-bold text-[var(--ink)]`}>Total</td>
+                                <td className={`${tdNum} font-bold text-[var(--ink)]`}>
+                                  {referralActive.patients.reduce((s, p) => s + p.visitCount, 0)}
+                                </td>
+                                <td className={`${tdNum} font-bold text-[var(--ink)]`}>
+                                  {formatINR(referralActive.patients.reduce((s, p) => s + p.revenuePaise, 0))}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </>
+                        )}
+                      </table>
+                    </div>
                   </div>
                 </div>
               </div>

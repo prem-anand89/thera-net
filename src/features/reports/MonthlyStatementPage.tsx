@@ -193,8 +193,9 @@ export function MonthlyStatementPage() {
       <p className="mb-2 text-xs text-[var(--muted)] sm:hidden">
         Swipe sideways to see more columns.
       </p>
-      <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-        <MonthlyReportTable
+      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xs">
+        <div className="overflow-x-auto overscroll-x-contain">
+          <MonthlyReportTable
           report={report}
           partnerSplit={partnerSplit}
           showPostTax={showPostTax}
@@ -203,6 +204,7 @@ export function MonthlyStatementPage() {
           partner={labels.partner}
           auditLinkMonth={therapistSplit ? selected : undefined}
         />
+        </div>
       </div>
       {therapistSplit && (
         <p className="text-xs text-[var(--muted)]">

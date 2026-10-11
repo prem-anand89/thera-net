@@ -149,50 +149,73 @@ export function AttributionAuditPage() {
             ))}
           </div>
 
-          <div className="hidden tab:block overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-            <table className="min-w-full divide-y divide-[var(--border)]">
-              <thead className="bg-[var(--paper)]">
-                <tr>
-                  <th className={th}>Date</th>
-                  <th className={th}>Patient</th>
-                  <th className={th}>From</th>
-                  <th className={th}>To</th>
-                  <th className={th}>Mechanism</th>
-                  <th className={th}>Basis</th>
-                  <th className={thNum}>Gross</th>
-                  <th className={thNum}>Post-Tax {labels.own}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border)]">
-                {entries.map((e, i) => (
-                  <tr key={`${e.visitId}-${e.toTherapistId}-${i}`}>
-                    <td className={td}>{formatDateDMY(e.visitDate)}</td>
-                    <td className={td}>{patientName.get(e.patientId) ?? '—'}</td>
-                    <td className={td}>{therapistName.get(e.fromTherapistId) ?? 'Unknown'}</td>
-                    <td className={td}>{therapistName.get(e.toTherapistId) ?? 'Unknown'}</td>
-                    <td className={td}>
-                      {e.mechanism === 'manual_split' ? 'Manual split' : 'Package attribution'}
-                    </td>
-                    <td className={`${td} text-[var(--muted)]`}>
-                      {e.mechanism === 'manual_split'
-                        ? `${e.sharedPct}% of ${formatINR(e.visitBillPaise ?? 0)} bill`
-                        : `Session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'} · ${formatINR(e.packageTotalPaise ?? 0)} package`}
-                    </td>
-                    <td
-                      className={tdNum}
-                      title={
-                        e.grossPaise == null
-                          ? 'No gross figure for package attribution — the continuation session was billed at ₹0; only the Post-Tax share (from the billing visit) moves.'
-                          : undefined
-                      }
-                    >
-                      {e.grossPaise != null ? formatINR(e.grossPaise) : '—'}
-                    </td>
-                    <td className={tdNum}>{formatINR(e.postTaxPaise)}</td>
+          <div className="hidden tab:block overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xs">
+            <div className="overflow-x-auto overscroll-x-contain">
+              <table className="min-w-full divide-y divide-[var(--border)]">
+                <thead className="bg-[var(--paper)]">
+                  <tr>
+                    <th className={th}>Date</th>
+                    <th className={th}>Patient</th>
+                    <th className={th}>From</th>
+                    <th className={th}>To</th>
+                    <th className={th}>Mechanism</th>
+                    <th className={th}>Basis</th>
+                    <th className={thNum}>Gross</th>
+                    <th className={thNum}>Post-Tax {labels.own}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)]">
+                  {entries.map((e, i) => (
+                    <tr key={`${e.visitId}-${e.toTherapistId}-${i}`} className="hover:bg-[var(--paper)]/50 transition-colors">
+                      <td className={td}>{formatDateDMY(e.visitDate)}</td>
+                      <td className={`${td} font-medium`}>{patientName.get(e.patientId) ?? '—'}</td>
+                      <td className={td}>{therapistName.get(e.fromTherapistId) ?? 'Unknown'}</td>
+                      <td className={td}>{therapistName.get(e.toTherapistId) ?? 'Unknown'}</td>
+                      <td className={td}>
+                        {e.mechanism === 'manual_split' ? (
+                          <span className="rounded-full bg-[var(--amber-light)] px-2 py-0.5 text-[10px] font-semibold text-[#b45309]">
+                            Manual split
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10px] font-semibold text-[var(--teal-strong)]">
+                            Package attribution
+                          </span>
+                        )}
+                      </td>
+                      <td className={`${td} text-[var(--muted)]`}>
+                        {e.mechanism === 'manual_split'
+                          ? `${e.sharedPct}% of ${formatINR(e.visitBillPaise ?? 0)} bill`
+                          : `Session ${e.sessionIndex ?? '?'} of ${e.packageSessionCount ?? '?'} · ${formatINR(e.packageTotalPaise ?? 0)} package`}
+                      </td>
+                      <td
+                        className={tdNum}
+                        title={
+                          e.grossPaise == null
+                            ? 'No gross figure for package attribution — the continuation session was billed at ₹0; only the Post-Tax share (from the billing visit) moves.'
+                            : undefined
+                        }
+                      >
+                        {e.grossPaise != null ? formatINR(e.grossPaise) : '—'}
+                      </td>
+                      <td className={`${tdNum} font-semibold text-[var(--ink)]`}>{formatINR(e.postTaxPaise)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold text-sm">
+                  <tr>
+                    <td className={`${td} font-bold text-[var(--ink)]`} colSpan={6}>
+                      Total Reallocated ({entries.length} entries)
+                    </td>
+                    <td className={`${tdNum} font-bold text-[var(--ink)]`}>
+                      {formatINR(entries.reduce((s, e) => s + (e.grossPaise ?? 0), 0))}
+                    </td>
+                    <td className={`${tdNum} font-bold text-[var(--ink)]`}>
+                      {formatINR(entries.reduce((s, e) => s + e.postTaxPaise, 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
         </>
       )}

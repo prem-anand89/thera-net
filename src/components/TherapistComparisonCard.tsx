@@ -9,7 +9,6 @@ import { clinicBillingConfig, clinicShareLabels } from '@/domain/types';
 import { formatINR } from '@/domain/money';
 import { monthName } from '@/domain/fiscalYear';
 import { SectionCard } from '@/components/ui';
-import { useCompactChart } from '@/components/useCompactChart';
 import { useTherapistUtilisation } from '@/components/useTherapistUtilisation';
 import {
   TherapistComparisonTable,
@@ -45,7 +44,6 @@ export function TherapistComparisonCard({
   const clinic = useClinic();
   const scope = useWorkspaceScope();
   const entitlements = useEntitlements(clinic.id);
-  const compact = useCompactChart();
   const showComparison = !scope.isFrontDesk && entitlements.can('revenueSplit');
   const { partnerSplit } = clinicBillingConfig(clinic);
   const labels = clinicShareLabels(clinic);
@@ -189,35 +187,27 @@ export function TherapistComparisonCard({
     return (chartMonth?.rows ?? []).reduce((sum, r) => sum + (r.visitCount ?? 0), 0);
   }, [chartMonth]);
 
-  const maxTherapistRevenue = useMemo(() => {
-    return Math.max(1, ...therapistRevenuePaise);
-  }, [therapistRevenuePaise]);
-
-  const maxTherapistVisits = useMemo(() => {
-    return Math.max(1, ...therapistVisitCounts);
-  }, [therapistVisitCounts]);
-
   const therapistRevenueRanking = useMemo(() => {
     return therapistNames
       .map((name, i) => {
         const revenue = therapistRevenuePaise[i] ?? 0;
         const sharePct = totalMonthRevenue > 0 ? Math.round((revenue / totalMonthRevenue) * 100) : 0;
-        const barPct = Math.round((revenue / maxTherapistRevenue) * 100);
+        const barPct = totalMonthRevenue > 0 ? Math.min(100, Math.max(revenue > 0 ? 2 : 0, sharePct)) : 0;
         return { name, revenue, sharePct, barPct };
       })
       .sort((a, b) => b.revenue - a.revenue);
-  }, [therapistNames, therapistRevenuePaise, totalMonthRevenue, maxTherapistRevenue]);
+  }, [therapistNames, therapistRevenuePaise, totalMonthRevenue]);
 
   const therapistVisitRanking = useMemo(() => {
     return therapistNames
       .map((name, i) => {
         const visits = therapistVisitCounts[i] ?? 0;
         const sharePct = totalMonthVisits > 0 ? Math.round((visits / totalMonthVisits) * 100) : 0;
-        const barPct = Math.round((visits / maxTherapistVisits) * 100);
+        const barPct = totalMonthVisits > 0 ? Math.min(100, Math.max(visits > 0 ? 2 : 0, sharePct)) : 0;
         return { name, visits, sharePct, barPct };
       })
       .sort((a, b) => b.visits - a.visits);
-  }, [therapistNames, therapistVisitCounts, totalMonthVisits, maxTherapistVisits]);
+  }, [therapistNames, therapistVisitCounts, totalMonthVisits]);
 
   // Single Therapist Trend data across all period months
   const individualRevenuePaise = useMemo(() => {

@@ -80,6 +80,19 @@ export function PractitionerPerformanceTable({
     }
   };
 
+  const totals = useMemo(() => {
+    const totalRevenue = rows.reduce((s, r) => s + r.revenuePaise, 0);
+    const totalVisits = rows.reduce((s, r) => s + r.visitCount, 0);
+    const totalWorkedMinutes = rows.reduce((s, r) => s + (r.utilisation.workedMinutes ?? 0), 0);
+    const totalAvailableMinutes = rows.reduce((s, r) => s + (r.utilisation.availableMinutes ?? 0), 0);
+    const avgRatio = totalAvailableMinutes > 0 ? totalWorkedMinutes / totalAvailableMinutes : null;
+    return {
+      revenuePaise: totalRevenue,
+      visitCount: totalVisits,
+      avgRatio,
+    };
+  }, [rows]);
+
   const sortedRows = useMemo(() => {
     const list = [...rows];
     list.sort((a, b) => {
@@ -267,6 +280,26 @@ export function PractitionerPerformanceTable({
               );
             })}
           </tbody>
+          {rows.length > 0 && (
+            <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold text-sm">
+              <tr>
+                <td className="px-4 py-3 font-semibold text-[var(--ink)]">
+                  Clinic Total
+                </td>
+                <td className="px-4 py-3">
+                  <span className="font-num text-xs font-semibold text-[var(--ink)]">
+                    {totals.avgRatio != null ? `${Math.round(totals.avgRatio * 100)}% clinic avg` : '—'}
+                  </span>
+                </td>
+                <td className="font-num px-4 py-3 text-right font-bold text-[var(--ink)]">
+                  {formatINR(totals.revenuePaise)}
+                </td>
+                <td className="font-num px-4 py-3 text-right font-bold text-[var(--ink)]">
+                  {totals.visitCount}
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 

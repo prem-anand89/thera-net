@@ -55,7 +55,7 @@ export function MonthlyReportTable({
       {partnerSplit && showPostTax && <td className={tdNum}>{formatINR(r.postTaxPaise)}</td>}
       {partnerSplit && <td className={tdNum}>{formatINR(r.partnerSharePaise)}</td>}
       {showShared && <td className={tdNum}>{r.sharedPaise !== 0 ? formatINR(r.sharedPaise) : '—'}</td>}
-      <td className={tdNum}>
+      <td className={`${tdNum} font-semibold bg-[var(--teal-light)]/10 text-[var(--ink)]`}>
         {formatINR(r.netPostTaxPaise)}
         {auditLinkMonth && r.netPostTaxPaise < 0 && (
           <Link
@@ -114,7 +114,7 @@ export function MonthlyReportTable({
               <InfoTip text="Money moved between therapists on split visits — negative for who gave it up, positive for who received it. Always nets to zero. Shown here as a share of the gross bill; the amount actually reflected in Net is the same % applied to the post-tax figure, so the two won't match exactly when tax applies." />
             </th>
           )}
-          <th className={thNum}>
+          <th className={`${thNum} bg-[var(--teal-light)]/10 text-[var(--teal-strong)] font-bold`}>
             Net
             <InfoTip text={`Post Tax ${own}, adjusted for same-visit splits and for a multi-session package's total spread evenly across the therapists who ran its sessions — the real figure for "how much did this therapist generate," not just whoever it was billed under.`} />
           </th>
@@ -122,28 +122,30 @@ export function MonthlyReportTable({
           <th className={thNum}>Patients</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-[var(--border)]">
+      <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)]">
         {(report?.rows ?? []).map((r) => (
-          <tr key={r.therapistId}>
+          <tr key={r.therapistId} className="hover:bg-[var(--paper)]/50 transition-colors">
             <td
-              className={`${td} sticky left-0 z-[1] bg-[var(--surface)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]`}
+              className={`${td} sticky left-0 z-[1] bg-[var(--surface)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-medium text-[var(--ink)]`}
             >
               {r.therapistName}
             </td>
             {cells(r)}
           </tr>
         ))}
-        {report && (
-          <tr className="bg-[var(--paper)] font-semibold">
+      </tbody>
+      {report && (
+        <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold text-sm">
+          <tr>
             <td
-              className={`${td} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]`}
+              className={`${td} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-semibold text-[var(--ink)]`}
             >
               Total
             </td>
             {cells(report.total)}
           </tr>
-        )}
-      </tbody>
+        </tfoot>
+      )}
     </table>
   );
 }

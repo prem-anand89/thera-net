@@ -16,7 +16,6 @@ import { therapistStatus } from '@/domain/therapistStatus';
 import { PerformanceFilterBar } from './PerformanceFilterBar';
 import { UtilisationTrendCard } from './UtilisationTrendCard';
 import { CapacityHoursCard } from './CapacityHoursCard';
-import { RevenueVolumeCard } from './RevenueVolumeCard';
 import {
   PractitionerPerformanceTable,
   type PractitionerPerformanceRow,

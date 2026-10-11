@@ -131,8 +131,12 @@ describe('ClinicUtilisationView (Splose-inspired redesign)', () => {
             bucket: { key: 'x', label: 'Empty', from: '2026-01-01', to: '2026-01-31' },
             clinicRatio: 0,
             clinicRevenuePaise: 0,
+            clinicWorkedMinutes: 0,
+            clinicAvailableMinutes: 0,
             priorClinicRatio: null,
             priorClinicRevenuePaise: null,
+            priorClinicWorkedMinutes: null,
+            priorClinicAvailableMinutes: null,
             rows: [],
           },
         ]}
