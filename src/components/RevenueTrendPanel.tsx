@@ -1,8 +1,8 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { formatINR } from '@/domain/money';
-import { SERIES_COLORS } from '@/components/chartColors';
 import { RevenueWaterfallChart } from '@/components/RevenueWaterfallChart';
-import { VisitsRevenueTrendChart } from '@/components/VisitsRevenueTrendChart';
+import { MonthlyRevenueChart } from '@/components/MonthlyRevenueChart';
+import { MonthlyVisitsChart } from '@/components/MonthlyVisitsChart';
 import { RevenueTrendMonthTable } from '@/components/RevenueTrendMonthTable';
 import { useCompactChart } from '@/components/useCompactChart';
 
@@ -72,19 +72,25 @@ export function RevenueTrendPanel({
       </TrendSection>
 
       <TrendSection kicker="Volume & earnings" title="Visits and revenue each month">
-        <VisitsRevenueTrendChart
-          categories={chartCategories}
-          fullCategories={categories}
-          visitCounts={visitCounts}
-          revenuePaise={revenuePaise}
-          visitsColor={SERIES_COLORS[1]}
-          revenueColor={SERIES_COLORS[0]}
-          formatRevenue={formatINR}
-          compact={compact}
-          currentMonthIndices={currentMonthIndices}
-          selectedCategoryIndex={activeIndex}
-          onCategoryHover={setActiveIndex}
-        />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <MonthlyRevenueChart
+            categories={chartCategories}
+            fullCategories={categories}
+            revenuePaise={revenuePaise}
+            formatRevenue={formatINR}
+            currentMonthIndices={currentMonthIndices}
+            selectedIndex={activeIndex}
+            onSelectIndex={setActiveIndex}
+          />
+          <MonthlyVisitsChart
+            categories={chartCategories}
+            fullCategories={categories}
+            visitCounts={visitCounts}
+            currentMonthIndices={currentMonthIndices}
+            selectedIndex={activeIndex}
+            onSelectIndex={setActiveIndex}
+          />
+        </div>
       </TrendSection>
 
       <TrendSection kicker="Month detail" title="Numbers behind the charts">
