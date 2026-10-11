@@ -1,7 +1,7 @@
 import { fiscalYearOf, monthDateRange, monthName, monthsOfFiscalYear, type FyMonth } from './fiscalYear';
 import { toLocalDateStr } from './schedule';
 
-export type UtilisationGranularity = 'month' | 'quarter' | 'year';
+export type UtilisationGranularity = 'ytd' | '6m' | 'fy' | 'month' | 'quarter' | 'year';
 
 export type UtilisationBucket = {
   key: string;
@@ -16,9 +16,8 @@ function span(months: FyMonth[]): { from: string; to: string } {
 }
 
 /**
- * Buckets to chart, oldest first: the last 12 calendar months, the last 4
- * fiscal quarters, or the last 3 fiscal years — always ending with the
- * period in progress. Buckets that haven't started yet are left out.
+ * Buckets to chart, oldest first: YTD, 6m, FY, or legacy monthly/quarterly/annual.
+ * Always ends with the period in progress; future periods are excluded.
  */
 export function utilisationBuckets(
   granularity: UtilisationGranularity,
@@ -29,7 +28,38 @@ export function utilisationBuckets(
   const currentFy = fiscalYearOf(asOf, fyStartMonth).startYear;
   let buckets: UtilisationBucket[];
 
-  if (granularity === 'month') {
+  if (granularity === 'ytd') {
+    buckets = [];
+    const y = asOf.getFullYear();
+    for (let m = 1; m <= asOf.getMonth() + 1; m++) {
+      const monthObj = { year: y, month: m };
+      buckets.push({
+        key: `${y}-${m}`,
+        label: `${monthName(m).slice(0, 3)} '${String(y).slice(2)}`,
+        ...span([monthObj]),
+      });
+    }
+  } else if (granularity === '6m') {
+    buckets = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(asOf.getFullYear(), asOf.getMonth() - i, 1);
+      const m = { year: d.getFullYear(), month: d.getMonth() + 1 };
+      buckets.push({
+        key: `${m.year}-${m.month}`,
+        label: `${monthName(m.month).slice(0, 3)} '${String(m.year).slice(2)}`,
+        ...span([m]),
+      });
+    }
+  } else if (granularity === 'fy') {
+    const months = monthsOfFiscalYear(currentFy, fyStartMonth).filter(
+      (m) => m.year * 12 + m.month <= asOf.getFullYear() * 12 + (asOf.getMonth() + 1)
+    );
+    buckets = months.map((m) => ({
+      key: `${m.year}-${m.month}`,
+      label: `${monthName(m.month).slice(0, 3)} '${String(m.year).slice(2)}`,
+      ...span([m]),
+    }));
+  } else if (granularity === 'month') {
     buckets = [];
     for (let i = 11; i >= 0; i--) {
       const d = new Date(asOf.getFullYear(), asOf.getMonth() - i, 1);

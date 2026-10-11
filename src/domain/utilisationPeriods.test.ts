@@ -4,6 +4,27 @@ import { utilisationBuckets } from './utilisationPeriods';
 const asOf = new Date(2026, 9, 12); // 12 Oct 2026, mid fiscal Q3 of FY 26-27 (Apr start)
 
 describe('utilisationBuckets', () => {
+  it('ytd: all calendar months from start of year up to current month', () => {
+    const b = utilisationBuckets('ytd', 4, asOf);
+    expect(b).toHaveLength(10); // Jan to Oct
+    expect(b[0].from).toBe('2026-01-01');
+    expect(b[9]).toMatchObject({ from: '2026-10-01', to: '2026-10-31' });
+  });
+
+  it('6m: the last 6 calendar months ending with the current one', () => {
+    const b = utilisationBuckets('6m', 4, asOf);
+    expect(b).toHaveLength(6);
+    expect(b[0].from).toBe('2026-05-01');
+    expect(b[5]).toMatchObject({ from: '2026-10-01', to: '2026-10-31' });
+  });
+
+  it('fy: all elapsed months in the fiscal year up to current month', () => {
+    const b = utilisationBuckets('fy', 4, asOf); // Apr start
+    expect(b).toHaveLength(7); // Apr, May, Jun, Jul, Aug, Sep, Oct
+    expect(b[0].from).toBe('2026-04-01');
+    expect(b[6]).toMatchObject({ from: '2026-10-01', to: '2026-10-31' });
+  });
+
   it('month: the last 12 calendar months ending with the current one', () => {
     const b = utilisationBuckets('month', 4, asOf);
     expect(b).toHaveLength(12);

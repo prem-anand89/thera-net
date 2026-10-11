@@ -16,7 +16,7 @@ describe('PerformanceFilterBar', () => {
     render(
       <PerformanceFilterBar
         activePeriodLabel="01 Oct 26 → 31 Oct 26"
-        granularity="month"
+        granularity="ytd"
         onGranularityChange={vi.fn()}
         practitioners={practitioners}
         selectedPractitionerId={null}
@@ -27,9 +27,9 @@ describe('PerformanceFilterBar', () => {
     );
 
     expect(screen.getByText('01 Oct 26 → 31 Oct 26')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Monthly/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /Quarterly/i })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByRole('button', { name: /Annual/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /YTD/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /6m/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /FY/i })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('combobox', { name: /Filter by practitioner/i })).toHaveValue('');
     expect(screen.getByRole('switch', { name: /Compare previous period/i })).toHaveAttribute('aria-checked', 'false');
   });
@@ -39,7 +39,7 @@ describe('PerformanceFilterBar', () => {
     render(
       <PerformanceFilterBar
         activePeriodLabel="01 Oct 26 → 31 Oct 26"
-        granularity="month"
+        granularity="ytd"
         onGranularityChange={onGranularityChange}
         practitioners={practitioners}
         selectedPractitionerId={null}
@@ -49,8 +49,8 @@ describe('PerformanceFilterBar', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Quarterly/i }));
-    expect(onGranularityChange).toHaveBeenCalledWith('quarter');
+    fireEvent.click(screen.getByRole('button', { name: /6m/i }));
+    expect(onGranularityChange).toHaveBeenCalledWith('6m');
   });
 
   it('calls onPractitionerChange when practitioner dropdown changes', () => {
@@ -58,7 +58,7 @@ describe('PerformanceFilterBar', () => {
     render(
       <PerformanceFilterBar
         activePeriodLabel="01 Oct 26 → 31 Oct 26"
-        granularity="month"
+        granularity="ytd"
         onGranularityChange={vi.fn()}
         practitioners={practitioners}
         selectedPractitionerId={null}
@@ -74,12 +74,12 @@ describe('PerformanceFilterBar', () => {
     expect(onPractitionerChange).toHaveBeenCalledWith('t2');
   });
 
-  it('calls onCompareModeChange when compare switch is toggled', () => {
+  it('toggles compareMode when switch is clicked', () => {
     const onCompareModeChange = vi.fn();
     render(
       <PerformanceFilterBar
         activePeriodLabel="01 Oct 26 → 31 Oct 26"
-        granularity="month"
+        granularity="ytd"
         onGranularityChange={vi.fn()}
         practitioners={practitioners}
         selectedPractitionerId={null}

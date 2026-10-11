@@ -167,7 +167,7 @@ export function ReportsOverviewPage() {
     void navigate({
       search: (prev) => ({
         ...prev,
-        period: '6m',
+        period: 'ytd',
         year: now.getFullYear(),
         month: now.getMonth() + 1,
       }),

@@ -39,6 +39,23 @@ describe('MonthlyRevenueChart', () => {
     fireEvent.click(sepBar);
     expect(onSelect).toHaveBeenCalledWith(1);
   });
+
+  it('toggles between Revenue and MoM Growth modes', () => {
+    render(
+      <MonthlyRevenueChart
+        categories={categories}
+        revenuePaise={revenuePaise}
+        formatRevenue={formatINR}
+        selectedIndex={2}
+      />
+    );
+
+    const growthButton = screen.getByRole('button', { name: /MoM Growth/i });
+    fireEvent.click(growthButton);
+
+    expect(screen.getByText(/MoM Revenue Growth/i)).toBeInTheDocument();
+    expect(screen.getByText('+₹50,000')).toBeInTheDocument(); // 250k - 200k = +50k
+  });
 });
 
 describe('MonthlyVisitsChart', () => {

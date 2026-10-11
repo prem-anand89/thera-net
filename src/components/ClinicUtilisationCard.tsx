@@ -30,7 +30,7 @@ import {
  */
 export function ClinicUtilisationCard() {
   const clinic = useClinic();
-  const [granularity, setGranularity] = useState<UtilisationGranularity>('month');
+  const [granularity, setGranularity] = useState<UtilisationGranularity>('ytd');
 
   const report = useLiveQuery(async () => {
     const buckets = utilisationBuckets(granularity, clinic.fyStartMonth);

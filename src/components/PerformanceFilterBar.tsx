@@ -1,9 +1,9 @@
 import type { UtilisationGranularity } from '@/domain/utilisationPeriods';
 
 const GRANULARITIES: { key: UtilisationGranularity; label: string }[] = [
-  { key: 'month', label: 'Monthly' },
-  { key: 'quarter', label: 'Quarterly' },
-  { key: 'year', label: 'Annual' },
+  { key: 'ytd', label: 'YTD' },
+  { key: '6m', label: '6m' },
+  { key: 'fy', label: 'FY' },
 ];
 
 export function PerformanceFilterBar({

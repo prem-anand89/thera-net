@@ -26,6 +26,7 @@ export function MonthlyRevenueChart({
   hoveredIndex?: number | null;
   onHoverIndex?: (index: number | null) => void;
 }) {
+  const [chartMode, setChartMode] = useState<'volume' | 'growth'>('volume');
   const [localHovered, setLocalHovered] = useState<number | null>(null);
   const activeHover = hoveredIndex ?? localHovered;
   const activeIdx =
@@ -33,9 +34,17 @@ export function MonthlyRevenueChart({
 
   const activeValue = revenuePaise[activeIdx] ?? 0;
   const previousValue = activeIdx > 0 ? revenuePaise[activeIdx - 1] : 0;
+  const activeDelta = activeIdx > 0 ? activeValue - previousValue : null;
   const deltaPct = activeIdx > 0 ? pctChange(activeValue, previousValue) : null;
 
   const maxVal = Math.max(1, ...revenuePaise);
+
+  // Month-over-month deltas calculation
+  const deltas = revenuePaise.map((val, i) => (i > 0 ? val - revenuePaise[i - 1] : null));
+  const maxAbsDelta = Math.max(
+    1,
+    ...deltas.filter((d): d is number => d != null).map(Math.abs)
+  );
 
   const width = 360;
   const height = 180;
@@ -47,6 +56,7 @@ export function MonthlyRevenueChart({
   const count = categories.length;
   const groupW = count > 0 ? plotW / count : plotW;
   const barW = Math.max(8, Math.min(22, groupW - 6));
+  const y0 = paddingTop + plotH / 2; // zero-line for growth mode
 
   const labelFor = (i: number) => fullCategories?.[i] ?? categories[i];
 
@@ -56,26 +66,84 @@ export function MonthlyRevenueChart({
         <div className="flex items-start justify-between">
           <div>
             <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-              Monthly Revenue
+              {chartMode === 'volume' ? 'Monthly Revenue' : 'MoM Revenue Growth'}
             </span>
             <div className="mt-1 flex items-baseline gap-2.5">
-              <span className="font-num text-2xl font-bold tracking-tight text-[var(--ink)]">
-                {formatRevenue(activeValue)}
-              </span>
-              {deltaPct != null && (
-                <span
-                  className={`font-num text-xs font-semibold ${
-                    deltaPct >= 0 ? 'text-[var(--teal)]' : 'text-[var(--rust)]'
-                  }`}
-                >
-                  {deltaPct >= 0 ? `▲ +${deltaPct}%` : `▼ ${deltaPct}%`} vs prior
-                </span>
+              {chartMode === 'volume' ? (
+                <>
+                  <span className="font-num text-2xl font-bold tracking-tight text-[var(--ink)]">
+                    {formatRevenue(activeValue)}
+                  </span>
+                  {deltaPct != null && (
+                    <span
+                      className={`font-num text-xs font-semibold ${
+                        deltaPct >= 0 ? 'text-[var(--teal)]' : 'text-[var(--rust)]'
+                      }`}
+                    >
+                      {deltaPct >= 0 ? `▲ +${deltaPct}%` : `▼ ${deltaPct}%`} vs prior
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span
+                    className={`font-num text-2xl font-bold tracking-tight ${
+                      activeDelta == null || activeDelta === 0
+                        ? 'text-[var(--ink)]'
+                        : activeDelta > 0
+                          ? 'text-[var(--teal)]'
+                          : 'text-[var(--rust)]'
+                    }`}
+                  >
+                    {activeDelta != null
+                      ? `${activeDelta >= 0 ? '+' : '−'}${formatRevenue(Math.abs(activeDelta))}`
+                      : '—'}
+                  </span>
+                  {deltaPct != null && (
+                    <span
+                      className={`font-num text-xs font-semibold ${
+                        deltaPct >= 0 ? 'text-[var(--teal)]' : 'text-[var(--rust)]'
+                      }`}
+                    >
+                      ({deltaPct >= 0 ? `+${deltaPct}%` : `${deltaPct}%`}) vs prior
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </div>
-          <span className="rounded-full bg-[var(--paper)] px-2 py-0.5 text-[11px] font-medium text-[var(--muted)]">
-            {labelFor(activeIdx)}
-          </span>
+
+          <div className="flex items-center gap-2">
+            {/* View Mode Toggle: Revenue vs MoM Growth */}
+            <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5">
+              <button
+                type="button"
+                onClick={() => setChartMode('volume')}
+                className={`rounded-md px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
+                  chartMode === 'volume'
+                    ? 'bg-[var(--surface)] text-[var(--ink)] font-semibold shadow-xs'
+                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                }`}
+              >
+                Revenue
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartMode('growth')}
+                className={`rounded-md px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-colors ${
+                  chartMode === 'growth'
+                    ? 'bg-[var(--surface)] text-[var(--ink)] font-semibold shadow-xs'
+                    : 'text-[var(--muted)] hover:text-[var(--ink)]'
+                }`}
+              >
+                MoM Growth
+              </button>
+            </div>
+
+            <span className="rounded-full bg-[var(--paper)] px-2 py-0.5 text-[11px] font-medium text-[var(--muted)]">
+              {labelFor(activeIdx)}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -88,7 +156,11 @@ export function MonthlyRevenueChart({
               left: `${((paddingX + activeHover * groupW + groupW / 2) / width) * 100}%`,
             }}
           >
-            {labelFor(activeHover)}: {formatRevenue(revenuePaise[activeHover] ?? 0)}
+            {chartMode === 'volume'
+              ? `${labelFor(activeHover)}: ${formatRevenue(revenuePaise[activeHover] ?? 0)}`
+              : deltas[activeHover] != null
+                ? `${labelFor(activeHover)}: ${deltas[activeHover]! >= 0 ? '+' : '−'}${formatRevenue(Math.abs(deltas[activeHover]!))}`
+                : `${labelFor(activeHover)}: Baseline`}
           </div>
         )}
 
@@ -101,68 +173,132 @@ export function MonthlyRevenueChart({
           {/* Baseline rule */}
           <line
             x1={paddingX}
-            y1={baseline}
+            y1={chartMode === 'volume' ? baseline : y0}
             x2={width - paddingX}
-            y2={baseline}
+            y2={chartMode === 'volume' ? baseline : y0}
             stroke="var(--border)"
-            strokeWidth="1"
+            strokeWidth={chartMode === 'volume' ? 1 : 1.5}
+            strokeDasharray={chartMode === 'volume' ? 'none' : '3 2'}
           />
 
-          {revenuePaise.map((val, i) => {
-            const isSelected = i === activeIdx;
-            const isInProgress = currentMonthIndices.includes(i);
-            const centerX = paddingX + i * groupW + groupW / 2;
-            const barX = centerX - barW / 2;
-            const h = val > 0 ? Math.max(6, Math.round((val / maxVal) * plotH)) : 0;
-            const y = baseline - h;
+          {chartMode === 'volume'
+            ? /* VOLUME MODE BARS */
+              revenuePaise.map((val, i) => {
+                const isSelected = i === activeIdx;
+                const isInProgress = currentMonthIndices.includes(i);
+                const centerX = paddingX + i * groupW + groupW / 2;
+                const barX = centerX - barW / 2;
+                const h = val > 0 ? Math.max(6, Math.round((val / maxVal) * plotH)) : 0;
+                const y = baseline - h;
 
-            return (
-              <g key={`rev-bar-${categories[i]}-${i}`}>
-                {/* Column highlight */}
-                {isSelected && (
-                  <rect
-                    x={centerX - groupW / 2 + 1}
-                    y={paddingTop - 4}
-                    width={groupW - 2}
-                    height={plotH + 8}
-                    rx="4"
-                    fill="var(--teal)"
-                    opacity="0.08"
-                  />
-                )}
+                return (
+                  <g key={`rev-bar-${categories[i]}-${i}`}>
+                    {/* Column highlight */}
+                    {isSelected && (
+                      <rect
+                        x={centerX - groupW / 2 + 1}
+                        y={paddingTop - 4}
+                        width={groupW - 2}
+                        height={plotH + 8}
+                        rx="4"
+                        fill="var(--teal)"
+                        opacity="0.08"
+                      />
+                    )}
 
-                {val > 0 ? (
-                  <rect
-                    x={barX}
-                    y={y}
-                    width={barW}
-                    height={h}
-                    rx="3"
-                    fill="var(--teal)"
-                    opacity={isSelected ? 1 : 0.65}
-                    stroke={isInProgress ? 'var(--ink)' : 'none'}
-                    strokeWidth={isInProgress ? 1.5 : 0}
-                    strokeDasharray={isInProgress ? '3 2' : 'none'}
-                    className="transition-all hover:opacity-90"
-                  />
-                ) : (
-                  <rect
-                    x={barX}
-                    y={baseline - 2}
-                    width={barW}
-                    height="2"
-                    rx="1"
-                    fill="var(--muted)"
-                    opacity="0.35"
-                  />
-                )}
+                    {val > 0 ? (
+                      <rect
+                        x={barX}
+                        y={y}
+                        width={barW}
+                        height={h}
+                        rx="3"
+                        fill="var(--teal)"
+                        opacity={isSelected ? 1 : 0.65}
+                        stroke={isInProgress ? 'var(--ink)' : 'none'}
+                        strokeWidth={isInProgress ? 1.5 : 0}
+                        strokeDasharray={isInProgress ? '3 2' : 'none'}
+                        className="transition-all hover:opacity-90"
+                      />
+                    ) : (
+                      <rect
+                        x={barX}
+                        y={baseline - 2}
+                        width={barW}
+                        height="2"
+                        rx="1"
+                        fill="var(--muted)"
+                        opacity="0.35"
+                      />
+                    )}
 
-                {isSelected && val > 0 && (
-                  <circle cx={centerX} cy={Math.max(6, y - 5)} r="2.5" fill="var(--teal)" />
-                )}
-              </g>
-            );
-          })}
+                    {isSelected && val > 0 && (
+                      <circle cx={centerX} cy={Math.max(6, y - 5)} r="2.5" fill="var(--teal)" />
+                    )}
+                  </g>
+                );
+              })
+            : /* MOM GROWTH MODE BARS */
+              deltas.map((d, i) => {
+                const isSelected = i === activeIdx;
+                const centerX = paddingX + i * groupW + groupW / 2;
+                const barX = centerX - barW / 2;
+                const isPositive = d != null && d >= 0;
+                const h =
+                  d != null && d !== 0
+                    ? Math.max(6, Math.round((Math.abs(d) / maxAbsDelta) * (plotH / 2 - 8)))
+                    : 0;
+                const y = isPositive ? y0 - h : y0;
+
+                return (
+                  <g key={`growth-bar-${categories[i]}-${i}`}>
+                    {/* Column highlight */}
+                    {isSelected && (
+                      <rect
+                        x={centerX - groupW / 2 + 1}
+                        y={paddingTop - 4}
+                        width={groupW - 2}
+                        height={plotH + 8}
+                        rx="4"
+                        fill={isPositive ? 'var(--teal)' : 'var(--rust)'}
+                        opacity="0.08"
+                      />
+                    )}
+
+                    {d != null && d !== 0 ? (
+                      <rect
+                        x={barX}
+                        y={y}
+                        width={barW}
+                        height={h}
+                        rx="3"
+                        fill={isPositive ? 'var(--teal)' : 'var(--rust)'}
+                        opacity={isSelected ? 1 : 0.7}
+                        className="transition-all hover:opacity-90"
+                      />
+                    ) : (
+                      <rect
+                        x={barX}
+                        y={y0 - 1}
+                        width={barW}
+                        height="2"
+                        rx="1"
+                        fill="var(--muted)"
+                        opacity="0.4"
+                      />
+                    )}
+
+                    {isSelected && d != null && d !== 0 && (
+                      <circle
+                        cx={centerX}
+                        cy={isPositive ? Math.max(6, y - 5) : Math.min(baseline, y + h + 5)}
+                        r="2.5"
+                        fill={isPositive ? 'var(--teal)' : 'var(--rust)'}
+                      />
+                    )}
+                  </g>
+                );
+              })}
         </svg>
 
         {/* HTML Month labels */}

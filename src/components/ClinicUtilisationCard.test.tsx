@@ -91,8 +91,8 @@ describe('ClinicUtilisationView (Splose-inspired redesign)', () => {
     const onChange = vi.fn();
     render(<ClinicUtilisationView report={report} granularity="month" onGranularityChange={onChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Quarterly' }));
-    expect(onChange).toHaveBeenCalledWith('quarter');
+    fireEvent.click(screen.getByRole('button', { name: '6m' }));
+    expect(onChange).toHaveBeenCalledWith('6m');
   });
 
   it('switches the active period when clicking a point or bar in the KPI cards', () => {
