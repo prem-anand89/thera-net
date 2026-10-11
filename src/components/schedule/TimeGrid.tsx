@@ -53,6 +53,8 @@ type DayColumnProps = {
   working?: Interval[];
   /** Drag / move wiring from GridFrame (tablet + desktop only). */
   drag?: ColumnDrag;
+  /** When true, renders textless color blocks with tooltip on hover (multi-therapist week view). */
+  minimalBlocks?: boolean;
 };
 
 export type DragGhost = { columnKey: string; appointmentId: string; start: number; duration: number; valid: boolean };
@@ -102,6 +104,7 @@ export function DayColumn({
   dense = false,
   working,
   drag,
+  minimalBlocks = false,
 }: DayColumnProps) {
   const height = (hours.endHour - hours.startHour) * 60 * PX_PER_MINUTE;
   const blocks = useMemo(
@@ -199,7 +202,9 @@ export function DayColumn({
             {/* Free time stays blank so bookings stand out; touch screens (no
                 hover) get a faint "+" so it's still discoverable. */}
             <span className="hidden px-1.5 opacity-40 pointer-coarse:inline group-hover:!hidden group-focus-visible:!hidden" aria-hidden>+</span>
-            <span className="hidden px-1.5 group-hover:inline group-focus-visible:inline">+ {slot.label}</span>
+            <span className={`hidden px-1.5 group-hover:inline group-focus-visible:inline ${minimalBlocks ? 'text-[10px]' : ''}`}>
+              {minimalBlocks ? '+' : `+ ${slot.label}`}
+            </span>
           </button>
         );
       })}
@@ -245,25 +250,31 @@ export function DayColumn({
                 }}
               />
             )}
-            <BlockFlagBadges flags={flags} />
-            {compact ? (
-              <span className="block truncate">
-                {style.mark && <span aria-hidden>{style.mark} </span>}
-                {minutesLabel(start)} {appointment.patientName}
-              </span>
-            ) : (
+            {!minimalBlocks ? (
               <>
-                <span className="block truncate font-medium">
-                  {style.mark && <span aria-hidden>{style.mark} </span>}
-                  {appointment.patientName}
-                </span>
-                <span className="block truncate text-[11px] opacity-80">
-                  {dense ? minutesLabel(start) : `${minutesLabel(start)}–${minutesLabel(end)}`}
-                </span>
-                {reason && geometry.height >= 60 * PX_PER_MINUTE && (
-                  <span className="mt-0.5 block truncate text-[11px] italic opacity-80">{reason}</span>
+                <BlockFlagBadges flags={flags} />
+                {compact ? (
+                  <span className="block truncate">
+                    {style.mark && <span aria-hidden>{style.mark} </span>}
+                    {minutesLabel(start)} {appointment.patientName}
+                  </span>
+                ) : (
+                  <>
+                    <span className="block truncate font-medium">
+                      {style.mark && <span aria-hidden>{style.mark} </span>}
+                      {appointment.patientName}
+                    </span>
+                    <span className="block truncate text-[11px] opacity-80">
+                      {dense ? minutesLabel(start) : `${minutesLabel(start)}–${minutesLabel(end)}`}
+                    </span>
+                    {reason && geometry.height >= 60 * PX_PER_MINUTE && (
+                      <span className="mt-0.5 block truncate text-[11px] italic opacity-80">{reason}</span>
+                    )}
+                  </>
                 )}
               </>
+            ) : (
+              flags.length > 0 && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[var(--ink)]/40" />
             )}
           </button>
         );
@@ -297,7 +308,7 @@ export function DayColumn({
   );
 }
 
-function TimeAxis({ hours }: { hours: GridHours }) {
+export function TimeAxis({ hours }: { hours: GridHours }) {
   return (
     <div className="relative" style={{ height: (hours.endHour - hours.startHour) * 60 * PX_PER_MINUTE }}>
       {Array.from({ length: hours.endHour - hours.startHour }, (_, index) => (

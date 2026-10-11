@@ -51,6 +51,7 @@ import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
 import { FindTimePanel } from '@/components/schedule/FindTimePanel';
 import { ScheduleRail, rangeLabel } from '@/components/schedule/ScheduleRail';
 import { ResourceDayGrid, WeekTimeGrid, type GridDragOptions, type GridTherapist, type LoadSummary, type MoveTarget } from '@/components/schedule/TimeGrid';
+import { MultiResourceWeekGrid } from '@/components/schedule/MultiResourceWeekGrid';
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
 
 type BookingView = 'schedule' | 'requests' | 'history';
@@ -227,11 +228,9 @@ export function ScheduleBookingsView({
     [isTherapist, myTherapistId, selectedIds, roster, dayAppointments]
   );
   const singleTherapist = visibleRoster.length === 1 ? visibleRoster[0] : null;
-  // Week is a real time grid only with one therapist in view (tab+); with
-  // several it was a list of names the week strip already gives, so a
-  // `mode=week` link falls back to Day.
-  const weekAvailable = singleTherapist !== null;
-  const mode = weekAvailable ? search.mode ?? 'day' : 'day';
+  // Week view is available for both single-therapist and multi-therapist (matrix) modes.
+  const weekAvailable = true;
+  const mode = search.mode ?? 'day';
 
   const closedFor = useCallback(
     (day: string) => isClosedDay(day, clinic.closedWeekdays, closedDates ?? []),
@@ -284,6 +283,13 @@ export function ScheduleBookingsView({
     if (orphaned) columns.push({ id: '', name: 'Unassigned', color: UNASSIGNED_COLOR });
     return columns;
   }, [visibleRoster, selectedIds.length, dayAppointments, rosterById]);
+
+  const maxWeekTherapists = 4;
+  const isAllTherapistsWeek = mode === 'week' && !singleTherapist && !selectedIds.length && visibleRoster.length > maxWeekTherapists;
+  const weekGridTherapists: GridTherapist[] = useMemo(() => {
+    const list = isAllTherapistsWeek ? visibleRoster.slice(0, maxWeekTherapists) : visibleRoster;
+    return list.map((t) => ({ id: t.id, name: t.name, color: t.color }));
+  }, [isAllTherapistsWeek, visibleRoster]);
 
   const pendingRequests = useMemo(
     () => (requests ?? []).filter((r) => r.status === 'pending').sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -799,27 +805,58 @@ export function ScheduleBookingsView({
               </div>
             )}
 
+            {isAllTherapistsWeek && (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-xs text-[var(--muted)]">
+                <span>
+                  Showing first <strong>{maxWeekTherapists}</strong> therapists in week view. Use the left sidebar to select specific team members.
+                </span>
+              </div>
+            )}
+
             {/* Phones always show the day (agenda); Week is tab+ only. */}
             <div className="hidden tab:block">
-              {mode === 'week' && singleTherapist ? (
-                <WeekTimeGrid
-                  reasonFor={reasonFor}
-                  flagContext={flagContext}
-                  days={weekDays(date)}
-                  today={today}
-                  nowMinutes={now.minutes}
-                  appointments={visibleAppointments.filter((a) => a.therapistId === singleTherapist.id)}
-                  hours={hours}
-                  slotMinutes={slotMinutes}
-                  closedFor={closedFor}
-                  colorFor={colorFor}
-                  selectedId={selectedId}
-                  onSelect={(a) => setSelectedId(a.id)}
-                  onBook={canBookFor(singleTherapist.id) ? ({ date: day, time }) => openBooking({ date: day, time, therapistId: singleTherapist.id }) : undefined}
-                  onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
-                  workingFor={(day) => workingFor(singleTherapist.id, day)}
-                  drag={dragOptions}
-                />
+              {mode === 'week' ? (
+                singleTherapist ? (
+                  <WeekTimeGrid
+                    reasonFor={reasonFor}
+                    flagContext={flagContext}
+                    days={weekDays(date)}
+                    today={today}
+                    nowMinutes={now.minutes}
+                    appointments={visibleAppointments.filter((a) => a.therapistId === singleTherapist.id)}
+                    hours={hours}
+                    slotMinutes={slotMinutes}
+                    closedFor={closedFor}
+                    colorFor={colorFor}
+                    selectedId={selectedId}
+                    onSelect={(a) => setSelectedId(a.id)}
+                    onBook={canBookFor(singleTherapist.id) ? ({ date: day, time }) => openBooking({ date: day, time, therapistId: singleTherapist.id }) : undefined}
+                    onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
+                    workingFor={(day) => workingFor(singleTherapist.id, day)}
+                    drag={dragOptions}
+                  />
+                ) : (
+                  <MultiResourceWeekGrid
+                    days={weekDays(date)}
+                    today={today}
+                    nowMinutes={now.minutes}
+                    therapists={weekGridTherapists}
+                    appointments={visibleAppointments}
+                    hours={hours}
+                    slotMinutes={slotMinutes}
+                    closedFor={closedFor}
+                    colorFor={colorFor}
+                    reasonFor={reasonFor}
+                    flagContext={flagContext}
+                    selectedId={selectedId}
+                    onSelect={(a) => setSelectedId(a.id)}
+                    onBook={({ date: day, time, therapistId }) => {
+                      if (canBookFor(therapistId)) openBooking({ date: day, time, therapistId });
+                    }}
+                    onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
+                    workingFor={(therapistId, day) => workingFor(therapistId, day)}
+                  />
+                )
               ) : (
                 <ResourceDayGrid
                   reasonFor={reasonFor}
