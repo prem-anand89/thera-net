@@ -28,26 +28,34 @@ export function UtilisationTrendCard({
       ? Math.round((activeRatio - priorRatio) * 100)
       : null;
 
+  // Dynamic Ceiling: at least 100% (1.0), or higher if someone exceeds 100% capacity (shift overtime)
+  const maxObserved = Math.max(
+    ...reports.map((r) => r.clinicRatio ?? 0),
+    ...(compareMode ? reports.map((r) => r.priorClinicRatio ?? 0) : []),
+    targetRatio
+  );
+  const ceilingRatio = maxObserved > 1.0 ? Math.ceil(maxObserved * 10) / 10 + 0.1 : 1.0;
+
   // SVG Chart Geometry
   const width = 360;
-  const height = 120;
+  const height = 126;
   const paddingX = 16;
-  const paddingTop = 14;
-  const baseline = 96;
+  const paddingTop = 20;
+  const baseline = 100;
   const plotH = baseline - paddingTop;
   const plotW = width - paddingX * 2;
 
   const points = reports.map((r, i) => {
     const x = paddingX + (reports.length > 1 ? (i / (reports.length - 1)) * plotW : plotW / 2);
-    const ratio = Math.max(0, Math.min(1, r.clinicRatio ?? 0));
-    const y = baseline - ratio * plotH;
+    const ratio = Math.max(0, r.clinicRatio ?? 0);
+    const y = baseline - (ratio / ceilingRatio) * plotH;
     return { x, y, r, index: i };
   });
 
   const comparePoints = reports.map((r, i) => {
     const x = paddingX + (reports.length > 1 ? (i / (reports.length - 1)) * plotW : plotW / 2);
-    const ratio = Math.max(0, Math.min(1, r.priorClinicRatio ?? 0));
-    const y = baseline - ratio * plotH;
+    const ratio = Math.max(0, r.priorClinicRatio ?? 0);
+    const y = baseline - (ratio / ceilingRatio) * plotH;
     return { x, y };
   });
 
@@ -57,7 +65,8 @@ export function UtilisationTrendCard({
     : '';
   const comparePathD = comparePoints.reduce((acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`, '');
 
-  const targetY = baseline - targetRatio * plotH;
+  const y100 = baseline - (1.0 / ceilingRatio) * plotH;
+  const targetY = baseline - (targetRatio / ceilingRatio) * plotH;
 
   return (
     <div className="flex flex-col justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs">
@@ -112,6 +121,26 @@ export function UtilisationTrendCard({
             stroke="var(--border)"
             strokeWidth="1"
           />
+
+          {/* 100% Capacity line */}
+          <line
+            x1={paddingX}
+            y1={y100}
+            x2={width - paddingX}
+            y2={y100}
+            stroke="var(--border)"
+            strokeDasharray="2 2"
+            strokeWidth="1"
+            strokeOpacity="0.8"
+          />
+          <text
+            x={paddingX}
+            y={Math.max(9, y100 - 3)}
+            textAnchor="start"
+            className="fill-[var(--muted)] text-[8.5px] font-medium"
+          >
+            100% Capacity
+          </text>
 
           {/* Target line */}
           <line

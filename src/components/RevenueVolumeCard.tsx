@@ -103,6 +103,19 @@ export function RevenueVolumeCard({
 
             return (
               <g key={r.bucket.key}>
+                {/* Subtle column highlight for selected bucket */}
+                {isSelected && (
+                  <rect
+                    x={centerX - groupW / 2 + 2}
+                    y={paddingTop - 4}
+                    width={groupW - 4}
+                    height={plotH + 8}
+                    rx="4"
+                    fill="var(--teal)"
+                    opacity="0.08"
+                  />
+                )}
+
                 {/* Compare mode prior bar */}
                 {compareMode && priorH > 0 && (
                   <rect
@@ -170,7 +183,7 @@ export function RevenueVolumeCard({
           })}
         </svg>
 
-        {/* HTML Accessible Click Overlay */}
+        {/* HTML Accessible Click Overlay without jarring focus ring */}
         <div className="pointer-events-auto absolute inset-0 flex items-stretch">
           {reports.map((r, i) => (
             <button
@@ -178,7 +191,7 @@ export function RevenueVolumeCard({
               type="button"
               aria-label={`${r.bucket.label}: ${formatINR(r.clinicRevenuePaise)}`}
               onClick={() => onSelectBucket(i)}
-              className="flex-1 focus:outline-hidden focus:ring-1 focus:ring-[var(--teal)]/40 rounded-sm cursor-pointer"
+              className="flex-1 cursor-pointer focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
               title={`${r.bucket.label}: ${formatINR(r.clinicRevenuePaise)}`}
             />
           ))}
