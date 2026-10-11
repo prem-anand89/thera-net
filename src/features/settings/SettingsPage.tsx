@@ -501,8 +501,8 @@ export function SettingsPage() {
                 </div>
               )}
               <Therapists />
-              <ShiftTemplatesSection />
               <ShiftAssignmentsSection />
+              <ShiftTemplatesSection />
             </>
           )}
           {activeTab === 'services' && <CatalogSection view={catalogView} onViewChange={setCatalogView} />}

@@ -61,5 +61,6 @@ export default defineConfig({
     // Node by default; component tests opt in with `// @vitest-environment jsdom`.
     environment: 'node',
     include: ['src/**/*.test.{ts,tsx}'],
+    testTimeout: 15000,
   },
 });

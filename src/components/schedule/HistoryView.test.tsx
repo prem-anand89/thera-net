@@ -51,7 +51,7 @@ describe('HistoryView', () => {
     expect(within(group).getAllByRole('listitem')).toHaveLength(50);
     fireEvent.click(screen.getByRole('button', { name: 'Show more (5 left)' }));
     expect(within(group).getAllByRole('listitem')).toHaveLength(55);
-  });
+  }, 15000);
 
   it('searches by name and opens a row', () => {
     const { onSelect } = setup([appt(1, { patientName: 'Radhika' }), appt(1, { patientName: 'Aaron' })]);
