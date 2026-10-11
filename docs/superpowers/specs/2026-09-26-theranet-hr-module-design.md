@@ -1,3 +1,5 @@
+> **Superseded** by docs/superpowers/specs/2026-10-12-hr-module-design.md — kept for history.
+
 # Theranet HR & Operations Module Design
 
 ## Overview
