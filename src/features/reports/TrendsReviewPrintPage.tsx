@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { dashboardService, reportService } from '@/services';
+import { dashboardService, reportService, repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { publicLogoUrl } from '@/lib/supabase';
 import { formatINR } from '@/domain/money';
@@ -15,6 +15,7 @@ import {
   TherapistComparisonTable,
   type TherapistComparisonRow,
 } from '@/components/TherapistComparisonTable';
+import { useTherapistUtilisation } from '@/components/useTherapistUtilisation';
 import { useCompactChart } from '@/components/useCompactChart';
 import {
   buildTrendMonthsInRange,
@@ -113,6 +114,9 @@ export function TrendsReviewPrintPage() {
     );
   }, [clinic.id, period.year, period.month, report?.rows]);
 
+  const printTherapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const utilisationById = useTherapistUtilisation(period, printTherapists, Boolean(clinic.showTherapistComparison));
+
   const engagementById = useMemo(
     () => new Map((therapistEngagement ?? []).map((e) => [e.therapistId, e])),
     [therapistEngagement]
@@ -165,9 +169,11 @@ export function TrendsReviewPrintPage() {
         visitCount: r.visitCount,
         retentionPct: live?.retentionPct ?? null,
         newPackages: live?.newPackages ?? 0,
+        utilisation: utilisationById?.get(r.therapistId)?.ratio,
+        utilisationClinicHours: utilisationById?.get(r.therapistId)?.usesClinicHours,
       };
     });
-  }, [report?.rows, engagementById]);
+  }, [report?.rows, engagementById, utilisationById]);
 
   const comparisonTotal = useMemo((): TherapistComparisonRow | undefined => {
     if (!report) return undefined;

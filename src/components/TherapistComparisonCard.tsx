@@ -12,6 +12,7 @@ import { SectionCard } from '@/components/ui';
 import { SERIES_COLORS } from '@/components/chartColors';
 import { VisitsRevenueTrendChart } from '@/components/VisitsRevenueTrendChart';
 import { useCompactChart } from '@/components/useCompactChart';
+import { useTherapistUtilisation } from '@/components/useTherapistUtilisation';
 import {
   TherapistComparisonTable,
   type TherapistComparisonRow,
@@ -136,6 +137,8 @@ export function TherapistComparisonCard({
     [clinic.id, showComparison, chartMonth?.month.year, chartMonth?.month.month, therapists]
   );
 
+  const utilisationById = useTherapistUtilisation(chartMonth?.month, therapists, showComparison);
+
   const statsByName = useMemo(
     () => new Map((therapistLiveStats ?? []).map((s) => [s.name, s])),
     [therapistLiveStats]
@@ -145,6 +148,7 @@ export function TherapistComparisonCard({
     return therapistNames.map((name) => {
       const row = chartMonth?.rows.find((r) => r.therapistName === name);
       const live = statsByName.get(name);
+      const util = live ? utilisationById?.get(live.therapistId) : undefined;
       return {
         therapistName: name,
         billPaise: row?.billPaise ?? 0,
@@ -153,9 +157,11 @@ export function TherapistComparisonCard({
         visitCount: row?.visitCount ?? 0,
         retentionPct: live?.retentionPct ?? null,
         newPackages: live?.newPackages ?? 0,
+        utilisation: util ? util.ratio : undefined,
+        utilisationClinicHours: util?.usesClinicHours,
       };
     });
-  }, [therapistNames, chartMonth, statsByName]);
+  }, [therapistNames, chartMonth, statsByName, utilisationById]);
 
   const comparisonTotal = useMemo((): TherapistComparisonRow | undefined => {
     if (!chartMonth) return undefined;

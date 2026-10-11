@@ -398,6 +398,7 @@ queued with a visible error.
 - **Single dual-bar chart** (visits + revenue per therapist, month picker) plus live month table with retention % and new packages
 - **Visible to therapists too**, not just admins — deliberate exception to "financial aggregates are admin-only"
 - **3 key metrics** per therapist
+- **Utilisation column** (`src/domain/utilisation.ts`, hook `useTherapistUtilisation`): work actually done ÷ time made available, from logged **visits** — not bookings, so walk-ins and last-minute bookings count. Each visit counts as one clinic slot (`slotDurationMinutes`); available time is the therapist's working hours (breaks excluded) over non-closed days, or the clinic's booking hours when none are set (shown with `*`). Each day is capped at 100% of that day's available time, so overlapping entries can't overstate it; the in-progress month only counts elapsed time; shared visits split by `sharedPct`; visit time on days off isn't counted. No schema change; per-visit/per-service durations are a later refinement. Same column on the Trends print page.
 - **6-month trend charts** need at least 2 months of history to render (otherwise read as a false spike);
   below them, a **live "this month" table** (revenue, visits, open packages per therapist) always shows
   as soon as there's at least one visit this month — not gated behind the trend's own history requirement

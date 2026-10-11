@@ -20,6 +20,10 @@ export type TherapistComparisonRow = {
   visitCount: number;
   retentionPct: number | null;
   newPackages: number;
+  /** Work done / time available, 0-1. Undefined = not computed; null = nothing was available. */
+  utilisation?: number | null;
+  /** Utilisation used the clinic's booking hours because no personal hours are set. */
+  utilisationClinicHours?: boolean;
 };
 
 export function TherapistComparisonTable({
@@ -33,6 +37,7 @@ export function TherapistComparisonTable({
   showPostTax: boolean;
   ownLabel: string;
 }) {
+  const showUtilisation = rows.some((r) => r.utilisation !== undefined);
   return (
     <div className="overflow-x-auto overscroll-x-contain rounded-lg border border-[var(--border)]">
       <table className="min-w-full divide-y divide-[var(--border)]">
@@ -54,6 +59,9 @@ export function TherapistComparisonTable({
             <TableColumnHead title="Visits" detail="Sessions in period" />
             <TableColumnHead title="Retention" detail="Repeat visits within 30 days, % of visits" />
             <TableColumnHead title="Packages" detail="New packages started in period" />
+            {showUtilisation && (
+              <TableColumnHead title="Utilisation" detail="Visits × slot time ÷ available hours" />
+            )}
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--border)]">
@@ -72,6 +80,15 @@ export function TherapistComparisonTable({
                 {row.retentionPct != null ? `${row.retentionPct}%` : '—'}
               </td>
               <td className={tdNum}>{row.newPackages}</td>
+              {showUtilisation && (
+                <td
+                  className={tdNum}
+                  title={row.utilisationClinicHours ? 'Based on clinic hours — no personal hours set' : undefined}
+                >
+                  {row.utilisation != null ? `${Math.round(row.utilisation * 100)}%` : '—'}
+                  {row.utilisation != null && row.utilisationClinicHours ? '*' : ''}
+                </td>
+              )}
             </tr>
           ))}
           {total && (
@@ -87,10 +104,16 @@ export function TherapistComparisonTable({
               <td className={tdNum}>{total.visitCount}</td>
               <td className={tdNum}>—</td>
               <td className={tdNum}>{total.newPackages}</td>
+              {showUtilisation && <td className={tdNum}>—</td>}
             </tr>
           )}
         </tbody>
       </table>
+      {showUtilisation && rows.some((r) => r.utilisationClinicHours) && (
+        <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
+          * No personal working hours set, so clinic booking hours were used as available time.
+        </p>
+      )}
     </div>
   );
 }
