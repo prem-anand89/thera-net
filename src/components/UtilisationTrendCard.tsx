@@ -133,14 +133,6 @@ export function UtilisationTrendCard({
             strokeWidth="1"
             strokeOpacity="0.8"
           />
-          <text
-            x={paddingX}
-            y={Math.max(9, y100 - 3)}
-            textAnchor="start"
-            className="fill-[var(--muted)] text-[8.5px] font-medium"
-          >
-            100% Capacity
-          </text>
 
           {/* Target line */}
           <line
@@ -153,16 +145,6 @@ export function UtilisationTrendCard({
             strokeOpacity="0.6"
             strokeWidth="1.2"
           />
-
-          {/* Target label */}
-          <text
-            x={width - paddingX}
-            y={Math.max(10, targetY - 4)}
-            textAnchor="end"
-            className="fill-[var(--muted)] text-[9px] font-semibold"
-          >
-            Target {Math.round(targetRatio * 100)}%
-          </text>
 
           {/* Area fill under curve */}
           {areaD && (
@@ -195,25 +177,38 @@ export function UtilisationTrendCard({
               strokeLinejoin="round"
             />
           )}
+        </svg>
 
-          {/* Month labels underneath */}
+        {/* Crisp HTML Guideline Badges (No SVG text distortion) */}
+        <div
+          className="pointer-events-none absolute left-4 text-[10px] font-medium text-[var(--muted)]"
+          style={{ top: `${(y100 / height) * 100}%`, transform: 'translateY(-100%)' }}
+        >
+          100% Capacity
+        </div>
+        <div
+          className="pointer-events-none absolute right-4 text-[10px] font-semibold text-[var(--muted)]"
+          style={{ top: `${(targetY / height) * 100}%`, transform: 'translateY(-100%)' }}
+        >
+          Target {Math.round(targetRatio * 100)}%
+        </div>
+
+        {/* Month labels underneath (HTML flex layer) */}
+        <div className="pointer-events-none absolute bottom-0 inset-x-0 flex items-center justify-between px-3.5">
           {points.map((p) => {
             const isSelected = p.index === activeIndex;
             return (
-              <text
+              <span
                 key={`lbl-${p.r.bucket.key}`}
-                x={p.x}
-                y={baseline + 16}
-                textAnchor="middle"
                 className={`text-[10px] transition-colors ${
-                  isSelected ? 'fill-[var(--ink)] font-bold' : 'fill-[var(--muted)] font-medium'
+                  isSelected ? 'font-bold text-[var(--ink)]' : 'font-medium text-[var(--muted)]'
                 }`}
               >
                 {p.r.bucket.label.slice(0, 3)}
-              </text>
+              </span>
             );
           })}
-        </svg>
+        </div>
 
         {/* Interactive Point Buttons */}
         <div className="pointer-events-auto absolute inset-0">
