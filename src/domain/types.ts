@@ -245,6 +245,10 @@ export interface Therapist {
    *  email from `notify-therapist`. Absent or true = on (the column default);
    *  the therapist switches it from their own Notifications settings. */
   emailAppointmentUpdates?: boolean;
+  /** Whether this therapist is offered on the public online-booking page.
+   *  Independent of `active` (internal roster/schedule). Absent or true = shown;
+   *  only clinic admins can change it (enforced by guard_therapists_self_update). */
+  publicBookable?: boolean;
   /** Custom assigned hex color for the therapist's schedule column. */
   color?: string | null;
   updatedAt: string;

@@ -2563,7 +2563,7 @@ function TeamMemberCard({
   const [regDraft, setRegDraft] = useState(therapist?.registrationNo ?? '');
   const [phoneDraft, setPhoneDraft] = useState(therapist?.phone ?? '');
   const [colorDraft, setColorDraft] = useState(therapist?.color ?? '');
-  const [activeDraft, setActiveDraft] = useState(therapist ? therapist.active !== false : true);
+  const [publicBookableDraft, setPublicBookableDraft] = useState(therapist ? therapist.publicBookable !== false : true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -2617,7 +2617,7 @@ function TeamMemberCard({
           registrationNo: regDraft.trim() || null,
           phone: phoneDraft.trim() || null,
           color: colorDraft.trim() || null,
-          active: activeDraft,
+          publicBookable: publicBookableDraft,
           updatedAt: new Date().toISOString(),
         });
       }
@@ -2694,6 +2694,11 @@ function TeamMemberCard({
                   Bookable
                 </span>
               )}
+              {therapist && therapist.publicBookable === false && (
+                <span className="inline-block rounded-full bg-[var(--paper)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--muted)]" title="Not offered on the public online-booking page">
+                  Hidden online
+                </span>
+              )}
               {!member && therapist && (
                 <span className="inline-block rounded-full bg-[var(--amber-light)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--amber-strong)]">
                   No login
@@ -2762,7 +2767,7 @@ function TeamMemberCard({
               setRegDraft(therapist?.registrationNo ?? '');
               setPhoneDraft(therapist?.phone ?? '');
               setColorDraft(therapist?.color ?? '');
-              setActiveDraft(therapist ? therapist.active !== false : true);
+              setPublicBookableDraft(therapist ? therapist.publicBookable !== false : true);
               setEditing(true);
             }}
           >
@@ -2920,24 +2925,24 @@ function TeamMemberCard({
                     <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)]/60 p-3 space-y-1.5">
                       <div className="flex items-center justify-between">
                         <div className="pr-2">
-                          <label htmlFor="active-on-schedule-toggle" className="text-xs font-semibold text-[var(--ink)] cursor-pointer">
-                            Active on schedule (Bookable)
+                          <label htmlFor="public-bookable-toggle" className="text-xs font-semibold text-[var(--ink)] cursor-pointer">
+                            Show in online booking
                           </label>
                           <p className="text-[11px] text-[var(--muted)] leading-tight">
-                            Shows this therapist on the booking schedule and weekly shift coverage grid.
+                            Lets patients pick this therapist on your public booking page.
                           </p>
                         </div>
                         <input
-                          id="active-on-schedule-toggle"
+                          id="public-bookable-toggle"
                           type="checkbox"
-                          checked={activeDraft}
-                          onChange={(e) => setActiveDraft(e.target.checked)}
+                          checked={publicBookableDraft}
+                          onChange={(e) => setPublicBookableDraft(e.target.checked)}
                           className="h-4 w-4 rounded accent-[var(--teal)] cursor-pointer"
                         />
                       </div>
-                      {!activeDraft && (
-                        <p className="text-[11px] text-[var(--rust)] font-medium">
-                          ⚠️ Inactive: Removed from bookable schedule and shift grid. Existing records stay intact.
+                      {!publicBookableDraft && (
+                        <p className="text-[11px] text-[var(--muted)]">
+                          Hidden from patients only. They stay on your team, in the schedule, and in shift planning — front desk can still book them.
                         </p>
                       )}
                     </div>
