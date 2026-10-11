@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { TherapistComparisonTable, type TherapistComparisonRow } from './TherapistComparisonTable';
 
 afterEach(cleanup);
@@ -46,5 +46,39 @@ describe('TherapistComparisonTable utilisation column', () => {
     );
     expect(screen.getByText('50%*')).toBeInTheDocument();
     expect(screen.getByText(/No personal working hours set/)).toBeInTheDocument();
+  });
+});
+
+describe('TherapistComparisonTable ranking', () => {
+  const two = [
+    row({ therapistName: 'Priya', visitCount: 25, netPostTaxPaise: 5000 }),
+    row({ therapistName: 'Kiran', visitCount: 40, netPostTaxPaise: 3000 }),
+  ];
+
+  it('marks the leader of each column and explains the minimum', () => {
+    render(<TherapistComparisonTable rows={two} showPostTax={false} ownLabel="BM" />);
+    expect(screen.getAllByText('Top').length).toBeGreaterThan(0);
+    expect(screen.getByText(/at least 20 visits/)).toBeInTheDocument();
+  });
+
+  it('shows no marks when only one therapist is eligible', () => {
+    render(
+      <TherapistComparisonTable
+        rows={[two[0], row({ therapistName: 'New', visitCount: 3 })]}
+        showPostTax={false}
+        ownLabel="BM"
+      />
+    );
+    expect(screen.queryByText('Top')).not.toBeInTheDocument();
+  });
+
+  it('re-orders rows when a column header is clicked and restores on a second click', () => {
+    render(<TherapistComparisonTable rows={two} showPostTax={false} ownLabel="BM" />);
+    const names = () => screen.getAllByRole('row').slice(1).map((r) => r.textContent?.slice(0, 5));
+    expect(names()[0]).toBe('Priya');
+    fireEvent.click(screen.getByRole('button', { name: 'Sort by Visits' }));
+    expect(names()[0]).toBe('Kiran');
+    fireEvent.click(screen.getByRole('button', { name: 'Sort by Visits' }));
+    expect(names()[0]).toBe('Priya');
   });
 });

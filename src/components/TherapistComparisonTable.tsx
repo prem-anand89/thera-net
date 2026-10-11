@@ -1,10 +1,41 @@
+import { useMemo, useState } from 'react';
 import { formatINR } from '@/domain/money';
 import { th, thNum, td, tdNum } from '@/components/ui';
+import {
+  columnLeaders,
+  metricValue,
+  MIN_VISITS_FOR_RANKING,
+  type RankMetric,
+} from '@/domain/therapistRanking';
 
-export function TableColumnHead({ title, detail }: { title: string; detail: string }) {
+export function TableColumnHead({
+  title,
+  detail,
+  onSort,
+  sorted,
+}: {
+  title: string;
+  detail: string;
+  onSort?: () => void;
+  sorted?: boolean;
+}) {
   return (
-    <th className={thNum}>
-      <div>{title}</div>
+    <th className={thNum} aria-sort={sorted ? 'descending' : undefined}>
+      <div>
+        {onSort ? (
+          <button
+            type="button"
+            onClick={onSort}
+            className="min-h-6 font-semibold uppercase tracking-wide hover:text-[var(--ink)]"
+            aria-label={`Sort by ${title}`}
+          >
+            {title}
+            {sorted ? ' ↓' : ''}
+          </button>
+        ) : (
+          title
+        )}
+      </div>
       <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-[var(--muted)]">
         {detail}
       </div>
@@ -38,6 +69,25 @@ export function TherapistComparisonTable({
   ownLabel: string;
 }) {
   const showUtilisation = rows.some((r) => r.utilisation !== undefined);
+  const [sortBy, setSortBy] = useState<RankMetric | null>(null);
+  const toggleSort = (metric: RankMetric) => setSortBy((c) => (c === metric ? null : metric));
+  const leaders = useMemo(
+    () => columnLeaders(rows, ['net', 'visits', 'retention', ...(showUtilisation ? (['utilisation'] as const) : [])]),
+    [rows, showUtilisation]
+  );
+  const shownRows = useMemo(() => {
+    if (!sortBy) return rows;
+    return [...rows].sort(
+      (a, b) => (metricValue(b, sortBy) ?? -Infinity) - (metricValue(a, sortBy) ?? -Infinity)
+    );
+  }, [rows, sortBy]);
+  const anyLeader = Object.values(leaders).some((set) => set.size > 0);
+  const lead = (metric: RankMetric, name: string) =>
+    leaders[metric].has(name) ? (
+      <span className="ml-1 rounded bg-[var(--teal-light)] px-1 text-[9px] font-semibold uppercase text-[var(--teal-strong)]">
+        Top
+      </span>
+    ) : null;
   return (
     <div className="overflow-x-auto overscroll-x-contain rounded-lg border border-[var(--border)]">
       <table className="min-w-full divide-y divide-[var(--border)]">
@@ -55,17 +105,17 @@ export function TherapistComparisonTable({
             {showPostTax && (
               <TableColumnHead title={`Post tax ${ownLabel}`} detail="Clinic share after TDS" />
             )}
-            <TableColumnHead title="Net" detail="After splits & package attribution" />
-            <TableColumnHead title="Visits" detail="Sessions in period" />
-            <TableColumnHead title="Retention" detail="Repeat visits within 30 days, % of visits" />
+            <TableColumnHead title="Net" detail="After splits & package attribution" onSort={() => toggleSort('net')} sorted={sortBy === 'net'} />
+            <TableColumnHead title="Visits" detail="Sessions in period" onSort={() => toggleSort('visits')} sorted={sortBy === 'visits'} />
+            <TableColumnHead title="Retention" detail="Repeat visits within 30 days, % of visits" onSort={() => toggleSort('retention')} sorted={sortBy === 'retention'} />
             <TableColumnHead title="Packages" detail="New packages started in period" />
             {showUtilisation && (
-              <TableColumnHead title="Utilisation" detail="Visits × slot time ÷ available hours" />
+              <TableColumnHead title="Utilisation" detail="Visits × slot time ÷ available hours" onSort={() => toggleSort('utilisation')} sorted={sortBy === 'utilisation'} />
             )}
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--border)]">
-          {rows.map((row) => (
+          {shownRows.map((row) => (
             <tr key={row.therapistName}>
               <td
                 className={`${td} sticky left-0 z-[1] bg-[var(--surface)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]`}
@@ -74,10 +124,11 @@ export function TherapistComparisonTable({
               </td>
               <td className={tdNum}>{formatINR(row.billPaise)}</td>
               {showPostTax && <td className={tdNum}>{formatINR(row.postTaxPaise)}</td>}
-              <td className={tdNum}>{formatINR(row.netPostTaxPaise)}</td>
-              <td className={tdNum}>{row.visitCount}</td>
+              <td className={tdNum}>{formatINR(row.netPostTaxPaise)}{lead('net', row.therapistName)}</td>
+              <td className={tdNum}>{row.visitCount}{lead('visits', row.therapistName)}</td>
               <td className={tdNum}>
                 {row.retentionPct != null ? `${row.retentionPct}%` : '—'}
+                {lead('retention', row.therapistName)}
               </td>
               <td className={tdNum}>{row.newPackages}</td>
               {showUtilisation && (
@@ -87,6 +138,7 @@ export function TherapistComparisonTable({
                 >
                   {row.utilisation != null ? `${Math.round(row.utilisation * 100)}%` : '—'}
                   {row.utilisation != null && row.utilisationClinicHours ? '*' : ''}
+                  {lead('utilisation', row.therapistName)}
                 </td>
               )}
             </tr>
@@ -109,6 +161,11 @@ export function TherapistComparisonTable({
           )}
         </tbody>
       </table>
+      {anyLeader && (
+        <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
+          Top marks the best in each column among therapists with at least {MIN_VISITS_FOR_RANKING} visits in the period.
+        </p>
+      )}
       {showUtilisation && rows.some((r) => r.utilisationClinicHours) && (
         <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
           * No personal working hours set, so clinic booking hours were used as available time.
