@@ -41,8 +41,8 @@ describe('ShiftCoverageGrid', () => {
       />
     );
 
-    // With bookingStartHour: 9 and bookingEndHour: 17, label should be "Default (9–5)", not hardcoded "Default (9–6)"
-    const defaultLabels = screen.getAllByText('Default (9–5)');
+    // With bookingStartHour: 9 and bookingEndHour: 17, label should be "9–5", not hardcoded "Default (9–6)"
+    const defaultLabels = screen.getAllByText('9–5');
     expect(defaultLabels.length).toBeGreaterThan(0);
   });
 

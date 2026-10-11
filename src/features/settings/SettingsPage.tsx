@@ -68,10 +68,11 @@ const ACCENT_VARS: Record<Accent, { color: string; light: string }> = {
 
 /** Sections that edit a slice of the clinic row and report unsaved edits.
  *  A tab can hold more than one (Billing holds billing + partner). */
-type FormKey = 'profile' | 'billing' | 'partner' | 'patientComms';
+type FormKey = 'profile' | 'clinicHours' | 'billing' | 'partner' | 'patientComms';
 
 const FORM_TAB: Record<FormKey, SettingsTab> = {
   profile: 'general',
+  clinicHours: 'general',
   billing: 'billing',
   partner: 'billing',
   patientComms: 'booking',
@@ -385,6 +386,7 @@ export function SettingsPage() {
   // switching tabs or leaving can warn before discarding it. Team, Services
   // and Account act immediately per row or button and never report dirty.
   const setProfileDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'profile', d)), []);
+  const setClinicHoursDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'clinicHours', d)), []);
   const setBillingDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'billing', d)), []);
   const setPartnerDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'partner', d)), []);
   const setPatientCommsDirty = useCallback(
@@ -491,7 +493,12 @@ export function SettingsPage() {
             </h2>
             <p className="mt-0.5 text-sm text-[var(--muted)]">{SETTINGS_TAB_META[activeTab].description}</p>
           </div>
-          {activeTab === 'general' && <ClinicProfileSection onDirtyChange={setProfileDirty} />}
+          {activeTab === 'general' && (
+            <>
+              <ClinicProfileSection onDirtyChange={setProfileDirty} />
+              <ClinicHoursSection onDirtyChange={setClinicHoursDirty} />
+            </>
+          )}
           {activeTab === 'team' && (
             <>
               {unlinkedCount > 0 && (
@@ -1233,6 +1240,156 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
   );
 }
 
+type ClinicHoursFields = Pick<
+  Clinic,
+  | 'bookingStartHour'
+  | 'bookingEndHour'
+  | 'closedWeekdays'
+  | 'slotDurationMinutes'
+>;
+
+function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const { form, set, save, cancel, dirty, saved, busy, error } =
+    useClinicSectionForm<ClinicHoursFields>(
+      (c) => ({
+        bookingStartHour: c.bookingStartHour ?? 9,
+        bookingEndHour: c.bookingEndHour ?? 17,
+        closedWeekdays: c.closedWeekdays ?? [],
+        slotDurationMinutes: c.slotDurationMinutes ?? 30,
+      }),
+      onDirtyChange
+    );
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (editing && saved && !dirty) setEditing(false);
+  }, [editing, saved, dirty]);
+
+  return (
+    <div className="mt-6">
+      <SectionCard
+        id="settings-card-booking-hours"
+        title="Hours & closures"
+        action={editing ? undefined : <SetOnceEditButton label="Edit hours & closures" onClick={() => setEditing(true)} />}
+      >
+        <fieldset disabled={!editing} className="contents">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field
+              label={
+                <>
+                  Clinic operating hours
+                  <InfoTip text="The earliest and latest times your clinic is open for appointments and therapist shifts." />
+                </>
+              }
+            >
+              <div className="flex items-center gap-2">
+                <select
+                  className={inputCls}
+                  value={form.bookingStartHour ?? 9}
+                  onChange={(e) => set({ bookingStartHour: parseInt(e.target.value, 10) })}
+                >
+                  {Array.from({ length: 24 }).map((_, i) => (
+                    <option key={`start-${i}`} value={i}>
+                      {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-[var(--muted)]">to</span>
+                <select
+                  className={inputCls}
+                  value={form.bookingEndHour ?? 17}
+                  onChange={(e) => set({ bookingEndHour: parseInt(e.target.value, 10) })}
+                >
+                  {Array.from({ length: 24 }).map((_, i) => (
+                    <option key={`end-${i}`} value={i}>
+                      {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </Field>
+
+            <Field
+              label={
+                <>
+                  Default appointment duration
+                  <InfoTip text="The length of a standard appointment. This sets default time blocks on the schedule calendar and online booking." />
+                </>
+              }
+            >
+              <select
+                className={inputCls}
+                value={form.slotDurationMinutes ?? 30}
+                onChange={(e) => set({ slotDurationMinutes: Number(e.target.value) })}
+              >
+                <option value={15}>15 minutes</option>
+                <option value={30}>30 minutes</option>
+                <option value={45}>45 minutes</option>
+                <option value={60}>60 minutes</option>
+              </select>
+            </Field>
+
+            <div className="sm:col-span-2">
+              <Field
+                label={
+                  <>
+                    Weekly closed days
+                    <InfoTip text="Select the regular recurring days of the week when the clinic is closed." />
+                  </>
+                }
+              >
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, idx) => {
+                    const isClosed = form.closedWeekdays?.includes(idx);
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        disabled={!editing}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                          isClosed
+                            ? 'bg-[var(--rust)] border-[var(--rust)] text-white shadow-sm'
+                            : 'bg-white border-[var(--border)] text-[var(--ink)] hover:border-[var(--rust)]'
+                        } ${!editing ? 'cursor-default opacity-85' : 'cursor-pointer'}`}
+                        onClick={() => {
+                          const current = form.closedWeekdays || [];
+                          if (isClosed) {
+                            set({ closedWeekdays: current.filter((d) => d !== idx) });
+                          } else {
+                            set({ closedWeekdays: [...current, idx].sort() });
+                          }
+                        }}
+                      >
+                        {day}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+            </div>
+          </div>
+        </fieldset>
+        <p className="mt-3 text-xs text-[var(--muted)]">
+          Holidays, one-off closures, and individual therapist shift overrides are managed directly on the{' '}
+          <span className="font-medium text-[var(--ink)]">Schedule</span> calendar.
+        </p>
+        {editing && (
+          <SectionSaveBar
+            dirty={dirty}
+            saved={saved}
+            busy={busy}
+            onSave={() => void save()}
+            onCancel={() => {
+              cancel();
+              setEditing(false);
+            }}
+            error={error}
+          />
+        )}
+      </SectionCard>
+    </div>
+  );
+}
+
 type BillingFields = Pick<
   Clinic,
   | 'invoicePrefix'
@@ -1666,7 +1823,7 @@ function PartnerSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
   );
 }
 
-type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' | 'bookingSlug' | 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays' | 'slotDurationMinutes'>;
+type PatientCommsFields = Pick<Clinic, 'enablePatientComms' | 'googleReviewUrl' | 'bookingSlug'>;
 
 // Lowercase alphanumeric + hyphens, no leading/trailing/doubled hyphen —
 // the DB only enforces uniqueness, so this is the one place the "clean
@@ -1689,10 +1846,6 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
         enablePatientComms: c.enablePatientComms ?? false,
         googleReviewUrl: c.googleReviewUrl ?? null,
         bookingSlug: c.bookingSlug ?? null,
-        bookingStartHour: c.bookingStartHour ?? 9,
-        bookingEndHour: c.bookingEndHour ?? 17,
-        closedWeekdays: c.closedWeekdays ?? [],
-        slotDurationMinutes: c.slotDurationMinutes ?? 30,
       }),
       _onDirtyChange
     );
@@ -1717,204 +1870,98 @@ function PatientCommsSection({ onDirtyChange: _onDirtyChange }: { onDirtyChange:
 
   return (
     <>
-    <SectionCard
-      id="settings-card-booking-online"
-      title="Booking page"
-      action={editing ? undefined : <SetOnceEditButton label="Edit booking page" onClick={() => setEditing(true)} />}
-    >
-      <fieldset disabled={!editing} className="contents">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field
-          label={
-            <>
-              Feedback
-              <InfoTip text="Turn on to let staff ask a patient for feedback after a visit. Each request creates a one-time link to a public feedback form, shared via WhatsApp — no patient login or Business API needed." />
-            </>
-          }
-        >
-          <BoolToggle
-            value={form.enablePatientComms ?? false}
-            onChange={(v) => set({ enablePatientComms: v })}
-          />
-        </Field>
-        <Field
-          label={
-            <>
-              Google review link
-              <InfoTip text="Your clinic's Google review page. Set it to unlock a 'Leave a Google review' prompt for patients who rate 5 stars, plus an 'Ask for a Google review' action for staff on those same responses — or any visit at all, via the row menu. Leave blank to skip Google review nudges entirely." />
-            </>
-          }
-        >
-          <input
-            type="url"
-            className={inputCls}
-            placeholder="https://g.page/r/…/review"
-            value={form.googleReviewUrl ?? ''}
-            onChange={(e) => set({ googleReviewUrl: e.target.value.trim() || null })}
-          />
-        </Field>
-        <Field
-          label={
-            <>
-              Booking link
-              <InfoTip text="A short web address patients use to request an appointment — safe to put on Google, your website, or social media. Front desk confirms each request into a scheduled appointment; there's no live slot picker yet. Leave blank to keep public booking off." />
-            </>
-          }
-        >
-          <input
-            type="text"
-            className={inputCls}
-            placeholder="my-clinic-name"
-            value={form.bookingSlug ?? ''}
-            onChange={(e) => set({ bookingSlug: e.target.value.toLowerCase().trim() || null })}
-          />
-          {slugInvalid && (
-            <p className="mt-1 text-xs text-[var(--rust)]">
-              Lowercase letters, numbers, and hyphens only — no spaces.
-            </p>
-          )}
-        </Field>
-        {bookingUrl && !slugInvalid && (
-          <div className="sm:col-span-2">
-            <span className="mb-1 block text-xs font-medium text-[var(--muted)]">
-              Your booking link
-            </span>
-            <div className="flex items-center justify-between gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5">
-              <span className="truncate font-mono text-xs text-[var(--ink)]">{bookingUrl}</span>
-              <button
-                type="button"
-                className="whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
-                onClick={() => void copyBookingUrl()}
-              >
-                {slugCopied ? 'Copied!' : 'Copy link'}
-              </button>
-            </div>
+      <SectionCard
+        id="settings-card-booking-online"
+        title="Booking page"
+        action={editing ? undefined : <SetOnceEditButton label="Edit booking page" onClick={() => setEditing(true)} />}
+      >
+        <fieldset disabled={!editing} className="contents">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field
+              label={
+                <>
+                  Feedback
+                  <InfoTip text="Turn on to let staff ask a patient for feedback after a visit. Each request creates a one-time link to a public feedback form, shared via WhatsApp — no patient login or Business API needed." />
+                </>
+              }
+            >
+              <BoolToggle
+                value={form.enablePatientComms ?? false}
+                onChange={(v) => set({ enablePatientComms: v })}
+              />
+            </Field>
+            <Field
+              label={
+                <>
+                  Google review link
+                  <InfoTip text="Your clinic's Google review page. Set it to unlock a 'Leave a Google review' prompt for patients who rate 5 stars, plus an 'Ask for a Google review' action for staff on those same responses — or any visit at all, via the row menu. Leave blank to skip Google review nudges entirely." />
+                </>
+              }
+            >
+              <input
+                type="url"
+                className={inputCls}
+                placeholder="https://g.page/r/…/review"
+                value={form.googleReviewUrl ?? ''}
+                onChange={(e) => set({ googleReviewUrl: e.target.value.trim() || null })}
+              />
+            </Field>
+            <Field
+              label={
+                <>
+                  Booking link
+                  <InfoTip text="A short web address patients use to request an appointment — safe to put on Google, your website, or social media. Front desk confirms each request into a scheduled appointment; there's no live slot picker yet. Leave blank to keep public booking off." />
+                </>
+              }
+            >
+              <input
+                type="text"
+                className={inputCls}
+                placeholder="my-clinic-name"
+                value={form.bookingSlug ?? ''}
+                onChange={(e) => set({ bookingSlug: e.target.value.toLowerCase().trim() || null })}
+              />
+              {slugInvalid && (
+                <p className="mt-1 text-xs text-[var(--rust)]">
+                  Lowercase letters, numbers, and hyphens only — no spaces.
+                </p>
+              )}
+            </Field>
+            {bookingUrl && !slugInvalid && (
+              <div className="sm:col-span-2">
+                <span className="mb-1 block text-xs font-medium text-[var(--muted)]">
+                  Your booking link
+                </span>
+                <div className="flex items-center justify-between gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--paper)] px-3 py-2.5">
+                  <span className="truncate font-mono text-xs text-[var(--ink)]">{bookingUrl}</span>
+                  <button
+                    type="button"
+                    className="whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                    onClick={() => void copyBookingUrl()}
+                  >
+                    {slugCopied ? 'Copied!' : 'Copy link'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
+        </fieldset>
+        {editing && (
+          <SectionSaveBar
+            dirty={dirty}
+            saved={saved}
+            busy={busy}
+            onSave={() => void save()}
+            onCancel={() => {
+              cancel();
+              setEditing(false);
+            }}
+            error={slugInvalid ? 'Fix the booking link before saving.' : error}
+            saveDisabled={slugInvalid}
+          />
         )}
-      </div>
-      </fieldset>
-      {editing && (
-        <SectionSaveBar
-        dirty={dirty}
-        saved={saved}
-        busy={busy}
-        onSave={() => void save()}
-        onCancel={() => {
-          cancel();
-          setEditing(false);
-        }}
-        error={slugInvalid ? 'Fix the booking link before saving.' : error}
-        saveDisabled={slugInvalid}
-      />
-      )}
-    </SectionCard>
-    <SectionCard id="settings-card-booking-hours" title="Hours & closures">
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 pt-4 border-t border-[var(--border)]">
-        <Field
-          label={
-            <>
-              Booking hours
-              <InfoTip text="The earliest and latest times patients can request an appointment." />
-            </>
-          }
-        >
-          <div className="flex items-center gap-2">
-            <select
-              className={inputCls}
-              value={form.bookingStartHour ?? 9}
-              onChange={(e) => set({ bookingStartHour: parseInt(e.target.value, 10) })}
-            >
-              {Array.from({ length: 24 }).map((_, i) => (
-                <option key={`start-${i}`} value={i}>
-                  {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
-                </option>
-              ))}
-            </select>
-            <span className="text-[var(--muted)]">to</span>
-            <select
-              className={inputCls}
-              value={form.bookingEndHour ?? 17}
-              onChange={(e) => set({ bookingEndHour: parseInt(e.target.value, 10) })}
-            >
-              {Array.from({ length: 24 }).map((_, i) => (
-                <option key={`end-${i}`} value={i}>
-                  {i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`}
-                </option>
-              ))}
-            </select>
-          </div>
-        </Field>
-
-        <Field
-          label={
-            <>
-              Appointment duration
-              <InfoTip text="The length of a standard appointment. This controls the time blocks shown on the schedule and public booking page." />
-            </>
-          }
-        >
-          <select
-            className={inputCls}
-            value={form.slotDurationMinutes ?? 30}
-            onChange={(e) => set({ slotDurationMinutes: Number(e.target.value) })}
-          >
-            <option value={15}>15 minutes</option>
-            <option value={30}>30 minutes</option>
-            <option value={45}>45 minutes</option>
-            <option value={60}>60 minutes</option>
-          </select>
-        </Field>
-        
-        <Field
-          label={
-            <>
-              Closed days
-              <InfoTip text="Select the days of the week your clinic is regularly closed." />
-            </>
-          }
-        >
-          <div className="flex flex-wrap gap-2">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, idx) => {
-              const isClosed = form.closedWeekdays?.includes(idx);
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                    isClosed
-                      ? 'bg-[var(--rust)] border-[var(--rust)] text-white'
-                      : 'bg-white border-[var(--border)] text-[var(--ink)] hover:border-[var(--rust)]'
-                  }`}
-                  onClick={() => {
-                    const current = form.closedWeekdays || [];
-                    if (isClosed) {
-                      set({ closedWeekdays: current.filter((d) => d !== idx) });
-                    } else {
-                      set({ closedWeekdays: [...current, idx].sort() });
-                    }
-                  }}
-                >
-                  {day}
-                </button>
-              );
-            })}
-          </div>
-        </Field>
-        <p className="text-xs text-[var(--muted)]">
-          Holidays and one-off closures, and each therapist’s hours, are set in Schedule.
-        </p>
-      </div>
-      <SectionSaveBar
-        dirty={dirty}
-        saved={saved}
-        busy={busy}
-        onSave={() => void save()}
-        onCancel={cancel}
-        error={slugInvalid ? 'Fix the booking link before saving.' : error}
-        saveDisabled={slugInvalid}
-      />
+      </SectionCard>
       <WhatsAppBusinessSubsection clinicId={clinic.id} />
-    </SectionCard>
     </>
   );
 }

@@ -219,7 +219,8 @@ describe('ShiftAssignmentsSection', () => {
     expect(screen.getAllByText('Priya Sharma').length).toBeGreaterThanOrEqual(1);
 
     // 5 shifts * 7h = 35h
-    expect(screen.getAllByText('35h (5 shifts)').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('35h').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('5 shifts').length).toBeGreaterThanOrEqual(1);
   });
 
   it('opens assign dialog on direct cell click pre-filling therapist and day', () => {

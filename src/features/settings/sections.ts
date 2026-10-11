@@ -10,10 +10,10 @@ export const CATALOG_VIEWS = ['packages', 'treatments', 'referrals'] as const;
 export type CatalogViewKey = (typeof CATALOG_VIEWS)[number];
 
 export const SETTINGS_TAB_META: Record<SettingsTab, { label: string; description: string }> = {
-  general: { label: 'General', description: 'Clinic name, logo, address and contact details.' },
+  general: { label: 'General', description: 'Clinic profile, operating hours, address and contact details.' },
   team: { label: 'Team', description: 'Therapists, invites and who can sign in.' },
   services: { label: 'Services', description: 'Treatments, packages and referral sources.' },
-  booking: { label: 'Booking', description: 'Your online booking page, patient messages and closed days.' },
+  booking: { label: 'Booking', description: 'Your online booking page and patient messages.' },
   billing: { label: 'Billing', description: 'Invoices, GST, UPI and partner revenue split.' },
   account: { label: 'Account', description: 'Your plan, data import, backup and clinic deletion.' },
 };
@@ -78,7 +78,7 @@ export const SETTINGS_CARDS: SettingsCard[] = [
   { id: 'settings-card-services-treatments', title: 'Treatments performed', tab: 'services', catalogView: 'treatments', keywords: ['treatment', 'manual therapy', 'exercise', 'taping', 'checklist'] },
   { id: 'settings-card-services-referrals', title: 'Referral sources', tab: 'services', catalogView: 'referrals', keywords: ['referral', 'referred by', 'source', 'doctor'] },
   { id: 'settings-card-booking-online', title: 'Booking page', tab: 'booking', keywords: ['whatsapp', 'feedback', 'google review', 'booking page', 'booking link', 'slug', 'patient messages', 'review link'] },
-  { id: 'settings-card-booking-hours', title: 'Hours & closures', tab: 'booking', keywords: ['booking hours', 'hours', 'closed day', 'weekly closed', 'holiday', 'closure', 'slot', 'appointment duration'] },
+  { id: 'settings-card-booking-hours', title: 'Hours & closures', tab: 'general', keywords: ['booking hours', 'hours', 'closed day', 'weekly closed', 'holiday', 'closure', 'slot', 'appointment duration'] },
   { id: 'settings-card-billing-invoicing', title: 'Billing & invoicing', tab: 'billing', keywords: ['gst', 'tax', 'invoice', 'prefix', 'upi', 'signature', 'fiscal year', 'who can bill', 'number'] },
   { id: 'settings-card-billing-partner', title: 'Partner & split', tab: 'billing', keywords: ['partner', 'split', 'revenue share', 'tds', 'hospital', 'share'] },
   { id: 'settings-card-account-plan', title: 'Your plan', tab: 'account', keywords: ['plan', 'tier', 'limit', 'seats', 'subscription'] },

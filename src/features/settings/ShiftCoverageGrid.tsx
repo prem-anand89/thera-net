@@ -46,12 +46,13 @@ export function ShiftCoverageGrid({
     [clinic.closedWeekdays]
   );
 
+  // Short, compact label e.g. "9–5" instead of verbose "Default (9–5)"
   const defaultHourLabel = useMemo(() => {
     const start = clinic.bookingStartHour ?? 9;
-    const end = clinic.bookingEndHour ?? 18;
+    const end = clinic.bookingEndHour ?? 17;
     const start12 = start % 12 || 12;
     const end12 = end % 12 || 12;
-    return `Default (${start12}–${end12})`;
+    return `${start12}–${end12}`;
   }, [clinic.bookingStartHour, clinic.bookingEndHour]);
 
   // Build the complete coverage matrix
@@ -81,7 +82,7 @@ export function ShiftCoverageGrid({
     <div className="space-y-3" data-testid="shift-coverage-grid">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-display text-lg font-semibold text-[var(--ink)]">
+          <h2 className="font-display text-base sm:text-lg font-semibold text-[var(--ink)]">
             Weekly coverage
           </h2>
           <p className="text-xs text-[var(--muted)]">
@@ -92,7 +93,7 @@ export function ShiftCoverageGrid({
           <button
             type="button"
             onClick={handleOpenGeneralAssign}
-            className="inline-flex min-h-10 items-center justify-center rounded-xl bg-[var(--teal)] px-4 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition disabled:opacity-50"
+            className="inline-flex min-h-9 items-center justify-center rounded-xl bg-[var(--teal)] px-3.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition disabled:opacity-50"
             disabled={activeTherapists.length === 0}
           >
             + Assign shift…
@@ -102,38 +103,44 @@ export function ShiftCoverageGrid({
 
       {/* =========================================================================
           DESKTOP COVERAGE TABLE (md and above)
+          Tight, fixed-layout table that fits 100% width with zero horizontal scroll.
           ========================================================================= */}
-      <div className="hidden md:block overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
-        <table className="w-full text-left border-collapse text-xs" role="grid">
+      <div className="hidden md:block overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-2xs">
+        <table className="table-fixed w-full text-left border-collapse text-xs" role="grid">
           <thead>
             <tr className="border-b border-[var(--border)] bg-[var(--paper)]">
-              <th className="sticky top-0 left-0 z-30 bg-[var(--paper)] p-3 font-semibold text-[var(--ink)] w-44 border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+              {/* Staff Member column (18%) */}
+              <th className="sticky top-0 left-0 z-30 bg-[var(--paper)] px-3 py-2 font-semibold text-[var(--ink)] w-[18%] min-w-[110px] border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                 Staff Member
               </th>
+
+              {/* 7 Days columns (10.5% each = 73.5% total) */}
               {WEEKDAY_ORDER.map((day) => {
                 const meta = WEEKDAY_META[day];
                 const isClosed = closedDays.has(day);
                 return (
                   <th
                     key={day}
-                    className="sticky top-0 z-10 bg-[var(--paper)] p-2.5 text-center font-semibold text-[var(--ink)] min-w-[100px]"
+                    className="sticky top-0 z-10 bg-[var(--paper)] px-1 py-1.5 text-center font-semibold text-[var(--ink)] w-[10.5%] min-w-[55px]"
                   >
-                    <div>{meta.short}</div>
+                    <div className="text-[11px] leading-tight">{meta.short}</div>
                     {isClosed && (
-                      <div className="text-[10px] font-normal text-[var(--muted)]">Closed</div>
+                      <div className="text-[9.5px] font-normal text-[var(--muted)] leading-tight">Closed</div>
                     )}
                   </th>
                 );
               })}
-              <th className="sticky top-0 right-0 z-30 bg-[var(--paper)] p-3 text-right font-semibold text-[var(--ink)] w-36 border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                Weekly Total
+
+              {/* Weekly Total column (8.5%) */}
+              <th className="sticky top-0 right-0 z-30 bg-[var(--paper)] px-2.5 py-2 text-right font-semibold text-[var(--ink)] w-[8.5%] min-w-[65px] border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                <div className="text-[11px] leading-tight">Total</div>
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
             {activeTherapists.length === 0 ? (
               <tr>
-                <td colSpan={9} className="p-8 text-center text-sm text-[var(--muted)]">
+                <td colSpan={9} className="p-8 text-center text-xs text-[var(--muted)]">
                   No active team members found.
                 </td>
               </tr>
@@ -148,14 +155,14 @@ export function ShiftCoverageGrid({
                     className="group hover:bg-[var(--paper)]/50 transition-colors"
                   >
                     {/* Therapist Name - Sticky Left */}
-                    <td className="sticky left-0 z-20 bg-[var(--surface)] group-hover:bg-[var(--paper)] p-3 border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                      <div className="flex items-center gap-2">
+                    <td className="sticky left-0 z-20 bg-[var(--surface)] group-hover:bg-[var(--paper)] px-2.5 py-1.5 border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                      <div className="flex items-center gap-1.5">
                         <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          className="h-2 w-2 shrink-0 rounded-full"
                           style={{ background: therapist.color ?? '#2c5f63' }}
                           aria-hidden
                         />
-                        <span className="font-medium text-[var(--ink)] truncate max-w-[140px]">
+                        <span className="font-medium text-[11.5px] text-[var(--ink)] truncate max-w-[105px]">
                           {therapist.name}
                         </span>
                       </div>
@@ -165,26 +172,26 @@ export function ShiftCoverageGrid({
                     {WEEKDAY_ORDER.map((weekday) => {
                       const cell = dayMap?.get(weekday);
                       if (!cell) {
-                        return <td key={weekday} className="p-2 text-center text-[var(--muted)]">-</td>;
+                        return <td key={weekday} className="p-1 text-center text-[var(--muted)]">-</td>;
                       }
 
                       return (
-                        <td key={weekday} className="p-1.5 text-center">
+                        <td key={weekday} className="p-0.5 text-center">
                           <button
                             type="button"
                             onClick={() => handleCellClick(therapist.id, weekday)}
                             title={cell.tooltip}
                             aria-label={`${therapist.name}, ${WEEKDAY_META[weekday]?.full}: ${cell.label}`}
-                            className="group/btn flex w-full flex-col items-center justify-center rounded-xl p-2 transition hover:ring-2 hover:ring-[var(--teal)] focus-visible:ring-2 focus-visible:ring-[var(--teal)] min-h-[52px]"
+                            className="group/btn flex w-full flex-col items-center justify-center rounded-lg p-1 transition hover:ring-1.5 hover:ring-[var(--teal)] focus-visible:ring-1.5 focus-visible:ring-[var(--teal)] min-h-[38px]"
                           >
                             {cell.type === 'template' && (
-                              <div className="flex flex-col gap-1 w-full items-center">
+                              <div className="flex flex-col gap-0.5 w-full items-center">
                                 {cell.templates.map(({ template }) => {
                                   const pal = getTemplatePalette(template.id);
                                   return (
                                     <span
                                       key={template.id}
-                                      className={`inline-block truncate rounded-lg border px-2 py-1 text-[11px] font-semibold ${pal.bg} ${pal.text} ${pal.border} w-full text-center shadow-xs`}
+                                      className={`inline-block truncate rounded border px-1 py-0.5 text-[10px] font-semibold leading-tight ${pal.bg} ${pal.text} ${pal.border} w-full text-center`}
                                     >
                                       {template.name}
                                     </span>
@@ -194,25 +201,25 @@ export function ShiftCoverageGrid({
                             )}
 
                             {cell.type === 'custom' && (
-                              <span className="inline-block truncate rounded-lg border border-[var(--border)] bg-[var(--paper)] px-2 py-1 text-[11px] font-medium text-[var(--ink)] w-full text-center">
+                              <span className="inline-block truncate rounded border border-[var(--border)] bg-[var(--paper)] px-1 py-0.5 text-[9.5px] font-medium text-[var(--ink)] w-full text-center">
                                 Custom
                               </span>
                             )}
 
                             {cell.type === 'off' && (
-                              <span className="inline-block truncate rounded-lg border border-dashed border-[var(--border)] px-2 py-0.5 text-[10px] font-medium text-[var(--muted)] w-full text-center">
+                              <span className="inline-block truncate rounded border border-dashed border-[var(--border)] px-1 py-0.5 text-[9.5px] font-medium text-[var(--muted)] w-full text-center">
                                 Off
                               </span>
                             )}
 
                             {cell.type === 'clinic_closed' && (
-                              <span className="inline-block truncate rounded-lg border border-dashed border-[var(--border)]/70 px-2 py-0.5 text-[10px] font-medium text-[var(--muted)]/60 w-full text-center">
+                              <span className="inline-block truncate rounded border border-dashed border-[var(--border)]/70 bg-[var(--paper)]/30 px-1 py-0.5 text-[9.5px] font-medium text-[var(--muted)]/60 w-full text-center">
                                 Closed
                               </span>
                             )}
 
                             {cell.type === 'clinic_default' && (
-                              <span className="inline-block truncate rounded-lg border border-transparent px-2 py-0.5 text-[10px] font-normal text-[var(--muted)] group-hover/btn:bg-[var(--paper)] w-full text-center">
+                              <span className="inline-block truncate rounded px-1 py-0.5 text-[10.5px] font-medium text-[var(--muted)] group-hover/btn:bg-[var(--paper)] group-hover/btn:text-[var(--ink)] w-full text-center transition-colors">
                                 {defaultHourLabel}
                               </span>
                             )}
@@ -221,17 +228,16 @@ export function ShiftCoverageGrid({
                       );
                     })}
 
-                    {/* Weekly Total Badge - Sticky Right */}
-                    <td className="sticky right-0 z-20 bg-[var(--surface)] group-hover:bg-[var(--paper)] p-3 text-right border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                          weekly.isAllDefault
-                            ? 'bg-[var(--paper)] text-[var(--muted)]'
-                            : 'bg-[var(--teal-light)] text-[var(--teal)]'
-                        }`}
-                      >
-                        {weekly.label}
-                      </span>
+                    {/* Weekly Total - Compact Stacked (Hours + Label) */}
+                    <td className="sticky right-0 z-20 bg-[var(--surface)] group-hover:bg-[var(--paper)] px-2 py-1.5 text-right border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                      <div className="flex flex-col items-end leading-tight">
+                        <span className="font-bold text-xs text-[var(--ink)]">
+                          {weekly.totalHours}h
+                        </span>
+                        <span className="text-[9.5px] text-[var(--muted)]">
+                          {weekly.isAllDefault ? 'Default' : `${weekly.shiftsCount} shifts`}
+                        </span>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -242,36 +248,33 @@ export function ShiftCoverageGrid({
           {/* Daily Clinic Coverage Footer */}
           {activeTherapists.length > 0 && (
             <tfoot>
-              <tr className="border-t-2 border-[var(--border)] bg-[var(--paper)]/80 text-[11px] font-semibold text-[var(--ink)]">
-                <td className="sticky left-0 z-20 bg-[var(--paper)] p-3 border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                  Clinic Daily Capacity
+              <tr className="border-t-2 border-[var(--border)] bg-[var(--paper)]/90 text-xs font-semibold text-[var(--ink)]">
+                <td className="sticky left-0 z-20 bg-[var(--paper)] px-3 py-1.5 border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] font-medium text-[10.5px] text-[var(--muted)]">
+                  Daily capacity
                 </td>
                 {WEEKDAY_ORDER.map((weekday) => {
                   const isClosed = closedDays.has(weekday);
                   const daily = calculateDailyCoverage(weekday, coverageMap, isClosed);
                   return (
-                    <td key={weekday} className="p-2 text-center">
+                    <td key={weekday} className="p-1 text-center">
                       {isClosed ? (
-                        <span className="text-[var(--muted)]">Closed</span>
+                        <span className="text-[10px] text-[var(--muted)]">Closed</span>
                       ) : daily.staffCount === 0 ? (
-                        <div className="flex flex-col items-center rounded-lg bg-[var(--amber-light)]/40 px-1.5 py-0.5 border border-[var(--amber)]/30">
-                          <span className="font-bold text-[var(--amber-strong)]">0 on duty</span>
-                          <span className="text-[10px] font-medium text-[var(--amber-strong)]">
-                            No coverage
-                          </span>
+                        <div className="flex flex-col items-center rounded bg-[var(--amber-light)]/40 px-1 py-0.5 border border-[var(--amber)]/30 leading-tight">
+                          <span className="font-bold text-[10px] text-[var(--amber-strong)]">0 staff</span>
                         </div>
                       ) : (
-                        <div className="flex flex-col items-center">
-                          <span className="text-[var(--teal)]">{daily.staffCount} on duty</span>
-                          <span className="text-[10px] font-normal text-[var(--muted)]">
-                            {daily.capacityHours}h capacity
+                        <div className="flex flex-col items-center leading-tight">
+                          <span className="text-[10.5px] font-semibold text-[var(--teal)]">{daily.staffCount} staff</span>
+                          <span className="text-[9.5px] font-normal text-[var(--muted)]">
+                            {daily.capacityHours}h
                           </span>
                         </div>
                       )}
                     </td>
                   );
                 })}
-                <td className="sticky right-0 z-20 bg-[var(--paper)] p-3 text-right border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)] text-[var(--muted)] font-normal">
+                <td className="sticky right-0 z-20 bg-[var(--paper)] px-2.5 py-1.5 text-right border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)] text-[var(--muted)] font-normal text-[11px]">
                   —
                 </td>
               </tr>
@@ -281,9 +284,10 @@ export function ShiftCoverageGrid({
       </div>
 
       {/* =========================================================================
-          MOBILE VIEW (Cards with 7-chip day strip)
+          MOBILE VIEW (Refined Staff Cards with 7-Day Quick Strip)
+          Touch-friendly, compact, clear day-by-day status.
           ========================================================================= */}
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-2.5 md:hidden">
         {activeTherapists.map((therapist) => {
           const dayMap = coverageMap.get(therapist.id);
           const weekly = calculateWeeklyTotal(therapist.id, coverageMap);
@@ -291,39 +295,64 @@ export function ShiftCoverageGrid({
           return (
             <div
               key={therapist.id}
-              className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 space-y-3 shadow-xs"
+              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 space-y-2 shadow-2xs"
             >
+              {/* Header: Therapist Name + Total Hours Badge */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span
-                    className="h-3 w-3 rounded-full"
+                    className="h-2.5 w-2.5 rounded-full"
                     style={{ background: therapist.color ?? '#2c5f63' }}
                     aria-hidden
                   />
-                  <h3 className="font-semibold text-sm text-[var(--ink)]">{therapist.name}</h3>
+                  <h3 className="font-semibold text-xs text-[var(--ink)] truncate max-w-[180px]">
+                    {therapist.name}
+                  </h3>
                 </div>
-                <span className="rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-xs font-bold text-[var(--teal)]">
-                  {weekly.label}
+                <span className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10.5px] font-bold text-[var(--teal)]">
+                  {weekly.totalHours}h {weekly.isAllDefault ? '• Default' : `• ${weekly.shiftsCount} shifts`}
                 </span>
               </div>
 
+              {/* 7-Day Touch Strip */}
               <div className="grid grid-cols-7 gap-1">
                 {WEEKDAY_ORDER.map((weekday) => {
                   const cell = dayMap?.get(weekday);
                   const meta = WEEKDAY_META[weekday];
+
+                  let pillContent = defaultHourLabel;
+                  let pillStyle = 'border-transparent text-[var(--muted)] bg-transparent';
+
+                  if (cell) {
+                    if (cell.type === 'template' && cell.templates.length > 0) {
+                      const pal = getTemplatePalette(cell.templates[0].template.id);
+                      pillContent = cell.templates[0].template.name.slice(0, 6);
+                      pillStyle = `${pal.bg} ${pal.text} ${pal.border}`;
+                    } else if (cell.type === 'custom') {
+                      pillContent = 'Cust';
+                      pillStyle = 'border-[var(--border)] bg-[var(--paper)] text-[var(--ink)]';
+                    } else if (cell.type === 'off') {
+                      pillContent = 'Off';
+                      pillStyle = 'border-dashed border-[var(--border)] text-[var(--muted)]';
+                    } else if (cell.type === 'clinic_closed') {
+                      pillContent = 'Close';
+                      pillStyle = 'border-dashed border-[var(--border)]/70 text-[var(--muted)]/60 bg-[var(--paper)]/40';
+                    }
+                  }
 
                   return (
                     <button
                       key={weekday}
                       type="button"
                       onClick={() => handleCellClick(therapist.id, weekday)}
-                      className="flex flex-col items-center justify-center rounded-xl border border-[var(--border)] p-1.5 text-center min-h-[46px] hover:border-[var(--teal)]"
+                      title={cell?.tooltip}
+                      className="flex flex-col items-center justify-center rounded-lg border border-[var(--border)]/80 p-1 text-center min-h-[44px] hover:border-[var(--teal)] active:scale-95 transition"
                     >
-                      <span className="text-[10px] font-bold text-[var(--muted)]">
+                      <span className="text-[9.5px] font-bold text-[var(--muted)] leading-none mb-1">
                         {meta.short}
                       </span>
-                      <span className="text-[9px] font-medium text-[var(--ink)] truncate w-full">
-                        {cell ? (cell.type === 'template' ? cell.label.split(' ')[0] : cell.label) : '-'}
+                      <span className={`inline-block truncate rounded px-1 py-0.5 text-[9px] font-semibold leading-tight w-full border ${pillStyle}`}>
+                        {pillContent}
                       </span>
                     </button>
                   );
