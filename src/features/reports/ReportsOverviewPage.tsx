@@ -18,6 +18,7 @@ import { BarChart } from '@/components/BarChart';
 import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { PieChart } from '@/components/PieChart';
 import { TherapistComparisonCard } from '@/components/TherapistComparisonCard';
+import { ClinicUtilisationCard } from '@/components/ClinicUtilisationCard';
 import { SERIES_COLORS } from '@/components/chartColors';
 import { InsightsTrendPeriodBar } from './InsightsTrendPeriodBar';
 import {
@@ -42,6 +43,7 @@ const DASHBOARD_SECTIONS: { key: string; label: string }[] = [
   { key: 'singleVisit', label: 'Single-visit patients' },
   { key: 'revenue', label: 'Revenue trend' },
   { key: 'therapistComparison', label: 'Therapist comparison' },
+  { key: 'utilisation', label: 'Clinic utilisation' },
   { key: 'modalityUsage', label: 'Treatment modalities' },
   { key: 'referralSources', label: 'Referral sources' },
 ];
@@ -423,6 +425,7 @@ export function ReportsOverviewPage() {
   const jumpTargets = DASHBOARD_SECTIONS.filter(
     (s) =>
       (s.key !== 'therapistComparison' || showTherapistComparison) &&
+      (s.key !== 'utilisation' || scope.isAdmin) &&
       (s.key !== 'modalityUsage' || clinic.clinicalDocsEnabled)
   );
 
@@ -899,6 +902,18 @@ export function ReportsOverviewPage() {
                 if (m) updateTrendPeriod({ year: m.year, month: m.month });
               }}
             />
+          </div>
+        )}
+
+        {scope.isAdmin && (
+          <div
+            ref={(el) => {
+              if (el) sectionRefs.current.set('utilisation', el);
+              else sectionRefs.current.delete('utilisation');
+            }}
+            className="scroll-mt-28 md:scroll-mt-20"
+          >
+            <ClinicUtilisationCard />
           </div>
         )}
 

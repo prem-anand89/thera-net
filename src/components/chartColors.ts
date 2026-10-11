@@ -19,3 +19,8 @@ export const SERIES_COLORS = [
   '#6254b2', // violet
   '#e76160', // red
 ];
+
+// Clinic utilisation chart: a deeper clinical blue, deliberately apart from
+// the revenue/visits series above so the two charts don't read as one. An
+// approximation of athenahealth's brand blue, not a sampled brand value.
+export const UTILISATION_COLOR = '#0a6ebd';
