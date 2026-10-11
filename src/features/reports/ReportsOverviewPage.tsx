@@ -172,6 +172,7 @@ export function ReportsOverviewPage() {
         month: now.getMonth() + 1,
       }),
       replace: true,
+      resetScroll: false,
     });
   }, [insightsSearch.period, navigate]);
 
@@ -196,6 +197,7 @@ export function ReportsOverviewPage() {
         month: focus.month,
       }),
       replace: true,
+      resetScroll: false,
     });
   }
 

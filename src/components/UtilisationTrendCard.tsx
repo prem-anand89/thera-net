@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { BucketReport } from '@/domain/utilisationReport';
 
 const pct = (r: number | null) => (r == null ? '—' : `${Math.round(r * 100)}%`);
@@ -19,7 +20,10 @@ export function UtilisationTrendCard({
   title?: string;
   subtitle?: string;
 }) {
-  const activeReport = reports[activeIndex] ?? reports[reports.length - 1];
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const activeIdx = hoveredIndex ?? activeIndex;
+  const activeReport = reports[activeIdx] ?? reports[reports.length - 1];
+
   const activeRatio = activeReport?.clinicRatio ?? null;
   const priorRatio = activeReport?.priorClinicRatio ?? null;
 
@@ -38,10 +42,10 @@ export function UtilisationTrendCard({
 
   // SVG Chart Geometry
   const width = 360;
-  const height = 126;
+  const height = 176;
   const paddingX = 16;
   const paddingTop = 20;
-  const baseline = 100;
+  const baseline = 140;
   const plotH = baseline - paddingTop;
   const plotW = width - paddingX * 2;
 
@@ -99,9 +103,21 @@ export function UtilisationTrendCard({
 
       {/* SVG Trend Line Chart */}
       <div className="relative mt-3">
+        {/* Floating tooltip above hovered point */}
+        {hoveredIndex != null && (
+          <div
+            className="pointer-events-none absolute -top-3 z-20 -translate-x-1/2 rounded-md bg-[var(--ink)] px-2 py-0.5 text-[11px] font-semibold text-[var(--paper)] shadow-md transition-all whitespace-nowrap"
+            style={{
+              left: `${((points[hoveredIndex]?.x ?? width / 2) / width) * 100}%`,
+            }}
+          >
+            {activeReport?.bucket.label}: {pct(activeRatio)}
+          </div>
+        )}
+
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="h-28 w-full overflow-visible"
+          className="h-44 w-full overflow-visible"
           preserveAspectRatio="none"
           aria-hidden="true"
         >
@@ -196,7 +212,7 @@ export function UtilisationTrendCard({
         {/* Month labels underneath (HTML flex layer) */}
         <div className="pointer-events-none absolute bottom-0 inset-x-0 flex items-center justify-between px-3.5">
           {points.map((p) => {
-            const isSelected = p.index === activeIndex;
+            const isSelected = p.index === activeIdx;
             return (
               <span
                 key={`lbl-${p.r.bucket.key}`}
@@ -213,15 +229,17 @@ export function UtilisationTrendCard({
         {/* Interactive Point Buttons */}
         <div className="pointer-events-auto absolute inset-0">
           {points.map((p) => {
-            const isSelected = p.index === activeIndex;
+            const isSelected = p.index === activeIdx;
             return (
               <button
                 key={p.r.bucket.key}
                 type="button"
                 aria-label={`${p.r.bucket.label}: ${pct(p.r.clinicRatio)}`}
                 onClick={() => onSelectBucket(p.index)}
+                onMouseEnter={() => setHoveredIndex(p.index)}
+                onMouseLeave={() => setHoveredIndex(null)}
                 title={`${p.r.bucket.label}: ${pct(p.r.clinicRatio)}`}
-                className="group absolute -translate-x-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center focus:outline-hidden cursor-pointer"
+                className="group absolute -translate-x-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center focus:outline-hidden cursor-pointer"
                 style={{
                   left: `${(p.x / width) * 100}%`,
                   top: `${(p.y / height) * 100}%`,

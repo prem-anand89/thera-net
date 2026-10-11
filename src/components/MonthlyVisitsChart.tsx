@@ -7,6 +7,8 @@ export function MonthlyVisitsChart({
   currentMonthIndices = [],
   selectedIndex = null,
   onSelectIndex,
+  hoveredIndex = null,
+  onHoverIndex,
 }: {
   categories: string[];
   fullCategories?: string[];
@@ -14,10 +16,13 @@ export function MonthlyVisitsChart({
   currentMonthIndices?: number[];
   selectedIndex?: number | null;
   onSelectIndex?: (index: number | null) => void;
+  hoveredIndex?: number | null;
+  onHoverIndex?: (index: number | null) => void;
 }) {
-  const [hovered, setHovered] = useState<number | null>(null);
+  const [localHovered, setLocalHovered] = useState<number | null>(null);
+  const activeHover = hoveredIndex ?? localHovered;
   const activeIdx =
-    selectedIndex ?? hovered ?? (visitCounts.length > 0 ? visitCounts.length - 1 : 0);
+    activeHover ?? selectedIndex ?? (visitCounts.length > 0 ? visitCounts.length - 1 : 0);
 
   const activeValue = visitCounts[activeIdx] ?? 0;
   const previousValue = activeIdx > 0 ? visitCounts[activeIdx - 1] : 0;
@@ -26,10 +31,10 @@ export function MonthlyVisitsChart({
   const maxVal = Math.max(1, ...visitCounts);
 
   const width = 360;
-  const height = 130;
+  const height = 180;
   const paddingX = 14;
-  const paddingTop = 16;
-  const baseline = 100;
+  const paddingTop = 18;
+  const baseline = 145;
   const plotH = baseline - paddingTop;
   const plotW = width - paddingX * 2;
   const count = categories.length;
@@ -68,9 +73,21 @@ export function MonthlyVisitsChart({
       </div>
 
       <div className="relative mt-3">
+        {/* Floating tooltip above hovered bar */}
+        {activeHover != null && (
+          <div
+            className="pointer-events-none absolute -top-3 z-20 -translate-x-1/2 rounded-md bg-[var(--ink)] px-2 py-0.5 text-[11px] font-semibold text-[var(--paper)] shadow-md transition-all whitespace-nowrap"
+            style={{
+              left: `${((paddingX + activeHover * groupW + groupW / 2) / width) * 100}%`,
+            }}
+          >
+            {labelFor(activeHover)}: {visitCounts[activeHover] ?? 0} visits
+          </div>
+        )}
+
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="h-28 w-full overflow-visible"
+          className="h-44 w-full overflow-visible"
           preserveAspectRatio="none"
           aria-hidden="true"
         >
@@ -166,8 +183,14 @@ export function MonthlyVisitsChart({
               type="button"
               aria-label={`${cat}: ${visitCounts[i]} visits`}
               onClick={() => onSelectIndex?.(i)}
-              onMouseEnter={() => setHovered(i)}
-              onMouseLeave={() => setHovered(null)}
+              onMouseEnter={() => {
+                setLocalHovered(i);
+                onHoverIndex?.(i);
+              }}
+              onMouseLeave={() => {
+                setLocalHovered(null);
+                onHoverIndex?.(null);
+              }}
               className="flex-1 cursor-pointer focus:outline-none focus:ring-0 focus-visible:outline-none"
               title={`${labelFor(i)}: ${visitCounts[i]} visits`}
             />

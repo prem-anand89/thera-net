@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { BucketReport } from '@/domain/utilisationReport';
 
 function formatHours(minutes: number): string {
@@ -10,8 +11,8 @@ export function CapacityHoursCard({
   activeIndex,
   onSelectBucket,
   compareMode = false,
-  title = 'Capacity & Hours',
-  subtitle = 'Booked time vs available capacity',
+  title = 'Capacity & Work Hours',
+  subtitle = 'Work hours vs available capacity',
 }: {
   reports: BucketReport[];
   activeIndex: number;
@@ -20,7 +21,10 @@ export function CapacityHoursCard({
   title?: string;
   subtitle?: string;
 }) {
-  const activeReport = reports[activeIndex] ?? reports[reports.length - 1];
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const activeIdx = hoveredIndex ?? activeIndex;
+  const activeReport = reports[activeIdx] ?? reports[reports.length - 1];
+
   const workedMinutes = activeReport?.clinicWorkedMinutes ?? 0;
   const availableMinutes = activeReport?.clinicAvailableMinutes ?? 0;
   const idleMinutes = Math.max(0, availableMinutes - workedMinutes);
@@ -43,10 +47,10 @@ export function CapacityHoursCard({
 
   // SVG Geometry
   const width = 360;
-  const height = 120;
+  const height = 170;
   const paddingX = 16;
-  const paddingTop = 14;
-  const baseline = 96;
+  const paddingTop = 16;
+  const baseline = 135;
   const plotH = baseline - paddingTop;
   const plotW = width - paddingX * 2;
   const groupW = reports.length > 0 ? plotW / reports.length : plotW;
@@ -87,9 +91,21 @@ export function CapacityHoursCard({
 
       {/* SVG Bar Chart Area */}
       <div className="relative mt-3">
+        {/* Floating tooltip above hovered bar */}
+        {hoveredIndex != null && (
+          <div
+            className="pointer-events-none absolute -top-3 z-20 -translate-x-1/2 rounded-md bg-[var(--ink)] px-2 py-0.5 text-[11px] font-semibold text-[var(--paper)] shadow-md transition-all whitespace-nowrap"
+            style={{
+              left: `${((paddingX + hoveredIndex * groupW + groupW / 2) / width) * 100}%`,
+            }}
+          >
+            {activeReport?.bucket.label}: {formatHours(workedMinutes)}
+          </div>
+        )}
+
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="h-28 w-full overflow-visible"
+          className="h-44 w-full overflow-visible"
           preserveAspectRatio="none"
           aria-hidden="true"
         >
@@ -104,7 +120,7 @@ export function CapacityHoursCard({
           />
 
           {reports.map((r, i) => {
-            const isSelected = i === activeIndex;
+            const isSelected = i === activeIdx;
             const centerX = paddingX + i * groupW + groupW / 2;
             const barX = centerX - barW / 2;
             const val = r.clinicWorkedMinutes;
@@ -148,7 +164,7 @@ export function CapacityHoursCard({
                   />
                 )}
 
-                {/* Main booked hours bar */}
+                {/* Main worked hours bar */}
                 {val > 0 ? (
                   <rect
                     x={barX}
@@ -190,7 +206,7 @@ export function CapacityHoursCard({
         {/* Month labels underneath (Native HTML layer) */}
         <div className="pointer-events-none absolute bottom-0 inset-x-0 flex items-center justify-between px-3.5">
           {reports.map((r, i) => {
-            const isSelected = i === activeIndex;
+            const isSelected = i === activeIdx;
             return (
               <span
                 key={`lbl-${r.bucket.key}`}
@@ -212,8 +228,10 @@ export function CapacityHoursCard({
               type="button"
               aria-label={`${r.bucket.label}: ${formatHours(r.clinicWorkedMinutes)}`}
               onClick={() => onSelectBucket(i)}
+              onMouseEnter={() => setHoveredIndex(i)}
+              onMouseLeave={() => setHoveredIndex(null)}
               className="flex-1 cursor-pointer focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
-              title={`${r.bucket.label}: ${formatHours(r.clinicWorkedMinutes)} booked of ${formatHours(r.clinicAvailableMinutes)}`}
+              title={`${r.bucket.label}: ${formatHours(r.clinicWorkedMinutes)} worked of ${formatHours(r.clinicAvailableMinutes)}`}
             />
           ))}
         </div>
@@ -233,7 +251,7 @@ export function CapacityHoursCard({
             </span>
           )}
         </div>
-        <span>Booked clinical hours</span>
+        <span>Clinical work hours</span>
       </div>
     </div>
   );

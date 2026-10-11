@@ -1,6 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { formatINR } from '@/domain/money';
-import { RevenueWaterfallChart } from '@/components/RevenueWaterfallChart';
 import { MonthlyRevenueChart } from '@/components/MonthlyRevenueChart';
 import { MonthlyVisitsChart } from '@/components/MonthlyVisitsChart';
 import { RevenueTrendMonthTable } from '@/components/RevenueTrendMonthTable';
@@ -37,7 +36,8 @@ export function RevenueTrendPanel({
   revenueColumnLabel: string;
   currentMonthIndices: number[];
 }) {
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const compact = useCompactChart();
 
   const shortCategories = useMemo(
@@ -54,23 +54,10 @@ export function RevenueTrendPanel({
       ? shortCategories
       : categories;
 
-  return (
-    <div className="space-y-1">
-      <TrendSection kicker="Revenue growth" title="How much did revenue move vs last month?">
-        <p className="mb-2 text-xs text-[var(--muted)]">
-          Green = more revenue than the prior month; red = less. Visits are not shown here.
-        </p>
-        <RevenueWaterfallChart
-          categories={chartCategories}
-          fullCategories={categories}
-          revenuePaise={revenuePaise}
-          formatValue={formatINR}
-          compact={compact}
-          selectedCategoryIndex={activeIndex}
-          onCategoryHover={setActiveIndex}
-        />
-      </TrendSection>
+  const tableActiveIndex = hoveredIndex ?? selectedIndex;
 
+  return (
+    <div className="space-y-4">
       <TrendSection kicker="Volume & earnings" title="Visits and revenue each month">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <MonthlyRevenueChart
@@ -79,16 +66,20 @@ export function RevenueTrendPanel({
             revenuePaise={revenuePaise}
             formatRevenue={formatINR}
             currentMonthIndices={currentMonthIndices}
-            selectedIndex={activeIndex}
-            onSelectIndex={setActiveIndex}
+            selectedIndex={selectedIndex}
+            onSelectIndex={setSelectedIndex}
+            hoveredIndex={hoveredIndex}
+            onHoverIndex={setHoveredIndex}
           />
           <MonthlyVisitsChart
             categories={chartCategories}
             fullCategories={categories}
             visitCounts={visitCounts}
             currentMonthIndices={currentMonthIndices}
-            selectedIndex={activeIndex}
-            onSelectIndex={setActiveIndex}
+            selectedIndex={selectedIndex}
+            onSelectIndex={setSelectedIndex}
+            hoveredIndex={hoveredIndex}
+            onHoverIndex={setHoveredIndex}
           />
         </div>
       </TrendSection>
@@ -99,8 +90,8 @@ export function RevenueTrendPanel({
           revenuePaise={revenuePaise}
           visitCounts={visitCounts}
           revenueColumnLabel={revenueColumnLabel}
-          selectedIndex={activeIndex}
-          onSelectIndex={setActiveIndex}
+          selectedIndex={tableActiveIndex}
+          onSelectIndex={setSelectedIndex}
           inProgressIndices={currentMonthIndices}
         />
       </TrendSection>

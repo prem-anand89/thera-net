@@ -187,7 +187,7 @@ export function ClinicUtilisationView({
   return (
     <SectionCard title="Clinic utilisation & performance">
       <p className="mb-4 text-xs text-[var(--muted)]">
-        Capacity utilisation and appointment booking volume overview, with practitioner breakdowns.
+        Capacity utilisation and clinical work hours overview, with practitioner breakdowns.
       </p>
 
       {!report && <p className="py-8 text-center text-sm text-[var(--muted)]">Loading…</p>}
@@ -222,7 +222,7 @@ export function ClinicUtilisationView({
               title={selectedPractitionerName ? `${selectedPractitionerName} Utilisation` : 'Utilisation'}
               subtitle={
                 selectedPractitionerName
-                  ? `${selectedPractitionerName} booked time vs capacity`
+                  ? `${selectedPractitionerName} work hours vs capacity`
                   : 'Percentage of available time utilised'
               }
             />
@@ -231,11 +231,11 @@ export function ClinicUtilisationView({
               activeIndex={activeIndex}
               onSelectBucket={(i) => setSelectedKey(report[i]?.bucket.key ?? null)}
               compareMode={compareMode}
-              title={selectedPractitionerName ? `${selectedPractitionerName} Capacity` : 'Capacity & Hours'}
+              title={selectedPractitionerName ? `${selectedPractitionerName} Work Hours` : 'Capacity & Work Hours'}
               subtitle={
                 selectedPractitionerName
-                  ? `${selectedPractitionerName} booked time vs available capacity`
-                  : 'Booked time vs available capacity'
+                  ? `${selectedPractitionerName} work hours vs available capacity`
+                  : 'Work hours vs available capacity'
               }
             />
           </div>

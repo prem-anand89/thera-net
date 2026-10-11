@@ -39,6 +39,7 @@ export function ReportsPage() {
         to: '/insights',
         search: next === 'overview' ? {} : { tab: next },
         replace: true,
+        resetScroll: false,
       });
     },
     [navigate]

@@ -45,7 +45,7 @@ describe('CapacityHoursCard', () => {
       />
     );
 
-    expect(screen.getByText(/Capacity & Hours/i)).toBeInTheDocument();
+    expect(screen.getByText(/Capacity & Work Hours/i)).toBeInTheDocument();
     expect(screen.getByText(/60 hrs/i)).toBeInTheDocument();
     expect(screen.getByText(/of 80 hrs total capacity/i)).toBeInTheDocument();
     expect(screen.getAllByText('Oct 26').length).toBeGreaterThan(0);
@@ -64,7 +64,7 @@ describe('CapacityHoursCard', () => {
     expect(screen.getByText(/\+20 hrs vs prior/i)).toBeInTheDocument();
   });
 
-  it('allows clicking a volume bar to select that period', () => {
+  it('allows clicking a volume bar to select that period and hovering shows tooltip', () => {
     const onSelectBucket = vi.fn();
     render(
       <CapacityHoursCard
@@ -76,6 +76,9 @@ describe('CapacityHoursCard', () => {
     );
 
     const bar = screen.getByRole('button', { name: /Sep 26: 40 hrs/i });
+    fireEvent.mouseEnter(bar);
+    expect(screen.getAllByText(/Sep 26: 40 hrs/i).length).toBeGreaterThan(0);
+
     fireEvent.click(bar);
     expect(onSelectBucket).toHaveBeenCalledWith(0);
   });

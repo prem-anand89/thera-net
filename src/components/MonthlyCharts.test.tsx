@@ -15,6 +15,7 @@ const visitCounts = [20, 28, 35];
 describe('MonthlyRevenueChart', () => {
   it('renders headline revenue, MoM delta, and selectable bars', () => {
     const onSelect = vi.fn();
+    const onHover = vi.fn();
     render(
       <MonthlyRevenueChart
         categories={categories}
@@ -22,6 +23,7 @@ describe('MonthlyRevenueChart', () => {
         formatRevenue={formatINR}
         selectedIndex={2}
         onSelectIndex={onSelect}
+        onHoverIndex={onHover}
       />
     );
 
@@ -30,6 +32,10 @@ describe('MonthlyRevenueChart', () => {
     expect(screen.getByText(/\+25%/i)).toBeInTheDocument(); // 250k vs 200k = +25%
 
     const sepBar = screen.getByRole('button', { name: /Sep: ₹2,00,000/i });
+    fireEvent.mouseEnter(sepBar);
+    expect(onHover).toHaveBeenCalledWith(1);
+    expect(screen.getAllByText(/Sep: ₹2,00,000/i).length).toBeGreaterThan(0);
+
     fireEvent.click(sepBar);
     expect(onSelect).toHaveBeenCalledWith(1);
   });
@@ -38,12 +44,14 @@ describe('MonthlyRevenueChart', () => {
 describe('MonthlyVisitsChart', () => {
   it('renders headline visits count, MoM delta, and selectable bars', () => {
     const onSelect = vi.fn();
+    const onHover = vi.fn();
     render(
       <MonthlyVisitsChart
         categories={categories}
         visitCounts={visitCounts}
         selectedIndex={2}
         onSelectIndex={onSelect}
+        onHoverIndex={onHover}
       />
     );
 
@@ -52,6 +60,10 @@ describe('MonthlyVisitsChart', () => {
     expect(screen.getByText(/\+7 vs prior/i)).toBeInTheDocument(); // 35 vs 28 = +7
 
     const sepBar = screen.getByRole('button', { name: /Sep: 28 visits/i });
+    fireEvent.mouseEnter(sepBar);
+    expect(onHover).toHaveBeenCalledWith(1);
+    expect(screen.getAllByText(/Sep: 28 visits/i).length).toBeGreaterThan(0);
+
     fireEvent.click(sepBar);
     expect(onSelect).toHaveBeenCalledWith(1);
   });

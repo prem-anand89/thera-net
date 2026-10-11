@@ -73,7 +73,7 @@ describe('ClinicUtilisationView (Splose-inspired redesign)', () => {
 
     // Dual Hero Cards
     expect(screen.getByRole('heading', { name: 'Utilisation' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Capacity & Hours' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Capacity & Work Hours' })).toBeInTheDocument();
     expect(screen.getByText('55%')).toBeInTheDocument(); // Oct 26 utilisation
     expect(screen.getByText('12.8 hrs')).toBeInTheDocument(); // Oct 26 booked hours
     expect(screen.getByText(/of 24 hrs total capacity/i)).toBeInTheDocument();
