@@ -44,4 +44,47 @@ describe('clinicUtilisationReport', () => {
     const r = clinicUtilisationReport({ ...common, closedWeekdays: [1], visits: [] });
     expect(r[0].clinicRatio).toBeNull();
   });
+
+  it('calculates total revenue per therapist and for the clinic, and includes photoPath', () => {
+    const therapistsWithPhoto: ReportTherapist[] = [
+      { id: 'a', name: 'A', active: true, photoPath: 'clinics/1/photo.jpg' },
+      { id: 'b', name: 'B', active: true },
+    ];
+    const visitsWithBill = [
+      { ...visit('a'), actualBillPaise: 50000 },
+      { ...visit('a'), actualBillPaise: 100000 },
+      { ...visit('b'), actualBillPaise: 80000 },
+    ];
+    const r = clinicUtilisationReport({
+      ...common,
+      therapists: therapistsWithPhoto,
+      visits: visitsWithBill,
+    });
+    expect(r[0].clinicRevenuePaise).toBe(230000);
+    const rowA = r[0].rows.find((x) => x.therapistId === 'a');
+    const rowB = r[0].rows.find((x) => x.therapistId === 'b');
+    expect(rowA?.revenuePaise).toBe(150000);
+    expect(rowA?.photoPath).toBe('clinics/1/photo.jpg');
+    expect(rowB?.revenuePaise).toBe(80000);
+    expect(rowB?.photoPath).toBeUndefined();
+  });
+
+  it('computes priorClinicRatio and priorClinicRevenuePaise across sequential buckets', () => {
+    const bucket1 = { key: 'sep', label: 'Sep', from: '2026-09-14', to: '2026-09-14' };
+    const bucket2 = { key: 'oct', label: 'Oct', from: '2026-10-12', to: '2026-10-12' };
+    const visits = [
+      { ...visit('a', '2026-09-14'), actualBillPaise: 100000 },
+      { ...visit('a', '2026-10-12'), actualBillPaise: 200000 },
+    ];
+    const r = clinicUtilisationReport({
+      ...common,
+      buckets: [bucket1, bucket2],
+      visits,
+    });
+    expect(r[0].priorClinicRatio).toBeNull();
+    expect(r[0].priorClinicRevenuePaise).toBeNull();
+    expect(r[1].priorClinicRatio).toBe(r[0].clinicRatio);
+    expect(r[1].priorClinicRevenuePaise).toBe(100000);
+  });
 });
+
