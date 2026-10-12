@@ -454,6 +454,20 @@ describe('dashboardService.outstandingInvoices', () => {
     expect(summary.rows[0].invoiceId).toBe('inv-1');
     expect(summary.totalPaise).toBe(rs(1500));
   });
+
+  it('gives each unpaid invoice its live visit, or null when the visit is gone', async () => {
+    for (const id of ['inv-1', 'inv-2', 'inv-3']) {
+      fake.invoices.set(id, baseInvoice(id, { totalPaise: rs(1000) }));
+      fake.invoicePayments.set(`p-${id}`, { id: `p-${id}`, clinicId: 'clinic-1', invoiceId: id, status: 'outstanding', paidAt: null, updatedAt: '' });
+    }
+    fake.visits.set('v1', baseVisit('v1', { invoiceId: 'inv-1' }));
+    fake.visits.set('v2', baseVisit('v2', { invoiceId: 'inv-2', deleted: true }));
+    const rows = (await createDashboardService(fake.repos).outstandingInvoices('clinic-1')).rows;
+    const byId = new Map(rows.map((r) => [r.invoiceId, r]));
+    expect(byId.get('inv-1')?.visitId).toBe('v1');
+    expect(byId.get('inv-2')?.visitId).toBeNull(); // only a deleted visit is left
+    expect(byId.get('inv-3')?.visitId).toBeNull(); // never had one
+  });
 });
 
 describe('dashboardService.monthlyCollection', () => {

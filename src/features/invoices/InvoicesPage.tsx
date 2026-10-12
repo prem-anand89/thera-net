@@ -431,7 +431,7 @@ export function InvoicesPage() {
                       </Pill>
                     </div>
                     <div className="flex items-center gap-2">
-                      {status === 'outstanding' && (
+                      {status === 'outstanding' && sampleVisitIdByInvoiceId.has(inv.id) && (
                         <button
                           type="button"
                           className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
@@ -440,6 +440,11 @@ export function InvoicesPage() {
                         >
                           Take payment
                         </button>
+                      )}
+                      {status === 'outstanding' && !sampleVisitIdByInvoiceId.has(inv.id) && (
+                        <span className="text-xs text-[var(--muted)]" title="Open the invoice and use Void invoice to clear it">
+                          Visit removed — void to clear
+                        </span>
                       )}
                       {status === 'outstanding' && (
                         <button
@@ -531,7 +536,7 @@ export function InvoicesPage() {
                             {formatINR(remainingPaise)} due
                           </div>
                         )}
-                        {status === 'outstanding' && (
+                        {status === 'outstanding' && sampleVisitIdByInvoiceId.has(inv.id) && (
                           <button
                             type="button"
                             className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
@@ -540,6 +545,11 @@ export function InvoicesPage() {
                           >
                             Take payment
                           </button>
+                        )}
+                        {status === 'outstanding' && !sampleVisitIdByInvoiceId.has(inv.id) && (
+                          <span className="ml-2 text-xs text-[var(--muted)]" title="Open the invoice and use Void invoice to clear it">
+                            Visit removed — void to clear
+                          </span>
                         )}
                         {status === 'outstanding' && (
                           <button

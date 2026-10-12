@@ -55,6 +55,9 @@ export interface OutstandingInvoiceRow {
   totalPaise: Paise;
   issuedAt: string;
   daysOutstanding: number;
+  /** A live visit the invoice covers, or null when none is left (the visit was removed). Payment needs one; without it the only way to clear the invoice is to void it. */
+  visitId: UUID | null;
+  patientId: UUID | null;
 }
 
 export interface OutstandingSummary {
@@ -418,10 +421,16 @@ export function createDashboardService(repos: Repos) {
     },
 
     async outstandingInvoices(clinicId: UUID): Promise<OutstandingSummary> {
-      const [invoices, payments] = await Promise.all([
+      const [invoices, payments, visits] = await Promise.all([
         repos.invoices.list(clinicId),
         repos.invoicePayments.list(clinicId),
+        repos.visits.list({ clinicId }),
       ]);
+      const visitByInvoiceId = new Map<UUID, { id: UUID; patientId: UUID }>();
+      for (const v of visits) {
+        if (v.deleted || !v.invoiceId || visitByInvoiceId.has(v.invoiceId)) continue;
+        visitByInvoiceId.set(v.invoiceId, { id: v.id, patientId: v.patientId });
+      }
       // Absence of a payment row means paid (see InvoicePayment doc comment) —
       // only an explicit 'outstanding' row counts here.
       const statusByInvoiceId = new Map(payments.map((p) => [p.invoiceId, p.status]));
@@ -435,6 +444,8 @@ export function createDashboardService(repos: Repos) {
           totalPaise: inv.totalPaise,
           issuedAt: inv.issuedAt,
           daysOutstanding: daysSince(inv.issuedAt.slice(0, 10)),
+          visitId: visitByInvoiceId.get(inv.id)?.id ?? null,
+          patientId: visitByInvoiceId.get(inv.id)?.patientId ?? null,
         }))
         .sort((a, b) => b.daysOutstanding - a.daysOutstanding);
 

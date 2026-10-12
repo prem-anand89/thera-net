@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService, feedbackService } from '@/services';
+import type { OutstandingInvoiceRow } from '@/services/dashboardService';
+import { toLocalDateStr } from '@/domain/schedule';
 import { db } from '@/lib/db';
 import { syncStatus } from '@/sync/status';
 import { useClinic } from '@/app/clinicContext';
@@ -235,6 +237,7 @@ export function LedgerPage() {
   const [patientQuery, setPatientQuery] = useState('');
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
+  const [takingInvoicePayment, setTakingInvoicePayment] = useState<OutstandingInvoiceRow | null>(null);
   const [splitting, setSplitting] = useState<Visit | null>(null);
   const [editing, setEditing] = useState<UUID | null>(null);
   const [editPatientId, setEditPatientId] = useState<UUID | null>(null);
@@ -776,42 +779,47 @@ export function LedgerPage() {
             <StatTile label="Invoices" value={outstanding.count} />
           </div>
           {canBill && (
-            <button
-              type="button"
-              className="mb-3 text-sm font-medium text-[var(--teal)] hover:underline"
-              onClick={() => setRecordsView('invoices')}
-            >
-              Take payment on the Invoices tab →
-            </button>
+            <p className="mb-3 text-xs text-[var(--muted)]">
+              Take payment on each row, or void an invoice whose visit was removed. All dates, not just this week.
+            </p>
           )}
           {/* Below tab: — boxed cards instead of forcing this 5-column
               table to scroll sideways on a phone. */}
           <div className="tab:hidden space-y-2">
             {outstanding.rows.map((r) => (
-              <Link
+              <div
                 key={r.invoiceId}
-                to="/invoices/$invoiceId/print"
-                params={{ invoiceId: r.invoiceId }}
-                search={{ from: '/ledger' }}
-                className="block rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
+                className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="font-display text-sm font-medium text-[var(--ink)]">
-                      {r.patientName}{' '}
-                      <span className="text-xs font-normal text-[var(--muted)]">{r.mrno}</span>
+                <Link
+                  to="/invoices/$invoiceId/print"
+                  params={{ invoiceId: r.invoiceId }}
+                  search={{ from: '/ledger' }}
+                  className="block"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-display text-sm font-medium text-[var(--ink)]">
+                        {r.patientName}{' '}
+                        <span className="text-xs font-normal text-[var(--muted)]">{r.mrno}</span>
+                      </div>
+                      <div className="text-xs text-[var(--teal)]">{r.invoiceNo}</div>
                     </div>
-                    <div className="text-xs text-[var(--teal)]">{r.invoiceNo}</div>
+                    <span className="font-num shrink-0 text-sm font-medium text-[var(--ink)]">
+                      {formatINR(r.totalPaise)}
+                    </span>
                   </div>
-                  <span className="font-num shrink-0 text-sm font-medium text-[var(--ink)]">
-                    {formatINR(r.totalPaise)}
-                  </span>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
-                  <span>Issued {formatDateDM(r.issuedAt)}</span>
-                  <span className="font-num">{r.daysOutstanding} days outstanding</span>
-                </div>
-              </Link>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
+                    <span>Issued {formatDateDM(r.issuedAt)}</span>
+                    <span className="font-num">{r.daysOutstanding} days outstanding</span>
+                  </div>
+                </Link>
+                {canBill && (
+                  <div className="mt-2 border-t border-[var(--border)] pt-2">
+                    <OutstandingInvoiceActions row={r} onTakePayment={setTakingInvoicePayment} />
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
@@ -824,6 +832,7 @@ export function LedgerPage() {
                   <th className={thNum}>Amount</th>
                   <th className={th}>Issued</th>
                   <th className={thNum}>Days outstanding</th>
+                  {canBill && <th className={th}>Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
@@ -846,6 +855,11 @@ export function LedgerPage() {
                     <td className={tdNum}>{formatINR(r.totalPaise)}</td>
                     <td className={td}>{formatDateDM(r.issuedAt)}</td>
                     <td className={tdNum}>{r.daysOutstanding}</td>
+                    {canBill && (
+                      <td className={td}>
+                        <OutstandingInvoiceActions row={r} onTakePayment={setTakingInvoicePayment} />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -977,6 +991,20 @@ export function LedgerPage() {
         />
       )}
 
+      {takingInvoicePayment?.visitId && (
+        <TakePaymentDialog
+          clinicId={clinic.id}
+          visitId={takingInvoicePayment.visitId}
+          invoiceId={takingInvoicePayment.invoiceId}
+          amountPaise={takingInvoicePayment.totalPaise}
+          visitDate={toLocalDateStr(new Date())}
+          patientLabel={takingInvoicePayment.patientName}
+          mrno={takingInvoicePayment.mrno}
+          patientId={takingInvoicePayment.patientId ?? undefined}
+          onClose={() => setTakingInvoicePayment(null)}
+        />
+      )}
+
       {editPatientId && editPatient && (
         <EditPatientModal
           patient={editPatient}
@@ -998,6 +1026,40 @@ export function LedgerPage() {
       {editing && (
         <EditVisitModal visitId={editing} onClose={() => setEditing(null)} setError={setError} />
       )}
+    </div>
+  );
+}
+
+/** Row actions for an unpaid invoice. With a live visit the money can be collected here; without one nothing can be recorded against the invoice, so the way out is to void it. */
+function OutstandingInvoiceActions({
+  row,
+  onTakePayment,
+}: {
+  row: OutstandingInvoiceRow;
+  onTakePayment: (row: OutstandingInvoiceRow) => void;
+}) {
+  if (row.visitId) {
+    return (
+      <button
+        type="button"
+        className="min-h-9 text-sm font-medium text-[var(--teal)] hover:underline"
+        onClick={() => onTakePayment(row)}
+      >
+        Take payment
+      </button>
+    );
+  }
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-[var(--muted)]">Its visit was removed, so no payment can be recorded.</p>
+      <Link
+        to="/invoices/$invoiceId/print"
+        params={{ invoiceId: row.invoiceId }}
+        search={{ from: '/ledger' }}
+        className="inline-flex min-h-9 items-center text-sm font-medium text-[var(--rust)] hover:underline"
+      >
+        Review and void
+      </Link>
     </div>
   );
 }
