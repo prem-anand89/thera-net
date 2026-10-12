@@ -1094,6 +1094,7 @@ export function ScheduleBookingsView({
         therapistId={assignShiftTherapistId ?? ''}
         therapistName={assignShiftTherapistId ? rosterById.get(assignShiftTherapistId)?.name ?? '' : ''}
         clinicId={clinic.id}
+        closedWeekdays={clinic.closedWeekdays}
         onClose={() => setAssignShiftTherapistId(null)}
       />
 

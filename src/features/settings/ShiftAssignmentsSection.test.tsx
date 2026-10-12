@@ -223,7 +223,7 @@ describe('ShiftAssignmentsSection', () => {
     expect(screen.getAllByText('5 shifts').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('opens assign dialog on direct cell click pre-filling therapist and day', () => {
+  it('opens assign dialog on clicking Edit next to therapist name', () => {
     therapists = [
       { id: 'th1', clinicId: 'c1', name: 'Dr Prem', active: true, updatedAt: '' } as Therapist,
     ];
@@ -244,9 +244,9 @@ describe('ShiftAssignmentsSection', () => {
 
     render(<ShiftAssignmentsSection />);
 
-    // Click Wednesday cell for Dr Prem
-    const cellBtn = screen.getByLabelText(/Dr Prem, Wednesday/i);
-    fireEvent.click(cellBtn);
+    // Click Edit button for Dr Prem (first of desktop/mobile views)
+    const editBtn = screen.getAllByLabelText(/Edit Dr Prem's schedule/i)[0]!;
+    fireEvent.click(editBtn);
 
     // Dialog should be open
     expect(screen.getByRole('dialog', { name: /Assign shift/i })).toBeInTheDocument();

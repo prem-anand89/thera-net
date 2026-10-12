@@ -5,7 +5,15 @@ import { ErrorNote, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
 import type { UUID } from '@/domain/types';
 
-const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAY_ITEMS: { day: number; label: string }[] = [
+  { day: 1, label: 'Mon' },
+  { day: 2, label: 'Tue' },
+  { day: 3, label: 'Wed' },
+  { day: 4, label: 'Thu' },
+  { day: 5, label: 'Fri' },
+  { day: 6, label: 'Sat' },
+  { day: 0, label: 'Sun' },
+];
 
 /**
  * Admin-side immediate shift assignment: picking a shift template +
@@ -16,12 +24,18 @@ const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
  * sheet has no custom-hours fallback.
  */
 export function AssignShiftSheet({
-  open, therapistId, therapistName, clinicId, onClose,
+  open,
+  therapistId,
+  therapistName,
+  clinicId,
+  closedWeekdays = [],
+  onClose,
 }: {
   open: boolean;
   therapistId: UUID;
   therapistName: string;
   clinicId: UUID;
+  closedWeekdays?: number[];
   onClose: () => void;
 }) {
   const templates = useLiveQuery(() => repos.shiftTemplates.list(clinicId), [clinicId]);
@@ -30,6 +44,9 @@ export function AssignShiftSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const titleId = useId();
+
+  const closedSet = new Set(closedWeekdays);
+  const openDays = [1, 2, 3, 4, 5, 6, 0].filter((d) => !closedSet.has(d));
 
   useEffect(() => {
     if (!open) return;
@@ -74,13 +91,69 @@ export function AssignShiftSheet({
                 <option value="">Pick a shift…</option>
                 {(templates ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
-              <div className="flex flex-wrap gap-2">
-                {WEEKDAY_LABELS.map((label, day) => (
-                  <label key={day} className="inline-flex min-h-11 items-center gap-1 text-sm">
-                    <input type="checkbox" checked={weekdays.includes(day)} onChange={(e) => setWeekdays((c) => e.target.checked ? [...c, day] : c.filter((d) => d !== day))} />
-                    {label}
-                  </label>
-                ))}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold uppercase tracking-wider text-[var(--muted)]">Active Weekdays</span>
+                  <div className="flex items-center gap-1.5">
+                    {closedWeekdays.length > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setWeekdays(openDays)}
+                          className="font-medium text-[var(--teal)] hover:underline"
+                        >
+                          Open days
+                        </button>
+                        <span className="text-[var(--border)]">|</span>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setWeekdays([1, 2, 3, 4, 5])}
+                      className="font-medium text-[var(--teal)] hover:underline"
+                    >
+                      Mon–Fri
+                    </button>
+                    <span className="text-[var(--border)]">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setWeekdays([1, 2, 3, 4, 5, 6, 0])}
+                      className="font-medium text-[var(--teal)] hover:underline"
+                    >
+                      All days
+                    </button>
+                    <span className="text-[var(--border)]">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setWeekdays([])}
+                      className="font-medium text-[var(--muted)] hover:underline"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {WEEKDAY_ITEMS.map(({ day, label }) => {
+                    const isClosed = closedSet.has(day);
+                    return (
+                      <label key={day} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1 text-sm text-[var(--ink)] cursor-pointer hover:bg-[var(--paper)] transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={weekdays.includes(day)}
+                          onChange={(e) =>
+                            setWeekdays((c) =>
+                              e.target.checked ? [...c, day] : c.filter((d) => d !== day)
+                            )
+                          }
+                        />
+                        {label}
+                        {isClosed && (
+                          <span className="text-xs text-[var(--muted)] font-normal">(Closed)</span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             </div>
             <ErrorNote message={error} />

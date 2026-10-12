@@ -65,4 +65,28 @@ describe('ShiftCoverageGrid', () => {
     const stickyRight = container.querySelector('.sticky.right-0');
     expect(stickyRight).toBeInTheDocument();
   });
+
+  it('renders Edit button next to therapist name and day cells are read-only divs', () => {
+    const { container } = render(
+      <ShiftCoverageGrid
+        therapists={[therapist]}
+        templates={[]}
+        approvedAssignments={[]}
+        pendingAssignments={[]}
+        clinic={baseClinic}
+      />
+    );
+
+    // Edit button is present next to therapist name
+    const editBtn = screen.getAllByRole('button', { name: `Edit ${therapist.name}'s schedule` })[0];
+    expect(editBtn).toBeInTheDocument();
+
+    // Verify day cells in the table do not contain buttons
+    const dayCells = container.querySelectorAll('tbody td');
+    // Cell 0 is the therapist name column (which has the Edit button)
+    // Cells 1 to 7 are the weekday cells
+    for (let i = 1; i <= 7; i++) {
+      expect(dayCells[i].querySelector('button')).toBeNull();
+    }
+  });
 });

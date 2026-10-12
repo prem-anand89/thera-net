@@ -37,4 +37,33 @@ describe('AssignShiftSheet', () => {
     expect(screen.getByText(/No shift templates set up yet/)).toBeInTheDocument();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
+
+  it('supports quick weekday presets and displays closed weekday indicators', async () => {
+    templates = [{ id: 't1', clinicId: 'c1', name: 'Morning', startMinute: 540, endMinute: 780, breakDurationMinutes: 0, defaultBreakStartMinute: null, active: true, updatedAt: '' }];
+    assignShift.mockResolvedValue('a1');
+    const onClose = vi.fn();
+    render(
+      <AssignShiftSheet
+        open
+        therapistId="th1"
+        therapistName="Priya"
+        clinicId="c1"
+        closedWeekdays={[0]}
+        onClose={onClose}
+      />
+    );
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 't1' } });
+    expect(screen.getByText('(Closed)')).toBeInTheDocument();
+
+    // Click Mon–Fri preset
+    fireEvent.click(screen.getByRole('button', { name: 'Mon–Fri' }));
+    fireEvent.click(screen.getByRole('button', { name: /assign shift/i }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(assignShift).toHaveBeenCalledWith({
+      therapistId: 'th1',
+      shiftTemplateId: 't1',
+      weekdays: [1, 2, 3, 4, 5],
+    });
+  });
 });

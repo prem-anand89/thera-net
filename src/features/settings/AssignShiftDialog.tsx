@@ -6,6 +6,7 @@ import {
   WEEKDAY_META,
   WEEKDAY_ORDER,
   formatRange12h,
+  formatWeekdays,
   minutesToTimeInput,
   previewAssign,
   sortWeekdays,
@@ -32,6 +33,77 @@ export type AssignShiftDialogProps = {
 
 const CLINIC_DEFAULT_ID = '__clinic_default__';
 
+export type TherapistScheduleInfo = {
+  type: 'template' | 'custom' | 'clinic_default';
+  templateId: string | null;
+  templateName: string | null;
+  weekdays: number[];
+  breakStartMinute: number | null;
+  summary: string;
+};
+
+export function getTherapistScheduleInfo(
+  therapistId: string,
+  therapists: Therapist[],
+  approvedAssignments: TherapistShiftAssignment[],
+  templates: ShiftTemplate[],
+  clinic: Clinic
+): TherapistScheduleInfo {
+  const therapist = therapists.find((t) => t.id === therapistId);
+  const templateById = new Map(templates.map((t) => [t.id, t]));
+  const assignments = approvedAssignments.filter((a) => a.therapistId === therapistId);
+
+  // 1. Check if assigned to shift templates
+  const templateAssignments = assignments.filter((a) => a.shiftTemplateId);
+  if (templateAssignments.length > 0) {
+    const firstA = templateAssignments[0];
+    const tmpl = templateById.get(firstA.shiftTemplateId!);
+    const allWeekdays = sortWeekdays(
+      Array.from(new Set(templateAssignments.flatMap((a) => a.weekdays ?? [])))
+    );
+    const dayLabel = allWeekdays.length > 0 ? formatWeekdays(allWeekdays) : 'No days';
+    return {
+      type: 'template',
+      templateId: firstA.shiftTemplateId,
+      templateName: tmpl?.name ?? 'Assigned Shift',
+      weekdays: allWeekdays,
+      breakStartMinute: firstA.breakStartMinute ?? null,
+      summary: `${tmpl?.name ?? 'Shift'} (${dayLabel})`,
+    };
+  }
+
+  // 2. Check if therapist has custom working hours
+  const wh = therapist?.workingHours;
+  if (wh && typeof wh === 'object') {
+    const customDays = WEEKDAY_ORDER.filter((d) => {
+      const k = String(d) as keyof typeof wh;
+      return k in wh && (wh[k] ?? []).length > 0;
+    });
+    if (customDays.length > 0) {
+      return {
+        type: 'custom',
+        templateId: null,
+        templateName: 'Custom Hours',
+        weekdays: customDays,
+        breakStartMinute: null,
+        summary: `Custom hours (${formatWeekdays(customDays)})`,
+      };
+    }
+  }
+
+  // 3. Clinic Default
+  const closedDays = new Set(clinic.closedWeekdays ?? []);
+  const openDays = WEEKDAY_ORDER.filter((d) => !closedDays.has(d));
+  return {
+    type: 'clinic_default',
+    templateId: CLINIC_DEFAULT_ID,
+    templateName: 'Clinic Default',
+    weekdays: openDays,
+    breakStartMinute: null,
+    summary: 'Clinic Default',
+  };
+}
+
 export function AssignShiftDialog({
   isOpen,
   onClose,
@@ -52,21 +124,113 @@ export function AssignShiftDialog({
     [templates]
   );
 
+  // Check if there is an existing approved assignment for the clicked cell
+  const matchingAssignment = useMemo(() => {
+    if (!initialTherapistId || initialWeekday === null || initialWeekday === undefined) {
+      return null;
+    }
+    return (
+      approvedAssignments.find(
+        (a) =>
+          a.therapistId === initialTherapistId &&
+          (a.weekdays ?? []).includes(initialWeekday)
+      ) ?? null
+    );
+  }, [initialTherapistId, initialWeekday, approvedAssignments]);
+
   const [selectedTherapistIds, setSelectedTherapistIds] = useState<string[]>(() =>
     initialTherapistId ? [initialTherapistId] : []
   );
-  const [selectedShiftId, setSelectedShiftId] = useState<string>(() =>
-    activeTemplates.length > 0 ? activeTemplates[0].id : CLINIC_DEFAULT_ID
-  );
-  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>(() =>
-    initialWeekday !== null && initialWeekday !== undefined ? [initialWeekday] : [1, 2, 3, 4, 5]
-  );
-  const [breakStartOverride, setBreakStartOverride] = useState('');
-  const [showBreakOverride, setShowBreakOverride] = useState(false);
+  const [selectedShiftId, setSelectedShiftId] = useState<string>(() => {
+    if (
+      matchingAssignment?.shiftTemplateId &&
+      activeTemplates.some((t) => t.id === matchingAssignment.shiftTemplateId)
+    ) {
+      return matchingAssignment.shiftTemplateId;
+    }
+    if (initialTherapistId) {
+      const currentSched = getTherapistScheduleInfo(
+        initialTherapistId,
+        activeTherapists,
+        approvedAssignments,
+        activeTemplates,
+        clinic
+      );
+      if (
+        currentSched.type === 'template' &&
+        currentSched.templateId &&
+        activeTemplates.some((t) => t.id === currentSched.templateId)
+      ) {
+        return currentSched.templateId;
+      }
+    }
+    return activeTemplates.length > 0 ? activeTemplates[0].id : CLINIC_DEFAULT_ID;
+  });
+  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>(() => {
+    if (matchingAssignment?.weekdays && matchingAssignment.weekdays.length > 0) {
+      return [...matchingAssignment.weekdays];
+    }
+    if (initialTherapistId) {
+      const currentSched = getTherapistScheduleInfo(
+        initialTherapistId,
+        activeTherapists,
+        approvedAssignments,
+        activeTemplates,
+        clinic
+      );
+      if (
+        (currentSched.type === 'template' || currentSched.type === 'custom') &&
+        currentSched.weekdays.length > 0
+      ) {
+        if (initialWeekday !== null && initialWeekday !== undefined) {
+          return sortWeekdays(
+            Array.from(new Set([...currentSched.weekdays, initialWeekday]))
+          );
+        }
+        return [...currentSched.weekdays];
+      }
+      return initialWeekday !== null && initialWeekday !== undefined
+        ? [initialWeekday]
+        : [1, 2, 3, 4, 5];
+    }
+    return initialWeekday !== null && initialWeekday !== undefined
+      ? [initialWeekday]
+      : [1, 2, 3, 4, 5];
+  });
+  const [breakStartOverride, setBreakStartOverride] = useState(() => {
+    if (matchingAssignment?.breakStartMinute != null) {
+      return minutesToTimeInput(matchingAssignment.breakStartMinute);
+    }
+    if (initialTherapistId) {
+      const currentSched = getTherapistScheduleInfo(
+        initialTherapistId,
+        activeTherapists,
+        approvedAssignments,
+        activeTemplates,
+        clinic
+      );
+      if (currentSched.breakStartMinute != null) {
+        return minutesToTimeInput(currentSched.breakStartMinute);
+      }
+    }
+    return '';
+  });
+  const [showBreakOverride, setShowBreakOverride] = useState(() => {
+    if (matchingAssignment?.breakStartMinute != null) return true;
+    if (initialTherapistId) {
+      const currentSched = getTherapistScheduleInfo(
+        initialTherapistId,
+        activeTherapists,
+        approvedAssignments,
+        activeTemplates,
+        clinic
+      );
+      return currentSched.breakStartMinute != null;
+    }
+    return false;
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (!isOpen) return null;
 
   const isClinicDefault = selectedShiftId === CLINIC_DEFAULT_ID;
   const pickedTemplate = activeTemplates.find((t) => t.id === selectedShiftId) ?? null;
@@ -74,6 +238,48 @@ export function AssignShiftDialog({
   // Selected therapist objects
   const pickedTherapists = activeTherapists.filter((t) =>
     selectedTherapistIds.includes(t.id)
+  );
+
+  const singleTherapistId =
+    selectedTherapistIds.length === 1 ? selectedTherapistIds[0] : null;
+
+  const singleSelectedTherapist = useMemo(
+    () => activeTherapists.find((t) => t.id === singleTherapistId) ?? null,
+    [activeTherapists, singleTherapistId]
+  );
+
+  const selectedTherapistSchedule = useMemo(() => {
+    if (!singleTherapistId) return null;
+    return getTherapistScheduleInfo(
+      singleTherapistId,
+      activeTherapists,
+      approvedAssignments,
+      activeTemplates,
+      clinic
+    );
+  }, [singleTherapistId, activeTherapists, approvedAssignments, activeTemplates, clinic]);
+
+  const currentWeekdays = useMemo(
+    () => selectedTherapistSchedule?.weekdays ?? [],
+    [selectedTherapistSchedule]
+  );
+
+  const addedDays = useMemo(
+    () => selectedWeekdays.filter((d) => !currentWeekdays.includes(d)),
+    [selectedWeekdays, currentWeekdays]
+  );
+
+  const removedDays = useMemo(
+    () => currentWeekdays.filter((d) => !selectedWeekdays.includes(d)),
+    [selectedWeekdays, currentWeekdays]
+  );
+
+  const isDaysUnchanged = useMemo(
+    () =>
+      currentWeekdays.length > 0 &&
+      addedDays.length === 0 &&
+      removedDays.length === 0,
+    [currentWeekdays.length, addedDays.length, removedDays.length]
   );
 
   // Dynamic presets
@@ -108,11 +314,49 @@ export function AssignShiftDialog({
     clinic,
   });
 
-  // Toggle therapist selection
+  // Toggle therapist selection and dynamically load schedule if single member picked
   function toggleTherapist(id: string) {
-    setSelectedTherapistIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    const nextIds = selectedTherapistIds.includes(id)
+      ? selectedTherapistIds.filter((x) => x !== id)
+      : [...selectedTherapistIds, id];
+
+    setSelectedTherapistIds(nextIds);
+
+    // If exactly one therapist is now selected, dynamically load their current schedule
+    if (nextIds.length === 1) {
+      const sched = getTherapistScheduleInfo(
+        nextIds[0],
+        activeTherapists,
+        approvedAssignments,
+        activeTemplates,
+        clinic
+      );
+
+      if (sched.type === 'template' && sched.templateId) {
+        setSelectedShiftId(sched.templateId);
+        if (sched.weekdays.length > 0) {
+          setSelectedWeekdays(sched.weekdays);
+        }
+        if (sched.breakStartMinute != null) {
+          setBreakStartOverride(minutesToTimeInput(sched.breakStartMinute));
+          setShowBreakOverride(true);
+        } else {
+          setBreakStartOverride('');
+          setShowBreakOverride(false);
+        }
+      } else if (sched.type === 'custom') {
+        if (sched.weekdays.length > 0) {
+          setSelectedWeekdays(sched.weekdays);
+        }
+        setBreakStartOverride('');
+        setShowBreakOverride(false);
+      } else if (sched.type === 'clinic_default') {
+        setSelectedShiftId(CLINIC_DEFAULT_ID);
+        setSelectedWeekdays(sched.weekdays);
+        setBreakStartOverride('');
+        setShowBreakOverride(false);
+      }
+    }
   }
 
   // Toggle weekday selection
@@ -189,6 +433,8 @@ export function AssignShiftDialog({
         selectedTherapistIds.length === 1 ? '' : 's'
       }`;
 
+  if (!isOpen) return null;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-150"
@@ -225,29 +471,144 @@ export function AssignShiftDialog({
           <div className="flex flex-wrap gap-1.5">
             {activeTherapists.map((t) => {
               const isSelected = selectedTherapistIds.includes(t.id);
+              const sched = getTherapistScheduleInfo(
+                t.id,
+                activeTherapists,
+                approvedAssignments,
+                activeTemplates,
+                clinic
+              );
               return (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => toggleTherapist(t.id)}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition ${
+                  className={`inline-flex flex-col items-start gap-0.5 rounded-xl px-3 py-1.5 text-xs font-medium transition text-left ${
                     isSelected
-                      ? 'bg-[var(--teal)] text-white shadow-sm'
+                      ? 'bg-[var(--teal)] text-white shadow-xs'
                       : 'border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--paper)]'
                   }`}
                 >
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: isSelected ? 'white' : t.color ?? '#2c5f63' }}
+                      aria-hidden
+                    />
+                    <span className="font-semibold">{t.name}</span>
+                  </div>
                   <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ background: isSelected ? 'white' : t.color ?? '#2c5f63' }}
-                    aria-hidden
-                  />
-                  {t.name}
+                    className={`text-[10px] ${
+                      isSelected ? 'text-white/80' : 'text-[var(--muted)]'
+                    }`}
+                  >
+                    {sched.summary}
+                  </span>
                 </button>
               );
             })}
           </div>
           {selectedTherapistIds.length === 0 && (
             <p className="text-[11px] text-[var(--rust)]">Please select at least one therapist.</p>
+          )}
+
+          {/* Current schedule context banner when 1 therapist is selected */}
+          {singleSelectedTherapist && selectedTherapistSchedule && (
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-3.5 text-xs space-y-1.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-xs text-[var(--ink)] flex items-center gap-1.5">
+                  <span
+                    className="h-2 w-2 rounded-full shrink-0"
+                    style={{ background: singleSelectedTherapist.color ?? '#2c5f63' }}
+                    aria-hidden
+                  />
+                  Current Schedule: {singleSelectedTherapist.name}
+                </span>
+                <span className="rounded-full bg-[var(--teal-light)] px-2.5 py-0.5 text-[10.5px] font-bold text-[var(--teal)]">
+                  {selectedTherapistSchedule.summary}
+                </span>
+              </div>
+
+              {/* Day-specific status if opened by clicking a cell */}
+              {initialWeekday !== null && initialWeekday !== undefined && (
+                <div className="text-xs text-[var(--ink)] pt-0.5">
+                  <span className="font-medium text-[var(--muted)]">
+                    {WEEKDAY_META[initialWeekday]?.full}:
+                  </span>{' '}
+                  {matchingAssignment ? (
+                    <span className="font-semibold text-[var(--teal)]">
+                      Currently assigned to {selectedTherapistSchedule.templateName}
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-[var(--amber-strong)]">
+                      Currently a Day Off (No shift scheduled)
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Weekly active days summary */}
+              {selectedTherapistSchedule.type === 'template' && (
+                <div className="space-y-0.5 text-[11px] pt-0.5">
+                  <p className="text-[var(--muted)]">
+                    Active working days:{' '}
+                    <span className="font-medium text-[var(--ink)]">
+                      {selectedTherapistSchedule.weekdays.length > 0
+                        ? formatWeekdays(selectedTherapistSchedule.weekdays)
+                        : 'None'}
+                    </span>
+                    {addedDays.length > 0 && (
+                      <span className="text-[var(--teal)] font-medium">
+                        {' '}• Adding {formatWeekdays(addedDays)} to active days below.
+                      </span>
+                    )}
+                    {removedDays.length > 0 && (
+                      <span className="text-[var(--rust)] font-medium">
+                        {' '}• Removing {formatWeekdays(removedDays)} from schedule.
+                      </span>
+                    )}
+                    {isDaysUnchanged && (
+                      <span> • Schedule unchanged.</span>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {selectedTherapistSchedule.type === 'custom' && (
+                <p className="text-[11px] text-[var(--muted)]">
+                  Currently on custom working hours ({formatWeekdays(selectedTherapistSchedule.weekdays)}). Selecting a shift template below will supersede custom hours on the chosen days.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Schedule comparison summary when multiple team members are selected */}
+          {selectedTherapistIds.length > 1 && (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-2.5 text-xs text-[var(--ink)] space-y-1">
+              <p className="font-medium text-[var(--ink)]">
+                Assigning shift to {selectedTherapistIds.length} team members:
+              </p>
+              <ul className="space-y-0.5 text-[11px]">
+                {pickedTherapists.map((t) => {
+                  const sched = getTherapistScheduleInfo(
+                    t.id,
+                    activeTherapists,
+                    approvedAssignments,
+                    activeTemplates,
+                    clinic
+                  );
+                  return (
+                    <li key={t.id} className="flex items-center gap-1.5 text-[var(--muted)]">
+                      <span className="font-medium text-[var(--ink)]">{t.name}:</span>
+                      <span>currently {sched.summary}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="text-[10.5px] text-[var(--muted)] pt-0.5">
+                The shift template and weekdays chosen below will be applied to all selected members.
+              </p>
+            </div>
           )}
         </div>
 
@@ -259,7 +620,14 @@ export function AssignShiftDialog({
           <select
             className={inputCls}
             value={selectedShiftId}
-            onChange={(e) => setSelectedShiftId(e.target.value)}
+            onChange={(e) => {
+              const newId = e.target.value;
+              setSelectedShiftId(newId);
+              const nextTemplate = activeTemplates.find((t) => t.id === newId);
+              if (showBreakOverride && nextTemplate?.defaultBreakStartMinute) {
+                setBreakStartOverride(minutesToTimeInput(nextTemplate.defaultBreakStartMinute));
+              }
+            }}
           >
             <option value={CLINIC_DEFAULT_ID}>
               🏢 Clinic Default Hours ({formatRange12h(clinicStart, clinicEnd)})
@@ -281,7 +649,47 @@ export function AssignShiftDialog({
                 Active Weekdays
               </label>
               {/* Presets */}
-              <div className="flex items-center gap-1.5 text-[11px]">
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                {initialWeekday !== null && initialWeekday !== undefined && selectedTherapistSchedule && selectedTherapistSchedule.weekdays.length > 0 && !selectedTherapistSchedule.weekdays.includes(initialWeekday) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedWeekdays(
+                          sortWeekdays(
+                            Array.from(
+                              new Set([...selectedTherapistSchedule.weekdays, initialWeekday])
+                            )
+                          )
+                        )
+                      }
+                      className="rounded px-2 py-0.5 font-medium text-[var(--teal)] hover:bg-[var(--teal-light)]/40"
+                    >
+                      + Add {WEEKDAY_META[initialWeekday]?.short}
+                    </button>
+                    <span className="text-[var(--border)]">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedWeekdays([initialWeekday])}
+                      className="rounded px-2 py-0.5 font-medium text-[var(--teal)] hover:bg-[var(--teal-light)]/40"
+                    >
+                      {WEEKDAY_META[initialWeekday]?.short} only
+                    </button>
+                    <span className="text-[var(--border)]">|</span>
+                  </>
+                )}
+                {selectedTherapistSchedule && selectedTherapistSchedule.weekdays.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedWeekdays(selectedTherapistSchedule.weekdays)}
+                      className="rounded px-2 py-0.5 font-medium text-[var(--teal)] hover:bg-[var(--teal-light)]/40"
+                    >
+                      Existing only
+                    </button>
+                    <span className="text-[var(--border)]">|</span>
+                  </>
+                )}
                 <button
                   type="button"
                   onClick={() => setSelectedWeekdays(openDaysPreset)}
@@ -305,6 +713,14 @@ export function AssignShiftDialog({
                 >
                   All days
                 </button>
+                <span className="text-[var(--border)]">|</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedWeekdays([])}
+                  className="rounded px-2 py-0.5 font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
+                >
+                  Clear
+                </button>
               </div>
             </div>
 
@@ -312,22 +728,41 @@ export function AssignShiftDialog({
               {WEEKDAY_ORDER.map((day) => {
                 const isSelected = selectedWeekdays.includes(day);
                 const isClosed = closedDays.has(day);
+                const wasScheduled = currentWeekdays.includes(day);
+
+                let badgeText: string | null = null;
+                let badgeClass = '';
+
+                if (isClosed) {
+                  badgeText = 'Closed';
+                  badgeClass = isSelected ? 'text-white/80' : 'text-[var(--muted)]';
+                } else if (isSelected && !wasScheduled) {
+                  badgeText = '+Add';
+                  badgeClass = 'text-white font-semibold';
+                } else if (isSelected && wasScheduled) {
+                  badgeText = 'Active';
+                  badgeClass = 'text-white/80';
+                } else if (!isSelected && wasScheduled) {
+                  badgeText = '−Removed';
+                  badgeClass = 'text-[var(--rust)] font-semibold';
+                }
+
+                const buttonStyle = isSelected
+                  ? 'bg-[var(--teal)] text-white shadow-sm ring-1 ring-[var(--teal)]'
+                  : !isSelected && wasScheduled
+                  ? 'border border-[var(--rust)]/40 bg-[var(--rust-light)]/20 text-[var(--ink)] hover:bg-[var(--rust-light)]/40'
+                  : 'border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--paper)]';
+
                 return (
                   <button
                     key={day}
                     type="button"
                     onClick={() => toggleWeekday(day)}
-                    className={`flex flex-col items-center justify-center rounded-xl py-2 text-center transition ${
-                      isSelected
-                        ? 'bg-[var(--teal)] text-white shadow-sm'
-                        : 'border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--paper)]'
-                    }`}
+                    className={`flex flex-col items-center justify-center rounded-xl py-2 text-center transition min-h-[52px] ${buttonStyle}`}
                   >
                     <span className="text-xs font-bold">{WEEKDAY_META[day]?.short}</span>
-                    {isClosed && (
-                      <span className={`text-[9px] ${isSelected ? 'text-white/80' : 'text-[var(--muted)]'}`}>
-                        Closed
-                      </span>
+                    {badgeText && (
+                      <span className={`text-[9px] ${badgeClass}`}>{badgeText}</span>
                     )}
                   </button>
                 );
@@ -344,7 +779,17 @@ export function AssignShiftDialog({
           <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3">
             <button
               type="button"
-              onClick={() => setShowBreakOverride(!showBreakOverride)}
+              onClick={() => {
+                const nextShow = !showBreakOverride;
+                setShowBreakOverride(nextShow);
+                if (nextShow && pickedTemplate) {
+                  if (!breakStartOverride && pickedTemplate.defaultBreakStartMinute) {
+                    setBreakStartOverride(minutesToTimeInput(pickedTemplate.defaultBreakStartMinute));
+                  }
+                } else if (!nextShow) {
+                  setBreakStartOverride('');
+                }
+              }}
               className="flex w-full items-center justify-between text-xs font-medium text-[var(--ink)]"
             >
               <span>Custom break start time (optional)</span>
@@ -363,12 +808,7 @@ export function AssignShiftDialog({
                   <input
                     type="time"
                     className={inputCls}
-                    value={
-                      breakStartOverride ||
-                      (pickedTemplate.defaultBreakStartMinute
-                        ? minutesToTimeInput(pickedTemplate.defaultBreakStartMinute)
-                        : '')
-                    }
+                    value={breakStartOverride}
                     onChange={(e) => setBreakStartOverride(e.target.value)}
                   />
                 </Field>

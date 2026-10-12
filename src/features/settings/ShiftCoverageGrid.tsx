@@ -38,7 +38,6 @@ export function ShiftCoverageGrid({
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
     therapistId?: string | null;
-    weekday?: number | null;
   }>({ isOpen: false });
 
   const closedDays = useMemo(
@@ -61,12 +60,11 @@ export function ShiftCoverageGrid({
     [activeTherapists, approvedAssignments, templates, clinic]
   );
 
-  // Open assign dialog directly pre-filled with therapist and weekday
-  function handleCellClick(therapistId: string, weekday: number) {
+  // Open assign dialog pre-filled with therapist to edit their schedule
+  function handleEditTherapist(therapistId: string) {
     setDialogState({
       isOpen: true,
       therapistId,
-      weekday,
     });
   }
 
@@ -74,7 +72,6 @@ export function ShiftCoverageGrid({
     setDialogState({
       isOpen: true,
       therapistId: null,
-      weekday: null,
     });
   }
 
@@ -86,7 +83,7 @@ export function ShiftCoverageGrid({
             Weekly coverage
           </h2>
           <p className="text-xs text-[var(--muted)]">
-            Click any cell to assign or update staff shifts.
+            Click Edit next to any team member to update their schedule.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -109,19 +106,19 @@ export function ShiftCoverageGrid({
         <table className="table-fixed w-full text-left border-collapse text-xs" role="grid">
           <thead>
             <tr className="border-b border-[var(--border)] bg-[var(--paper)]">
-              {/* Staff Member column (18%) */}
-              <th className="sticky top-0 left-0 z-30 bg-[var(--paper)] px-3 py-2 font-semibold text-[var(--ink)] w-[18%] min-w-[110px] border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+              {/* Staff Member column (22%) */}
+              <th className="sticky top-0 left-0 z-30 bg-[var(--paper)] px-3 py-2 font-semibold text-[var(--ink)] w-[22%] min-w-[130px] border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                 Staff Member
               </th>
 
-              {/* 7 Days columns (10.5% each = 73.5% total) */}
+              {/* 7 Days columns (10% each = 70% total) */}
               {WEEKDAY_ORDER.map((day) => {
                 const meta = WEEKDAY_META[day];
                 const isClosed = closedDays.has(day);
                 return (
                   <th
                     key={day}
-                    className="sticky top-0 z-10 bg-[var(--paper)] px-1 py-1.5 text-center font-semibold text-[var(--ink)] w-[10.5%] min-w-[55px]"
+                    className="sticky top-0 z-10 bg-[var(--paper)] px-1 py-1.5 text-center font-semibold text-[var(--ink)] w-[10%] min-w-[50px]"
                   >
                     <div className="text-[11px] leading-tight">{meta.short}</div>
                     {isClosed && (
@@ -131,8 +128,8 @@ export function ShiftCoverageGrid({
                 );
               })}
 
-              {/* Weekly Total column (8.5%) */}
-              <th className="sticky top-0 right-0 z-30 bg-[var(--paper)] px-2.5 py-2 text-right font-semibold text-[var(--ink)] w-[8.5%] min-w-[65px] border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+              {/* Weekly Total column (8%) */}
+              <th className="sticky top-0 right-0 z-30 bg-[var(--paper)] px-2.5 py-2 text-right font-semibold text-[var(--ink)] w-[8%] min-w-[60px] border-l border-[var(--border)] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                 <div className="text-[11px] leading-tight">Total</div>
               </th>
             </tr>
@@ -156,19 +153,30 @@ export function ShiftCoverageGrid({
                   >
                     {/* Therapist Name - Sticky Left */}
                     <td className="sticky left-0 z-20 bg-[var(--surface)] group-hover:bg-[var(--paper)] px-2.5 py-1.5 border-r border-[var(--border)] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className="h-2 w-2 shrink-0 rounded-full"
-                          style={{ background: therapist.color ?? '#2c5f63' }}
-                          aria-hidden
-                        />
-                        <span className="font-medium text-[11.5px] text-[var(--ink)] truncate max-w-[105px]">
-                          {therapist.name}
-                        </span>
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ background: therapist.color ?? '#2c5f63' }}
+                            aria-hidden
+                          />
+                          <span className="font-medium text-[11.5px] text-[var(--ink)] truncate max-w-[80px]" title={therapist.name}>
+                            {therapist.name}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleEditTherapist(therapist.id)}
+                          className="rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition shrink-0"
+                          title={`Edit ${therapist.name}'s schedule`}
+                          aria-label={`Edit ${therapist.name}'s schedule`}
+                        >
+                          Edit
+                        </button>
                       </div>
                     </td>
 
-                    {/* Day Cells */}
+                    {/* Day Cells (Read-only indicators) */}
                     {WEEKDAY_ORDER.map((weekday) => {
                       const cell = dayMap?.get(weekday);
                       if (!cell) {
@@ -177,12 +185,10 @@ export function ShiftCoverageGrid({
 
                       return (
                         <td key={weekday} className="p-0.5 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleCellClick(therapist.id, weekday)}
+                          <div
                             title={cell.tooltip}
                             aria-label={`${therapist.name}, ${WEEKDAY_META[weekday]?.full}: ${cell.label}`}
-                            className="group/btn flex w-full flex-col items-center justify-center rounded-lg p-1 transition hover:ring-1.5 hover:ring-[var(--teal)] focus-visible:ring-1.5 focus-visible:ring-[var(--teal)] min-h-[38px]"
+                            className="flex w-full flex-col items-center justify-center rounded-lg p-1 min-h-[38px]"
                           >
                             {cell.type === 'template' && (
                               <div className="flex flex-col gap-0.5 w-full items-center">
@@ -219,11 +225,11 @@ export function ShiftCoverageGrid({
                             )}
 
                             {cell.type === 'clinic_default' && (
-                              <span className="inline-block truncate rounded px-1 py-0.5 text-[10.5px] font-medium text-[var(--muted)] group-hover/btn:bg-[var(--paper)] group-hover/btn:text-[var(--ink)] w-full text-center transition-colors">
+                              <span className="inline-block truncate rounded px-1 py-0.5 text-[10.5px] font-medium text-[var(--muted)] w-full text-center">
                                 {defaultHourLabel}
                               </span>
                             )}
-                          </button>
+                          </div>
                         </td>
                       );
                     })}
@@ -302,24 +308,32 @@ export function ShiftCoverageGrid({
                 key={therapist.id}
                 className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 space-y-2 shadow-2xs"
               >
-                {/* Header: Therapist Name + Total Hours Badge */}
+                {/* Header: Therapist Name + Edit Button + Total Hours Badge */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <span
                       className="h-2.5 w-2.5 rounded-full"
                       style={{ background: therapist.color ?? '#2c5f63' }}
                       aria-hidden
                     />
-                    <h3 className="font-semibold text-xs text-[var(--ink)] truncate max-w-[180px]">
+                    <h3 className="font-semibold text-xs text-[var(--ink)] truncate max-w-[140px]">
                       {therapist.name}
                     </h3>
+                    <button
+                      type="button"
+                      onClick={() => handleEditTherapist(therapist.id)}
+                      className="rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--teal)] hover:border-[var(--teal)] hover:bg-[var(--paper)] transition"
+                      aria-label={`Edit ${therapist.name}'s schedule`}
+                    >
+                      Edit
+                    </button>
                   </div>
                   <span className="rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-[10.5px] font-bold text-[var(--teal)]">
                     {weekly.totalHours}h {weekly.isAllDefault ? '• Default' : `• ${weekly.shiftsCount} shifts`}
                   </span>
                 </div>
 
-                {/* 7-Day Touch Strip */}
+                {/* 7-Day Quick Strip (Read-only indicators) */}
                 <div className="grid grid-cols-7 gap-1">
                   {WEEKDAY_ORDER.map((weekday) => {
                     const cell = dayMap?.get(weekday);
@@ -346,12 +360,10 @@ export function ShiftCoverageGrid({
                     }
 
                     return (
-                      <button
+                      <div
                         key={weekday}
-                        type="button"
-                        onClick={() => handleCellClick(therapist.id, weekday)}
                         title={cell?.tooltip}
-                        className="flex flex-col items-center justify-center rounded-lg border border-[var(--border)]/80 p-1 text-center min-h-[44px] hover:border-[var(--teal)] active:scale-95 transition"
+                        className="flex flex-col items-center justify-center rounded-lg border border-[var(--border)]/80 p-1 text-center min-h-[44px]"
                       >
                         <span className="text-[9.5px] font-bold text-[var(--muted)] leading-none mb-1">
                           {meta.short}
@@ -359,7 +371,7 @@ export function ShiftCoverageGrid({
                         <span className={`inline-block truncate rounded px-1 py-0.5 text-[9px] font-semibold leading-tight w-full border ${pillStyle}`}>
                           {pillContent}
                         </span>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -369,14 +381,13 @@ export function ShiftCoverageGrid({
         )}
       </div>
 
-      {/* Direct Cell / Assign Shift Dialog */}
+      {/* Assign Shift Dialog */}
       {dialogState.isOpen && (
         <AssignShiftDialog
-          key={`${dialogState.therapistId ?? 'all'}-${dialogState.weekday ?? 'all'}`}
+          key={dialogState.therapistId ?? 'all'}
           isOpen={dialogState.isOpen}
           onClose={() => setDialogState({ isOpen: false })}
           initialTherapistId={dialogState.therapistId}
-          initialWeekday={dialogState.weekday}
           therapists={activeTherapists}
           templates={templates}
           approvedAssignments={approvedAssignments}

@@ -465,18 +465,29 @@ export function previewAssign({
           a.weekdays?.some((w) => weekdaySet.has(w))
       );
       for (const a of approved) {
-        const overlapDays = a.weekdays?.filter((w) => weekdaySet.has(w)) ?? [];
-        if (overlapDays.length > 0) {
-          replaces.push(
-            `Replaces ${formatWeekdays(overlapDays)} on ${therapist.name}'s schedule`
-          );
+        if (a.shiftTemplateId && a.shiftTemplateId !== template.id) {
+          const overlapDays = a.weekdays?.filter((w) => weekdaySet.has(w)) ?? [];
+          if (overlapDays.length > 0) {
+            replaces.push(
+              `Replaces ${formatWeekdays(overlapDays)} on ${therapist.name}'s schedule`
+            );
+          }
         }
       }
 
-      // Check if custom hours exist for any chosen weekdays
+      // Check if custom hours exist for any chosen weekdays that are not already covered by an approved template
       if (therapist.workingHours) {
+        const daysWithApprovedTemplate = new Set(
+          existingApproved
+            .filter((a) => a.therapistId === therapist.id && a.shiftTemplateId)
+            .flatMap((a) => a.weekdays ?? [])
+        );
         const customDays = weekdays.filter(
-          (w) => String(w) in (therapist.workingHours ?? {})
+          (w) =>
+            !daysWithApprovedTemplate.has(w) &&
+            String(w) in (therapist.workingHours ?? {}) &&
+            (therapist.workingHours as Record<string, unknown>)[String(w)] != null &&
+            ((therapist.workingHours as Record<string, [number, number][]>)[String(w)] ?? []).length > 0
         );
         if (customDays.length > 0) {
           replaces.push(
