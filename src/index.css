@@ -313,6 +313,16 @@ body {
    showed on desktop beside the rail's own therapist list. */
 @layer components {
   .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  /* Centered pop-up panels: never taller than the visible screen, scroll inside
+     instead. Without it, a short phone (or an open keyboard) cuts off the top
+     and the action buttons with no way to reach them. 100dvh tracks the
+     browser toolbar; the vh line is the fallback for browsers without dvh. */
+  .dialog-panel {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 .mini-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .mini-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 6px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; }
@@ -417,4 +427,19 @@ body {
   .settings-card-highlight {
     transition: none;
   }
+}
+
+/* A chart/card nested inside a SectionCard. On phones the extra border + padding
+   costs ~50px of chart width and reads as a box inside a box, so it flattens to
+   a divided section; from sm: up it keeps its own card look. */
+@media (max-width: 639.98px) {
+  .chart-panel {
+    border-width: 0;
+    border-top-width: 1px;
+    border-radius: 0;
+    background: transparent;
+    padding: 16px 0 0;
+    box-shadow: none;
+  }
+  .chart-panel:first-child { border-top-width: 0; padding-top: 0; }
 }

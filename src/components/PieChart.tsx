@@ -45,6 +45,20 @@ export function PieChart({ data, width = 200, height = 200, showPercent = false,
 
     const largeArc = sliceAngle > 180 ? 1 : 0;
 
+    currentAngle = endAngle;
+    const dimmed = interactive && selectedIndex != null && selectedIndex !== i;
+    const common = {
+      key: i,
+      fill: SERIES_COLORS[i % SERIES_COLORS.length],
+      opacity: dimmed ? 0.35 : 1,
+      onClick: interactive ? () => toggle(i) : undefined,
+      className: `transition-opacity ${interactive ? 'cursor-pointer' : 'hover:opacity-80'}`,
+    };
+
+    // One slice covering everything: an arc whose start and end points coincide
+    // draws nothing, so the whole pie vanished — draw a full circle instead.
+    if (sliceAngle >= 359.99) return <circle {...common} cx={centerX} cy={centerY} r={radius} />;
+
     const path = [
       `M ${centerX} ${centerY}`,
       `L ${x1} ${y1}`,
@@ -52,24 +66,12 @@ export function PieChart({ data, width = 200, height = 200, showPercent = false,
       'Z',
     ].join(' ');
 
-    currentAngle = endAngle;
-    const dimmed = interactive && selectedIndex != null && selectedIndex !== i;
-
-    return (
-      <path
-        key={i}
-        d={path}
-        fill={SERIES_COLORS[i % SERIES_COLORS.length]}
-        opacity={dimmed ? 0.35 : 1}
-        onClick={interactive ? () => toggle(i) : undefined}
-        className={`transition-opacity ${interactive ? 'cursor-pointer' : 'hover:opacity-80'}`}
-      />
-    );
+    return <path {...common} d={path} />;
   });
 
   return (
-    <div className="flex items-center justify-center gap-6">
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0">
+    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="h-auto max-w-full shrink-0">
         {paths}
       </svg>
       <div className="space-y-1 text-xs">

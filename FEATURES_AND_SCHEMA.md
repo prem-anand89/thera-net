@@ -4489,6 +4489,38 @@ once-per-tab flag, so a later deploy in the same tab can still self-heal while
 a broken deploy can't loop. `ErrorBoundary`/`RouterErrorFallback` remain as
 the fallback and use the same helper.
 
+### 0b. Phone layout conventions
+Checked at 375px wide (and 375x640 for pop-ups) with the app booted in headless
+Chromium against mocked Supabase responses — a quick way to catch what a code
+read misses (clipped pills, tables wider than their card).
+- **Pop-up panels use `.dialog-panel`** (`index.css`): capped at the visible
+  height (`100dvh`, `100vh` fallback) and scrolling inside. A centered panel
+  without it loses its top and its action buttons off-screen on a short phone or
+  with the keyboard open, with no way to scroll to them. Long forms (the team
+  member edit form) also pin the Save/Cancel footer outside the scrolling body.
+- **Charts/cards nested in a `SectionCard` use `.chart-panel`**: a bordered card
+  from `sm:` up, a flat divided section on phones, so the chart gets the card's
+  full width instead of a box inside a box.
+- **Wide tables on phones.** The month breakdown hides secondary columns below
+  `tab:` (Month, revenue, MoM %, visits on a phone; all seven from tablet width).
+  The therapist comparison stays a real table at every width — sticky Therapist
+  column, tighter cell padding, no caption lines, a "swipe sideways" hint — because
+  a per-therapist card list read worse than a table. The Monthly statement keeps its
+  deliberate sticky-column sideways scroll.
+- **Long lists in Reports collapse** (`ShowMore.tsx`: `useShowMore` + `ShowMoreFooter`):
+  5 rows by default, then "Show more / Show all /
+  Show less". Used by Single-visit patients and the Referral sources patient/partner
+  lists, which grow with the clinic; a
+  list's `resetKey` (filter, selected source) collapses it back to the first page.
+  Footer totals still cover the whole list ("Total (all 43)"). Bounded lists — the
+  6-item modalities chart, a handful of therapists, ≤12 months — don't need it.
+- **Chart headline numbers are `text-xl font-semibold`** (`text-2xl` on the
+  utilisation cards), not bold display size, so they don't dominate the chart under them.
+- **A "vs …" KPI label and its comparison figure read as one phrase** ("vs last
+  month: ₹26,932"), never "vs last month · Last month: ₹26,932".
+- **Don't repeat a heading at several levels** (card title, eyebrow, sub-heading,
+  table heading all saying "therapist comparison"): one title per block.
+
 ### 1. Offline-First with Outbox Sync
 - **Dexie** for local IndexedDB storage
 - **Outbox table** (in Supabase) for tracking changes made offline

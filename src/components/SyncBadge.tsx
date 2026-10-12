@@ -172,7 +172,7 @@ function DiscardChangeDialog({ entry, onClose }: { entry: OutboxEntry; onClose: 
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--ink)]/40 p-4">
-      <div className="w-full max-w-sm space-y-3 rounded-2xl bg-[var(--surface)] p-5">
+      <div className="dialog-panel w-full max-w-sm space-y-3 rounded-2xl bg-[var(--surface)] p-5">
         <h2 className="text-sm font-semibold text-[var(--ink)]">
           {permanent ? `Dismiss this ${label}?` : `Discard this ${label}?`}
         </h2>

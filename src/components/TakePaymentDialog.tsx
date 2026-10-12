@@ -192,7 +192,7 @@ export function TakePaymentDialog({
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5"
+        className="dialog-panel w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5"
       >
         <h2 className="text-sm font-semibold text-[var(--ink)]">Take payment</h2>
         <p className="text-sm text-[var(--muted)]">

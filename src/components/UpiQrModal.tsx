@@ -117,7 +117,7 @@ function UpiQrModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="upi-qr-title"
-        className="w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5"
+        className="dialog-panel w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5"
       >
         <h2 id="upi-qr-title" className="font-display text-base font-semibold text-[var(--ink)]">
           Scan to pay

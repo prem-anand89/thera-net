@@ -13,6 +13,7 @@ import {
 import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
 import { SectionCard, th, td, tdNum, thNum } from '@/components/ui';
+import { ShowMoreFooter, useShowMore } from '@/components/ShowMore';
 import { BarChart } from '@/components/BarChart';
 import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { PieChart } from '@/components/PieChart';
@@ -91,7 +92,7 @@ function KpiCard({
         </span>
         {trendPct != null && (
           <span
-            className="font-num text-xs font-semibold"
+            className="font-num whitespace-nowrap text-xs font-semibold"
             style={{ color: trendPct >= 0 ? 'var(--moss)' : 'var(--rust)' }}
           >
             {trendPct >= 0 ? '▲' : '▼'} {Math.abs(trendPct)}%
@@ -100,9 +101,19 @@ function KpiCard({
       </div>
       {(trendLabel || lastMonthValue != null) && (
         <div className="mt-0.5 text-[11px] text-[var(--muted)]">
-          {trendLabel}
-          {trendLabel && lastMonthValue != null && ' · '}
-          {lastMonthValue != null && <>Last month: {lastMonthValue}</>}
+          {/* A "vs …" label and the figure it compares against read as one phrase
+              ("vs last month: ₹26,932"), not "vs last month · Last month: ₹26,932". */}
+          {trendLabel && lastMonthValue != null && /(^|· )vs /.test(trendLabel) ? (
+            <>
+              {trendLabel}: {lastMonthValue}
+            </>
+          ) : (
+            <>
+              {trendLabel}
+              {trendLabel && lastMonthValue != null && ' · '}
+              {lastMonthValue != null && <>Last month: {lastMonthValue}</>}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -452,6 +463,9 @@ export function ReportsOverviewPage() {
     }
     return [...byDetail.entries()].sort((a, b) => b[1].revenuePaise - a[1].revenuePaise);
   }, [referralActive, referralNeedsDetail]);
+  // Long lists (every patient under one source) collapse to a first page.
+  const referralPatientsList = useShowMore(referralActive?.patients ?? [], referralActiveIdx, 5);
+  const referralGroupsList = useShowMore(referralDetailGroups, referralActiveIdx, 5);
 
   // The clinic's own "why didn't they come back" list
   const noReturnReasons = useLiveQuery(
@@ -663,15 +677,15 @@ export function ReportsOverviewPage() {
             }}
             momFocus={focusMonth}
             onMomFocusChange={(m) => updateTrendPeriod({ period: 'mom', year: m.year, month: m.month })}
-            periodCaption={`Applies to revenue trend and therapist comparison · ${trendPeriodCaption}`}
+            periodCaption={`Showing ${trendPeriodCaption} · applies to revenue trend and therapist comparison`}
           />
           <SectionCard
             title={
               scope.isClinicWideView
                 ? revenueLabel === 'Revenue'
-                  ? `Revenue trend — ${trendPeriodCaption}`
-                  : `Revenue trend — ${trendPeriodCaption} (${revenueLabel})`
-                : `My revenue trend — ${trendPeriodCaption} (${revenueLabel})`
+                  ? 'Revenue trend'
+                  : `Revenue trend (${revenueLabel})`
+                : `My revenue trend (${revenueLabel})`
             }
           >
             {trend && !hasEnoughTrendHistory && (
@@ -733,7 +747,7 @@ export function ReportsOverviewPage() {
           >
             <SectionCard title="Treatment modalities">
               <p className="mb-3 text-xs text-[var(--muted)]">
-                Breakdown of treatment modalities recorded in clinical notes across all visits.
+                From clinical notes, across all visits.
               </p>
               {modalityUsage === undefined ? null : modalityUsage.length === 0 ? (
                 <p className="py-6 text-center text-sm text-[var(--muted)]">
@@ -790,7 +804,7 @@ export function ReportsOverviewPage() {
                         table too tight on a phone. */}
                   <div className="tab:hidden space-y-1.5">
                     {referralNeedsDetail
-                      ? referralDetailGroups.map(([name, g]) => (
+                      ? referralGroupsList.visible.map(([name, g]) => (
                           <div
                             key={name}
                             className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
@@ -802,14 +816,14 @@ export function ReportsOverviewPage() {
                             </span>
                           </div>
                         ))
-                      : referralActive.patients.map((p) => (
+                      : referralPatientsList.visible.map((p) => (
                           <div
                             key={p.patientId}
                             className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
                           >
-                            <span className="min-w-0 truncate">
-                              {p.patientName}{' '}
-                              <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                            <span className="min-w-0">
+                              <span className="block truncate">{p.patientName}</span>
+                              <span className="block text-xs text-[var(--muted)]">{p.mrno}</span>
                             </span>
                             <span className="font-num shrink-0 text-xs text-[var(--muted)]">
                               {p.visitCount} visit{p.visitCount === 1 ? '' : 's'} ·{' '}
@@ -833,7 +847,7 @@ export function ReportsOverviewPage() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)]">
-                              {referralDetailGroups.map(([name, g]) => (
+                              {referralGroupsList.visible.map(([name, g]) => (
                                 <tr key={name} className="hover:bg-[var(--paper)]/50 transition-colors">
                                   <td className={`${td} font-medium`}>{name}</td>
                                   <td className={tdNum}>{g.patients}</td>
@@ -844,7 +858,9 @@ export function ReportsOverviewPage() {
                             </tbody>
                             <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold text-sm">
                               <tr>
-                                <td className={`${td} font-bold text-[var(--ink)]`}>Total</td>
+                                <td className={`${td} font-bold text-[var(--ink)]`}>
+                                  {referralGroupsList.hasMore ? `Total (all ${referralGroupsList.total})` : 'Total'}
+                                </td>
                                 <td className={`${tdNum} font-bold text-[var(--ink)]`}>
                                   {referralDetailGroups.reduce((s, [, g]) => s + g.patients, 0)}
                                 </td>
@@ -867,7 +883,7 @@ export function ReportsOverviewPage() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)]">
-                              {referralActive.patients.map((p) => (
+                              {referralPatientsList.visible.map((p) => (
                                 <tr key={p.patientId} className="hover:bg-[var(--paper)]/50 transition-colors">
                                   <td className={td}>
                                     <span className="font-medium">{p.patientName}</span>{' '}
@@ -880,7 +896,9 @@ export function ReportsOverviewPage() {
                             </tbody>
                             <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold text-sm">
                               <tr>
-                                <td className={`${td} font-bold text-[var(--ink)]`}>Total</td>
+                                <td className={`${td} font-bold text-[var(--ink)]`}>
+                                  {referralPatientsList.hasMore ? `Total (all ${referralPatientsList.total})` : 'Total'}
+                                </td>
                                 <td className={`${tdNum} font-bold text-[var(--ink)]`}>
                                   {referralActive.patients.reduce((s, p) => s + p.visitCount, 0)}
                                 </td>
@@ -894,6 +912,10 @@ export function ReportsOverviewPage() {
                       </table>
                     </div>
                   </div>
+                  <ShowMoreFooter
+                    list={referralNeedsDetail ? referralGroupsList : referralPatientsList}
+                    noun={referralNeedsDetail ? 'entries' : 'patients'}
+                  />
                 </div>
               </div>
             ) : (

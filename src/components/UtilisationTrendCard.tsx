@@ -73,20 +73,20 @@ export function UtilisationTrendCard({
   const targetY = baseline - (targetRatio / ceilingRatio) * plotH;
 
   return (
-    <div className="flex flex-col justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs">
+    <div className="chart-panel flex flex-col justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs">
       <div>
         <div className="flex items-start justify-between">
           <div>
             <h3 className="font-display text-sm font-semibold text-[var(--ink)]">{title}</h3>
             <p className="text-xs text-[var(--muted)]">{subtitle}</p>
           </div>
-          <span className="rounded-full bg-[var(--paper)] px-2 py-0.5 text-[11px] font-semibold text-[var(--muted)]">
+          <span className="whitespace-nowrap rounded-full bg-[var(--paper)] px-2 py-0.5 text-[11px] font-semibold text-[var(--muted)]">
             {activeReport?.bucket.label ?? '—'}
           </span>
         </div>
 
         <div className="mt-3 flex items-baseline gap-3">
-          <span className="font-num text-3xl font-bold tracking-tight text-[var(--ink)]">
+          <span className="font-num text-xl font-medium text-[var(--ink)]">
             {pct(activeRatio)}
           </span>
           {compareMode && deltaPts != null && (

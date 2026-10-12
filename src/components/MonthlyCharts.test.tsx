@@ -73,7 +73,8 @@ describe('MonthlyVisitsChart', () => {
     );
 
     expect(screen.getByText(/Patient Visits/i)).toBeInTheDocument();
-    expect(screen.getByText('35 visits')).toBeInTheDocument();
+    // The unit is a separate muted span, so match on the headline's full text.
+    expect(screen.getByText((_, el) => el?.textContent === '35 visits' && el.tagName === 'SPAN')).toBeInTheDocument();
     expect(screen.getByText(/\+7 vs prior/i)).toBeInTheDocument(); // 35 vs 28 = +7
 
     const sepBar = screen.getByRole('button', { name: /Sep: 28 visits/i });

@@ -570,7 +570,7 @@ export function ConfirmDialog({
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-sm space-y-3 rounded-[10px] bg-[var(--surface)] p-5"
+        className="dialog-panel w-full max-w-sm space-y-3 rounded-[10px] bg-[var(--surface)] p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-sm font-semibold text-[var(--ink)]">{title}</h2>

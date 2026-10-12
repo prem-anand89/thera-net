@@ -5,18 +5,9 @@ import { MonthlyVisitsChart } from '@/components/MonthlyVisitsChart';
 import { RevenueTrendMonthTable } from '@/components/RevenueTrendMonthTable';
 import { useCompactChart } from '@/components/useCompactChart';
 
-function TrendSection({
-  kicker,
-  title,
-  children,
-}: {
-  kicker: string;
-  title: string;
-  children: ReactNode;
-}) {
+function TrendSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="border-t border-[var(--border)] pt-4 first:border-t-0 first:pt-0">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">{kicker}</p>
       <h3 className="font-display text-sm font-semibold text-[var(--ink)]">{title}</h3>
       <div className="mt-3">{children}</div>
     </div>
@@ -58,7 +49,7 @@ export function RevenueTrendPanel({
 
   return (
     <div className="space-y-4">
-      <TrendSection kicker="Volume & revenue" title="Visits and revenue each month">
+      <div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <MonthlyRevenueChart
             categories={chartCategories}
@@ -82,9 +73,9 @@ export function RevenueTrendPanel({
             onHoverIndex={setHoveredIndex}
           />
         </div>
-      </TrendSection>
+      </div>
 
-      <TrendSection kicker="Monthly breakdown" title="Month-by-month financial summary">
+      <TrendSection title="Month-by-month breakdown">
         <RevenueTrendMonthTable
           monthLabels={categories}
           revenuePaise={revenuePaise}

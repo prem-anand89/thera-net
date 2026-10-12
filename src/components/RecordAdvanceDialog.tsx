@@ -71,7 +71,7 @@ export function RecordAdvanceDialog({
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5"
+        className="dialog-panel w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5"
       >
         {recorded ? (
           <>

@@ -8,6 +8,13 @@ import {
   type RankMetric,
 } from '@/domain/therapistRanking';
 
+// Phones keep the full table (sticky Therapist column, sideways scroll for the rest),
+// just tighter: less cell padding and no caption lines under the headings.
+const tdT = `${td} max-tab:px-2`;
+const tdN = `${tdNum} max-tab:px-2`;
+const thT = `${th} max-tab:px-2`;
+const thN = `${thNum} max-tab:px-2`;
+
 export function TableColumnHead({
   title,
   detail,
@@ -20,7 +27,7 @@ export function TableColumnHead({
   sorted?: boolean;
 }) {
   return (
-    <th className={thNum} aria-sort={sorted ? 'descending' : undefined}>
+    <th className={thN} title={detail} aria-sort={sorted ? 'descending' : undefined}>
       <div>
         {onSort ? (
           <button
@@ -36,7 +43,7 @@ export function TableColumnHead({
           title
         )}
       </div>
-      <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-[var(--muted)]">
+      <div className="mt-0.5 hidden text-[9px] font-normal normal-case tracking-normal text-[var(--muted)] tab:block">
         {detail}
       </div>
     </th>
@@ -95,10 +102,10 @@ export function TherapistComparisonTable({
           <thead className="bg-[var(--paper)]">
             <tr>
               <th
-                className={`${th} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]`}
+                className={`${thT} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]`}
               >
                 <div>Therapist</div>
-                <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-[var(--muted)]">
+                <div className="mt-0.5 hidden text-[9px] font-normal normal-case tracking-normal text-[var(--muted)] tab:block">
                   Team member
                 </div>
               </th>
@@ -119,22 +126,22 @@ export function TherapistComparisonTable({
             {shownRows.map((row) => (
               <tr key={row.therapistName} className="hover:bg-[var(--paper)]/50 transition-colors">
                 <td
-                  className={`${td} sticky left-0 z-[1] bg-[var(--surface)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-medium text-[var(--ink)]`}
+                  className={`${tdT} sticky left-0 z-[1] bg-[var(--surface)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-medium text-[var(--ink)]`}
                 >
                   {row.therapistName}
                 </td>
-                <td className={tdNum}>{formatINR(row.billPaise)}</td>
-                {showPostTax && <td className={tdNum}>{formatINR(row.postTaxPaise)}</td>}
-                <td className={tdNum}>{formatINR(row.netPostTaxPaise)}{lead('net', row.therapistName)}</td>
-                <td className={tdNum}>{row.visitCount}{lead('visits', row.therapistName)}</td>
-                <td className={tdNum}>{row.newPackages}</td>
-                <td className={tdNum}>
+                <td className={tdN}>{formatINR(row.billPaise)}</td>
+                {showPostTax && <td className={tdN}>{formatINR(row.postTaxPaise)}</td>}
+                <td className={tdN}>{formatINR(row.netPostTaxPaise)}{lead('net', row.therapistName)}</td>
+                <td className={tdN}>{row.visitCount}{lead('visits', row.therapistName)}</td>
+                <td className={tdN}>{row.newPackages}</td>
+                <td className={tdN}>
                   {row.retentionPct != null ? `${row.retentionPct}%` : '—'}
                   {lead('retention', row.therapistName)}
                 </td>
                 {showUtilisation && (
                   <td
-                    className={tdNum}
+                    className={tdN}
                     title={row.utilisationClinicHours ? 'Based on clinic hours — no personal hours set' : undefined}
                   >
                     <div className="flex items-center justify-end gap-2.5">
@@ -177,18 +184,18 @@ export function TherapistComparisonTable({
             <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold text-sm">
               <tr>
                 <td
-                  className={`${td} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-bold text-[var(--ink)]`}
+                  className={`${tdT} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-bold text-[var(--ink)]`}
                 >
                   Total
                 </td>
-                <td className={`${tdNum} font-bold text-[var(--ink)]`}>{formatINR(total.billPaise)}</td>
-                {showPostTax && <td className={`${tdNum} font-bold text-[var(--ink)]`}>{formatINR(total.postTaxPaise)}</td>}
-                <td className={`${tdNum} font-bold text-[var(--ink)]`}>{formatINR(total.netPostTaxPaise)}</td>
-                <td className={`${tdNum} font-bold text-[var(--ink)]`}>{total.visitCount}</td>
-                <td className={`${tdNum} font-bold text-[var(--ink)]`}>{total.newPackages}</td>
-                <td className={tdNum}>—</td>
+                <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.billPaise)}</td>
+                {showPostTax && <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.postTaxPaise)}</td>}
+                <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.netPostTaxPaise)}</td>
+                <td className={`${tdN} font-bold text-[var(--ink)]`}>{total.visitCount}</td>
+                <td className={`${tdN} font-bold text-[var(--ink)]`}>{total.newPackages}</td>
+                <td className={tdN}>—</td>
                 {showUtilisation && (
-                  <td className={tdNum}>
+                  <td className={tdN}>
                     {total.utilisation != null ? (
                       <div className="flex items-center justify-end gap-2.5">
                         <div
@@ -223,6 +230,9 @@ export function TherapistComparisonTable({
           )}
         </table>
       </div>
+      <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)] tab:hidden">
+        Swipe sideways for more columns.
+      </p>
       {anyLeader && (
         <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
           Top marks the best in each column among therapists with at least {MIN_VISITS_FOR_RANKING} visits in the period.

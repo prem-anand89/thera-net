@@ -5,6 +5,7 @@ import { feedbackService } from '@/services';
 import type { NoReturnReasonItem } from '@/domain/types';
 import type { SingleVisitPatientRow } from '@/services/dashboardService';
 import { SectionCard, Pill } from '@/components/ui';
+import { ShowMoreFooter, useShowMore } from '@/components/ShowMore';
 
 type TriageFilter = 'all' | 'needs_review' | 'logged' | 'closed';
 
@@ -90,6 +91,8 @@ export function SingleVisitPatientsCard({
 
     return rows;
   }, [allRows, filter, searchQuery]);
+
+  const list = useShowMore(filteredRows, `${filter}|${searchQuery}`, 5);
 
   async function handleAddReasonSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -338,7 +341,7 @@ export function SingleVisitPatientsCard({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)]">
-                  {filteredRows.slice(0, 50).map((p) => (
+                  {list.visible.map((p) => (
                     <tr key={p.patientId} className="hover:bg-[var(--paper)]/50 transition-colors">
                       {/* Patient */}
                       <td className="px-4 py-3">
@@ -437,7 +440,7 @@ export function SingleVisitPatientsCard({
 
             {/* Mobile Cards (< md) */}
             <div className="md:hidden divide-y divide-[var(--border)] bg-[var(--surface)]">
-              {filteredRows.slice(0, 50).map((p) => (
+              {list.visible.map((p) => (
                 <div key={p.patientId} className="p-3.5 space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -511,11 +514,7 @@ export function SingleVisitPatientsCard({
               ))}
             </div>
 
-            {filteredRows.length > 50 && (
-              <div className="border-t border-[var(--border)] bg-[var(--paper)]/50 px-4 py-2.5 text-center text-xs text-[var(--muted)]">
-                Showing 50 of {filteredRows.length} patients matching filter.
-              </div>
-            )}
+            <ShowMoreFooter list={list} noun="patients" />
           </div>
         )}
       </SectionCard>

@@ -90,7 +90,7 @@ export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps)
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-md rounded-2xl bg-[var(--surface)] p-6 shadow-xl"
+        className="dialog-panel w-full max-w-md rounded-2xl bg-[var(--surface)] p-6 shadow-xl"
       >
           {success ? (
             <div className="text-center py-6">
