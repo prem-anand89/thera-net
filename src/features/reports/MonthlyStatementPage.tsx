@@ -32,8 +32,11 @@ export function MonthlyStatementPage() {
   const { partnerSplit, therapistSplit } = clinicBillingConfig(clinic);
   const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
   const [fyStartYear, setFyStartYear] = useState(currentFy.startYear);
-  const now = new Date();
-  const [month, setMonth] = useState(`${now.getFullYear()}-${now.getMonth() + 1}`);
+  const { currentYear, currentMonth } = useMemo(() => {
+    const d = new Date();
+    return { currentYear: d.getFullYear(), currentMonth: d.getMonth() + 1 };
+  }, []);
+  const [month, setMonth] = useState(`${currentYear}-${currentMonth}`);
 
   const months = useMemo(
     () => monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth),
@@ -119,9 +122,9 @@ export function MonthlyStatementPage() {
       : null;
 
   const currentMonthIndices = useMemo(() => {
-    const isCurrent = selected.year === now.getFullYear() && selected.month === now.getMonth() + 1;
+    const isCurrent = selected.year === currentYear && selected.month === currentMonth;
     return isCurrent && trendCategories.length > 0 ? [trendCategories.length - 1] : [];
-  }, [selected.year, selected.month, trendCategories.length, now]);
+  }, [selected.year, selected.month, trendCategories.length, currentYear, currentMonth]);
 
   const trendPeriodRange = useMemo(() => {
     if (trendCategories.length === 0) return '';
