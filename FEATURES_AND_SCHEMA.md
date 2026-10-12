@@ -4508,7 +4508,7 @@ read misses (clipped pills, tables wider than their card).
   a per-therapist card list read worse than a table. The Monthly statement keeps its
   deliberate sticky-column sideways scroll.
 - **Long lists in Reports collapse** (`ShowMore.tsx`: `useShowMore` + `ShowMoreFooter`):
-  10 rows by default (5 for Single-visit patients), then "Show more / Show all /
+  5 rows by default, then "Show more / Show all /
   Show less". Used by Single-visit patients and the Referral sources patient/partner
   lists, which grow with the clinic; a
   list's `resetKey` (filter, selected source) collapses it back to the first page.

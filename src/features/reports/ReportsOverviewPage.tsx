@@ -464,8 +464,8 @@ export function ReportsOverviewPage() {
     return [...byDetail.entries()].sort((a, b) => b[1].revenuePaise - a[1].revenuePaise);
   }, [referralActive, referralNeedsDetail]);
   // Long lists (every patient under one source) collapse to a first page.
-  const referralPatientsList = useShowMore(referralActive?.patients ?? [], referralActiveIdx);
-  const referralGroupsList = useShowMore(referralDetailGroups, referralActiveIdx);
+  const referralPatientsList = useShowMore(referralActive?.patients ?? [], referralActiveIdx, 5);
+  const referralGroupsList = useShowMore(referralDetailGroups, referralActiveIdx, 5);
 
   // The clinic's own "why didn't they come back" list
   const noReturnReasons = useLiveQuery(
