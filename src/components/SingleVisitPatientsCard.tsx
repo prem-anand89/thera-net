@@ -50,7 +50,7 @@ export function SingleVisitPatientsCard({
   const [reasonDraftClosed, setReasonDraftClosed] = useState(false);
   const [isSubmittingReason, setIsSubmittingReason] = useState(false);
 
-  const allRows = patients ?? [];
+  const allRows = useMemo(() => patients ?? [], [patients]);
 
   // Triage counts
   const counts = useMemo(() => {

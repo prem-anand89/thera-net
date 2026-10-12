@@ -431,11 +431,22 @@ export function createDashboardService(repos: Repos) {
         if (v.deleted || !v.invoiceId || visitByInvoiceId.has(v.invoiceId)) continue;
         visitByInvoiceId.set(v.invoiceId, { id: v.id, patientId: v.patientId });
       }
+      // An invoice that has been superseded by an amendment is obsolete —
+      // the new amendment invoice carries the active balance and visits.
+      const supersededInvoiceIds = new Set(
+        invoices
+          .map((inv) => inv.supersedesInvoiceId)
+          .filter((id): id is UUID => Boolean(id))
+      );
       // Absence of a payment row means paid (see InvoicePayment doc comment) —
       // only an explicit 'outstanding' row counts here.
       const statusByInvoiceId = new Map(payments.map((p) => [p.invoiceId, p.status]));
       const rows: OutstandingInvoiceRow[] = invoices
-        .filter((inv) => statusByInvoiceId.get(inv.id) === 'outstanding')
+        .filter(
+          (inv) =>
+            !supersededInvoiceIds.has(inv.id) &&
+            statusByInvoiceId.get(inv.id) === 'outstanding'
+        )
         .map((inv) => ({
           invoiceId: inv.id,
           invoiceNo: inv.invoiceNo,

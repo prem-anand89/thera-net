@@ -624,7 +624,7 @@ export function InvoicePrintPage() {
         {/* Document Title */}
         <div className="mt-6 text-center">
           <h2 className="font-display text-lg font-bold uppercase tracking-wide text-[var(--ink)]">
-            {isVoid ? 'BILL (VOID)' : isPaid ? 'BILL CUM RECEIPT' : 'BILL'}
+            {isVoid ? 'BILL (VOID)' : supersededBy ? 'BILL (SUPERSEDED)' : isPaid ? 'BILL CUM RECEIPT' : 'BILL'}
           </h2>
         </div>
 
@@ -703,8 +703,8 @@ export function InvoicePrintPage() {
                     <th className="w-1/3 py-0.5 font-medium text-[var(--muted)] align-top">Status</th>
                     <td className="py-0.5 font-semibold align-top">
                       :{' '}
-                      <span className={isPaid ? 'text-[var(--moss-strong)]' : 'text-[var(--rust)]'}>
-                        {isVoid ? 'VOID' : isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE'}
+                      <span className={supersededBy ? 'text-[var(--muted)]' : isPaid ? 'text-[var(--moss-strong)]' : 'text-[var(--rust)]'}>
+                        {isVoid ? 'VOID' : supersededBy ? 'SUPERSEDED' : isPaid ? 'PAID' : isPartial ? 'PART PAID' : 'PAYMENT DUE'}
                       </span>
                     </td>
                   </tr>

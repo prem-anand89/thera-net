@@ -468,6 +468,35 @@ describe('dashboardService.outstandingInvoices', () => {
     expect(byId.get('inv-2')?.visitId).toBeNull(); // only a deleted visit is left
     expect(byId.get('inv-3')?.visitId).toBeNull(); // never had one
   });
+
+  it('excludes an invoice that has been superseded by an amendment', async () => {
+    fake.invoices.set('inv-1', baseInvoice('inv-1', { totalPaise: rs(1000) }));
+    fake.invoices.set(
+      'inv-2',
+      baseInvoice('inv-2', { totalPaise: rs(1500), supersedesInvoiceId: 'inv-1' })
+    );
+    fake.invoicePayments.set('p-inv-1', {
+      id: 'p1',
+      clinicId: 'clinic-1',
+      invoiceId: 'inv-1',
+      status: 'outstanding',
+      paidAt: null,
+      updatedAt: '',
+    });
+    fake.invoicePayments.set('p-inv-2', {
+      id: 'p2',
+      clinicId: 'clinic-1',
+      invoiceId: 'inv-2',
+      status: 'outstanding',
+      paidAt: null,
+      updatedAt: '',
+    });
+    const svc = createDashboardService(fake.repos);
+    const summary = await svc.outstandingInvoices('clinic-1');
+    expect(summary.count).toBe(1);
+    expect(summary.rows[0].invoiceId).toBe('inv-2');
+    expect(summary.totalPaise).toBe(rs(1500));
+  });
 });
 
 describe('dashboardService.monthlyCollection', () => {

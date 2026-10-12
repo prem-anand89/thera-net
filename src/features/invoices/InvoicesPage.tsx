@@ -172,14 +172,24 @@ export function InvoicesPage() {
     [filteredInvoices, sort]
   );
 
+  const supersededInvoiceIds = useMemo(
+    () =>
+      new Set(
+        (invoices ?? [])
+          .map((i) => i.supersedesInvoiceId)
+          .filter((id): id is string => Boolean(id))
+      ),
+    [invoices]
+  );
+
   const { totalOutstanding, totalCollected, totalInvoiced, unbilledTotal } = useMemo(() => {
     let outstanding = 0;
     let collected = 0;
     let invoiced = 0;
     for (const inv of filteredInvoices) {
       const status = invoiceStatus(inv.id);
-      // A voided invoice keeps its number but counts for nothing.
-      if (status === 'void') continue;
+      // A voided or superseded invoice keeps its number but doesn't contribute to active totals.
+      if (status === 'void' || supersededInvoiceIds.has(inv.id)) continue;
       invoiced += inv.totalPaise;
       if (status === 'paid') {
         collected += inv.totalPaise;
@@ -203,7 +213,7 @@ export function InvoicesPage() {
     }
 
     return { totalOutstanding: outstanding, totalCollected: collected, totalInvoiced: invoiced, unbilledTotal: unbilled };
-  }, [filteredInvoices, invoiceStatus, paidByInvoiceId, visits, from, to, directPaymentByVisitId]);
+  }, [filteredInvoices, invoiceStatus, paidByInvoiceId, visits, from, to, directPaymentByVisitId, supersededInvoiceIds]);
 
   // Undo for an invoice flagged paid with no payment behind it. Paying is
   // Take payment, which logs the cash.
@@ -392,9 +402,10 @@ export function InvoicesPage() {
               scroll sideways on a phone. */}
           <div className="tab:hidden space-y-2">
             {sortedInvoices.map((inv) => {
+              const isSuperseded = supersededInvoiceIds.has(inv.id);
               const status = invoiceStatus(inv.id);
               const { paidPaise, remainingPaise } = balanceFor(inv);
-              const isPartial = status === 'outstanding' && paidPaise > 0;
+              const isPartial = !isSuperseded && status === 'outstanding' && paidPaise > 0;
               const initials = inv.patientSnapshot.name
                 .split(/\s+/)
                 .slice(0, 2)
@@ -426,12 +437,12 @@ export function InvoicesPage() {
                       <span className="font-num text-sm font-medium text-[var(--ink)]">
                         {formatINR(inv.totalPaise)}
                       </span>
-                      <Pill tone={status === 'paid' ? 'green' : status === 'void' ? 'slate' : 'amber'}>
-                        {status === 'paid' ? 'Paid' : status === 'void' ? 'Void' : isPartial ? 'Partially paid' : 'Outstanding'}
+                      <Pill tone={isSuperseded ? 'slate' : status === 'paid' ? 'green' : status === 'void' ? 'slate' : 'amber'}>
+                        {isSuperseded ? 'Superseded' : status === 'paid' ? 'Paid' : status === 'void' ? 'Void' : isPartial ? 'Partially paid' : 'Outstanding'}
                       </Pill>
                     </div>
                     <div className="flex items-center gap-2">
-                      {status === 'outstanding' && sampleVisitIdByInvoiceId.has(inv.id) && (
+                      {!isSuperseded && status === 'outstanding' && sampleVisitIdByInvoiceId.has(inv.id) && (
                         <button
                           type="button"
                           className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
@@ -441,12 +452,12 @@ export function InvoicesPage() {
                           Take payment
                         </button>
                       )}
-                      {status === 'outstanding' && !sampleVisitIdByInvoiceId.has(inv.id) && (
+                      {!isSuperseded && status === 'outstanding' && !sampleVisitIdByInvoiceId.has(inv.id) && (
                         <span className="text-xs text-[var(--muted)]" title="Open the invoice and use Void invoice to clear it">
                           Visit removed — void to clear
                         </span>
                       )}
-                      {status === 'outstanding' && (
+                      {!isSuperseded && status === 'outstanding' && (
                         <button
                           type="button"
                           className="text-xs font-medium text-[var(--teal)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
@@ -509,9 +520,10 @@ export function InvoicesPage() {
               </thead>
               <tbody>
                 {sortedInvoices.map((inv) => {
+                  const isSuperseded = supersededInvoiceIds.has(inv.id);
                   const status = invoiceStatus(inv.id);
                   const { paidPaise, remainingPaise } = balanceFor(inv);
-                  const isPartial = status === 'outstanding' && paidPaise > 0;
+                  const isPartial = !isSuperseded && status === 'outstanding' && paidPaise > 0;
                   return (
                     <tr key={inv.id} className="hover:bg-[var(--paper)]">
                       <td className={`${td} font-medium`}>{inv.invoiceNo}</td>
@@ -521,14 +533,16 @@ export function InvoicesPage() {
                       <td className={tdNum}>{formatINR(inv.totalPaise)}</td>
                       <td className={td}>{inv.paymentMode}</td>
                       <td className={td}>
-                        <Pill tone={status === 'paid' ? 'green' : status === 'void' ? 'slate' : 'amber'}>
-                          {status === 'paid'
-                            ? 'Paid'
-                            : status === 'void'
-                              ? 'Void'
-                              : isPartial
-                                ? 'Partially paid'
-                                : 'Outstanding'}
+                        <Pill tone={isSuperseded ? 'slate' : status === 'paid' ? 'green' : status === 'void' ? 'slate' : 'amber'}>
+                          {isSuperseded
+                            ? 'Superseded'
+                            : status === 'paid'
+                              ? 'Paid'
+                              : status === 'void'
+                                ? 'Void'
+                                : isPartial
+                                  ? 'Partially paid'
+                                  : 'Outstanding'}
                         </Pill>
                         {isPartial && (
                           <div className="mt-1 text-xs text-[var(--muted)]">
@@ -536,7 +550,7 @@ export function InvoicesPage() {
                             {formatINR(remainingPaise)} due
                           </div>
                         )}
-                        {status === 'outstanding' && sampleVisitIdByInvoiceId.has(inv.id) && (
+                        {!isSuperseded && status === 'outstanding' && sampleVisitIdByInvoiceId.has(inv.id) && (
                           <button
                             type="button"
                             className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
@@ -546,12 +560,12 @@ export function InvoicesPage() {
                             Take payment
                           </button>
                         )}
-                        {status === 'outstanding' && !sampleVisitIdByInvoiceId.has(inv.id) && (
+                        {!isSuperseded && status === 'outstanding' && !sampleVisitIdByInvoiceId.has(inv.id) && (
                           <span className="ml-2 text-xs text-[var(--muted)]" title="Open the invoice and use Void invoice to clear it">
                             Visit removed — void to clear
                           </span>
                         )}
-                        {status === 'outstanding' && (
+                        {!isSuperseded && status === 'outstanding' && (
                           <button
                             type="button"
                             className="ml-2 text-xs text-[var(--teal)] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"

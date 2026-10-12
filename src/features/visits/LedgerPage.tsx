@@ -22,6 +22,7 @@ import {
   type ConsultationNote,
   type FeedbackRequest,
   type FeedbackResponse,
+  type Invoice,
   type Patient,
   type PaymentStatus,
   type UUID,
@@ -47,6 +48,7 @@ import { SplitModal } from '@/components/SplitModal';
 import { TakePaymentDialog } from '@/components/TakePaymentDialog';
 import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueInvoiceDialog';
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
+import { VoidInvoiceDialog } from '@/components/VoidInvoiceDialog';
 import { InvoicesPage } from '@/features/invoices/InvoicesPage';
 import { DaybookPage } from './DaybookPage';
 
@@ -238,6 +240,7 @@ export function LedgerPage() {
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
   const [takingInvoicePayment, setTakingInvoicePayment] = useState<OutstandingInvoiceRow | null>(null);
+  const [voidingInvoice, setVoidingInvoice] = useState<Invoice | null>(null);
   const [splitting, setSplitting] = useState<Visit | null>(null);
   const [editing, setEditing] = useState<UUID | null>(null);
   const [editPatientId, setEditPatientId] = useState<UUID | null>(null);
@@ -377,6 +380,10 @@ export function LedgerPage() {
   // a separate map off the same invoices list this page's Invoices tab
   // already loads.
   const invoices = useLiveQuery(() => repos.invoices.list(clinic.id), [clinic.id]);
+  const invoiceById = useMemo(
+    () => new Map((invoices ?? []).map((inv) => [inv.id, inv])),
+    [invoices]
+  );
   const issuedAtByInvoiceId = useMemo(
     () => new Map((invoices ?? []).map((inv) => [inv.id, inv.issuedAt])),
     [invoices]
@@ -816,7 +823,11 @@ export function LedgerPage() {
                 </Link>
                 {canBill && (
                   <div className="mt-2 border-t border-[var(--border)] pt-2">
-                    <OutstandingInvoiceActions row={r} onTakePayment={setTakingInvoicePayment} />
+                    <OutstandingInvoiceActions
+                      row={r}
+                      onTakePayment={setTakingInvoicePayment}
+                      onVoid={(row) => setVoidingInvoice(invoiceById.get(row.invoiceId) ?? null)}
+                    />
                   </div>
                 )}
               </div>
@@ -857,7 +868,11 @@ export function LedgerPage() {
                     <td className={tdNum}>{r.daysOutstanding}</td>
                     {canBill && (
                       <td className={td}>
-                        <OutstandingInvoiceActions row={r} onTakePayment={setTakingInvoicePayment} />
+                        <OutstandingInvoiceActions
+                          row={r}
+                          onTakePayment={setTakingInvoicePayment}
+                          onVoid={(row) => setVoidingInvoice(invoiceById.get(row.invoiceId) ?? null)}
+                        />
                       </td>
                     )}
                   </tr>
@@ -1005,6 +1020,14 @@ export function LedgerPage() {
         />
       )}
 
+      {voidingInvoice && (
+        <VoidInvoiceDialog
+          invoice={voidingInvoice}
+          receivedPaise={0}
+          onClose={() => setVoidingInvoice(null)}
+        />
+      )}
+
       {editPatientId && editPatient && (
         <EditPatientModal
           patient={editPatient}
@@ -1034,9 +1057,11 @@ export function LedgerPage() {
 function OutstandingInvoiceActions({
   row,
   onTakePayment,
+  onVoid,
 }: {
   row: OutstandingInvoiceRow;
   onTakePayment: (row: OutstandingInvoiceRow) => void;
+  onVoid: (row: OutstandingInvoiceRow) => void;
 }) {
   if (row.visitId) {
     return (
@@ -1052,14 +1077,24 @@ function OutstandingInvoiceActions({
   return (
     <div className="space-y-1">
       <p className="text-xs text-[var(--muted)]">Its visit was removed, so no payment can be recorded.</p>
-      <Link
-        to="/invoices/$invoiceId/print"
-        params={{ invoiceId: row.invoiceId }}
-        search={{ from: '/ledger' }}
-        className="inline-flex min-h-9 items-center text-sm font-medium text-[var(--rust)] hover:underline"
-      >
-        Review and void
-      </Link>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="min-h-9 text-sm font-medium text-[var(--rust)] hover:underline"
+          onClick={() => onVoid(row)}
+        >
+          Void invoice
+        </button>
+        <span className="text-xs text-[var(--border)]">·</span>
+        <Link
+          to="/invoices/$invoiceId/print"
+          params={{ invoiceId: row.invoiceId }}
+          search={{ from: '/ledger' }}
+          className="inline-flex min-h-9 items-center text-xs text-[var(--muted)] hover:underline"
+        >
+          Review
+        </Link>
+      </div>
     </div>
   );
 }
