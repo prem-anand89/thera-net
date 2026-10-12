@@ -199,7 +199,7 @@ export function EditVisitModal({
                 className={`${inputCls} min-h-20 resize-none`}
                 value={treatmentNotes}
                 onChange={(e) => setTreatmentNotes(e.target.value)}
-                placeholder="Add something not in the list above…"
+                placeholder="Anything not in the list…"
               />
             </div>
           </Field>

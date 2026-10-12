@@ -44,20 +44,20 @@ export function MonthlyVisitsChart({
   const labelFor = (i: number) => fullCategories?.[i] ?? categories[i];
 
   return (
-    <div className="flex flex-col justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xs">
+    <div className="chart-panel flex flex-col justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xs">
       <div>
-        <div className="flex items-start justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
           <div>
             <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
               Patient Visits
             </span>
-            <div className="mt-1 flex items-baseline gap-2.5">
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
               <span className="font-num text-2xl font-bold tracking-tight text-[var(--ink)]">
                 {activeValue} visits
               </span>
               {deltaVisits != null && (
                 <span
-                  className={`font-num text-xs font-semibold ${
+                  className={`font-num whitespace-nowrap text-xs font-semibold ${
                     deltaVisits >= 0 ? 'text-[var(--teal)]' : 'text-[var(--rust)]'
                   }`}
                 >
@@ -66,7 +66,7 @@ export function MonthlyVisitsChart({
               )}
             </div>
           </div>
-          <span className="rounded-full bg-[var(--paper)] px-2 py-0.5 text-[11px] font-medium text-[var(--muted)]">
+          <span className="whitespace-nowrap rounded-full bg-[var(--paper)] px-2 py-0.5 text-[11px] font-medium text-[var(--muted)]">
             {labelFor(activeIdx)}
           </span>
         </div>

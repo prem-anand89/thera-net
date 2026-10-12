@@ -1125,7 +1125,7 @@ export function NewVisitPage() {
         <div className="space-y-3">
           <input
             className={inputCls}
-            placeholder="Search by Patient ID, name, or phone…"
+            placeholder="Search ID, name or phone…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
@@ -1305,7 +1305,7 @@ export function NewVisitPage() {
                   )}
                   <input
                     className={inputCls}
-                    placeholder="Add something not in the list above…"
+                    placeholder="Anything not in the list…"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                   />

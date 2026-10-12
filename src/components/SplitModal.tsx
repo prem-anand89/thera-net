@@ -49,7 +49,7 @@ export function SplitModal({
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">
-      <div className="w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5">
+      <div className="dialog-panel w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5">
         <h2 className="text-sm font-semibold text-[var(--ink)]">Share visit revenue</h2>
         <p className="text-sm text-[var(--muted)]">
           Credit part of this {formatINR(visit.actualBillPaise)} visit (billed under {primaryName}) to

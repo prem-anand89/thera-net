@@ -52,7 +52,7 @@ export function ChangePasswordDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="change-password-title"
-        className="w-full max-w-sm space-y-4 rounded-2xl bg-[var(--surface)] p-4 sm:p-5"
+        className="dialog-panel w-full max-w-sm space-y-4 rounded-2xl bg-[var(--surface)] p-4 sm:p-5"
       >
         {done ? (
           <>

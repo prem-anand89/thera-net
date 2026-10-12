@@ -20,7 +20,7 @@ export function AddClinicDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-clinic-title"
-        className="w-full max-w-sm space-y-4 rounded-2xl bg-[var(--surface)] p-4 sm:p-5"
+        className="dialog-panel w-full max-w-sm space-y-4 rounded-2xl bg-[var(--surface)] p-4 sm:p-5"
       >
         <div>
           <h2 id="add-clinic-title" className="text-sm font-semibold text-[var(--ink)]">

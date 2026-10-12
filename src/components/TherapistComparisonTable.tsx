@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { formatINR } from '@/domain/money';
 import { th, thNum, td, tdNum } from '@/components/ui';
+import { usePhoneLayout } from '@/components/usePhoneLayout';
 import {
   columnLeaders,
   metricValue,
@@ -57,6 +58,104 @@ export type TherapistComparisonRow = {
   utilisationClinicHours?: boolean;
 };
 
+function utilisationTone(v: number): string {
+  return v >= 0.7 ? 'bg-[var(--teal)]' : v >= 0.5 ? 'bg-[#d97706]' : 'bg-[var(--rust)]';
+}
+
+function PhoneMetric({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <dt className="text-[var(--muted)]">{label}</dt>
+      <dd className="font-num text-right font-medium text-[var(--ink)]">{children}</dd>
+    </div>
+  );
+}
+
+function PhoneUtilisation({ row }: { row: TherapistComparisonRow }) {
+  if (row.utilisation == null) return <span className="text-[var(--muted)]">—</span>;
+  const pct = Math.round(row.utilisation * 100);
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full border border-[var(--border)]/50 bg-[var(--paper)]"
+      >
+        <span
+          className={`block h-full rounded-full ${utilisationTone(row.utilisation)}`}
+          style={{ width: `${Math.min(100, Math.max(3, pct))}%` }}
+        />
+      </span>
+      {pct}%{row.utilisationClinicHours ? '*' : ''}
+    </span>
+  );
+}
+
+/** Phone layout: one card per therapist with every figure the table has, so nothing
+ *  needs sideways scrolling. */
+function PhoneRows({
+  rows,
+  total,
+  showPostTax,
+  showUtilisation,
+  ownLabel,
+  lead,
+}: {
+  rows: TherapistComparisonRow[];
+  total?: TherapistComparisonRow;
+  showPostTax: boolean;
+  showUtilisation: boolean;
+  ownLabel: string;
+  lead: (metric: RankMetric, name: string) => ReactNode;
+}) {
+  const card = (row: TherapistComparisonRow, isTotal: boolean) => (
+    <li
+      key={row.therapistName}
+      className={`rounded-xl border border-[var(--border)] p-3 ${isTotal ? 'bg-[var(--paper)]' : 'bg-[var(--surface)]'}`}
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <span className={`min-w-0 break-words text-sm text-[var(--ink)] ${isTotal ? 'font-bold' : 'font-medium'}`}>
+          {row.therapistName}
+        </span>
+        <span className="font-num shrink-0 text-sm font-semibold text-[var(--ink)]">
+          {formatINR(row.netPostTaxPaise)}
+          {!isTotal && lead('net', row.therapistName)}
+          <span className="ml-1 text-[10px] font-normal uppercase text-[var(--muted)]">net</span>
+        </span>
+      </div>
+      <dl className="mt-2 grid grid-cols-1 gap-y-1 text-xs min-[420px]:grid-cols-2 min-[420px]:gap-x-4">
+        <PhoneMetric label="Bill amount">{formatINR(row.billPaise)}</PhoneMetric>
+        {showPostTax && <PhoneMetric label={`Post tax ${ownLabel}`}>{formatINR(row.postTaxPaise)}</PhoneMetric>}
+        <PhoneMetric label="Visits">
+          {row.visitCount}
+          {!isTotal && lead('visits', row.therapistName)}
+        </PhoneMetric>
+        <PhoneMetric label="Packages">{row.newPackages}</PhoneMetric>
+        {!isTotal && (
+          <PhoneMetric label="Retention">
+            {row.retentionPct != null ? `${row.retentionPct}%` : '—'}
+            {lead('retention', row.therapistName)}
+          </PhoneMetric>
+        )}
+        {showUtilisation && (
+          <PhoneMetric label="Utilisation">
+            <PhoneUtilisation row={row} />
+            {!isTotal && lead('utilisation', row.therapistName)}
+          </PhoneMetric>
+        )}
+      </dl>
+    </li>
+  );
+  return (
+    <ul className="space-y-2">
+      {rows.map((r) => card(r, false))}
+      {total && card({ ...total, therapistName: 'Total' }, true)}
+    </ul>
+  );
+}
+
 export function TherapistComparisonTable({
   rows,
   total,
@@ -68,6 +167,7 @@ export function TherapistComparisonTable({
   showPostTax: boolean;
   ownLabel: string;
 }) {
+  const phone = usePhoneLayout();
   const showUtilisation = rows.some((r) => r.utilisation !== undefined);
   const [sortBy, setSortBy] = useState<RankMetric | null>(null);
   const toggleSort = (metric: RankMetric) => setSortBy((c) => (c === metric ? null : metric));
@@ -88,6 +188,37 @@ export function TherapistComparisonTable({
         Top
       </span>
     ) : null;
+  const notes = (
+    <>
+      {anyLeader && (
+        <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)] max-tab:border-t-0 max-tab:px-0">
+          Top marks the best in each column among therapists with at least {MIN_VISITS_FOR_RANKING} visits in the period.
+        </p>
+      )}
+      {showUtilisation && rows.some((r) => r.utilisationClinicHours) && (
+        <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)] max-tab:border-t-0 max-tab:px-0">
+          * No personal working hours set, so clinic booking hours were used as available time.
+        </p>
+      )}
+    </>
+  );
+
+  if (phone) {
+    return (
+      <div className="space-y-2">
+        <PhoneRows
+          rows={shownRows}
+          total={total}
+          showPostTax={showPostTax}
+          showUtilisation={showUtilisation}
+          ownLabel={ownLabel}
+          lead={lead}
+        />
+        {notes}
+      </div>
+    );
+  }
+
   return (
     <div className="isolate overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xs">
       <div className="overflow-x-auto overscroll-x-contain">
@@ -223,16 +354,7 @@ export function TherapistComparisonTable({
           )}
         </table>
       </div>
-      {anyLeader && (
-        <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
-          Top marks the best in each column among therapists with at least {MIN_VISITS_FOR_RANKING} visits in the period.
-        </p>
-      )}
-      {showUtilisation && rows.some((r) => r.utilisationClinicHours) && (
-        <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
-          * No personal working hours set, so clinic booking hours were used as available time.
-        </p>
-      )}
+      {notes}
     </div>
   );
 }

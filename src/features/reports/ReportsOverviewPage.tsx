@@ -91,7 +91,7 @@ function KpiCard({
         </span>
         {trendPct != null && (
           <span
-            className="font-num text-xs font-semibold"
+            className="font-num whitespace-nowrap text-xs font-semibold"
             style={{ color: trendPct >= 0 ? 'var(--moss)' : 'var(--rust)' }}
           >
             {trendPct >= 0 ? '▲' : '▼'} {Math.abs(trendPct)}%
@@ -100,9 +100,19 @@ function KpiCard({
       </div>
       {(trendLabel || lastMonthValue != null) && (
         <div className="mt-0.5 text-[11px] text-[var(--muted)]">
-          {trendLabel}
-          {trendLabel && lastMonthValue != null && ' · '}
-          {lastMonthValue != null && <>Last month: {lastMonthValue}</>}
+          {/* A "vs …" label and the figure it compares against read as one phrase
+              ("vs last month: ₹26,932"), not "vs last month · Last month: ₹26,932". */}
+          {trendLabel && lastMonthValue != null && /(^|· )vs /.test(trendLabel) ? (
+            <>
+              {trendLabel}: {lastMonthValue}
+            </>
+          ) : (
+            <>
+              {trendLabel}
+              {trendLabel && lastMonthValue != null && ' · '}
+              {lastMonthValue != null && <>Last month: {lastMonthValue}</>}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -663,15 +673,15 @@ export function ReportsOverviewPage() {
             }}
             momFocus={focusMonth}
             onMomFocusChange={(m) => updateTrendPeriod({ period: 'mom', year: m.year, month: m.month })}
-            periodCaption={`Applies to revenue trend and therapist comparison · ${trendPeriodCaption}`}
+            periodCaption={`Showing ${trendPeriodCaption} · applies to revenue trend and therapist comparison`}
           />
           <SectionCard
             title={
               scope.isClinicWideView
                 ? revenueLabel === 'Revenue'
-                  ? `Revenue trend — ${trendPeriodCaption}`
-                  : `Revenue trend — ${trendPeriodCaption} (${revenueLabel})`
-                : `My revenue trend — ${trendPeriodCaption} (${revenueLabel})`
+                  ? 'Revenue trend'
+                  : `Revenue trend (${revenueLabel})`
+                : `My revenue trend (${revenueLabel})`
             }
           >
             {trend && !hasEnoughTrendHistory && (
@@ -733,7 +743,7 @@ export function ReportsOverviewPage() {
           >
             <SectionCard title="Treatment modalities">
               <p className="mb-3 text-xs text-[var(--muted)]">
-                Breakdown of treatment modalities recorded in clinical notes across all visits.
+                From clinical notes, across all visits.
               </p>
               {modalityUsage === undefined ? null : modalityUsage.length === 0 ? (
                 <p className="py-6 text-center text-sm text-[var(--muted)]">
@@ -807,9 +817,9 @@ export function ReportsOverviewPage() {
                             key={p.patientId}
                             className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
                           >
-                            <span className="min-w-0 truncate">
-                              {p.patientName}{' '}
-                              <span className="text-xs text-[var(--muted)]">{p.mrno}</span>
+                            <span className="min-w-0">
+                              <span className="block truncate">{p.patientName}</span>
+                              <span className="block text-xs text-[var(--muted)]">{p.mrno}</span>
                             </span>
                             <span className="font-num shrink-0 text-xs text-[var(--muted)]">
                               {p.visitCount} visit{p.visitCount === 1 ? '' : 's'} ·{' '}

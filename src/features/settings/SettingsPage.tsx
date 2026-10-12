@@ -2761,18 +2761,26 @@ function TeamMemberCard({
         {/* Modal Portal */}
         {editing && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/40 p-4 backdrop-blur-sm">
-            <div 
-              className="w-full max-w-[500px] rounded-2xl bg-[var(--surface)] p-6 shadow-2xl overflow-hidden flex flex-col sm:flex-row gap-6 relative"
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Edit team member"
+              className="dialog-panel relative flex w-full max-w-[500px] flex-col rounded-2xl bg-[var(--surface)] shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Left Column: Avatar & Quick Info */}
-              <div className="flex flex-col items-center gap-2 sm:w-1/3 text-center sm:border-r border-[var(--border)] pr-4">
-                {renderPhoto('h-24 w-24 mb-2')}
-                <div className="font-semibold text-[var(--ink)] break-words w-full px-2 leading-tight">
-                  {nameDraft || 'New Member'}
-                </div>
-                <div className="text-xs text-[var(--muted)]">
-                  {roleDraft !== 'unknown' ? CLINIC_ROLE_LABELS[roleDraft] : 'Therapist'}
+              {/* Scrolling body; the Save/Cancel footer below stays pinned so a
+                  short phone screen can always reach it. */}
+              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5 sm:flex-row sm:gap-6 sm:p-6">
+              {/* Left Column: Avatar & Quick Info — a compact row on phones */}
+              <div className="flex items-center gap-3 sm:w-1/3 sm:flex-col sm:gap-2 sm:border-r sm:border-[var(--border)] sm:pr-4 sm:text-center">
+                {renderPhoto('h-14 w-14 shrink-0 sm:mb-2 sm:h-24 sm:w-24')}
+                <div className="min-w-0 sm:w-full">
+                  <div className="break-words font-semibold leading-tight text-[var(--ink)] sm:px-2">
+                    {nameDraft || 'New Member'}
+                  </div>
+                  <div className="text-xs text-[var(--muted)]">
+                    {roleDraft !== 'unknown' ? CLINIC_ROLE_LABELS[roleDraft] : 'Therapist'}
+                  </div>
                 </div>
               </div>
 
@@ -2831,7 +2839,7 @@ function TeamMemberCard({
                     <Field label="Phone">
                       <input
                         className={inputCls}
-                        placeholder="For WhatsApp booking notifications"
+                        placeholder="WhatsApp number"
                         value={phoneDraft}
                         onChange={(e) => setPhoneDraft(e.target.value)}
                       />
@@ -2882,25 +2890,26 @@ function TeamMemberCard({
                 )}
                 
                 <ErrorNote message={error} />
+              </div>
+              </div>
 
-                <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-[var(--border)]">
-                  <button
-                    type="button"
-                    className="text-sm font-medium text-[var(--muted)] hover:text-[var(--ink)] px-2"
-                    disabled={saving}
-                    onClick={() => setEditing(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--teal-strong)] disabled:opacity-50"
-                    disabled={saving}
-                    onClick={() => void save()}
-                  >
-                    {saving ? 'Saving…' : 'Save changes'}
-                  </button>
-                </div>
+              <div className="flex shrink-0 justify-end gap-3 border-t border-[var(--border)] px-5 py-3 sm:px-6 sm:py-4">
+                <button
+                  type="button"
+                  className="px-2 text-sm font-medium text-[var(--muted)] hover:text-[var(--ink)]"
+                  disabled={saving}
+                  onClick={() => setEditing(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--teal-strong)] disabled:opacity-50"
+                  disabled={saving}
+                  onClick={() => void save()}
+                >
+                  {saving ? 'Saving…' : 'Save changes'}
+                </button>
               </div>
             </div>
           </div>

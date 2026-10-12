@@ -4489,6 +4489,29 @@ once-per-tab flag, so a later deploy in the same tab can still self-heal while
 a broken deploy can't loop. `ErrorBoundary`/`RouterErrorFallback` remain as
 the fallback and use the same helper.
 
+### 0b. Phone layout conventions
+Checked at 375px wide (and 375x640 for pop-ups) with the app booted in headless
+Chromium against mocked Supabase responses — a quick way to catch what a code
+read misses (clipped pills, tables wider than their card).
+- **Pop-up panels use `.dialog-panel`** (`index.css`): capped at the visible
+  height (`100dvh`, `100vh` fallback) and scrolling inside. A centered panel
+  without it loses its top and its action buttons off-screen on a short phone or
+  with the keyboard open, with no way to scroll to them. Long forms (the team
+  member edit form) also pin the Save/Cancel footer outside the scrolling body.
+- **Charts/cards nested in a `SectionCard` use `.chart-panel`**: a bordered card
+  from `sm:` up, a flat divided section on phones, so the chart gets the card's
+  full width instead of a box inside a box.
+- **Wide tables don't scroll sideways on phones.** Either hide secondary columns
+  below `tab:` (`RevenueTrendMonthTable`: Month, revenue, MoM %, visits on a
+  phone; all seven from tablet width) or render one card per row
+  (`TherapistComparisonTable` via `usePhoneLayout()`, which renders only the
+  layout that applies — not both — so text queries and screen readers see it
+  once). The Monthly statement keeps a deliberate sticky-column sideways scroll.
+- **A "vs …" KPI label and its comparison figure read as one phrase** ("vs last
+  month: ₹26,932"), never "vs last month · Last month: ₹26,932".
+- **Don't repeat a heading at several levels** (card title, eyebrow, sub-heading,
+  table heading all saying "therapist comparison"): one title per block.
+
 ### 1. Offline-First with Outbox Sync
 - **Dexie** for local IndexedDB storage
 - **Outbox table** (in Supabase) for tracking changes made offline

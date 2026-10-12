@@ -25,20 +25,30 @@ function DeltaInrCell({ deltaPaise }: { deltaPaise: number | null }) {
   );
 }
 
+/** Columns marked `secondary` only show from tablet width up — a phone keeps Month,
+ *  revenue, its MoM % and visits so the table fits without sideways scrolling (the
+ *  full set is still in "Copy month table"). */
+const SECONDARY = 'hidden tab:table-cell';
+const PHONE_PAD = 'max-tab:px-2';
+
 function ColumnHead({
   title,
   detail,
   sticky,
+  secondary,
 }: {
   title: string;
   detail: string;
   sticky?: boolean;
+  secondary?: boolean;
 }) {
   const base = sticky ? `${th} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]` : thNum;
   return (
-    <th className={base}>
+    <th className={`${base} ${PHONE_PAD} ${secondary ? SECONDARY : ''}`}>
       <div>{title}</div>
-      <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-[var(--muted)]">{detail}</div>
+      <div className="mt-0.5 hidden text-[9px] font-normal normal-case tracking-normal text-[var(--muted)] tab:block">
+        {detail}
+      </div>
     </th>
   );
 }
@@ -122,11 +132,11 @@ export function RevenueTrendMonthTable({
               <tr>
                 <ColumnHead title="Month" detail="Calendar month in this window" sticky />
                 <ColumnHead title={revenueColumnLabel} detail="Total for the month" />
-                <ColumnHead title="Change ₹" detail="Net change vs prior month" />
-                <ColumnHead title="Revenue MoM" detail="% change vs prior month" />
+                <ColumnHead title="Change ₹" detail="Net change vs prior month" secondary />
+                <ColumnHead title="Rev. MoM" detail="% change vs prior month" />
                 <ColumnHead title="Visits" detail="Completed sessions" />
-                <ColumnHead title="Visit MoM" detail="% change vs prior month" />
-                <ColumnHead title="₹/visit" detail="Average revenue per visit" />
+                <ColumnHead title="Visit MoM" detail="% change vs prior month" secondary />
+                <ColumnHead title="₹/visit" detail="Average revenue per visit" secondary />
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
@@ -144,29 +154,32 @@ export function RevenueTrendMonthTable({
                       selected ? 'bg-[var(--teal-light)]/40 font-medium' : 'hover:bg-[var(--paper)]/60'
                     }`}
                     onMouseEnter={() => onSelectIndex?.(i)}
+                    onClick={() => onSelectIndex?.(i)}
                   >
                     <td
-                      className={`${td} sticky left-0 z-[1] shadow-[2px_0_4px_rgba(0,0,0,0.04)] ${
+                      className={`${td} ${PHONE_PAD} sticky left-0 z-[1] whitespace-nowrap shadow-[2px_0_4px_rgba(0,0,0,0.04)] ${
                         selected ? 'bg-[var(--teal-light)]/40' : 'bg-[var(--surface)]'
                       }`}
                     >
                       {lab}
                       {inProgress && (
-                        <span className="ml-1 text-[10px] font-normal text-[var(--muted)]">· in progress</span>
+                        <span className="block text-[10px] font-normal text-[var(--muted)] tab:ml-1 tab:inline">
+                          <span className="hidden tab:inline">· </span>in progress
+                        </span>
                       )}
                     </td>
-                    <td className={tdNum}>{revenuePaise[i] > 0 ? formatINR(revenuePaise[i]) : '—'}</td>
-                    <td className={tdNum}>
+                    <td className={`${tdNum} ${PHONE_PAD}`}>{revenuePaise[i] > 0 ? formatINR(revenuePaise[i]) : '—'}</td>
+                    <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY}`}>
                       <DeltaInrCell deltaPaise={revDelta[i]} />
                     </td>
-                    <td className={tdNum}>
+                    <td className={`${tdNum} ${PHONE_PAD}`}>
                       <PctCell value={revPct[i]} />
                     </td>
-                    <td className={tdNum}>{visitCounts[i] > 0 ? visitCounts[i] : '—'}</td>
-                    <td className={tdNum}>
+                    <td className={`${tdNum} ${PHONE_PAD}`}>{visitCounts[i] > 0 ? visitCounts[i] : '—'}</td>
+                    <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY}`}>
                       <PctCell value={visitPct[i]} />
                     </td>
-                    <td className={tdNum}>{rpv != null ? formatINR(rpv * 100) : '—'}</td>
+                    <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY}`}>{rpv != null ? formatINR(rpv * 100) : '—'}</td>
                   </tr>
                 );
               })}
@@ -175,20 +188,20 @@ export function RevenueTrendMonthTable({
             <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold">
               <tr>
                 <td
-                  className={`${td} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-semibold text-[var(--ink)]`}
+                  className={`${td} ${PHONE_PAD} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-semibold text-[var(--ink)]`}
                 >
-                  Period Total
+                  Total
                 </td>
-                <td className={`${tdNum} font-bold text-[var(--ink)]`}>
+                <td className={`${tdNum} ${PHONE_PAD} font-bold text-[var(--ink)]`}>
                   {totalRevenue > 0 ? formatINR(totalRevenue) : '—'}
                 </td>
-                <td className={tdNum}>—</td>
-                <td className={tdNum}>—</td>
-                <td className={`${tdNum} font-bold text-[var(--ink)]`}>
+                <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY}`}>—</td>
+                <td className={`${tdNum} ${PHONE_PAD}`}>—</td>
+                <td className={`${tdNum} ${PHONE_PAD} font-bold text-[var(--ink)]`}>
                   {totalVisits > 0 ? totalVisits : '—'}
                 </td>
-                <td className={tdNum}>—</td>
-                <td className={`${tdNum} font-bold text-[var(--ink)]`}>
+                <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY}`}>—</td>
+                <td className={`${tdNum} ${PHONE_PAD} ${SECONDARY} font-bold text-[var(--ink)]`}>
                   {avgRpv != null ? formatINR(avgRpv * 100) : '—'}
                 </td>
               </tr>
@@ -205,7 +218,8 @@ export function RevenueTrendMonthTable({
           <span>{copyOk ? '✓ Copied table' : '📋 Copy month table'}</span>
         </button>
         <p className="text-[11px] text-[var(--muted)]">
-          Swipe sideways on a phone to see all columns. Hover on a row to sync with the charts above.
+          <span className="tab:hidden">Tap a month to highlight it on the charts. More columns on a wider screen.</span>
+          <span className="hidden tab:inline">Select a row to highlight that month on the charts above.</span>
         </p>
       </div>
     </div>

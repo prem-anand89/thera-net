@@ -259,16 +259,11 @@ export function TherapistComparisonCard({
       {trend && therapistNames.length > 0 && (
         <div className="border-t border-[var(--border)] pt-4 first:border-t-0 first:pt-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                {viewMode === 'comparison' ? 'Comparative breakdown' : 'Individual trend'}
-              </p>
+            {viewMode === 'individual' && (
               <h3 className="font-display text-sm font-semibold text-[var(--ink)]">
-                {viewMode === 'comparison'
-                  ? 'Therapist performance comparison'
-                  : `${activeTherapistName} — Trend across period`}
+                {activeTherapistName} — trend across period
               </h3>
-            </div>
+            )}
 
             {/* View Mode Switcher Toggle */}
             <div className="inline-flex shrink-0 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5">
@@ -324,7 +319,7 @@ export function TherapistComparisonCard({
               {/* Two Side-by-Side Comparative Ranking Cards */}
               <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Revenue Ranking Card */}
-                <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xs">
+                <div className="chart-panel rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xs">
                   <div className="flex items-baseline justify-between mb-3">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
                       {revenueLabel}
@@ -357,7 +352,7 @@ export function TherapistComparisonCard({
                 </div>
 
                 {/* Visits Ranking Card */}
-                <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xs">
+                <div className="chart-panel rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xs">
                   <div className="flex items-baseline justify-between mb-3">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
                       Patient Visits
@@ -457,13 +452,10 @@ export function TherapistComparisonCard({
 
       {trend && therapistNames.length > 0 && viewMode === 'comparison' && (
         <div className="mt-6 border-t border-[var(--border)] pt-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            {chartMonth
-              ? `${monthName(chartMonth.month.month)} ${chartMonth.month.year}`
-              : 'Selected month'}
-          </p>
           <h3 className="font-display text-sm font-semibold text-[var(--ink)]">
-            Therapist performance & attribution
+            {chartMonth
+              ? `${monthName(chartMonth.month.month)} ${chartMonth.month.year} breakdown`
+              : 'Selected month breakdown'}
           </h3>
           <TherapistComparisonTable
             rows={comparisonRows}

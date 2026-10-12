@@ -114,13 +114,10 @@ export function MonthlyStatementPage() {
         <h2 className="font-display text-base font-semibold text-[var(--ink)]">
           Monthly statement
         </h2>
-        {/* `w-full` on mobile (wraps onto its own line below the title,
-            scrolling sideways rather than forcing the whole page wider —
-            this cluster of 4 controls has no business fighting the title
-            for one cramped row on a phone) vs `sm:w-auto` to sit beside
-            the title again once there's room. Same scroll/trailing-padding
-            treatment as the Schedule → Feedback filter row. */}
-        <div className="ml-auto flex w-full items-center gap-2 overflow-x-auto pb-1 pr-2 sm:w-auto sm:flex-wrap sm:overflow-visible sm:pb-0 sm:pr-0">
+        {/* `w-full` on mobile (its own line below the title) vs `sm:w-auto` to sit
+            beside the title once there's room. Wraps instead of scrolling
+            sideways so the Export buttons are never cut off the edge. */}
+        <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <select
             className={chipSelect}
             style={chevron}
@@ -148,7 +145,7 @@ export function MonthlyStatementPage() {
               </option>
             ))}
           </select>
-          <span className="h-5 w-px shrink-0 bg-[var(--border)]" aria-hidden />
+          <span className="hidden h-5 w-px shrink-0 bg-[var(--border)] sm:block" aria-hidden />
           <button
             type="button"
             className={`${btnSecondary} shrink-0 whitespace-nowrap`}
