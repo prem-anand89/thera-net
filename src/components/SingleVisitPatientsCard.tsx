@@ -19,6 +19,10 @@ export interface SingleVisitPatientsCardProps {
   clinicId: string;
   clinicName: string;
   sectionRefCallback?: (el: HTMLDivElement | null) => void;
+  /** Controls collapsible state. If omitted, uses defaultExpanded. */
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
+  defaultExpanded?: boolean;
 }
 
 export function SingleVisitPatientsCard({
@@ -31,7 +35,14 @@ export function SingleVisitPatientsCard({
   clinicId,
   clinicName,
   sectionRefCallback,
+  expanded: expandedProp,
+  onExpandedChange,
+  defaultExpanded = true,
 }: SingleVisitPatientsCardProps) {
+  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
+  const isExpanded = expandedProp !== undefined ? expandedProp : internalExpanded;
+  const setIsExpanded = onExpandedChange ?? setInternalExpanded;
+
   const [filter, setFilter] = useState<TriageFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [manageReasonsOpen, setManageReasonsOpen] = useState(false);
@@ -150,19 +161,96 @@ export function SingleVisitPatientsCard({
           ) : undefined
         }
       >
-        {/* Helper copy & Manage reasons trigger */}
-        <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <p className="text-xs text-[var(--muted)] leading-relaxed">
-            Patients with exactly one completed visit, more than 14 days ago. Review retention, call or send reminders, and categorize dropouts to improve clinic return rates.
-          </p>
-          <button
-            type="button"
-            onClick={() => setManageReasonsOpen((o) => !o)}
-            className="shrink-0 self-start sm:self-auto text-xs font-semibold text-[var(--teal)] hover:text-[var(--teal-strong)] hover:underline transition-colors"
-          >
-            {manageReasonsOpen ? 'Hide reason settings' : 'Manage reasons'}
-          </button>
-        </div>
+        {/* Collapsed State: Executive Triage Summary */}
+        {!isExpanded && allRows.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-xs text-[var(--muted)]">
+                {allRows.length} patients with exactly 1 completed visit &gt; 14 days ago. Review retention or conduct outreach:
+              </p>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilter('needs_review');
+                    setIsExpanded(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--rust)]/30 bg-[var(--rust-light)] px-3 py-1 text-xs font-semibold text-[var(--rust)] shadow-2xs hover:bg-[var(--rust)] hover:text-white transition-colors cursor-pointer"
+                  title="Filter to patients needing review"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--rust)]" aria-hidden="true" />
+                  <span>{counts.needsReview} Need review</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilter('logged');
+                    setIsExpanded(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[#d97706]/30 bg-[var(--amber-light)] px-3 py-1 text-xs font-semibold text-[#b45309] shadow-2xs hover:bg-[#d97706] hover:text-white transition-colors cursor-pointer"
+                  title="Filter to patients with reason logged"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#d97706]" aria-hidden="true" />
+                  <span>{counts.logged} Reason logged</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilter('closed');
+                    setIsExpanded(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--teal)]/30 bg-[var(--teal-light)] px-3 py-1 text-xs font-semibold text-[var(--teal-strong)] shadow-2xs hover:bg-[var(--teal)] hover:text-white transition-colors cursor-pointer"
+                  title="Filter to resolved/closed dropouts"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--teal)]" aria-hidden="true" />
+                  <span>{counts.closed} Resolved</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsExpanded(true)}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3.5 py-1.5 text-xs font-semibold text-[var(--ink)] shadow-2xs hover:bg-[var(--surface)] hover:border-[var(--teal)] hover:text-[var(--teal)] transition-colors cursor-pointer"
+              >
+                <span>Review patients ({allRows.length})</span>
+                <span aria-hidden="true">▾</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Expanded State (or empty/loading states) */}
+        {(isExpanded || allRows.length === 0 || patients === undefined) && (
+          <div>
+            {/* Helper copy & Manage reasons trigger */}
+            {allRows.length > 0 && (
+              <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-3 border-b border-[var(--border)]">
+                <p className="text-xs text-[var(--muted)] leading-relaxed">
+                  Patients with exactly one completed visit, more than 14 days ago. Review retention, call or send reminders, and categorize dropouts to improve clinic return rates.
+                </p>
+                <div className="flex items-center gap-3 self-start sm:self-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setManageReasonsOpen((o) => !o)}
+                    className="text-xs font-semibold text-[var(--teal)] hover:text-[var(--teal-strong)] hover:underline transition-colors cursor-pointer"
+                  >
+                    {manageReasonsOpen ? 'Hide reason settings' : 'Manage reasons'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsExpanded(false)}
+                    className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3 py-1 text-xs font-semibold text-[var(--muted)] hover:text-[var(--ink)] shadow-2xs hover:bg-[var(--surface)] transition-colors cursor-pointer"
+                  >
+                    <span>Collapse list</span>
+                    <span aria-hidden="true">▴</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
         {/* Expandable Manage Reasons Panel */}
         {manageReasonsOpen && (
@@ -545,6 +633,8 @@ export function SingleVisitPatientsCard({
             </div>
 
             <ShowMoreFooter list={list} noun="patients" />
+          </div>
+        )}
           </div>
         )}
       </SectionCard>

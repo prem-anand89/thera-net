@@ -416,6 +416,7 @@ export function ReportsOverviewPage() {
   // pattern as the note editor's — a flat list here (no SOAP-style
   // grouping) since six items reads fine as one row/column without it.
   const [activeSection, setActiveSection] = useState(DASHBOARD_SECTIONS[0].key);
+  const [singleVisitExpanded, setSingleVisitExpanded] = useState(false);
   const sectionRefs = useRef(new Map<string, HTMLDivElement>());
   const suppressSpyRef = useRef(false);
 
@@ -438,6 +439,9 @@ export function ReportsOverviewPage() {
   }, []);
 
   function jumpToSection(key: string) {
+    if (key === 'singleVisit') {
+      setSingleVisitExpanded(true);
+    }
     setActiveSection(key);
     suppressSpyRef.current = true;
     sectionRefs.current.get(key)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -663,6 +667,9 @@ export function ReportsOverviewPage() {
           enablePatientComms={clinic.enablePatientComms}
           clinicId={clinic.id}
           clinicName={clinic.name}
+          expanded={singleVisitExpanded}
+          onExpandedChange={setSingleVisitExpanded}
+          defaultExpanded={false}
           sectionRefCallback={(el) => {
             if (el) sectionRefs.current.set('singleVisit', el);
             else sectionRefs.current.delete('singleVisit');
