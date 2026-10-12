@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { dashboardService, reportService, settlementService } from '@/services';
+import { reportService, settlementService } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import type { Paise } from '@/domain/money';
@@ -20,11 +20,6 @@ import {
 } from '@/components/ui';
 import { MonthlyReportTable } from '@/components/MonthlyReportTable';
 import { toFriendlyMessage } from '@/lib/errors';
-import { SERIES_COLORS } from '@/components/chartColors';
-import { VisitsRevenueTrendChart } from '@/components/VisitsRevenueTrendChart';
-import { MonthlyRevenueChart } from '@/components/MonthlyRevenueChart';
-import { MonthlyVisitsChart } from '@/components/MonthlyVisitsChart';
-import { useCompactChart } from '@/components/useCompactChart';
 
 export function MonthlyStatementPage() {
   const clinic = useClinic();
@@ -53,84 +48,6 @@ export function MonthlyStatementPage() {
     [clinic.id, selected.year, selected.month]
   );
 
-  const trendMonths = useMemo(() => {
-    const res = [];
-    let y = selected.year;
-    let m = selected.month;
-    for (let i = 0; i < 6; i++) {
-      res.unshift({ year: y, month: m });
-      m--;
-      if (m < 1) {
-        m = 12;
-        y--;
-      }
-    }
-    return res;
-  }, [selected.year, selected.month]);
-
-  const trendData = useLiveQuery(
-    () => dashboardService.revenueTrend(clinic.id, trendMonths),
-    [clinic.id, trendMonths]
-  );
-
-  const trendCategories = useMemo(
-    () =>
-      (trendData ?? []).map(
-        (r) => `${monthName(r.month.month).slice(0, 3)} '${String(r.month.year).slice(2)}`
-      ),
-    [trendData]
-  );
-  
-  const trendVisits = useMemo(() => (trendData ?? []).map((r) => r.total.visitCount), [trendData]);
-  const trendRevenue = useMemo(
-    () => (trendData ?? []).map((r) => r.total.postTaxPaise),
-    [trendData]
-  );
-
-  const [showTrend, setShowTrend] = useState(false);
-  const [chartViewMode, setChartViewMode] = useState<'split' | 'combined'>('split');
-  const [chartSelectedIndex, setChartSelectedIndex] = useState<number | null>(null);
-  const compactChart = useCompactChart();
-
-  useEffect(() => {
-    if (trendCategories.length > 0) {
-      setChartSelectedIndex(trendCategories.length - 1);
-    }
-  }, [trendCategories.length, selected.year, selected.month]);
-
-  const sixMonthTotalRevenue = useMemo(
-    () => trendRevenue.reduce((sum, v) => sum + v, 0),
-    [trendRevenue]
-  );
-  const sixMonthTotalVisits = useMemo(
-    () => trendVisits.reduce((sum, v) => sum + v, 0),
-    [trendVisits]
-  );
-  const sixMonthAvgRevenue = useMemo(
-    () => (trendRevenue.length > 0 ? Math.round(sixMonthTotalRevenue / trendRevenue.length) : 0),
-    [sixMonthTotalRevenue, trendRevenue.length]
-  );
-  const sixMonthAvgVisits = useMemo(
-    () => (trendVisits.length > 0 ? Math.round(sixMonthTotalVisits / trendVisits.length) : 0),
-    [sixMonthTotalVisits, trendVisits.length]
-  );
-
-  const selectedMonthRevenue = trendRevenue[trendRevenue.length - 1] ?? 0;
-  const revenueVsAvgPct =
-    sixMonthAvgRevenue > 0
-      ? Math.round(((selectedMonthRevenue - sixMonthAvgRevenue) / sixMonthAvgRevenue) * 100)
-      : null;
-
-  const currentMonthIndices = useMemo(() => {
-    const isCurrent = selected.year === currentYear && selected.month === currentMonth;
-    return isCurrent && trendCategories.length > 0 ? [trendCategories.length - 1] : [];
-  }, [selected.year, selected.month, trendCategories.length, currentYear, currentMonth]);
-
-  const trendPeriodRange = useMemo(() => {
-    if (trendCategories.length === 0) return '';
-    return `${trendCategories[0]} – ${trendCategories[trendCategories.length - 1]}`;
-  }, [trendCategories]);
-
   // A 0% TDS rate leaves the split itself in place, but with nothing
   // actually withheld "Post-Tax" no longer describes the figure.
   const showPostTax = useMemo(
@@ -157,9 +74,14 @@ export function MonthlyStatementPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="font-display text-base font-semibold text-[var(--ink)]">
-          Monthly statement
-        </h2>
+        <div>
+          <h2 className="font-display text-base font-semibold text-[var(--ink)]">
+            Monthly statement
+          </h2>
+          <p className="text-xs text-[var(--muted)]">
+            Audited financial breakdown for {monthName(selected.month)} {selected.year}
+          </p>
+        </div>
         {/* `w-full` on mobile (its own line below the title) vs `sm:w-auto` to sit
             beside the title once there's room. Wraps instead of scrolling
             sideways so the Export buttons are never cut off the edge. */}
@@ -209,197 +131,85 @@ export function MonthlyStatementPage() {
         </div>
       </div>
 
-      {/* Redesigned 6-Month Trend Card */}
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xs overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setShowTrend((s) => !s)}
-          className="flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--paper)]/60 cursor-pointer"
-          aria-expanded={showTrend}
-        >
-          <div className="flex flex-wrap items-center gap-2.5 min-w-0">
-            <span
-              className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--teal-light)] text-sm shrink-0"
-              aria-hidden="true"
-            >
-              📈
+      {/* Executive Monthly KPI Summary Ribbon */}
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:p-4 shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--teal-light)] text-xs font-semibold text-[var(--teal-strong)]">
+              📊
             </span>
-            <div className="flex flex-wrap items-center gap-2 min-w-0">
-              <span className="font-display text-sm font-semibold text-[var(--ink)]">
-                6-Month Trend
-              </span>
-              {trendPeriodRange && (
-                <span className="rounded-full border border-[var(--border)] bg-[var(--paper)] px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
-                  {trendPeriodRange}
-                </span>
-              )}
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+              {monthName(selected.month)} {selected.year} Summary
+            </span>
+          </div>
+          <Link
+            to="/insights"
+            className="text-xs font-medium text-[var(--teal)] hover:underline inline-flex items-center gap-1"
+          >
+            <span>View historical trends in Trends</span>
+            <span aria-hidden="true">→</span>
+          </Link>
+        </div>
+
+        <div className={`grid grid-cols-2 gap-2.5 sm:gap-3 ${partnerSplit ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+          {/* Card 1: Total Billed */}
+          <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--paper)]/50 p-3">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)] truncate">
+              Total Billed
+            </div>
+            <div className="mt-1 font-num text-lg sm:text-xl font-semibold text-[var(--ink)] truncate">
+              {report ? formatINR(report.total.billPaise) : '—'}
+            </div>
+            <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
+              {report?.total.billedSessionCount ?? 0} billed sessions
             </div>
           </div>
 
-          <div className="flex items-center gap-3 ml-auto">
-            {trendCategories.length > 0 && (
-              <div className="hidden sm:flex items-center gap-2 text-xs text-[var(--muted)]">
-                <span>6M Total:</span>
-                <strong className="font-num font-semibold text-[var(--ink)]">
-                  {formatINR(sixMonthTotalRevenue)}
-                </strong>
-                <span>·</span>
-                <strong className="font-num font-semibold text-[var(--ink)]">
-                  {sixMonthTotalVisits} visits
-                </strong>
-              </div>
-            )}
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--paper)] px-2.5 py-1 text-xs font-semibold text-[var(--ink)] shadow-2xs">
-              <span>{showTrend ? 'Hide trend' : 'Show trend'}</span>
-              <span aria-hidden="true">{showTrend ? '▴' : '▾'}</span>
-            </span>
-          </div>
-        </button>
-
-        {showTrend && trendCategories.length > 0 && (
-          <div className="border-t border-[var(--border)]">
-            {/* 6-Month Summary KPIs Ribbon */}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 p-3 sm:p-4 border-b border-[var(--border)] bg-[var(--paper)]/40">
-              {/* Tile 1: 6M Revenue */}
-              <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 sm:p-3 shadow-2xs">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)] truncate">
-                  6M Total Revenue
-                </div>
-                <div className="mt-1 font-num text-base sm:text-lg font-semibold text-[var(--ink)] truncate">
-                  {formatINR(sixMonthTotalRevenue)}
-                </div>
-                <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
-                  {showPostTax ? `Post-Tax ${labels.own}` : labels.own}
-                </div>
-              </div>
-
-              {/* Tile 2: 6M Visits */}
-              <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 sm:p-3 shadow-2xs">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)] truncate">
-                  6M Total Visits
-                </div>
-                <div className="mt-1 font-num text-base sm:text-lg font-semibold text-[var(--ink)]">
-                  {sixMonthTotalVisits}
-                </div>
-                <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
-                  avg. {sixMonthAvgVisits} / month
-                </div>
-              </div>
-
-              {/* Tile 3: Selected Month Share */}
-              <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 sm:p-3 shadow-2xs">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)] truncate">
-                  {monthName(selected.month).slice(0, 3)} '{String(selected.year).slice(2)} Revenue
-                </div>
-                <div className="mt-1 font-num text-base sm:text-lg font-semibold text-[var(--ink)] truncate">
-                  {formatINR(selectedMonthRevenue)}
-                </div>
-                <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
-                  {sixMonthTotalRevenue > 0
-                    ? `${Math.round((selectedMonthRevenue / sixMonthTotalRevenue) * 100)}% of 6M total`
-                    : '—'}
-                </div>
-              </div>
-
-              {/* Tile 4: Vs 6M Average */}
-              <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 sm:p-3 shadow-2xs">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)] truncate">
-                  vs 6M Monthly Avg
-                </div>
-                <div className="mt-1 flex items-baseline gap-1.5">
-                  <span
-                    className={`font-num text-base sm:text-lg font-semibold ${
-                      revenueVsAvgPct == null || revenueVsAvgPct === 0
-                        ? 'text-[var(--ink)]'
-                        : revenueVsAvgPct > 0
-                          ? 'text-[var(--teal)]'
-                          : 'text-[var(--rust)]'
-                    }`}
-                  >
-                    {revenueVsAvgPct != null ? `${revenueVsAvgPct >= 0 ? '+' : ''}${revenueVsAvgPct}%` : '—'}
-                  </span>
-                </div>
-                <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
-                  avg: {formatINR(sixMonthAvgRevenue)}
-                </div>
-              </div>
+          {/* Card 2: Clinic Share (Net) */}
+          <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--paper)]/50 p-3">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)] truncate">
+              {showPostTax ? `Post-Tax ${labels.own}` : `${labels.own} Share`}
             </div>
-
-            {/* Interactive Charts Area */}
-            <div className="p-3 sm:p-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs text-[var(--muted)]">
-                  Click a month bar to inspect its MoM performance
-                </span>
-                <div
-                  className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5"
-                  role="group"
-                  aria-label="Chart view mode"
-                >
-                  <button
-                    type="button"
-                    aria-pressed={chartViewMode === 'split'}
-                    onClick={() => setChartViewMode('split')}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors ${
-                      chartViewMode === 'split'
-                        ? 'bg-[var(--surface)] text-[var(--ink)] font-semibold shadow-xs'
-                        : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                    }`}
-                  >
-                    Side-by-side
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={chartViewMode === 'combined'}
-                    onClick={() => setChartViewMode('combined')}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors ${
-                      chartViewMode === 'combined'
-                        ? 'bg-[var(--surface)] text-[var(--ink)] font-semibold shadow-xs'
-                        : 'text-[var(--muted)] hover:text-[var(--ink)]'
-                    }`}
-                  >
-                    Combined
-                  </button>
-                </div>
-              </div>
-
-              {chartViewMode === 'split' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <MonthlyRevenueChart
-                    categories={trendCategories}
-                    revenuePaise={trendRevenue}
-                    formatRevenue={formatINR}
-                    currentMonthIndices={currentMonthIndices}
-                    selectedIndex={chartSelectedIndex}
-                    onSelectIndex={setChartSelectedIndex}
-                  />
-                  <MonthlyVisitsChart
-                    categories={trendCategories}
-                    visitCounts={trendVisits}
-                    currentMonthIndices={currentMonthIndices}
-                    selectedIndex={chartSelectedIndex}
-                    onSelectIndex={setChartSelectedIndex}
-                  />
-                </div>
+            <div className="mt-1 font-num text-lg sm:text-xl font-semibold text-[var(--teal-strong)] truncate">
+              {report ? formatINR(report.total.netPostTaxPaise) : '—'}
+            </div>
+            <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
+              {report && (report.total.tdsPaise ?? 0) > 0 ? (
+                <span>TDS: {formatINR(report.total.tdsPaise)} withheld</span>
               ) : (
-                <div className="rounded-2xl border border-[var(--border)] bg-[var(--paper)]/30 p-3 sm:p-4">
-                  <VisitsRevenueTrendChart
-                    categories={trendCategories}
-                    visitCounts={trendVisits}
-                    revenuePaise={trendRevenue}
-                    visitsColor={SERIES_COLORS[1]}
-                    revenueColor={SERIES_COLORS[0]}
-                    formatRevenue={formatINR}
-                    compact={compactChart}
-                    currentMonthIndices={currentMonthIndices}
-                    selectedCategoryIndex={chartSelectedIndex}
-                    onCategoryHover={setChartSelectedIndex}
-                  />
-                </div>
+                <span>Net clinic earnings</span>
               )}
             </div>
           </div>
-        )}
+
+          {/* Card 3: Partner Share (if applicable) */}
+          {partnerSplit && (
+            <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--paper)]/50 p-3">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)] truncate">
+                {labels.partner} Share
+              </div>
+              <div className="mt-1 font-num text-lg sm:text-xl font-semibold text-[var(--ink)] truncate">
+                {report ? formatINR(report.total.partnerSharePaise) : '—'}
+              </div>
+              <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
+                {100 - clinic.clinicSplitPct}% contractual cut
+              </div>
+            </div>
+          )}
+
+          {/* Card 4: Visits & Patients */}
+          <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--paper)]/50 p-3">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted)] truncate">
+              Visits & Patients
+            </div>
+            <div className="mt-1 font-num text-lg sm:text-xl font-semibold text-[var(--ink)] truncate">
+              {report ? `${report.total.visitCount} visits` : '—'}
+            </div>
+            <div className="mt-0.5 text-[11px] text-[var(--muted)] truncate">
+              {report ? `${report.total.uniquePatients} unique patients` : '—'}
+            </div>
+          </div>
+        </div>
       </div>
 
       <p className="mb-2 text-xs text-[var(--muted)] sm:hidden">
