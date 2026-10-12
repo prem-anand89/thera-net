@@ -92,7 +92,7 @@ export function SingleVisitPatientsCard({
     return rows;
   }, [allRows, filter, searchQuery]);
 
-  const list = useShowMore(filteredRows, `${filter}|${searchQuery}`);
+  const list = useShowMore(filteredRows, `${filter}|${searchQuery}`, 5);
 
   async function handleAddReasonSubmit(e: React.FormEvent) {
     e.preventDefault();
