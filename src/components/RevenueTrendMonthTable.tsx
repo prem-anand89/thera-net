@@ -122,9 +122,9 @@ export function RevenueTrendMonthTable({
               <tr>
                 <ColumnHead title="Month" detail="Calendar month in this window" sticky />
                 <ColumnHead title={revenueColumnLabel} detail="Total for the month" />
-                <ColumnHead title="Change ₹" detail="More or less vs the month before" />
+                <ColumnHead title="Change ₹" detail="Net change vs prior month" />
                 <ColumnHead title="Revenue MoM" detail="% change vs prior month" />
-                <ColumnHead title="Visits" detail="Sessions logged" />
+                <ColumnHead title="Visits" detail="Completed sessions" />
                 <ColumnHead title="Visit MoM" detail="% change vs prior month" />
                 <ColumnHead title="₹/visit" detail="Average revenue per visit" />
               </tr>

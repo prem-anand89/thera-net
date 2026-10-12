@@ -80,7 +80,7 @@ export function MonthlyRevenueChart({
                         deltaPct >= 0 ? 'text-[var(--teal)]' : 'text-[var(--rust)]'
                       }`}
                     >
-                      {deltaPct >= 0 ? `▲ +${deltaPct}%` : `▼ ${deltaPct}%`} vs prior
+                      {deltaPct >= 0 ? `▲ +${deltaPct}%` : `▼ ${Math.abs(deltaPct)}%`} vs prior
                     </span>
                   )}
                 </>

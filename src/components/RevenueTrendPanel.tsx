@@ -58,7 +58,7 @@ export function RevenueTrendPanel({
 
   return (
     <div className="space-y-4">
-      <TrendSection kicker="Volume & earnings" title="Visits and revenue each month">
+      <TrendSection kicker="Volume & revenue" title="Visits and revenue each month">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <MonthlyRevenueChart
             categories={chartCategories}
@@ -84,7 +84,7 @@ export function RevenueTrendPanel({
         </div>
       </TrendSection>
 
-      <TrendSection kicker="Month detail" title="Numbers behind the charts">
+      <TrendSection kicker="Monthly breakdown" title="Month-by-month financial summary">
         <RevenueTrendMonthTable
           monthLabels={categories}
           revenuePaise={revenuePaise}

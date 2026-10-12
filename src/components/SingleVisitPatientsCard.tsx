@@ -138,7 +138,7 @@ export function SingleVisitPatientsCard({
           allRows.length > 0 ? (
             <div className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-right">
               <div className="text-[9px] font-medium uppercase leading-tight tracking-wide text-[var(--muted)]">
-                Dropouts
+                Single visits
               </div>
               <div className="font-num text-sm font-semibold leading-tight text-[var(--ink)]">
                 {allRows.length}
@@ -169,7 +169,7 @@ export function SingleVisitPatientsCard({
                 Non-return reasons catalog
               </h4>
               <span className="text-[11px] text-[var(--muted)]">
-                Marking "Counts as closed" archives dropouts who recovered or relocated.
+                Marking "Counts as closed" archives patients who completed care or relocated.
               </span>
             </div>
 
@@ -177,11 +177,10 @@ export function SingleVisitPatientsCard({
               {(noReturnReasons ?? []).map((r) => (
                 <span
                   key={r.id}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-all ${
-                    r.active
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-all ${r.active
                       ? 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]'
                       : 'border-[var(--border)] bg-[var(--paper)] text-[var(--muted)] opacity-50 line-through'
-                  }`}
+                    }`}
                 >
                   <span className="font-medium">{r.name}</span>
                   {r.isClosed && (
@@ -236,44 +235,40 @@ export function SingleVisitPatientsCard({
             <button
               type="button"
               onClick={() => setFilter('all')}
-              className={`rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${
-                filter === 'all'
+              className={`rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${filter === 'all'
                   ? 'bg-[var(--ink)] text-white shadow-xs'
                   : 'bg-[var(--surface)] text-[var(--muted)] border border-[var(--border)] hover:bg-[var(--paper)]'
-              }`}
+                }`}
             >
               All ({counts.all})
             </button>
             <button
               type="button"
               onClick={() => setFilter('needs_review')}
-              className={`rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${
-                filter === 'needs_review'
+              className={`rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${filter === 'needs_review'
                   ? 'bg-[var(--rust)] text-white shadow-xs'
                   : 'bg-[var(--surface)] text-[var(--rust)] border border-[var(--rust)]/30 hover:bg-[var(--rust-light)]'
-              }`}
+                }`}
             >
               Needs review ({counts.needsReview})
             </button>
             <button
               type="button"
               onClick={() => setFilter('logged')}
-              className={`rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${
-                filter === 'logged'
+              className={`rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${filter === 'logged'
                   ? 'bg-[#d97706] text-white shadow-xs'
                   : 'bg-[var(--surface)] text-[#d97706] border border-[#d97706]/30 hover:bg-[var(--amber-light)]'
-              }`}
+                }`}
             >
               Reason logged ({counts.logged})
             </button>
             <button
               type="button"
               onClick={() => setFilter('closed')}
-              className={`rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${
-                filter === 'closed'
+              className={`rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${filter === 'closed'
                   ? 'bg-[var(--teal)] text-white shadow-xs'
                   : 'bg-[var(--surface)] text-[var(--teal-strong)] border border-[var(--teal)]/30 hover:bg-[var(--teal-light)]'
-              }`}
+                }`}
             >
               Closed / Resolved ({counts.closed})
             </button>
@@ -335,7 +330,7 @@ export function SingleVisitPatientsCard({
                       Clinical Condition
                     </th>
                     <th scope="col" className="px-4 py-3 text-left">
-                      Retention Status / Reason
+                      Retention Reason
                     </th>
                     <th scope="col" className="px-4 py-3 text-right">
                       Contact & Outreach
@@ -385,13 +380,12 @@ export function SingleVisitPatientsCard({
                         <select
                           value={p.noReturnReasonId ?? ''}
                           onChange={(e) => void onSetPatientReason(p.patientId, e.target.value)}
-                          className={`rounded-full border px-2.5 py-1 text-xs font-semibold cursor-pointer transition-colors focus:outline-hidden ${
-                            p.noReturnReasonName
+                          className={`rounded-full border px-2.5 py-1 text-xs font-semibold cursor-pointer transition-colors focus:outline-hidden ${p.noReturnReasonName
                               ? p.noReturnReasonClosed
                                 ? 'bg-[var(--moss-light)] text-[var(--moss-strong)] border-transparent'
                                 : 'bg-[var(--amber-light)] text-[#b45309] border-transparent'
                               : 'bg-[var(--surface)] text-[var(--muted)] border-dashed border-[var(--border)] hover:border-[var(--teal)]'
-                          }`}
+                            }`}
                         >
                           <option value="">+ Log reason</option>
                           {(noReturnReasons ?? [])
@@ -470,13 +464,12 @@ export function SingleVisitPatientsCard({
                     <select
                       value={p.noReturnReasonId ?? ''}
                       onChange={(e) => void onSetPatientReason(p.patientId, e.target.value)}
-                      className={`rounded-full border px-2 py-1 text-xs font-semibold max-w-[160px] truncate ${
-                        p.noReturnReasonName
+                      className={`rounded-full border px-2 py-1 text-xs font-semibold max-w-[160px] truncate ${p.noReturnReasonName
                           ? p.noReturnReasonClosed
                             ? 'bg-[var(--moss-light)] text-[var(--moss-strong)] border-transparent'
                             : 'bg-[var(--amber-light)] text-[#b45309] border-transparent'
                           : 'bg-[var(--surface)] text-[var(--muted)] border-dashed border-[var(--border)]'
-                      }`}
+                        }`}
                     >
                       <option value="">+ Log reason</option>
                       {(noReturnReasons ?? [])
@@ -520,7 +513,7 @@ export function SingleVisitPatientsCard({
 
             {filteredRows.length > 50 && (
               <div className="border-t border-[var(--border)] bg-[var(--paper)]/50 px-4 py-2.5 text-center text-xs text-[var(--muted)]">
-                Showing 50 of {filteredRows.length} dropouts matching filter.
+                Showing 50 of {filteredRows.length} patients matching filter.
               </div>
             )}
           </div>

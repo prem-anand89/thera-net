@@ -378,7 +378,7 @@ export function ReportsOverviewPage() {
   const visitsCompareValue = kpiMode === 'pacing' ? visitsPacing : visitsLastMonth;
   const visitsCompareLabel = kpiMode === 'pacing' ? 'vs same days last month' : kpiMode === 'projected' ? 'projected · vs last month' : 'vs last month';
 
-  const notProjectable = kpiMode !== 'standard' ? ' (not available in this mode)' : '';
+  const notProjectable = kpiMode !== 'standard' ? ' (calendar month)' : '';
 
   // Average charge/session — always the clinic-wide figure, not scoped to
   // just one therapist (per request: "a clinic overall metric"), from the
@@ -539,9 +539,9 @@ export function ReportsOverviewPage() {
           lastMonthValue={visitsCompareValue ?? undefined}
         />
         <KpiCard
-          label="Avg charge/session"
+          label="Avg. charge / session"
           value={avgChargePerSession != null ? formatINR(avgChargePerSession) : '—'}
-          trendLabel="clinic-wide, this month"
+          trendLabel="clinic-wide this month"
         />
         <KpiCard
           label={scope.isClinicWideView ? 'Repeat visits (30d)' : 'My repeat visits (30d)'}
@@ -668,7 +668,9 @@ export function ReportsOverviewPage() {
           <SectionCard
             title={
               scope.isClinicWideView
-                ? `Revenue trend — ${trendPeriodCaption} (${revenueLabel})`
+                ? revenueLabel === 'Revenue'
+                  ? `Revenue trend — ${trendPeriodCaption}`
+                  : `Revenue trend — ${trendPeriodCaption} (${revenueLabel})`
                 : `My revenue trend — ${trendPeriodCaption} (${revenueLabel})`
             }
           >
@@ -731,8 +733,7 @@ export function ReportsOverviewPage() {
           >
             <SectionCard title="Treatment modalities">
               <p className="mb-3 text-xs text-[var(--muted)]">
-                How often each modality gets picked in clinical notes, across everyone on record — a
-                look at which techniques actually get used, not just what's offered.
+                Breakdown of treatment modalities recorded in clinical notes across all visits.
               </p>
               {modalityUsage === undefined ? null : modalityUsage.length === 0 ? (
                 <p className="py-6 text-center text-sm text-[var(--muted)]">
@@ -763,8 +764,7 @@ export function ReportsOverviewPage() {
         >
           <SectionCard title="Referral sources">
             <p className="mb-4 text-xs text-[var(--muted)]">
-              Click a slice — Doctor/Hospital referral break down by name; everything else lists its
-              patients.
+              Click a slice to view patient breakdown. Doctor and hospital referrals break down by partner name.
             </p>
             {referralSources && referralSources.length > 0 && referralActive ? (
               <div className="grid gap-4 sm:grid-cols-2">

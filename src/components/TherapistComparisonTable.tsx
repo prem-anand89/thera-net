@@ -109,7 +109,7 @@ export function TherapistComparisonTable({
               <TableColumnHead title="Net" detail="After splits & package attribution" onSort={() => toggleSort('net')} sorted={sortBy === 'net'} />
               <TableColumnHead title="Visits" detail="Sessions in period" onSort={() => toggleSort('visits')} sorted={sortBy === 'visits'} />
               <TableColumnHead title="Packages" detail="New packages started in period" />
-              <TableColumnHead title="Retention" detail="Repeat visits within 30 days, % of visits" onSort={() => toggleSort('retention')} sorted={sortBy === 'retention'} />
+              <TableColumnHead title="Retention" detail="30-day repeat visit rate (% of visits)" onSort={() => toggleSort('retention')} sorted={sortBy === 'retention'} />
               {showUtilisation && (
                 <TableColumnHead title="Utilisation" detail="Work hours ÷ available capacity" onSort={() => toggleSort('utilisation')} sorted={sortBy === 'utilisation'} />
               )}

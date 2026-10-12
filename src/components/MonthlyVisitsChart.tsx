@@ -61,7 +61,7 @@ export function MonthlyVisitsChart({
                     deltaVisits >= 0 ? 'text-[var(--teal)]' : 'text-[var(--rust)]'
                   }`}
                 >
-                  {deltaVisits >= 0 ? `▲ +${deltaVisits}` : `▼ ${deltaVisits}`} vs prior
+                  {deltaVisits >= 0 ? `▲ +${deltaVisits}` : `▼ ${Math.abs(deltaVisits)}`} vs prior
                 </span>
               )}
             </div>

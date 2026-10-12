@@ -155,7 +155,7 @@ export function ClinicUtilisationView({
   return (
     <SectionCard title="Clinic utilisation">
       <p className="mb-4 text-xs text-[var(--muted)]">
-        Capacity utilisation and clinical work hours overview across time. Detailed practitioner metrics and utilisation bars are consolidated in the Therapist Comparison section above.
+        Capacity utilisation and clinical work hours across time periods. Filter by practitioner or compare against previous intervals.
       </p>
 
       {!report && <p className="py-8 text-center text-sm text-[var(--muted)]">Loading…</p>}

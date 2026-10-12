@@ -261,12 +261,12 @@ export function TherapistComparisonCard({
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                {viewMode === 'comparison' ? 'Comparative attribution' : 'Individual trend'}
+                {viewMode === 'comparison' ? 'Comparative breakdown' : 'Individual trend'}
               </p>
               <h3 className="font-display text-sm font-semibold text-[var(--ink)]">
                 {viewMode === 'comparison'
-                  ? 'Performance comparison per therapist'
-                  : `${activeTherapistName} — Performance across period`}
+                  ? 'Therapist performance comparison'
+                  : `${activeTherapistName} — Trend across period`}
               </h3>
             </div>
 
@@ -281,7 +281,7 @@ export function TherapistComparisonCard({
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                 }`}
               >
-                All Therapists
+                All therapists
               </button>
               <button
                 type="button"
@@ -292,7 +292,7 @@ export function TherapistComparisonCard({
                     : 'text-[var(--muted)] hover:text-[var(--ink)]'
                 }`}
               >
-                Single Therapist Trend
+                Single therapist trend
               </button>
             </div>
           </div>
@@ -397,7 +397,7 @@ export function TherapistComparisonCard({
             <div className="mt-4 space-y-4">
               {/* Therapist Selector Pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
-                <span className="text-xs text-[var(--muted)] mr-1">Practitioner:</span>
+                <span className="text-xs text-[var(--muted)] mr-1">Therapist:</span>
                 {therapistNames.map((name) => (
                   <button
                     key={name}
@@ -452,7 +452,7 @@ export function TherapistComparisonCard({
       )}
 
       {trend && therapistNames.length === 0 && (
-        <p className="text-sm text-[var(--muted)]">No visits in the last 6 months.</p>
+        <p className="text-sm text-[var(--muted)]">No visits recorded in this period.</p>
       )}
 
       {trend && therapistNames.length > 0 && viewMode === 'comparison' && (
@@ -462,7 +462,9 @@ export function TherapistComparisonCard({
               ? `${monthName(chartMonth.month.month)} ${chartMonth.month.year}`
               : 'Selected month'}
           </p>
-          <h3 className="font-display text-sm font-semibold text-[var(--ink)]">Totals</h3>
+          <h3 className="font-display text-sm font-semibold text-[var(--ink)]">
+            Therapist performance & attribution
+          </h3>
           <TherapistComparisonTable
             rows={comparisonRows}
             total={comparisonTotal}
