@@ -70,7 +70,7 @@ export function CapacityHoursCard({
         </div>
 
         <div className="mt-3 flex items-baseline gap-3">
-          <span className="font-num text-3xl font-bold tracking-tight text-[var(--ink)]">
+          <span className="font-num text-xl font-medium text-[var(--ink)]">
             {formatHours(workedMinutes)}
           </span>
           {compareMode && deltaMinutes != null && (

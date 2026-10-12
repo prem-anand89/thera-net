@@ -13,6 +13,7 @@ import {
 import { clinicBillingConfig, clinicShareLabels, type NoReturnReasonItem } from '@/domain/types';
 import type { MonthlyReport, TherapistMonthRow } from '@/services/reportService';
 import { SectionCard, th, td, tdNum, thNum } from '@/components/ui';
+import { ShowMoreFooter, useShowMore } from '@/components/ShowMore';
 import { BarChart } from '@/components/BarChart';
 import { RevenueTrendPanel } from '@/components/RevenueTrendPanel';
 import { PieChart } from '@/components/PieChart';
@@ -462,6 +463,9 @@ export function ReportsOverviewPage() {
     }
     return [...byDetail.entries()].sort((a, b) => b[1].revenuePaise - a[1].revenuePaise);
   }, [referralActive, referralNeedsDetail]);
+  // Long lists (every patient under one source) collapse to a first page.
+  const referralPatientsList = useShowMore(referralActive?.patients ?? [], referralActiveIdx);
+  const referralGroupsList = useShowMore(referralDetailGroups, referralActiveIdx);
 
   // The clinic's own "why didn't they come back" list
   const noReturnReasons = useLiveQuery(
@@ -800,7 +804,7 @@ export function ReportsOverviewPage() {
                         table too tight on a phone. */}
                   <div className="tab:hidden space-y-1.5">
                     {referralNeedsDetail
-                      ? referralDetailGroups.map(([name, g]) => (
+                      ? referralGroupsList.visible.map(([name, g]) => (
                           <div
                             key={name}
                             className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
@@ -812,7 +816,7 @@ export function ReportsOverviewPage() {
                             </span>
                           </div>
                         ))
-                      : referralActive.patients.map((p) => (
+                      : referralPatientsList.visible.map((p) => (
                           <div
                             key={p.patientId}
                             className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
@@ -843,7 +847,7 @@ export function ReportsOverviewPage() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)]">
-                              {referralDetailGroups.map(([name, g]) => (
+                              {referralGroupsList.visible.map(([name, g]) => (
                                 <tr key={name} className="hover:bg-[var(--paper)]/50 transition-colors">
                                   <td className={`${td} font-medium`}>{name}</td>
                                   <td className={tdNum}>{g.patients}</td>
@@ -854,7 +858,9 @@ export function ReportsOverviewPage() {
                             </tbody>
                             <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold text-sm">
                               <tr>
-                                <td className={`${td} font-bold text-[var(--ink)]`}>Total</td>
+                                <td className={`${td} font-bold text-[var(--ink)]`}>
+                                  {referralGroupsList.hasMore ? `Total (all ${referralGroupsList.total})` : 'Total'}
+                                </td>
                                 <td className={`${tdNum} font-bold text-[var(--ink)]`}>
                                   {referralDetailGroups.reduce((s, [, g]) => s + g.patients, 0)}
                                 </td>
@@ -877,7 +883,7 @@ export function ReportsOverviewPage() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--border)] bg-[var(--surface)]">
-                              {referralActive.patients.map((p) => (
+                              {referralPatientsList.visible.map((p) => (
                                 <tr key={p.patientId} className="hover:bg-[var(--paper)]/50 transition-colors">
                                   <td className={td}>
                                     <span className="font-medium">{p.patientName}</span>{' '}
@@ -890,7 +896,9 @@ export function ReportsOverviewPage() {
                             </tbody>
                             <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold text-sm">
                               <tr>
-                                <td className={`${td} font-bold text-[var(--ink)]`}>Total</td>
+                                <td className={`${td} font-bold text-[var(--ink)]`}>
+                                  {referralPatientsList.hasMore ? `Total (all ${referralPatientsList.total})` : 'Total'}
+                                </td>
                                 <td className={`${tdNum} font-bold text-[var(--ink)]`}>
                                   {referralActive.patients.reduce((s, p) => s + p.visitCount, 0)}
                                 </td>
@@ -904,6 +912,10 @@ export function ReportsOverviewPage() {
                       </table>
                     </div>
                   </div>
+                  <ShowMoreFooter
+                    list={referralNeedsDetail ? referralGroupsList : referralPatientsList}
+                    noun={referralNeedsDetail ? 'entries' : 'patients'}
+                  />
                 </div>
               </div>
             ) : (

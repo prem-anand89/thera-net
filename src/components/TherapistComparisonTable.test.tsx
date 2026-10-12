@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { TherapistComparisonTable, type TherapistComparisonRow } from './TherapistComparisonTable';
 
@@ -95,32 +95,5 @@ describe('TherapistComparisonTable ranking', () => {
     expect(names()[0]).toBe('Kiran');
     fireEvent.click(screen.getByRole('button', { name: 'Sort by Visits' }));
     expect(names()[0]).toBe('Priya');
-  });
-});
-
-describe('TherapistComparisonTable on a phone', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('lists each therapist as a card with every figure instead of a sideways-scrolling table', () => {
-    vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: true,
-      media: query,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    }));
-    const { container } = render(
-      <TherapistComparisonTable
-        rows={[row({ therapistName: 'Priya', postTaxPaise: 60000 }), row({ therapistName: 'Kiran' })]}
-        total={row({ therapistName: 'Total' })}
-        showPostTax
-        ownLabel="BM"
-      />
-    );
-    expect(container.querySelector('table')).toBeNull();
-    expect(container.querySelectorAll('li')).toHaveLength(3);
-    for (const label of ['Bill amount', 'Post tax BM', 'Visits', 'Packages', 'Retention']) {
-      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
-    }
-    expect(screen.getByText('Priya')).toBeInTheDocument();
   });
 });

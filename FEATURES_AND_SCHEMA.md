@@ -4501,12 +4501,20 @@ read misses (clipped pills, tables wider than their card).
 - **Charts/cards nested in a `SectionCard` use `.chart-panel`**: a bordered card
   from `sm:` up, a flat divided section on phones, so the chart gets the card's
   full width instead of a box inside a box.
-- **Wide tables don't scroll sideways on phones.** Either hide secondary columns
-  below `tab:` (`RevenueTrendMonthTable`: Month, revenue, MoM %, visits on a
-  phone; all seven from tablet width) or render one card per row
-  (`TherapistComparisonTable` via `usePhoneLayout()`, which renders only the
-  layout that applies — not both — so text queries and screen readers see it
-  once). The Monthly statement keeps a deliberate sticky-column sideways scroll.
+- **Wide tables on phones.** The month breakdown hides secondary columns below
+  `tab:` (Month, revenue, MoM %, visits on a phone; all seven from tablet width).
+  The therapist comparison stays a real table at every width — sticky Therapist
+  column, tighter cell padding, no caption lines, a "swipe sideways" hint — because
+  a per-therapist card list read worse than a table. The Monthly statement keeps its
+  deliberate sticky-column sideways scroll.
+- **Long lists in Reports collapse** (`ShowMore.tsx`: `useShowMore` + `ShowMoreFooter`):
+  10 rows, then "Show 10 more / Show all / Show less". Used by Single-visit patients
+  and the Referral sources patient/partner lists, which grow with the clinic; a
+  list's `resetKey` (filter, selected source) collapses it back to the first page.
+  Footer totals still cover the whole list ("Total (all 43)"). Bounded lists — the
+  6-item modalities chart, a handful of therapists, ≤12 months — don't need it.
+- **Chart headline numbers are `text-xl font-semibold`** (`text-2xl` on the
+  utilisation cards), not bold display size, so they don't dominate the chart under them.
 - **A "vs …" KPI label and its comparison figure read as one phrase** ("vs last
   month: ₹26,932"), never "vs last month · Last month: ₹26,932".
 - **Don't repeat a heading at several levels** (card title, eyebrow, sub-heading,

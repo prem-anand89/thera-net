@@ -86,7 +86,7 @@ export function UtilisationTrendCard({
         </div>
 
         <div className="mt-3 flex items-baseline gap-3">
-          <span className="font-num text-3xl font-bold tracking-tight text-[var(--ink)]">
+          <span className="font-num text-xl font-medium text-[var(--ink)]">
             {pct(activeRatio)}
           </span>
           {compareMode && deltaPts != null && (

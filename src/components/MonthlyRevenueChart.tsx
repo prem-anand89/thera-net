@@ -71,7 +71,7 @@ export function MonthlyRevenueChart({
             <div className="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
               {chartMode === 'volume' ? (
                 <>
-                  <span className="font-num text-2xl font-bold tracking-tight text-[var(--ink)]">
+                  <span className="font-num text-lg font-medium text-[var(--ink)]">
                     {formatRevenue(activeValue)}
                   </span>
                   {deltaPct != null && (
@@ -87,7 +87,7 @@ export function MonthlyRevenueChart({
               ) : (
                 <>
                   <span
-                    className={`font-num text-2xl font-bold tracking-tight ${
+                    className={`font-num text-lg font-medium ${
                       activeDelta == null || activeDelta === 0
                         ? 'text-[var(--ink)]'
                         : activeDelta > 0

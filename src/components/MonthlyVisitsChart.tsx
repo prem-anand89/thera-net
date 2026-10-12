@@ -52,8 +52,9 @@ export function MonthlyVisitsChart({
               Patient Visits
             </span>
             <div className="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-              <span className="font-num text-2xl font-bold tracking-tight text-[var(--ink)]">
-                {activeValue} visits
+              <span className="font-num text-lg font-medium text-[var(--ink)]">
+                {activeValue}{' '}
+                <span className="font-sans text-sm font-normal text-[var(--muted)]">visits</span>
               </span>
               {deltaVisits != null && (
                 <span

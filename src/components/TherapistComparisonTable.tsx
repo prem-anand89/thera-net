@@ -1,13 +1,19 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { formatINR } from '@/domain/money';
 import { th, thNum, td, tdNum } from '@/components/ui';
-import { usePhoneLayout } from '@/components/usePhoneLayout';
 import {
   columnLeaders,
   metricValue,
   MIN_VISITS_FOR_RANKING,
   type RankMetric,
 } from '@/domain/therapistRanking';
+
+// Phones keep the full table (sticky Therapist column, sideways scroll for the rest),
+// just tighter: less cell padding and no caption lines under the headings.
+const tdT = `${td} max-tab:px-2`;
+const tdN = `${tdNum} max-tab:px-2`;
+const thT = `${th} max-tab:px-2`;
+const thN = `${thNum} max-tab:px-2`;
 
 export function TableColumnHead({
   title,
@@ -21,7 +27,7 @@ export function TableColumnHead({
   sorted?: boolean;
 }) {
   return (
-    <th className={thNum} aria-sort={sorted ? 'descending' : undefined}>
+    <th className={thN} title={detail} aria-sort={sorted ? 'descending' : undefined}>
       <div>
         {onSort ? (
           <button
@@ -37,7 +43,7 @@ export function TableColumnHead({
           title
         )}
       </div>
-      <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-[var(--muted)]">
+      <div className="mt-0.5 hidden text-[9px] font-normal normal-case tracking-normal text-[var(--muted)] tab:block">
         {detail}
       </div>
     </th>
@@ -58,104 +64,6 @@ export type TherapistComparisonRow = {
   utilisationClinicHours?: boolean;
 };
 
-function utilisationTone(v: number): string {
-  return v >= 0.7 ? 'bg-[var(--teal)]' : v >= 0.5 ? 'bg-[#d97706]' : 'bg-[var(--rust)]';
-}
-
-function PhoneMetric({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2">
-      <dt className="text-[var(--muted)]">{label}</dt>
-      <dd className="font-num text-right font-medium text-[var(--ink)]">{children}</dd>
-    </div>
-  );
-}
-
-function PhoneUtilisation({ row }: { row: TherapistComparisonRow }) {
-  if (row.utilisation == null) return <span className="text-[var(--muted)]">—</span>;
-  const pct = Math.round(row.utilisation * 100);
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full border border-[var(--border)]/50 bg-[var(--paper)]"
-      >
-        <span
-          className={`block h-full rounded-full ${utilisationTone(row.utilisation)}`}
-          style={{ width: `${Math.min(100, Math.max(3, pct))}%` }}
-        />
-      </span>
-      {pct}%{row.utilisationClinicHours ? '*' : ''}
-    </span>
-  );
-}
-
-/** Phone layout: one card per therapist with every figure the table has, so nothing
- *  needs sideways scrolling. */
-function PhoneRows({
-  rows,
-  total,
-  showPostTax,
-  showUtilisation,
-  ownLabel,
-  lead,
-}: {
-  rows: TherapistComparisonRow[];
-  total?: TherapistComparisonRow;
-  showPostTax: boolean;
-  showUtilisation: boolean;
-  ownLabel: string;
-  lead: (metric: RankMetric, name: string) => ReactNode;
-}) {
-  const card = (row: TherapistComparisonRow, isTotal: boolean) => (
-    <li
-      key={row.therapistName}
-      className={`rounded-xl border border-[var(--border)] p-3 ${isTotal ? 'bg-[var(--paper)]' : 'bg-[var(--surface)]'}`}
-    >
-      <div className="flex items-baseline justify-between gap-3">
-        <span className={`min-w-0 break-words text-sm text-[var(--ink)] ${isTotal ? 'font-bold' : 'font-medium'}`}>
-          {row.therapistName}
-        </span>
-        <span className="font-num shrink-0 text-sm font-semibold text-[var(--ink)]">
-          {formatINR(row.netPostTaxPaise)}
-          {!isTotal && lead('net', row.therapistName)}
-          <span className="ml-1 text-[10px] font-normal uppercase text-[var(--muted)]">net</span>
-        </span>
-      </div>
-      <dl className="mt-2 grid grid-cols-1 gap-y-1 text-xs min-[420px]:grid-cols-2 min-[420px]:gap-x-4">
-        <PhoneMetric label="Bill amount">{formatINR(row.billPaise)}</PhoneMetric>
-        {showPostTax && <PhoneMetric label={`Post tax ${ownLabel}`}>{formatINR(row.postTaxPaise)}</PhoneMetric>}
-        <PhoneMetric label="Visits">
-          {row.visitCount}
-          {!isTotal && lead('visits', row.therapistName)}
-        </PhoneMetric>
-        <PhoneMetric label="Packages">{row.newPackages}</PhoneMetric>
-        {!isTotal && (
-          <PhoneMetric label="Retention">
-            {row.retentionPct != null ? `${row.retentionPct}%` : '—'}
-            {lead('retention', row.therapistName)}
-          </PhoneMetric>
-        )}
-        {showUtilisation && (
-          <PhoneMetric label="Utilisation">
-            <PhoneUtilisation row={row} />
-            {!isTotal && lead('utilisation', row.therapistName)}
-          </PhoneMetric>
-        )}
-      </dl>
-    </li>
-  );
-  return (
-    <ul className="space-y-2">
-      {rows.map((r) => card(r, false))}
-      {total && card({ ...total, therapistName: 'Total' }, true)}
-    </ul>
-  );
-}
-
 export function TherapistComparisonTable({
   rows,
   total,
@@ -167,7 +75,6 @@ export function TherapistComparisonTable({
   showPostTax: boolean;
   ownLabel: string;
 }) {
-  const phone = usePhoneLayout();
   const showUtilisation = rows.some((r) => r.utilisation !== undefined);
   const [sortBy, setSortBy] = useState<RankMetric | null>(null);
   const toggleSort = (metric: RankMetric) => setSortBy((c) => (c === metric ? null : metric));
@@ -188,37 +95,6 @@ export function TherapistComparisonTable({
         Top
       </span>
     ) : null;
-  const notes = (
-    <>
-      {anyLeader && (
-        <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)] max-tab:border-t-0 max-tab:px-0">
-          Top marks the best in each column among therapists with at least {MIN_VISITS_FOR_RANKING} visits in the period.
-        </p>
-      )}
-      {showUtilisation && rows.some((r) => r.utilisationClinicHours) && (
-        <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)] max-tab:border-t-0 max-tab:px-0">
-          * No personal working hours set, so clinic booking hours were used as available time.
-        </p>
-      )}
-    </>
-  );
-
-  if (phone) {
-    return (
-      <div className="space-y-2">
-        <PhoneRows
-          rows={shownRows}
-          total={total}
-          showPostTax={showPostTax}
-          showUtilisation={showUtilisation}
-          ownLabel={ownLabel}
-          lead={lead}
-        />
-        {notes}
-      </div>
-    );
-  }
-
   return (
     <div className="isolate overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-xs">
       <div className="overflow-x-auto overscroll-x-contain">
@@ -226,10 +102,10 @@ export function TherapistComparisonTable({
           <thead className="bg-[var(--paper)]">
             <tr>
               <th
-                className={`${th} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]`}
+                className={`${thT} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)]`}
               >
                 <div>Therapist</div>
-                <div className="mt-0.5 text-[9px] font-normal normal-case tracking-normal text-[var(--muted)]">
+                <div className="mt-0.5 hidden text-[9px] font-normal normal-case tracking-normal text-[var(--muted)] tab:block">
                   Team member
                 </div>
               </th>
@@ -250,22 +126,22 @@ export function TherapistComparisonTable({
             {shownRows.map((row) => (
               <tr key={row.therapistName} className="hover:bg-[var(--paper)]/50 transition-colors">
                 <td
-                  className={`${td} sticky left-0 z-[1] bg-[var(--surface)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-medium text-[var(--ink)]`}
+                  className={`${tdT} sticky left-0 z-[1] bg-[var(--surface)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-medium text-[var(--ink)]`}
                 >
                   {row.therapistName}
                 </td>
-                <td className={tdNum}>{formatINR(row.billPaise)}</td>
-                {showPostTax && <td className={tdNum}>{formatINR(row.postTaxPaise)}</td>}
-                <td className={tdNum}>{formatINR(row.netPostTaxPaise)}{lead('net', row.therapistName)}</td>
-                <td className={tdNum}>{row.visitCount}{lead('visits', row.therapistName)}</td>
-                <td className={tdNum}>{row.newPackages}</td>
-                <td className={tdNum}>
+                <td className={tdN}>{formatINR(row.billPaise)}</td>
+                {showPostTax && <td className={tdN}>{formatINR(row.postTaxPaise)}</td>}
+                <td className={tdN}>{formatINR(row.netPostTaxPaise)}{lead('net', row.therapistName)}</td>
+                <td className={tdN}>{row.visitCount}{lead('visits', row.therapistName)}</td>
+                <td className={tdN}>{row.newPackages}</td>
+                <td className={tdN}>
                   {row.retentionPct != null ? `${row.retentionPct}%` : '—'}
                   {lead('retention', row.therapistName)}
                 </td>
                 {showUtilisation && (
                   <td
-                    className={tdNum}
+                    className={tdN}
                     title={row.utilisationClinicHours ? 'Based on clinic hours — no personal hours set' : undefined}
                   >
                     <div className="flex items-center justify-end gap-2.5">
@@ -308,18 +184,18 @@ export function TherapistComparisonTable({
             <tfoot className="border-t-2 border-[var(--border)] bg-[var(--paper)] font-semibold text-sm">
               <tr>
                 <td
-                  className={`${td} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-bold text-[var(--ink)]`}
+                  className={`${tdT} sticky left-0 z-[1] bg-[var(--paper)] shadow-[2px_0_4px_rgba(0,0,0,0.04)] font-bold text-[var(--ink)]`}
                 >
                   Total
                 </td>
-                <td className={`${tdNum} font-bold text-[var(--ink)]`}>{formatINR(total.billPaise)}</td>
-                {showPostTax && <td className={`${tdNum} font-bold text-[var(--ink)]`}>{formatINR(total.postTaxPaise)}</td>}
-                <td className={`${tdNum} font-bold text-[var(--ink)]`}>{formatINR(total.netPostTaxPaise)}</td>
-                <td className={`${tdNum} font-bold text-[var(--ink)]`}>{total.visitCount}</td>
-                <td className={`${tdNum} font-bold text-[var(--ink)]`}>{total.newPackages}</td>
-                <td className={tdNum}>—</td>
+                <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.billPaise)}</td>
+                {showPostTax && <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.postTaxPaise)}</td>}
+                <td className={`${tdN} font-bold text-[var(--ink)]`}>{formatINR(total.netPostTaxPaise)}</td>
+                <td className={`${tdN} font-bold text-[var(--ink)]`}>{total.visitCount}</td>
+                <td className={`${tdN} font-bold text-[var(--ink)]`}>{total.newPackages}</td>
+                <td className={tdN}>—</td>
                 {showUtilisation && (
-                  <td className={tdNum}>
+                  <td className={tdN}>
                     {total.utilisation != null ? (
                       <div className="flex items-center justify-end gap-2.5">
                         <div
@@ -354,7 +230,19 @@ export function TherapistComparisonTable({
           )}
         </table>
       </div>
-      {notes}
+      <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)] tab:hidden">
+        Swipe sideways for more columns.
+      </p>
+      {anyLeader && (
+        <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
+          Top marks the best in each column among therapists with at least {MIN_VISITS_FOR_RANKING} visits in the period.
+        </p>
+      )}
+      {showUtilisation && rows.some((r) => r.utilisationClinicHours) && (
+        <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
+          * No personal working hours set, so clinic booking hours were used as available time.
+        </p>
+      )}
     </div>
   );
 }
