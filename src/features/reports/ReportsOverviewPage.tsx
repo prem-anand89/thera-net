@@ -80,19 +80,31 @@ function KpiCard({
    *  an extrapolated figure is never mistaken for a settled one. */
   projected?: boolean;
 }) {
+  const valStr = typeof value === 'string' ? value : '';
+  const isVeryLongValue = valStr.length >= 10;
+  const isLongValue = valStr.length >= 8;
+
   return (
-    <div className="min-w-[140px] flex-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-sm">
-      <div className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">{label}</div>
-      <div className="mt-1 flex items-baseline gap-2">
+    <div className="min-w-0 flex-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2.5 sm:px-4 sm:py-3.5 shadow-2xs overflow-hidden">
+      <div className="text-[11px] sm:text-xs font-medium uppercase tracking-wide text-[var(--muted)] truncate" title={label}>
+        {label}
+      </div>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
         <span
-          className={`font-num text-2xl font-semibold text-[var(--ink)] ${projected ? 'border-b border-dotted border-[var(--muted)]' : ''}`}
+          className={`font-num font-semibold text-[var(--ink)] tracking-tight whitespace-nowrap ${
+            isVeryLongValue
+              ? 'text-base sm:text-lg md:text-2xl'
+              : isLongValue
+                ? 'text-lg sm:text-xl md:text-2xl'
+                : 'text-xl sm:text-2xl'
+          } ${projected ? 'border-b border-dotted border-[var(--muted)]' : ''}`}
           title={projected ? 'Projected — not a settled figure' : undefined}
         >
           {value}
         </span>
         {trendPct != null && (
           <span
-            className="font-num whitespace-nowrap text-xs font-semibold"
+            className="font-num whitespace-nowrap text-xs font-semibold shrink-0"
             style={{ color: trendPct >= 0 ? 'var(--moss)' : 'var(--rust)' }}
           >
             {trendPct >= 0 ? '▲' : '▼'} {Math.abs(trendPct)}%
@@ -100,7 +112,7 @@ function KpiCard({
         )}
       </div>
       {(trendLabel || lastMonthValue != null) && (
-        <div className="mt-0.5 text-[11px] text-[var(--muted)]">
+        <div className="mt-0.5 text-[11px] text-[var(--muted)] break-words leading-tight">
           {/* A "vs …" label and the figure it compares against read as one phrase
               ("vs last month: ₹26,932"), not "vs last month · Last month: ₹26,932". */}
           {trendLabel && lastMonthValue != null && /(^|· )vs /.test(trendLabel) ? (
@@ -662,23 +674,8 @@ export function ReportsOverviewPage() {
             if (el) sectionRefs.current.set('revenue', el);
             else sectionRefs.current.delete('revenue');
           }}
-          className="scroll-mt-28 md:scroll-mt-20 space-y-2"
+          className="scroll-mt-28 md:scroll-mt-20"
         >
-          <InsightsTrendPeriodBar
-            clinic={clinic}
-            mode={trendPeriodMode}
-            onModeChange={(mode) => {
-              const range = buildTrendMonthsInRange(mode, {
-                fyStartMonth: clinic.fyStartMonth,
-                momFocus: focusMonth,
-              });
-              const last = range[range.length - 1];
-              updateTrendPeriod({ period: mode, year: last.year, month: last.month });
-            }}
-            momFocus={focusMonth}
-            onMomFocusChange={(m) => updateTrendPeriod({ period: 'mom', year: m.year, month: m.month })}
-            periodCaption={`Showing ${trendPeriodCaption} · applies to revenue trend and therapist comparison`}
-          />
           <SectionCard
             title={
               scope.isClinicWideView
@@ -688,6 +685,22 @@ export function ReportsOverviewPage() {
                 : `My revenue trend (${revenueLabel})`
             }
           >
+            <InsightsTrendPeriodBar
+              clinic={clinic}
+              mode={trendPeriodMode}
+              onModeChange={(mode) => {
+                const range = buildTrendMonthsInRange(mode, {
+                  fyStartMonth: clinic.fyStartMonth,
+                  momFocus: focusMonth,
+                });
+                const last = range[range.length - 1];
+                updateTrendPeriod({ period: mode, year: last.year, month: last.month });
+              }}
+              momFocus={focusMonth}
+              onMomFocusChange={(m) => updateTrendPeriod({ period: 'mom', year: m.year, month: m.month })}
+              periodCaption={trendPeriodCaption}
+            />
+
             {trend && !hasEnoughTrendHistory && (
               <p className="py-8 text-center text-sm text-[var(--muted)]">
                 Not enough data yet — a trend needs at least two months of visits to be meaningful.

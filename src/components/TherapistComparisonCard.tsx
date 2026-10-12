@@ -259,16 +259,26 @@ export function TherapistComparisonCard({
       {trend && therapistNames.length > 0 && (
         <div className="border-t border-[var(--border)] pt-4 first:border-t-0 first:pt-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            {viewMode === 'individual' && (
+            <div>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+                {viewMode === 'comparison' ? 'Comparative Breakdown' : 'Individual Performance'}
+              </span>
               <h3 className="font-display text-sm font-semibold text-[var(--ink)]">
-                {activeTherapistName} — trend across period
+                {viewMode === 'comparison'
+                  ? 'Monthly team comparison'
+                  : `${activeTherapistName} — Trend across period`}
               </h3>
-            )}
+            </div>
 
             {/* View Mode Switcher Toggle */}
-            <div className="inline-flex shrink-0 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5">
+            <div
+              className="inline-flex self-start sm:self-auto shrink-0 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-0.5"
+              role="group"
+              aria-label="Therapist comparison view mode"
+            >
               <button
                 type="button"
+                aria-pressed={viewMode === 'comparison'}
                 onClick={() => setViewMode('comparison')}
                 className={`rounded-md px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${
                   viewMode === 'comparison'
@@ -280,6 +290,7 @@ export function TherapistComparisonCard({
               </button>
               <button
                 type="button"
+                aria-pressed={viewMode === 'individual'}
                 onClick={() => setViewMode('individual')}
                 className={`rounded-md px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${
                   viewMode === 'individual'
@@ -296,8 +307,8 @@ export function TherapistComparisonCard({
           {viewMode === 'comparison' && (
             <div className="mt-4">
               {categories.length > 1 && (
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
-                  <span className="text-xs text-[var(--muted)] mr-1">Month:</span>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <span className="text-xs text-[var(--muted)] mr-1 shrink-0">Month:</span>
                   {categories.map((label, i) => (
                     <button
                       key={label}
@@ -319,28 +330,28 @@ export function TherapistComparisonCard({
               {/* Two Side-by-Side Comparative Ranking Cards */}
               <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Revenue Ranking Card */}
-                <div className="chart-panel rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xs">
+                <div className="chart-panel rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:p-4 shadow-xs">
                   <div className="flex items-baseline justify-between mb-3">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)] truncate">
                       {revenueLabel}
                     </span>
-                    <span className="font-num text-xs font-semibold text-[var(--ink)]">
+                    <span className="font-num text-xs font-semibold text-[var(--ink)] shrink-0 ml-2">
                       Total: {formatINR(totalMonthRevenue)}
                     </span>
                   </div>
                   <div className="space-y-3.5">
                     {therapistRevenueRanking.map((item) => (
                       <div key={item.name} className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-medium text-[var(--ink)]">{item.name}</span>
-                          <div className="flex items-baseline gap-2">
+                        <div className="flex items-center justify-between text-xs gap-2">
+                          <span className="font-medium text-[var(--ink)] truncate">{item.name}</span>
+                          <div className="flex items-baseline gap-2 shrink-0">
                             <span className="font-num font-semibold text-[var(--ink)]">{formatINR(item.revenue)}</span>
                             <span className="font-num text-[11px] font-medium text-[var(--muted)]">
                               {item.sharePct}% of clinic
                             </span>
                           </div>
                         </div>
-                        <div className="h-3.5 w-full overflow-hidden rounded-full bg-[var(--paper)]">
+                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--paper)]">
                           <div
                             className="h-full rounded-full bg-[var(--teal)] transition-all"
                             style={{ width: `${item.barPct}%` }}
@@ -352,28 +363,28 @@ export function TherapistComparisonCard({
                 </div>
 
                 {/* Visits Ranking Card */}
-                <div className="chart-panel rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xs">
+                <div className="chart-panel rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 sm:p-4 shadow-xs">
                   <div className="flex items-baseline justify-between mb-3">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
                       Patient Visits
                     </span>
-                    <span className="font-num text-xs font-semibold text-[var(--ink)]">
+                    <span className="font-num text-xs font-semibold text-[var(--ink)] shrink-0 ml-2">
                       Total: {totalMonthVisits} visits
                     </span>
                   </div>
                   <div className="space-y-3.5">
                     {therapistVisitRanking.map((item) => (
                       <div key={item.name} className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-medium text-[var(--ink)]">{item.name}</span>
-                          <div className="flex items-baseline gap-2">
+                        <div className="flex items-center justify-between text-xs gap-2">
+                          <span className="font-medium text-[var(--ink)] truncate">{item.name}</span>
+                          <div className="flex items-baseline gap-2 shrink-0">
                             <span className="font-num font-semibold text-[var(--ink)]">{item.visits} visits</span>
                             <span className="font-num text-[11px] font-medium text-[var(--muted)]">
                               {item.sharePct}% of clinic
                             </span>
                           </div>
                         </div>
-                        <div className="h-3.5 w-full overflow-hidden rounded-full bg-[var(--paper)]">
+                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--paper)]">
                           <div
                             className="h-full rounded-full bg-[#d97706] transition-all"
                             style={{ width: `${item.barPct}%` }}
@@ -390,38 +401,35 @@ export function TherapistComparisonCard({
           {/* VIEW MODE 2: Single Therapist Trend over entire period */}
           {viewMode === 'individual' && (
             <div className="mt-4 space-y-4">
-              {/* Therapist Selector Pills */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
-                <span className="text-xs text-[var(--muted)] mr-1">Therapist:</span>
-                {therapistNames.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => setSelectedTherapistName(name)}
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${
-                      activeTherapistName === name
-                        ? 'bg-[var(--teal-light)] text-[var(--teal-strong)] font-semibold ring-1 ring-[var(--teal)]/30'
-                        : 'bg-[var(--surface)] text-[var(--muted)] border border-[var(--border)] hover:bg-[var(--paper)]'
-                    }`}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
+              {/* Consolidated Therapist Selector & Period Totals Bar */}
+              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:p-3.5 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  {/* Therapist Selector Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <span className="text-xs text-[var(--muted)] mr-1 shrink-0">Therapist:</span>
+                    {therapistNames.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => setSelectedTherapistName(name)}
+                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-colors ${
+                          activeTherapistName === name
+                            ? 'bg-[var(--teal-light)] text-[var(--teal-strong)] font-semibold ring-1 ring-[var(--teal)]/30'
+                            : 'bg-[var(--paper)] text-[var(--muted)] border border-[var(--border)] hover:bg-[var(--surface)] hover:text-[var(--ink)]'
+                        }`}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
 
-              {/* Individual Period Totals Header */}
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div>
-                  <span className="text-[var(--muted)]">Period Total for </span>
-                  <span className="font-semibold text-[var(--ink)]">{activeTherapistName}</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span>
-                    Revenue: <strong className="font-num text-[var(--ink)]">{formatINR(individualTotalRevenue)}</strong>
-                  </span>
-                  <span>
-                    Visits: <strong className="font-num text-[var(--ink)]">{individualTotalVisits}</strong>
-                  </span>
+                  {/* Period Total Summary Stats */}
+                  <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 rounded-xl bg-[var(--paper)] px-3 py-1.5 text-xs">
+                    <span className="text-[var(--muted)]">Period total:</span>
+                    <span className="font-num font-semibold text-[var(--ink)]">{formatINR(individualTotalRevenue)}</span>
+                    <span className="text-[var(--muted)]">·</span>
+                    <span className="font-num font-semibold text-[var(--ink)]">{individualTotalVisits} visits</span>
+                  </div>
                 </div>
               </div>
 
@@ -452,11 +460,16 @@ export function TherapistComparisonCard({
 
       {trend && therapistNames.length > 0 && viewMode === 'comparison' && (
         <div className="mt-6 border-t border-[var(--border)] pt-4">
-          <h3 className="font-display text-sm font-semibold text-[var(--ink)]">
-            {chartMonth
-              ? `${monthName(chartMonth.month.month)} ${chartMonth.month.year} breakdown`
-              : 'Selected month breakdown'}
-          </h3>
+          <div className="mb-3 flex items-baseline justify-between">
+            <h3 className="font-display text-sm font-semibold text-[var(--ink)]">
+              {chartMonth
+                ? `${monthName(chartMonth.month.month)} ${chartMonth.month.year} breakdown`
+                : 'Selected month breakdown'}
+            </h3>
+            <span className="text-xs text-[var(--muted)]">
+              Ranked metrics across active staff
+            </span>
+          </div>
           <TherapistComparisonTable
             rows={comparisonRows}
             total={comparisonTotal}

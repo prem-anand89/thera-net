@@ -441,62 +441,91 @@ export function SingleVisitPatientsCard({
             {/* Mobile Cards (< md) */}
             <div className="md:hidden divide-y divide-[var(--border)] bg-[var(--surface)]">
               {list.visible.map((p) => (
-                <div key={p.patientId} className="p-3.5 space-y-2.5">
+                <div key={p.patientId} className="p-4 space-y-3">
+                  {/* Row 1: Patient Name, MRNO and Recency Badge */}
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <div className="min-w-0">
                       <Link
                         to="/ledger"
                         search={{ patientId: p.patientId }}
-                        className="text-sm font-semibold text-[var(--ink)] hover:underline"
+                        className="text-sm font-semibold text-[var(--ink)] hover:text-[var(--teal)] hover:underline block truncate"
                       >
                         {p.patientName}
                       </Link>
-                      <div className="text-xs font-num font-mono text-[var(--muted)]">
+                      <div className="mt-0.5 text-xs font-mono font-medium text-[var(--muted)]">
                         {p.mrno}
                       </div>
                     </div>
-                    {getRecencyBadge(p.daysSince)}
+                    <div className="shrink-0">{getRecencyBadge(p.daysSince)}</div>
                   </div>
 
+                  {/* Row 2: Last Visit & Condition */}
                   <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="text-[var(--muted)]">Last visit: {formatDateDMY(p.visitDate)}</span>
-                    {p.primaryCondition && <Pill tone="slate">{p.primaryCondition}</Pill>}
+                    <span className="text-[var(--muted)]">
+                      Last visit:{' '}
+                      <strong className="font-normal text-[var(--ink)]">
+                        {formatDateDMY(p.visitDate)}
+                      </strong>
+                    </span>
+                    {p.primaryCondition ? (
+                      <Pill tone="slate">{p.primaryCondition}</Pill>
+                    ) : (
+                      <span className="text-xs text-[var(--muted)]">—</span>
+                    )}
                   </div>
 
-                  <div className="flex items-center justify-between gap-2 pt-1">
-                    <select
-                      value={p.noReturnReasonId ?? ''}
-                      onChange={(e) => void onSetPatientReason(p.patientId, e.target.value)}
-                      className={`rounded-full border px-2 py-1 text-xs font-semibold max-w-[160px] truncate ${p.noReturnReasonName
-                          ? p.noReturnReasonClosed
-                            ? 'bg-[var(--moss-light)] text-[var(--moss-strong)] border-transparent'
-                            : 'bg-[var(--amber-light)] text-[#b45309] border-transparent'
-                          : 'bg-[var(--surface)] text-[var(--muted)] border-dashed border-[var(--border)]'
+                  {/* Row 3: Action Toolbar (Reason Dropdown + Call + Remind) */}
+                  <div className="space-y-2 pt-2 border-t border-[var(--border)]/60">
+                    {/* Reason Selector */}
+                    <div className="relative">
+                      <select
+                        value={p.noReturnReasonId ?? ''}
+                        onChange={(e) => void onSetPatientReason(p.patientId, e.target.value)}
+                        className={`w-full appearance-none rounded-xl border px-3 py-2 pr-8 text-xs cursor-pointer transition-colors focus:outline-hidden ${
+                          p.noReturnReasonName
+                            ? p.noReturnReasonClosed
+                              ? 'bg-[var(--moss-light)] text-[var(--moss-strong)] border-[var(--moss)]/30 font-semibold'
+                              : 'bg-[var(--amber-light)] text-[#b45309] border-[var(--amber)]/30 font-semibold'
+                            : 'bg-[var(--paper)] text-[var(--muted)] border-dashed border-[var(--border)] hover:border-[var(--teal)] font-medium'
                         }`}
-                    >
-                      <option value="">+ Log reason</option>
-                      {(noReturnReasons ?? [])
-                        .filter((r) => r.active || r.id === p.noReturnReasonId)
-                        .map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.isClosed ? `✓ ${r.name}` : r.name}
-                          </option>
-                        ))}
-                    </select>
+                      >
+                        <option value="">+ Log non-return reason…</option>
+                        {(noReturnReasons ?? [])
+                          .filter((r) => r.active || r.id === p.noReturnReasonId)
+                          .map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.isClosed ? `✓ ${r.name} (closed)` : r.name}
+                            </option>
+                          ))}
+                      </select>
+                      <span
+                        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)]"
+                        aria-hidden="true"
+                      >
+                        ▾
+                      </span>
+                    </div>
 
-                    <div className="flex items-center gap-1.5">
-                      {p.phone && (
+                    {/* Quick Outreach Actions */}
+                    <div className="flex items-center gap-2">
+                      {p.phone ? (
                         <a
                           href={`tel:${p.phone}`}
-                          className="rounded-full border border-[var(--border)] px-2 py-1 text-xs font-semibold text-[var(--teal)] hover:bg-[var(--paper)]"
+                          className="flex-1 min-h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-semibold text-[var(--teal)] shadow-2xs hover:bg-[var(--paper)] active:bg-[var(--paper)] transition-colors whitespace-nowrap"
                         >
-                          📞 Call
+                          <span aria-hidden="true">📞</span>
+                          <span>Call</span>
                         </a>
+                      ) : (
+                        <div className="flex-1 min-h-9 inline-flex items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--paper)]/50 px-3 py-1.5 text-xs text-[var(--muted)]">
+                          No phone
+                        </div>
                       )}
+
                       {enablePatientComms && p.phone && (
                         <button
                           type="button"
-                          className="rounded-full bg-[var(--teal-light)] px-2 py-1 text-xs font-semibold text-[var(--teal-strong)]"
+                          className="flex-1 min-h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-[var(--teal-light)] px-3 py-1.5 text-xs font-semibold text-[var(--teal-strong)] shadow-2xs hover:bg-[var(--teal)] hover:text-white active:bg-[var(--teal-strong)] active:text-white transition-colors whitespace-nowrap cursor-pointer"
                           onClick={() => {
                             void feedbackService
                               .sendReturnReminder(clinicId, p.patientName, p.phone!, clinicName)
@@ -505,7 +534,8 @@ export function SingleVisitPatientsCard({
                               );
                           }}
                         >
-                          Remind
+                          <span aria-hidden="true">💬</span>
+                          <span>Remind</span>
                         </button>
                       )}
                     </div>
