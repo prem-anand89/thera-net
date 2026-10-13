@@ -567,3 +567,158 @@ export function clampBufferHours(value: number): number {
   return Math.max(0, Math.min(12, Math.round(value)));
 }
 
+/** Formats minute from midnight to 12-hour compact time: 540->'9', 510->'8:30', 720->'12', 780->'1', 0->'12' */
+export function formatCompactTime(minute: number): string {
+  const h24 = Math.floor(minute / 60) % 24;
+  const min = minute % 60;
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return min === 0 ? String(h12) : `${h12}:${min.toString().padStart(2, '0')}`;
+}
+
+/** Formats minute range to compact string with en dash: (540, 1020)->'9–5' */
+export function formatCompactRange(start: number, end: number): string {
+  return `${formatCompactTime(start)}–${formatCompactTime(end)}`;
+}
+
+/** Formats weekdays Monday-first; runs of consecutive days collapse */
+export function formatDayRanges(days: number[]): string {
+  if (days.length === 0) return '';
+  const sortedDays = sortWeekdays(Array.from(new Set(days)));
+  if (sortedDays.length <= 2) {
+    return sortedDays.map((d) => WEEKDAY_META[d]?.short ?? String(d)).join(', ');
+  }
+
+  const orderMap = new Map<number, number>(WEEKDAY_ORDER.map((d, i) => [d, i]));
+  const runs: number[][] = [];
+  let currentRun: number[] = [sortedDays[0]];
+
+  for (let i = 1; i < sortedDays.length; i++) {
+    const prevIdx = orderMap.get(sortedDays[i - 1]) ?? -1;
+    const currIdx = orderMap.get(sortedDays[i]) ?? -1;
+    if (currIdx === prevIdx + 1) {
+      currentRun.push(sortedDays[i]);
+    } else {
+      runs.push(currentRun);
+      currentRun = [sortedDays[i]];
+    }
+  }
+  runs.push(currentRun);
+
+  return runs
+    .map((run) => {
+      if (run.length >= 2) {
+        const startShort = WEEKDAY_META[run[0]]?.short ?? String(run[0]);
+        const endShort = WEEKDAY_META[run[run.length - 1]]?.short ?? String(run[run.length - 1]);
+        return `${startShort}–${endShort}`;
+      }
+      return WEEKDAY_META[run[0]]?.short ?? String(run[0]);
+    })
+    .join(', ');
+}
+
+export type ScheduleDescription = {
+  type: 'template' | 'custom' | 'clinic_default' | 'off';
+  headline: string; // 'General Shift (Mon–Fri)' | 'Custom hours' | 'Clinic default hours' | 'No working days'
+  groups: { days: number[]; label: string }[]; // days Monday-first; label like '9–5' or '9–1 & 2–5'
+  summary: string; // one line: first two groups as `${formatDayRanges(days)} ${label}` joined ', ', then ' +N more' if more groups
+};
+
+export function describeSchedule(
+  therapist: Pick<Therapist, 'workingHours'>,
+  assignments: TherapistShiftAssignment[],
+  templates: ShiftTemplate[],
+  clinic: Pick<Clinic, 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays'>
+): ScheduleDescription {
+  const closedDays = new Set(clinic.closedWeekdays ?? []);
+  const clinicStart = (clinic.bookingStartHour ?? 9) * 60;
+  const clinicEnd = (clinic.bookingEndHour ?? 17) * 60;
+
+  const hasCustomWh =
+    therapist.workingHours !== null &&
+    therapist.workingHours !== undefined &&
+    typeof therapist.workingHours === 'object';
+  const wh = hasCustomWh ? (therapist.workingHours as Record<string, [number, number][]>) : null;
+
+  const groups: { days: number[]; label: string }[] = [];
+
+  for (const d of WEEKDAY_ORDER) {
+    let intervals: [number, number][] = [];
+    if (wh) {
+      intervals = wh[String(d)] ?? [];
+    } else if (!closedDays.has(d)) {
+      intervals = [[clinicStart, clinicEnd]];
+    }
+
+    if (intervals.length === 0) continue;
+
+    const label = intervals
+      .map(([start, end]) => formatCompactRange(start, end))
+      .join(' & ');
+
+    const existing = groups.find((g) => g.label === label);
+    if (existing) {
+      existing.days.push(d);
+    } else {
+      groups.push({ days: [d], label });
+    }
+  }
+
+  // Type & headline
+  const approvedTemplateAssignments = assignments.filter(
+    (a) => a.status === 'approved' && Boolean(a.shiftTemplateId)
+  );
+
+  let type: ScheduleDescription['type'];
+  let headline: string;
+
+  if (approvedTemplateAssignments.length > 0) {
+    type = 'template';
+    const sortedByCreated = [...approvedTemplateAssignments].sort((a, b) =>
+      (a.createdAt || '').localeCompare(b.createdAt || '')
+    );
+    const uniqueNames: string[] = [];
+    for (const a of sortedByCreated) {
+      const tmpl = templates.find((t) => t.id === a.shiftTemplateId);
+      const name = tmpl?.name ?? 'Assigned Shift';
+      if (!uniqueNames.includes(name)) {
+        uniqueNames.push(name);
+      }
+    }
+    const templateNamesJoined = uniqueNames.join(' + ');
+    const allWeekdays = sortWeekdays(
+      Array.from(new Set(approvedTemplateAssignments.flatMap((a) => a.weekdays ?? [])))
+    );
+    headline = `${templateNamesJoined} (${formatDayRanges(allWeekdays)})`;
+  } else if (hasCustomWh) {
+    if (groups.length === 0) {
+      type = 'off';
+      headline = 'No working days';
+    } else {
+      type = 'custom';
+      headline = 'Custom hours';
+    }
+  } else {
+    type = 'clinic_default';
+    headline = 'Clinic default hours';
+  }
+
+  // Summary
+  let summary: string;
+  if (type === 'off' || groups.length === 0) {
+    summary = 'No working days';
+  } else {
+    const firstTwo = groups
+      .slice(0, 2)
+      .map((g) => `${formatDayRanges(g.days)} ${g.label}`)
+      .join(', ');
+    if (groups.length > 2) {
+      summary = `${firstTwo} +${groups.length - 2} more`;
+    } else {
+      summary = firstTwo;
+    }
+  }
+
+  return { type, headline, groups, summary };
+}
+
+

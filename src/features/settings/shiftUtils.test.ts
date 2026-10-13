@@ -13,6 +13,10 @@ import {
   templateUsage,
   validateShiftTemplate,
   clampBufferHours,
+  formatCompactTime,
+  formatCompactRange,
+  formatDayRanges,
+  describeSchedule,
 } from './shiftUtils';
 import type {
   Clinic,
@@ -292,4 +296,215 @@ describe('shiftUtils', () => {
       expect(preview.workingTime).toBe('Working time: 7h/day (8h − 1h break)');
     });
   });
+
+  describe('compact formatting & day ranges', () => {
+    it.each([
+      [540, '9'],
+      [510, '8:30'],
+      [720, '12'],
+      [780, '1'],
+      [0, '12'],
+    ])('formatCompactTime(%i) -> %s', (minute, expected) => {
+      expect(formatCompactTime(minute)).toBe(expected);
+    });
+
+    it('formatCompactRange(start, end) formats with en dash', () => {
+      expect(formatCompactRange(540, 1020)).toBe('9–5');
+      expect(formatCompactRange(510, 810)).toBe('8:30–1:30');
+    });
+
+    it.each([
+      [[1, 2, 3, 4, 5], 'Mon–Fri'],
+      [[2, 6], 'Tue, Sat'],
+      [[1, 2, 3, 5, 6], 'Mon–Wed, Fri–Sat'],
+      [[1, 2], 'Mon, Tue'],
+      [[0], 'Sun'],
+      [[6, 0], 'Sat, Sun'],
+    ])('formatDayRanges(%j) -> %s', (days, expected) => {
+      expect(formatDayRanges(days)).toBe(expected);
+    });
+  });
+
+  describe('describeSchedule', () => {
+    const clinic: Pick<Clinic, 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays'> = {
+      bookingStartHour: 9,
+      bookingEndHour: 17,
+      closedWeekdays: [0], // Sunday closed
+    };
+
+    const generalShift: ShiftTemplate = {
+      id: 'tmpl-general',
+      clinicId: 'c1',
+      name: 'General Shift',
+      startMinute: 540, // 9:00 AM
+      endMinute: 960,   // 4:00 PM
+      breakDurationMinutes: 60,
+      defaultBreakStartMinute: 810, // 1:30 PM - 2:30 PM
+      active: true,
+      updatedAt: '',
+    };
+
+    it('Kiran-like (template General Shift, Mon–Sat 9–1:30 & 2:30–4)', () => {
+      // 9:00 AM - 1:30 PM (540, 810), 2:30 PM - 4:00 PM (870, 960)
+      const kiranHours: Record<string, [number, number][]> = {
+        '1': [[540, 810], [870, 960]],
+        '2': [[540, 810], [870, 960]],
+        '3': [[540, 810], [870, 960]],
+        '4': [[540, 810], [870, 960]],
+        '5': [[540, 810], [870, 960]],
+        '6': [[540, 810], [870, 960]],
+      };
+      const assignments: TherapistShiftAssignment[] = [
+        {
+          id: 'a1',
+          clinicId: 'c1',
+          therapistId: 'th-kiran',
+          shiftTemplateId: 'tmpl-general',
+          customHours: null,
+          weekdays: [1, 2, 3, 4, 5, 6],
+          breakStartMinute: 810,
+          status: 'approved',
+          note: null,
+          requestedBy: null,
+          decidedBy: null,
+          decidedAt: null,
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ];
+
+      const desc = describeSchedule(
+        { workingHours: kiranHours },
+        assignments,
+        [generalShift],
+        clinic
+      );
+
+      expect(desc.type).toBe('template');
+      expect(desc.headline).toBe('General Shift (Mon–Sat)');
+      expect(desc.groups).toEqual([
+        { days: [1, 2, 3, 4, 5, 6], label: '9–1:30 & 2:30–4' },
+      ]);
+      expect(desc.summary).toBe('Mon–Sat 9–1:30 & 2:30–4');
+    });
+
+    it('custom Tue/Sat -> Tue, Sat 10–1', () => {
+      // 10:00 AM - 1:00 PM (600, 780)
+      const customHours: Record<string, [number, number][]> = {
+        '2': [[600, 780]],
+        '6': [[600, 780]],
+      };
+
+      const desc = describeSchedule(
+        { workingHours: customHours },
+        [],
+        [],
+        clinic
+      );
+
+      expect(desc.type).toBe('custom');
+      expect(desc.headline).toBe('Custom hours');
+      expect(desc.groups).toEqual([
+        { days: [2, 6], label: '10–1' },
+      ]);
+      expect(desc.summary).toBe('Tue, Sat 10–1');
+    });
+
+    it('three different groups -> summary ends +1 more', () => {
+      const customHours: Record<string, [number, number][]> = {
+        '1': [[540, 720]], // Mon 9-12
+        '2': [[600, 780]], // Tue 10-1
+        '3': [[720, 900]], // Wed 12-3
+      };
+
+      const desc = describeSchedule(
+        { workingHours: customHours },
+        [],
+        [],
+        clinic
+      );
+
+      expect(desc.type).toBe('custom');
+      expect(desc.groups).toHaveLength(3);
+      expect(desc.summary).toBe('Mon 9–12, Tue 10–1 +1 more');
+    });
+
+    it('null hours with Sunday closed -> clinic_default and groups Mon–Sat', () => {
+      const desc = describeSchedule(
+        { workingHours: null },
+        [],
+        [],
+        clinic
+      );
+
+      expect(desc.type).toBe('clinic_default');
+      expect(desc.headline).toBe('Clinic default hours');
+      expect(desc.groups).toEqual([
+        { days: [1, 2, 3, 4, 5, 6], label: '9–5' },
+      ]);
+      expect(desc.summary).toBe('Mon–Sat 9–5');
+    });
+
+    it('empty {} hours -> off / No working days', () => {
+      const desc = describeSchedule(
+        { workingHours: {} },
+        [],
+        [],
+        clinic
+      );
+
+      expect(desc.type).toBe('off');
+      expect(desc.headline).toBe('No working days');
+      expect(desc.groups).toEqual([]);
+      expect(desc.summary).toBe('No working days');
+    });
+
+    it('declined/pending/superseded rows are ignored for template determination', () => {
+      const assignments: TherapistShiftAssignment[] = [
+        {
+          id: 'a-declined',
+          clinicId: 'c1',
+          therapistId: 'th-1',
+          shiftTemplateId: 'tmpl-general',
+          customHours: null,
+          weekdays: [1, 2, 3, 4, 5],
+          breakStartMinute: null,
+          status: 'declined',
+          note: null,
+          requestedBy: null,
+          decidedBy: null,
+          decidedAt: null,
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+        {
+          id: 'a-pending',
+          clinicId: 'c1',
+          therapistId: 'th-1',
+          shiftTemplateId: 'tmpl-general',
+          customHours: null,
+          weekdays: [1, 2, 3, 4, 5],
+          breakStartMinute: null,
+          status: 'pending',
+          note: null,
+          requestedBy: null,
+          decidedBy: null,
+          decidedAt: null,
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ];
+
+      const desc = describeSchedule(
+        { workingHours: null },
+        assignments,
+        [generalShift],
+        clinic
+      );
+
+      expect(desc.type).toBe('clinic_default');
+      expect(desc.headline).toBe('Clinic default hours');
+    });
+  });
 });
+
