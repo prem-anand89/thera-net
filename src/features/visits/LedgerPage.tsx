@@ -50,11 +50,31 @@ import { IssueInvoiceDialog, type IssueInvoiceTarget } from '@/components/IssueI
 import { EditPatientModal } from '@/features/patients/EditPatientModal';
 import { VoidInvoiceDialog } from '@/components/VoidInvoiceDialog';
 import { InvoicesPage } from '@/features/invoices/InvoicesPage';
+import { PatientsList } from '@/features/patients/PatientsPage';
 import { DaybookPage } from './DaybookPage';
 
 const PATIENT_SEARCH_LIMIT = 6;
 
-type RecordsView = 'visits' | 'invoices' | 'daybook';
+export type RecordsView = 'visits' | 'patients' | 'invoices' | 'daybook';
+
+export const LEDGER_TAB_ITEMS = [
+  { key: 'visits', label: 'Visits' },
+  { key: 'patients', label: 'Patients' },
+  { key: 'invoices', label: 'Invoices' },
+  { key: 'daybook', label: 'Daybook' },
+] as const;
+
+export function filterLedgerTabs({
+  canBill,
+  entitlementsLoading,
+}: {
+  canBill: boolean;
+  entitlementsLoading: boolean;
+}) {
+  return LEDGER_TAB_ITEMS.filter(
+    (v) => (v.key !== 'invoices' && v.key !== 'daybook') || canBill || entitlementsLoading
+  );
+}
 
 type DatePreset = 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
 const DATE_PRESETS: { key: DatePreset; label: string }[] = [
@@ -205,7 +225,7 @@ export function LedgerPage() {
     (next: RecordsView) => {
       void navigate({
         to: '/ledger',
-        search: { patientId: search.patientId, tab: next === 'visits' ? undefined : next },
+        search: { patientId: next === 'visits' ? search.patientId : undefined, tab: next === 'visits' ? undefined : next },
         replace: true,
       });
     },
@@ -620,32 +640,28 @@ export function LedgerPage() {
       <h1 className="sr-only">Ledger</h1>
       <div className="flex flex-wrap items-center gap-2">
         <div className="hide-scrollbar flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-1">
-          {(
-            [
-              { key: 'visits', label: 'Visits' },
-              { key: 'invoices', label: 'Invoices' },
-              { key: 'daybook', label: 'Daybook' },
-            ] as const
-          )
-            .filter((v) => (v.key !== 'invoices' && v.key !== 'daybook') || canBill || entitlementsLoading)
-            .map((v) => (
-              <button
-                key={v.key}
-                type="button"
-                className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${recordsView === v.key
-                    ? 'bg-[var(--teal)] text-white shadow-sm'
-                    : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
-                  }`}
-                onClick={() => setRecordsView(v.key)}
-              >
-                {v.label}
-                {v.key === 'invoices' && (
-                  <CountBadge count={clinic.invoicePolicy === 'never_nag' ? 0 : (needsReceipt?.length ?? 0)} tone="amber" />
-                )}
-              </button>
-            ))}
+          {filterLedgerTabs({ canBill, entitlementsLoading }).map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                recordsView === v.key
+                  ? 'bg-[var(--teal)] text-white shadow-sm'
+                  : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
+              }`}
+              onClick={() => setRecordsView(v.key)}
+            >
+              {v.label}
+              {v.key === 'invoices' && (
+                <CountBadge
+                  count={clinic.invoicePolicy === 'never_nag' ? 0 : (needsReceipt?.length ?? 0)}
+                  tone="amber"
+                />
+              )}
+            </button>
+          ))}
         </div>
-        {filteredPatient && (
+        {filteredPatient && recordsView === 'visits' && (
           <span className="rounded-full bg-[var(--teal-light)] px-3 py-1 text-xs text-[var(--teal)]">
             {filteredPatient.name} ({filteredPatient.mrno})
             <Link to="/ledger" className="ml-2 font-medium" aria-label="Clear patient filter">
@@ -980,6 +996,7 @@ export function LedgerPage() {
         </div>
       )}
 
+      {recordsView === 'patients' && <PatientsList />}
       {recordsView === 'invoices' && <InvoicesPage />}
       {recordsView === 'daybook' && <DaybookPage />}
 

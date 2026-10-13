@@ -61,10 +61,10 @@ test.describe('mobile list layouts', () => {
 
   test('patients list uses flat rows with action in footer', async ({ page }) => {
     await login(page);
-    await page.goto('/patients');
-    await expect(page.getByRole('heading', { name: 'Patients', exact: true })).toBeVisible({ timeout: 15_000 });
+    await page.goto('/ledger?tab=patients');
+    await expect(page.getByPlaceholder('Search ID, name or phone')).toBeVisible({ timeout: 15_000 });
 
-    const section = page.locator('section').filter({ has: page.getByRole('heading', { name: 'All Patients' }) });
+    const section = page.locator('section').filter({ has: page.getByPlaceholder('Search ID, name or phone') });
     await expect(section.getByRole('link', { name: '+ Visit' }).first()).toBeVisible({ timeout: 10_000 });
     await expect(section.getByRole('columnheader', { name: 'Name' })).toHaveCount(0);
   });

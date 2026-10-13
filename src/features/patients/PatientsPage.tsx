@@ -57,18 +57,7 @@ const PATIENT_COMPARATORS = {
   condition: byString<Patient>((p) => p.primaryCondition ?? ''),
 };
 
-export function PatientsPage() {
-  return (
-    <div className="space-y-3">
-      {/* Phones reach Patients through More, so it keeps a compact title
-          there; from sm: the top nav names the page. */}
-      <h1 className="font-display text-lg font-semibold text-[var(--ink)] sm:sr-only">Patients</h1>
-      <AllPatientsSection />
-    </div>
-  );
-}
-
-function AllPatientsSection() {
+export function PatientsList() {
   const clinic = useClinic();
   const referringSources = useLiveQuery(
     () => repos.referringSourceCatalog.list(clinic.id),
@@ -83,7 +72,7 @@ function AllPatientsSection() {
   // Book button that always failed with "Not authorized."
   const canBook = clinic.enablePatientComms && (isAdmin || isFrontDesk);
   const [query, setQuery] = useState('');
-  const [chip, setChip] = useState<'all' | 'needs_invoice' | 'mine'>('all');
+  const [chip, setChip] = useState<'all' | 'mine'>('all');
   const [showHidden, setShowHidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Patient | null>(null);
@@ -223,11 +212,6 @@ function AllPatientsSection() {
     if (chip === 'mine') {
       return stats?.latestVisit.therapistId === myTherapistId;
     }
-    if (chip === 'needs_invoice') {
-      return stats
-        ? paymentActions(latestState(stats.latestVisit)).includes('issue_invoice')
-        : false;
-    }
     return true;
   });
   const hidden = (all ?? []).filter((p) => p.deletedAt);
@@ -288,21 +272,20 @@ function AllPatientsSection() {
           select (financial year + month in one) on the right. Phones: the
           chips scroll on one row, search and period share the next. */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="hide-scrollbar flex w-full gap-1 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-1 sm:w-auto">
+        <div className="hide-scrollbar flex w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1 sm:w-auto">
           {(
             [
               { key: 'all', label: 'All' },
-              { key: 'needs_invoice', label: 'Needs invoice' },
               { key: 'mine', label: 'My patients' },
             ] as const
           ).map((c) => (
             <button
               key={c.key}
               type="button"
-              className={`min-h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium ${
+              className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${
                 chip === c.key
                   ? 'bg-[var(--teal)] text-white'
-                  : 'text-[var(--muted)] hover:bg-[var(--paper)]'
+                  : 'text-[var(--muted)] hover:bg-[var(--surface)]'
               }`}
               onClick={() => setChip(c.key)}
             >
