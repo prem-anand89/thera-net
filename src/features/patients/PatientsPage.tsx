@@ -304,7 +304,7 @@ export function PatientsList() {
           />
           <select
             aria-label="Period"
-            className="min-h-10 w-[9.5rem] shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-base text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none sm:w-auto sm:text-sm"
+            className="min-h-10 w-[9.5rem] shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none sm:w-auto sm:text-sm"
             value={month === 'custom' ? 'custom' : `${fyStartYear}:${month}`}
             onChange={(e) => {
               if (e.target.value === 'custom') {
@@ -336,9 +336,9 @@ export function PatientsList() {
       </div>
       {month === 'custom' && (
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-          <input type="date" className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm text-[var(--ink)]" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} aria-label="From" />
+          <input type="date" className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm text-[var(--ink)]" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} aria-label="From date" />
           –
-          <input type="date" className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm text-[var(--ink)]" value={customTo} onChange={(e) => setCustomTo(e.target.value)} aria-label="To" />
+          <input type="date" className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm text-[var(--ink)]" value={customTo} onChange={(e) => setCustomTo(e.target.value)} aria-label="To date" />
           {!customFrom || !customTo ? (
             <span>Pick a From and To date.</span>
           ) : customFrom > customTo ? (

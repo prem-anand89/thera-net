@@ -52,6 +52,7 @@ import { VoidInvoiceDialog } from '@/components/VoidInvoiceDialog';
 import { InvoicesPage } from '@/features/invoices/InvoicesPage';
 import { PatientsList } from '@/features/patients/PatientsPage';
 import { DaybookPage } from './DaybookPage';
+import { DatePresetBar, DATE_PRESETS, type DatePreset } from '@/components/DatePresetBar';
 
 const PATIENT_SEARCH_LIMIT = 6;
 
@@ -76,14 +77,7 @@ export function filterLedgerTabs({
   );
 }
 
-type DatePreset = 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
-const DATE_PRESETS: { key: DatePreset; label: string }[] = [
-  { key: 'week', label: 'This week' },
-  { key: 'month', label: 'This month' },
-  { key: 'lastMonth', label: 'Last month' },
-  { key: 'all', label: 'All time' },
-  { key: 'custom', label: 'Custom' },
-];
+
 // Local Y/M/D components, not toISOString() — that converts to UTC first,
 // which puts "today" a day behind for roughly the first ~5.5 hours of the
 // local day for an India-based clinic (UTC+5:30).
@@ -616,6 +610,12 @@ export function LedgerPage() {
   const syncCaption = syncFreshnessCaption(unsyncedVisitCount, 'visits', syncSnapshot.lastSyncAt);
   const activeFilterCount =
     Number(therapistId !== '') + Number(onlyCollectedNoReceipt) + Number(onlyNotCollected) + Number(onlyNotDocumented);
+  const activeFilterNames = [
+    therapistId ? (therapists?.find((t) => t.id === therapistId)?.name ?? 'Selected therapist') : null,
+    onlyCollectedNoReceipt ? 'Collected, no invoice' : null,
+    onlyNotCollected ? 'Not collected' : null,
+    onlyNotDocumented ? 'Not documented' : null,
+  ].filter(Boolean) as string[];
 
   // Compact toolbar controls (no field labels; aria-labels instead).
   const toolInput =
@@ -681,26 +681,12 @@ export function LedgerPage() {
               on their own scrolling row, then search, Filters and ⋮, with
               therapist inside Filters. */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="hide-scrollbar flex w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1 sm:w-auto">
-              {DATE_PRESETS.map((p) => (
-                <button
-                  key={p.key}
-                  type="button"
-                  className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${datePreset === p.key
-                      ? 'bg-[var(--teal)] text-white'
-                      : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-                    }`}
-                  onClick={() => applyDatePreset(p.key)}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            <DatePresetBar value={datePreset} onChange={applyDatePreset} />
             {datePreset === 'custom' && (
               <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                <input type="date" aria-label="From" className={toolInput} value={from} onChange={(e) => setFrom(e.target.value)} />
+                <input type="date" aria-label="From date" className={toolInput} value={from} onChange={(e) => setFrom(e.target.value)} />
                 –
-                <input type="date" aria-label="To" className={toolInput} value={to} onChange={(e) => setTo(e.target.value)} />
+                <input type="date" aria-label="To date" className={toolInput} value={to} onChange={(e) => setTo(e.target.value)} />
               </div>
             )}
             <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
@@ -984,7 +970,7 @@ export function LedgerPage() {
             </>
           ) : (
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center text-sm text-[var(--muted)] shadow-sm">
-              No visits match "Collected, no invoice" in this range.
+              No visits match these filters in this range{activeFilterNames.length > 0 ? ` (${activeFilterNames.join(', ')})` : ''}.
             </div>
           )}
         </div>

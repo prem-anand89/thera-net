@@ -12,14 +12,7 @@ import { type Invoice } from '@/domain/types';
 const toIsoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-type DatePreset = 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
-const DATE_PRESETS: { key: DatePreset; label: string }[] = [
-  { key: 'week', label: 'This week' },
-  { key: 'month', label: 'This month' },
-  { key: 'lastMonth', label: 'Last month' },
-  { key: 'all', label: 'All time' },
-  { key: 'custom', label: 'Custom range…' },
-];
+import { DatePresetBar, type DatePreset } from '@/components/DatePresetBar';
 import { buildUpiPayUri, clinicCanShowUpiQr, clinicUpiPayeeName } from '@/domain/upiPay';
 import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard } from '@/components/ui';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
@@ -233,36 +226,23 @@ export function InvoicesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex max-w-full flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
-            {DATE_PRESETS.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                  datePreset === p.key
-                    ? 'bg-[var(--teal)] text-white'
-                    : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-                }`}
-                onClick={() => applyDatePreset(p.key)}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+          <DatePresetBar value={datePreset} onChange={applyDatePreset} />
           {datePreset === 'custom' && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
               <input
                 type="date"
+                aria-label="From date"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
-                className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm"
+                className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
               />
-              <span className="text-[var(--muted)]">to</span>
+              –
               <input
                 type="date"
+                aria-label="To date"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm"
+                className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
               />
             </div>
           )}
