@@ -9,6 +9,7 @@ import { useInstallState } from '@/features/notifications/useInstallState';
 import { MyAccountSheet } from '@/features/me/MyAccountSheet';
 import { MyNotificationsSheet } from '@/features/me/MyNotificationsSheet';
 import { useMyTherapist } from '@/features/me/useMyTherapist';
+import { useMySchedule } from '@/features/me/useMySchedule';
 import { useClinic } from './clinicContext';
 import { publicTherapistPhotoUrl } from '@/lib/supabase';
 import { HelpFeedbackDialog } from '@/components/HelpFeedbackDialog';
@@ -73,9 +74,27 @@ export function AccountMenu({
   const name = displayName ?? fallbackName;
   const roleLabel = role !== 'unknown' ? CLINIC_ROLE_LABELS[role] : '';
   const myTherapist = useMyTherapist(clinicId);
+  const mySchedule = useMySchedule(
+    myTherapist?.id ?? '',
+    clinicId,
+    myTherapist?.workingHours ?? null
+  );
   const photoUrl = myTherapist?.photoPath ? publicTherapistPhotoUrl(myTherapist.photoPath) : null;
   const install = useInstallState();
   const showInstall = !install.standalone && (install.canPromptInstall || install.iosSafari);
+
+  const [seenAt, setSeenAt] = useState<string | null>(() => {
+    if (!myTherapist?.id) return null;
+    try {
+      return localStorage.getItem(`myHoursSeen:${myTherapist.id}`);
+    } catch {
+      return null;
+    }
+  });
+
+  const lastChangeAt = mySchedule?.lastChange?.at ?? null;
+  const hasUpdatedDot = Boolean(lastChangeAt && (!seenAt || seenAt < lastChangeAt));
+  const hoursSubtitle = mySchedule?.pending ? 'Request pending' : mySchedule?.summary ?? null;
 
   function closeMenu() {
     setOpen(false);
@@ -83,6 +102,17 @@ export function AccountMenu({
   function openSheet(set: (value: boolean) => void) {
     closeMenu();
     set(true);
+  }
+  function openHoursSheet() {
+    if (myTherapist && lastChangeAt) {
+      try {
+        localStorage.setItem(`myHoursSeen:${myTherapist.id}`, lastChangeAt);
+      } catch {
+        // ignore storage unavailable
+      }
+      setSeenAt(lastChangeAt);
+    }
+    openSheet(setHoursOpen);
   }
 
   /** Proactive version of what auto-update already does in the background
@@ -150,9 +180,26 @@ export function AccountMenu({
                 </span>
               </button>
               {myTherapist && (
-                <button type="button" role="menuitem" className={rowCls} onClick={() => openSheet(setHoursOpen)}>
+                <button type="button" role="menuitem" className={rowCls} onClick={openHoursSheet}>
                   <IconCalendar className={rowIcon} />
-                  My working hours
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="flex items-center gap-1.5 leading-tight">
+                      <span>My working hours</span>
+                      {hasUpdatedDot && (
+                        <span
+                          data-testid="hours-updated-dot"
+                          className="h-2 w-2 rounded-full bg-[var(--teal)] shrink-0"
+                          title="Updated"
+                          aria-label="Updated"
+                        />
+                      )}
+                    </span>
+                    {hoursSubtitle && (
+                      <span className="mt-0.5 block truncate text-xs text-[var(--muted)]">
+                        {hoursSubtitle}
+                      </span>
+                    )}
+                  </span>
                 </button>
               )}
               <button type="button" role="menuitem" className={rowCls} onClick={() => openSheet(setNotificationsOpen)}>

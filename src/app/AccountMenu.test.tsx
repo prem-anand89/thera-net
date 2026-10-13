@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Therapist } from '@/domain/types';
 
 let myTherapist: Therapist | undefined;
+let mySchedule: any = undefined;
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to, ...rest }: { children: React.ReactNode; to: string }) => (
     <a href={to} {...rest}>{children}</a>
@@ -12,6 +13,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 vi.mock('./clinicContext', () => ({ useClinic: () => ({ id: 'c1', bookingStartHour: 9, bookingEndHour: 17 }) }));
 vi.mock('@/features/me/useMyTherapist', () => ({ useMyTherapist: () => myTherapist }));
+vi.mock('@/features/me/useMySchedule', () => ({ useMySchedule: () => mySchedule }));
 vi.mock('@/features/setup/SetupProgressBar', () => ({ SetupProgressBar: () => null }));
 vi.mock('@/features/notifications/useInstallState', () => ({
   useInstallState: () => ({ standalone: true, iosSafari: false, canPromptInstall: false, promptInstall: vi.fn() }),
@@ -45,6 +47,8 @@ function openMenu(role: ClinicRole) {
 afterEach(() => {
   cleanup();
   myTherapist = undefined;
+  mySchedule = undefined;
+  localStorage.clear();
 });
 
 describe('AccountMenu rows by role', () => {
@@ -64,8 +68,83 @@ describe('AccountMenu rows by role', () => {
   it('shows My working hours only for a linked therapist', () => {
     myTherapist = { id: 't1', clinicId: 'c1', name: 'Ritu', active: true, userId: 'u1', updatedAt: '' };
     openMenu('therapist');
-    expect(screen.getByRole('menuitem', { name: 'My working hours' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /my working hours/i })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Settings' })).not.toBeInTheDocument();
+  });
+});
+
+describe('My working hours subtitle and dot', () => {
+  it('renders subtitle from schedule summary', () => {
+    myTherapist = { id: 't1', clinicId: 'c1', name: 'Ritu', active: true, userId: 'u1', updatedAt: '' };
+    mySchedule = {
+      headline: 'General Shift (Mon–Fri)',
+      summary: 'Mon–Fri 9–5',
+      weekList: [],
+      pending: null,
+      declined: null,
+      lastChange: null,
+    };
+    openMenu('therapist');
+    expect(screen.getByText('Mon–Fri 9–5')).toBeInTheDocument();
+    expect(screen.queryByTestId('hours-updated-dot')).not.toBeInTheDocument();
+  });
+
+  it('renders "Request pending" as subtitle when a pending request exists', () => {
+    myTherapist = { id: 't1', clinicId: 'c1', name: 'Ritu', active: true, userId: 'u1', updatedAt: '' };
+    mySchedule = {
+      headline: 'General Shift (Mon–Fri)',
+      summary: 'Mon–Fri 9–5',
+      weekList: [],
+      pending: { id: 'p1', title: 'Morning Shift', sentAt: '2026-10-12' },
+      declined: null,
+      lastChange: null,
+    };
+    openMenu('therapist');
+    expect(screen.getByText('Request pending')).toBeInTheDocument();
+  });
+
+  it('shows Updated dot when lastChange is newer than seen timestamp, and clears upon opening', () => {
+    myTherapist = { id: 't1', clinicId: 'c1', name: 'Ritu', active: true, userId: 'u1', updatedAt: '' };
+    mySchedule = {
+      headline: 'General Shift (Mon–Fri)',
+      summary: 'Mon–Fri 9–5',
+      weekList: [],
+      pending: null,
+      declined: null,
+      lastChange: { at: '2026-10-13T10:00:00Z', text: 'Changed by your clinic admin on 13 Oct 2026' },
+    };
+    localStorage.setItem('myHoursSeen:t1', '2026-10-10T00:00:00Z');
+    openMenu('therapist');
+    expect(screen.getByTestId('hours-updated-dot')).toBeInTheDocument();
+
+    // Click "My working hours" to open sheet
+    fireEvent.click(screen.getByRole('menuitem', { name: /my working hours/i }));
+    expect(localStorage.getItem('myHoursSeen:t1')).toBe('2026-10-13T10:00:00Z');
+  });
+
+  it('renders without error when localStorage throws', () => {
+    myTherapist = { id: 't1', clinicId: 'c1', name: 'Ritu', active: true, userId: 'u1', updatedAt: '' };
+    mySchedule = {
+      headline: 'General Shift (Mon–Fri)',
+      summary: 'Mon–Fri 9–5',
+      weekList: [],
+      pending: null,
+      declined: null,
+      lastChange: { at: '2026-10-13T10:00:00Z', text: 'Changed by your clinic admin on 13 Oct 2026' },
+    };
+    const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError: localStorage is disabled');
+    });
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+
+    openMenu('therapist');
+    expect(screen.getByRole('menuitem', { name: /my working hours/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: /my working hours/i }));
+
+    getItemSpy.mockRestore();
+    setItemSpy.mockRestore();
   });
 });
 

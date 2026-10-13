@@ -5,6 +5,7 @@ import { WorkingHoursSheet } from './WorkingHoursSheet';
 import { BreakPlacementControl } from './BreakPlacementControl';
 import { ErrorNote, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
+import { useMySchedule, formatScheduleDate } from '@/features/me/useMySchedule';
 import type { UUID, WorkingHours } from '@/domain/types';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -31,6 +32,11 @@ export function ShiftRequestSheet({
   onClose: () => void;
 }) {
   const templates = useLiveQuery(() => repos.shiftTemplates.list(clinicId), [clinicId]);
+  const schedule = useMySchedule(therapistId, clinicId, currentWorkingHours, {
+    bookingStartHour: clinic.startHour,
+    bookingEndHour: clinic.endHour,
+    closedWeekdays: clinic.closedWeekdays,
+  });
   const [shiftId, setShiftId] = useState('');
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [customMode, setCustomMode] = useState(false);
@@ -92,6 +98,40 @@ export function ShiftRequestSheet({
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full rounded-t-2xl bg-[var(--surface)] p-4 sm:max-w-md sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
         <h2 id={titleId} className="font-display text-lg font-semibold text-[var(--ink)]">My working hours</h2>
+        {schedule && (
+          <div data-testid="current-schedule-block" className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-3">
+            <h3 className="text-sm font-semibold text-[var(--ink)]">{schedule.headline}</h3>
+            {schedule.lastChange && (
+              <p className="mt-0.5 text-xs text-[var(--muted)]">{schedule.lastChange.text}</p>
+            )}
+            <div className="mt-2 divide-y divide-[var(--border)]/60 text-xs">
+              {schedule.weekList.map((d) => (
+                <div key={d.weekday} className="flex items-center justify-between py-1">
+                  <span className="font-medium text-[var(--ink)]">{d.label}</span>
+                  <span className={d.text === 'Off' || d.text === 'Closed' ? 'text-[var(--muted)]' : 'text-[var(--ink)]'}>
+                    {d.text}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {schedule.pending && (
+              <div className="mt-2.5 rounded border border-[var(--teal)]/30 bg-[var(--teal-light)] p-2 text-xs text-[var(--ink)]">
+                <p className="font-medium">Request pending: {schedule.pending.title}</p>
+                <p className="text-[var(--muted)]">Sent on {formatScheduleDate(schedule.pending.sentAt)}</p>
+              </div>
+            )}
+            {schedule.declined && (
+              <div className="mt-2.5 rounded border border-[var(--rust)]/30 bg-[var(--rust-light)] p-2 text-xs text-[var(--ink)]">
+                <p className="font-medium">Declined: {schedule.declined.title}</p>
+                <p className="text-[var(--muted)]">
+                  {schedule.declined.decisionNote
+                    ? `Declined on ${formatScheduleDate(schedule.declined.decidedAt)}: “${schedule.declined.decisionNote}”`
+                    : `Declined on ${formatScheduleDate(schedule.declined.decidedAt)}`}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
         <div className="mt-3">
           <BreakPlacementControl therapistId={therapistId} clinicId={clinicId} />
         </div>
