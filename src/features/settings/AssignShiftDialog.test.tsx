@@ -10,7 +10,17 @@ const assignCustomHours = vi.fn();
 
 vi.mock('@/lib/errors', () => ({ toFriendlyMessage: (e: Error) => e.message }));
 
+vi.mock('@/app/clinicContext', () => ({
+  useClinic: () => ({ id: 'c1', bookingStartHour: 9, bookingEndHour: 18 }),
+}));
+vi.mock('dexie-react-hooks', () => ({
+  useLiveQuery: (query: () => unknown) => query(),
+}));
+
 vi.mock('@/services', () => ({
+  repos: {
+    appointments: { listByClinic: () => [] },
+  },
   bookingService: {
     assignShift: (...a: unknown[]) => assignShift(...a),
     assignCustomHours: (...a: unknown[]) => assignCustomHours(...a),
@@ -488,5 +498,80 @@ describe('AssignShiftDialog', () => {
     const submitBtn = screen.getByRole('button', { name: 'Assign to 1 therapist' });
     expect(submitBtn).toBeDisabled();
   });
+
+  describe('custom hours option', () => {
+    it('disables custom hours option when multiple therapists are selected', () => {
+      render(
+        <AssignShiftDialog
+          isOpen={true}
+          onClose={vi.fn()}
+          initialTherapistId={null} // Select all or multiple
+          therapists={therapists}
+          templates={templates}
+          approvedAssignments={[]}
+          pendingAssignments={[]}
+          clinic={clinic}
+        />
+      );
+
+      // Select both therapists by clicking Dr Prem and Dr Kiran
+      fireEvent.click(screen.getByRole('button', { name: /Dr Prem/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Dr Kiran/ }));
+
+      const option = screen.getByRole('option', { name: /Custom hours \(select one person\)/i });
+      expect(option).toBeDisabled();
+    });
+
+    it('enables custom hours option when exactly one therapist is selected', () => {
+      render(
+        <AssignShiftDialog
+          isOpen={true}
+          onClose={vi.fn()}
+          initialTherapistId="th1"
+          therapists={therapists}
+          templates={templates}
+          approvedAssignments={[]}
+          pendingAssignments={[]}
+          clinic={clinic}
+        />
+      );
+
+      const option = screen.getByRole('option', { name: /Custom hours \(individual\)/i });
+      expect(option).not.toBeDisabled();
+    });
+
+    it('selecting custom hours shows notice, Set custom hours button, and hides weekday checkboxes', () => {
+      render(
+        <AssignShiftDialog
+          isOpen={true}
+          onClose={vi.fn()}
+          initialTherapistId="th1"
+          therapists={therapists}
+          templates={templates}
+          approvedAssignments={[]}
+          pendingAssignments={[]}
+          clinic={clinic}
+        />
+      );
+
+      // Select Custom hours option
+      const select = screen.getByRole('combobox');
+      fireEvent.change(select, { target: { value: '__custom_hours__' } });
+
+      // Notice appears
+      expect(
+        screen.getByText('Custom hours replace all assigned shifts for Dr Prem.')
+      ).toBeInTheDocument();
+
+      // Primary button is "Set custom hours…"
+      expect(screen.getByRole('button', { name: 'Set custom hours…' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Assign to/i })).toBeNull();
+
+      // Weekday picker is hidden
+      expect(screen.queryByText('Active Weekdays')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Mon' })).toBeNull();
+    });
+  });
 });
+
 

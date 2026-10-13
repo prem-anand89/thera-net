@@ -31,7 +31,10 @@ export type AssignShiftDialogProps = {
   clinic: Clinic;
 };
 
+import { SetWorkingHoursFlow } from './SetWorkingHoursFlow';
+
 const CLINIC_DEFAULT_ID = '__clinic_default__';
+export const CUSTOM_HOURS_ID = '__custom_hours__';
 
 export type TherapistScheduleInfo = {
   type: 'template' | 'custom' | 'clinic_default';
@@ -233,6 +236,7 @@ export function AssignShiftDialog({
   const [error, setError] = useState<string | null>(null);
 
   const isClinicDefault = selectedShiftId === CLINIC_DEFAULT_ID;
+  const isCustomHours = selectedShiftId === CUSTOM_HOURS_ID;
   const pickedTemplate = activeTemplates.find((t) => t.id === selectedShiftId) ?? null;
 
   // Selected therapist objects
@@ -242,6 +246,10 @@ export function AssignShiftDialog({
 
   const singleTherapistId =
     selectedTherapistIds.length === 1 ? selectedTherapistIds[0] : null;
+  const selectedTherapist = singleTherapistId
+    ? activeTherapists.find((t) => t.id === singleTherapistId) ?? null
+    : null;
+  const [showCustomHoursFlow, setShowCustomHoursFlow] = useState(false);
 
   const singleSelectedTherapist = useMemo(
     () => activeTherapists.find((t) => t.id === singleTherapistId) ?? null,
@@ -632,6 +640,14 @@ export function AssignShiftDialog({
             <option value={CLINIC_DEFAULT_ID}>
               🏢 Clinic Default Hours ({formatRange12h(clinicStart, clinicEnd)})
             </option>
+            <option
+              value={CUSTOM_HOURS_ID}
+              disabled={selectedTherapistIds.length !== 1}
+            >
+              {selectedTherapistIds.length === 1
+                ? 'Custom hours (individual)'
+                : 'Custom hours (select one person)'}
+            </option>
             {activeTemplates.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name} ({formatRange12h(t.startMinute, t.endMinute)}
@@ -641,8 +657,8 @@ export function AssignShiftDialog({
           </select>
         </div>
 
-        {/* 3. Working Days Selection (Only when not resetting to clinic default) */}
-        {!isClinicDefault && (
+        {/* 3. Working Days Selection (Only when not resetting to clinic default or custom hours) */}
+        {!isClinicDefault && !isCustomHours && (
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
@@ -775,7 +791,7 @@ export function AssignShiftDialog({
         )}
 
         {/* 4. Break Override (Optional) */}
-        {!isClinicDefault && pickedTemplate && pickedTemplate.breakDurationMinutes > 0 && (
+        {!isClinicDefault && !isCustomHours && pickedTemplate && pickedTemplate.breakDurationMinutes > 0 && (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)] p-3">
             <button
               type="button"
@@ -820,22 +836,30 @@ export function AssignShiftDialog({
           </div>
         )}
 
-        {/* 5. Live Preview Feedback */}
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-3.5 space-y-1.5 text-xs text-[var(--ink)]">
-          <p className="font-semibold text-[var(--teal)] flex items-center gap-1.5">
-            <span>ℹ️</span> {preview.workingTime}
-          </p>
-          {preview.replaces.map((msg, i) => (
-            <p key={`rep-${i}`} className="text-[var(--amber)] font-medium">
-              • {msg}
+        {/* 5. Live Preview Feedback / Custom Hours Notice */}
+        {isCustomHours ? (
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-3.5 space-y-1.5 text-xs text-[var(--ink)]">
+            <p className="font-medium text-[var(--amber-strong)]">
+              Custom hours replace all assigned shifts for {selectedTherapist?.name ?? 'selected member'}.
             </p>
-          ))}
-          {preview.closesPending.map((msg, i) => (
-            <p key={`close-${i}`} className="text-[var(--teal)]">
-              • {msg}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--paper)] p-3.5 space-y-1.5 text-xs text-[var(--ink)]">
+            <p className="font-semibold text-[var(--teal)] flex items-center gap-1.5">
+              <span>ℹ️</span> {preview.workingTime}
             </p>
-          ))}
-        </div>
+            {preview.replaces.map((msg, i) => (
+              <p key={`rep-${i}`} className="text-[var(--amber)] font-medium">
+                • {msg}
+              </p>
+            ))}
+            {preview.closesPending.map((msg, i) => (
+              <p key={`close-${i}`} className="text-[var(--teal)]">
+                • {msg}
+              </p>
+            ))}
+          </div>
+        )}
 
         <ErrorNote message={error} />
 
@@ -848,16 +872,39 @@ export function AssignShiftDialog({
           >
             Cancel
           </button>
-          <button
-            type="button"
-            className={btnPrimary}
-            onClick={() => void handleSubmit()}
-            disabled={!canSubmit}
-          >
-            {submitLabel}
-          </button>
+          {isCustomHours ? (
+            <button
+              type="button"
+              className={btnPrimary}
+              onClick={() => setShowCustomHoursFlow(true)}
+              disabled={!selectedTherapist}
+            >
+              Set custom hours…
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={btnPrimary}
+              onClick={() => void handleSubmit()}
+              disabled={!canSubmit}
+            >
+              {submitLabel}
+            </button>
+          )}
         </div>
       </div>
+
+      {showCustomHoursFlow && selectedTherapist && (
+        <SetWorkingHoursFlow
+          open={showCustomHoursFlow}
+          therapist={selectedTherapist}
+          onClose={() => setShowCustomHoursFlow(false)}
+          onSaved={() => {
+            setShowCustomHoursFlow(false);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }

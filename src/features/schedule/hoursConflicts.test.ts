@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { appointmentsOutsideHours } from './hoursConflicts';
 import { localDateTime } from '@/domain/schedule';
-import type { Appointment, WorkingHours } from '@/domain/types';
+import type { Appointment } from '@/domain/types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
 

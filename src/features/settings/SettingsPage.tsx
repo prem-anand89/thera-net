@@ -43,6 +43,7 @@ import { LetterheadPreview } from './LetterheadPreview';
 import { ShiftTemplatesSection } from './ShiftTemplatesSection';
 import { ShiftAssignmentsSection } from './ShiftAssignmentsSection';
 import { clampBufferHours, describeSchedule } from './shiftUtils';
+import { SetWorkingHoursFlow } from './SetWorkingHoursFlow';
 import {
   SETTINGS_TABS,
   SETTINGS_TAB_META,
@@ -2527,6 +2528,7 @@ export function TeamMemberCard({
     : null;
 
   const [editing, setEditing] = useState(false);
+  const [showHoursFlow, setShowHoursFlow] = useState(false);
   
   const [nameDraft, setNameDraft] = useState(displayName);
   const [roleDraft, setRoleDraft] = useState<ClinicRole>(role);
@@ -2745,6 +2747,19 @@ export function TeamMemberCard({
             Edit
           </button>
           
+          {therapist && (
+            <button
+              type="button"
+              className="text-xs font-medium text-[var(--teal)] hover:underline"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowHoursFlow(true);
+              }}
+            >
+              Set working hours
+            </button>
+          )}
+          
           {member && member.status !== 'active' && (
             <button
               type="button"
@@ -2952,6 +2967,15 @@ export function TeamMemberCard({
               </div>
             </div>
           </div>
+        )}
+
+        {showHoursFlow && therapist && (
+          <SetWorkingHoursFlow
+            open={showHoursFlow}
+            therapist={therapist}
+            onClose={() => setShowHoursFlow(false)}
+            onSaved={() => onSaved()}
+          />
         )}
 
     </div>
