@@ -207,8 +207,8 @@ export function ShiftCoverageGrid({
                             )}
 
                             {cell.type === 'custom' && (
-                              <span className="inline-block truncate rounded border border-[var(--border)] bg-[var(--paper)] px-1 py-0.5 text-[9.5px] font-medium text-[var(--ink)] w-full text-center">
-                                Custom
+                              <span className="inline-block truncate whitespace-nowrap rounded border border-[var(--border)] bg-[var(--paper)] px-1 py-0.5 text-[9.5px] font-medium text-[var(--ink)] w-full text-center">
+                                {cell.label}
                               </span>
                             )}
 

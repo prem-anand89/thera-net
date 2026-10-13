@@ -203,6 +203,7 @@ describe('shiftUtils', () => {
       // Dr Kiran Mon: Custom
       const kiranMon = coverage.get('th-2')!.get(1)!;
       expect(kiranMon.type).toBe('custom');
+      expect(kiranMon.label).toBe('9–1');
       expect(kiranMon.workingMinutes).toBe(240);
 
       // Dr Kiran Tue: Off

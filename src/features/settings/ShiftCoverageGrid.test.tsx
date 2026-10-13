@@ -89,4 +89,35 @@ describe('ShiftCoverageGrid', () => {
       expect(dayCells[i].querySelector('button')).toBeNull();
     }
   });
+
+  it('renders compact range for custom hours and split shifts instead of hardcoded Custom', () => {
+    const customTherapist: Therapist = {
+      id: 't-custom',
+      clinicId: 'c1',
+      name: 'Dr Consultant',
+      active: true,
+      publicBookable: true,
+      workingHours: {
+        '1': [[540, 780], [840, 1020]], // Mon: 9-1 & 2-5 -> span 9-5
+        '2': [[600, 780]],              // Tue: 10-1
+      },
+      updatedAt: '',
+    };
+
+    render(
+      <ShiftCoverageGrid
+        therapists={[customTherapist]}
+        templates={[]}
+        approvedAssignments={[]}
+        pendingAssignments={[]}
+        clinic={baseClinic}
+      />
+    );
+
+    // Mon shows 9–5, Tue shows 10–1
+    expect(screen.getAllByText('9–5').length).toBeGreaterThan(0);
+    expect(screen.getByText('10–1')).toBeInTheDocument();
+    expect(screen.queryByText('Custom')).toBeNull();
+  });
 });
+

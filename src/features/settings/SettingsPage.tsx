@@ -19,7 +19,7 @@ import { resizeImageToBlob } from '@/lib/resizeImage';
 import { db } from '@/lib/db';
 import { MONTH_NAMES, formatDateDM } from '@/domain/fiscalYear';
 import { toLocalDateStr } from '@/domain/schedule';
-import { clinicShareLabels, type Clinic, type InvoicePolicy, type Therapist, type UUID } from '@/domain/types';
+import { clinicShareLabels, type Clinic, type InvoicePolicy, type Therapist, type UUID, type ShiftTemplate, type TherapistShiftAssignment } from '@/domain/types';
 import {
   memberOnboardingStatus,
   MEMBER_ONBOARDING_LABELS,
@@ -42,7 +42,7 @@ import { CatalogSection, type CatalogView } from './CatalogSection';
 import { LetterheadPreview } from './LetterheadPreview';
 import { ShiftTemplatesSection } from './ShiftTemplatesSection';
 import { ShiftAssignmentsSection } from './ShiftAssignmentsSection';
-import { clampBufferHours } from './shiftUtils';
+import { clampBufferHours, describeSchedule } from './shiftUtils';
 import {
   SETTINGS_TABS,
   SETTINGS_TAB_META,
@@ -2484,19 +2484,7 @@ function buildTeamList(members: ClinicMember[] | null, therapists: Therapist[] |
   });
 }
 
-function TeamMemberCard({
-  person,
-  clinicId,
-  isLastAdmin,
-  revoking,
-  resending,
-  onRevoke,
-  onResend,
-  onSaved,
-  onDelete,
-  onPhotoUpload,
-  onDeactivate
-}: {
+export type TeamMemberCardProps = {
   person: TeamPerson;
   clinicId: string;
   isLastAdmin: boolean;
@@ -2508,11 +2496,35 @@ function TeamMemberCard({
   onDelete: () => void;
   onPhotoUpload: (file: File) => void;
   onDeactivate: () => void;
-}) {
+  assignments: TherapistShiftAssignment[];
+  templates: ShiftTemplate[];
+  clinic: Clinic;
+};
+
+export function TeamMemberCard({
+  person,
+  clinicId,
+  isLastAdmin,
+  revoking,
+  resending,
+  onRevoke,
+  onResend,
+  onSaved,
+  onDelete,
+  onPhotoUpload,
+  onDeactivate,
+  assignments,
+  templates,
+  clinic,
+}: TeamMemberCardProps) {
   const { member, therapist } = person;
   const displayName = member?.displayName || therapist?.name || member?.email || 'Unknown';
   const role = member ? ((member.role as Exclude<ClinicRole, 'unknown'>) ?? 'therapist') : 'therapist';
   const { color, light } = ACCENT_VARS[ROLE_ACCENT[role] ?? 'slate'];
+
+  const scheduleDesc = therapist
+    ? describeSchedule(therapist, assignments, templates, clinic)
+    : null;
 
   const [editing, setEditing] = useState(false);
   
@@ -2697,12 +2709,12 @@ function TeamMemberCard({
                   </span>
                 </div>
                 
-                {therapist.workingHours && (
-                  <div className="flex items-center gap-2.5">
-                    <svg className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                {scheduleDesc && (
+                  <div className="flex items-center gap-2.5" title={scheduleDesc.headline}>
+                    <svg className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <span className="truncate">Custom schedule</span>
+                    <span className="truncate">{scheduleDesc.summary}</span>
                   </div>
                 )}
               </>
@@ -3119,6 +3131,11 @@ function Therapists() {
   const clinic = useClinic();
   const entitlements = useEntitlements(clinic.id);
   const rawTherapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const templates = useLiveQuery(() => repos.shiftTemplates.list(clinic.id, true), [clinic.id]);
+  const assignments = useLiveQuery(
+    () => repos.therapistShiftAssignments.listByClinic(clinic.id),
+    [clinic.id]
+  );
   const [members, setMembers] = useState<ClinicMember[] | null>(null);
   const [membersError, setMembersError] = useState<string | null>(null);
   const [rosterError, setRosterError] = useState<string | null>(null);
@@ -3405,6 +3422,9 @@ function Therapists() {
           const isLastAdmin =
             p.member?.role === 'admin' &&
             (members?.filter((x) => x.role === 'admin').length ?? 0) <= 1;
+          const therapistAssignments = (assignments ?? []).filter(
+            (a) => a.therapistId === p.therapist?.id
+          );
 
           return (
             <TeamMemberCard
@@ -3430,6 +3450,9 @@ function Therapists() {
               onDeactivate={() => {
                 if (p.therapist) void requestToggleActive(p.therapist);
               }}
+              assignments={therapistAssignments}
+              templates={templates ?? []}
+              clinic={clinic}
             />
           );
         })}

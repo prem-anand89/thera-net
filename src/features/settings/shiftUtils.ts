@@ -254,13 +254,16 @@ export function buildCoverage(
           const formatted = intervals
             .map(([s, e]) => formatRange12h(s, e))
             .join(' & ');
+          const firstInterval = intervals[0];
+          const lastInterval = intervals[intervals.length - 1];
+          const spanLabel = formatCompactRange(firstInterval[0], lastInterval[1]);
           dayMap.set(weekday, {
             therapistId: therapist.id,
             weekday,
             type: 'custom',
             templates: [],
             customIntervals: intervals,
-            label: 'Custom',
+            label: spanLabel,
             tooltip: `Custom hours: ${formatted}`,
             workingMinutes: mins,
           });
