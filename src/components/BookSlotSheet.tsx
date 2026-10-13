@@ -17,6 +17,7 @@ import {
   isClosedDay,
   isTherapistSlotOccupied,
   localDateTime,
+  bookableWindow,
   localDateTimeToIso,
   minutesLabel,
   minutesOfDay,
@@ -27,9 +28,6 @@ import {
   WEEKDAY_NAMES,
   workingIntervals,
 } from '@/domain/schedule';
-
-const EXTENDED_START_HOUR = 6;
-const EXTENDED_END_HOUR = 22;
 import type { Appointment, UUID, Patient } from '@/domain/types';
 import { AttendanceNote } from '@/components/schedule/AppointmentDetailsPanel';
 import { therapistColor } from '@/components/schedule/scheduleColors';
@@ -111,7 +109,6 @@ export function BookSlotSheet({
   const [patientPhone, setPatientPhone] = useState('');
   const [showLater, setShowLater] = useState(false);
   const [showOffHours, setShowOffHours] = useState(false);
-  const [showClinicOffHours, setShowClinicOffHours] = useState(false);
   const [confirmPrompt, setConfirmPrompt] = useState<{
     title: string;
     message: string;
@@ -148,12 +145,6 @@ export function BookSlotSheet({
         .map((patient: Patient) => ({ value: patient.id, label: `${patient.name} (${patient.phone ?? 'no phone'})` })),
     [patients]
   );
-  const extendedStartHour = Math.min(startHour, EXTENDED_START_HOUR);
-  const extendedEndHour = Math.max(endHour, EXTENDED_END_HOUR);
-  const slots = useMemo(
-    () => generateScheduleSlots(slotMinutes, extendedStartHour, extendedEndHour),
-    [slotMinutes, extendedStartHour, extendedEndHour]
-  );
   const quickDates = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(today, index)), [today]);
   const lengthOptions = useMemo(
     () => [...new Set([...LENGTH_OPTIONS, slotMinutes, rescheduleAppointment ? appointmentMinutes(rescheduleAppointment, slotMinutes) : slotMinutes])].sort((a, b) => a - b),
@@ -185,7 +176,6 @@ export function BookSlotSheet({
     setPatientPhone(prefilledPatientPhone ?? '');
     setPatientMode(prefilledPatientName && !prefilledPatientId ? 'new' : 'find');
     setShowOffHours(false);
-    setShowClinicOffHours(false);
     setConfirmPrompt(null);
     setRepeat(false);
     setRepeatDays([]);
@@ -249,15 +239,23 @@ export function BookSlotSheet({
   const therapistRow = (therapists ?? []).find((t) => t.id === therapistId);
   const therapistName = therapistRow?.name;
   const workingNow = workingIntervals(therapistRow?.workingHours, selectedDate, { startHour, endHour });
+  const bufferHours = clinic.staffBookingBufferHours ?? 3;
+  const slotWindow = bookableWindow({
+    clinicHours: { startHour, endHour },
+    bufferHours,
+    working: workingNow,
+  });
+  const slots = generateScheduleSlots(slotMinutes, slotWindow.startHour, slotWindow.endHour);
   const workingSlots = slots.filter(
     (slot) => slotHoursStatus({ minutes: slot.minutes, length: lengthMinutes, working: workingNow, clinicHours: { startHour, endHour } }) === 'ok'
   );
-  const offSlots = slots.filter(
-    (slot) => slotHoursStatus({ minutes: slot.minutes, length: lengthMinutes, working: workingNow, clinicHours: { startHour, endHour } }) === 'outside_therapist'
+  const outsideSlots = slots.filter(
+    (slot) => slotHoursStatus({ minutes: slot.minutes, length: lengthMinutes, working: workingNow, clinicHours: { startHour, endHour } }) !== 'ok'
   );
-  const outsideClinicSlots = slots.filter(
-    (slot) => slotHoursStatus({ minutes: slot.minutes, length: lengthMinutes, working: workingNow, clinicHours: { startHour, endHour } }) === 'outside_clinic'
-  );
+  const isOutsideExpanded =
+    showOffHours ||
+    workingSlots.length === 0 ||
+    outsideSlots.some((slot) => slot.time === selectedTime);
   const renderSlot = (slot: (typeof slots)[number]) => {
     const unavailable = occupied(slot.time) || isPast(slot.time);
     const selected = selectedTime === slot.time;
@@ -499,6 +497,11 @@ export function BookSlotSheet({
     { label: 'Afternoon', slots: workingSlots.filter((slot) => slot.minutes >= 12 * 60 && slot.minutes < 17 * 60) },
     { label: 'Evening', slots: workingSlots.filter((slot) => slot.minutes >= 17 * 60) },
   ].filter((part) => part.slots.length > 0);
+  const outsideDayParts = [
+    { label: 'Morning', slots: outsideSlots.filter((slot) => slot.minutes < 12 * 60) },
+    { label: 'Afternoon', slots: outsideSlots.filter((slot) => slot.minutes >= 12 * 60 && slot.minutes < 17 * 60) },
+    { label: 'Evening', slots: outsideSlots.filter((slot) => slot.minutes >= 17 * 60) },
+  ].filter((part) => part.slots.length > 0);
   const chip = (on: boolean) =>
     `flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium ${
       on ? 'border-[var(--teal)] bg-[var(--teal)] text-white' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--teal)]/50'
@@ -696,33 +699,25 @@ export function BookSlotSheet({
                     ))}
                   </div>
                 )}
-                {offSlots.length > 0 && (
+                {outsideSlots.length > 0 && (
                   <div className="mt-3">
                     <button
                       type="button"
-                      aria-expanded={showOffHours || workingSlots.length === 0 || offSlots.some((slot) => slot.time === selectedTime)}
+                      aria-expanded={isOutsideExpanded}
                       className="min-h-9 text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]"
                       onClick={() => setShowOffHours((current) => !current)}
                     >
-                      {showOffHours || workingSlots.length === 0 || offSlots.some((slot) => slot.time === selectedTime) ? '▾' : '▸'} Outside {therapistName ? `${therapistName}'s` : 'working'} hours ({offSlots.length})
+                      <span aria-hidden="true">{isOutsideExpanded ? '▾ ' : '▸ '}</span>Outside hours ({outsideSlots.length})
                     </button>
-                    {(showOffHours || workingSlots.length === 0 || offSlots.some((slot) => slot.time === selectedTime)) && (
-                      <div className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-5">{offSlots.map(renderSlot)}</div>
-                    )}
-                  </div>
-                )}
-                {outsideClinicSlots.length > 0 && (
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      aria-expanded={showClinicOffHours || outsideClinicSlots.some((slot) => slot.time === selectedTime)}
-                      className="min-h-9 text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]"
-                      onClick={() => setShowClinicOffHours((current) => !current)}
-                    >
-                      {showClinicOffHours || outsideClinicSlots.some((slot) => slot.time === selectedTime) ? '▾' : '▸'} Outside clinic hours ({outsideClinicSlots.length})
-                    </button>
-                    {(showClinicOffHours || outsideClinicSlots.some((slot) => slot.time === selectedTime)) && (
-                      <div className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-5">{outsideClinicSlots.map(renderSlot)}</div>
+                    {isOutsideExpanded && (
+                      <div className="mt-2 space-y-3">
+                        {outsideDayParts.map((part) => (
+                          <div key={part.label}>
+                            <p className="mb-1.5 text-[11px] font-medium text-[var(--muted)]">{part.label}</p>
+                            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">{part.slots.map(renderSlot)}</div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}

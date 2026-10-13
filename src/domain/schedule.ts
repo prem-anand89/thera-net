@@ -461,6 +461,20 @@ export function withinWorking(intervals: Interval[], start: number, length: numb
   return intervals.some((interval) => start >= interval.start && start + length <= interval.end);
 }
 
+export function bookableWindow(input: {
+  clinicHours: { startHour: number; endHour: number };
+  bufferHours: number;
+  working: Interval[];
+}): { startHour: number; endHour: number } {
+  let start = input.clinicHours.startHour - input.bufferHours;
+  let end = input.clinicHours.endHour + input.bufferHours;
+  for (const w of input.working) {
+    start = Math.min(start, Math.floor(w.start / 60));
+    end = Math.max(end, Math.ceil(w.end / 60));
+  }
+  return { startHour: Math.max(0, start), endHour: Math.min(24, end) };
+}
+
 export type SlotHoursStatus = 'ok' | 'outside_therapist' | 'outside_clinic';
 
 /**
@@ -480,13 +494,9 @@ export function slotHoursStatus({
 }): SlotHoursStatus {
   const clinicStart = clinicHours.startHour * 60;
   const clinicEnd = clinicHours.endHour * 60;
-  if (minutes < clinicStart || minutes + length > clinicEnd) {
-    return 'outside_clinic';
-  }
-  if (!withinWorking(working, minutes, length)) {
-    return 'outside_therapist';
-  }
-  return 'ok';
+  if (withinWorking(working, minutes, length)) return 'ok';
+  const inClinic = minutes >= clinicStart && minutes + length <= clinicEnd;
+  return inClinic ? 'outside_therapist' : 'outside_clinic';
 }
 
 /** Extract YYYY-MM-DD date from an appointment's scheduledAt. */

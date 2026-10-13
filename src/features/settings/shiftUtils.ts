@@ -558,3 +558,12 @@ export function validateShiftTemplate(
   }
   return { valid: true, error: null };
 }
+
+/**
+ * Clamps staff booking buffer hours to an integer between 0 and 12.
+ */
+export function clampBufferHours(value: number): number {
+  if (Number.isNaN(value) || !Number.isFinite(value)) return 3;
+  return Math.max(0, Math.min(12, Math.round(value)));
+}
+

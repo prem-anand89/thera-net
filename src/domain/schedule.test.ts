@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, dayLoad, lengthLabel, dragTarget, dropAllowed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -366,6 +366,74 @@ describe('working hours', () => {
       const dayOffWorking = workingIntervals(hours, '2026-10-02', clinic); // []
       expect(slotHoursStatus({ minutes: 600, length: 30, working: dayOffWorking, clinicHours: clinic })).toBe('outside_therapist');
       expect(slotHoursStatus({ minutes: 450, length: 30, working: dayOffWorking, clinicHours: clinic })).toBe('outside_clinic');
+    });
+
+    it('returns "ok" when therapist shift extends beyond clinic hours', () => {
+      // custom 8-20 (480-1200) at 9-17 clinic
+      const extendedShift = [{ start: 480, end: 1200 }];
+      const clinic9to17 = { startHour: 9, endHour: 17 };
+      // 8:30 (510) is outside clinic hours (9-17) but inside therapist shift -> 'ok'
+      expect(slotHoursStatus({ minutes: 510, length: 30, working: extendedShift, clinicHours: clinic9to17 })).toBe('ok');
+      // 7:00 (420) is outside both therapist shift and clinic hours -> 'outside_clinic'
+      expect(slotHoursStatus({ minutes: 420, length: 30, working: extendedShift, clinicHours: clinic9to17 })).toBe('outside_clinic');
+      // 20:30 (1230) is outside both -> 'outside_clinic'
+      expect(slotHoursStatus({ minutes: 1230, length: 30, working: extendedShift, clinicHours: clinic9to17 })).toBe('outside_clinic');
+    });
+
+    it('returns "outside_clinic" for null-hours therapist outside clinic hours', () => {
+      const clinic9to17 = { startHour: 9, endHour: 17 };
+      const defaultWorking = workingIntervals(null, '2026-10-01', clinic9to17);
+      // 8:00 (480) for 30m -> 'outside_clinic'
+      expect(slotHoursStatus({ minutes: 480, length: 30, working: defaultWorking, clinicHours: clinic9to17 })).toBe('outside_clinic');
+    });
+
+    it('returns "outside_therapist" for custom 10-13 shift at 9:00 (inside clinic hours)', () => {
+      const clinic9to17 = { startHour: 9, endHour: 17 };
+      const customShift = [{ start: 600, end: 780 }]; // 10:00 - 13:00
+      // 9:00 (540) for 30m is inside clinic hours (9-17) but outside therapist shift -> 'outside_therapist'
+      expect(slotHoursStatus({ minutes: 540, length: 30, working: customShift, clinicHours: clinic9to17 })).toBe('outside_therapist');
+    });
+  });
+
+  describe('bookableWindow', () => {
+    it('widens clinic hours by bufferHours', () => {
+      // buffer 3 on a 9-17 clinic -> 6-20
+      expect(bookableWindow({ clinicHours: { startHour: 9, endHour: 17 }, bufferHours: 3, working: [] })).toEqual({
+        startHour: 6,
+        endHour: 20,
+      });
+    });
+
+    it('returns clinic hours when bufferHours is 0', () => {
+      // buffer 0 -> 9-17
+      expect(bookableWindow({ clinicHours: { startHour: 9, endHour: 17 }, bufferHours: 0, working: [] })).toEqual({
+        startHour: 9,
+        endHour: 17,
+      });
+    });
+
+    it('clamps to 0 and 24', () => {
+      // clinic 1-23, buffer 3 -> 0-24
+      expect(bookableWindow({ clinicHours: { startHour: 1, endHour: 23 }, bufferHours: 3, working: [] })).toEqual({
+        startHour: 0,
+        endHour: 24,
+      });
+    });
+
+    it('widens further if therapist interval extends beyond buffer', () => {
+      // therapist interval 5:30-21:10 (330 to 1270) widens to 5-22
+      const working = [{ start: 5 * 60 + 30, end: 21 * 60 + 10 }];
+      expect(bookableWindow({ clinicHours: { startHour: 9, endHour: 17 }, bufferHours: 3, working })).toEqual({
+        startHour: 5,
+        endHour: 22,
+      });
+    });
+
+    it('leaves clinic +- buffer window when working is empty (day off)', () => {
+      expect(bookableWindow({ clinicHours: { startHour: 9, endHour: 17 }, bufferHours: 2, working: [] })).toEqual({
+        startHour: 7,
+        endHour: 19,
+      });
     });
   });
 });

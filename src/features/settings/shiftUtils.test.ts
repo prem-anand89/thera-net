@@ -12,6 +12,7 @@ import {
   sortWeekdays,
   templateUsage,
   validateShiftTemplate,
+  clampBufferHours,
 } from './shiftUtils';
 import type {
   Clinic,
@@ -21,6 +22,23 @@ import type {
 } from '@/domain/types';
 
 describe('shiftUtils', () => {
+  describe('clampBufferHours', () => {
+    it('clamps to range 0 to 12 as an integer', () => {
+      expect(clampBufferHours(-3)).toBe(0);
+      expect(clampBufferHours(15)).toBe(12);
+      expect(clampBufferHours(0)).toBe(0);
+      expect(clampBufferHours(12)).toBe(12);
+      expect(clampBufferHours(3)).toBe(3);
+      expect(clampBufferHours(3.4)).toBe(3);
+      expect(clampBufferHours(3.8)).toBe(4);
+    });
+
+    it('falls back to 3 on NaN or non-finite', () => {
+      expect(clampBufferHours(Number.NaN)).toBe(3);
+      expect(clampBufferHours(Infinity)).toBe(3);
+    });
+  });
+
   describe('formatting & sorting', () => {
     it('formats 12h time strings correctly', () => {
       expect(format12h(540)).toBe('9:00 AM');

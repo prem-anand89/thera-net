@@ -144,6 +144,7 @@ export interface Clinic {
   bookingSlug?: string | null;
   bookingStartHour?: number;
   bookingEndHour?: number;
+  staffBookingBufferHours?: number;
   closedWeekdays?: number[];
   /** Set when the admin finishes the post–create-clinic setup wizard (team + catalog). */
   onboardingCompletedAt?: string | null;

@@ -42,6 +42,7 @@ import { CatalogSection, type CatalogView } from './CatalogSection';
 import { LetterheadPreview } from './LetterheadPreview';
 import { ShiftTemplatesSection } from './ShiftTemplatesSection';
 import { ShiftAssignmentsSection } from './ShiftAssignmentsSection';
+import { clampBufferHours } from './shiftUtils';
 import {
   SETTINGS_TABS,
   SETTINGS_TAB_META,
@@ -1243,6 +1244,7 @@ type ClinicHoursFields = Pick<
   Clinic,
   | 'bookingStartHour'
   | 'bookingEndHour'
+  | 'staffBookingBufferHours'
   | 'closedWeekdays'
   | 'slotDurationMinutes'
 >;
@@ -1253,6 +1255,7 @@ function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean)
       (c) => ({
         bookingStartHour: c.bookingStartHour ?? 9,
         bookingEndHour: c.bookingEndHour ?? 17,
+        staffBookingBufferHours: c.staffBookingBufferHours ?? 3,
         closedWeekdays: c.closedWeekdays ?? [],
         slotDurationMinutes: c.slotDurationMinutes ?? 30,
       }),
@@ -1326,6 +1329,30 @@ function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean)
                 <option value={60}>60 minutes</option>
               </select>
             </Field>
+
+            <div>
+              <label htmlFor="staff-booking-buffer" className="mb-1 block text-xs font-medium text-[var(--muted)]">
+                Staff booking buffer (hours)
+              </label>
+              <input
+                id="staff-booking-buffer"
+                type="number"
+                min={0}
+                max={12}
+                step={1}
+                inputMode="numeric"
+                className={inputCls}
+                value={form.staffBookingBufferHours ?? 3}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (Number.isNaN(val)) return;
+                  set({ staffBookingBufferHours: clampBufferHours(val) });
+                }}
+              />
+              <span className="mt-1 block text-[11px] text-[var(--muted)]">
+                Staff can book up to this many hours before opening and after closing. 0 = clinic hours only. Patients on the public page are still limited to clinic hours.
+              </span>
+            </div>
 
             <div className="sm:col-span-2">
               <Field
