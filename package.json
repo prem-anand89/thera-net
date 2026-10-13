@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check:fast": "bash scripts/check-fast.sh",
     "e2e": "playwright test",
     "prepare": "git config core.hooksPath .githooks"
   },
