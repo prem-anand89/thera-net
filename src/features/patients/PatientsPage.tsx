@@ -282,7 +282,7 @@ export function PatientsList() {
             <button
               key={c.key}
               type="button"
-              className={`flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium sm:min-h-0 ${
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium sm:px-2.5 sm:py-1 ${
                 chip === c.key
                   ? 'bg-[var(--teal)] text-white'
                   : 'text-[var(--muted)] hover:bg-[var(--surface)]'
