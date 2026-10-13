@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
+import { BackLink } from '@/components/BackLink';
 import { Link, useParams, useSearch } from '@tanstack/react-router';
 import { patientsBackLink, type PatientProfileBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -421,25 +422,18 @@ export function PatientProfilePage() {
 
   const back = patientsBackLink(backTo);
   const effectiveBack: PatientProfileBackTarget = backTo ?? '/patients';
+  const backLabel =
+    back.to === '/ledger' ? (back.search ? 'Patients' : 'Ledger') : back.to === '/schedule' ? 'Schedule' : 'Workspace';
 
   return (
     <div className="space-y-4">
-      {back.to === '/ledger' && back.search ? (
-        <Link
-          to="/ledger"
-          search={back.search}
-          className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]"
-        >
-          ← Back
-        </Link>
-      ) : (
-        <Link
+      <div>
+        <BackLink
           to={back.to}
-          className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]"
-        >
-          ← Back
-        </Link>
-      )}
+          search={back.search as { tab: 'patients' } | undefined}
+          label={backLabel}
+        />
+      </div>
 
       {safetyFlags.length > 0 && (
         <div className="flex items-start gap-2 rounded-[10px] border border-[var(--rust)] bg-[var(--rust-light)] px-3.5 py-3 text-sm text-[var(--rust)]">
