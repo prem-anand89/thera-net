@@ -644,7 +644,7 @@ export function LedgerPage() {
             <button
               key={v.key}
               type="button"
-              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              className={`whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-medium transition-colors sm:px-4 ${
                 recordsView === v.key
                   ? 'bg-[var(--teal)] text-white shadow-sm'
                   : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'

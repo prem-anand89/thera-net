@@ -25,7 +25,7 @@ export function DatePresetBar({
         <button
           key={p.key}
           type="button"
-          className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${
+          className={`flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium sm:min-h-0 ${
             value === p.key
               ? 'bg-[var(--teal)] text-white'
               : 'text-[var(--muted)] hover:bg-[var(--surface)]'
