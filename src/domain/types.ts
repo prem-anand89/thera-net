@@ -289,6 +289,7 @@ export interface TherapistShiftAssignment {
   breakStartMinute: number | null;
   status: ShiftAssignmentStatus;
   note: string | null;
+  decisionNote: string | null;
   requestedBy: UUID | null;
   decidedBy: UUID | null;
   decidedAt: string | null;

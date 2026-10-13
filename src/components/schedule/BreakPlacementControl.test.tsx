@@ -36,6 +36,7 @@ describe('BreakPlacementControl', () => {
         breakStartMinute: null,
         status: 'approved',
         note: null,
+        decisionNote: null,
         requestedBy: null,
         decidedBy: null,
         decidedAt: null,
@@ -62,6 +63,7 @@ describe('BreakPlacementControl', () => {
         breakStartMinute: null,
         status: 'approved',
         note: null,
+        decisionNote: null,
         requestedBy: null,
         decidedBy: null,
         decidedAt: null,
@@ -81,7 +83,7 @@ describe('BreakPlacementControl', () => {
 
   const breakAssignment = (): TherapistShiftAssignment => ({
     id: 'a1', clinicId: 'c1', therapistId: 'th1', shiftTemplateId: 't1', customHours: null, weekdays: [1],
-    breakStartMinute: null, status: 'approved', note: null, requestedBy: null, decidedBy: null, decidedAt: null,
+    breakStartMinute: null, status: 'approved', note: null, decisionNote: null, requestedBy: null, decidedBy: null, decidedAt: null,
     createdAt: '', updatedAt: '',
   });
   const breakTemplate: ShiftTemplate = { id: 't1', clinicId: 'c1', name: 'Morning', startMinute: 540, endMinute: 780, breakDurationMinutes: 30, defaultBreakStartMinute: 660, active: true, updatedAt: '' };

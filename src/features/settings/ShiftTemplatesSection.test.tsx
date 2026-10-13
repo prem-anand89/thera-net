@@ -112,6 +112,7 @@ describe('ShiftTemplatesSection', () => {
         breakStartMinute: null,
         status: 'approved',
         note: null,
+        decisionNote: null,
         requestedBy: null,
         decidedBy: null,
         decidedAt: null,
