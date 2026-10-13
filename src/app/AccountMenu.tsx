@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from '@tanstack/react-router';
 import { signOutSafely } from './signOut';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
@@ -13,7 +12,7 @@ import { useMySchedule } from '@/features/me/useMySchedule';
 import { useClinic } from './clinicContext';
 import { publicTherapistPhotoUrl } from '@/lib/supabase';
 import { HelpFeedbackDialog } from '@/components/HelpFeedbackDialog';
-import { IconBell, IconCalendar, IconSettings, IconUser } from '@/components/NavIcons';
+import { IconBell, IconCalendar, IconUser } from '@/components/NavIcons';
 import { SetupProgressBar } from '@/features/setup/SetupProgressBar';
 import { BrandMark } from '@/components/BrandMark';
 import { initialsFor } from './accountInitials';
@@ -208,12 +207,6 @@ export function AccountMenu({
                 <IconBell className={rowIcon} />
                 Notifications
               </button>
-              {role === 'admin' && (
-                <Link to="/settings" role="menuitem" onClick={closeMenu} className={rowCls}>
-                  <IconSettings className={rowIcon} />
-                  Settings
-                </Link>
-              )}
             </div>
 
             <div className="border-t border-[var(--border)] px-2 py-2">

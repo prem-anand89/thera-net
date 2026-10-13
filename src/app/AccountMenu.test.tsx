@@ -53,7 +53,7 @@ afterEach(() => {
 });
 
 describe('AccountMenu rows by role', () => {
-  it('gives every role My account and Notifications, and only admins Settings', () => {
+  it('gives every role My account and Notifications, and no Settings in the menu', () => {
     openMenu('front_desk');
     expect(screen.getByRole('menuitem', { name: /my account/i })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Notifications' })).toBeInTheDocument();
@@ -61,9 +61,9 @@ describe('AccountMenu rows by role', () => {
     expect(screen.queryByRole('menuitem', { name: 'My working hours' })).not.toBeInTheDocument();
   });
 
-  it('shows Settings for an admin', () => {
+  it('does not show Settings for an admin (moved to main header nav)', () => {
     openMenu('admin');
-    expect(screen.getByRole('menuitem', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Settings' })).not.toBeInTheDocument();
   });
 
   it('shows My working hours only for a linked therapist', () => {

@@ -1,4 +1,4 @@
-export type MainNavPath = '/workspace' | '/schedule' | '/ledger' | '/patients' | '/insights';
+export type MainNavPath = '/workspace' | '/schedule' | '/ledger' | '/insights' | '/settings';
 export type PhoneTabPath = '/workspace' | '/schedule' | '/ledger' | '/more';
 
 function under(pathname: string, prefix: string): boolean {
@@ -6,8 +6,12 @@ function under(pathname: string, prefix: string): boolean {
 }
 
 /** Header nav: matches by path only, so `?tab=` and other search params never
- *  unset the highlight (TanStack's default `.active` includes search). */
+ *  unset the highlight (TanStack's default `.active` includes search).
+ *  Patients and patient profile pages (/patients/*) highlight Ledger.
+ *  Guided setup (/setup) highlights Settings. */
 export function isNavActive(pathname: string, to: MainNavPath): boolean {
+  if (to === '/ledger' && under(pathname, '/patients')) return true;
+  if (to === '/settings' && under(pathname, '/setup')) return true;
   return under(pathname, to);
 }
 
@@ -16,12 +20,12 @@ export function isAccountAreaActive(pathname: string): boolean {
   return under(pathname, '/settings') || under(pathname, '/setup');
 }
 
-/** Phone bottom bar: Patients, Reports, Settings and Setup are reached via More. */
+/** Phone bottom bar: Patients highlights Ledger; Reports, Settings and Setup are reached via More. */
 export function activePhoneTab(pathname: string): PhoneTabPath | null {
   if (under(pathname, '/workspace')) return '/workspace';
   if (under(pathname, '/schedule')) return '/schedule';
-  if (under(pathname, '/ledger')) return '/ledger';
-  if (['/more', '/settings', '/setup', '/insights', '/patients'].some((p) => under(pathname, p))) return '/more';
+  if (under(pathname, '/ledger') || under(pathname, '/patients')) return '/ledger';
+  if (['/more', '/settings', '/setup', '/insights'].some((p) => under(pathname, p))) return '/more';
   return null;
 }
 

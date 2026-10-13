@@ -33,9 +33,7 @@ for (const viewport of [
       for (const route of ROUTES) {
         await page.goto(route);
         const current = page.locator('[aria-current="page"]:visible');
-        // Settings has no header item on desktop (it lives in the account menu).
-        const expected = viewport.name === 'desktop' && route.startsWith('/settings') ? 0 : 1;
-        await expect(current, route).toHaveCount(expected);
+        await expect(current, route).toHaveCount(1);
       }
     });
   });

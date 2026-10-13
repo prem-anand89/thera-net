@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { Link, useParams, useSearch } from '@tanstack/react-router';
-import type { PatientProfileBackTarget } from '@/app/router';
+import { patientsBackLink, type PatientProfileBackTarget } from '@/app/router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   repos,
@@ -419,14 +419,27 @@ export function PatientProfilePage() {
         .join(' — ')
     : null;
 
+  const back = patientsBackLink(backTo);
+  const effectiveBack: PatientProfileBackTarget = backTo ?? '/patients';
+
   return (
     <div className="space-y-4">
-      <Link
-        to={backTo ?? '/patients'}
-        className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]"
-      >
-        ← Back
-      </Link>
+      {back.to === '/ledger' && back.search ? (
+        <Link
+          to="/ledger"
+          search={back.search}
+          className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]"
+        >
+          ← Back
+        </Link>
+      ) : (
+        <Link
+          to={back.to}
+          className="text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]"
+        >
+          ← Back
+        </Link>
+      )}
 
       {safetyFlags.length > 0 && (
         <div className="flex items-start gap-2 rounded-[10px] border border-[var(--rust)] bg-[var(--rust-light)] px-3.5 py-3 text-sm text-[var(--rust)]">
@@ -624,7 +637,7 @@ export function PatientProfilePage() {
                     <Link
                       to="/patients/$patientId/notes/session-batch"
                       params={{ patientId }}
-                      search={{ visitIds: needsNoteVisitIds, ...(backTo ? { from: backTo } : {}) }}
+                      search={{ visitIds: needsNoteVisitIds, from: effectiveBack }}
                       className={btnPrimary}
                     >
                       Write session notes
@@ -635,7 +648,7 @@ export function PatientProfilePage() {
                       <Link
                         to="/patients/$patientId/session-log/$enrollmentId"
                         params={{ patientId, enrollmentId: sessionNotesEnrollmentId }}
-                        search={backTo ? { from: backTo } : undefined}
+                        search={{ from: effectiveBack }}
                         className="text-xs font-medium text-[var(--teal)] hover:underline"
                       >
                         View session log
@@ -643,7 +656,7 @@ export function PatientProfilePage() {
                       <Link
                         to="/patients/$patientId/insurer-packet/$enrollmentId"
                         params={{ patientId, enrollmentId: sessionNotesEnrollmentId }}
-                        search={backTo ? { from: backTo } : undefined}
+                        search={{ from: effectiveBack }}
                         className="text-xs font-medium text-[var(--teal)] hover:underline"
                       >
                         Insurer packet

@@ -32,10 +32,10 @@ import { repos } from '@/services';
 import {
   IconWorkspace,
   IconLedger,
-  IconPatients,
   IconReports,
   IconCalendar,
   IconMore,
+  IconSettings,
 } from '@/components/NavIcons';
 import { AccountMenu } from './AccountMenu';
 import { ClinicSwitcher } from './ClinicSwitcher';
@@ -43,19 +43,24 @@ import { AppLoading, BrandMark } from '@/components/BrandMark';
 
 
 
-const NAV = [
+export const NAV = [
   { to: '/workspace', label: 'Workspace', Icon: IconWorkspace },
   { to: '/schedule', label: 'Schedule', Icon: IconCalendar },
   { to: '/ledger', label: 'Ledger', Icon: IconLedger },
-  { to: '/patients', label: 'Patients', Icon: IconPatients },
   { to: '/insights', label: 'Reports', Icon: IconReports },
-  // Settings deliberately isn't in this array — it sits in the account
-  // menu's Account section instead, under the same `role === 'admin'` gate
-  // this array's filter used to apply. Five labelled items is what the
-  // header row can actually carry (see the layout comment on <header>);
-  // Settings was the sixth, and the least-often-visited of them. Mobile is
-  // unaffected either way — More has always been its route there.
+  { to: '/settings', label: 'Settings', Icon: IconSettings },
 ] as const;
+
+/** Filter header nav items by user role / permissions. */
+export function filterNavItems(role: string) {
+  const canEditSettings = role === 'admin';
+  return NAV.filter(
+    (item) =>
+      (item.to !== '/schedule' || role !== 'unknown') &&
+      (item.to !== '/insights' || role === 'admin' || role === 'front_desk') &&
+      (item.to !== '/settings' || canEditSettings)
+  );
+}
 
 export function Shell() {
   const { loading, session } = useSession();
@@ -109,19 +114,7 @@ export function Shell() {
   const newVisitFrom = (['/workspace', '/schedule', '/ledger', '/patients'] as const).find((p) =>
     pathname.startsWith(p)
   );
-  const nav = useMemo(
-    () =>
-      NAV.filter(
-        (item) =>
-          // Schedule is for every role: admin / front desk see the whole
-          // clinic, a therapist sees and books their own column (the page
-          // scopes itself; the booking RPCs enforce it). Hidden only while
-          // the role is still resolving.
-          (item.to !== '/schedule' || role !== 'unknown') &&
-          (item.to !== '/insights' || role === 'admin' || role === 'front_desk')
-      ),
-    [role]
-  );
+  const nav = useMemo(() => filterNavItems(role), [role]);
 
   const prevUserId = useRef<string | null>(null);
 
@@ -489,7 +482,7 @@ function PhoneTab({
   active,
   badge,
 }: {
-  to: '/workspace' | '/patients' | '/ledger' | '/more' | '/schedule';
+  to: '/workspace' | '/ledger' | '/more' | '/schedule';
   label: string;
   Icon: (props: { className?: string }) => ReactNode;
   active: boolean;

@@ -22,9 +22,6 @@ const SetupPage = lazy(() =>
 const LedgerPage = lazy(() =>
   import('@/features/visits/LedgerPage').then((m) => ({ default: m.LedgerPage }))
 );
-const PatientsPage = lazy(() =>
-  import('@/features/patients/PatientsPage').then((m) => ({ default: m.PatientsPage }))
-);
 const PatientProfilePage = lazy(() =>
   import('@/features/patients/PatientProfilePage').then((m) => ({ default: m.PatientProfilePage }))
 );
@@ -128,7 +125,8 @@ const workspaceRoute = createRoute({
   component: WorkspacePage,
 });
 
-const LEDGER_TABS = ['visits', 'invoices', 'daybook'] as const;
+export const LEDGER_TABS = ['visits', 'patients', 'invoices', 'daybook'] as const;
+export type LedgerTab = (typeof LEDGER_TABS)[number];
 
 const ledgerRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -191,14 +189,38 @@ const newVisitRoute = createRoute({
   component: NewVisitPage,
 });
 
+// Patients moved fully under Ledger as a sub-view — redirect rather than
+// 404, preserving bookmarks/external links.
 const patientsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/patients',
-  component: PatientsPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/ledger', search: { tab: 'patients' } });
+  },
 });
 
 const PATIENT_PROFILE_BACK_TARGETS = ['/patients', '/workspace', '/ledger'] as const;
 export type PatientProfileBackTarget = (typeof PATIENT_PROFILE_BACK_TARGETS)[number];
+
+export type PatientsBackResult =
+  | { to: '/ledger'; search: { tab: 'patients' } }
+  | { to: '/ledger'; search?: undefined }
+  | { to: '/workspace'; search?: undefined }
+  | { to: '/schedule'; search?: undefined };
+
+/** Maps a `from` return target to a route destination, keeping `/patients` alias pointing to `/ledger?tab=patients`. */
+export function patientsBackLink(from?: string): PatientsBackResult {
+  if (!from || from === '/patients') {
+    return { to: '/ledger', search: { tab: 'patients' } };
+  }
+  if (from === '/ledger') {
+    return { to: '/ledger' };
+  }
+  if (from === '/schedule') {
+    return { to: '/schedule' };
+  }
+  return { to: '/workspace' };
+}
 
 const patientProfileRoute = createRoute({
   getParentRoute: () => rootRoute,

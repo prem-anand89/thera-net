@@ -1,5 +1,5 @@
 import { StartVisitSheet } from '@/components/StartVisitSheet';
-import type { NewVisitBackTarget } from '@/app/router';
+import { patientsBackLink, type NewVisitBackTarget } from '@/app/router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -160,7 +160,12 @@ export function NewVisitPage() {
   // that patient, and anything else to Workspace.
   function goBack() {
     if (search.from) {
-      void navigate({ to: search.from });
+      const target = patientsBackLink(search.from);
+      if (target.to === '/ledger' && target.search) {
+        void navigate({ to: '/ledger', search: target.search });
+      } else {
+        void navigate({ to: target.to });
+      }
     } else if (search.patientId) {
       void navigate({ to: '/patients/$patientId', params: { patientId: search.patientId } });
     } else {
