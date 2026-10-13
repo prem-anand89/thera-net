@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { hasSupabaseConfig } from '@/lib/env';
 import { bookingService } from '@/services';
 import type { UUID, WorkingHours } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
-import { addDays, generateScheduleSlots, isPublicSlotTaken, toLocalDateStr, workingIntervals } from '@/domain/schedule';
+import { addDays, generateScheduleSlots, isPublicSlotTaken, toLocalDateStr } from '@/domain/schedule';
+import {
+  clinicNow,
+  getDayStatus,
+  normalizeAndValidatePhone,
+  validateEmail,
+  type PublicDayStatus,
+} from '@/domain/publicBookingDays';
 import { PoweredBy } from '@/components/BrandMark';
 
 type AvailabilityData = {
@@ -15,68 +22,22 @@ type AvailabilityData = {
   therapistHours?: Record<string, WorkingHours>;
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function isoDate(d: Date) {
-  return toLocalDateStr(d);
-}
-
 // ─── Mini Calendar ────────────────────────────────────────────────────────────
 
-/** Availability is fetched for this many days ahead; later dates can't be
- *  checked for closures, so they aren't offered. */
 const BOOKING_WINDOW_DAYS = 90;
-
-function getDayStatus(
-  d: Date,
-  today: Date,
-  availability: AvailabilityData | null,
-  preferredTherapistId: string,
-  clinicHours: { startHour: number; endHour: number }
-) {
-  const iso = isoDate(d);
-  const isPast = iso < isoDate(today);
-  if (isPast) return 'past';
-  if (iso > addDays(isoDate(today), BOOKING_WINDOW_DAYS)) return 'far';
-
-  if (!availability) return 'available'; // Default while loading
-
-  if (availability.closedWeekdays.includes(d.getDay())) return 'closed';
-
-  const closedDate = availability.closedDates.find((cd) => cd.date === iso);
-  if (closedDate) return 'holiday';
-
-  // A preferred clinician's own day off — distinct from the clinic being closed.
-  if (preferredTherapistId) {
-    const hours = availability.therapistHours?.[preferredTherapistId];
-    if (hours && workingIntervals(hours, iso, clinicHours).length === 0) return 'therapistOff';
-  } else if (availability.therapistHours && Object.keys(availability.therapistHours).length > 0) {
-    // If no preference and all active therapists with schedules are off on this day
-    const allOff = Object.values(availability.therapistHours).every(
-      (hours) => workingIntervals(hours, iso, clinicHours).length === 0
-    );
-    if (allOff) return 'therapistOff';
-  }
-
-  // For fully booked days, we'll let the user click it and see empty slots.
-  return 'available';
-}
 
 function MiniCalendar({
   selectedDate,
   onSelect,
-  availability,
-  preferredTherapistId,
-  clinicHours,
+  dayStatusOf,
+  todayIso,
 }: {
   selectedDate: string | null;
   onSelect: (date: string) => void;
-  availability: AvailabilityData | null;
-  preferredTherapistId: string;
-  clinicHours: { startHour: number; endHour: number };
+  dayStatusOf: (iso: string) => PublicDayStatus;
+  todayIso: string;
 }) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = useMemo(() => new Date(`${todayIso}T00:00:00`), [todayIso]);
 
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -118,7 +79,7 @@ function MiniCalendar({
         <button
           type="button"
           onClick={prevMonth}
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-[var(--ink)] hover:bg-slate-100 transition-colors"
+          className="flex min-h-11 min-w-11 h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-lg font-bold text-[var(--ink)] hover:bg-slate-100 transition-colors"
           aria-label="Previous month"
         >
           ‹
@@ -127,7 +88,7 @@ function MiniCalendar({
         <button
           type="button"
           onClick={nextMonth}
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-[var(--ink)] hover:bg-slate-100 transition-colors"
+          className="flex min-h-11 min-w-11 h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-lg font-bold text-[var(--ink)] hover:bg-slate-100 transition-colors"
           aria-label="Next month"
         >
           ›
@@ -146,46 +107,65 @@ function MiniCalendar({
       {/* Date grid */}
       <div className="grid grid-cols-7 gap-1">
         {cells.map((day, i) => {
-          if (!day) return <div key={i} className="h-9 w-full" />;
+          if (!day) return <div key={i} className="min-h-11 w-full" aria-hidden />;
 
           const cellDate = new Date(viewYear, viewMonth, day);
-          const iso = isoDate(cellDate);
-          const status = getDayStatus(cellDate, today, availability, preferredTherapistId, clinicHours);
+          const iso = toLocalDateStr(cellDate);
+          const status = dayStatusOf(iso);
           const isSelected = iso === selectedDate;
-          const isToday = iso === isoDate(today);
+          const isToday = iso === todayIso;
 
-          let btnCls = 'h-9 w-full rounded-lg font-semibold text-sm flex items-center justify-center transition-colors ';
+          let btnCls = 'min-h-11 w-full rounded-lg font-semibold text-sm flex items-center justify-center transition-colors ';
           let title = '';
+          let statusAria = 'Available';
 
           if (isSelected) {
             btnCls += 'border border-[var(--teal)]/65 bg-[var(--teal-light)] text-[var(--teal-strong)] font-bold shadow-xs';
+            statusAria = 'Selected, Available';
           } else if (isToday && status === 'available') {
             btnCls += 'border border-slate-400 bg-white font-bold text-[var(--teal-strong)] shadow-2xs hover:bg-slate-50';
             title = 'Today (Available)';
+            statusAria = 'Today, Available';
           } else if (status === 'past') {
             btnCls += 'text-slate-300 opacity-40 cursor-not-allowed';
+            title = isToday ? 'Closed for today' : 'Past date';
+            statusAria = isToday ? 'Closed for today' : 'Past date';
           } else if (status === 'far') {
             btnCls += 'text-slate-300 opacity-40 cursor-not-allowed';
             title = 'Not open for booking yet';
+            statusAria = 'Not open for booking yet';
           } else if (status === 'closed') {
             btnCls += 'bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed';
             title = 'Closed';
+            statusAria = 'Clinic closed';
           } else if (status === 'holiday') {
             btnCls += 'bg-orange-50/60 text-orange-800/80 cursor-not-allowed border border-orange-100';
             title = 'Holiday / Clinic Closure';
+            statusAria = 'Clinic holiday';
           } else if (status === 'therapistOff') {
             btnCls += 'bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed';
-            title = 'Not available with this clinician — other clinicians may still have time';
+            title = 'Not available with this clinician';
+            statusAria = 'Not available with this clinician';
           } else {
             btnCls += 'hover:bg-slate-100 text-[var(--ink)]';
             title = 'Available';
+            statusAria = 'Available';
           }
+
+          const fullDateAria = `${cellDate.toLocaleDateString('en-IN', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          })}, ${statusAria}`;
 
           return (
             <button
               key={i}
               type="button"
               title={title}
+              aria-label={fullDateAria}
+              aria-pressed={isSelected}
               disabled={status !== 'available'}
               onClick={() => onSelect(iso)}
               className={btnCls}
@@ -262,7 +242,14 @@ const COUNTRY_CODES = [
   { code: '', flag: '🌍', name: 'Other (type full number)' },
 ];
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+function useClinicNow() {
+  const [current, setCurrent] = useState(() => clinicNow());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrent(clinicNow()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  return current;
+}
 
 /**
  * Public, unauthenticated patient booking request form — /book/$clinicSlug.
@@ -297,11 +284,21 @@ export function BookingFormPage() {
   const [preferredDate, setPreferredDate] = useState<string | null>(null);
   const [preferredTime, setPreferredTime] = useState<string | null>(null);
 
-  // Submit state
+  // Submit & validation state
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string;
+    phone?: string;
+    email?: string;
+  }>({});
   const [done, setDone] = useState(false);
   const [joinedWaitlist, setJoinedWaitlist] = useState(false);
+
+  const clinicCurrent = useClinicNow();
+  const todayIso = clinicCurrent.dateIso;
+  const currentMinuteOfDay = clinicCurrent.minutes + 15;
+  const clinicHours = useMemo(() => ({ startHour, endHour }), [startHour, endHour]);
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
@@ -315,7 +312,7 @@ export function BookingFormPage() {
           bookingService.getBookingClinicInfo(clinicSlug),
           bookingService.listBookingTherapists(clinicSlug),
           bookingService
-            .getBookingAvailability(clinicSlug, isoDate(new Date()), addDays(isoDate(new Date()), BOOKING_WINDOW_DAYS))
+            .getBookingAvailability(clinicSlug, todayIso, addDays(todayIso, BOOKING_WINDOW_DAYS))
             .catch(() => null),
         ]);
         setClinicName(info.name);
@@ -330,7 +327,7 @@ export function BookingFormPage() {
       }
       setChecking(false);
     })();
-  }, [clinicSlug]);
+  }, [clinicSlug, todayIso]);
 
   // Memoized slots generation
   const allSlots = useMemo(
@@ -350,10 +347,23 @@ export function BookingFormPage() {
 
   const therapistIds = useMemo(() => therapists.map((t) => t.id), [therapists]);
 
-  const nowTime = new Date();
-  const todayIso = isoDate(nowTime);
-  const currentMinuteOfDay = nowTime.getHours() * 60 + nowTime.getMinutes() + 15;
-  const clinicHours = useMemo(() => ({ startHour, endHour }), [startHour, endHour]);
+  // Pure domain day classification
+  const dayStatusOf = useCallback(
+    (date: string): PublicDayStatus =>
+      getDayStatus({
+        dateIso: date,
+        todayIso,
+        nowMinutes: currentMinuteOfDay,
+        closedWeekdays: availability?.closedWeekdays ?? [],
+        closedDates: availability?.closedDates ?? [],
+        bookableTherapists: therapists,
+        preferredTherapistId: preferredTherapistId || null,
+        therapistHours: availability?.therapistHours ?? null,
+        clinicHours,
+        slotDurationMinutes: slotDuration,
+      }),
+    [todayIso, currentMinuteOfDay, availability, therapists, preferredTherapistId, clinicHours, slotDuration]
+  );
 
   // Memoized slot calculation for preferredDate
   const openSlots = useMemo(() => {
@@ -392,18 +402,11 @@ export function BookingFormPage() {
     [daySlots]
   );
 
-  const todayDate = useMemo(() => new Date(`${todayIso}T00:00:00`), [todayIso]);
-
-  const dayStatusOf = (date: string) =>
-    getDayStatus(new Date(`${date}T00:00:00`), todayDate, availability, preferredTherapistId, clinicHours);
-
   const nextOpenDay = useMemo(() => {
     if (!preferredDate || openSlots.length > 0) return null;
     return (
       Array.from({ length: 30 }, (_, index) => addDays(preferredDate, index + 1)).find((date) => {
-        const isAvailableDay =
-          getDayStatus(new Date(`${date}T00:00:00`), todayDate, availability, preferredTherapistId, clinicHours) ===
-          'available';
+        const isAvailableDay = dayStatusOf(date) === 'available';
         if (!isAvailableDay) return false;
         return allSlots.some(
           (slot) =>
@@ -420,7 +423,7 @@ export function BookingFormPage() {
         );
       }) ?? null
     );
-  }, [preferredDate, openSlots.length, todayDate, availability, preferredTherapistId, clinicHours, allSlots, slotDuration, booked, therapistIds]);
+  }, [preferredDate, openSlots.length, dayStatusOf, allSlots, slotDuration, booked, therapistIds, preferredTherapistId, availability?.therapistHours, clinicHours]);
 
   const pickDate = (date: string) => {
     setPreferredDate(date);
@@ -428,20 +431,65 @@ export function BookingFormPage() {
     setCalendarOpen(false);
   };
 
+  function resetForm() {
+    setName('');
+    setPhone('');
+    setEmail('');
+    setPreferredTherapistId('');
+    setNotes('');
+    setScheduleMode('specific');
+    setFlexibleTimeOfDay('any');
+    setPreferredDate(null);
+    setPreferredTime(null);
+    setCalendarOpen(false);
+    setSubmitError(null);
+    setFieldErrors({});
+    setDone(false);
+    setJoinedWaitlist(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !phone.trim()) {
-      setSubmitError('Please add your name and phone number.');
+    setSubmitError(null);
+
+    const errors: { name?: string; phone?: string; email?: string } = {};
+    if (!name.trim()) {
+      errors.name = 'Please add your name.';
+    }
+    const phoneResult = normalizeAndValidatePhone(countryCode, phone);
+    if (!phoneResult.valid) {
+      errors.phone = phoneResult.error;
+    }
+    const emailErr = validateEmail(email);
+    if (emailErr) {
+      errors.email = emailErr;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      if (errors.name) document.getElementById('field-name')?.focus();
+      else if (errors.phone) document.getElementById('field-phone')?.focus();
+      else if (errors.email) document.getElementById('field-email')?.focus();
       return;
     }
+    if (!phoneResult.valid) return;
+
+    setFieldErrors({});
+
+    // Guard against submitting for an ended day (Bug 2)
+    if (scheduleMode === 'specific' && preferredDate === todayIso && dayStatusOf(todayIso) === 'past') {
+      setSubmitError('Clinic hours for today have already ended. Please select another day.');
+      return;
+    }
+
     setBusy(true);
-    setSubmitError(null);
     try {
       const isFlexible = scheduleMode === 'flexible';
       await bookingService.submitAppointmentRequest(
         clinicSlug,
         name.trim(),
-        [countryCode, phone.trim()].filter(Boolean).join(' '),
+        phoneResult.stored,
         email.trim() || null,
         preferredTherapistId || null,
         notes.trim() || null,
@@ -535,6 +583,13 @@ export function BookingFormPage() {
               </span>
             </p>
           </div>
+          <button
+            type="button"
+            onClick={resetForm}
+            className="mt-2 flex min-h-12 w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-[var(--ink)] shadow-xs hover:bg-slate-50 transition-colors"
+          >
+            Book another appointment
+          </button>
         </div>
       </Centered>
     );
@@ -716,7 +771,7 @@ export function BookingFormPage() {
                       {preferredDate && (
                         <button
                           type="button"
-                          className="font-medium text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
+                          className="inline-flex min-h-11 items-center px-2 font-medium text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
                           onClick={() => {
                             setPreferredDate(null);
                             setPreferredTime(null);
@@ -728,7 +783,7 @@ export function BookingFormPage() {
                       <button
                         type="button"
                         aria-expanded={calendarOpen}
-                        className="inline-flex items-center gap-1 font-semibold text-[var(--teal)] hover:text-teal-700 transition-colors"
+                        className="inline-flex min-h-11 items-center gap-1 px-2 font-semibold text-[var(--teal)] hover:text-teal-700 transition-colors"
                         onClick={() => setCalendarOpen((open) => !open)}
                       >
                         <span>{calendarOpen ? '← 14-day strip' : 'Month calendar'}</span>
@@ -737,13 +792,12 @@ export function BookingFormPage() {
                   </div>
 
                   {calendarOpen ? (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-2 sm:p-3.5 shadow-xs">
                       <MiniCalendar
                         selectedDate={preferredDate}
-                        availability={availability}
                         onSelect={pickDate}
-                        preferredTherapistId={preferredTherapistId}
-                        clinicHours={clinicHours}
+                        dayStatusOf={dayStatusOf}
+                        todayIso={todayIso}
                       />
                     </div>
                   ) : (
@@ -758,9 +812,18 @@ export function BookingFormPage() {
                         const open = status === 'available';
                         const selected = preferredDate === date;
                         const isToday = index === 0;
-                        const closedCaption = status === 'therapistOff' ? 'Off' : 'Closed';
+                        const closedCaption =
+                          status === 'past'
+                            ? 'Past'
+                            : status === 'therapistOff'
+                              ? 'Off'
+                              : 'Closed';
                         const closedAriaSuffix =
-                          status === 'therapistOff' ? ', not available with this clinician' : ', closed';
+                          status === 'past'
+                            ? ', clinic hours ended for today'
+                            : status === 'therapistOff'
+                              ? ', not available with this clinician'
+                              : ', closed';
 
                         return (
                           <button
@@ -771,7 +834,9 @@ export function BookingFormPage() {
                             title={
                               status === 'therapistOff'
                                 ? 'Not available with this clinician — other clinicians may still have time'
-                                : undefined
+                                : status === 'past'
+                                  ? 'Clinic hours ended for today'
+                                  : undefined
                             }
                             aria-label={`${value.toLocaleDateString('en-IN', {
                               weekday: 'long',
@@ -910,19 +975,31 @@ export function BookingFormPage() {
           >
             <SectionTitle id="details-heading" step={therapists.length > 0 ? 3 : 2} title="Your details" />
 
-            <Field label="Full name">
+            <Field label="Full name" htmlFor="field-name" error={fieldErrors.name}>
               <input
+                id="field-name"
                 type="text"
                 autoComplete="name"
                 placeholder="e.g. John Doe"
-                className={inputCls}
+                className={`${inputCls} ${fieldErrors.name ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''}`}
+                aria-invalid={!!fieldErrors.name}
+                aria-describedby={fieldErrors.name ? 'field-name-error' : undefined}
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (fieldErrors.name) setFieldErrors((prev) => ({ ...prev, name: undefined }));
+                }}
               />
             </Field>
 
-            <Field label="Phone (WhatsApp)">
-              <div className="flex h-12 rounded-xl border border-slate-200 bg-white shadow-xs focus-within:border-[var(--teal)] focus-within:ring-2 focus-within:ring-[var(--teal)]/20">
+            <Field label="Phone (WhatsApp)" htmlFor="field-phone" error={fieldErrors.phone}>
+              <div
+                className={`flex h-12 rounded-xl border bg-white shadow-xs focus-within:ring-2 ${
+                  fieldErrors.phone
+                    ? 'border-red-300 focus-within:border-red-500 focus-within:ring-red-200'
+                    : 'border-slate-200 focus-within:border-[var(--teal)] focus-within:ring-[var(--teal)]/20'
+                }`}
+              >
                 <div className="relative flex shrink-0 items-center gap-1.5 rounded-l-xl border-r border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-[var(--ink)] hover:bg-slate-100 transition-colors">
                   <span aria-hidden>{COUNTRY_CODES.find((c) => c.code === countryCode)?.flag ?? '🌍'}</span>
                   <span aria-hidden className="text-xs font-semibold">
@@ -945,14 +1022,20 @@ export function BookingFormPage() {
                   </select>
                 </div>
                 <input
+                  id="field-phone"
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel-national"
                   aria-label="Phone number"
+                  aria-invalid={!!fieldErrors.phone}
+                  aria-describedby={fieldErrors.phone ? 'field-phone-error' : undefined}
                   placeholder={countryCode === '+91' ? '98765 43210' : countryCode ? 'Phone number' : 'Full number'}
                   className="min-w-0 flex-1 rounded-r-xl bg-transparent px-3 text-base text-[var(--ink)] placeholder:text-slate-400 focus:outline-none sm:text-sm"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    if (fieldErrors.phone) setFieldErrors((prev) => ({ ...prev, phone: undefined }));
+                  }}
                 />
               </div>
               <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
@@ -963,19 +1046,26 @@ export function BookingFormPage() {
               </p>
             </Field>
 
-            <Field label="Email" optional>
+            <Field label="Email" optional htmlFor="field-email" error={fieldErrors.email}>
               <input
+                id="field-email"
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
-                className={inputCls}
+                className={`${inputCls} ${fieldErrors.email ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''}`}
+                aria-invalid={!!fieldErrors.email}
+                aria-describedby={fieldErrors.email ? 'field-email-error' : undefined}
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                }}
               />
             </Field>
 
-            <Field label="Reason for visit" optional>
+            <Field label="Reason for visit" optional htmlFor="field-notes">
               <textarea
+                id="field-notes"
                 rows={3}
                 placeholder="Briefly describe what's bothering you or what care you're seeking"
                 className={`${inputCls} h-auto py-3 resize-none`}
@@ -1038,15 +1128,35 @@ export function BookingFormPage() {
 const inputCls =
   'h-12 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-base text-[var(--ink)] placeholder:text-slate-400 focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20 transition-colors duration-75 sm:text-sm shadow-xs';
 
-function Field({ label, optional = false, children }: { label: string; optional?: boolean; children: ReactNode }) {
+function Field({
+  label,
+  optional = false,
+  htmlFor,
+  error,
+  children,
+}: {
+  label: string;
+  optional?: boolean;
+  htmlFor?: string;
+  error?: string;
+  children: ReactNode;
+}) {
   return (
-    <label className="block">
-      <span className="mb-1.5 flex items-baseline justify-between text-sm font-semibold text-[var(--ink)]">
+    <div className="block">
+      <label
+        htmlFor={htmlFor}
+        className="mb-1.5 flex items-baseline justify-between text-sm font-semibold text-[var(--ink)] cursor-pointer"
+      >
         <span>{label}</span>
         {optional && <span className="text-xs font-normal text-[var(--muted)]">optional</span>}
-      </span>
+      </label>
       {children}
-    </label>
+      {error && (
+        <p id={htmlFor ? `${htmlFor}-error` : undefined} className="mt-1.5 text-xs font-medium text-[var(--rust)]">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
