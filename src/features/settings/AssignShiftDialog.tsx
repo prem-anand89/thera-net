@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { bookingService } from '@/services';
 import { ErrorNote, Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
+import { SetWorkingHoursFlow } from './SetWorkingHoursFlow';
 import {
   WEEKDAY_META,
   WEEKDAY_ORDER,
@@ -30,8 +31,6 @@ export type AssignShiftDialogProps = {
   pendingAssignments: TherapistShiftAssignment[];
   clinic: Clinic;
 };
-
-import { SetWorkingHoursFlow } from './SetWorkingHoursFlow';
 
 const CLINIC_DEFAULT_ID = '__clinic_default__';
 export const CUSTOM_HOURS_ID = '__custom_hours__';
@@ -246,15 +245,13 @@ export function AssignShiftDialog({
 
   const singleTherapistId =
     selectedTherapistIds.length === 1 ? selectedTherapistIds[0] : null;
-  const selectedTherapist = singleTherapistId
-    ? activeTherapists.find((t) => t.id === singleTherapistId) ?? null
-    : null;
   const [showCustomHoursFlow, setShowCustomHoursFlow] = useState(false);
 
   const singleSelectedTherapist = useMemo(
     () => activeTherapists.find((t) => t.id === singleTherapistId) ?? null,
     [activeTherapists, singleTherapistId]
   );
+  const selectedTherapist = singleSelectedTherapist;
 
   const selectedTherapistSchedule = useMemo(() => {
     if (!singleTherapistId) return null;

@@ -48,7 +48,6 @@ describe('computeMySchedule', () => {
     };
 
     const templateSchedule = computeMySchedule({
-      therapistId: 'th1',
       workingHours: {
         '1': [[540, 780]],
         '2': [[540, 780]],
@@ -64,7 +63,6 @@ describe('computeMySchedule', () => {
     expect(templateSchedule.summary).toBe('Mon–Fri 9–1');
 
     const customSchedule = computeMySchedule({
-      therapistId: 'th1',
       workingHours: {
         '2': [[600, 780]],
         '6': [[600, 780]],
@@ -77,7 +75,6 @@ describe('computeMySchedule', () => {
     expect(customSchedule.summary).toBe('Tue, Sat 10–1');
 
     const defaultSchedule = computeMySchedule({
-      therapistId: 'th1',
       workingHours: null,
       assignments: [],
       templates: [],
@@ -95,7 +92,6 @@ describe('computeMySchedule', () => {
     };
 
     const res = computeMySchedule({
-      therapistId: 'th1',
       workingHours: splitHours,
       assignments: [],
       templates: [],
@@ -126,7 +122,6 @@ describe('computeMySchedule', () => {
 
   it('builds weekList for null workingHours using clinic hours on open days and Closed on closed days', () => {
     const res = computeMySchedule({
-      therapistId: 'th1',
       workingHours: null,
       assignments: [],
       templates: [],
@@ -165,7 +160,6 @@ describe('computeMySchedule', () => {
     };
 
     const res = computeMySchedule({
-      therapistId: 'th1',
       workingHours: null,
       assignments: [pendingRow],
       templates: [morningTemplate],
@@ -199,7 +193,6 @@ describe('computeMySchedule', () => {
     };
 
     const res = computeMySchedule({
-      therapistId: 'th1',
       workingHours: null,
       assignments: [declinedWithNote],
       templates: [morningTemplate],
@@ -233,7 +226,6 @@ describe('computeMySchedule', () => {
     };
 
     const resWithNewerPending = computeMySchedule({
-      therapistId: 'th1',
       workingHours: null,
       assignments: [declinedWithNote, newerPending],
       templates: [morningTemplate],
@@ -265,7 +257,6 @@ describe('computeMySchedule', () => {
       };
 
       const res = computeMySchedule({
-        therapistId: 'th1',
         workingHours: null,
         assignments: [adminAssignedRow],
         templates: [morningTemplate],
@@ -298,7 +289,6 @@ describe('computeMySchedule', () => {
       };
 
       const res = computeMySchedule({
-        therapistId: 'th1',
         workingHours: null,
         assignments: [approvedRequestRow],
         templates: [morningTemplate],
@@ -336,7 +326,6 @@ describe('computeMySchedule', () => {
       };
 
       const res = computeMySchedule({
-        therapistId: 'th1',
         workingHours: null,
         assignments: [approvedRow],
         templates: [editedTemplate],
@@ -369,7 +358,6 @@ describe('computeMySchedule', () => {
       };
 
       const res = computeMySchedule({
-        therapistId: 'th1',
         workingHours: null,
         assignments: [supersededRow],
         templates: [morningTemplate],
@@ -380,6 +368,32 @@ describe('computeMySchedule', () => {
         at: '2026-10-11T11:00:00Z',
         text: 'Reset to clinic default on 11 Oct 2026',
       });
+    });
+    it('ignores a superseded row replaced by a newer approved assignment', () => {
+      const base = {
+        clinicId: 'c1',
+        therapistId: 'th1',
+        shiftTemplateId: 't-morning',
+        customHours: null,
+        weekdays: [1, 2, 3],
+        breakStartMinute: null,
+        note: null,
+        decisionNote: null,
+        requestedBy: null,
+        decidedBy: null,
+        decidedAt: null,
+        createdAt: '2026-10-01T00:00:00Z',
+      } satisfies Partial<TherapistShiftAssignment>;
+      const res = computeMySchedule({
+        workingHours: null,
+        assignments: [
+          { ...base, id: 'old', status: 'superseded', updatedAt: '2026-10-11T11:00:01Z' },
+          { ...base, id: 'new', status: 'approved', updatedAt: '2026-10-11T11:00:00Z' },
+        ],
+        templates: [morningTemplate],
+        clinic,
+      });
+      expect(res.lastChange?.text).toBe('Changed by your clinic admin on 11 Oct 2026');
     });
   });
 });

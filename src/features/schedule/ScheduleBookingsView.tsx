@@ -27,6 +27,7 @@ import {
   weekDays,
   slotHoursStatus,
   displayHoursFor,
+  dateForAppointment,
   type SlotHoursStatus,
   type ClosedRange,
   dayLoad,
@@ -102,10 +103,6 @@ const tabAction =
   'h-9 items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]';
 const tabPrimary =
   'inline-flex h-9 items-center rounded-lg bg-[var(--teal)] px-3.5 text-sm font-medium text-white hover:bg-[var(--teal-strong)]';
-
-function dateForAppointment(appointment: Appointment) {
-  return toLocalDateStr(new Date(appointment.scheduledAt));
-}
 
 /** Re-renders every minute so the "now" line and past-slot checks stay current. */
 function useNowMinutes() {

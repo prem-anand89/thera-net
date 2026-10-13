@@ -40,13 +40,11 @@ export function formatScheduleDate(isoString: string): string {
 }
 
 export function computeMySchedule({
-  therapistId: _therapistId,
   workingHours,
   assignments,
   templates,
   clinic,
 }: {
-  therapistId: string;
   workingHours: WorkingHours | null;
   assignments: TherapistShiftAssignment[];
   templates: ShiftTemplate[];
@@ -174,11 +172,17 @@ export function computeMySchedule({
     }
   }
 
-  // Superseded rows (e.g. reset to clinic default)
+  // Superseded rows: a reset to clinic default leaves only superseded rows. When an approved
+  // row landed at (nearly) the same time, the supersede was just a reassignment it already reports.
+  const approvedTimes = approvedRows
+    .map((a) => Date.parse(a.updatedAt || a.createdAt || ''))
+    .filter((t) => !Number.isNaN(t));
   const supersededRows = assignments.filter((a) => a.status === 'superseded');
   for (const s of supersededRows) {
     const at = s.updatedAt || s.createdAt;
     if (!at) continue;
+    const t = Date.parse(at);
+    if (approvedTimes.some((approved) => approved >= t - 60_000)) continue;
     events.push({
       at,
       text: `Reset to clinic default on ${formatScheduleDate(at)}`,
@@ -232,7 +236,6 @@ export function useMySchedule(
   if (!clinic || !assignments || !templates) return undefined;
 
   return computeMySchedule({
-    therapistId,
     workingHours,
     assignments,
     templates,

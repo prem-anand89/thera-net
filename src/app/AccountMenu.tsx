@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { signOutSafely } from './signOut';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
@@ -83,14 +83,16 @@ export function AccountMenu({
   const install = useInstallState();
   const showInstall = !install.standalone && (install.canPromptInstall || install.iosSafari);
 
-  const [seenAt, setSeenAt] = useState<string | null>(() => {
-    if (!myTherapist?.id) return null;
+  const [seenAt, setSeenAt] = useState<string | null>(null);
+  const myTherapistId = myTherapist?.id;
+  useEffect(() => {
+    if (!myTherapistId) return;
     try {
-      return localStorage.getItem(`myHoursSeen:${myTherapist.id}`);
+      setSeenAt(localStorage.getItem(`myHoursSeen:${myTherapistId}`));
     } catch {
-      return null;
+      setSeenAt(null);
     }
-  });
+  }, [myTherapistId]);
 
   const lastChangeAt = mySchedule?.lastChange?.at ?? null;
   const hasUpdatedDot = Boolean(lastChangeAt && (!seenAt || seenAt < lastChangeAt));
