@@ -461,6 +461,75 @@ export function withinWorking(intervals: Interval[], start: number, length: numb
   return intervals.some((interval) => start >= interval.start && start + length <= interval.end);
 }
 
+export type SlotHoursStatus = 'ok' | 'outside_therapist' | 'outside_clinic';
+
+/**
+ * Classifies whether a slot falls within therapist working hours, clinic operating hours, or outside.
+ * Used by BookSlotSheet, TimeGrid, and ScheduleBookingsView to ensure consistent behavior and prompts.
+ */
+export function slotHoursStatus({
+  minutes,
+  length,
+  working,
+  clinicHours,
+}: {
+  minutes: number;
+  length: number;
+  working: Interval[];
+  clinicHours: { startHour: number; endHour: number };
+}): SlotHoursStatus {
+  const clinicStart = clinicHours.startHour * 60;
+  const clinicEnd = clinicHours.endHour * 60;
+  if (minutes < clinicStart || minutes + length > clinicEnd) {
+    return 'outside_clinic';
+  }
+  if (!withinWorking(working, minutes, length)) {
+    return 'outside_therapist';
+  }
+  return 'ok';
+}
+
+/** Extract YYYY-MM-DD date from an appointment's scheduledAt. */
+export function dateForAppointment(appointment: Appointment): string {
+  return toLocalDateStr(new Date(appointment.scheduledAt));
+}
+
+/**
+ * Calculates start and end hours for rendering schedule grid.
+ * Widens clinic hours if non-cancelled appointments fall earlier or later,
+ * filtering strictly to the displayed week in week mode.
+ */
+export function displayHoursFor({
+  clinicHours,
+  appointments,
+  mode,
+  date,
+  slotMinutes,
+}: {
+  clinicHours: { startHour: number; endHour: number };
+  appointments: Appointment[];
+  mode: 'day' | 'week';
+  date: string;
+  slotMinutes: number;
+}): { startHour: number; endHour: number } {
+  let minHour = clinicHours.startHour;
+  let maxHour = clinicHours.endHour;
+  const currentWeekDates = mode === 'week' ? new Set(weekDays(date)) : null;
+  const apptsToCheck = mode === 'week'
+    ? appointments.filter((a) => currentWeekDates?.has(dateForAppointment(a)))
+    : appointments;
+  for (const a of apptsToCheck) {
+    if (a.status === 'cancelled') continue;
+    const startM = minutesOfDay(a.scheduledAt);
+    const endM = startM + appointmentMinutes(a, slotMinutes);
+    const startH = Math.floor(startM / 60);
+    const endH = Math.ceil(endM / 60);
+    if (startH < minHour) minHour = startH;
+    if (endH > maxHour) maxHour = endH;
+  }
+  return { startHour: minHour, endHour: maxHour };
+}
+
 /** Intersects free gaps with working intervals (drops breaks and off-hours). */
 export function clipToWorking(gaps: Interval[], working: Interval[], minMinutes = 1): Interval[] {
   const result: Interval[] = [];

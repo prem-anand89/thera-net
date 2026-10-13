@@ -123,14 +123,13 @@ export function DayColumn({
     if ((!onBook && !drag?.placing) || closed.closed || isPastDay) return [];
     return generateScheduleSlots(slotMinutes, hours.startHour, hours.endHour).filter((slot) => {
       if (nowMinutes !== null && slot.minutes < nowMinutes) return false;
-      if (working && !withinWorking(working, slot.minutes, slotMinutes)) return false;
       const end = slot.minutes + slotMinutes;
       // Same rule as the server: every non-cancelled appointment holds its time.
       return !blocks.some(
         (b) => b.appointment.status !== 'cancelled' && b.start < end && b.end > slot.minutes
       );
     });
-  }, [onBook, drag?.placing, closed.closed, isPastDay, slotMinutes, hours.startHour, hours.endHour, nowMinutes, blocks, working]);
+  }, [onBook, drag?.placing, closed.closed, isPastDay, slotMinutes, hours.startHour, hours.endHour, nowMinutes, blocks]);
   const offHours = useMemo(() => {
     if (!working || closed.closed) return [];
     const open = hours.startHour * 60;
@@ -188,13 +187,22 @@ export function DayColumn({
       )}
       {freeSlots.map((slot) => {
         const geometry = blockGeometry(slot.minutes, slotMinutes, hours.startHour, PX_PER_MINUTE);
+        const isOffHours = Boolean(working && !withinWorking(working, slot.minutes, slotMinutes));
         return (
           <button
             key={slot.time}
             type="button"
             onClick={() => (drag?.placing ? drag.onPlace(slot.minutes) : onBook?.(slot.time))}
-            aria-label={drag?.placing ? `Move here: ${label} at ${slot.label}` : `Book ${label} at ${slot.label}`}
-            className={`group absolute inset-x-0.5 rounded-md text-left text-[11px] text-[var(--moss-strong)] hover:bg-[var(--moss-light)] focus-visible:bg-[var(--moss-light)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)] ${
+            aria-label={
+              drag?.placing
+                ? `Move here: ${label} at ${slot.label}${isOffHours ? ' (outside working hours)' : ''}`
+                : `Book ${label} at ${slot.label}${isOffHours ? ' (outside working hours)' : ''}`
+            }
+            className={`group absolute inset-x-0.5 rounded-md text-left text-[11px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--teal)] ${
+              isOffHours
+                ? 'text-slate-400 hover:bg-slate-100/70 focus-visible:bg-slate-100'
+                : 'text-[var(--moss-strong)] hover:bg-[var(--moss-light)] focus-visible:bg-[var(--moss-light)]'
+            } ${
               drag?.placing ? 'border border-dashed border-[var(--moss)]/60 bg-[var(--moss-light)]/60' : ''
             }`}
             style={{ top: geometry.top + 1, height: geometry.height - 2 }}
@@ -439,7 +447,6 @@ export function useGridDrag(input: {
       start,
       duration,
       slotMinutes: slot,
-      working: column.working,
       closed: column.closed.closed,
       isPast: column.date < day || (column.date === day && start < now),
     });

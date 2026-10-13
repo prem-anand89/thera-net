@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService, dashboardService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
-import { ErrorNote, Field, inputCls, btnPrimary } from '@/components/ui';
+import { ErrorNote, Field, inputCls, btnPrimary, ConfirmDialog } from '@/components/ui';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -20,13 +20,16 @@ import {
   localDateTimeToIso,
   minutesLabel,
   minutesOfDay,
+  slotHoursStatus,
   toLocalDateStr,
   seriesDates,
   seriesProblem,
   WEEKDAY_NAMES,
-  withinWorking,
   workingIntervals,
 } from '@/domain/schedule';
+
+const EXTENDED_START_HOUR = 6;
+const EXTENDED_END_HOUR = 22;
 import type { Appointment, UUID, Patient } from '@/domain/types';
 import { AttendanceNote } from '@/components/schedule/AppointmentDetailsPanel';
 import { therapistColor } from '@/components/schedule/scheduleColors';
@@ -108,6 +111,13 @@ export function BookSlotSheet({
   const [patientPhone, setPatientPhone] = useState('');
   const [showLater, setShowLater] = useState(false);
   const [showOffHours, setShowOffHours] = useState(false);
+  const [showClinicOffHours, setShowClinicOffHours] = useState(false);
+  const [confirmPrompt, setConfirmPrompt] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    run: () => void;
+  } | null>(null);
   const [repeat, setRepeat] = useState(false);
   const [repeatDays, setRepeatDays] = useState<number[]>([]);
   const [repeatCount, setRepeatCount] = useState(6);
@@ -138,7 +148,12 @@ export function BookSlotSheet({
         .map((patient: Patient) => ({ value: patient.id, label: `${patient.name} (${patient.phone ?? 'no phone'})` })),
     [patients]
   );
-  const slots = useMemo(() => generateScheduleSlots(slotMinutes, startHour, endHour), [slotMinutes, startHour, endHour]);
+  const extendedStartHour = Math.min(startHour, EXTENDED_START_HOUR);
+  const extendedEndHour = Math.max(endHour, EXTENDED_END_HOUR);
+  const slots = useMemo(
+    () => generateScheduleSlots(slotMinutes, extendedStartHour, extendedEndHour),
+    [slotMinutes, extendedStartHour, extendedEndHour]
+  );
   const quickDates = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(today, index)), [today]);
   const lengthOptions = useMemo(
     () => [...new Set([...LENGTH_OPTIONS, slotMinutes, rescheduleAppointment ? appointmentMinutes(rescheduleAppointment, slotMinutes) : slotMinutes])].sort((a, b) => a - b),
@@ -170,6 +185,8 @@ export function BookSlotSheet({
     setPatientPhone(prefilledPatientPhone ?? '');
     setPatientMode(prefilledPatientName && !prefilledPatientId ? 'new' : 'find');
     setShowOffHours(false);
+    setShowClinicOffHours(false);
+    setConfirmPrompt(null);
     setRepeat(false);
     setRepeatDays([]);
     setRepeatCount(6);
@@ -224,7 +241,6 @@ export function BookSlotSheet({
 
   const closed = isClosedDay(selectedDate, clinic.closedWeekdays, closedDates ?? []);
   const isPast = (time: string) => localDateTime(selectedDate, time).getTime() < Date.now();
-  const runsPastClose = (minutes: number) => minutes + lengthMinutes > endHour * 60;
   const occupied = (time: string) =>
     Boolean(therapistId) && isTherapistSlotOccupied(appointments, therapistId, selectedDate, time, lengthMinutes, {
       fallbackMinutes: slotMinutes,
@@ -233,10 +249,17 @@ export function BookSlotSheet({
   const therapistRow = (therapists ?? []).find((t) => t.id === therapistId);
   const therapistName = therapistRow?.name;
   const workingNow = workingIntervals(therapistRow?.workingHours, selectedDate, { startHour, endHour });
-  const workingSlots = slots.filter((slot) => withinWorking(workingNow, slot.minutes, lengthMinutes));
-  const offSlots = slots.filter((slot) => !withinWorking(workingNow, slot.minutes, lengthMinutes));
+  const workingSlots = slots.filter(
+    (slot) => slotHoursStatus({ minutes: slot.minutes, length: lengthMinutes, working: workingNow, clinicHours: { startHour, endHour } }) === 'ok'
+  );
+  const offSlots = slots.filter(
+    (slot) => slotHoursStatus({ minutes: slot.minutes, length: lengthMinutes, working: workingNow, clinicHours: { startHour, endHour } }) === 'outside_therapist'
+  );
+  const outsideClinicSlots = slots.filter(
+    (slot) => slotHoursStatus({ minutes: slot.minutes, length: lengthMinutes, working: workingNow, clinicHours: { startHour, endHour } }) === 'outside_clinic'
+  );
   const renderSlot = (slot: (typeof slots)[number]) => {
-    const unavailable = occupied(slot.time) || isPast(slot.time) || runsPastClose(slot.minutes);
+    const unavailable = occupied(slot.time) || isPast(slot.time);
     const selected = selectedTime === slot.time;
     return (
       <button
@@ -324,7 +347,51 @@ export function BookSlotSheet({
   async function submit() {
     if (!therapistId) return setError('Choose a therapist first.');
     if (!selectedTime) return setError('Choose an available time.');
-    const scheduledAt = localDateTimeToIso(selectedDate, selectedTime);
+
+    if (!rescheduleAppointment) {
+      const existing = patientId ? patients?.find((patient) => patient.id === patientId) : undefined;
+      const finalName = patientMode === 'find' ? existing?.name ?? '' : patientName.trim();
+      const finalPhone = patientMode === 'find' ? (existing?.phone || patientPhone).trim() : patientPhone.trim();
+      if (patientMode === 'find' && !existing) return setError('Choose an existing patient, or switch to New patient.');
+      if (!finalName) return setError('Enter the patient name.');
+      if (!finalPhone) return setError('This patient has no phone on file — enter one so the booking can be confirmed.');
+
+      if (repeat) {
+        if (activeRows.length < 2) return setError('A repeat booking needs at least two sessions.');
+        if (unresolved > 0) return setError('Some sessions clash — pick another time or skip them.');
+      }
+    }
+
+    const scheduledMinutes = Number(selectedTime.slice(0, 2)) * 60 + Number(selectedTime.slice(3, 5));
+    const hoursStatus = slotHoursStatus({
+      minutes: scheduledMinutes,
+      length: lengthMinutes,
+      working: workingNow,
+      clinicHours: { startHour, endHour },
+    });
+
+    if (hoursStatus !== 'ok') {
+      const confirmMsg =
+        hoursStatus === 'outside_clinic'
+          ? 'Outside clinic hours. Book anyway?'
+          : workingNow.length > 0
+            ? `Outside ${therapistName ? `${therapistName}'s` : 'working'} hours (${workingNow.map((i) => `${minutesLabel(i.start)}–${minutesLabel(i.end)}`).join(', ')}). Book anyway?`
+            : `${therapistName ? `${therapistName}` : 'This therapist'} isn't working this day. Book anyway?`;
+
+      setConfirmPrompt({
+        title: hoursStatus === 'outside_clinic' ? 'Outside clinic hours' : 'Outside working hours',
+        message: confirmMsg,
+        confirmLabel: rescheduleAppointment ? 'Move anyway' : 'Book anyway',
+        run: () => void executeSave(),
+      });
+      return;
+    }
+
+    await executeSave();
+  }
+
+  async function executeSave() {
+    const scheduledAt = localDateTimeToIso(selectedDate, selectedTime!);
 
     if (rescheduleAppointment) {
       setBusy(true);
@@ -352,13 +419,8 @@ export function BookSlotSheet({
     const existing = patientId ? patients?.find((patient) => patient.id === patientId) : undefined;
     const finalName = patientMode === 'find' ? existing?.name ?? '' : patientName.trim();
     const finalPhone = patientMode === 'find' ? (existing?.phone || patientPhone).trim() : patientPhone.trim();
-    if (patientMode === 'find' && !existing) return setError('Choose an existing patient, or switch to New patient.');
-    if (!finalName) return setError('Enter the patient name.');
-    if (!finalPhone) return setError('This patient has no phone on file — enter one so the booking can be confirmed.');
 
     if (repeat) {
-      if (activeRows.length < 2) return setError('A repeat booking needs at least two sessions.');
-      if (unresolved > 0) return setError('Some sessions clash — pick another time or skip them.');
       setBusy(true);
       setError(null);
       try {
@@ -624,26 +686,43 @@ export function BookSlotSheet({
                 {workingSlots.length === 0 && (
                   <p className="mb-2 rounded-lg bg-[var(--paper)] p-3 text-sm text-[var(--muted)]">{therapistName ?? 'This therapist'} isn't working this day.</p>
                 )}
-                <div className="space-y-3">
-                  {dayParts.map((part) => (
-                    <div key={part.label}>
-                      <p className="mb-1.5 text-[11px] font-medium text-[var(--muted)]">{part.label}</p>
-                      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">{part.slots.map(renderSlot)}</div>
-                    </div>
-                  ))}
-                </div>
+                {dayParts.length > 0 && (
+                  <div className="space-y-3">
+                    {dayParts.map((part) => (
+                      <div key={part.label}>
+                        <p className="mb-1.5 text-[11px] font-medium text-[var(--muted)]">{part.label}</p>
+                        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">{part.slots.map(renderSlot)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {offSlots.length > 0 && (
                   <div className="mt-3">
                     <button
                       type="button"
-                      aria-expanded={showOffHours || offSlots.some((slot) => slot.time === selectedTime)}
+                      aria-expanded={showOffHours || workingSlots.length === 0 || offSlots.some((slot) => slot.time === selectedTime)}
                       className="min-h-9 text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]"
                       onClick={() => setShowOffHours((current) => !current)}
                     >
-                      {showOffHours || offSlots.some((slot) => slot.time === selectedTime) ? '▾' : '▸'} Outside working hours ({offSlots.length})
+                      {showOffHours || workingSlots.length === 0 || offSlots.some((slot) => slot.time === selectedTime) ? '▾' : '▸'} Outside {therapistName ? `${therapistName}'s` : 'working'} hours ({offSlots.length})
                     </button>
-                    {(showOffHours || offSlots.some((slot) => slot.time === selectedTime)) && (
+                    {(showOffHours || workingSlots.length === 0 || offSlots.some((slot) => slot.time === selectedTime)) && (
                       <div className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-5">{offSlots.map(renderSlot)}</div>
+                    )}
+                  </div>
+                )}
+                {outsideClinicSlots.length > 0 && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      aria-expanded={showClinicOffHours || outsideClinicSlots.some((slot) => slot.time === selectedTime)}
+                      className="min-h-9 text-xs font-medium text-[var(--muted)] hover:text-[var(--ink)]"
+                      onClick={() => setShowClinicOffHours((current) => !current)}
+                    >
+                      {showClinicOffHours || outsideClinicSlots.some((slot) => slot.time === selectedTime) ? '▾' : '▸'} Outside clinic hours ({outsideClinicSlots.length})
+                    </button>
+                    {(showClinicOffHours || outsideClinicSlots.some((slot) => slot.time === selectedTime)) && (
+                      <div className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-5">{outsideClinicSlots.map(renderSlot)}</div>
                     )}
                   </div>
                 )}
@@ -772,6 +851,20 @@ export function BookSlotSheet({
           </button>
         </div>
       </div>
+      {confirmPrompt && (
+        <ConfirmDialog
+          open={confirmPrompt !== null}
+          title={confirmPrompt.title}
+          message={confirmPrompt.message}
+          confirmLabel={confirmPrompt.confirmLabel ?? 'Book anyway'}
+          onCancel={() => setConfirmPrompt(null)}
+          onConfirm={() => {
+            const run = confirmPrompt.run;
+            setConfirmPrompt(null);
+            run();
+          }}
+        />
+      )}
     </div>
   );
 }

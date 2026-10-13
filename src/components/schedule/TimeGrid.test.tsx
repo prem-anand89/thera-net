@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import type { Appointment } from '@/domain/types';
 import type { PatientFlagContext } from '@/domain/patientFlags';
@@ -66,3 +66,50 @@ describe('DayColumn flag badges', () => {
     expect(container.querySelectorAll('[class*="h-1.5"]')).toHaveLength(0);
   });
 });
+
+describe('DayColumn off-hours booking and display', () => {
+  it('renders off-hours empty cells as clickable with outside working hours aria-label', () => {
+    const onBook = vi.fn();
+    const { getByRole } = render(
+      <DayColumn
+        {...baseProps}
+        working={[{ start: 600, end: 720 }]} // 10:00–12:00
+        onBook={onBook}
+      />
+    );
+    const offSlotBtn = getByRole('button', { name: 'Book Thu at 9:00 AM (outside working hours)' });
+    expect(offSlotBtn).toBeInTheDocument();
+    offSlotBtn.click();
+    expect(onBook).toHaveBeenCalledWith('09:00');
+  });
+
+  it('does not render clickable free slots on a closed day', () => {
+    const onBook = vi.fn();
+    const { queryByRole } = render(
+      <DayColumn
+        {...baseProps}
+        closed={{ closed: true, kind: 'weekday', label: null }}
+        onBook={onBook}
+      />
+    );
+    expect(queryByRole('button', { name: /Book Thu/ })).not.toBeInTheDocument();
+  });
+
+  it('renders an appointment outside regular clinic hours within the drawn range when hours are widened', () => {
+    const earlyAppt: Appointment = {
+      id: 'a-early', clinicId: 'c1', patientId: 'p1', patientName: 'Priya', patientPhone: '+91 98200 00001',
+      therapistId: 't1', scheduledAt: '2026-10-01T02:00:00Z', // 7:30 AM IST (UTC+5:30: 02:00 UTC = 07:30 IST)
+      durationMinutes: 30, status: 'confirmed', requestId: null, visitId: null, rescheduleCount: 0,
+      previousScheduledAt: null, createdAt: '', updatedAt: '',
+    };
+    const { getByText } = render(
+      <DayColumn
+        {...baseProps}
+        hours={{ startHour: 7, endHour: 18 }} // widened from 9 to 7 to cover 7:30 AM
+        appointments={[earlyAppt]}
+      />
+    );
+    expect(getByText('Priya')).toBeInTheDocument();
+  });
+});
+

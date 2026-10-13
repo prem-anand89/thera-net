@@ -26,6 +26,9 @@ import {
   toLocalDateStr,
   weekDays,
   withinWorking,
+  slotHoursStatus,
+  displayHoursFor,
+  type SlotHoursStatus,
   type ClosedRange,
   dayLoad,
 } from '@/domain/schedule';
@@ -232,6 +235,18 @@ export function ScheduleBookingsView({
   const weekAvailable = true;
   const mode = search.mode ?? 'day';
 
+  const displayHours = useMemo(
+    () =>
+      displayHoursFor({
+        clinicHours: hours,
+        appointments: mode === 'week' ? visibleAppointments : dayAppointments,
+        mode,
+        date,
+        slotMinutes,
+      }),
+    [hours, mode, date, visibleAppointments, dayAppointments, slotMinutes]
+  );
+
   const closedFor = useCallback(
     (day: string) => isClosedDay(day, clinic.closedWeekdays, closedDates ?? []),
     [clinic.closedWeekdays, closedDates]
@@ -371,7 +386,11 @@ export function ScheduleBookingsView({
     [hoursTherapistId, allAppointments, hours, slotMinutes]
   );
   const [startNoteFor, setStartNoteFor] = useState<Appointment | null>(null);
-  const [pendingMove, setPendingMove] = useState<{ appointment: Appointment; target: MoveTarget } | null>(null);
+  const [pendingMove, setPendingMove] = useState<{
+    appointment: Appointment;
+    target: MoveTarget;
+    status?: SlotHoursStatus;
+  } | null>(null);
   const [undo, setUndo] = useState<{ message: string; run: () => Promise<void> } | null>(null);
   useEffect(() => {
     if (!undo) return;
@@ -493,9 +512,19 @@ export function ScheduleBookingsView({
     onMove: (appointment, target) => {
       const isDifferentTherapist = Boolean(target.therapistId && target.therapistId !== appointment.therapistId);
       const isDifferentDate = target.date !== dateForAppointment(appointment);
-      if (isDifferentTherapist || isDifferentDate) {
+      const targetTherapistId = target.therapistId ?? appointment.therapistId;
+      const targetWorking = targetTherapistId ? workingFor(targetTherapistId, target.date) : [];
+      const status = slotHoursStatus({
+        minutes: target.start,
+        length: target.duration,
+        working: targetWorking,
+        clinicHours: hours,
+      });
+      const isOffHours = status !== 'ok';
+
+      if (isDifferentTherapist || isDifferentDate || isOffHours) {
         if (isDifferentTherapist && !canManageAll) return;
-        setPendingMove({ appointment, target });
+        setPendingMove({ appointment, target, status });
       } else {
         void commitMove(appointment, target);
       }
@@ -826,7 +855,7 @@ export function ScheduleBookingsView({
                     today={today}
                     nowMinutes={now.minutes}
                     appointments={visibleAppointments.filter((a) => a.therapistId === singleTherapist.id)}
-                    hours={hours}
+                    hours={displayHours}
                     slotMinutes={slotMinutes}
                     closedFor={closedFor}
                     colorFor={colorFor}
@@ -844,7 +873,7 @@ export function ScheduleBookingsView({
                     nowMinutes={now.minutes}
                     therapists={weekGridTherapists}
                     appointments={visibleAppointments}
-                    hours={hours}
+                    hours={displayHours}
                     slotMinutes={slotMinutes}
                     closedFor={closedFor}
                     colorFor={colorFor}
@@ -869,7 +898,7 @@ export function ScheduleBookingsView({
                   nowMinutes={now.minutes}
                   therapists={gridTherapists}
                   appointments={dayAppointments}
-                  hours={hours}
+                  hours={displayHours}
                   slotMinutes={slotMinutes}
                   closed={closedToday}
                   colorFor={colorFor}
@@ -1145,9 +1174,15 @@ export function ScheduleBookingsView({
       <ConfirmDialog
         open={pendingMove !== null}
         title={
-          pendingMove && pendingMove.target.therapistId !== pendingMove.appointment.therapistId
-            ? 'Move to another therapist?'
-            : 'Move to another date?'
+          pendingMove?.status === 'outside_clinic'
+            ? 'Move outside clinic hours?'
+            : pendingMove?.status === 'outside_therapist'
+              ? (rosterById.get(pendingMove.target.therapistId ?? pendingMove.appointment.therapistId ?? '')?.name
+                  ? `Move outside ${rosterById.get(pendingMove.target.therapistId ?? pendingMove.appointment.therapistId ?? '')!.name}'s hours?`
+                  : 'Move outside working hours?')
+              : pendingMove && pendingMove.target.therapistId !== pendingMove.appointment.therapistId
+                ? 'Move to another therapist?'
+                : 'Move to another date?'
         }
         message={
           pendingMove
@@ -1155,7 +1190,13 @@ export function ScheduleBookingsView({
                 pendingMove.target.therapistId !== pendingMove.appointment.therapistId
                   ? `${rosterById.get(pendingMove.target.therapistId ?? '')?.name ?? 'another therapist'}, `
                   : ''
-              }${longDate(pendingMove.target.date)} at ${minutesLabel(pendingMove.target.start)}.`
+              }${longDate(pendingMove.target.date)} at ${minutesLabel(pendingMove.target.start)}.${
+                pendingMove.status === 'outside_clinic'
+                  ? ' This is outside clinic hours.'
+                  : pendingMove.status === 'outside_therapist'
+                    ? ' This is outside scheduled working hours.'
+                    : ''
+              }`
             : ''
         }
         confirmLabel="Move"

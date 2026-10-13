@@ -109,15 +109,12 @@ describe('BookSlotSheet', () => {
     expect(slot('10:30 AM')).toBeEnabled();
   });
 
-  it('disables occupied time for the chosen length, and time that runs past closing', () => {
+  it('disables occupied time for the chosen length', () => {
     render(<BookSlotSheet isOpen onClose={() => {}} appointments={[appointment({})]} prefilledDate="2026-10-01" />);
     expect(slot('11:00 AM')).toBeDisabled();
     expect(slot('10:30 AM')).toBeEnabled();
     fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '60m' }));
     expect(slot('10:30 AM')).toBeDisabled(); // 10:30–11:30 hits the 11:00 booking
-    // 11:30 + 60 min would end after the 12:00 close: listed under "Outside working hours", disabled.
-    fireEvent.click(screen.getByRole('button', { name: /Outside working hours \(1\)/ }));
-    expect(slot('11:30 AM')).toBeDisabled();
     expect(slot('9:00 AM')).toBeEnabled();
   });
 
@@ -204,7 +201,7 @@ describe('BookSlotSheet', () => {
       expect(slot('9:30 AM')).toBeEnabled();
       expect(slot('11:00 AM')).toBeEnabled();
       expect(screen.queryByRole('button', { name: '10:00 AM' })).not.toBeInTheDocument(); // the break
-      fireEvent.click(screen.getByRole('button', { name: /Outside working hours \(2\)/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Outside Dr Asha's hours \(2\)/ }));
       expect(slot('10:00 AM')).toBeEnabled(); // staff may still book it
     } finally {
       data.therapists = [
@@ -212,6 +209,81 @@ describe('BookSlotSheet', () => {
         { id: 't2', name: 'Dr Ravi' },
       ];
     }
+  });
+
+  it('prompts confirmation when booking outside therapist hours', async () => {
+    data.therapists = [
+      { id: 't1', name: 'Dr Asha', workingHours: { '4': [[540, 600], [660, 720]] } } as never,
+      { id: 't2', name: 'Dr Ravi' },
+    ];
+    const onClose = vi.fn();
+    try {
+      render(<BookSlotSheet isOpen onClose={onClose} prefilledDate="2026-10-01" />);
+      fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p1' } });
+      fireEvent.click(screen.getByRole('button', { name: /Outside Dr Asha's hours/ }));
+      fireEvent.click(slot('10:00 AM'));
+      fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
+
+      expect(await screen.findByRole('heading', { name: 'Outside working hours' })).toBeInTheDocument();
+      expect(screen.getByText(/Outside Dr Asha's hours.*Book anyway\?/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(confirmBookingSlot).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
+      expect(await screen.findByRole('heading', { name: 'Outside working hours' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Book anyway' }));
+
+      await waitFor(() => expect(confirmBookingSlot).toHaveBeenCalled());
+      expect(onClose).toHaveBeenCalled();
+    } finally {
+      data.therapists = [
+        { id: 't1', name: 'Dr Asha' },
+        { id: 't2', name: 'Dr Ravi' },
+      ];
+    }
+  });
+
+  it('auto-expands outside-hours slots when therapist is on day off', () => {
+    data.therapists = [
+      { id: 't1', name: 'Dr Asha', workingHours: { '1': [[540, 1020]] } } as never,
+      { id: 't2', name: 'Dr Ravi' },
+    ];
+    try {
+      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      expect(screen.getByText(/Dr Asha isn't working this day/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Outside Dr Asha's hours/ })).toHaveAttribute('aria-expanded', 'true');
+      expect(slot('10:00 AM')).toBeEnabled();
+    } finally {
+      data.therapists = [
+        { id: 't1', name: 'Dr Asha' },
+        { id: 't2', name: 'Dr Ravi' },
+      ];
+    }
+  });
+
+  it('prompts confirmation when booking outside clinic hours', async () => {
+    const onClose = vi.fn();
+    render(<BookSlotSheet isOpen onClose={onClose} prefilledDate="2026-10-01" />);
+    fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p1' } });
+    fireEvent.click(screen.getByRole('button', { name: /Outside clinic hours/ }));
+    fireEvent.click(slot('6:00 AM'));
+    fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
+
+    expect(await screen.findByRole('heading', { name: 'Outside clinic hours' })).toBeInTheDocument();
+    expect(screen.getByText(/Outside clinic hours\. Book anyway\?/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(confirmBookingSlot).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
+    expect(await screen.findByRole('heading', { name: 'Outside clinic hours' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Book anyway' }));
+
+    await waitFor(() => expect(confirmBookingSlot).toHaveBeenCalled());
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('locks the therapist for a therapist login', () => {

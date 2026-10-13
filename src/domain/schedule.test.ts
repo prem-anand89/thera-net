@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, dayLoad, lengthLabel, dragTarget, dropAllowed, resizeTarget, snapMinutes, seriesDates, seriesProblem, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, dayLoad, lengthLabel, dragTarget, dropAllowed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -319,6 +319,55 @@ describe('working hours', () => {
     expect(isPublicSlotTaken('2026-10-01', 810, 30, [], ['t1', 't2'], 't1', custom, clinic)).toBe(true);
     expect(isPublicSlotTaken('2026-10-01', 810, 30, [], ['t1'], null, custom, clinic)).toBe(true);
   });
+
+  describe('slotHoursStatus', () => {
+    const working = workingIntervals(hours, '2026-10-01', clinic); // 540-780, 840-1080 (9-13, 14-18)
+
+    it('returns "ok" when slot is inside therapist shift', () => {
+      // 10:00 (600) for 30m
+      expect(slotHoursStatus({ minutes: 600, length: 30, working, clinicHours: clinic })).toBe('ok');
+    });
+
+    it('returns "outside_therapist" inside a break gap', () => {
+      // 13:30 (810) for 30m is during break 13:00-14:00 (780-840)
+      expect(slotHoursStatus({ minutes: 810, length: 30, working, clinicHours: clinic })).toBe('outside_therapist');
+    });
+
+    it('returns "outside_therapist" before the therapist shift starts (within clinic hours)', () => {
+      const lateShift = [{ start: 660, end: 1080 }]; // 11:00 - 18:00
+      // 9:30 (570) for 30m is before shift starts
+      expect(slotHoursStatus({ minutes: 570, length: 30, working: lateShift, clinicHours: clinic })).toBe('outside_therapist');
+    });
+
+    it('returns "outside_clinic" when slot is before clinic opening or after clinic closing', () => {
+      // 7:30 (450) is before 9:00
+      expect(slotHoursStatus({ minutes: 450, length: 30, working, clinicHours: clinic })).toBe('outside_clinic');
+      // 18:00 (1080) for 30m is after clinic closing (18:00)
+      expect(slotHoursStatus({ minutes: 1080, length: 30, working, clinicHours: clinic })).toBe('outside_clinic');
+    });
+
+    it('returns "outside_therapist" when slot straddles shift end (within clinic hours)', () => {
+      // 12:45 (765) for 30m ends at 795, past morning shift end 780, but within clinic hours
+      expect(slotHoursStatus({ minutes: 765, length: 30, working, clinicHours: clinic })).toBe('outside_therapist');
+    });
+
+    it('returns "outside_clinic" when slot straddles clinic close', () => {
+      // 17:45 (1065) for 30m ends at 1095, past clinic close 1080
+      expect(slotHoursStatus({ minutes: 1065, length: 30, working, clinicHours: clinic })).toBe('outside_clinic');
+    });
+
+    it('handles therapist with null working hours (clinic hours default)', () => {
+      const defaultWorking = workingIntervals(null, '2026-10-01', clinic);
+      expect(slotHoursStatus({ minutes: 600, length: 30, working: defaultWorking, clinicHours: clinic })).toBe('ok');
+      expect(slotHoursStatus({ minutes: 450, length: 30, working: defaultWorking, clinicHours: clinic })).toBe('outside_clinic');
+    });
+
+    it('handles therapist on a day off (empty working intervals)', () => {
+      const dayOffWorking = workingIntervals(hours, '2026-10-02', clinic); // []
+      expect(slotHoursStatus({ minutes: 600, length: 30, working: dayOffWorking, clinicHours: clinic })).toBe('outside_therapist');
+      expect(slotHoursStatus({ minutes: 450, length: 30, working: dayOffWorking, clinicHours: clinic })).toBe('outside_clinic');
+    });
+  });
 });
 
 describe('repeat bookings', () => {
@@ -422,3 +471,87 @@ describe('workingIntervals with malformed hours', () => {
     expect(workingIntervals(mixed, '2026-10-01', { startHour: 9, endHour: 18 })).toEqual([{ start: 540, end: 600 }]);
   });
 });
+
+describe('displayHoursFor', () => {
+  const clinicHours = { startHour: 9, endHour: 17 };
+  const targetDate = '2026-10-15'; // Thursday of week Mon 2026-10-12 to Sun 2026-10-18
+
+  it('widens the grid when a 7:30 AM appointment falls in this week', () => {
+    const appts = [
+      appt({
+        scheduledAt: at('2026-10-14', '07:30'), // Wednesday in the same week
+        durationMinutes: 45,
+      }),
+    ];
+    const res = displayHoursFor({
+      clinicHours,
+      appointments: appts,
+      mode: 'week',
+      date: targetDate,
+      slotMinutes: 30,
+    });
+    expect(res).toEqual({ startHour: 7, endHour: 17 });
+  });
+
+  it('does not widen this week for an out-of-hours appointment in a different week', () => {
+    const appts = [
+      appt({
+        scheduledAt: at('2026-09-15', '07:00'), // Different month/week
+        durationMinutes: 60,
+      }),
+      appt({
+        scheduledAt: at('2026-10-25', '20:00'), // Future week
+        durationMinutes: 60,
+      }),
+    ];
+    const res = displayHoursFor({
+      clinicHours,
+      appointments: appts,
+      mode: 'week',
+      date: targetDate,
+      slotMinutes: 30,
+    });
+    expect(res).toEqual({ startHour: 9, endHour: 17 });
+  });
+
+  it('ignores cancelled appointments when expanding hours', () => {
+    const appts = [
+      appt({
+        scheduledAt: at('2026-10-15', '06:00'),
+        durationMinutes: 60,
+        status: 'cancelled',
+      }),
+      appt({
+        scheduledAt: at('2026-10-15', '21:00'),
+        durationMinutes: 60,
+        status: 'cancelled',
+      }),
+    ];
+    const res = displayHoursFor({
+      clinicHours,
+      appointments: appts,
+      mode: 'week',
+      date: targetDate,
+      slotMinutes: 30,
+    });
+    expect(res).toEqual({ startHour: 9, endHour: 17 });
+  });
+
+  it('uses only appointments passed for that day in day mode', () => {
+    const dayAppts = [
+      appt({
+        scheduledAt: at('2026-10-15', '18:15'),
+        durationMinutes: 30, // ends at 18:45 -> ceil to 19
+      }),
+    ];
+    const res = displayHoursFor({
+      clinicHours,
+      appointments: dayAppts,
+      mode: 'day',
+      date: targetDate,
+      slotMinutes: 30,
+    });
+    expect(res).toEqual({ startHour: 9, endHour: 19 });
+  });
+});
+
