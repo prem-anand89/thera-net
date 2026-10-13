@@ -18,13 +18,11 @@ If you do not do this, you have introduced schema drift — a known recurring bu
 
 ---
 
-## Rule 2: Two-Step Migration Convention
+## Rule 2: Database Migration Convention
 
-Every database change needs **exactly two things**:
-1. **Applied live** via Supabase MCP `execute_sql` or `apply_migration`
-2. **Committed to git** in `supabase/migrations/YYYYMMDDNNNNNN_description.sql`
-
-Skipping step 2 means the next agent (or rebuild) cannot reconstruct the current database state. This has caused real bugs in this repo.
+Every database change needs to be **committed to git** in `supabase/migrations/YYYYMMDDNNNNNN_description.sql`.
+- During agent feature execution, **never apply migrations or execute SQL against live Supabase directly**; write the migration file and report its path. Claude reviews and applies migrations to live Supabase.
+- Application code must be written defensively to tolerate new columns/tables being missing until applied (`value ?? default`).
 
 ---
 

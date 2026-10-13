@@ -45,8 +45,9 @@ TheraNet is a mobile-first clinic management SaaS. Core features: patient billin
 2. **WhatsApp = `wa.me` deep links only.** `src/services/whatsappBusinessService.ts` exists but its UI entry point in Settings returns `null` (deliberately hidden).
 3. **Mobile nav = 5 items max.** Do not add a 6th tab to the mobile bottom bar.
 4. **Colours = CSS variables only.** Never hardcode hex values.
-5. **Buttons need `type` attribute.** Use `<Button>` from `src/components/Button.tsx`.
-6. **Every DB change = two steps:** apply via MCP + write migration file to `supabase/migrations/`.
+5. **Buttons need `type` attribute.** Every `<button>` needs an explicit `type` (`type="button"` unless submitting).
+6. **Database migrations:** Write migration file to `supabase/migrations/`; do not apply live during task execution (Claude reviews and applies).
+7. **Fast test loop:** Use `npm run check:fast` while working. Run the full test suite only at the end of a plan.
 
 ## Active Implementation Plan
 
