@@ -272,7 +272,7 @@ export function PatientsList() {
           select (financial year + month in one) on the right. Phones: the
           chips scroll on one row, search and period share the next. */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="hide-scrollbar flex w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1 sm:w-auto">
+        <div className="hide-scrollbar flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
           {(
             [
               { key: 'all', label: 'All' },
@@ -282,7 +282,7 @@ export function PatientsList() {
             <button
               key={c.key}
               type="button"
-              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium sm:px-2.5 sm:py-1 ${
+              className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${
                 chip === c.key
                   ? 'bg-[var(--teal)] text-white'
                   : 'text-[var(--muted)] hover:bg-[var(--surface)]'
