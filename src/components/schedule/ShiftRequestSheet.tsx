@@ -32,11 +32,7 @@ export function ShiftRequestSheet({
   onClose: () => void;
 }) {
   const templates = useLiveQuery(() => repos.shiftTemplates.list(clinicId), [clinicId]);
-  const schedule = useMySchedule(therapistId, clinicId, currentWorkingHours, {
-    bookingStartHour: clinic.startHour,
-    bookingEndHour: clinic.endHour,
-    closedWeekdays: clinic.closedWeekdays,
-  });
+  const schedule = useMySchedule(therapistId, clinicId, currentWorkingHours);
   const [shiftId, setShiftId] = useState('');
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [customMode, setCustomMode] = useState(false);

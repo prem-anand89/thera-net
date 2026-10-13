@@ -213,16 +213,9 @@ export function computeMySchedule({
 export function useMySchedule(
   therapistId: string,
   clinicId: string,
-  workingHours: WorkingHours | null,
-  clinicOverride?: Pick<Clinic, 'bookingStartHour' | 'bookingEndHour' | 'closedWeekdays'>
+  workingHours: WorkingHours | null
 ): MySchedule | undefined {
-  let contextClinic: Clinic | null = null;
-  try {
-    contextClinic = useClinic();
-  } catch {
-    // outside ClinicContext
-  }
-  const clinic = clinicOverride ?? contextClinic;
+  const clinic = useClinic();
 
   const assignments = useLiveQuery(
     () =>

@@ -15,6 +15,9 @@ vi.mock('./WorkingHoursSheet', () => ({
     return <div>custom-hours-sheet</div>;
   },
 }));
+vi.mock('@/app/clinicContext', () => ({
+  useClinic: () => ({ id: 'c1', bookingStartHour: 9, bookingEndHour: 17, closedWeekdays: [0] }),
+}));
 vi.mock('./BreakPlacementControl', () => ({ BreakPlacementControl: () => null }));
 const requestShiftAssignment = vi.fn();
 const requestCustomHours = vi.fn();

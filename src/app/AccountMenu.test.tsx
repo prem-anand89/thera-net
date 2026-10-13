@@ -3,9 +3,10 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Therapist } from '@/domain/types';
+import type { MySchedule } from '@/features/me/useMySchedule';
 
 let myTherapist: Therapist | undefined;
-let mySchedule: any = undefined;
+let mySchedule: MySchedule | undefined = undefined;
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to, ...rest }: { children: React.ReactNode; to: string }) => (
     <a href={to} {...rest}>{children}</a>

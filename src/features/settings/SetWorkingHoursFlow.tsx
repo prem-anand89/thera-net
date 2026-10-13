@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
 import { repos, bookingService } from '@/services';
@@ -38,10 +38,13 @@ export function SetWorkingHoursFlow({
     reject: (error: unknown) => void;
   } | null>(null);
 
-  const clinicHours = {
-    startHour: clinic.bookingStartHour ?? 9,
-    endHour: clinic.bookingEndHour ?? 17,
-  };
+  const clinicHours = useMemo(
+    () => ({
+      startHour: clinic.bookingStartHour ?? 9,
+      endHour: clinic.bookingEndHour ?? 17,
+    }),
+    [clinic.bookingStartHour, clinic.bookingEndHour]
+  );
   const slotMinutes = clinic.slotDurationMinutes || 30;
 
   const handleSave = useCallback(
