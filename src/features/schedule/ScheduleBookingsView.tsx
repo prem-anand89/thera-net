@@ -43,6 +43,7 @@ import { RequestsInbox } from '@/components/schedule/RequestsInbox';
 import { TherapistFilter } from '@/components/schedule/TherapistFilter';
 import { HistoryView } from '@/components/schedule/HistoryView';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
+import { appointmentsOutsideHours } from './hoursConflicts';
 import { appointmentReason, patientFlags } from '@/domain/patientFlags';
 import { matchingWaitlistEntries, timeOfDayFor } from '@/domain/waitlistMatch';
 import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
@@ -370,12 +371,13 @@ export function ScheduleBookingsView({
           return;
         }
         const todayIso = toLocalDateStr(new Date());
-        const conflicts = (allAppointments ?? []).filter((a) => {
-          if (a.therapistId !== therapistId || a.status === 'cancelled') return false;
-          const apptDate = toLocalDateStr(new Date(a.scheduledAt));
-          if (apptDate < todayIso) return false;
-          const intervals = workingIntervals(value, apptDate, hours);
-          return !withinWorking(intervals, minutesOfDay(a.scheduledAt), appointmentMinutes(a, slotMinutes));
+        const conflicts = appointmentsOutsideHours({
+          appointments: allAppointments ?? [],
+          therapistId,
+          hours: value,
+          clinicHours: hours,
+          slotMinutes,
+          todayIso,
         });
         if (conflicts.length === 0) {
           bookingService.assignCustomHours(therapistId, value).then(() => resolve(), reject);
