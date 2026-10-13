@@ -71,10 +71,10 @@ src/sync/              outbox push / delta pull engine against Supabase
 src/services/          visit/invoice/report/patient/dashboard/consultation-note/advance orchestration — no React imports
 src/features/          UI pages and components (React + TanStack Router)
   ├── workspace/       WorkspacePage (default landing: header stats, Today, Open Packages, therapist comparison)
-  ├── visits/          LedgerPage at /ledger (Visits/Invoices/Daybook sub-tabs); DaybookPage; NewVisitPage
-  ├── patients/        PatientsPage, PatientProfilePage, NoteEditorPage (Core Assessment)
+  ├── visits/          LedgerPage at /ledger (Visits/Patients/Invoices/Daybook sub-tabs); DaybookPage; NewVisitPage
+  ├── patients/        PatientsList (embedded in /ledger), PatientProfilePage, NoteEditorPage (Core Assessment)
   ├── reports/         ReportsPage at /insights (Trends + monthly statement; nav label is "Reports")
-  ├── settings/        SettingsPage at /settings; CreateClinicForm for first-time clinic setup
+  ├── settings/        SettingsPage at /settings (nav label: "Settings", in main header nav for admins); CreateClinicForm
   ├── requests/        /schedule — the calendar (schedule/), Requests, History, and Feedback (admin)
   ├── publicFeedback/  Public, no-login feedback form at /f/$token
   └── publicBooking/   Public, no-login booking request form at /book/$clinicSlug
@@ -84,11 +84,11 @@ supabase/              SQL migrations (schema, RLS, RPCs, realtime publications)
 
 **App Routes:**
 - `/workspace` (default, `/` redirects here) — today's work, recent history, open packages, pending items
-- `/ledger` — historical visit records and invoices as URL-addressable sub-tabs (`?tab=visits|invoices`); the Invoices tab is hidden without billing access
-- `/patients/$patientId` — individual patient profile with clinical notes history
+- `/ledger` — historical visit records, patients list, invoices, and daybook as URL-addressable sub-tabs (`?tab=visits|patients|invoices|daybook`); `/patients` redirects to `/ledger?tab=patients`. The Invoices/Daybook tabs are hidden without billing access
+- `/patients/$patientId` — individual patient profile with clinical notes history (Back returns to `/ledger?tab=patients`)
 - `/patients/$patientId/notes/$noteId` — Core Assessment note editor (Initial/Follow-up consultation notes)
 - `/insights` — Dashboard + monthly per-therapist statement (nav label: "Reports"; `?tab=monthly` for the statement). Hidden from plain therapists — a colleague's individual earnings stay admin/front_desk-only, same as the monthly statement always has been. The one exception, the therapist comparison chart, surfaces on `/workspace` instead so therapists can still reach it.
-- `/settings` — clinic configuration, MRNO settings, billing mode, rate setup, feature toggles (nav label: "Settings")
+- `/settings` — clinic configuration, MRNO settings, billing mode, rate setup, feature toggles (nav label: "Settings", promoted to header nav for admins; removed from AccountMenu)
 - `/schedule` — clinic calendar for every role (therapists see their own), booking requests (admin + front_desk), Feedback (admin)
 - `/f/$token`, `/book/$clinicSlug` — public, no-login, no-Shell forms for patient feedback and booking requests
 - `/archive`, `/setup`, `/invoices`, `/reports` — legacy paths, kept as redirects to the routes above for old bookmarks
@@ -145,10 +145,10 @@ patients work.
 
 **Archive Page (`/archive`, since renamed to Ledger at `/ledger` — see Phase 3)**
 - Renamed from Visits page, serves as historical records hub
-- **Records toggle** — Visits tab (all-time visit history with dense table) and Patients tab (enriched patient list)
+- **Ledger sub-tabs** — Visits, Patients, Invoices, and Daybook sub-tabs
 - **Visits tab columns** — Date, Patient ID, Name, Service, Package, Bill, Invoice Status, Therapist, actions
-- **Patients tab columns** — Patient ID, Name (age/sex inline), Primary Condition, Last Visit + Count, Therapist, Treatment, Bill, Phone, Package/Outstanding badge, actions
-- **Filters** — Therapist dropdown, date presets (This week, This month, Last month, All time), patient search (MRNO prefix + name substring)
+- **Patients tab columns** — Patient ID, Name, Primary Condition, Last Visit, actions (All / My patients chips)
+- **Filters** — Therapist dropdown, unified `DatePresetBar` (This week, This month, Last month, All time, Custom), patient search (MRNO prefix + name substring)
 - **Actions** — Invoice, Repeat, Split, Delete on individual rows
 
 **Services Layer** (`dashboardService.ts`)
@@ -216,7 +216,7 @@ patients work.
 - **Responsive breakpoint fix** — a dedicated `tab:` (744px) Tailwind
   token so iPad Mini gets the tablet layout instead of the phone layout.
 - Plus a New Visit rebuild, notes-completion prompting, Ledger hygiene,
-  and Patients extracted to its own route. Full detail and shipped
+  and Patients integrated into the Ledger tab. Full detail and shipped
   corrections are in the two build-plan docs.
 
 ---

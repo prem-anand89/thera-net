@@ -49,11 +49,13 @@ Thera.Net is an offline-first visit ledger, revenue-split tracker, and invoice b
 
 #### Ledger & History
 - **Dense table view** with patient enrichment (last visit + count, treatment, condition, bill amount)
-- **Multi-tab interface**:
+- **Multi-tab interface** (`/ledger` with sub-tabs `visits`, `patients`, `invoices`, `daybook`; `/patients` redirects to `/ledger?tab=patients`):
   - Visits tab — all-time visit history, URL-addressable (`/ledger?tab=visits`)
+  - Patients tab — patient roster list (`/ledger?tab=patients`), visible to all roles, with All and My patients chips (replaces standalone `/patients` route; redundant "Needs invoice" chip removed)
   - Invoices tab — issued invoice records, billing-access-gated, URL-addressable (`/ledger?tab=invoices`)
   - Daybook tab — end-of-day cash reconciliation log tracking payments, advances, and discounts (`/ledger?tab=daybook`)
-- **Filtering** — therapist dropdown, date range search
+- **Shared Date Preset Bar** — unified `DatePresetBar` control (`This week`, `This month`, `Last month`, `All time`, `Custom`) across Visits and Invoices tabs, preserving tab defaults (Visits = This week, Invoices = This month)
+- **Filtering** — therapist dropdown, date range search, consistent segmented control styling
 - **Bulk actions** on individual rows — Invoice, Repeat, Split, Delete
 - **Only real visits can be invoiced** — no standalone "manual invoice" path
 
@@ -507,9 +509,7 @@ queued with a visible error.
 - **Create-if-missing** on visit entry
 - **Walk-in MRNO auto-generation** (sequential per clinic per year)
 - **Editable fields**: age, sex, phone, primary condition, referring source
-- Phone is searchable everywhere but only *displayed* on the Patient Profile
-  page — dropped from the Patients list/card to save space there
-- **Patients list toolbar** — one compact row (two on phones), no card heading (the page title says Patients): the All / Needs invoice / My patients switch on the left; search and a **single Period select** on the right (financial year and month in one control, grouped by FY: "FY 26-27 · full year" (default), "to date", each month; or Custom range, whose From/To inputs then show below, same pattern as Ledger's). The old "Showing patients seen in…" sentence is gone — the select says it.
+- **Patients list toolbar** — embedded in `/ledger?tab=patients`: one compact row (two on phones), no card heading (the page title says Ledger): the All / My patients segmented switch on the left ("Needs invoice" removed as Invoices→Needs receipt and Visits→Collected, no invoice cover it); search and a **single Period select** on the right (financial year and month in one control, grouped by FY: "FY 26-27 · full year" (default), "to date", each month; or Custom range, whose From/To inputs then show below with standardized height and border, same pattern as Ledger's). The old "Showing patients seen in…" sentence is gone — the select says it.
 - **Patients list "Bill" column** — a patient-level summary (lifetime
   billed total, plus an outstanding-due figure when nonzero), not the
   latest visit's own status phrase or package-session detail — those stay
@@ -1338,18 +1338,18 @@ supabase/                SQL migrations, RLS policies, RPCs, realtime
 |-------|---------|--------|
 | `/workspace` (default) | Today's work, recent history, open packages, pending items | All roles |
 | `/visits/new` | New visit entry | All roles (billing fields gated by `canBill`) |
-| `/ledger` | Historical visit records & invoices, URL-addressable sub-tabs (`?tab=visits\|invoices`) | All roles (Invoices tab requires billing access) |
-| `/patients` | Patients list | All roles |
-| `/patients/$patientId` | Individual patient profile, visit history, payments summary, clinical notes | All roles |
+| `/ledger` | Historical visit records, patients list, invoices & daybook, URL-addressable sub-tabs (`?tab=visits\|patients\|invoices\|daybook`) | All roles (Invoices/Daybook tabs require billing access) |
+| `/patients` | Redirects to `/ledger?tab=patients` | All roles |
+| `/patients/$patientId` | Individual patient profile, visit history, payments summary, clinical notes (Back returns to `/ledger?tab=patients`) | All roles |
 | `/patients/$patientId/notes/new`, `/patients/$patientId/notes/$noteId` | Core Assessment note editor (Initial/Follow-up) | Therapists & admins (`canViewClinicalNotes`) |
 | `/patients/$patientId/notes/$noteId/print` | Printable consultation note | Therapists & admins |
 | `/insights` | Dashboard + monthly per-therapist statement (`?tab=monthly`) + monthly performance report picker (`?tab=performance`) | Admins & front_desk (monthly statement and performance report sub-views further gated admin-only, same `canViewPayouts` check) |
 | `/insights/print` | Printable monthly ledger (portrait A4) | Admins & front_desk |
 | `/insights/performance-print` | Printable monthly performance report — clinic totals, per-therapist chart + table, referral/condition mix, retention follow-ups (portrait A4) | Admins & front_desk |
 | `/invoices/$invoiceId/print` | Printable Bill/Bill Cum Receipt (A4/A5) | Anyone who can reach the invoice |
-| `/settings` | Clinic configuration, MRNO settings, billing mode, rate setup, feature toggles | Admins only |
+| `/settings` | Clinic configuration, MRNO settings, billing mode, rate setup, feature toggles (in main header nav for admins) | Admins only |
 | `/settings/import-visits` | Historical Excel visit import | Admins only |
-| `/more` | Mobile-only overflow nav: Patients (everyone), Reports (admin/front desk), Settings (admin) — icon rows. Booking requests aren't listed; the Schedule tab carries their badge and inbox | All roles |
+| `/more` | Mobile-only overflow nav: Reports (admin/front desk), Settings (admin) — icon rows. Booking requests aren't listed; the Schedule tab carries their badge and inbox | All roles |
 | `/schedule` (`?tab=feedback\|bookings`, `?view=schedule\|requests\|history`, `?mode=day\|week`, `?date=`, `?therapist=`) | Clinic calendar (see Patient Communications → Schedule), booking requests, appointment history; Feedback tab | Calendar + History: all roles (therapists scoped to their own appointments). Requests: admins + front_desk. Feedback: admins only |
 | `/reset-password` | Password reset | Unauthenticated |
 | `/f/$token` | Public patient feedback form (Patient Communications, Phase 0) | Unauthenticated — token-scoped, no clinic membership |
@@ -3130,18 +3130,18 @@ supabase/                SQL migrations, RLS policies, RPCs, realtime
 |-------|---------|--------|
 | `/workspace` (default) | Today's work, recent history, open packages, pending items | All roles |
 | `/visits/new` | New visit entry | All roles (billing fields gated by `canBill`) |
-| `/ledger` | Historical visit records & invoices, URL-addressable sub-tabs (`?tab=visits\|invoices`) | All roles (Invoices tab requires billing access) |
-| `/patients` | Patients list | All roles |
-| `/patients/$patientId` | Individual patient profile, visit history, payments summary, clinical notes | All roles |
+| `/ledger` | Historical visit records, patients list, invoices & daybook, URL-addressable sub-tabs (`?tab=visits\|patients\|invoices\|daybook`) | All roles (Invoices/Daybook tabs require billing access) |
+| `/patients` | Redirects to `/ledger?tab=patients` | All roles |
+| `/patients/$patientId` | Individual patient profile, visit history, payments summary, clinical notes (Back returns to `/ledger?tab=patients`) | All roles |
 | `/patients/$patientId/notes/new`, `/patients/$patientId/notes/$noteId` | Core Assessment note editor (Initial/Follow-up) | Therapists & admins (`canViewClinicalNotes`) |
 | `/patients/$patientId/notes/$noteId/print` | Printable consultation note | Therapists & admins |
 | `/insights` | Dashboard + monthly per-therapist statement (`?tab=monthly`) + monthly performance report picker (`?tab=performance`) | Admins & front_desk (monthly statement and performance report sub-views further gated admin-only, same `canViewPayouts` check) |
 | `/insights/print` | Printable monthly ledger (portrait A4) | Admins & front_desk |
 | `/insights/performance-print` | Printable monthly performance report — clinic totals, per-therapist chart + table, referral/condition mix, retention follow-ups (portrait A4) | Admins & front_desk |
 | `/invoices/$invoiceId/print` | Printable Bill/Bill Cum Receipt (A4/A5) | Anyone who can reach the invoice |
-| `/settings` | Clinic configuration, MRNO settings, billing mode, rate setup, feature toggles | Admins only |
+| `/settings` | Clinic configuration, MRNO settings, billing mode, rate setup, feature toggles (in main header nav for admins) | Admins only |
 | `/settings/import-visits` | Historical Excel visit import | Admins only |
-| `/more` | Mobile-only overflow nav: Patients (everyone), Reports (admin/front desk), Settings (admin) — icon rows. Booking requests aren't listed; the Schedule tab carries their badge and inbox | All roles |
+| `/more` | Mobile-only overflow nav: Reports (admin/front desk), Settings (admin) — icon rows. Booking requests aren't listed; the Schedule tab carries their badge and inbox | All roles |
 | `/schedule` (`?tab=feedback\|bookings`, `?view=schedule\|requests\|history`, `?mode=day\|week`, `?date=`, `?therapist=`) | Clinic calendar (see Patient Communications → Schedule), booking requests, appointment history; Feedback tab | Calendar + History: all roles (therapists scoped to their own appointments). Requests: admins + front_desk. Feedback: admins only |
 | `/reset-password` | Password reset | Unauthenticated |
 | `/f/$token` | Public patient feedback form (Patient Communications, Phase 0) | Unauthenticated — token-scoped, no clinic membership |
@@ -4362,8 +4362,8 @@ initials-avatar trigger below `sm:`), replacing what used to be two
 separate, independently-built account areas: a flat always-visible
 name+Sign-out pair on desktop, and an ad-hoc hamburger-icon dropdown on
 mobile with its own copy of the same `NameEditor`. Panel contents: the
-guided-setup bar for an admin while setup is incomplete (see Guided setup), Settings (admin), a "Change
-password" action (`ChangePasswordDialog`,
+guided-setup bar for an admin while setup is incomplete (see Guided setup), a "Change
+password" action (Settings moved to the main header nav for admins, removing duplication), (`ChangePasswordDialog`,
 `src/components/ChangePasswordDialog.tsx` — calls
 `supabase.auth.updateUser({ password })` directly, since the account menu
 only exists post-login, unlike `ResetPasswordPage.tsx`'s invite/recovery-
