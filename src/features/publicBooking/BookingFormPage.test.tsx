@@ -56,6 +56,7 @@ vi.mock('@/services', () => ({
 }));
 
 import { BookingFormPage } from './BookingFormPage';
+import { bookingService } from '@/services';
 
 describe('BookingFormPage', () => {
   beforeEach(() => {
@@ -104,6 +105,16 @@ describe('BookingFormPage', () => {
     // The submit button should say "Join the waitlist"
     const submitBtn = screen.getByRole('button', { name: 'Join the waitlist' });
     expect(submitBtn).toBeInTheDocument();
+  });
+
+  it('warns instead of showing everything as open when live availability cannot be loaded, and can retry', async () => {
+    vi.mocked(bookingService.getBookingAvailability).mockRejectedValueOnce(new Error('network'));
+    render(<BookingFormPage />);
+    expect(await screen.findByText('Sunrise Wellness')).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't check live availability/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await vi.waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
 
   it('normalizes phone with leading 0 or pasted +91 upon submission', async () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { hasSupabaseConfig } from '@/lib/env';
 import { bookingService } from '@/services';
@@ -266,6 +266,10 @@ export function BookingFormPage() {
   const [endHour, setEndHour] = useState(17);
   const [therapists, setTherapists] = useState<{ id: UUID; name: string }[]>([]);
   const [availability, setAvailability] = useState<AvailabilityData | null>(null);
+  // The live availability call failed: without it closed days, holidays and
+  // booked slots can't be shown, so say so instead of presenting everything as open.
+  const [availabilityFailed, setAvailabilityFailed] = useState(false);
+  const availabilityFetchedAt = useRef(0);
   const [checking, setChecking] = useState(true);
   const [invalid, setInvalid] = useState(false);
 
@@ -313,7 +317,8 @@ export function BookingFormPage() {
           bookingService.listBookingTherapists(clinicSlug),
           bookingService
             .getBookingAvailability(clinicSlug, todayIso, addDays(todayIso, BOOKING_WINDOW_DAYS))
-            .catch(() => null),
+            .then((a) => ({ ok: true as const, a }))
+            .catch(() => ({ ok: false as const, a: null })),
         ]);
         setClinicName(info.name);
         setClinicLogo(publicLogoUrl(info.logoPath) ?? null);
@@ -321,13 +326,41 @@ export function BookingFormPage() {
         setStartHour(info.bookingStartHour);
         setEndHour(info.bookingEndHour);
         setTherapists(therapistList);
-        setAvailability(avail);
+        setAvailability(avail.a);
+        setAvailabilityFailed(!avail.ok);
+        availabilityFetchedAt.current = Date.now();
       } catch {
         setInvalid(true);
       }
       setChecking(false);
     })();
   }, [clinicSlug, todayIso]);
+
+  const refreshAvailability = useCallback(async () => {
+    try {
+      const fresh = await bookingService.getBookingAvailability(
+        clinicSlug,
+        todayIso,
+        addDays(todayIso, BOOKING_WINDOW_DAYS)
+      );
+      setAvailability(fresh);
+      setAvailabilityFailed(false);
+    } catch {
+      setAvailabilityFailed(true);
+    }
+    availabilityFetchedAt.current = Date.now();
+  }, [clinicSlug, todayIso]);
+
+  // A tab left open goes stale (someone else books the slot): refresh when it
+  // comes back into view after a few minutes, not on a timer.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - availabilityFetchedAt.current > 3 * 60 * 1000) void refreshAvailability();
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refreshAvailability]);
 
   // Memoized slots generation
   const allSlots = useMemo(
@@ -765,6 +798,14 @@ export function BookingFormPage() {
               ) : (
                 /* Specific Day & Time Mode */
                 <div className="mt-3">
+                  {availabilityFailed && (
+                    <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--amber)]/50 bg-[var(--paper)] px-3 py-2 text-sm text-[var(--ink)]">
+                      <span>We couldn't check live availability, so closed days and booked times may not show.</span>
+                      <button type="button" className="min-h-11 font-semibold text-[var(--teal)]" onClick={() => void refreshAvailability()}>
+                        Try again
+                      </button>
+                    </div>
+                  )}
                   <div className="mb-2.5 flex items-baseline justify-between">
                     <p className="text-sm font-semibold text-[var(--ink)]">Day</p>
                     <div className="flex items-center gap-3 text-xs">
