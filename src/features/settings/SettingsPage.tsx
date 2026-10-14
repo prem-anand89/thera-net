@@ -1,3 +1,4 @@
+import { notify } from '@/components/notify';
 import { edgeFunctionErrorMessage } from '@/lib/edgeFunctionError';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Link, useBlocker, useNavigate, useSearch } from '@tanstack/react-router';
@@ -2791,7 +2792,7 @@ export function TeamMemberCard({
                 onClick={(e) => { 
                   e.stopPropagation(); 
                   if (isLastAdmin) {
-                    alert('This clinic must keep at least one admin — make someone else admin first to unlock this button.');
+                    notify.error('This clinic must keep at least one admin — make someone else admin first to unlock this button.');
                     return;
                   }
                   onRevoke(); 

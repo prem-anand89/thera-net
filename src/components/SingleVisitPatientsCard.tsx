@@ -1,3 +1,4 @@
+import { notify } from '@/components/notify';
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { formatDateDMY } from '@/domain/fiscalYear';
@@ -511,7 +512,7 @@ export function SingleVisitPatientsCard({
                                 void feedbackService
                                   .sendReturnReminder(clinicId, p.patientName, p.phone!, clinicName)
                                   .catch((e) =>
-                                    alert(e instanceof Error ? e.message : String(e))
+                                    notify.error(e instanceof Error ? e.message : String(e))
                                   );
                               }}
                             >
@@ -618,7 +619,7 @@ export function SingleVisitPatientsCard({
                             void feedbackService
                               .sendReturnReminder(clinicId, p.patientName, p.phone!, clinicName)
                               .catch((e) =>
-                                alert(e instanceof Error ? e.message : String(e))
+                                notify.error(e instanceof Error ? e.message : String(e))
                               );
                           }}
                         >

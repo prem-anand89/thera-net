@@ -1,3 +1,4 @@
+import { askConfirm } from '@/components/notify';
 import { useMemo, useState, useCallback } from 'react';
 import { BackLink } from '@/components/BackLink';
 import { Link, useParams, useSearch } from '@tanstack/react-router';
@@ -329,7 +330,8 @@ export function PatientProfilePage() {
   );
 
   const handleVisitDelete = useCallback(async (visitId: string) => {
-    if (!confirm('Delete this visit?')) return;
+    const ok = await askConfirm({ title: 'Delete this visit?', message: 'It is removed from the records.', confirmLabel: 'Delete visit', destructive: true });
+    if (!ok) return;
     try {
       const visit = await repos.visits.get(visitId);
       if (visit && !visit.invoiceId) {

@@ -1,3 +1,4 @@
+import { askConfirm } from '@/components/notify';
 import { toLocalDateStr } from '@/domain/schedule';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useBlocker, useNavigate, useParams, useSearch } from '@tanstack/react-router';
@@ -647,9 +648,11 @@ export function NoteEditorPage() {
         return false;
       }
       if (nextStatus === 'completed' && derived.redFlagCount > 0) {
-        const proceed = confirm(
-          `This note has ${derived.redFlagCount} red flag${derived.redFlagCount > 1 ? 's' : ''} marked in Screening. Mark completed anyway?`
-        );
+        const proceed = await askConfirm({
+          title: 'Mark completed anyway?',
+          message: `This note has ${derived.redFlagCount} red flag${derived.redFlagCount > 1 ? 's' : ''} marked in Screening.`,
+          confirmLabel: 'Mark completed',
+        });
         if (!proceed) return false;
       }
       if (navigateAway) {

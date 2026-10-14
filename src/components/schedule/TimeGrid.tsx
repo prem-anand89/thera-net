@@ -1,3 +1,4 @@
+import { notify } from '@/components/notify';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Appointment, UUID } from '@/domain/types';
 import { APPOINTMENT_BLOCK_STYLE } from '@/domain/appointmentStatus';
@@ -558,7 +559,7 @@ export function useGridDrag(input: {
         valid: validate(columnKey, placing.appointment.id, start, placing.duration),
       };
       if (!target.valid) {
-        alert('That time is not free for the whole appointment.');
+        notify.error('That time is not free for the whole appointment.');
         return;
       }
       setPlacing(null);

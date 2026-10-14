@@ -1,3 +1,4 @@
+import { askConfirm, notify } from '@/components/notify';
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -218,12 +219,13 @@ export function PatientsList() {
   const rows = applySort(active, comparators, sort);
 
   async function hide(p: Patient) {
-    if (
-      !confirm(
-        `Hide ${p.name} (${p.mrno})?\n\nThey disappear from search and pickers; their visits stay in the records. You can restore them anytime from "Hidden patients" below.`
-      )
-    )
-      return;
+    const ok = await askConfirm({
+      title: `Hide ${p.name} (${p.mrno})?`,
+      message:
+        'They disappear from search and pickers; their visits stay in the records. You can restore them anytime from "Hidden patients" below.',
+      confirmLabel: 'Hide patient',
+    });
+    if (!ok) return;
     setError(null);
     try {
       await patientService.hide(p.id);
@@ -246,19 +248,22 @@ export function PatientsList() {
     try {
       const visits = await repos.visits.list({ clinicId: clinic.id, patientId: p.id });
       if (visits.length > 0) {
-        alert(
+        notify.error(
           `${p.name} has ${visits.length} visit(s) on record, so they can't be permanently deleted - keep them hidden instead.`
         );
         return;
       }
-      const typed = prompt(
-        `Permanently delete ${p.name} (${p.mrno})? This cannot be undone.\n\nType the patient's name to confirm:`
-      );
-      if (typed === null) return;
-      if (typed.trim().toLowerCase() !== p.name.trim().toLowerCase()) {
-        alert('Name did not match - nothing was deleted.');
-        return;
-      }
+      const confirmed = await askConfirm({
+        title: `Permanently delete ${p.name} (${p.mrno})?`,
+        message: "This cannot be undone. Type the patient's name to confirm.",
+        confirmLabel: 'Delete permanently',
+        destructive: true,
+        typeToConfirm: {
+          placeholder: p.name,
+          isMatch: (typed) => typed.trim().toLowerCase() === p.name.trim().toLowerCase(),
+        },
+      });
+      if (!confirmed) return;
       await patientService.hardDelete(p.id);
     } catch (e) {
       setError(toFriendlyMessage(e));
@@ -388,7 +393,7 @@ export function PatientsList() {
                       ? () => {
                           void feedbackService
                             .sendReturnReminder(clinic.id, p.name, p.phone, clinic.name)
-                            .catch((e) => alert(toFriendlyMessage(e)));
+                            .catch((e) => notify.error(toFriendlyMessage(e)));
                         }
                       : undefined
                   }
@@ -548,7 +553,7 @@ export function PatientsList() {
                                 onClick={() => {
                                   void feedbackService
                                     .sendReturnReminder(clinic.id, p.name, p.phone, clinic.name)
-                                    .catch((e) => alert(toFriendlyMessage(e)));
+                                    .catch((e) => notify.error(toFriendlyMessage(e)));
                                 }}
                               >
                                 Remind

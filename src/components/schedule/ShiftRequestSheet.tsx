@@ -1,3 +1,4 @@
+import { notify } from '@/components/notify';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService } from '@/services';
@@ -69,7 +70,7 @@ export function ShiftRequestSheet({
           setSubmitted(true);
           // WorkingHoursSheet closes itself right after onSave resolves (other
           // callers rely on that), so confirm here before it does.
-          window.alert('Submitted — waiting on approval. Your current hours stay in effect until then.');
+          notify.info('Submitted — waiting on approval. Your current hours stay in effect until then.');
         }}
         onClose={onClose}
       />

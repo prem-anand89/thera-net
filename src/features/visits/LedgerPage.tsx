@@ -1,3 +1,4 @@
+import { askConfirm } from '@/components/notify';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -930,7 +931,11 @@ export function LedgerPage() {
                     : undefined
                 }
                 onDelete={(row) => {
-                  if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+                  void askConfirm({ title: 'Delete this visit?', message: 'It is removed from the records.', confirmLabel: 'Delete visit', destructive: true }).then(
+                    (ok) => {
+                  if (ok) void repos.visits.softDelete(row.visitId);
+                }
+                  );
                 }}
                 onAskForFeedback={(row) => {
                   setError(null);

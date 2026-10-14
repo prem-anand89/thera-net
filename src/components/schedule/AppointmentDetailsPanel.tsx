@@ -1,3 +1,4 @@
+import { notify } from '@/components/notify';
 import { useEffect, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ConfirmDialog, Pill } from '@/components/ui';
@@ -146,7 +147,7 @@ export function AppointmentDetailsPanel({
     try {
       await action();
     } catch (error) {
-      alert(toFriendlyMessage(error));
+      notify.error(toFriendlyMessage(error));
     } finally {
       setBusy(false);
     }

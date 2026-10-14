@@ -1,3 +1,4 @@
+import { notify } from '@/components/notify';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -505,7 +506,7 @@ export function ScheduleBookingsView({
         run: () => bookingService.restoreAppointmentSlot(previous),
       });
     } catch (error) {
-      alert(toFriendlyMessage(error));
+      notify.error(toFriendlyMessage(error));
     }
   }
 
@@ -561,7 +562,7 @@ export function ScheduleBookingsView({
     try {
       await bookingService.declineAppointmentRequest(requestId);
     } catch (error) {
-      alert(toFriendlyMessage(error));
+      notify.error(toFriendlyMessage(error));
     }
   }
 
@@ -1069,7 +1070,7 @@ export function ScheduleBookingsView({
             ? (appointment) =>
                 void bookingService
                   .cancelAppointmentSeries(appointment.seriesId!, appointment.scheduledAt)
-                  .catch((error) => alert(toFriendlyMessage(error)))
+                  .catch((error) => notify.error(toFriendlyMessage(error)))
             : undefined
         }
         slotMinutes={slotMinutes}
@@ -1188,7 +1189,7 @@ export function ScheduleBookingsView({
             onClick={() => {
               const action = undo;
               setUndo(null);
-              void action.run().catch((error) => alert(toFriendlyMessage(error)));
+              void action.run().catch((error) => notify.error(toFriendlyMessage(error)));
             }}
           >
             Undo
@@ -1277,7 +1278,7 @@ export function ScheduleBookingsView({
         onConfirm={() => {
           const range = removing;
           setRemoving(null);
-          if (range) void bookingService.removeClosedDates(clinic.id, range.from, range.to).catch((e) => alert(toFriendlyMessage(e)));
+          if (range) void bookingService.removeClosedDates(clinic.id, range.from, range.to).catch((e) => notify.error(toFriendlyMessage(e)));
         }}
       />
     </div>

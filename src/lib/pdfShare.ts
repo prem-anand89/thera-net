@@ -1,3 +1,4 @@
+import { notify } from '@/components/notify';
 /**
  * Renders a DOM node — the same content the browser's own "Print / Save
  * PDF" button shows — into a paginated PDF entirely on-device, no server
@@ -110,7 +111,7 @@ export function openPatientWhatsAppChat(
   patientPhone: string | null | undefined
 ): void {
   if (!patientPhone?.trim()) {
-    window.alert('Patient has no phone number on file');
+    notify.error('Patient has no phone number on file');
     return;
   }
   const url = buildWhatsAppSendUrl(text, patientPhone);
@@ -135,7 +136,7 @@ export function notifyWhatsAppOpenFailed(shareText: string): void {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     void navigator.clipboard.writeText(shareText).catch(() => {});
   }
-  window.alert(
+  notify.error(
     'Could not open WhatsApp automatically — your browser may be blocking pop-ups. ' +
       'The message was copied to your clipboard; open WhatsApp, pick the patient, and paste. ' +
       'Or allow pop-ups for this site and try again.'

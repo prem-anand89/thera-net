@@ -1,3 +1,4 @@
+import { noticeStore } from '@/components/notify';
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildWhatsAppSendUrl,
@@ -25,16 +26,16 @@ describe('openPatientWhatsAppChat', () => {
     );
   });
 
-  it('shows an alert when blocked after async feedback work', () => {
-    const alert = vi.fn();
+  it('shows a notice when blocked after async feedback work', () => {
+    noticeStore.reset();
     const open = vi.fn().mockReturnValue(null);
-    vi.stubGlobal('window', { open, alert });
+    vi.stubGlobal('window', { open });
     vi.stubGlobal('document', {
       body: { appendChild: vi.fn(), removeChild: vi.fn() },
       createElement: () => ({ click: vi.fn(), remove: vi.fn() }),
     });
     openPatientWhatsAppChat('Hello', '9876543210');
-    expect(alert).toHaveBeenCalledWith(expect.stringContaining('blocking pop-ups'));
+    expect(noticeStore.notices().map((n) => n.message).join(' ')).toContain('blocking pop-ups');
   });
 });
 

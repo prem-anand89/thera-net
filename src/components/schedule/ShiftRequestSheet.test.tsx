@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { noticeStore } from '@/components/notify';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -241,14 +242,13 @@ describe('ShiftRequestSheet', () => {
   it('pre-fills the custom-hours fallback with current hours and confirms submission', async () => {
     templates = [];
     const current = { '1': [[540, 780]] as [number, number][] };
-    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    noticeStore.reset();
     render(<ShiftRequestSheet open therapistId="th1" therapistName="Priya" clinicId="c1" clinic={clinic} currentWorkingHours={current} onClose={() => {}} />);
     fireEvent.click(screen.getByText(/set custom hours instead/i));
     expect(workingHoursProps?.value).toBe(current);
     await workingHoursProps!.onSave(null);
     expect(requestCustomHours).toHaveBeenCalledWith('th1', null);
-    expect(alert).toHaveBeenCalledWith(expect.stringMatching(/waiting on approval/i));
-    alert.mockRestore();
+    expect(noticeStore.notices().map((n) => n.message).join(' ')).toMatch(/waiting on approval/i);
   });
 
   it('labels the dialog by its heading and the shift select', () => {

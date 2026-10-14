@@ -1,3 +1,4 @@
+import { askConfirm } from '@/components/notify';
 import { db } from '@/lib/db';
 import { getSupabase } from '@/lib/supabase';
 import { syncEngine } from '@/sync/engine';
@@ -29,11 +30,15 @@ export async function signOutSafely(): Promise<void> {
 
   const stillPending = await db.outbox.count();
   if (stillPending > 0) {
-    const proceed = window.confirm(
-      `You have ${stillPending} unsynced change${stillPending === 1 ? '' : 's'} that ` +
+    const proceed = await askConfirm({
+      title: 'Sign out anyway?',
+      message:
+        `You have ${stillPending} unsynced change${stillPending === 1 ? '' : 's'} that ` +
         `couldn't be saved to the server (check your connection). Signing out now will ` +
-        `discard ${stillPending === 1 ? 'it' : 'them'} permanently. Sign out anyway?`
-    );
+        `discard ${stillPending === 1 ? 'it' : 'them'} permanently.`,
+      confirmLabel: 'Sign out and discard',
+      destructive: true,
+    });
     if (!proceed) return;
   }
 

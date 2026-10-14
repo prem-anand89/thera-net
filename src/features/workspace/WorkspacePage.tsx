@@ -1,3 +1,5 @@
+import { askConfirm } from '@/components/notify';
+import { notify } from '@/components/notify';
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -684,7 +686,7 @@ export function WorkspacePage() {
           const request = decliningRequest;
           setDecliningRequest(null);
           if (request) {
-            bookingService.declineAppointmentRequest(request.id).catch((error: unknown) => alert(toFriendlyMessage(error)));
+            bookingService.declineAppointmentRequest(request.id).catch((error: unknown) => notify.error(toFriendlyMessage(error)));
           }
         }}
       />
@@ -866,19 +868,23 @@ export function WorkspacePage() {
                 : undefined
             }
             onDelete={(row) => {
-              if (confirm('Delete this visit?')) void repos.visits.softDelete(row.visitId);
+              void askConfirm({ title: 'Delete this visit?', message: 'It is removed from the records.', confirmLabel: 'Delete visit', destructive: true }).then(
+                (ok) => {
+                  if (ok) void repos.visits.softDelete(row.visitId);
+                }
+              );
             }}
             onAskForFeedback={(row) => {
               void feedbackService
                 .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name)
-                .catch((e) => alert(toFriendlyMessage(e)));
+                .catch((e) => notify.error(toFriendlyMessage(e)));
             }}
             onResendFeedback={(row) => {
               const request = feedbackRequestByVisitId.get(row.visitId);
               if (!request?.token) return;
               void feedbackService
                 .resend(request, row.patientName, row.patientPhone ?? null, clinic.name)
-                .catch((e) => alert(toFriendlyMessage(e)));
+                .catch((e) => notify.error(toFriendlyMessage(e)));
             }}
             onAskForGoogleReview={(row) => {
               if (!row.googleReviewUrl) return;
@@ -890,7 +896,7 @@ export function WorkspacePage() {
                   clinic.name,
                   row.googleReviewUrl
                 )
-                .catch((e) => alert(toFriendlyMessage(e)));
+                .catch((e) => notify.error(toFriendlyMessage(e)));
             }}
             canInvoice={canBill}
             backTo="/workspace"
@@ -1000,7 +1006,7 @@ export function WorkspacePage() {
                                 clinic.name,
                                 p.serviceName
                               )
-                              .catch((e) => alert(toFriendlyMessage(e)));
+                              .catch((e) => notify.error(toFriendlyMessage(e)));
                           }}
                         >
                           Send reminder
@@ -1076,7 +1082,7 @@ export function WorkspacePage() {
                                     clinic.name,
                                     p.serviceName
                                   )
-                                  .catch((e) => alert(toFriendlyMessage(e)));
+                                  .catch((e) => notify.error(toFriendlyMessage(e)));
                               }}
                             >
                               Send reminder

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { askConfirm } from '@/components/notify';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -43,6 +44,8 @@ afterEach(() => {
   assignments = [];
   therapists = [];
 });
+
+vi.mock('@/components/notify', () => ({ askConfirm: vi.fn(), notify: { error: vi.fn(), info: vi.fn() } }));
 
 describe('ShiftTemplatesSection', () => {
   it('lists existing templates with their hours and break', () => {
@@ -255,7 +258,7 @@ describe('ShiftTemplatesSection', () => {
     ];
     deleteShiftTemplate.mockResolvedValueOnce(undefined);
     dbUpdate.mockResolvedValueOnce(1);
-    vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
+    vi.mocked(askConfirm).mockResolvedValueOnce(true);
 
     render(<ShiftTemplatesSection />);
     // Template is inactive, expand inactive section first

@@ -1,3 +1,4 @@
+import { askConfirm } from '@/components/notify';
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
@@ -93,9 +94,13 @@ function ShiftTemplateCard({
       setError(`Cannot delete template while assigned to ${usedByTherapistNames.join(', ')}.`);
       return;
     }
-    if (!window.confirm(`Permanently delete "${template.name}"? This cannot be undone.`)) {
-      return;
-    }
+    const ok = await askConfirm({
+      title: 'Delete this shift template?',
+      message: `Permanently delete "${template.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
     setSaving(true);
     setError(null);
     try {
