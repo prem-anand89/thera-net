@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { Appointment, AppointmentRequest } from '@/domain/types';
-import { appointmentMinutes, lengthLabel, minutesLabel, minutesOfDay } from '@/domain/schedule';
+import { appointmentMinutes, lengthLabel, minutesLabel, minutesOfDay, toLocalDateStr } from '@/domain/schedule';
+import { formatDateDM } from '@/domain/fiscalYear';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import { Pill } from '@/components/ui';
 import { RequestsInbox } from './RequestsInbox';
@@ -10,6 +11,7 @@ import { PatientFlagPills } from './PatientFlagPills';
 import { appointmentReason, patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
 
 const UPCOMING_LIMIT = 5;
+const DONE_OPEN_KEY = 'theranet:today-done-open';
 const REQUESTS_LIMIT = 3;
 
 const sectionHeading = 'mb-1.5 text-xs font-medium text-[var(--muted)]';
@@ -67,6 +69,14 @@ export function TodayAppointments({
   onUndoNoShow?: (appointment: Appointment) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
+  // Finished rows carry Paid / Due / Undo, so they stay open unless the user folds them (remembered per device).
+  const [doneOpen, setDoneOpen] = useState(() => {
+    try {
+      return localStorage.getItem(DONE_OPEN_KEY) !== 'closed';
+    } catch {
+      return true;
+    }
+  });
   const inProgress = appointments.filter((a) => a.status === 'arrived' && !a.visitId);
   const upcoming = appointments.filter((a) => a.status === 'confirmed' || a.status === 'rescheduled');
   const done = appointments.filter((a) => a.visitId || a.status === 'no_show');
@@ -97,7 +107,12 @@ export function TodayAppointments({
         style={{ borderLeftColor: color, background: fill.background }}
       >
         <button type="button" className="flex min-w-0 flex-1 items-start gap-3 text-left" onClick={() => onSelect(a)}>
-          <span className="w-16 shrink-0 whitespace-nowrap pt-0.5 text-[13px] tabular-nums text-[var(--muted)] sm:w-[4.5rem] sm:text-sm">{minutesLabel(minutesOfDay(a.scheduledAt))}</span>
+          <span className="w-16 shrink-0 whitespace-nowrap pt-0.5 text-[13px] tabular-nums text-[var(--muted)] sm:w-[4.5rem] sm:text-sm">
+            {minutesLabel(minutesOfDay(a.scheduledAt))}
+            {toLocalDateStr(new Date(a.scheduledAt)) !== toLocalDateStr(new Date()) && (
+              <span className="block text-[11px]">{formatDateDM(a.scheduledAt)}</span>
+            )}
+          </span>
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-1.5">
               <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}>
@@ -283,7 +298,18 @@ export function TodayAppointments({
       )}
 
       {done.length > 0 && (
-        <details>
+        <details
+          open={doneOpen}
+          onToggle={(e) => {
+            const open = (e.currentTarget as HTMLDetailsElement).open;
+            setDoneOpen(open);
+            try {
+              localStorage.setItem(DONE_OPEN_KEY, open ? 'open' : 'closed');
+            } catch {
+              // storage unavailable — the choice just isn't remembered
+            }
+          }}
+        >
           <summary className="min-h-9 cursor-pointer text-sm text-[var(--muted)]">
             Done ({done.length})
             <span className="text-xs">{doneSummary}</span>

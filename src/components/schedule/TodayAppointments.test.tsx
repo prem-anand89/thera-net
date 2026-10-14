@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Appointment, AppointmentRequest } from '@/domain/types';
 import { localDateTime } from '@/domain/schedule';
+import { formatDateDM } from '@/domain/fiscalYear';
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, className }: { children: React.ReactNode; className?: string }) => (
@@ -175,5 +176,48 @@ describe('TodayAppointments quick actions', () => {
     expect(screen.getByText('Paid ✓')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(onUndoNoShow).toHaveBeenCalledWith(missed);
+  });
+});
+
+describe('TodayAppointments carried-over and Done defaults', () => {
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+  });
+
+  it('Done is open by default, and a closed choice is remembered', () => {
+    localStorage.clear();
+    render(
+      <TodayAppointments
+        appointments={[appt('09:00', { status: 'arrived', visitId: 'v1', patientName: 'Seen' })]}
+        slotMinutes={30}
+        nextUpId={null}
+        colorFor={() => '#000'}
+        therapistNameFor={() => 'Dr A'}
+        showTherapist
+        onSelect={vi.fn()}
+      />
+    );
+    const details = screen.getByText('Done (1)').closest('details')!;
+    expect(details.open).toBe(true);
+    details.open = false;
+    fireEvent(details, new Event('toggle'));
+    expect(localStorage.getItem('theranet:today-done-open')).toBe('closed');
+  });
+
+  it('shows the date under the time for an appointment from another day', () => {
+    const old = appt('09:00', { status: 'arrived', visitId: 'v1', patientName: 'Yesterday', scheduledAt: localDateTime('2026-09-01', '09:00').toISOString() });
+    render(
+      <TodayAppointments
+        appointments={[old]}
+        slotMinutes={30}
+        nextUpId={null}
+        colorFor={() => '#000'}
+        therapistNameFor={() => 'Dr A'}
+        showTherapist
+        onSelect={vi.fn()}
+      />
+    );
+    expect(screen.getByText(formatDateDM(old.scheduledAt))).toBeInTheDocument();
   });
 });

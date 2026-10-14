@@ -294,7 +294,17 @@ export function WorkspacePage() {
     const todays = clinic.enablePatientComms
       ? expectedToday
       : expectedToday.filter((a) => a.status === 'arrived' && !a.visitId);
-    return [...olderOpen, ...todays];
+    // An appointment carried over from an earlier day that was completed today
+    // (the visit is logged today): keep it in Done so it doesn't just vanish
+    // from this list the moment its visit is saved.
+    const finishedToday = (workspaceAppointments ?? []).filter((a) => {
+      const day = toLocalDateStr(new Date(a.scheduledAt));
+      return (
+        Boolean(a.visitId) && day < todayStr && toLocalDateStr(new Date(a.updatedAt)) === todayStr &&
+        (!scope.scopeTherapistId || a.therapistId === scope.scopeTherapistId)
+      );
+    });
+    return [...olderOpen, ...finishedToday, ...todays];
   }, [workspaceAppointments, expectedToday, scope.scopeTherapistId, clinic.enablePatientComms]);
   const toCompleteCount = todayAppointments.filter((a) => a.status === 'arrived' && !a.visitId).length;
   // The Appointments tab: always with patient comms; otherwise only while a
