@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { BrandMark } from './BrandMark';
+import { useDialogBehavior } from './dialogBehavior';
 import { paiseToRupees, rupeesToPaise, type Paise } from '@/domain/money';
 
 export const inputCls =
@@ -86,7 +87,7 @@ export function SectionCard({
 export function ErrorNote({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <p className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-sm text-[var(--rust)]">
+    <p role="alert" className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-sm text-[var(--rust)]">
       {message}
     </p>
   );
@@ -558,6 +559,8 @@ export function ConfirmDialog({
   useEffect(() => {
     if (open) setTyped('');
   }, [open]);
+  const panelRef = useDialogBehavior<HTMLDivElement>(open, onCancel);
+  const titleId = useId();
 
   if (!open) return null;
   const canConfirm = !typeToConfirm || typeToConfirm.isMatch(typed);
@@ -568,13 +571,15 @@ export function ConfirmDialog({
       onClick={onCancel}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
         className="dialog-panel w-full max-w-sm space-y-3 rounded-[10px] bg-[var(--surface)] p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-sm font-semibold text-[var(--ink)]">{title}</h2>
-        <p className="whitespace-pre-line text-sm text-[var(--muted)]">{message}</p>
+        <h2 id={titleId} className="text-sm font-semibold text-[var(--ink)]">{title}</h2>
+        <div className="whitespace-pre-line text-sm text-[var(--muted)]">{message}</div>
         {typeToConfirm && (
           <input
             autoFocus

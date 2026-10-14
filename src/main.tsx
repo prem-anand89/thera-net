@@ -5,6 +5,7 @@ import { router } from './app/router';
 import { ErrorBoundary } from './app/ErrorBoundary';
 import { installAppUpdateHandling } from './app/appUpdate';
 import { registerServiceWorker } from './app/registerServiceWorker';
+import { NoticeHost } from './components/NoticeHost';
 import { installGlobalErrorReporting } from './lib/errorReporting';
 import './index.css';
 import { db } from './lib/db';
@@ -24,6 +25,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <RouterProvider router={router} />
+      <NoticeHost />
     </ErrorBoundary>
   </StrictMode>
 );
