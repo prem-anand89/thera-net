@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useState } from 'react';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
 import { getSupabase } from '@/lib/supabase';
@@ -12,6 +13,7 @@ export interface HelpFeedbackDialogProps {
 type Mode = 'menu' | 'bug' | 'feature' | 'support';
 
 export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps) {
+  const dialogRef = useDialogBehavior<HTMLDivElement>(isOpen, onClose, () => !busy);
   const [mode, setMode] = useState<Mode>('menu');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -88,7 +90,7 @@ export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--ink)]/40 p-3 sm:p-4">
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         className="dialog-panel w-full max-w-md rounded-2xl bg-[var(--surface)] p-6 shadow-xl"
       >

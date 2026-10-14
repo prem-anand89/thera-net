@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useMemo, useState } from 'react';
 import { bookingService } from '@/services';
 import { ErrorNote, Field, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
@@ -140,6 +141,7 @@ export function AssignShiftDialog({
     );
   }, [initialTherapistId, initialWeekday, approvedAssignments]);
 
+  const dialogRef = useDialogBehavior<HTMLDivElement>(isOpen, onClose, () => !saving);
   const [selectedTherapistIds, setSelectedTherapistIds] = useState<string[]>(() =>
     initialTherapistId ? [initialTherapistId] : []
   );
@@ -442,6 +444,7 @@ export function AssignShiftDialog({
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-150"
       role="dialog"
       aria-modal="true"

@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useEffect, useState } from 'react';
 import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
@@ -67,6 +68,7 @@ function UpiQrModal({
   const vpa = clinic.upiVpa?.trim() ?? '';
   const hasVpa = isValidUpiVpa(vpa);
   const staticUrl = publicLogoUrl(clinic.upiQrPath);
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
   const [preferStatic, setPreferStatic] = useState(!hasVpa);
   const showStatic = preferStatic || !hasVpa;
   const note = buildUpiNote({ mrno, visitDate, patientName });
@@ -114,7 +116,7 @@ function UpiQrModal({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[var(--ink)]/50 p-4">
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         aria-labelledby="upi-qr-title"
         className="dialog-panel w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5"

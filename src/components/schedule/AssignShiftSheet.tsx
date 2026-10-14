@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useDialogBehavior } from '@/components/dialogBehavior';
+import { useEffect, useId, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService } from '@/services';
 import { ErrorNote, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
@@ -39,6 +40,7 @@ export function AssignShiftSheet({
   onClose: () => void;
 }) {
   const templates = useLiveQuery(() => repos.shiftTemplates.list(clinicId), [clinicId]);
+  const dialogRef = useDialogBehavior<HTMLDivElement>(open, onClose, () => !busy);
   const [shiftId, setShiftId] = useState('');
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
@@ -51,15 +53,6 @@ export function AssignShiftSheet({
   useEffect(() => {
     if (!open) return;
     setShiftId(''); setWeekdays([]); setError(null); setBusy(false);
-  }, [open]);
-
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
   if (!open) return null;
@@ -80,7 +73,7 @@ export function AssignShiftSheet({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full rounded-t-2xl bg-[var(--surface)] p-4 sm:max-w-md sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full rounded-t-2xl bg-[var(--surface)] p-4 sm:max-w-md sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
         <h2 id={titleId} className="font-display text-lg font-semibold text-[var(--ink)]">Assign shift, {therapistName}</h2>
         {(templates ?? []).length === 0 ? (
           <p className="mt-2 text-sm text-[var(--muted)]">No shift templates set up yet. Use "Working hours, {therapistName}" to set custom hours instead.</p>

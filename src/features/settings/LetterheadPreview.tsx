@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useClinic } from '@/app/clinicContext';
 import { PrintLetterhead, PrintSignatureFooter } from '@/features/invoices/printChrome';
 import { publicLogoUrl } from '@/lib/supabase';
@@ -181,6 +182,7 @@ export function LetterheadPreview({ draft, logoUrl, partnerLogoUrl }: Letterhead
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
+  const dialogRef = useDialogBehavior<HTMLDivElement>(expanded, () => setExpanded(false));
 
   useEffect(() => {
     if (!containerRef.current || !contentRef.current) return;
@@ -239,7 +241,7 @@ export function LetterheadPreview({ draft, logoUrl, partnerLogoUrl }: Letterhead
           onClick={() => setExpanded(false)}
         >
           <div 
-            role="dialog"
+            ref={dialogRef} role="dialog"
             aria-modal="true"
             className="relative bg-[var(--surface)] shadow-2xl rounded-sm max-w-[794px] w-full my-auto overflow-hidden animate-in fade-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}

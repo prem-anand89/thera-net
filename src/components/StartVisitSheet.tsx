@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import type { NewVisitBackTarget } from '@/app/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
@@ -45,6 +46,7 @@ export function StartVisitSheet({
 
   const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const dialogRef = useDialogBehavior<HTMLDivElement>(open, onClose, () => !busy);
   const [mode, setMode] = useState<'find' | 'new'>('find');
   const [patientId, setPatientId] = useState<UUID | ''>('');
   const [name, setName] = useState('');
@@ -66,11 +68,6 @@ export function StartVisitSheet({
     setName(appointment?.patientName ?? '');
     setPhone(appointment?.patientPhone ?? '');
     setTherapistId(appointment?.therapistId ?? scope.myTherapistId ?? '');
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when opened
   }, [open, appointment?.id]);
 
@@ -168,7 +165,7 @@ export function StartVisitSheet({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={onClose}>
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         aria-labelledby="start-visit-title"
         className="w-full rounded-t-2xl bg-[var(--surface)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"

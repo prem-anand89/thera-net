@@ -4537,7 +4537,7 @@ notice (`role="alert"` / `status`, auto-dismiss) and `askConfirm({ title, messag
 destructive, typeToConfirm })` returns a `Promise<boolean>` for a styled confirm (type-to-confirm replaces
 `prompt()`); both work from non-React code, and `NoticeHost` (mounted once in `main.tsx`) renders them.
 `ConfirmDialog` takes `open`/`onConfirm`/`onCancel` for places that own the state. **The main dialogs and sheets use
-`useDialogBehavior(open, onClose, canClose?)`** on their `role="dialog"` panel (a dialog that stays mounted while closed must pass its real `open`, and one that can be mid-save passes `canClose` so Escape can't interrupt it); a handful of older modals (`AddClinicDialog`, `ChangePasswordDialog`, `HelpFeedbackDialog`, `AmendInvoiceDialog`, `StartVisitSheet`, `AssignShift*`, …) do not yet: Escape closes only the topmost
+`useDialogBehavior(open, onClose, canClose?)`** on their `role="dialog"` panel (a dialog that stays mounted while closed must pass its real `open`, and one that can be mid-save passes `canClose` so Escape can't interrupt it); every modal component uses it (payment/invoice/advance dialogs, booking and schedule sheets, account dialogs, `StartVisitSheet`, `AssignShift*`, `UpiQrModal`, the letterhead preview); only the two inline dialogs inside `SettingsPage` and `ScheduleBookingsView` still hand-roll theirs: Escape closes only the topmost
 open dialog, Tab/Shift+Tab stay inside it, focus moves in on open and back to the opener on close.
 `ErrorNote` is `role="alert"`. The only native dialogs left are the three unsaved-changes route guards
 (Settings, session note editor, note editor): the router blocker must answer synchronously.

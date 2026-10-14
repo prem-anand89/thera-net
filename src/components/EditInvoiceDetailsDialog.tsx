@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useState } from 'react';
 import type { Invoice, InvoiceClinicalSnapshot } from '@/domain/types';
 import { invoiceService } from '@/services';
@@ -39,6 +40,7 @@ export function EditInvoiceDetailsDialog({
   invoice: Invoice;
   onClose: () => void;
 }) {
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose, () => !busy);
   const [fields, setFields] = useState<ClinicalFields>(
     fieldsFromSnapshot(invoice.clinicalSnapshot)
   );
@@ -84,7 +86,7 @@ export function EditInvoiceDetailsDialog({
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-3 sm:p-4">
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         aria-labelledby="edit-invoice-details-title"
         className="max-h-[90vh] w-full max-w-sm space-y-4 overflow-y-auto rounded-2xl bg-[var(--surface)] p-4 sm:p-5"

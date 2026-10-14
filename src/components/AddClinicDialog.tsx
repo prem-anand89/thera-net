@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { CreateClinicForm } from '@/features/settings/CreateClinicForm';
 
 /**
@@ -14,10 +15,11 @@ export function AddClinicDialog({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-3 sm:p-4">
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         aria-labelledby="add-clinic-title"
         className="dialog-panel w-full max-w-sm space-y-4 rounded-2xl bg-[var(--surface)] p-4 sm:p-5"
