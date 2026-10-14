@@ -44,6 +44,7 @@ export function TodayAppointments({
   onCollect,
   onMarkArrived,
   onUndoNoShow,
+  onRestoreCancelled,
 }: {
   appointments: Appointment[];
   slotMinutes: number;
@@ -67,6 +68,8 @@ export function TodayAppointments({
   onMarkArrived?: (appointment: Appointment) => void;
   /** Reverses a mistaken no-show; Rebook is the row itself (opens the panel with Reschedule). */
   onUndoNoShow?: (appointment: Appointment) => void;
+  /** Brings a cancelled appointment back (managers). Shown only while its time is still ahead. */
+  onRestoreCancelled?: (appointment: Appointment) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   // Finished rows carry Paid / Due / Undo, so they stay open unless the user folds them (remembered per device).
@@ -80,6 +83,7 @@ export function TodayAppointments({
   const inProgress = appointments.filter((a) => a.status === 'arrived' && !a.visitId);
   const upcoming = appointments.filter((a) => a.status === 'confirmed' || a.status === 'rescheduled');
   const done = appointments.filter((a) => a.visitId || a.status === 'no_show');
+  const cancelled = appointments.filter((a) => a.status === 'cancelled' && !a.visitId);
   const shownUpcoming = showAll ? upcoming : upcoming.slice(0, UPCOMING_LIMIT);
   const hasRequests = requests.length > 0 && Boolean(onConfirmRequest && onDeclineRequest);
   const sectionCount = [hasRequests, inProgress.length > 0, upcoming.length > 0].filter(Boolean).length;
@@ -117,7 +121,7 @@ export function TodayAppointments({
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-1.5">
-              <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}>
+              <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : fill.kind === 'cancelled' ? 'text-[var(--muted)] line-through' : 'text-[var(--ink)]'}`}>
                 {a.patientName}
               </span>
               {a.id === nextUpId && (
@@ -299,7 +303,7 @@ onClick={() => onMarkArrived(a)}
       )}
 
       {upcoming.length === 0 && inProgress.length === 0 && (
-        <p className="text-sm text-[var(--muted)]">No more appointments today.</p>
+        <p className="text-sm text-[var(--muted)]">{done.length > 0 ? 'All done for today ✓' : 'No more appointments today.'}</p>
       )}
 
       {done.length > 0 && (
@@ -321,6 +325,31 @@ onClick={() => onMarkArrived(a)}
           </summary>
           <ul className={`${listCls} mt-1`}>
             {done.map((a) => row(a, doneEnd(a), a.visitId ? 'Visit logged' : APPOINTMENT_STATUS_LABEL[a.status], Boolean(a.visitId ? dueByVisitId : onUndoNoShow)))}
+          </ul>
+        </details>
+      )}
+
+      {cancelled.length > 0 && (
+        <details>
+          <summary className="min-h-9 cursor-pointer text-sm text-[var(--muted)]">Cancelled ({cancelled.length})</summary>
+          <ul className={`${listCls} mt-1`}>
+            {cancelled.map((a) =>
+              row(
+                a,
+                onRestoreCancelled && new Date(a.scheduledAt).getTime() > Date.now() ? (
+                  <button
+                    type="button"
+                    aria-label={`Restore ${a.patientName}'s appointment`}
+                    className="min-h-11 rounded-full border border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)] sm:min-h-9"
+                    onClick={() => onRestoreCancelled(a)}
+                  >
+                    Restore
+                  </button>
+                ) : null,
+                'Cancelled',
+                Boolean(onRestoreCancelled)
+              )
+            )}
           </ul>
         </details>
       )}

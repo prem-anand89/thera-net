@@ -34,7 +34,9 @@ export type AppointmentFillKind = 'upcoming' | 'arrived' | 'done' | 'no_show' | 
  * only signal.
  */
 export function appointmentFill(appointment: Appointment, color: string): { kind: AppointmentFillKind; background: string } {
-  if (appointment.status === 'arrived' && appointment.visitId) return { kind: 'done', background: 'var(--slate-light)' };
+  // Any appointment with a linked visit is done, whatever its status says (the visit can
+  // exist before the status catches up, e.g. mid-sync).
+  if (appointment.visitId) return { kind: 'done', background: 'var(--slate-light)' };
   if (appointment.status === 'arrived') return { kind: 'arrived', background: `color-mix(in srgb, ${color} 18%, white)` };
   if (appointment.status === 'no_show') return { kind: 'no_show', background: 'var(--rust-light)' };
   if (appointment.status === 'cancelled') return { kind: 'cancelled', background: 'var(--slate-light)' };

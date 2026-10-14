@@ -17,11 +17,12 @@ export function PatientFlagPills({ flags, max }: { flags: PatientFlag[]; max?: n
   const shown = max === undefined ? flags : flags.slice(0, max);
   return (
     <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
-      {shown.map((flag) =>
+      {shown.map((flag, index) =>
         flag.key === 'noshow' && max !== undefined ? (
           <span key={flag.key} title={flag.label} aria-label={flag.label} className="h-2 w-2 shrink-0 rounded-full bg-[var(--rust)]" />
         ) : (
-          <span key={flag.key} className={`whitespace-nowrap rounded-full px-1.5 py-px text-[10px] font-medium leading-4 ${STYLE[flag.key]}`}>
+          // In a list row on a very narrow phone only the first pill fits beside the name.
+          <span key={flag.key} className={`whitespace-nowrap rounded-full px-1.5 py-px text-[10px] font-medium leading-4 ${STYLE[flag.key]} ${max !== undefined && index > 0 ? 'max-[359px]:hidden' : ''}`}>
             {flag.label}
           </span>
         )

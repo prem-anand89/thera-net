@@ -221,3 +221,32 @@ describe('TodayAppointments carried-over and Done defaults', () => {
     expect(screen.getByText(formatDateDM(old.scheduledAt))).toBeInTheDocument();
   });
 });
+
+describe('TodayAppointments end of day and cancelled', () => {
+  afterEach(cleanup);
+  const baseProps = {
+    slotMinutes: 30,
+    nextUpId: null,
+    colorFor: () => '#000',
+    therapistNameFor: () => 'Dr A',
+    showTherapist: true,
+    onSelect: vi.fn(),
+  };
+
+  it('says all done (not "no more appointments") when everything is finished', () => {
+    render(<TodayAppointments {...baseProps} appointments={[appt('09:00', { status: 'arrived', visitId: 'v1' })]} />);
+    expect(screen.getByText('All done for today ✓')).toBeInTheDocument();
+    expect(screen.queryByText('No more appointments today.')).not.toBeInTheDocument();
+  });
+
+  it('lists cancelled appointments in their own fold and offers Restore only while the time is ahead', () => {
+    const onRestoreCancelled = vi.fn();
+    const future = appt('09:00', { status: 'cancelled', patientName: 'Later', scheduledAt: new Date(Date.now() + 3_600_000).toISOString() });
+    const past = appt('08:00', { status: 'cancelled', patientName: 'Earlier', scheduledAt: new Date(Date.now() - 3_600_000).toISOString() });
+    render(<TodayAppointments {...baseProps} appointments={[past, future]} onRestoreCancelled={onRestoreCancelled} />);
+    expect(screen.getByText('Cancelled (2)')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Restore Earlier/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Restore Later/ }));
+    expect(onRestoreCancelled).toHaveBeenCalledWith(future);
+  });
+});

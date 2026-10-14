@@ -272,7 +272,6 @@ export function WorkspacePage() {
     return (workspaceAppointments ?? [])
       .filter(
         (a) =>
-          a.status !== 'cancelled' &&
           appointmentStartsOnDate(a, todayStr) &&
           (!scope.scopeTherapistId || a.therapistId === scope.scopeTherapistId)
       )
@@ -654,6 +653,7 @@ export function WorkspacePage() {
     ),
     ...todayAppointments,
   ];
+  // `todayAppointments` now carries cancelled rows (for the Cancelled fold); counts ignore them.
   const appointmentsLeft =
     todayAppointments.filter((a) => (a.status === 'confirmed' || a.status === 'rescheduled' || (a.status === 'arrived' && !a.visitId))).length +
     pendingRequestCount;
@@ -835,7 +835,7 @@ export function WorkspacePage() {
                   onClick={() => setTodayTab(tab)}
                   className={`min-h-9 rounded-md px-3 text-xs font-medium ${todayTab === tab ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}
                 >
-                  {tab === 'appointments' ? (appointmentsLeft > 0 ? `Appointments (${appointmentsLeft} left)` : `Appointments (${appointmentsForList.length + pendingRequestCount})`) : `Visits (${today?.visits.length ?? 0})`}
+                  {tab === 'appointments' ? (appointmentsLeft > 0 ? `Appointments (${appointmentsLeft} left)` : appointmentsForList.filter((a) => a.status !== 'cancelled').length > 0 ? 'Appointments (all done ✓)' : `Appointments (${pendingRequestCount})`) : `Visits (${today?.visits.length ?? 0})`}
                 </button>
               ))}
             </div>
@@ -866,6 +866,11 @@ export function WorkspacePage() {
               onMarkArrived={
                 canManageBookings || scope.myTherapistId
                   ? (a) => void bookingService.markAppointmentArrived(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
+                  : undefined
+              }
+              onRestoreCancelled={
+                canManageBookings || scope.myTherapistId
+                  ? (a) => void bookingService.restoreCancelledAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
                   : undefined
               }
               onUndoNoShow={
