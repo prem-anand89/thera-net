@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type {
   ConsultationNote,
+  Invoice,
   InvoiceClinicalSnapshot,
   InvoiceLineItem,
   PaymentMethod,
@@ -80,6 +81,10 @@ export function IssueInvoiceDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<{ invoiceId: string; invoiceNo: string } | null>(null);
+  // The invoice itself is already issued (the number is spent) even when its
+  // paid/outstanding flag could not be saved; keep it so that can be retried.
+  const [issuedInvoice, setIssuedInvoice] = useState<Invoice | null>(null);
+  const [statusProblem, setStatusProblem] = useState(false);
 
   // 'form' -> fill in payment mode/clinical details; 'review' -> a preview
   // of exactly what will be issued, computed via the same line-item build
@@ -199,6 +204,32 @@ export function IssueInvoiceDialog({
     }
   }
 
+  async function recordPaymentStatus(invoice: Invoice) {
+    if (collectedNow) {
+      await paymentService.collectInvoiceNow(
+        clinicId,
+        invoice,
+        METHOD_FOR_MODE[paymentMode],
+        toLocalDateStr(new Date())
+      );
+    } else {
+      await paymentService.setStatus(invoice.id, clinicId, 'outstanding');
+    }
+  }
+
+  async function retryPaymentStatus() {
+    if (!issuedInvoice) return;
+    setBusy(true);
+    try {
+      await recordPaymentStatus(issuedInvoice);
+      setStatusProblem(false);
+    } catch (e) {
+      console.error('Could not record payment status', e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function issue() {
     setBusy(true);
     setError(null);
@@ -208,19 +239,12 @@ export function IssueInvoiceDialog({
         paymentMode,
         clinicalSnapshotFromFields()
       );
+      setIssuedInvoice(invoice);
       try {
-        if (collectedNow) {
-          await paymentService.collectInvoiceNow(
-            clinicId,
-            invoice,
-            METHOD_FOR_MODE[paymentMode],
-            toLocalDateStr(new Date())
-          );
-        } else {
-          await paymentService.setStatus(invoice.id, clinicId, 'outstanding');
-        }
+        await recordPaymentStatus(invoice);
       } catch (statusError) {
         console.error('Could not record payment status', statusError);
+        setStatusProblem(true);
       }
       setIssued({ invoiceId: invoice.id, invoiceNo: invoice.invoiceNo });
     } catch (e) {
@@ -246,6 +270,17 @@ export function IssueInvoiceDialog({
             <p className="text-sm text-[var(--ink)]">
               Invoice {issued.invoiceNo} issued for {target.patientLabel}.
             </p>
+            {statusProblem && (
+              <div role="alert" className="space-y-2 rounded-lg border border-[var(--amber)]/50 bg-[var(--amber-light,var(--paper))] p-3 text-sm text-[var(--ink)]">
+                <p>
+                  The invoice was issued, but its payment status could not be saved. Tap Retry
+                  before closing, or it may show as paid.
+                </p>
+                <button type="button" className={btnSecondary} disabled={busy} onClick={() => void retryPaymentStatus()}>
+                  {busy ? 'Retrying…' : 'Retry'}
+                </button>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <Link
                 to="/invoices/$invoiceId/print"
@@ -256,7 +291,7 @@ export function IssueInvoiceDialog({
                 Print
               </Link>
               <button type="button" className={btnPrimary} onClick={onClose}>
-                Done
+                {statusProblem ? 'Close anyway' : 'Done'}
               </button>
             </div>
           </>
