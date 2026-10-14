@@ -52,7 +52,12 @@ export interface OutstandingInvoiceRow {
   invoiceNo: string;
   patientName: string;
   mrno: string;
+  /** The invoice's full total. */
   totalPaise: Paise;
+  /** Recorded against the invoice's visits so far. */
+  paidPaise: Paise;
+  /** Total minus paid — what is actually still owed. */
+  remainingPaise: Paise;
   issuedAt: string;
   daysOutstanding: number;
   /** A live visit the invoice covers, or null when none is left (the visit was removed). Payment needs one; without it the only way to clear the invoice is to void it. */
@@ -62,6 +67,7 @@ export interface OutstandingInvoiceRow {
 
 export interface OutstandingSummary {
   rows: OutstandingInvoiceRow[];
+  /** Sum of what is still owed (remaining, not invoice totals). */
   totalPaise: Paise;
   count: number;
 }
@@ -421,11 +427,26 @@ export function createDashboardService(repos: Repos) {
     },
 
     async outstandingInvoices(clinicId: UUID): Promise<OutstandingSummary> {
-      const [invoices, payments, visits] = await Promise.all([
+      const [invoices, payments, visits, visitPayments] = await Promise.all([
         repos.invoices.list(clinicId),
         repos.invoicePayments.list(clinicId),
         repos.visits.list({ clinicId }),
+        repos.payments.list(clinicId),
       ]);
+      // Same balance rule as paymentService.invoiceBalance: money recorded on
+      // the invoice's live visits. A partly paid invoice owes only the rest.
+      const paidByVisitId = new Map<UUID, Paise>();
+      for (const p of visitPayments) {
+        paidByVisitId.set(p.visitId, (paidByVisitId.get(p.visitId) ?? 0) + p.amountPaise);
+      }
+      const paidByInvoiceId = new Map<UUID, Paise>();
+      for (const v of visits) {
+        if (v.deleted || !v.invoiceId) continue;
+        paidByInvoiceId.set(
+          v.invoiceId,
+          (paidByInvoiceId.get(v.invoiceId) ?? 0) + (paidByVisitId.get(v.id) ?? 0)
+        );
+      }
       const visitByInvoiceId = new Map<UUID, { id: UUID; patientId: UUID }>();
       for (const v of visits) {
         if (v.deleted || !v.invoiceId || visitByInvoiceId.has(v.invoiceId)) continue;
@@ -447,22 +468,27 @@ export function createDashboardService(repos: Repos) {
             !supersededInvoiceIds.has(inv.id) &&
             statusByInvoiceId.get(inv.id) === 'outstanding'
         )
-        .map((inv) => ({
+        .map((inv) => {
+          const paidPaise = paidByInvoiceId.get(inv.id) ?? 0;
+          return {
           invoiceId: inv.id,
           invoiceNo: inv.invoiceNo,
           patientName: inv.patientSnapshot.name,
           mrno: inv.patientSnapshot.mrno,
           totalPaise: inv.totalPaise,
+          paidPaise,
+          remainingPaise: Math.max(0, inv.totalPaise - paidPaise),
           issuedAt: inv.issuedAt,
           daysOutstanding: daysSince(inv.issuedAt.slice(0, 10)),
           visitId: visitByInvoiceId.get(inv.id)?.id ?? null,
           patientId: visitByInvoiceId.get(inv.id)?.patientId ?? null,
-        }))
+          };
+        })
         .sort((a, b) => b.daysOutstanding - a.daysOutstanding);
 
       return {
         rows,
-        totalPaise: rows.reduce((sum, r) => sum + r.totalPaise, 0),
+        totalPaise: rows.reduce((sum, r) => sum + r.remainingPaise, 0),
         count: rows.length,
       };
     },

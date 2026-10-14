@@ -814,8 +814,11 @@ export function LedgerPage() {
                       </div>
                       <div className="text-xs text-[var(--teal)]">{r.invoiceNo}</div>
                     </div>
-                    <span className="font-num shrink-0 text-sm font-medium text-[var(--ink)]">
-                      {formatINR(r.totalPaise)}
+                    <span className="font-num shrink-0 text-right text-sm font-medium text-[var(--ink)]">
+                      {formatINR(r.remainingPaise)}
+                      {r.paidPaise > 0 && (
+                        <span className="block text-[11px] font-normal text-[var(--muted)]">of {formatINR(r.totalPaise)}</span>
+                      )}
                     </span>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
@@ -865,7 +868,12 @@ export function LedgerPage() {
                       <span className="font-display">{r.patientName}</span>{' '}
                       <span className="text-xs text-[var(--muted)]">{r.mrno}</span>
                     </td>
-                    <td className={tdNum}>{formatINR(r.totalPaise)}</td>
+                    <td className={tdNum}>
+                      {formatINR(r.remainingPaise)}
+                      {r.paidPaise > 0 && (
+                        <span className="block text-[11px] font-normal text-[var(--muted)]">of {formatINR(r.totalPaise)}</span>
+                      )}
+                    </td>
                     <td className={td}>{formatDateDM(r.issuedAt)}</td>
                     <td className={tdNum}>{r.daysOutstanding}</td>
                     {canBill && (
