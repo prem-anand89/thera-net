@@ -43,11 +43,8 @@ export function createAdvanceService(repos: Repos) {
     },
 
     /** Remaining balance = amount_paise − sum(payments where advance_id = a.id). */
-    async advanceBalance(clinicId: UUID, advance: PatientAdvance): Promise<Paise> {
-      const payments = await repos.payments.list(clinicId);
-      const drawnDown = payments
-        .filter((p) => p.advanceId === advance.id)
-        .reduce((sum, p) => sum + p.amountPaise, 0);
+    async advanceBalance(_clinicId: UUID, advance: PatientAdvance): Promise<Paise> {
+      const drawnDown = (await repos.payments.listByAdvanceId(advance.id)).reduce((sum, p) => sum + p.amountPaise, 0);
       return Math.max(0, advance.amountPaise - drawnDown);
     },
 
@@ -59,14 +56,10 @@ export function createAdvanceService(repos: Repos) {
       const advances = (await repos.patientAdvances.listByPatient(clinicId, patientId)).filter(
         (a) => a.status === 'open'
       );
-      const payments = await repos.payments.list(clinicId);
       const drawnDownByAdvance = new Map<UUID, Paise>();
-      for (const p of payments) {
-        if (!p.advanceId) continue;
-        drawnDownByAdvance.set(
-          p.advanceId,
-          (drawnDownByAdvance.get(p.advanceId) ?? 0) + p.amountPaise
-        );
+      for (const advance of advances) {
+        const drawn = (await repos.payments.listByAdvanceId(advance.id)).reduce((sum, p) => sum + p.amountPaise, 0);
+        drawnDownByAdvance.set(advance.id, drawn);
       }
       return advances
         .map((advance) => ({
@@ -145,10 +138,16 @@ export function createAdvanceService(repos: Repos) {
       // so without this it would keep showing (and chasing) a balance that
       // is already settled.
       const invoiceIds = [...new Set(visits.map((v) => v.invoiceId).filter((id): id is UUID => Boolean(id)))];
-      const paymentSvc = createPaymentService(repos);
-      for (const invoiceId of invoiceIds) {
-        const invoice = await repos.invoices.get(invoiceId);
-        if (invoice) await paymentSvc.reconcileInvoiceStatus(clinicId, invoice);
+      // Best effort: the payments and the advance update above are already saved,
+      // so a failure here must not make the caller think the draw-down failed.
+      try {
+        const paymentSvc = createPaymentService(repos);
+        for (const invoiceId of invoiceIds) {
+          const invoice = await repos.invoices.get(invoiceId);
+          if (invoice) await paymentSvc.reconcileInvoiceStatus(clinicId, invoice);
+        }
+      } catch (e) {
+        console.error('Could not update the invoice status after applying an advance', e);
       }
     },
   };

@@ -47,12 +47,10 @@ export function createPaymentService(repos: Repos) {
    * visits alike.
    */
   async function invoiceBalance(
-    clinicId: UUID,
+    _clinicId: UUID,
     invoice: Invoice
   ): Promise<{ paidPaise: Paise; remainingPaise: Paise }> {
-    const visits = (await repos.visits.list({ clinicId })).filter(
-      (v) => v.invoiceId === invoice.id && !v.deleted
-    );
+    const visits = await repos.visits.listByInvoiceId(invoice.id);
     let paidPaise = 0;
     for (const v of visits) {
       const payments = await repos.payments.listByVisit(v.id);
@@ -80,9 +78,7 @@ export function createPaymentService(repos: Repos) {
     receivedDate: string,
     notes: string | null
   ): Promise<void> {
-    const visits = (await repos.visits.list({ clinicId }))
-      .filter((v) => v.invoiceId === invoice.id && !v.deleted)
-      .sort((a, b) => a.visitDate.localeCompare(b.visitDate));
+    const visits = await repos.visits.listByInvoiceId(invoice.id); // live visits, oldest first
     if (visits.length === 0) {
       throw new Error('No visits found for this invoice — nothing to record the payment against.');
     }
@@ -154,9 +150,7 @@ export function createPaymentService(repos: Repos) {
     if (existing?.status === 'void') return;
     // Payments hang off visits. With every visit deleted there is nothing to
     // derive a balance from, and "no payments" would wrongly read as unpaid.
-    const liveVisits = (await repos.visits.list({ clinicId })).filter(
-      (v) => v.invoiceId === invoice.id && !v.deleted
-    );
+    const liveVisits = await repos.visits.listByInvoiceId(invoice.id);
     if (liveVisits.length === 0) return;
     const { remainingPaise } = await invoiceBalance(clinicId, invoice);
     await setStatus(invoice.id, clinicId, remainingPaise === 0 ? 'paid' : 'outstanding');
@@ -209,6 +203,16 @@ export function createDirectPaymentService(repos: Repos) {
         updatedAt: new Date().toISOString(),
       };
       await repos.payments.put(payment);
+      // A payment on an invoiced visit changes that invoice's balance, so keep its
+      // paid/outstanding flag in step (best effort: the money is already recorded).
+      if (visit.invoiceId) {
+        try {
+          const invoice = await repos.invoices.get(visit.invoiceId);
+          if (invoice) await createPaymentService(repos).reconcileInvoiceStatus(clinicId, invoice);
+        } catch (e) {
+          console.error('Could not update the invoice status', e);
+        }
+      }
       return payment;
     },
 

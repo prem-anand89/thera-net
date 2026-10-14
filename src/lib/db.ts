@@ -290,6 +290,11 @@ export class ClinicDB extends Dexie {
       shift_templates: 'id, clinicId, active',
       therapist_shift_assignments: 'id, clinicId, therapistId, status, shiftTemplateId',
     });
+    // Indexed lookups instead of whole-clinic scans: an advance's draw-downs,
+    // and one day's payments (Daybook).
+    this.version(23).stores({
+      payments: 'id, clinicId, visitId, receivedDate, advanceId, [clinicId+receivedDate]',
+    });
   }
 }
 

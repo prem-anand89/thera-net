@@ -27,6 +27,7 @@ function setup(payments: Payment[]) {
     visits: {
       get: async () => v,
       list: async () => [{ ...v, invoiceId: 'inv-new' }],
+      listByInvoiceId: async (id: string) => (id === 'inv-new' ? [{ ...v, invoiceId: 'inv-new' }] : []),
       listByPackageGroup: async () => [],
       markInvoiced: async () => {},
     },

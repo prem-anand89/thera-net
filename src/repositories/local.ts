@@ -293,11 +293,13 @@ const payments: PaymentRepo = {
     return db.payments.where('clinicId').equals(clinicId).toArray();
   },
   async listByDate(clinicId, date) {
-    const all = await db.payments.where('clinicId').equals(clinicId).toArray();
-    return all.filter((p) => p.receivedDate === date);
+    return db.payments.where('[clinicId+receivedDate]').equals([clinicId, date]).toArray();
   },
   async listByVisit(visitId) {
     return db.payments.where('visitId').equals(visitId).toArray();
+  },
+  async listByAdvanceId(advanceId) {
+    return db.payments.where('advanceId').equals(advanceId).toArray();
   },
   put: (payment) => putWithOutbox('payments', payment),
   delete: async (id) => {

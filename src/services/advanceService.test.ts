@@ -13,6 +13,7 @@ function setup(invoiceTotal: number, visitBill: number) {
   const repos = {
     payments: {
       list: async () => [...payments.values()],
+      listByAdvanceId: async (id: string) => [...payments.values()].filter((p) => p.advanceId === id),
       listByVisit: async (id: string) => [...payments.values()].filter((p) => p.visitId === id),
       put: async (p: Payment) => void payments.set(p.id, p),
     },
@@ -22,7 +23,7 @@ function setup(invoiceTotal: number, visitBill: number) {
       getByInvoiceId: async (id: string) => [...statuses.values()].find((s) => s.invoiceId === id),
       put: async (p: InvoicePayment) => void statuses.set(p.id, p),
     },
-    visits: { list: async () => [visit] },
+    visits: { list: async () => [visit], listByInvoiceId: async (id: string) => (visit.invoiceId === id && !visit.deleted ? [visit] : []) },
   } as unknown as Repos;
   const advance = { id: 'adv-1', clinicId: 'c1', patientId: 'p1', amountPaise: rs(1000), method: 'cash', receivedDate: '2026-07-30', status: 'open' } as PatientAdvance;
   return { repos, visit, statuses, advance };

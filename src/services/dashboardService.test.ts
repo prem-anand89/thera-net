@@ -156,6 +156,7 @@ function makeFakeRepos() {
       listByDate: async (clinicId, date) =>
         [...payments.values()].filter((p) => p.clinicId === clinicId && p.receivedDate === date),
       listByVisit: async (visitId) => [...payments.values()].filter((p) => p.visitId === visitId),
+      listByAdvanceId: async () => [],
       put: async (p) => void payments.set(p.id, p),
       delete: async (id) => void payments.delete(id),
     },

@@ -99,6 +99,8 @@ function makeInvoicePaymentFlowRepos(visitFixtures: Visit[]) {
     },
     visits: {
       list: async () => [...visits.values()],
+      listByInvoiceId: async (invoiceId: string) =>
+        [...visits.values()].filter((v) => v.invoiceId === invoiceId && !v.deleted).sort((a, b) => a.visitDate.localeCompare(b.visitDate)),
     },
   } as unknown as Repos;
   return { repos, invoicePayments, payments };
@@ -403,5 +405,20 @@ describe('paymentService.reconcileInvoiceStatus', () => {
     await svc.setStatus('inv-1', 'clinic-1', 'paid');
     await svc.reconcileInvoiceStatus('clinic-1', invoice());
     expect((await fake.repos.invoicePayments.getByInvoiceId('inv-1'))?.status).toBe('paid');
+  });
+});
+
+describe('directPaymentService.logPayment on an invoiced visit', () => {
+  it('keeps the invoice flag in step with the new payment', async () => {
+    const visit = visitFixture({ id: 'visit-1', invoiceId: 'inv-1', actualBillPaise: rs(500) });
+    const fake = makeInvoicePaymentFlowRepos([visit]);
+    const repos = {
+      ...fake.repos,
+      visits: { ...(fake.repos as unknown as { visits: object }).visits, get: async () => visit },
+      invoices: { get: async () => invoiceFixture({ id: 'inv-1', totalPaise: rs(500) }) },
+    } as unknown as Repos;
+    await createPaymentService(repos).setStatus('inv-1', 'clinic-1', 'outstanding');
+    await createDirectPaymentService(repos).logPayment('clinic-1', 'visit-1', rs(500), 'cash', '2026-08-02');
+    expect((await repos.invoicePayments.getByInvoiceId('inv-1'))?.status).toBe('paid');
   });
 });

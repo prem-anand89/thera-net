@@ -145,6 +145,8 @@ export interface PaymentRepo {
   list(clinicId: UUID): Promise<Payment[]>;
   listByDate(clinicId: UUID, date: string): Promise<Payment[]>;
   listByVisit(visitId: UUID): Promise<Payment[]>;
+  /** Every payment drawn from one advance (indexed). */
+  listByAdvanceId(advanceId: UUID): Promise<Payment[]>;
   put(payment: Payment): Promise<void>;
   delete(id: UUID): Promise<void>;
 }

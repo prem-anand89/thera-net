@@ -137,6 +137,7 @@ function makeFakeRepos() {
       list: async () => [],
       listByDate: async () => [],
       listByVisit: async () => [],
+      listByAdvanceId: async () => [],
       put: async () => {},
       delete: async () => {},
     },
