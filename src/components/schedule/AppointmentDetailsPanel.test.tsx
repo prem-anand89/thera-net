@@ -113,3 +113,34 @@ describe('AppointmentDetailsPanel confirmations', () => {
     expect(onCancelSeries).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('AppointmentDetailsPanel restore actions', () => {
+  afterEach(cleanup);
+
+  it('a no-show offers Undo no-show and Reschedule, and Undo calls the restore RPC', async () => {
+    const restoreNoShowAppointment = vi.fn(async () => {});
+    const bs = (await import('@/services')).bookingService as unknown as Record<string, unknown>;
+    bs.restoreNoShowAppointment = restoreNoShowAppointment;
+    show(appt({ status: 'no_show' }));
+    expect(screen.getByRole('button', { name: 'Reschedule' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo no-show' }));
+    expect(restoreNoShowAppointment).toHaveBeenCalledWith('a1');
+  });
+
+  it('a cancelled appointment offers Restore, which calls the restore RPC', async () => {
+    const restoreCancelledAppointment = vi.fn(async () => {});
+    const bs = (await import('@/services')).bookingService as unknown as Record<string, unknown>;
+    bs.restoreCancelledAppointment = restoreCancelledAppointment;
+    show(appt({ status: 'cancelled' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Restore appointment' }));
+    expect(restoreCancelledAppointment).toHaveBeenCalledWith('a1');
+  });
+
+  it('shows neither to someone who cannot manage the appointment, or once a visit exists', () => {
+    show(appt({ status: 'no_show' }), false);
+    expect(screen.queryByRole('button', { name: 'Undo no-show' })).not.toBeInTheDocument();
+    cleanup();
+    show(appt({ status: 'cancelled', visitId: 'v1' }));
+    expect(screen.queryByRole('button', { name: 'Restore appointment' })).not.toBeInTheDocument();
+  });
+});

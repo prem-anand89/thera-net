@@ -330,6 +330,41 @@ export function AppointmentDetailsPanel({
           </div>
         )}
 
+        {appointment.status === 'no_show' && canManage && !appointment.visitId && (
+          <div className="mt-4 rounded-lg bg-[var(--paper)] p-3">
+            <p className="text-sm text-[var(--ink)]">Marked as a no-show. Marked by mistake, or did they call to rebook?</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                className={`${actionCls} text-[var(--teal)]`}
+                onClick={() => void run(() => bookingService.restoreNoShowAppointment(appointment.id))}
+              >
+                Undo no-show
+              </button>
+              <button type="button" disabled={busy} className={`${actionCls} text-[var(--teal)]`} onClick={() => onReschedule(appointment)}>
+                Reschedule
+              </button>
+            </div>
+          </div>
+        )}
+
+        {appointment.status === 'cancelled' && canManage && !appointment.visitId && (
+          <div className="mt-4 rounded-lg bg-[var(--paper)] p-3">
+            <p className="text-sm text-[var(--ink)]">Cancelled by mistake? Bringing it back checks that the time is still free.</p>
+            <div className="mt-2">
+              <button
+                type="button"
+                disabled={busy}
+                className={`${actionCls} text-[var(--teal)]`}
+                onClick={() => void run(() => bookingService.restoreCancelledAppointment(appointment.id))}
+              >
+                Restore appointment
+              </button>
+            </div>
+          </div>
+        )}
+
         {appointment.status === 'cancelled' && (
           <div className="mt-4 rounded-lg bg-[var(--paper)] p-3">
             <p className="text-sm text-[var(--ink)]">Let them know it's cancelled:</p>

@@ -290,6 +290,26 @@ export const bookingService = {
     syncEngine.schedule(0);
   },
 
+  /** Puts a no-show back to confirmed (or rescheduled if it had been moved). The slot is still held, so it cannot clash. */
+  async restoreNoShowAppointment(appointmentId: UUID): Promise<void> {
+    const supabase = supabaseOrThrow();
+    const { error } = await supabase.rpc('restore_no_show_appointment', {
+      p_appointment_id: appointmentId,
+    });
+    if (error) throw new Error(`Could not undo the no-show: ${error.message}`);
+    syncEngine.schedule(0);
+  },
+
+  /** Brings a cancelled appointment back. The server re-checks the slot and refuses if it was booked since. */
+  async restoreCancelledAppointment(appointmentId: UUID): Promise<void> {
+    const supabase = supabaseOrThrow();
+    const { error } = await supabase.rpc('restore_cancelled_appointment', {
+      p_appointment_id: appointmentId,
+    });
+    if (error) throw new Error(`Could not restore the appointment: ${error.message}`);
+    syncEngine.schedule(0);
+  },
+
   async cancelAppointment(appointmentId: UUID): Promise<void> {
     const supabase = supabaseOrThrow();
     const { error } = await supabase.rpc('cancel_appointment', {
