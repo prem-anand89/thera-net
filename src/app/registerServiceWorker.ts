@@ -1,6 +1,7 @@
 import { syncEngine } from '@/sync/engine';
 import { syncStatus } from '@/sync/status';
-import { markUpdateInProgress, setWaitingActivator } from './appUpdate';
+import { clearUpdateInProgress, markUpdateInProgress, setWaitingActivator } from './appUpdate';
+import { answerTabPresence, otherTabsOpen } from './tabPresence';
 import {
   BACKGROUND_APPLY_MS,
   CHECK_INTERVAL_MS,
@@ -17,16 +18,30 @@ const ACTIVATE_TIMEOUT_MS = 5_000;
 let registration: ServiceWorkerRegistration | null = null;
 let lastCheck = Date.now();
 
-/** Tells the waiting worker to take over; the page reloads once it has. */
-function activateWaiting(): boolean {
+let activating = false;
+
+/**
+ * Tells the waiting worker to take over; the page reloads once it has (see the
+ * single `controllerchange` listener in `registerServiceWorker`). Idempotent.
+ * `reloadIfStuck`: if the worker never takes over, reload anyway — for the
+ * stale-chunk recovery path, where the page is already broken.
+ */
+function activateWaiting(options: { reloadIfStuck?: boolean } = {}): boolean {
+  if (activating) return true;
   const waiting = registration?.waiting;
   if (!waiting || !navigator.serviceWorker.controller) return false;
+  activating = true;
   updateStore.setApplying(true);
   markUpdateInProgress();
-  navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
   waiting.postMessage({ type: 'SKIP_WAITING' });
-  // If the worker never takes over, stop showing "Updating…" instead of hanging.
-  window.setTimeout(() => updateStore.setApplying(false), ACTIVATE_TIMEOUT_MS);
+  window.setTimeout(() => {
+    // Still here: the worker did not take over. Stop showing "Updating…", let
+    // other tabs' handlers work again, and recover a broken page with a reload.
+    activating = false;
+    updateStore.setApplying(false);
+    clearUpdateInProgress();
+    if (options.reloadIfStuck) location.reload();
+  }, ACTIVATE_TIMEOUT_MS);
   return true;
 }
 
@@ -55,6 +70,7 @@ export async function applyUpdateNow(): Promise<void> {
  * to finish installing, then switch to it (or just reload when there is none).
  */
 export async function checkForUpdateAndReload(): Promise<void> {
+  lastCheck = Date.now();
   try {
     await registration?.update();
     const installing = registration?.installing;
@@ -95,8 +111,19 @@ function watchForUpdates(reg: ServiceWorkerRegistration): void {
     });
   });
 
-  // A tab opened while an update was already waiting: nothing is in progress,
-  // so switch now (once per minute at most, so a broken worker can't loop).
+  // An update already installing when this page loaded (its statechange would
+  // otherwise be missed until the next load).
+  const pendingInstall = reg.installing;
+  if (pendingInstall) {
+    pendingInstall.addEventListener('statechange', () => {
+      if (pendingInstall.state === 'installed') noticeWaiting(pendingInstall);
+    });
+  }
+
+  // A tab opened while an update was already waiting: nothing is in progress
+  // here, so switch now (once per minute at most, so a broken worker can't
+  // loop) — but only if no other tab is open, since the switch takes over every
+  // tab and another one may hold unsaved input.
   if (reg.waiting && navigator.serviceWorker.controller) {
     let recent = false;
     try {
@@ -107,8 +134,14 @@ function watchForUpdates(reg: ServiceWorkerRegistration): void {
       // sessionStorage unavailable — show the banner instead of auto-applying.
       recent = true;
     }
-    if (recent) updateStore.markWaiting();
-    else activateWaiting();
+    if (recent) {
+      updateStore.markWaiting();
+    } else {
+      void otherTabsOpen().then((others) => {
+        if (others) updateStore.markWaiting();
+        else activateWaiting();
+      });
+    }
   }
 
   window.setInterval(checkNow, CHECK_INTERVAL_MS);
@@ -129,7 +162,10 @@ function watchForUpdates(reg: ServiceWorkerRegistration): void {
           busy: isBusyDocument(document),
         })
       ) {
-        activateWaiting();
+        // Switching takes over every tab; only do it unprompted when this is the only one.
+        void otherTabsOpen().then((others) => {
+          if (!others && document.visibilityState === 'hidden') activateWaiting();
+        });
       }
     }, BACKGROUND_APPLY_MS);
   });
@@ -142,7 +178,14 @@ export function registerServiceWorker(): void {
       .register('/sw.js', { scope: '/' })
       .then((reg) => {
         registration = reg;
-        setWaitingActivator(activateWaiting);
+        setWaitingActivator(() => activateWaiting({ reloadIfStuck: true }));
+        answerTabPresence();
+        // One listener for the page's lifetime: our own switch reloads; a switch
+        // made by another tab leaves this tab's banner stale, so clear it.
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (activating) location.reload();
+          else updateStore.reset();
+        });
         watchForUpdates(reg);
       })
       .catch(() => {});

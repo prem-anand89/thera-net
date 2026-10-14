@@ -170,7 +170,7 @@ describe('BookSlotSheet', () => {
   it('closes on Escape', () => {
     const onClose = vi.fn();
     render(<BookSlotSheet isOpen onClose={onClose} />);
-    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalled();
   });
 

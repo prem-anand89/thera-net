@@ -13,11 +13,25 @@ cleanupOutdatedCaches();
 // Refresh in the update banner, which posts SKIP_WAITING (see
 // src/app/registerServiceWorker.ts). clients.claim() only matters for the very
 // first install, which has no previous worker to wait for.
+//
+// Bridge: pages and workers from before this protocol cannot tell a waiting
+// worker to take over, so they would be stuck on the old version until every
+// tab closes (days, for an installed phone app). A worker that finds no
+// protocol marker therefore takes over at once, and leaves the marker for the
+// next deploy, which waits for the banner as designed.
+const PROTOCOL_CACHE = 'thera-sw-protocol-2';
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.has(PROTOCOL_CACHE).then((known) => {
+      if (!known) return self.skipWaiting();
+    })
+  );
+});
 self.addEventListener('message', (event) => {
   if ((event.data as { type?: string } | null)?.type === 'SKIP_WAITING') void self.skipWaiting();
 });
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(Promise.all([self.clients.claim(), caches.open(PROTOCOL_CACHE)]));
 });
 
 interface PushData {

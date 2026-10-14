@@ -50,6 +50,10 @@ let updateInProgress = false;
 export function markUpdateInProgress(): void {
   updateInProgress = true;
 }
+/** The switch did not happen after all: other tabs' recovery handler works again. */
+export function clearUpdateInProgress(): void {
+  updateInProgress = false;
+}
 
 interface NavigationRouter {
   subscribe(

@@ -4519,6 +4519,7 @@ running the version it loaded, from the old precache, until it is switched:
   (`__APP_VERSION__`, `__APP_BUILD__` from `vite.config.ts`: `VERCEL_GIT_COMMIT_SHA`,
   else `git rev-parse`, else `dev`). "Refresh app" runs
   `checkForUpdateAndReload()` (check, wait for install, sync, switch).
+**Bridge:** a worker that finds no `thera-sw-protocol-2` cache marker calls `skipWaiting()` on install (and writes the marker on activate), so pages from before the waiting protocol, which cannot promote a waiting worker, are not stuck on the old version; every later deploy waits for the banner. **Only one tab switches unprompted:** cold-start and background auto-apply first ask other tabs over a `BroadcastChannel` (`tabPresence.ts`) and show the banner instead when another tab answers, since the switch takes over every tab. `activateWaiting` is idempotent, there is one `controllerchange` listener per page (our own switch reloads; a switch made by another tab clears this tab's banner), and a worker that never takes over resets the state (and reloads, on the stale-chunk recovery path).
 `installAppUpdateHandling(router)` remains as the safety net: `vite:preloadError`
 triggers a silent reload, and if another tab switched versions and this one lost
 its chunks, the *next in-app navigation* becomes a full load of its target
@@ -4535,8 +4536,8 @@ phone PWA and iOS standalone can suppress them). `notify.error()` / `notify.info
 notice (`role="alert"` / `status`, auto-dismiss) and `askConfirm({ title, message, confirmLabel,
 destructive, typeToConfirm })` returns a `Promise<boolean>` for a styled confirm (type-to-confirm replaces
 `prompt()`); both work from non-React code, and `NoticeHost` (mounted once in `main.tsx`) renders them.
-`ConfirmDialog` takes `open`/`onConfirm`/`onCancel` for places that own the state. **Every modal uses
-`useDialogBehavior(open, onClose)`** on its `role="dialog"` panel: Escape closes only the topmost
+`ConfirmDialog` takes `open`/`onConfirm`/`onCancel` for places that own the state. **The main dialogs and sheets use
+`useDialogBehavior(open, onClose, canClose?)`** on their `role="dialog"` panel (a dialog that stays mounted while closed must pass its real `open`, and one that can be mid-save passes `canClose` so Escape can't interrupt it); a handful of older modals (`AddClinicDialog`, `ChangePasswordDialog`, `HelpFeedbackDialog`, `AmendInvoiceDialog`, `StartVisitSheet`, `AssignShift*`, …) do not yet: Escape closes only the topmost
 open dialog, Tab/Shift+Tab stay inside it, focus moves in on open and back to the opener on close.
 `ErrorNote` is `role="alert"`. The only native dialogs left are the three unsaved-changes route guards
 (Settings, session note editor, note editor): the router blocker must answer synchronously.
@@ -4600,7 +4601,7 @@ read misses (clipped pills, tables wider than their card).
   user with nothing pending -> clear then continue; a different user **with**
   pending work -> `ForeignPendingScreen` (Discard and continue / Sign out) and
   syncing stays off, since the rows would otherwise be pushed under the wrong
-  account. `SyncEngine.sync()` also no-ops while stopped. After a session
+  account. `SyncEngine.sync()` also no-ops while stopped. The session effect in `Shell` is keyed by **user id** (not the session object, which Supabase replaces on every token refresh), runs queued one at a time, and re-checks cancellation before every clear; a hot-swap to another account clears only when nothing is waiting to sync, otherwise the owner check above applies. The voluntary-sign-out flag expires after 15 s so a failed sign-out cannot make a later involuntary loss look deliberate. Known limits: in the 'keep' case patient data stays readable in IndexedDB until the owner signs in again; a device that held data from before `lastUserId` existed cannot tell whose it is. After a session
   starts the app calls `navigator.storage.persist()` (`lib/persistStorage.ts`)
   so the browser doesn't evict the outbox.
 - **Colliding walk-in IDs are re-issued, not reverted.** Walk-in IDs
@@ -4609,7 +4610,7 @@ read misses (clipped pills, tables wider than their card).
   (`23505`). `SyncEngine.push` detects that (`isMrnoCollision`), and for an
   auto-minted ID replaces it with the next free number from local + server rows
   (`reissueWalkInMrno`, up to 3 tries) and pushes again. A typed hospital ID is
-  left as a visible failure. Previously the permanent-failure path reverted to
+  left as a visible failure: the patient is kept and the outbox entry is not retried each cycle until the row is edited again. The re-issue re-reads the row in a transaction, escapes the `LIKE` prefix, and tells the user ("ID W26-0001 was taken, so X is now W26-0003"). Previously the permanent-failure path reverted to
   server truth, which deleted the patient locally and stranded its visits.
 - **Sync status tells the truth.** `lastSuccessAt` (persisted in `db.meta`,
   display only) feeds the badge: "Last synced 14:32 / 12 min ago", "Sync issue"
