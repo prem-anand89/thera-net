@@ -4487,22 +4487,45 @@ Triggers `appointments_push`, `appointment_requests_push`, and `feedback_respons
 
 ## Key Design Patterns
 
-### 0. Deploys and open tabs (`src/app/appUpdate.ts`)
-`src/sw.ts` calls `skipWaiting()` + `clients.claim()` + `cleanupOutdatedCaches()`,
-so on every deploy the new service worker takes over tabs that are already
-open and deletes the previous precache. Every route except Workspace is
-`React.lazy()`, so the page on screen still references old chunk hashes: the
-next tab the user clicks fails to load (the host's SPA rewrite answers the
-missing file with `index.html`) and the app crashed until a manual reload.
-`installAppUpdateHandling(router)` (called from `main.tsx`) handles it before
-the user sees an error: `vite:preloadError` triggers a silent reload, and when
-a new worker takes control of a page that already had one, the *next in-app
-navigation* becomes a full page load of its target (immediate reload if the
-tab is hidden) so no in-progress form is interrupted. `reloadForNewVersion()`
-is the single reload entry point; its guard is a 60-second cooldown, not a
-once-per-tab flag, so a later deploy in the same tab can still self-heal while
-a broken deploy can't loop. `ErrorBoundary`/`RouterErrorFallback` remain as
-the fallback and use the same helper.
+### 0. Deploys and open tabs (`src/sw.ts`, `src/app/registerServiceWorker.ts`, `src/app/updateStore.ts`, `src/app/appUpdate.ts`)
+Every route except Workspace is `React.lazy()`, and `cleanupOutdatedCaches()`
+deletes the previous precache once a new worker is *active*. A new worker used
+to take over open tabs at once (`skipWaiting` + `clients.claim`), so the page
+on screen kept old chunk hashes and its next lazy route failed to load.
+**The new worker now waits.** `sw.js` only calls `skipWaiting()` when the page
+posts `{type:'SKIP_WAITING'}` (and `clients.claim()` runs on `activate`, which
+only matters for the very first install). The app registers `/sw.js` itself
+(`registerServiceWorker()`, called from `main.tsx`; `vite.config.ts` has
+`registerType: 'prompt'`, `injectRegister: false`), so an open tab keeps
+running the version it loaded, from the old precache, until it is switched:
+- **Banner** (`components/UpdateBanner.tsx`, mounted in `Shell`): "A new version
+  is available", the running `v{version} · {build}`, **Refresh** and **Later**.
+  Refresh first syncs pending outbox changes (8 s cap, skipped offline), then
+  activates the waiting worker; the page reloads on `controllerchange`. Later
+  snoozes 4 h; after 8 h of waiting the banner is sticky (no Later). Timings and
+  rules are pure functions in `updateStore.ts` (`SNOOZE_MS`, `STICKY_AFTER_MS`,
+  `bannerVisible`, `isSticky`).
+- **Safe-moment apply:** a tab hidden for 2 min that has nothing unsynced and no
+  open dialog or typed-in field (`isBusyDocument` heuristic) switches itself.
+  A tab opened while an update is already waiting switches immediately (once per
+  minute at most).
+- **Update checks:** `registration.update()` every 30 min while the tab is
+  visible and online, and when it regains focus; never closer than 15 min. It
+  only re-fetches `sw.js` (about 20 KB, conditional) from the static host — no
+  Supabase traffic. `vercel.json` serves `/sw.js` with `no-cache`.
+- **Account menu:** footer shows `Thera.Net v{package version} · {short commit}`
+  (`__APP_VERSION__`, `__APP_BUILD__` from `vite.config.ts`: `VERCEL_GIT_COMMIT_SHA`,
+  else `git rev-parse`, else `dev`). "Refresh app" runs
+  `checkForUpdateAndReload()` (check, wait for install, sync, switch).
+`installAppUpdateHandling(router)` remains as the safety net: `vite:preloadError`
+triggers a silent reload, and if another tab switched versions and this one lost
+its chunks, the *next in-app navigation* becomes a full load of its target
+(immediate if hidden). `reloadForNewVersion()` is the single reload entry point
+(60-second cooldown) and first activates a waiting worker, since a plain reload
+would otherwise still serve the old version. Not built: a "minimum supported
+version" lock for breaking releases. Not browser-tested at the time of writing;
+the flow to verify on a real deploy is open app, push, wait for the banner,
+Refresh.
 
 ### 0b. Phone layout conventions
 Checked at 375px wide (and 375x640 for pop-ups) with the app booted in headless
