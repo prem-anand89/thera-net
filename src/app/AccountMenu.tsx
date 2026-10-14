@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { signOutSafely } from './signOut';
+import { checkForUpdateAndReload } from './registerServiceWorker';
 import { CLINIC_ROLE_LABELS, type ClinicRole } from './useClinicRole';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { ShiftRequestSheet } from '@/components/schedule/ShiftRequestSheet';
@@ -123,14 +124,7 @@ export function AccountMenu({
    *  the service worker to check for a new version right now (instead of
    *  waiting for its own periodic check) before reloading. */
   async function refreshApp() {
-    try {
-      const reg = await navigator.serviceWorker?.getRegistration();
-      await reg?.update();
-    } catch {
-      // Ignore — reload regardless; a plain refresh still picks up
-      // whatever the server currently serves.
-    }
-    location.reload();
+    await checkForUpdateAndReload();
   }
 
   return (
@@ -232,7 +226,7 @@ export function AccountMenu({
             </div>
             <div className="flex items-center justify-center gap-2 border-t border-[var(--border)] px-3 py-2 text-[11px] text-[var(--muted)]">
               <BrandMark size={14} decorative />
-              <span>Thera.Net v{__APP_VERSION__}</span>
+              <span>Thera.Net v{__APP_VERSION__} · {__APP_BUILD__}</span>
               <span aria-hidden>·</span>
               <button type="button" className="font-medium text-[var(--teal)] hover:underline" onClick={() => void refreshApp()}>
                 Refresh app

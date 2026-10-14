@@ -7,8 +7,18 @@ declare const self: ServiceWorkerGlobalScope & {
 
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
-self.skipWaiting();
-self.clients.claim();
+
+// A new deploy installs and WAITS: the open tab keeps the version it loaded
+// (its lazy chunks are still in the old precache) until the user taps
+// Refresh in the update banner, which posts SKIP_WAITING (see
+// src/app/registerServiceWorker.ts). clients.claim() only matters for the very
+// first install, which has no previous worker to wait for.
+self.addEventListener('message', (event) => {
+  if ((event.data as { type?: string } | null)?.type === 'SKIP_WAITING') void self.skipWaiting();
+});
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
 interface PushData {
   title: string;

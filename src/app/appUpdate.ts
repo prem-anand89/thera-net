@@ -23,6 +23,9 @@ export function isStaleChunkError(error: unknown): boolean {
  * later stale-chunk crash in the same tab fall through to the error screen.
  */
 export function reloadForNewVersion(target?: string): boolean {
+  // A waiting service worker still serves the OLD version on a plain reload,
+  // so switch to it first; it reloads the page itself once it takes over.
+  if (waitingActivator?.()) return true;
   try {
     const last = Number(sessionStorage.getItem(RELOAD_GUARD_KEY));
     if (last && Date.now() - last < RELOAD_COOLDOWN_MS) return false;
@@ -36,6 +39,18 @@ export function reloadForNewVersion(target?: string): boolean {
   return true;
 }
 
+let waitingActivator: (() => boolean) | null = null;
+/** Set by registerServiceWorker: tells a waiting worker to take over (true if it did). */
+export function setWaitingActivator(fn: () => boolean): void {
+  waitingActivator = fn;
+}
+
+let updateInProgress = false;
+/** The banner / account menu is already switching versions and reloading. */
+export function markUpdateInProgress(): void {
+  updateInProgress = true;
+}
+
 interface NavigationRouter {
   subscribe(
     event: 'onBeforeNavigate',
@@ -44,10 +59,11 @@ interface NavigationRouter {
 }
 
 /**
- * The service worker takes over open tabs on every deploy (skipWaiting +
- * clients.claim) and deletes the previous precache, so the page already on
- * screen holds chunk hashes that no longer exist and the next lazy-loaded tab
- * crashes. Instead of waiting for that crash:
+ * A new deploy's service worker now waits until the user accepts the update
+ * banner (see registerServiceWorker.ts), so the page on screen keeps working.
+ * It can still happen that ANOTHER tab accepted the update and the worker took
+ * over this one too; this tab then holds chunk hashes that no longer exist
+ * and its next lazy-loaded route would crash. Instead of waiting for that crash:
  *  - a failed lazy import (`vite:preloadError`) reloads once, silently;
  *  - when a new worker takes control of a page that already had one, the next
  *    in-app navigation becomes a full page load of its target (or an
@@ -64,6 +80,7 @@ export function installAppUpdateHandling(router: NavigationRouter): void {
   if (!hadController) return;
 
   navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (updateInProgress) return;
     if (document.visibilityState === 'hidden') {
       reloadForNewVersion();
       return;

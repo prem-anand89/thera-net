@@ -13,6 +13,8 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 vi.mock('./clinicContext', () => ({ useClinic: () => ({ id: 'c1', bookingStartHour: 9, bookingEndHour: 17 }) }));
+vi.mock('./registerServiceWorker', () => ({ checkForUpdateAndReload: vi.fn() }));
+import { checkForUpdateAndReload } from './registerServiceWorker';
 vi.mock('@/features/me/useMyTherapist', () => ({ useMyTherapist: () => myTherapist }));
 vi.mock('@/features/me/useMySchedule', () => ({ useMySchedule: () => mySchedule }));
 vi.mock('@/features/setup/SetupProgressBar', () => ({ SetupProgressBar: () => null }));
@@ -150,12 +152,10 @@ describe('My working hours subtitle and dot', () => {
 });
 
 describe('Refresh app', () => {
-  it('reloads the page when clicked', async () => {
-    const reload = vi.fn();
-    vi.stubGlobal('location', { ...window.location, reload });
+  it('checks for a new version and reloads onto it when clicked', async () => {
+    vi.mocked(checkForUpdateAndReload).mockClear();
     openMenu('admin');
     fireEvent.click(screen.getByRole('button', { name: 'Refresh app' }));
-    await vi.waitFor(() => expect(reload).toHaveBeenCalled());
-    vi.unstubAllGlobals();
+    await vi.waitFor(() => expect(checkForUpdateAndReload).toHaveBeenCalledTimes(1));
   });
 });

@@ -38,6 +38,7 @@ import {
   IconSettings,
 } from '@/components/NavIcons';
 import { AccountMenu } from './AccountMenu';
+import { UpdateBanner } from '@/components/UpdateBanner';
 import { ClinicSwitcher } from './ClinicSwitcher';
 import { AppLoading, BrandMark } from '@/components/BrandMark';
 
@@ -421,6 +422,7 @@ export function Shell() {
             </div>
           </div>
         </header>
+        <UpdateBanner />
         <SyncStatusBanners />
         <main className="mx-auto max-w-6xl px-[max(1rem,env(safe-area-inset-left))] py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6">
           <Suspense

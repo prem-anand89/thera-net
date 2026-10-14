@@ -4,6 +4,7 @@ import { RouterProvider } from '@tanstack/react-router';
 import { router } from './app/router';
 import { ErrorBoundary } from './app/ErrorBoundary';
 import { installAppUpdateHandling } from './app/appUpdate';
+import { registerServiceWorker } from './app/registerServiceWorker';
 import { installGlobalErrorReporting } from './lib/errorReporting';
 import './index.css';
 import { db } from './lib/db';
@@ -11,6 +12,7 @@ import { repos } from './services';
 
 installGlobalErrorReporting();
 installAppUpdateHandling(router);
+registerServiceWorker();
 
 // Vercel environment configured with Supabase credentials
 // Dev/e2e handle for seeding the local store and inspecting sync state

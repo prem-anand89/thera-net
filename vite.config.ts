@@ -4,17 +4,31 @@ import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 
 const appVersion = (JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')) as { version: string }).version;
 
+function buildId(): string {
+  const fromEnv = process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA;
+  if (fromEnv) return fromEnv.slice(0, 7);
+  try {
+    return execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return 'dev';
+  }
+}
+
 export default defineConfig({
-  // Shown in the account menu footer ("Thera.Net · v0.1.0").
-  define: { __APP_VERSION__: JSON.stringify(appVersion) },
+  // Shown in the account menu footer ("Thera.Net v2.1.0 · abc1234") and the update banner.
+  define: { __APP_VERSION__: JSON.stringify(appVersion), __APP_BUILD__: JSON.stringify(buildId()) },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // The app registers /sw.js itself (src/app/registerServiceWorker.ts):
+      // new versions wait for the user instead of reloading tabs.
+      registerType: 'prompt',
+      injectRegister: false,
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
