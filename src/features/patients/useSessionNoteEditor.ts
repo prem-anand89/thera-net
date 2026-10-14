@@ -1,3 +1,4 @@
+import { useUnsavedWorkProbe } from '@/lib/unsavedWork';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBlocker } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -121,6 +122,7 @@ export function useSessionNoteEditor({
 
   const savedSnapshotRef = useRef<string>(JSON.stringify(emptySessionPayload('')));
   const isDirtyRef = useRef(false);
+  useUnsavedWorkProbe(() => isDirtyRef.current);
   useEffect(() => {
     isDirtyRef.current = JSON.stringify(payload) !== savedSnapshotRef.current;
     if (ready && status !== 'completed' && isDirtyRef.current) {

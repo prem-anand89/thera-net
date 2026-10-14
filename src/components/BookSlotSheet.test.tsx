@@ -5,6 +5,9 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { Appointment } from '@/domain/types';
 import { localDateTime } from '@/domain/schedule';
 
+const askConfirmMock = vi.fn(async () => false);
+vi.mock('@/components/notify', () => ({ askConfirm: (...a: unknown[]) => askConfirmMock(...(a as [])), notify: { error: vi.fn(), info: vi.fn() } }));
+
 // ---- mocks -----------------------------------------------------------------
 const scope = { myTherapistId: 't1' as string | undefined };
 const data = {
@@ -172,6 +175,19 @@ describe('BookSlotSheet', () => {
     render(<BookSlotSheet isOpen onClose={onClose} />);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('asks before discarding typed patient details on Escape', async () => {
+    const onClose = vi.fn();
+    askConfirmMock.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    render(<BookSlotSheet isOpen onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: /New patient/i }));
+    fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Typed Name' } });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(askConfirmMock).toHaveBeenCalledTimes(1));
+    expect(onClose).not.toHaveBeenCalled(); // "Keep editing"
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1)); // "Discard"
   });
 
   it('resets everything when reopened with different prefill', () => {

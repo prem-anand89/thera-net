@@ -2,6 +2,7 @@ import { syncEngine } from '@/sync/engine';
 import { syncStatus } from '@/sync/status';
 import { clearUpdateInProgress, markUpdateInProgress, setWaitingActivator } from './appUpdate';
 import { answerTabPresence, otherTabsOpen } from './tabPresence';
+import { hasUnsavedWork } from '@/lib/unsavedWork';
 import {
   BACKGROUND_APPLY_MS,
   CHECK_INTERVAL_MS,
@@ -159,7 +160,7 @@ function watchForUpdates(reg: ServiceWorkerRegistration): void {
         canApplyInBackground({
           hidden: document.visibilityState === 'hidden',
           pendingSync: syncStatus.get().pending ?? 0,
-          busy: isBusyDocument(document),
+          busy: isBusyDocument(document) || hasUnsavedWork(),
         })
       ) {
         // Switching takes over every tab; only do it unprompted when this is the only one.

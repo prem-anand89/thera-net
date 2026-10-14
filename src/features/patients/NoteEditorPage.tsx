@@ -1,3 +1,4 @@
+import { useUnsavedWorkProbe } from '@/lib/unsavedWork';
 import { askConfirm } from '@/components/notify';
 import { toLocalDateStr } from '@/domain/schedule';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -307,6 +308,7 @@ export function NoteEditorPage() {
   // read as dirty.
   const savedSnapshotRef = useRef<string>(JSON.stringify(emptyPayload()));
   const isDirtyRef = useRef(false);
+  useUnsavedWorkProbe(() => isDirtyRef.current);
   useEffect(() => {
     isDirtyRef.current = JSON.stringify(payload) !== savedSnapshotRef.current;
     if (ready && status !== 'completed' && isDirtyRef.current) {

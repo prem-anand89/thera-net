@@ -4620,6 +4620,7 @@ read misses (clipped pills, tables wider than their card).
   sync has settled" gate, so a persisted value can never satisfy it. The
   "Preparing..." screen offers Retry and Sign out after 15 s
   (`PreparingEscape`).
+- **Unsaved work registry** (`lib/unsavedWork.ts`): screens register a probe with `useUnsavedWorkProbe(() => dirty)` (the booking sheet, both note editors); `hasUnsavedWork()` feeds the update system's background-apply check alongside the DOM heuristic. The booking sheet asks "Discard this booking?" when Escape, the backdrop or the X would throw away typed patient details.
 
 ### 2. Revenue Split Snapshot at Billing
 - **Rates stored with each visit** (bm_split_pct, tax_pct, tds_basis)

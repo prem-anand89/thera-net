@@ -1,4 +1,6 @@
 import { useDialogBehavior } from '@/components/dialogBehavior';
+import { askConfirm } from '@/components/notify';
+import { useUnsavedWorkProbe } from '@/lib/unsavedWork';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService, dashboardService } from '@/services';
@@ -100,7 +102,7 @@ export function BookSlotSheet({
   const today = toLocalDateStr(new Date());
   const isReschedule = Boolean(rescheduleAppointment);
 
-  const dialogRef = useDialogBehavior<HTMLDivElement>(isOpen, onClose, () => !busy);
+  const dialogRef = useDialogBehavior<HTMLDivElement>(isOpen, () => void requestClose(), () => !busy);
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [lengthMinutes, setLengthMinutes] = useState(slotMinutes);
@@ -124,6 +126,24 @@ export function BookSlotSheet({
   const [rowOverrides, setRowOverrides] = useState<Record<string, { time?: string; skipped?: boolean }>>({});
   const [therapistTouched, setTherapistTouched] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Typed-in patient details beyond whatever the sheet was opened with.
+  const dirty = !isReschedule && (patientName !== (prefilledPatientName ?? '') || patientPhone !== (prefilledPatientPhone ?? ''));
+  useUnsavedWorkProbe(() => isOpen && dirty);
+  // Escape, the backdrop and the X all come through here: don't throw typed input away silently.
+  async function requestClose() {
+    if (busy) return;
+    if (dirty) {
+      const discard = await askConfirm({
+        title: 'Discard this booking?',
+        message: "You've typed patient details that haven't been saved.",
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        destructive: true,
+      });
+      if (!discard) return;
+    }
+    onClose();
+  }
   const [error, setError] = useState<string | null>(null);
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
@@ -503,7 +523,7 @@ export function BookSlotSheet({
     }`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={() => !busy && onClose()}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={() => void requestClose()}>
       <div
         ref={dialogRef} role="dialog"
         aria-modal="true"
@@ -523,7 +543,7 @@ export function BookSlotSheet({
               </p>
             )}
           </div>
-          <button type="button" aria-label="Close" className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--muted)] hover:bg-[var(--paper)]" onClick={onClose} disabled={busy}>
+          <button type="button" aria-label="Close" className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--muted)] hover:bg-[var(--paper)]" onClick={() => void requestClose()} disabled={busy}>
             <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
