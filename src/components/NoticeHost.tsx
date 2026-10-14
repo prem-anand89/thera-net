@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { ConfirmDialog } from '@/components/ui';
 import { noticeStore, type Notice } from './notify';
 
-const AUTO_DISMISS_MS = { error: 10_000, info: 5_000 } as const;
+const AUTO_DISMISS_MS = { error: 30_000, info: 5_000 } as const;
 
 function NoticeItem({ notice }: { notice: Notice }) {
   useEffect(() => {

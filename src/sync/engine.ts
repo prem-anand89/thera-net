@@ -411,7 +411,10 @@ export class SyncEngine {
         // itself stays (with its error), so the "won't succeed by
         // retrying" notice remains until discarded or the row is edited
         // again — only the stale local *data* is what this fixes.
-        if (isPermanentFailure(error.code, error.message)) {
+        // A patient-ID collision is the exception: there is no server row under
+        // this id, so reverting would delete the patient locally and strand its
+        // visits. Keep the patient; the error stays visible until the ID is fixed.
+        if (isPermanentFailure(error.code, error.message) && !(entry.table === 'patients' && isMrnoCollision(error))) {
           await this.revertToServerTruth(entry.table, entry.rowId);
         }
         continue;

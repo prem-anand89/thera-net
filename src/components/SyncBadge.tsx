@@ -7,6 +7,7 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { formatLastSynced, isSyncStale, syncFailureHeadline, syncRecordLabel } from '@/domain/syncCopy';
 import { btnPrimary, btnSecondary } from '@/components/ui';
 import { useDialogBehavior } from '@/components/dialogBehavior';
+import { isMrnoCollision } from '@/domain/walkInMrno';
 
 /** Re-renders every minute so "N min ago" and the stale check keep moving. */
 function useMinuteClock(): number {
@@ -206,7 +207,9 @@ function DiscardChangeDialog({ entry, onClose }: { entry: OutboxEntry; onClose: 
           {permanent ? `Dismiss this ${label}?` : `Discard this ${label}?`}
         </h2>
         <p className="text-sm text-[var(--muted)]">
-          {permanent
+          {entry.table === 'patients' && isMrnoCollision({ code: entry.errorCode, message: entry.error })
+            ? "This patient's ID is already used by another record, so it has not synced. Edit the patient's ID and it will sync. Dismissing keeps the patient on this device only."
+            : permanent
             ? 'The server rejected this change, so this device was restored to the server\'s version of the record. Dismissing just clears the notice — it does not change any data.'
             : 'This device will stop trying to save this change. Your local copy stays as it is, but other devices will not receive it unless you edit that record again.'}
         </p>

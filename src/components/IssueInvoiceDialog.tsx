@@ -207,6 +207,10 @@ export function IssueInvoiceDialog({
   }
 
   async function recordPaymentStatus(invoice: Invoice) {
+    // Safe direction first: an invoice with no status row reads as PAID, so mark
+    // it outstanding before anything that can fail. If recording the cash then
+    // fails (or the dialog is closed), the invoice still shows what is owed.
+    await paymentService.setStatus(invoice.id, clinicId, 'outstanding');
     if (collectedNow) {
       await paymentService.collectInvoiceNow(
         clinicId,
@@ -214,8 +218,6 @@ export function IssueInvoiceDialog({
         METHOD_FOR_MODE[paymentMode],
         toLocalDateStr(new Date())
       );
-    } else {
-      await paymentService.setStatus(invoice.id, clinicId, 'outstanding');
     }
   }
 
@@ -275,8 +277,8 @@ export function IssueInvoiceDialog({
             {statusProblem && (
               <div role="alert" className="space-y-2 rounded-lg border border-[var(--amber)]/50 bg-[var(--amber-light,var(--paper))] p-3 text-sm text-[var(--ink)]">
                 <p>
-                  The invoice was issued, but its payment status could not be saved. Tap Retry
-                  before closing, or it may show as paid.
+                  The invoice was issued, but the payment could not be recorded, so it may still show as
+                  unpaid. Tap Retry to record it.
                 </p>
                 <button type="button" className={btnSecondary} disabled={busy} onClick={() => void retryPaymentStatus()}>
                   {busy ? 'Retrying…' : 'Retry'}

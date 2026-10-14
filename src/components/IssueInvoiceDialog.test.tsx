@@ -48,13 +48,21 @@ describe('IssueInvoiceDialog payment status', () => {
   it('warns, and offers Retry, when the payment status could not be saved', async () => {
     collectInvoiceNow.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined);
     await issueIt();
-    expect(await screen.findByRole('alert')).toHaveTextContent(/payment status could not be saved/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/payment could not be recorded/);
     expect(screen.getByRole('button', { name: 'Close anyway' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(collectInvoiceNow).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+  });
+
+  it('marks the invoice outstanding before recording cash, so a failure never leaves it reading as paid', async () => {
+    collectInvoiceNow.mockRejectedValue(new Error('offline'));
+    await issueIt();
+    await screen.findByRole('alert');
+    expect(setStatus).toHaveBeenCalledWith('inv-1', 'c1', 'outstanding');
+    expect(setStatus.mock.invocationCallOrder[0]).toBeLessThan(collectInvoiceNow.mock.invocationCallOrder[0]);
   });
 
   it('shows no warning when the status saves', async () => {
