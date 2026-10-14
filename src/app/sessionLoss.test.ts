@@ -35,4 +35,9 @@ describe('voluntary sign-out flag', () => {
     expect(consumeVoluntarySignOut()).toBe(true);
     expect(consumeVoluntarySignOut()).toBe(false);
   });
+
+  it('expires, so a sign-out that failed cannot make a later session loss look deliberate', () => {
+    markVoluntarySignOut(1_000);
+    expect(consumeVoluntarySignOut(1_000 + 20_000)).toBe(false);
+  });
 });

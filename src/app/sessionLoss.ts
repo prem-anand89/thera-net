@@ -9,15 +9,18 @@
 
 export const LAST_USER_META_KEY = 'lastUserId';
 
-let voluntary = false;
-/** Called by `signOutSafely` right before `auth.signOut()`. */
-export function markVoluntarySignOut(): void {
-  voluntary = true;
+/** How long after "Sign out" a session loss still counts as that sign-out. */
+const VOLUNTARY_WINDOW_MS = 15_000;
+let voluntaryUntil = 0;
+/** Called by `signOutSafely` right before `auth.signOut()`. Expires, so a failed
+ *  sign-out can't make a later involuntary loss look deliberate. */
+export function markVoluntarySignOut(now = Date.now()): void {
+  voluntaryUntil = now + VOLUNTARY_WINDOW_MS;
 }
 /** Reads and resets the flag (one sign-out, one answer). */
-export function consumeVoluntarySignOut(): boolean {
-  const was = voluntary;
-  voluntary = false;
+export function consumeVoluntarySignOut(now = Date.now()): boolean {
+  const was = now < voluntaryUntil;
+  voluntaryUntil = 0;
   return was;
 }
 

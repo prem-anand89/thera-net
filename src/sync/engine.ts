@@ -7,6 +7,7 @@ import { onLocalWrite } from '@/repositories/local';
 import { syncStatus, isPermanentFailure } from './status';
 import { coerceReferringSource, type Patient } from '@/domain/types';
 import { isMrnoCollision, reissueWalkInMrno } from '@/domain/walkInMrno';
+import { notify } from '@/components/notify';
 
 /** Shown (and matched by toFriendlyMessage) when the server can't be reached. */
 const LAST_SUCCESS_META_KEY = 'lastSuccessAt';
@@ -339,10 +340,24 @@ export class SyncEngine {
     // One push per row: the outbox stores ids, not payloads, so N edits to a
     // row collapse into a single upsert of its current state.
     const seen = new Set<string>();
+    // The newest queued entry per row: a user edit adds a newer one, which is
+    // how a row blocked by a patient-ID collision gets retried.
+    const newestSeq = new Map<string, number>();
+    for (const e of entries) newestSeq.set(`${e.table}:${e.rowId}`, e.seq!);
     for (const entry of entries) {
       const key = `${entry.table}:${entry.rowId}`;
       if (seen.has(key)) continue;
       seen.add(key);
+      // A typed patient ID already taken on the server can't succeed until the
+      // ID is edited. Don't hammer the server with it on every sync cycle.
+      if (
+        entry.table === 'patients' &&
+        entry.error &&
+        isMrnoCollision({ code: entry.errorCode, message: entry.error }) &&
+        newestSeq.get(key) === entry.seq
+      ) {
+        continue;
+      }
 
       if (!(CLIENT_WRITABLE_TABLES as readonly string[]).includes(entry.table)) {
         await db.outbox
@@ -388,8 +403,9 @@ export class SyncEngine {
       // rather than treating it as a permanent failure (which would revert and
       // DELETE the patient locally and strand its visits).
       for (let attempt = 0; attempt < 3 && error && entry.table === 'patients' && isMrnoCollision(error); attempt++) {
-        if (!(await this.reissuePatientMrno(row as Patient))) break;
-        ({ error } = await supabase.from(entry.table).upsert(domainToRow(row)));
+        const reissued = await this.reissuePatientMrno(row as Patient);
+        if (!reissued) break;
+        ({ error } = await supabase.from(entry.table).upsert(domainToRow(reissued as unknown as Record<string, unknown>)));
       }
       if (error) {
         // Network-level failures throw to stop the drain; server rejections
@@ -423,27 +439,42 @@ export class SyncEngine {
     }
   }
 
-  /** Replaces an auto-minted, colliding walk-in ID with the next free one (local + server). */
-  private async reissuePatientMrno(patient: Patient): Promise<boolean> {
-    if (patient.mrnoSource !== 'auto') return false; // a typed hospital ID is the user's to fix
+  /**
+   * Replaces an auto-minted, colliding walk-in ID with the next free one
+   * (local + server) and returns the updated row, or null when it can't. The
+   * row is re-read inside a transaction so an edit made while the server call
+   * was in flight isn't overwritten by a stale snapshot.
+   */
+  private async reissuePatientMrno(patient: Patient): Promise<Patient | null> {
+    if (patient.mrnoSource !== 'auto') return null; // a typed hospital ID is the user's to fix
     const match = /^(.*?)(\d{2})-\d+$/.exec(patient.mrno);
-    if (!match) return false;
+    if (!match) return null;
     const [, prefix, yy] = match;
     const supabase = this.supabase!;
+    const escapedPrefix = prefix.replace(/[\\%_]/g, (c) => `\\${c}`);
     const { data, error } = await supabase
       .from('patients')
       .select('mrno')
       .eq('clinic_id', patient.clinicId)
-      .like('mrno', `${prefix}${yy}-%`)
-      .limit(5000);
-    if (error) return false;
+      .like('mrno', `${escapedPrefix}${yy}-%`)
+      .order('mrno', { ascending: false })
+      .limit(500);
+    if (error) return null;
     const local = (await db.patients.where('clinicId').equals(patient.clinicId).toArray()).map((p) => p.mrno);
     const fresh = reissueWalkInMrno(patient.mrno, [...local, ...(data ?? []).map((r) => r.mrno as string)]);
-    if (!fresh || fresh === patient.mrno) return false;
-    patient.mrno = fresh;
-    patient.updatedAt = new Date().toISOString();
-    await db.patients.put(patient);
-    return true;
+    if (!fresh || fresh === patient.mrno) return null;
+    const oldMrno = patient.mrno;
+    const updated = await db.transaction('rw', db.patients, async () => {
+      const current = await db.patients.get(patient.id);
+      if (!current) return null;
+      const next = { ...current, mrno: fresh, updatedAt: new Date().toISOString() };
+      await db.patients.put(next);
+      return next;
+    });
+    if (updated) {
+      notify.info(`Patient ID ${oldMrno} was already taken on another device, so ${updated.name} is now ${fresh}.`);
+    }
+    return updated;
   }
 
   private async revertToServerTruth(table: SyncedTable, rowId: string) {

@@ -72,6 +72,9 @@ export function filterNavItems(role: string) {
   );
 }
 
+// Serialises session-change work across effect runs (see the effect in Shell).
+let sessionWork: Promise<void> = Promise.resolve();
+
 async function clearLocalData() {
   await syncEngine.stop();
   for (const table of ALL_SYNCED_TABLES) await db.table(table).clear();
@@ -82,6 +85,9 @@ async function clearLocalData() {
 
 export function Shell() {
   const { loading, session } = useSession();
+  // Keyed by user id, not the session object: Supabase hands out a new object on
+  // every token refresh and tab-focus SIGNED_IN, which must not re-run this.
+  const userId = session?.user?.id ?? null;
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [syncKicked, setSyncKicked] = useState(false);
@@ -148,52 +154,69 @@ export function Shell() {
     // permanently discarding unsynced work.
     if (loading) return;
 
-    const currentUserId = session?.user?.id ?? null;
-    const isSwappingUsers = prevUserId.current != null && currentUserId !== prevUserId.current;
+    const currentUserId = userId;
+    const isSwappingUsers = prevUserId.current != null && currentUserId !== null && currentUserId !== prevUserId.current;
     prevUserId.current = currentUserId;
     let cancelled = false;
 
-    void (async () => {
-      // Signed out, or hot-swapping to another account (e.g. a magic link while
-      // already logged in): clear local data so one account's cache can't leak
-      // into the next — EXCEPT when the session was lost involuntarily (expired
-      // or revoked token, sign-out in another tab) with work still unsynced:
-      // that outbox is the only copy, so keep it and let the login screen say so.
-      if (!session || isSwappingUsers) {
+    // Runs are queued: two overlapping runs (a quick sign-out/in, a dev
+    // double-effect) must not interleave their clears, engine starts and meta
+    // writes. A run that was superseded before it began is skipped.
+    const run = async () => {
+      if (cancelled) return;
+      // Signed out. Clear local data so one account's cache can't leak into the
+      // next login — EXCEPT when the session was lost involuntarily (expired or
+      // revoked token, sign-out in another tab) with work still unsynced: that
+      // outbox is the only copy, so keep it and let the login screen say so.
+      if (currentUserId === null) {
         const outboxCount = await db.outbox.count();
-        if (!session && decideOnSignedOut({ voluntary: consumeVoluntarySignOut(), outboxCount }) === 'keep') {
+        if (cancelled) return;
+        if (decideOnSignedOut({ voluntary: consumeVoluntarySignOut(), outboxCount }) === 'keep') {
           await syncEngine.stop();
           syncStatus.reset();
           return;
         }
         await clearLocalData();
-        if (!session) return;
+        return;
+      }
+
+      // Hot-swap to another account without a sign-out in between (e.g. a magic
+      // link while logged in): wipe the old account's cache, but only when
+      // nothing is waiting to sync. With pending work, fall through so the
+      // owner check below asks before discarding it.
+      if (isSwappingUsers && (await db.outbox.count()) === 0) {
+        if (cancelled) return;
+        await clearLocalData();
       }
 
       // A session is starting. If this device still holds ANOTHER account's
       // unsynced work, pause (syncing would push it under the wrong account).
       const lastUserId = ((await db.meta.get(LAST_USER_META_KEY))?.value as string | undefined) ?? null;
       const outboxCount = await db.outbox.count();
-      const decision = decideOnSessionStart({ lastUserId, userId: currentUserId!, outboxCount });
+      const decision = decideOnSessionStart({ lastUserId, userId: currentUserId, outboxCount });
       if (cancelled) return;
       if (decision === 'confirm-discard') {
         await syncEngine.stop();
         setForeignPending(outboxCount);
         return;
       }
-      if (decision === 'clear-then-resume') await clearLocalData();
-      await db.meta.put({ key: LAST_USER_META_KEY, value: currentUserId! });
+      if (decision === 'clear-then-resume') {
+        await clearLocalData();
+        if (cancelled) return;
+      }
+      await db.meta.put({ key: LAST_USER_META_KEY, value: currentUserId });
       setForeignPending(null);
       syncEngine.start();
       syncEngine.schedule(0);
       setSyncKicked(true);
       void requestPersistentStorage();
-    })();
+    };
+    sessionWork = sessionWork.then(run).catch((e) => console.error('Session change failed', e));
 
     return () => {
       cancelled = true;
     };
-  }, [session, loading]);
+  }, [userId, loading]);
 
   // Default the active clinic to the first membership once data arrives,
   // and repair a stale pointer — `activeClinicId` can be set to an id that
