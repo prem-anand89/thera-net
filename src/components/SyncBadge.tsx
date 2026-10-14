@@ -1,11 +1,21 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type OutboxEntry } from '@/lib/db';
 import { syncStatus, isPermanentFailure } from '@/sync/status';
 import { syncEngine } from '@/sync/engine';
 import { toFriendlyMessage } from '@/lib/errors';
-import { syncFailureHeadline, syncRecordLabel } from '@/domain/syncCopy';
+import { formatLastSynced, isSyncStale, syncFailureHeadline, syncRecordLabel } from '@/domain/syncCopy';
 import { btnPrimary, btnSecondary } from '@/components/ui';
+
+/** Re-renders every minute so "N min ago" and the stale check keep moving. */
+function useMinuteClock(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return now;
+}
 
 export function SyncStatusBanners() {
   const status = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
@@ -18,7 +28,7 @@ export function SyncStatusBanners() {
     <div className="space-y-1 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2">
       {!status.online && (
         <p className="text-sm text-[var(--ink)]">
-          You're offline. Visits still save on this device.
+          You're offline. Your changes save on this device and sync when you're back online.
         </p>
       )}
       {headline && (
@@ -43,6 +53,9 @@ export function SyncBadge() {
   const [open, setOpen] = useState(false);
   const [discarding, setDiscarding] = useState<OutboxEntry | null>(null);
   const failed = useLiveQuery(() => db.outbox.filter((e) => !!e.error).toArray(), []) ?? [];
+  const now = useMinuteClock();
+  const stale = status.online && !status.error && isSyncStale(status.lastSuccessAt, now);
+  const lastSynced = formatLastSynced(status.lastSuccessAt, now);
 
   const dot = !status.online
     ? 'bg-[var(--rust)]'
@@ -50,7 +63,9 @@ export function SyncBadge() {
       ? 'bg-[var(--rust)]'
       : pending > 0 || status.syncing
         ? 'bg-[var(--teal)] animate-pulse'
-        : 'bg-[var(--moss)]';
+        : stale
+          ? 'bg-[var(--amber)]'
+          : 'bg-[var(--moss)]';
 
   const label = !status.online
     ? `Offline${pending ? ` · ${pending} pending` : ''}`
@@ -58,9 +73,13 @@ export function SyncBadge() {
       ? 'Syncing…'
       : failed.length > 0
         ? syncFailureHeadline(failed.map((e) => e.table))
-        : pending > 0
-          ? `${pending} pending`
-          : 'Synced';
+        : status.error
+          ? 'Sync issue'
+          : pending > 0
+            ? `${pending} pending`
+            : stale
+              ? 'Not synced recently'
+              : 'Synced';
 
   // "Quiet" = the boring, common case (online, nothing queued, nothing
   // failed) — the one state where collapsing to just the dot costs
@@ -68,14 +87,14 @@ export function SyncBadge() {
   // (offline, syncing, pending, failed) is the badge's whole reason to
   // exist, so it stays expanded everywhere, phone included, rather than
   // making someone tap a dot to discover their changes aren't syncing.
-  const quiet = status.online && !status.syncing && failed.length === 0 && pending === 0;
+  const quiet = status.online && !status.syncing && failed.length === 0 && pending === 0 && !status.error && !stale;
 
   return (
     <div className="relative">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        title={status.error ?? 'Sync status'}
+        title={status.error ? `${status.error}. ${lastSynced}` : lastSynced}
         aria-label={`Sync: ${label}`}
         className={`flex min-h-11 items-center gap-2 rounded-full text-xs text-[var(--muted)] hover:bg-[var(--paper)] ${quiet ? 'min-w-11 justify-center px-2' : 'border border-[var(--border)] bg-[var(--surface)] px-3 py-1'}`}
       >
@@ -108,6 +127,8 @@ export function SyncBadge() {
                 Try again
               </button>
             </div>
+
+            <p className="mt-1 text-xs text-[var(--muted)]">{lastSynced}</p>
 
             {status.error && (
               <p className="mt-2 rounded-lg border border-[var(--rust)] bg-[var(--rust-light)] px-2 py-1 text-xs text-[var(--rust)]">
@@ -178,7 +199,7 @@ function DiscardChangeDialog({ entry, onClose }: { entry: OutboxEntry; onClose: 
         </h2>
         <p className="text-sm text-[var(--muted)]">
           {permanent
-            ? 'This device already matches the server for this record. Dismissing just clears the notice — it does not change any data.'
+            ? 'The server rejected this change, so this device was restored to the server\'s version of the record. Dismissing just clears the notice — it does not change any data.'
             : 'This device will stop trying to save this change. Your local copy stays as it is, but other devices will not receive it unless you edit that record again.'}
         </p>
         <div className="flex justify-end gap-2">

@@ -8,7 +8,13 @@ export interface SyncStatus {
   online?: boolean;
   syncing?: boolean;
   pending?: number;
+  /** In-memory only: set once a push+pull cycle completes in THIS session. Shell
+   *  uses it as the "first sync has settled" gate, so it must never be restored
+   *  from a previous session. */
   lastSyncAt?: number;
+  /** Time of the last successful sync, persisted across sessions in db.meta —
+   *  purely for display ("Last synced 14:32"). */
+  lastSuccessAt?: number;
   error?: string | null;
 }
 

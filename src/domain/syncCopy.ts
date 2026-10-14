@@ -70,3 +70,22 @@ export function syncFreshnessCaption(
   }
   return null;
 }
+
+/** A successful sync older than this, while online, no longer counts as "all good". */
+export const SYNC_STALE_MS = 30 * 60 * 1000;
+
+export function isSyncStale(lastSuccessAt: number | undefined, now: number): boolean {
+  return lastSuccessAt !== undefined && now - lastSuccessAt > SYNC_STALE_MS;
+}
+
+/** "Last synced just now / 12 min ago / at 14:32 / 12 Oct, 14:32". */
+export function formatLastSynced(lastSuccessAt: number | undefined, now: number): string {
+  if (lastSuccessAt === undefined) return 'Not synced yet on this device';
+  const minutes = Math.floor((now - lastSuccessAt) / 60_000);
+  if (minutes < 1) return 'Last synced just now';
+  if (minutes < 60) return `Last synced ${minutes} min ago`;
+  const at = new Date(lastSuccessAt);
+  const time = at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  if (at.toDateString() === new Date(now).toDateString()) return `Last synced at ${time}`;
+  return `Last synced ${at.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, ${time}`;
+}

@@ -9,6 +9,7 @@ import { coerceReferringSource, type Patient } from '@/domain/types';
 import { isMrnoCollision, reissueWalkInMrno } from '@/domain/walkInMrno';
 
 /** Shown (and matched by toFriendlyMessage) when the server can't be reached. */
+const LAST_SUCCESS_META_KEY = 'lastSuccessAt';
 export const NETWORK_UNREACHABLE = 'Network unreachable';
 const RETRY_MIN_MS = 15_000;
 const RETRY_MAX_MS = 120_000;
@@ -175,6 +176,17 @@ export class SyncEngine {
     this.fallbackTimer = setInterval(() => this.schedule(), 5 * 60 * 1000);
 
     void this.updatePending();
+    // Restore the last successful sync time so the badge can say when it was,
+    // even right after a restart while offline. Display only (see SyncStatus).
+    void db.meta
+      .get(LAST_SUCCESS_META_KEY)
+      .then((m) => {
+        const at = Number(m?.value);
+        if (Number.isFinite(at) && at > 0 && !syncStatus.get().lastSuccessAt) {
+          syncStatus.set({ lastSuccessAt: at });
+        }
+      })
+      .catch(() => {});
     this.schedule();
   }
 
@@ -209,7 +221,9 @@ export class SyncEngine {
       // fails, the link stays queued and the next cycle's RPC answers "already
       // linked", which drops it.
       for (const appointmentId of sentLinks) await removePendingLink(appointmentId);
-      syncStatus.set({ lastSyncAt: Date.now(), error: null });
+      const completedAt = Date.now();
+      syncStatus.set({ lastSyncAt: completedAt, lastSuccessAt: completedAt, error: null });
+      void db.meta.put({ key: LAST_SUCCESS_META_KEY, value: String(completedAt) }).catch(() => {});
       this.retryDelayMs = RETRY_MIN_MS;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
