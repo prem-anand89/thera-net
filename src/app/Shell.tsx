@@ -39,6 +39,7 @@ import {
 } from '@/components/NavIcons';
 import { AccountMenu } from './AccountMenu';
 import { ForeignPendingScreen } from './ForeignPendingScreen';
+import { PreparingEscape } from './PreparingEscape';
 import {
   LAST_USER_META_KEY,
   consumeVoluntarySignOut,
@@ -364,6 +365,7 @@ export function Shell() {
           {syncKicked && !initialSyncSettled && sync.online !== false && sync.error && (
             <p className="text-xs text-[var(--rust)]">Sync issue: {sync.error}</p>
           )}
+          {syncKicked && !initialSyncSettled && <PreparingEscape error={sync.error} />}
         </AppLoading>
       );
     }

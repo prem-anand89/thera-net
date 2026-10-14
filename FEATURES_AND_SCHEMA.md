@@ -4575,6 +4575,35 @@ read misses (clipped pills, tables wider than their card).
   the wipe on every app launch/reload, discarding any outbox entry not
   yet pushed to the server (e.g. a patient added while offline, then the
   tab closed before sync ran) with no warning and no way to recover it.
+- **Only a deliberate sign-out wipes the outbox** (`src/app/sessionLoss.ts`).
+  `signOutSafely` (which already syncs first and warns) marks the sign-out
+  voluntary right before `auth.signOut()`. If the session ends any other way
+  (expired/revoked refresh token, sign-out in another tab, password change on
+  another device) and the outbox is not empty, `Shell` **keeps** all local data,
+  stops the engine, and the login screen shows how many changes are still saved
+  on the device (`UnsyncedNotice`). `db.meta.lastUserId` records who owns the
+  local store. On the next sign-in: same user -> resume syncing; a different
+  user with nothing pending -> clear then continue; a different user **with**
+  pending work -> `ForeignPendingScreen` (Discard and continue / Sign out) and
+  syncing stays off, since the rows would otherwise be pushed under the wrong
+  account. `SyncEngine.sync()` also no-ops while stopped. After a session
+  starts the app calls `navigator.storage.persist()` (`lib/persistStorage.ts`)
+  so the browser doesn't evict the outbox.
+- **Colliding walk-in IDs are re-issued, not reverted.** Walk-in IDs
+  (`W26-0001`) are minted from the local list, so two offline devices can mint
+  the same one; the server's unique `(clinic_id, mrno)` rejects the later push
+  (`23505`). `SyncEngine.push` detects that (`isMrnoCollision`), and for an
+  auto-minted ID replaces it with the next free number from local + server rows
+  (`reissueWalkInMrno`, up to 3 tries) and pushes again. A typed hospital ID is
+  left as a visible failure. Previously the permanent-failure path reverted to
+  server truth, which deleted the patient locally and stranded its visits.
+- **Sync status tells the truth.** `lastSuccessAt` (persisted in `db.meta`,
+  display only) feeds the badge: "Last synced 14:32 / 12 min ago", "Sync issue"
+  when the last attempt errored, amber "Not synced recently" past 30 minutes
+  while online. `lastSyncAt` stays in-memory and is still the Shell's "first
+  sync has settled" gate, so a persisted value can never satisfy it. The
+  "Preparing..." screen offers Retry and Sign out after 15 s
+  (`PreparingEscape`).
 
 ### 2. Revenue Split Snapshot at Billing
 - **Rates stored with each visit** (bm_split_pct, tax_pct, tds_basis)
