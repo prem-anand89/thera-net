@@ -1,3 +1,4 @@
+import { hasDue } from '@/domain/paymentState';
 import { askConfirm } from '@/components/notify';
 import { notify } from '@/components/notify';
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
@@ -619,6 +620,31 @@ export function WorkspacePage() {
   };
   const statCells = showDues ? [collectedCell, duesCell] : [collectedCell];
 
+  const todayCardFor = (row: TodayVisitRow) =>
+    todayRowToCardData(
+      row,
+      openPackageGroupIds,
+      scope.isAdmin,
+      scope.isFrontDesk,
+      scope.myTherapistId,
+      canViewClinicalNotes,
+      therapistSplit,
+      treatmentName,
+      invoicedSiblingGroupIds ?? new Set(),
+      consultationNotes,
+      clinic.enablePatientComms ?? false,
+      feedbackRequestByVisitId,
+      responseByRequestId,
+      googleReviewEligibleIds,
+      clinic.googleReviewUrl ?? null
+    );
+  // Today's visits that still owe money (true) or are settled (false), for the
+  // finished appointments' Due / Paid markers.
+  const dueByVisitId = new Map((today?.visits ?? []).map((row) => [row.visitId, hasDue(row.paymentState)]));
+  const appointmentsLeft =
+    todayAppointments.filter((a) => (a.status === 'confirmed' || a.status === 'rescheduled' || (a.status === 'arrived' && !a.visitId))).length +
+    pendingRequestCount;
+
   return (
     <div className="space-y-5">
       <InstallAppBanner />
@@ -796,7 +822,7 @@ export function WorkspacePage() {
                   onClick={() => setTodayTab(tab)}
                   className={`min-h-9 rounded-md px-3 text-xs font-medium ${todayTab === tab ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}
                 >
-                  {tab === 'appointments' ? `Appointments (${todayAppointments.length + pendingRequestCount})` : `Visits (${today?.visits.length ?? 0})`}
+                  {tab === 'appointments' ? (appointmentsLeft > 0 ? `Appointments (${appointmentsLeft} left)` : `Appointments (${todayAppointments.length + pendingRequestCount})`) : `Visits (${today?.visits.length ?? 0})`}
                 </button>
               ))}
             </div>
@@ -819,6 +845,21 @@ export function WorkspacePage() {
               onDeclineRequest={setDecliningRequest}
               onSeeAllRequests={() => void navigate({ to: '/schedule', search: { tab: 'bookings', view: 'requests' } })}
               flagContext={flagContext}
+              dueByVisitId={dueByVisitId}
+              onCollect={(visitId) => {
+                const row = today?.visits.find((r) => r.visitId === visitId);
+                if (row) setTakingPayment(todayCardFor(row));
+              }}
+              onMarkArrived={
+                canManageBookings || scope.myTherapistId
+                  ? (a) => void bookingService.markAppointmentArrived(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
+                  : undefined
+              }
+              onUndoNoShow={
+                canManageBookings || scope.myTherapistId
+                  ? (a) => void bookingService.restoreNoShowAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
+                  : undefined
+              }
             />
             <Link to="/schedule" className="mt-3 inline-block text-sm font-medium text-[var(--teal)] hover:underline">
               Open schedule →
@@ -830,25 +871,7 @@ export function WorkspacePage() {
           </p>
         ) : (
           <ResponsiveVisitList
-            rows={today.visits.map((row) =>
-              todayRowToCardData(
-                row,
-                openPackageGroupIds,
-                scope.isAdmin,
-                scope.isFrontDesk,
-                scope.myTherapistId,
-                canViewClinicalNotes,
-                therapistSplit,
-                treatmentName,
-                invoicedSiblingGroupIds ?? new Set(),
-                consultationNotes,
-                clinic.enablePatientComms ?? false,
-                feedbackRequestByVisitId,
-                responseByRequestId,
-                googleReviewEligibleIds,
-                clinic.googleReviewUrl ?? null
-              )
-            )}
+            rows={today.visits.map(todayCardFor)}
             showDate={false}
             showPatient={true}
             onInvoice={(row) => openInvoiceFor(row)}

@@ -125,3 +125,55 @@ describe('TodayAppointments', () => {
     expect(screen.getByText('No appointments today.')).toBeInTheDocument();
   });
 });
+
+describe('TodayAppointments quick actions', () => {
+  afterEach(cleanup);
+
+  it('upcoming rows get a one-tap Arrived button', () => {
+    const onMarkArrived = vi.fn();
+    const a = appt('10:00', { patientName: 'Ananya' });
+    render(
+      <TodayAppointments
+        appointments={[a]}
+        slotMinutes={30}
+        nextUpId={null}
+        colorFor={() => '#000'}
+        therapistNameFor={() => 'Dr A'}
+        showTherapist
+        onSelect={vi.fn()}
+        onMarkArrived={onMarkArrived}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Arrived' }));
+    expect(onMarkArrived).toHaveBeenCalledWith(a);
+  });
+
+  it('finished rows show Due (with Collect) or Paid, and the Done summary counts them', () => {
+    const onCollect = vi.fn();
+    const onUndoNoShow = vi.fn();
+    const owes = appt('09:00', { status: 'arrived', visitId: 'v-due', patientName: 'Owes' });
+    const paid = appt('09:30', { status: 'arrived', visitId: 'v-paid', patientName: 'Paid up' });
+    const missed = appt('10:00', { status: 'no_show', patientName: 'Missed' });
+    render(
+      <TodayAppointments
+        appointments={[owes, paid, missed]}
+        slotMinutes={30}
+        nextUpId={null}
+        colorFor={() => '#000'}
+        therapistNameFor={() => 'Dr A'}
+        showTherapist
+        onSelect={vi.fn()}
+        dueByVisitId={new Map([['v-due', true], ['v-paid', false]])}
+        onCollect={onCollect}
+        onUndoNoShow={onUndoNoShow}
+      />
+    );
+    expect(screen.getByText('Done (3)')).toBeInTheDocument();
+    expect(screen.getByText(/1 no-show · 1 due/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Due · Collect' }));
+    expect(onCollect).toHaveBeenCalledWith('v-due');
+    expect(screen.getByText('Paid ✓')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(onUndoNoShow).toHaveBeenCalledWith(missed);
+  });
+});

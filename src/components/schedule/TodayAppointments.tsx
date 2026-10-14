@@ -38,6 +38,10 @@ export function TodayAppointments({
   onDeclineRequest,
   onSeeAllRequests,
   flagContext,
+  dueByVisitId,
+  onCollect,
+  onMarkArrived,
+  onUndoNoShow,
 }: {
   appointments: Appointment[];
   slotMinutes: number;
@@ -54,6 +58,13 @@ export function TodayAppointments({
   onSeeAllRequests?: () => void;
   /** Patient flags + condition (`usePatientFlagContext`); omit to hide them. */
   flagContext?: PatientFlagContext;
+  /** Today's logged visits: true = still owes money, false = settled. Finished rows show Due / Paid from it. */
+  dueByVisitId?: Map<string, boolean>;
+  onCollect?: (visitId: string) => void;
+  /** One-tap "Arrived" on an upcoming row (otherwise it takes row, panel, button). */
+  onMarkArrived?: (appointment: Appointment) => void;
+  /** Reverses a mistaken no-show; Rebook is the row itself (opens the panel with Reschedule). */
+  onUndoNoShow?: (appointment: Appointment) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   const inProgress = appointments.filter((a) => a.status === 'arrived' && !a.visitId);
@@ -112,7 +123,7 @@ export function TodayAppointments({
           <span className="hidden w-14 shrink-0 pt-0.5 text-xs text-[var(--muted)] sm:block">{length}</span>
         </button>
         {end && (
-          <span className={`shrink-0 self-start pt-0.5 ${showEndOnMobile ? '' : 'hidden sm:block'}`}>
+          <span className={`shrink-0 self-start pt-0.5 sm:flex sm:w-40 sm:justify-end ${showEndOnMobile ? '' : 'hidden sm:flex'}`}>
             {end}
           </span>
         )}
@@ -125,6 +136,54 @@ export function TodayAppointments({
     ) : (
       <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>{APPOINTMENT_STATUS_LABEL[a.status]}</Pill>
     );
+
+  const dueCount = done.filter((a) => a.visitId && dueByVisitId?.get(a.visitId)).length;
+  const noShowCount = done.filter((a) => a.status === 'no_show' && !a.visitId).length;
+  const doneSummary = [
+    noShowCount > 0 ? `${noShowCount} no-show` : null,
+    dueCount > 0 ? `${dueCount} due` : null,
+  ]
+    .filter(Boolean)
+    .map((part) => ` · ${part}`)
+    .join('');
+
+  /** What a finished row's right side is for: payment state on a logged visit, undo on a no-show. */
+  const doneEnd = (a: Appointment): ReactNode => {
+    if (a.visitId && dueByVisitId?.has(a.visitId)) {
+      return dueByVisitId.get(a.visitId) ? (
+        <button
+          type="button"
+          className="min-h-9 rounded-full border border-[var(--rust)] px-3 text-xs font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
+          onClick={() => onCollect?.(a.visitId!)}
+        >
+          Due · Collect
+        </button>
+      ) : (
+        <span className="text-xs font-medium text-[var(--moss-strong,var(--teal))]">Paid ✓</span>
+      );
+    }
+    if (a.status === 'no_show' && !a.visitId && onUndoNoShow) {
+      return (
+        <span className="flex items-center gap-2">
+          <button
+            type="button"
+            className="min-h-9 rounded-full border border-[var(--rust)] px-3 text-xs font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
+            onClick={() => onUndoNoShow(a)}
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="hidden min-h-9 rounded-full border border-[var(--border)] px-3 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)] sm:inline-block"
+            onClick={() => onSelect(a)}
+          >
+            Rebook
+          </button>
+        </span>
+      );
+    }
+    return statusPill(a);
+  };
 
   const requestsSection = hasRequests ? (
     <section aria-label="Requests to confirm">
@@ -195,9 +254,19 @@ export function TodayAppointments({
             {shownUpcoming.map((a) =>
               row(
                 a,
-                statusPill(a),
+                onMarkArrived ? (
+                  <button
+                    type="button"
+                    className="min-h-9 rounded-full border border-[var(--teal)] px-3 text-xs font-medium text-[var(--teal)] hover:bg-[var(--teal-light)]"
+                    onClick={() => onMarkArrived(a)}
+                  >
+                    Arrived
+                  </button>
+                ) : (
+                  statusPill(a)
+                ),
                 a.status === 'rescheduled' ? 'Rescheduled' : undefined,
-                false
+                Boolean(onMarkArrived)
               )
             )}
           </ul>
@@ -215,16 +284,12 @@ export function TodayAppointments({
 
       {done.length > 0 && (
         <details>
-          <summary className="min-h-9 cursor-pointer text-sm text-[var(--muted)]">Done ({done.length})</summary>
+          <summary className="min-h-9 cursor-pointer text-sm text-[var(--muted)]">
+            Done ({done.length})
+            <span className="text-xs">{doneSummary}</span>
+          </summary>
           <ul className={`${listCls} mt-1`}>
-            {done.map((a) =>
-              row(
-                a,
-                statusPill(a),
-                a.visitId ? 'Visit logged' : APPOINTMENT_STATUS_LABEL[a.status],
-                false
-              )
-            )}
+            {done.map((a) => row(a, doneEnd(a), a.visitId ? 'Visit logged' : APPOINTMENT_STATUS_LABEL[a.status], Boolean(a.visitId ? dueByVisitId : onUndoNoShow)))}
           </ul>
         </details>
       )}
