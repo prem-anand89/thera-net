@@ -92,6 +92,8 @@ export function TodayAppointments({
     const flags = patientFlags(a, flagContext);
     const reason = appointmentReason(a, flagContext);
     const wideDetail = [note, reason?.text].filter(Boolean).join(', ');
+    // Only states worth a word on a phone; "Visit logged" / "Done" are said by the Paid / Due marker.
+    const mobileNote = note && note !== 'Visit logged' && note !== 'Done' ? note : undefined;
     const noteClass =
       note === 'Rescheduled'
         ? 'font-medium text-[var(--amber-strong,#b45309)]'
@@ -103,10 +105,10 @@ export function TodayAppointments({
     return (
       <li
         key={a.id}
-        className="flex items-start gap-3 border-l-4 py-2.5 pl-4 pr-5"
+        className="flex min-h-14 items-start gap-3 border-l-4 py-2.5 pl-4 pr-5"
         style={{ borderLeftColor: color, background: fill.background }}
       >
-        <button type="button" className="flex min-w-0 flex-1 items-start gap-3 text-left" onClick={() => onSelect(a)}>
+        <button type="button" className="flex min-h-11 min-w-0 flex-1 items-start gap-3 text-left" onClick={() => onSelect(a)}>
           <span className="w-16 shrink-0 whitespace-nowrap pt-0.5 text-[13px] tabular-nums text-[var(--muted)] sm:w-[4.5rem] sm:text-sm">
             {minutesLabel(minutesOfDay(a.scheduledAt))}
             {toLocalDateStr(new Date(a.scheduledAt)) !== toLocalDateStr(new Date()) && (
@@ -123,15 +125,15 @@ export function TodayAppointments({
               )}
               <PatientFlagPills flags={flags} max={2} />
             </span>
-            <span className="block truncate text-xs text-[var(--muted)] sm:hidden">
-              {note && (
-                <span className={noteClass}>
-                  {note}
-                  {[reason?.text, length, showTherapist ? therapistNameFor(a) : null].some(Boolean) ? ' · ' : ''}
-                </span>
-              )}
-              {[reason?.text, length, showTherapist ? therapistNameFor(a) : null].filter(Boolean).join(', ')}
-            </span>
+            {/* Phones: two clean lines. Length and therapist live in the detail
+                panel (the colour edge already says whose column it is). */}
+            {(mobileNote || reason?.text) && (
+              <span className="block truncate text-xs text-[var(--muted)] sm:hidden">
+                {mobileNote && <span className={noteClass}>{mobileNote}</span>}
+                {mobileNote && reason?.text ? ' · ' : ''}
+                {reason?.text}
+              </span>
+            )}
             {wideDetail && <span className="hidden truncate text-xs text-[var(--muted)] sm:block">{wideDetail}</span>}
           </span>
           {showTherapist && <span className="hidden w-36 shrink-0 truncate pt-0.5 text-xs text-[var(--muted)] sm:block">{therapistNameFor(a)}</span>}
@@ -168,7 +170,7 @@ export function TodayAppointments({
       return dueByVisitId.get(a.visitId) ? (
         <button
           type="button"
-          className="min-h-9 rounded-full border border-[var(--rust)] px-3 text-xs font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
+          className="min-h-11 rounded-full border sm:min-h-9 border-[var(--rust)] px-3 text-xs font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
           onClick={() => onCollect?.(a.visitId!)}
         >
           Due · Collect
@@ -182,14 +184,14 @@ export function TodayAppointments({
         <span className="flex items-center gap-2">
           <button
             type="button"
-            className="min-h-9 rounded-full border border-[var(--rust)] px-3 text-xs font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
+            className="min-h-11 rounded-full border sm:min-h-9 border-[var(--rust)] px-3 text-xs font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
             onClick={() => onUndoNoShow(a)}
           >
             Undo
           </button>
           <button
             type="button"
-            className="hidden min-h-9 rounded-full border border-[var(--border)] px-3 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)] sm:inline-block"
+            className="hidden min-h-11 rounded-full border sm:min-h-9 border-[var(--border)] px-3 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)] sm:inline-block"
             onClick={() => onSelect(a)}
           >
             Rebook
@@ -248,7 +250,7 @@ export function TodayAppointments({
                       ...(a.patientId ? { patientId: a.patientId } : {}),
                       from: '/workspace',
                     }}
-                    className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                    className="inline-flex min-h-11 items-center rounded-full bg-[var(--teal)] px-3 text-xs font-medium text-white hover:bg-[var(--teal-strong)] sm:min-h-0 sm:px-2.5 sm:py-1"
                   >
                     <span className="sm:hidden">Complete</span>
                     <span className="hidden sm:inline">Complete visit</span>
@@ -272,7 +274,7 @@ export function TodayAppointments({
                 onMarkArrived ? (
                   <button
                     type="button"
-                    className="min-h-9 rounded-full border border-[var(--teal)] px-3 text-xs font-medium text-[var(--teal)] hover:bg-[var(--teal-light)]"
+                    className="min-h-11 rounded-full border sm:min-h-9 border-[var(--teal)] px-3 text-xs font-medium text-[var(--teal)] hover:bg-[var(--teal-light)]"
                     onClick={() => onMarkArrived(a)}
                   >
                     Arrived
