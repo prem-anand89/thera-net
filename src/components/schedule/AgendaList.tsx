@@ -49,32 +49,6 @@ export function AgendaList({
   /** Patient flags + condition (`usePatientFlagContext`). */
   flagContext?: PatientFlagContext;
 }) {
-  let nowSortAt = nowMinutes;
-  let isNowInsideItem = false;
-  if (nowMinutes !== null) {
-    let bestSortAt: number = nowMinutes;
-    for (const appt of appointments) {
-      const at = minutesOfDay(appt.scheduledAt);
-      const end = at + appointmentMinutes(appt, slotMinutes);
-      // If the appointment is currently ongoing, we want the "now" line to sit above it
-      if (at <= nowMinutes && end > nowMinutes) {
-        isNowInsideItem = true;
-        if (bestSortAt === nowMinutes || at < bestSortAt) {
-          bestSortAt = at - 0.1;
-        }
-      }
-    }
-    for (const gap of gaps) {
-      if (gap.start <= nowMinutes && gap.end > nowMinutes) {
-        isNowInsideItem = true;
-        if (bestSortAt === nowMinutes || gap.start < bestSortAt) {
-          bestSortAt = gap.start - 0.1;
-        }
-      }
-    }
-    nowSortAt = bestSortAt;
-  }
-
   const rows: (Row & { sortAt: number })[] = [
     ...appointments.map((appointment) => {
       const at = minutesOfDay(appointment.scheduledAt);
@@ -86,7 +60,7 @@ export function AgendaList({
       };
     }),
     ...gaps.map((gap) => ({ kind: 'gap' as const, at: gap.start, sortAt: gap.start, gap, therapistName: gap.therapistName, therapistId: gap.therapistId })),
-    ...(nowMinutes !== null && nowSortAt !== null && !isNowInsideItem ? [{ kind: 'now' as const, at: nowMinutes, sortAt: nowSortAt }] : []),
+    ...(nowMinutes !== null ? [{ kind: 'now' as const, at: nowMinutes, sortAt: nowMinutes }] : []),
   ].sort((a, b) => a.sortAt - b.sortAt || (a.kind === 'now' ? -1 : b.kind === 'now' ? 1 : 0));
 
   return (
@@ -94,18 +68,16 @@ export function AgendaList({
       {rows.map((row) => {
         if (row.kind === 'now') {
           return (
-            <li key="now" className="flex items-center gap-2 text-[11px] font-medium text-[var(--rust)]" aria-label="Now">
+            <li key="now" className="flex items-center gap-2 py-1 text-[11px] font-medium text-[var(--rust)]" aria-label="Now">
               <span className="h-2 w-2 rounded-full bg-[var(--rust)]" aria-hidden />
               <span className="h-px flex-1 bg-[var(--rust)]" aria-hidden />
-              {minutesLabel(row.at)}
+              <span>{minutesLabel(row.at)}</span>
             </li>
           );
         }
         if (row.kind === 'gap') {
-          const isOngoing = nowMinutes !== null && row.gap.start <= nowMinutes && row.gap.end > nowMinutes;
-          const progressPercent = isOngoing ? Math.max(0, Math.min(100, ((nowMinutes! - row.gap.start) / (row.gap.end - row.gap.start)) * 100)) : 0;
           return (
-            <li key={`gap-${row.gap.start}-${row.therapistId ?? 'any'}`} className="relative">
+            <li key={`gap-${row.gap.start}-${row.therapistId ?? 'any'}`}>
               <button
                 type="button"
                 disabled={!onBookGap}
@@ -117,16 +89,6 @@ export function AgendaList({
                 </span>
                 {onBookGap && <span className="font-medium">+ Book</span>}
               </button>
-              {isOngoing && (
-                <div 
-                  className="absolute left-[-4px] right-0 z-10 flex items-center gap-2 pointer-events-none"
-                  style={{ top: `${progressPercent}%`, transform: 'translateY(-50%)' }}
-                >
-                  <span className="h-2 w-2 rounded-full bg-[var(--rust)]" aria-hidden />
-                  <span className="h-px flex-1 bg-[var(--rust)]" aria-hidden />
-                  <span className="text-[11px] font-medium text-[var(--rust)] text-shadow-sm">{minutesLabel(nowMinutes!)}</span>
-                </div>
-              )}
             </li>
           );
         }
@@ -138,10 +100,8 @@ export function AgendaList({
         const fill = appointmentFill(appointment, color);
         const flags = patientFlags(appointment, flagContext);
         const reason = appointmentReason(appointment, flagContext)?.text;
-        const isOngoing = nowMinutes !== null && row.at <= nowMinutes && (row.at + minutes) > nowMinutes;
-        const progressPercent = isOngoing ? Math.max(0, Math.min(100, ((nowMinutes! - row.at) / minutes) * 100)) : 0;
         return (
-          <li key={appointment.id} className="relative">
+          <li key={appointment.id}>
             <button
               type="button"
               onClick={() => onSelect(appointment)}
@@ -168,16 +128,6 @@ export function AgendaList({
                 </span>
               </span>
             </button>
-            {isOngoing && (
-              <div 
-                className="absolute left-[-4px] right-0 z-10 flex items-center gap-2 pointer-events-none"
-                style={{ top: `${progressPercent}%`, transform: 'translateY(-50%)' }}
-              >
-                <span className="h-2 w-2 rounded-full bg-[var(--rust)]" aria-hidden />
-                <span className="h-px flex-1 bg-[var(--rust)]" aria-hidden />
-                <span className="text-[11px] font-medium text-[var(--rust)] text-shadow-sm">{minutesLabel(nowMinutes!)}</span>
-              </div>
-            )}
           </li>
         );
       })}
