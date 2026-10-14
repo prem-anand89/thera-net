@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { PatientProfileBackTarget } from '@/app/router';
 import type { PaymentMethod } from '@/domain/types';
-import { paiseToRupees, rupeesToPaise } from '@/domain/money';
+import { formatINR, rupeesToPaise } from '@/domain/money';
+import { toLocalDateStr } from '@/domain/schedule';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { advanceService } from '@/services';
 
@@ -32,7 +33,7 @@ export function RecordAdvanceDialog({
 }) {
   const [amountRupees, setAmountRupees] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [receivedDate, setReceivedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [receivedDate, setReceivedDate] = useState(() => toLocalDateStr(new Date()));
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +78,7 @@ export function RecordAdvanceDialog({
           <>
             <h2 className="text-sm font-semibold text-[var(--ink)]">Advance recorded</h2>
             <p className="text-sm text-[var(--ink)]">
-              {paiseToRupees(parsedAmountPaise).toLocaleString('en-IN')} rupees recorded for{' '}
+              {formatINR(parsedAmountPaise)} recorded for{' '}
               {patientLabel}. It's available to apply against a future bill.
             </p>
             <div className="flex justify-end gap-2">

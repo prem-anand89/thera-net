@@ -6,6 +6,7 @@ import type { Paise } from '@/domain/money';
 import { btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { advanceService, directPaymentService, paymentService, repos } from '@/services';
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
+import { toLocalDateStr } from '@/domain/schedule';
 
 const METHODS: { value: PaymentMethod; label: string }[] = [
   { value: 'cash', label: 'Cash' },
@@ -44,6 +45,10 @@ export function TakePaymentDialog({
   onClose: () => void;
 }) {
   const [method, setMethod] = useState<PaymentMethod>('cash');
+  // When the money actually arrived — today by default, not the visit's date:
+  // collecting on an old visit would otherwise land in a past Daybook day.
+  const today = toLocalDateStr(new Date());
+  const [receivedDate, setReceivedDate] = useState(today);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Splitting one collection across methods (e.g. part cash, part UPI) was
@@ -116,9 +121,9 @@ export function TakePaymentDialog({
 
   async function recordOne(amount: Paise, forMethod: PaymentMethod) {
     if (invoiceId && invoice) {
-      await paymentService.recordInvoicePayment(clinicId, invoice, amount, forMethod, visitDate, null);
+      await paymentService.recordInvoicePayment(clinicId, invoice, amount, forMethod, receivedDate, null);
     } else {
-      await directPaymentService.logPayment(clinicId, visitId, amount, forMethod, visitDate, null);
+      await directPaymentService.logPayment(clinicId, visitId, amount, forMethod, receivedDate, null);
     }
   }
 
@@ -176,7 +181,7 @@ export function TakePaymentDialog({
       for (const { advance, remainingPaise } of ordered) {
         if (toApply <= 0) break;
         const slice = Math.min(remainingPaise, toApply);
-        await advanceService.applyAdvance(clinicId, advance, visits, slice, visitDate);
+        await advanceService.applyAdvance(clinicId, advance, visits, slice, receivedDate);
         toApply -= slice;
       }
       onClose();
@@ -322,6 +327,16 @@ export function TakePaymentDialog({
             )}
           </>
         )}
+        <label className="block text-xs font-medium text-[var(--muted)]">
+          Date received
+          <input
+            type="date"
+            className={`${inputCls} mt-1`}
+            value={receivedDate}
+            max={today}
+            onChange={(e) => setReceivedDate(e.target.value || today)}
+          />
+        </label>
         {invoiceId && remainingDuePaise > 0 && parsedAmountPaise < remainingDuePaise && (
           <p className="text-xs text-[var(--muted)]">
             Less than the full balance — the invoice stays outstanding until the rest is collected.
