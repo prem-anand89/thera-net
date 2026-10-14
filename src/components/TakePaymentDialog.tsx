@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { PaymentMethod } from '@/domain/types';
@@ -44,6 +45,7 @@ export function TakePaymentDialog({
   patientId?: string;
   onClose: () => void;
 }) {
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
   const [method, setMethod] = useState<PaymentMethod>('cash');
   // When the money actually arrived — today by default, not the visit's date:
   // collecting on an old visit would otherwise land in a past Daybook day.
@@ -195,7 +197,7 @@ export function TakePaymentDialog({
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         className="dialog-panel w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5"
       >

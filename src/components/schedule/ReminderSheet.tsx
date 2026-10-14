@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useEffect, useRef, useMemo, useState } from 'react';
 import { Field, btnSecondary, inputCls } from '@/components/ui';
 import { bookingService } from '@/services';
@@ -29,6 +30,7 @@ export function ReminderSheet({
   slotMinutes: number;
   onClose: () => void;
 }) {
+  const dialogRef = useDialogBehavior<HTMLDivElement>(open, onClose);
   const [date, setDate] = useState(initialDate);
   const [tab, setTab] = useState<'patients' | 'therapists'>('patients');
   const [sent, setSent] = useState<Set<string>>(new Set());
@@ -77,7 +79,7 @@ export function ReminderSheet({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={onClose}>
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         aria-labelledby="reminder-sheet-title"
         className="flex max-h-[90vh] w-full flex-col rounded-t-2xl bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] shadow-xl sm:max-w-lg sm:rounded-2xl sm:pb-0"

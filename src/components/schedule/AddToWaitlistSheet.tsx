@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useEffect, useRef, useState } from 'react';
 import { ErrorNote, Field, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -32,6 +33,7 @@ export function AddToWaitlistSheet({
   onClose: () => void;
   onAdded?: () => void;
 }) {
+  const dialogRef = useDialogBehavior<HTMLDivElement>(open, onClose);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [preferredTherapistId, setPreferredTherapistId] = useState('');
@@ -94,7 +96,7 @@ export function AddToWaitlistSheet({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={onClose}>
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         aria-labelledby="add-waitlist-title"
         className="w-full rounded-t-2xl bg-[var(--surface)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"

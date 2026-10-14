@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { PatientProfileBackTarget } from '@/app/router';
@@ -31,6 +32,7 @@ export function RecordAdvanceDialog({
   backTo?: PatientProfileBackTarget;
   onClose: () => void;
 }) {
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
   const [amountRupees, setAmountRupees] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [receivedDate, setReceivedDate] = useState(() => toLocalDateStr(new Date()));
@@ -70,7 +72,7 @@ export function RecordAdvanceDialog({
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-4">
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         className="dialog-panel w-full max-w-sm space-y-4 rounded-[10px] bg-[var(--surface)] p-5"
       >

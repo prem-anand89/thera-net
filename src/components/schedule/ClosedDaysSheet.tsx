@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ErrorNote, Field, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
@@ -17,6 +18,7 @@ export function ClosedDaysSheet({
   initialDate: string;
   onClose: () => void;
 }) {
+  const dialogRef = useDialogBehavior<HTMLDivElement>(open, onClose);
   const [from, setFrom] = useState(initialDate);
   const [to, setTo] = useState(initialDate);
   const [label, setLabel] = useState('');
@@ -66,7 +68,7 @@ export function ClosedDaysSheet({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={onClose}>
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         aria-labelledby="closed-days-title"
         className="w-full rounded-t-2xl bg-[var(--surface)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"

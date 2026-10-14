@@ -4527,6 +4527,18 @@ version" lock for breaking releases. Not browser-tested at the time of writing;
 the flow to verify on a real deploy is open app, push, wait for the banner,
 Refresh.
 
+### 0a. Dialogs, notices and confirms (`components/dialogBehavior.ts`, `notify.ts`, `NoticeHost.tsx`)
+Native `alert()` / `confirm()` / `prompt()` are not used for user-facing messages (they look wrong in a
+phone PWA and iOS standalone can suppress them). `notify.error()` / `notify.info()` show a dismissable
+notice (`role="alert"` / `status`, auto-dismiss) and `askConfirm({ title, message, confirmLabel,
+destructive, typeToConfirm })` returns a `Promise<boolean>` for a styled confirm (type-to-confirm replaces
+`prompt()`); both work from non-React code, and `NoticeHost` (mounted once in `main.tsx`) renders them.
+`ConfirmDialog` takes `open`/`onConfirm`/`onCancel` for places that own the state. **Every modal uses
+`useDialogBehavior(open, onClose)`** on its `role="dialog"` panel: Escape closes only the topmost
+open dialog, Tab/Shift+Tab stay inside it, focus moves in on open and back to the opener on close.
+`ErrorNote` is `role="alert"`. The only native dialogs left are the three unsaved-changes route guards
+(Settings, session note editor, note editor): the router blocker must answer synchronously.
+
 ### 0b. Phone layout conventions
 Checked at 375px wide (and 375x640 for pop-ups) with the app booted in headless
 Chromium against mocked Supabase responses — a quick way to catch what a code

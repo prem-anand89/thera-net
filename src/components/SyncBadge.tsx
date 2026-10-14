@@ -6,6 +6,7 @@ import { syncEngine } from '@/sync/engine';
 import { toFriendlyMessage } from '@/lib/errors';
 import { formatLastSynced, isSyncStale, syncFailureHeadline, syncRecordLabel } from '@/domain/syncCopy';
 import { btnPrimary, btnSecondary } from '@/components/ui';
+import { useDialogBehavior } from '@/components/dialogBehavior';
 
 /** Re-renders every minute so "N min ago" and the stale check keep moving. */
 function useMinuteClock(): number {
@@ -183,6 +184,7 @@ export function SyncBadge() {
 }
 
 function DiscardChangeDialog({ entry, onClose }: { entry: OutboxEntry; onClose: () => void }) {
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
   const permanent = isPermanentFailure(entry.errorCode ?? null, entry.error ?? '');
   const label = syncRecordLabel(entry.table);
 
@@ -193,8 +195,14 @@ function DiscardChangeDialog({ entry, onClose }: { entry: OutboxEntry; onClose: 
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--ink)]/40 p-4">
-      <div className="dialog-panel w-full max-w-sm space-y-3 rounded-2xl bg-[var(--surface)] p-5">
-        <h2 className="text-sm font-semibold text-[var(--ink)]">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="discard-change-title"
+        className="dialog-panel w-full max-w-sm space-y-3 rounded-2xl bg-[var(--surface)] p-5"
+      >
+        <h2 id="discard-change-title" className="text-sm font-semibold text-[var(--ink)]">
           {permanent ? `Dismiss this ${label}?` : `Discard this ${label}?`}
         </h2>
         <p className="text-sm text-[var(--muted)]">

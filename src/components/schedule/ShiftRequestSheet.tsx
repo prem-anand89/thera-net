@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { notify } from '@/components/notify';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -34,6 +35,7 @@ export function ShiftRequestSheet({
 }) {
   const templates = useLiveQuery(() => repos.shiftTemplates.list(clinicId), [clinicId]);
   const schedule = useMySchedule(therapistId, clinicId, currentWorkingHours);
+  const dialogRef = useDialogBehavior<HTMLDivElement>(open, onClose);
   const [shiftId, setShiftId] = useState('');
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [customMode, setCustomMode] = useState(false);
@@ -93,7 +95,7 @@ export function ShiftRequestSheet({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full rounded-t-2xl bg-[var(--surface)] p-4 sm:max-w-md sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full rounded-t-2xl bg-[var(--surface)] p-4 sm:max-w-md sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
         <h2 id={titleId} className="font-display text-lg font-semibold text-[var(--ink)]">My working hours</h2>
         {schedule && (
           <div data-testid="current-schedule-block" className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-3">

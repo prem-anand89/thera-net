@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useState } from 'react';
 import type { Invoice } from '@/domain/types';
 import { invoiceService } from '@/services';
@@ -21,6 +22,7 @@ export function VoidInvoiceDialog({
   receivedPaise: number;
   onClose: () => void;
 }) {
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export function VoidInvoiceDialog({
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[var(--ink)]/40 p-3 sm:p-4">
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         aria-labelledby="void-invoice-title"
         className="max-h-[90vh] w-full max-w-md space-y-4 overflow-y-auto rounded-2xl bg-[var(--surface)] p-4 sm:p-5"

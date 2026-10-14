@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { notify } from '@/components/notify';
 import { useEffect, useState } from 'react';
 import { Link } from '@tanstack/react-router';
@@ -94,6 +95,7 @@ export function AppointmentDetailsPanel({
   returnTo?: NewVisitBackTarget;
 }) {
   const clinic = useClinic();
+  const dialogRef = useDialogBehavior<HTMLElement>(Boolean(appointment), onClose);
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmNoShow, setConfirmNoShow] = useState(false);
@@ -162,7 +164,7 @@ export function AppointmentDetailsPanel({
     <>
       <div className="fixed inset-0 z-30 bg-[var(--ink)]/30 tab:bg-[var(--ink)]/10" onClick={onClose} aria-hidden />
       <aside
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         aria-labelledby="appointment-details-title"
         className="fixed inset-x-0 bottom-0 z-40 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-[var(--surface)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl tab:inset-y-0 tab:left-auto tab:right-0 tab:max-h-none tab:w-[380px] tab:rounded-none tab:border-l tab:border-[var(--border)] tab:p-5"

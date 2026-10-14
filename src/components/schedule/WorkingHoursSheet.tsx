@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useEffect, useState } from 'react';
 import { ErrorNote, btnPrimary, btnSecondary } from '@/components/ui';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -41,6 +42,7 @@ export function WorkingHoursSheet({
   onSave: (hours: WorkingHours | null) => Promise<void>;
   onClose: () => void;
 }) {
+  const dialogRef = useDialogBehavior<HTMLDivElement>(open, onClose);
   const [custom, setCustom] = useState(false);
   const [hours, setHours] = useState<WorkingHours>({});
   const [busy, setBusy] = useState(false);
@@ -91,7 +93,7 @@ export function WorkingHoursSheet({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={onClose}>
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         aria-labelledby="working-hours-title"
         className="flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-[var(--surface)] shadow-xl sm:max-w-lg sm:rounded-2xl"

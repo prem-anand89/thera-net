@@ -1,3 +1,4 @@
+import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService, dashboardService } from '@/services';
@@ -99,6 +100,7 @@ export function BookSlotSheet({
   const today = toLocalDateStr(new Date());
   const isReschedule = Boolean(rescheduleAppointment);
 
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [lengthMinutes, setLengthMinutes] = useState(slotMinutes);
@@ -510,7 +512,7 @@ export function BookSlotSheet({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--ink)]/45 sm:items-center sm:p-4" onClick={() => !busy && onClose()}>
       <div
-        role="dialog"
+        ref={dialogRef} role="dialog"
         aria-modal="true"
         aria-labelledby="book-slot-title"
         className="flex h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-[var(--surface)] shadow-xl sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl"
