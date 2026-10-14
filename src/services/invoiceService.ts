@@ -7,6 +7,7 @@ import {
 import type { Repos } from '@/repositories/types';
 import { getSupabase } from '@/lib/supabase';
 import { rowToDomain } from '@/repositories/rowMapping';
+import { createPaymentService } from './paymentService';
 
 /**
  * Invoice issuance is ONLINE-ONLY by design: gap-free sequential numbers per
@@ -228,6 +229,11 @@ export function createInvoiceService(repos: Repos) {
         allVisits.map((v) => v.id),
         invoice.id
       );
+      // The amendment is a brand-new invoice with no status row, which reads
+      // as PAID. Payments already recorded stay on the re-pointed visits, so
+      // derive its real state from them: unpaid stays outstanding, a raised
+      // total leaves a balance, an unchanged fully paid one stays paid.
+      await createPaymentService(repos).reconcileInvoiceStatus(clinic.id, invoice);
       return invoice;
     },
 
