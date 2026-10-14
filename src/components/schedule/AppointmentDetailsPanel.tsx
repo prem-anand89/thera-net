@@ -61,6 +61,7 @@ export function AppointmentDetailsPanel({
   onClose,
   onReschedule,
   onCancelSeries,
+  seriesFollowingCount,
   onStartNote,
   returnTo,
 }: {
@@ -84,6 +85,8 @@ export function AppointmentDetailsPanel({
   onReschedule: (appointment: Appointment) => void;
   /** Cancels this and the following sessions of its series. */
   onCancelSeries?: (appointment: Appointment) => void;
+  /** Sessions a series cancel would cancel (this one and the active ones after it), shown in its confirm. */
+  seriesFollowingCount?: number;
   /** Opens "Start note" — notes now, service and payment later. */
   onStartNote?: (appointment: Appointment) => void;
   /** Page this panel is on, so a visit completed from it returns here. */
@@ -92,6 +95,8 @@ export function AppointmentDetailsPanel({
   const clinic = useClinic();
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmNoShow, setConfirmNoShow] = useState(false);
+  const [confirmSeries, setConfirmSeries] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -320,7 +325,7 @@ export function AppointmentDetailsPanel({
                   type="button"
                   disabled={busy}
                   className={`${quickCls} !text-[var(--muted)]`}
-                  onClick={() => void run(() => bookingService.markAppointmentNoShow(appointment.id))}
+                  onClick={() => setConfirmNoShow(true)}
                 >
                   <IconNoShow />
                   No-show
@@ -374,7 +379,7 @@ export function AppointmentDetailsPanel({
                 className="mt-3 block text-sm font-medium text-[var(--rust)] hover:underline"
                 onClick={() => {
                   setConfirmCancel(false);
-                  onCancelSeries(appointment);
+                  setConfirmSeries(true);
                 }}
               >
                 Cancel this and all following sessions…
@@ -389,6 +394,31 @@ export function AppointmentDetailsPanel({
         onConfirm={() => {
           setConfirmCancel(false);
           void run(() => bookingService.cancelAppointment(appointment.id));
+        }}
+      />
+      <ConfirmDialog
+        open={confirmNoShow}
+        title="Mark as no-show?"
+        message={`${appointment.patientName} · ${dateLabel}, ${minutesLabel(start)}. This is recorded in their attendance history.`}
+        confirmLabel="Mark no-show"
+        cancelLabel="Keep"
+        onCancel={() => setConfirmNoShow(false)}
+        onConfirm={() => {
+          setConfirmNoShow(false);
+          void run(() => bookingService.markAppointmentNoShow(appointment.id));
+        }}
+      />
+      <ConfirmDialog
+        open={confirmSeries && Boolean(onCancelSeries)}
+        title={seriesFollowingCount ? `Cancel ${seriesFollowingCount} sessions?` : 'Cancel this and following sessions?'}
+        message={`${appointment.patientName}: this session (${dateLabel}, ${minutesLabel(start)}) and every active session after it in the series. Their times become free again, and the patient is not told automatically.`}
+        confirmLabel={seriesFollowingCount ? `Cancel ${seriesFollowingCount} sessions` : 'Cancel sessions'}
+        cancelLabel="Keep"
+        destructive
+        onCancel={() => setConfirmSeries(false)}
+        onConfirm={() => {
+          setConfirmSeries(false);
+          onCancelSeries?.(appointment);
         }}
       />
     </>

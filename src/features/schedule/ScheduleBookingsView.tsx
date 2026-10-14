@@ -45,6 +45,7 @@ import { TherapistFilter } from '@/components/schedule/TherapistFilter';
 import { HistoryView } from '@/components/schedule/HistoryView';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
 import { appointmentsOutsideHours } from './hoursConflicts';
+import { isActiveAppointmentStatus } from '@/domain/appointmentStatus';
 import { appointmentReason, patientFlags } from '@/domain/patientFlags';
 import { matchingWaitlistEntries, timeOfDayFor } from '@/domain/waitlistMatch';
 import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
@@ -1053,6 +1054,16 @@ export function ScheduleBookingsView({
         seriesLabel={seriesLabel}
         flags={selectedAppointment ? patientFlags(selectedAppointment, flagContext) : []}
         condition={selectedAppointment?.patientId ? flagContext?.conditionByPatient.get(selectedAppointment.patientId) ?? null : null}
+        seriesFollowingCount={
+          selectedAppointment?.seriesId
+            ? (allAppointments ?? []).filter(
+                (a) =>
+                  a.seriesId === selectedAppointment.seriesId &&
+                  a.scheduledAt >= selectedAppointment.scheduledAt &&
+                  isActiveAppointmentStatus(a.status)
+              ).length
+            : undefined
+        }
         onCancelSeries={
           selectedAppointment?.seriesId
             ? (appointment) =>

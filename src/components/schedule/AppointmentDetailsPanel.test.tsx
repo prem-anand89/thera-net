@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Appointment } from '@/domain/types';
 import { localDateTime } from '@/domain/schedule';
 
@@ -71,5 +71,45 @@ describe('AppointmentDetailsPanel', () => {
     for (const name of ['Reschedule', 'No-show', 'Cancel appointment']) {
       expect(screen.queryByText(name)).not.toBeInTheDocument();
     }
+  });
+});
+
+describe('AppointmentDetailsPanel confirmations', () => {
+  afterEach(cleanup);
+
+  it('asks before marking a no-show', async () => {
+    const markAppointmentNoShow = vi.fn(async () => {});
+    const bs = (await import('@/services')).bookingService as unknown as Record<string, unknown>;
+    bs.markAppointmentNoShow = markAppointmentNoShow;
+    show(appt());
+    fireEvent.click(screen.getByText('No-show'));
+    expect(markAppointmentNoShow).not.toHaveBeenCalled();
+    expect(screen.getByText('Mark as no-show?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark no-show' }));
+    expect(markAppointmentNoShow).toHaveBeenCalledWith('a1');
+  });
+
+  it('cancelling a series asks again, naming how many sessions go', () => {
+    const onCancelSeries = vi.fn();
+    render(
+      <AppointmentDetailsPanel
+        appointment={appt({ seriesId: 's1' } as Partial<Appointment>)}
+        therapistName="Bm"
+        therapistColor="#a6552f"
+        therapistPhone={null}
+        slotMinutes={30}
+        canManage
+        onClose={() => {}}
+        onReschedule={() => {}}
+        onCancelSeries={onCancelSeries}
+        seriesFollowingCount={5}
+      />
+    );
+    fireEvent.click(screen.getByText('Cancel appointment'));
+    fireEvent.click(screen.getByText('Cancel this and all following sessions…'));
+    expect(onCancelSeries).not.toHaveBeenCalled();
+    expect(screen.getByText('Cancel 5 sessions?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel 5 sessions' }));
+    expect(onCancelSeries).toHaveBeenCalledTimes(1);
   });
 });
