@@ -1,3 +1,4 @@
+import { edgeFunctionErrorMessage } from '@/lib/edgeFunctionError';
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
@@ -88,7 +89,7 @@ export function OnboardingTeamStep({
           redirectOrigin: window.location.origin,
         },
       });
-      if (invokeError) throw new Error(invokeError.message);
+      if (invokeError) throw new Error(await edgeFunctionErrorMessage(invokeError));
       const payload = result as { error?: string; message?: string; warning?: string } | null;
       if (payload?.error) throw new Error(payload.error);
       const base = payload?.message || `Invitation sent to ${inviteEmail}`;

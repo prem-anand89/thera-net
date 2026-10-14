@@ -38,6 +38,7 @@ import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { usePermissions } from '@/app/usePermissions';
 import { ReminderSheet } from '@/components/schedule/ReminderSheet';
 import { WorkingHoursSheet } from '@/components/schedule/WorkingHoursSheet';
+import { ShiftRequestSheet } from '@/components/schedule/ShiftRequestSheet';
 import { AssignShiftSheet } from '@/components/schedule/AssignShiftSheet';
 import { RequestsInbox } from '@/components/schedule/RequestsInbox';
 import { TherapistFilter } from '@/components/schedule/TherapistFilter';
@@ -339,6 +340,9 @@ export function ScheduleBookingsView({
   const [reminderOpen, setReminderOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [hoursTherapistId, setHoursTherapistId] = useState<UUID | null>(null);
+  // A therapist can't write hours directly (the server rejects it); "My hours"
+  // opens the request sheet instead, same as the account menu.
+  const [myHoursOpen, setMyHoursOpen] = useState(false);
   const [assignShiftTherapistId, setAssignShiftTherapistId] = useState<UUID | null>(null);
   const [pickingFor, setPickingFor] = useState<'shift' | 'hours' | null>(null);
   function openFor(kind: 'shift' | 'hours', id: UUID) {
@@ -534,7 +538,7 @@ export function ScheduleBookingsView({
     if (view !== 'schedule') return;
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return;
-      if (sheet || selectedId || closedSheetOpen || reminderOpen || hoursTherapistId) return;
+      if (sheet || selectedId || closedSheetOpen || reminderOpen || hoursTherapistId || myHoursOpen) return;
       if (event.key === '?') {
         setShortcutsOpen((current) => !current);
         event.preventDefault();
@@ -550,7 +554,7 @@ export function ScheduleBookingsView({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [view, sheet, selectedId, closedSheetOpen, reminderOpen, hoursTherapistId, setSchedule, step, weekAvailable]);
+  }, [view, sheet, selectedId, closedSheetOpen, reminderOpen, hoursTherapistId, myHoursOpen, setSchedule, step, weekAvailable]);
 
   async function decline(requestId: UUID) {
     try {
@@ -616,7 +620,7 @@ export function ScheduleBookingsView({
         actions={
           <>
             {isTherapist && myTherapistId && (
-              <button type="button" className={`${tabAction} inline-flex`} onClick={() => setHoursTherapistId(myTherapistId)}>
+              <button type="button" className={`${tabAction} inline-flex`} onClick={() => setMyHoursOpen(true)}>
                 My hours
               </button>
             )}
@@ -1115,6 +1119,18 @@ export function ScheduleBookingsView({
         onSave={handleHoursSave}
         onClose={() => setHoursTherapistId(null)}
       />
+
+      {myTherapistId && (
+        <ShiftRequestSheet
+          open={myHoursOpen}
+          therapistId={myTherapistId}
+          therapistName={rosterById.get(myTherapistId)?.name ?? ''}
+          clinicId={clinic.id}
+          currentWorkingHours={rosterById.get(myTherapistId)?.workingHours ?? null}
+          clinic={{ ...hours, closedWeekdays: clinic.closedWeekdays }}
+          onClose={() => setMyHoursOpen(false)}
+        />
+      )}
 
       <AssignShiftSheet
         open={assignShiftTherapistId !== null}

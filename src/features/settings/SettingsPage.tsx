@@ -1,3 +1,4 @@
+import { edgeFunctionErrorMessage } from '@/lib/edgeFunctionError';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Link, useBlocker, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -2564,7 +2565,7 @@ export function TeamMemberCard({
             },
           }
         );
-        if (invokeError) throw new Error(invokeError.message);
+        if (invokeError) throw new Error(await edgeFunctionErrorMessage(invokeError));
         const payload = result as { error?: string; success?: boolean } | null;
         if (payload?.error) throw new Error(payload.error);
       } else if (member) {
@@ -3032,7 +3033,7 @@ function AddTeamMemberForm({
             },
           }
         );
-        if (invokeError) throw new Error(invokeError.message);
+        if (invokeError) throw new Error(await edgeFunctionErrorMessage(invokeError));
         const payload = result as { error?: string; success?: boolean } | null;
         if (payload?.error) throw new Error(payload.error);
 
@@ -3401,7 +3402,7 @@ function Therapists() {
           },
         }
       );
-      if (invokeError) throw new Error(invokeError.message);
+      if (invokeError) throw new Error(await edgeFunctionErrorMessage(invokeError));
       const payload = result as { error?: string; message?: string } | null;
       if (payload?.error) throw new Error(payload.error);
     } catch (e) {
