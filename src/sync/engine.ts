@@ -5,7 +5,8 @@ import { getSupabase } from '@/lib/supabase';
 import { domainToRow, rowToDomain } from '@/repositories/rowMapping';
 import { onLocalWrite } from '@/repositories/local';
 import { syncStatus, isPermanentFailure } from './status';
-import { coerceReferringSource } from '@/domain/types';
+import { coerceReferringSource, type Patient } from '@/domain/types';
+import { isMrnoCollision, reissueWalkInMrno } from '@/domain/walkInMrno';
 
 /** Shown (and matched by toFriendlyMessage) when the server can't be reached. */
 export const NETWORK_UNREACHABLE = 'Network unreachable';
@@ -367,7 +368,15 @@ export class SyncEngine {
       // are written only by set_therapist_working_hours, and a stale local
       // copy (pending edit to the same row) would silently revert them.
       if (entry.table === 'therapists') delete payload.working_hours;
-      const { error } = await supabase.from(entry.table).upsert(payload);
+      let { error } = await supabase.from(entry.table).upsert(payload);
+      // Two devices that were offline can mint the same walk-in ID. The server
+      // rejects the later one; give it the next free number and push again
+      // rather than treating it as a permanent failure (which would revert and
+      // DELETE the patient locally and strand its visits).
+      for (let attempt = 0; attempt < 3 && error && entry.table === 'patients' && isMrnoCollision(error); attempt++) {
+        if (!(await this.reissuePatientMrno(row as Patient))) break;
+        ({ error } = await supabase.from(entry.table).upsert(domainToRow(row)));
+      }
       if (error) {
         // Network-level failures throw to stop the drain; server rejections
         // (RLS, constraints, immutability triggers) stay queued and visible.
@@ -395,6 +404,29 @@ export class SyncEngine {
       }
       await this.clearOutbox(entry.table, entry.rowId, maxSeq);
     }
+  }
+
+  /** Replaces an auto-minted, colliding walk-in ID with the next free one (local + server). */
+  private async reissuePatientMrno(patient: Patient): Promise<boolean> {
+    if (patient.mrnoSource !== 'auto') return false; // a typed hospital ID is the user's to fix
+    const match = /^(.*?)(\d{2})-\d+$/.exec(patient.mrno);
+    if (!match) return false;
+    const [, prefix, yy] = match;
+    const supabase = this.supabase!;
+    const { data, error } = await supabase
+      .from('patients')
+      .select('mrno')
+      .eq('clinic_id', patient.clinicId)
+      .like('mrno', `${prefix}${yy}-%`)
+      .limit(5000);
+    if (error) return false;
+    const local = (await db.patients.where('clinicId').equals(patient.clinicId).toArray()).map((p) => p.mrno);
+    const fresh = reissueWalkInMrno(patient.mrno, [...local, ...(data ?? []).map((r) => r.mrno as string)]);
+    if (!fresh || fresh === patient.mrno) return false;
+    patient.mrno = fresh;
+    patient.updatedAt = new Date().toISOString();
+    await db.patients.put(patient);
+    return true;
   }
 
   private async revertToServerTruth(table: SyncedTable, rowId: string) {

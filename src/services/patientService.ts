@@ -1,6 +1,7 @@
 import type { Patient, MrnoSource, UUID } from '@/domain/types';
 import type { Repos } from '@/repositories/types';
 import { getSupabase } from '@/lib/supabase';
+import { formatWalkInMrno, maxWalkInSeq } from '@/domain/walkInMrno';
 
 export interface NewPatientInput {
   clinicId: UUID;
@@ -44,20 +45,6 @@ export interface UpdatePatientInput {
  * longer than the pad width, so no separate "large clinic" setting exists
  * or is needed for that.
  */
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/** Highest {prefix}{YY}-NNNN sequence already used by this clinic this year, or 0 if none. */
-function maxWalkInSeq(mrnos: string[], prefix: string, yy: string): number {
-  const pattern = new RegExp(`^${escapeRegExp(prefix)}${yy}-(\\d+)$`);
-  let max = 0;
-  for (const mrno of mrnos) {
-    const match = pattern.exec(mrno);
-    if (match) max = Math.max(max, Number(match[1]));
-  }
-  return max;
-}
 
 export function createPatientService(repos: Repos) {
   return {
@@ -79,7 +66,7 @@ export function createPatientService(repos: Repos) {
         const existingMrnos = (await repos.patients.list(input.clinicId)).map((p) => p.mrno);
         let seq = maxWalkInSeq(existingMrnos, prefix, yy) + 1;
         do {
-          mrno = `${prefix}${yy}-${String(seq).padStart(4, '0')}`;
+          mrno = formatWalkInMrno(prefix, yy, seq);
           seq += 1;
         } while (await repos.patients.getByMrno(input.clinicId, mrno));
         mrnoSource = 'auto';
