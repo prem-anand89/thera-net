@@ -1,5 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPatientService } from './patientService';
+import { getSupabase } from '@/lib/supabase';
+
+vi.mock('@/lib/supabase', () => ({ getSupabase: vi.fn(() => null) }));
 import type { Repos } from '@/repositories/types';
 import type { Patient } from '@/domain/types';
 
@@ -179,5 +182,53 @@ describe('patientService.update', () => {
       referringSourceId: 'src-word-of-mouth',
       referringSourceDetail: 'Referred by Anita Rao',
     });
+  });
+});
+
+describe('patientService.create walk-in IDs from the server', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(getSupabase).mockReturnValue(null as never);
+  });
+
+  const rpcClient = (result: { data: unknown; error: unknown }) => {
+    const rpc = vi.fn(async () => result);
+    vi.mocked(getSupabase).mockReturnValue({ rpc } as never);
+    return rpc;
+  };
+
+  it('uses the number the server reserves when online', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const rpc = rpcClient({ data: 'W26-0042', error: null });
+    const { repos } = makeFakeRepos();
+    const patient = await createPatientService(repos).create({ clinicId: 'clinic-1', name: 'Walk In' });
+    expect(patient.mrno).toBe('W26-0042');
+    expect(patient.mrnoSource).toBe('auto');
+    expect(rpc).toHaveBeenCalledWith('reserve_walk_in_mrno', expect.objectContaining({ p_clinic_id: 'clinic-1' }));
+  });
+
+  it('falls back to the local list when the server call fails or the device is offline', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    rpcClient({ data: null, error: { message: 'boom' } });
+    const { repos, patients } = makeFakeRepos();
+    seedPatient(patients, { mrno: `W${String(new Date().getFullYear()).slice(2)}-0003`, mrnoSource: 'auto' });
+    const viaError = await createPatientService(repos).create({ clinicId: 'clinic-1', name: 'A' });
+    expect(viaError.mrno.endsWith('-0004')).toBe(true);
+
+    vi.stubGlobal('navigator', { onLine: false });
+    const rpc = rpcClient({ data: 'W26-0999', error: null });
+    const offline = await createPatientService(repos).create({ clinicId: 'clinic-1', name: 'B' });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(offline.mrno.endsWith('-0005')).toBe(true);
+  });
+
+  it('ignores a reserved number that is already used locally and mints locally instead', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const yy = String(new Date().getFullYear()).slice(2);
+    rpcClient({ data: `W${yy}-0001`, error: null });
+    const { repos, patients } = makeFakeRepos();
+    seedPatient(patients, { mrno: `W${yy}-0001`, mrnoSource: 'auto' });
+    const patient = await createPatientService(repos).create({ clinicId: 'clinic-1', name: 'C' });
+    expect(patient.mrno).toBe(`W${yy}-0002`);
   });
 });

@@ -46,6 +46,19 @@ export interface UpdatePatientInput {
  * or is needed for that.
  */
 
+/** Asks the server for the next walk-in ID. Null when offline or the call fails (the caller mints locally). */
+async function reserveWalkInMrno(clinicId: UUID, prefix: string, yy: string): Promise<string | null> {
+  try {
+    const supabase = getSupabase();
+    if (!supabase || typeof navigator === 'undefined' || !navigator.onLine) return null;
+    const { data, error } = await supabase.rpc('reserve_walk_in_mrno', { p_clinic_id: clinicId, p_prefix: prefix, p_yy: yy });
+    if (error || typeof data !== 'string') return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export function createPatientService(repos: Repos) {
   return {
     async create(input: NewPatientInput): Promise<Patient> {
@@ -61,14 +74,23 @@ export function createPatientService(repos: Repos) {
         const clinic = await repos.clinics.get(input.clinicId);
         const prefix = clinic?.walkInMrnoPrefix?.trim() || 'W';
         const yy = String(new Date().getFullYear()).slice(2);
-        // Includes hidden patients (repos.patients.list does) so a hidden
-        // duplicate never frees up its number for reuse.
-        const existingMrnos = (await repos.patients.list(input.clinicId)).map((p) => p.mrno);
-        let seq = maxWalkInSeq(existingMrnos, prefix, yy) + 1;
-        do {
-          mrno = formatWalkInMrno(prefix, yy, seq);
-          seq += 1;
-        } while (await repos.patients.getByMrno(input.clinicId, mrno));
+        // Online: the server hands out the number (a persistent per-clinic
+        // counter), so two devices cannot mint the same one. Offline or on any
+        // failure: mint from the local list as before; if two offline devices
+        // collide, the sync engine re-issues the later one on push.
+        const reserved = await reserveWalkInMrno(input.clinicId, prefix, yy);
+        if (reserved && !(await repos.patients.getByMrno(input.clinicId, reserved))) {
+          mrno = reserved;
+        } else {
+          // Includes hidden patients (repos.patients.list does) so a hidden
+          // duplicate never frees up its number for reuse.
+          const existingMrnos = (await repos.patients.list(input.clinicId)).map((p) => p.mrno);
+          let seq = maxWalkInSeq(existingMrnos, prefix, yy) + 1;
+          do {
+            mrno = formatWalkInMrno(prefix, yy, seq);
+            seq += 1;
+          } while (await repos.patients.getByMrno(input.clinicId, mrno));
+        }
         mrnoSource = 'auto';
       }
 
