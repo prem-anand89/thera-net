@@ -1,31 +1,10 @@
 import type { PatientAdvance, PaymentMethod, Payment, UUID, Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import type { Repos } from '@/repositories/types';
+import { allocateAcrossVisits } from './allocate';
+import { createPaymentService } from './paymentService';
 
-/**
- * Slices `amountPaise` across `visits` in date order, each slice capped at
- * that visit's own outstanding bill (`actualBillPaise` minus what
- * `paidByVisit` already shows for it) — shared by
- * `paymentService.recordInvoicePayment` (invoice draw-down) and this
- * module's `applyAdvance` (advance draw-down) so both paths allocate
- * identically instead of maintaining two copies of the same loop.
- */
-export async function allocateAcrossVisits(
-  visits: Visit[],
-  paidByVisit: Map<UUID, Paise>,
-  amountPaise: Paise,
-  makePayment: (visitId: UUID, slicePaise: Paise) => Promise<void>
-): Promise<void> {
-  let toAllocate = amountPaise;
-  for (const v of visits) {
-    if (toAllocate <= 0) break;
-    const visitRemaining = v.actualBillPaise - (paidByVisit.get(v.id) ?? 0);
-    if (visitRemaining <= 0) continue;
-    const slice = Math.min(visitRemaining, toAllocate);
-    await makePayment(v.id, slice);
-    toAllocate -= slice;
-  }
-}
+export { allocateAcrossVisits };
 
 /**
  * Money received ahead of treatment. An advance is not a `Payment` row
@@ -159,6 +138,17 @@ export function createAdvanceService(repos: Repos) {
           status: 'exhausted',
           updatedAt: new Date().toISOString(),
         });
+      }
+
+      // An invoice fully covered by the advance must read as paid: its
+      // paid/outstanding flag is only written by the invoice payment paths,
+      // so without this it would keep showing (and chasing) a balance that
+      // is already settled.
+      const invoiceIds = [...new Set(visits.map((v) => v.invoiceId).filter((id): id is UUID => Boolean(id)))];
+      const paymentSvc = createPaymentService(repos);
+      for (const invoiceId of invoiceIds) {
+        const invoice = await repos.invoices.get(invoiceId);
+        if (invoice) await paymentSvc.reconcileInvoiceStatus(clinicId, invoice);
       }
     },
   };

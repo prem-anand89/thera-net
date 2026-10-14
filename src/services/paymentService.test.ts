@@ -339,3 +339,61 @@ describe('directPaymentService.logPayment', () => {
     expect(await svc.totalPaidForVisit('visit-1')).toBe(rs(400));
   });
 });
+
+describe('paymentService.reconcileInvoiceStatus', () => {
+  const invoice = () => invoiceFixture({ id: 'inv-1', totalPaise: rs(500) });
+  const visit = () => visitFixture({ id: 'visit-1', invoiceId: 'inv-1', actualBillPaise: rs(500) });
+
+  it('marks an invoice with no payments outstanding (explicit row, not "missing = paid")', async () => {
+    const fake = makeInvoicePaymentFlowRepos([visit()]);
+    const svc = createPaymentService(fake.repos);
+    await svc.reconcileInvoiceStatus('clinic-1', invoice());
+    expect((await fake.repos.invoicePayments.getByInvoiceId('inv-1'))?.status).toBe('outstanding');
+  });
+
+  it('keeps a partly paid invoice outstanding', async () => {
+    const fake = makeInvoicePaymentFlowRepos([visit()]);
+    const svc = createPaymentService(fake.repos);
+    await fake.repos.payments.put({
+      id: 'p1', clinicId: 'clinic-1', visitId: 'visit-1', amountPaise: rs(200), method: 'cash',
+      receivedDate: '2026-08-02', notes: null, updatedAt: '2026-08-02T00:00:00.000Z',
+    } as Payment);
+    await svc.reconcileInvoiceStatus('clinic-1', invoice());
+    expect((await fake.repos.invoicePayments.getByInvoiceId('inv-1'))?.status).toBe('outstanding');
+  });
+
+  it('marks a fully covered invoice paid, e.g. after an advance is applied', async () => {
+    const fake = makeInvoicePaymentFlowRepos([visit()]);
+    const svc = createPaymentService(fake.repos);
+    await svc.setStatus('inv-1', 'clinic-1', 'outstanding');
+    await fake.repos.payments.put({
+      id: 'p1', clinicId: 'clinic-1', visitId: 'visit-1', amountPaise: rs(500), method: 'cash',
+      receivedDate: '2026-08-02', notes: null, advanceId: 'adv-1', updatedAt: '2026-08-02T00:00:00.000Z',
+    } as Payment);
+    await svc.reconcileInvoiceStatus('clinic-1', invoice());
+    expect((await fake.repos.invoicePayments.getByInvoiceId('inv-1'))?.status).toBe('paid');
+  });
+
+  it('flips a paid invoice back to outstanding when its total grew (amendment)', async () => {
+    const fake = makeInvoicePaymentFlowRepos([visit()]);
+    const svc = createPaymentService(fake.repos);
+    await svc.setStatus('inv-1', 'clinic-1', 'paid');
+    await fake.repos.payments.put({
+      id: 'p1', clinicId: 'clinic-1', visitId: 'visit-1', amountPaise: rs(500), method: 'cash',
+      receivedDate: '2026-08-02', notes: null, updatedAt: '2026-08-02T00:00:00.000Z',
+    } as Payment);
+    await svc.reconcileInvoiceStatus('clinic-1', invoiceFixture({ id: 'inv-1', totalPaise: rs(800) }));
+    expect((await fake.repos.invoicePayments.getByInvoiceId('inv-1'))?.status).toBe('outstanding');
+  });
+
+  it('never touches a void invoice', async () => {
+    const fake = makeInvoicePaymentFlowRepos([visit()]);
+    fake.invoicePayments.set('x', {
+      id: 'x', clinicId: 'clinic-1', invoiceId: 'inv-1', status: 'void', paidAt: null,
+      updatedAt: '2026-08-02T00:00:00.000Z',
+    } as InvoicePayment);
+    const svc = createPaymentService(fake.repos);
+    await svc.reconcileInvoiceStatus('clinic-1', invoice());
+    expect((await fake.repos.invoicePayments.getByInvoiceId('inv-1'))?.status).toBe('void');
+  });
+});

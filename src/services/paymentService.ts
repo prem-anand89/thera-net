@@ -9,7 +9,7 @@ import type {
 import type { Repos } from '@/repositories/types';
 import type { Paise } from '@/domain/money';
 import { formatINR } from '@/domain/money';
-import { allocateAcrossVisits } from './advanceService';
+import { allocateAcrossVisits } from './allocate';
 
 /**
  * Pure repo CRUD, deliberately separate from invoiceService (which is
@@ -141,7 +141,22 @@ export function createPaymentService(repos: Repos) {
     await setStatus(invoice.id, clinicId, 'paid');
   }
 
-  return { setStatus, invoiceBalance, recordInvoicePayment, collectInvoiceNow };
+  /**
+   * Re-derives an invoice's paid/outstanding flag from what has actually been
+   * recorded against its visits. Any money write that doesn't go through
+   * `recordInvoicePayment` (applying an advance, amending an invoice) calls
+   * this so the stored flag can't drift: with no row an invoice reads as
+   * paid, so a missed update silently hides what is owed. A void invoice is
+   * left alone — only the server's void_invoice() sets or clears that.
+   */
+  async function reconcileInvoiceStatus(clinicId: UUID, invoice: Invoice): Promise<void> {
+    const existing = await repos.invoicePayments.getByInvoiceId(invoice.id);
+    if (existing?.status === 'void') return;
+    const { remainingPaise } = await invoiceBalance(clinicId, invoice);
+    await setStatus(invoice.id, clinicId, remainingPaise === 0 ? 'paid' : 'outstanding');
+  }
+
+  return { setStatus, invoiceBalance, recordInvoicePayment, collectInvoiceNow, reconcileInvoiceStatus };
 }
 
 /**
