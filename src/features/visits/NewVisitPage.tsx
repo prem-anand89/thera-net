@@ -19,6 +19,7 @@ import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
 import { formatINR } from '@/domain/money';
 import { toLocalDateStr } from '@/domain/schedule';
+import { receivedDateAtVisit } from '@/domain/paymentDates';
 import { formatDateDMY } from '@/domain/fiscalYear';
 import { DUPLICATE_NAME_THRESHOLD, nameSimilarity } from '@/domain/nameSimilarity';
 import { isNearingCompletion } from '@/domain/packageTracking';
@@ -255,7 +256,11 @@ export function NewVisitPage() {
     billPaise: number;
     visitDate: string;
     mrno: string;
+    /** The visit saved but its payment didn't — shown on the saved screen instead of the form, so a retry can't create a second visit. */
+    paymentError?: string;
   } | null>(null);
+  // Synchronous double-tap guard: `busy` is React state and lags one render.
+  const savingRef = useRef(false);
   const [invoicing, setInvoicing] = useState(false);
   const [takingPayment, setTakingPayment] = useState(false);
   // What's been received for the just-saved visit, so Take payment disappears
@@ -625,6 +630,8 @@ export function NewVisitPage() {
         `This clinic's plan allows ${entitlements.visitCapPerMonth} visits per month, and that limit's been reached. Upgrade to log more.`
       );
     }
+    if (savingRef.current) return;
+    savingRef.current = true;
     setBusy(true);
     try {
       const visit = await visitService.create({
@@ -659,15 +666,23 @@ export function NewVisitPage() {
       // Skipped entirely without billing access — the visit saves as
       // genuinely unbilled, for whoever does handle billing to collect
       // from later (same Workspace pending-list path).
+      let paymentError: string | undefined;
       if (billPaise > 0 && canBill && paymentChoice === 'paid') {
-        await directPaymentService.logPayment(
-          clinic.id,
-          visit.id,
-          billPaise,
-          paymentMethod,
-          visitDate,
-          null
-        );
+        try {
+          await directPaymentService.logPayment(
+            clinic.id,
+            visit.id,
+            billPaise,
+            paymentMethod,
+            // Cash taken at the visit; a future-dated visit can't have been paid yet.
+            receivedDateAtVisit(visitDate, today),
+            null
+          );
+        } catch (paymentFailure) {
+          // The visit is already saved. Falling into the outer catch would keep
+          // the form open and a second Save would log the same visit again.
+          paymentError = toFriendlyMessage(paymentFailure);
+        }
       }
 
       // Slice 5: this visit is arrival for the appointment it was started
@@ -696,7 +711,8 @@ export function NewVisitPage() {
             ? selectedPackage!.serviceName
             : (selectedService?.name ?? 'Visit'),
         isPackage: mode === 'continuation',
-        alreadyCollected: billPaise > 0 && canBill && paymentChoice === 'paid',
+        alreadyCollected: billPaise > 0 && canBill && paymentChoice === 'paid' && !paymentError,
+        paymentError,
         therapistId,
         billPaise,
         visitDate,
@@ -705,12 +721,13 @@ export function NewVisitPage() {
       setFeedbackRequested(false);
       // Clinic policy "always": the bill step opens straight after a paid visit
       // (still the usual review-then-issue dialog, never issued silently).
-      if (clinic.invoicePolicy === 'always' && billPaise > 0 && canBill && paymentChoice === 'paid') {
+      if (clinic.invoicePolicy === 'always' && billPaise > 0 && canBill && paymentChoice === 'paid' && !paymentError) {
         setInvoicing(true);
       }
     } catch (e) {
       setError(toFriendlyMessage(e));
     } finally {
+      savingRef.current = false;
       setBusy(false);
     }
   }
@@ -734,6 +751,11 @@ export function NewVisitPage() {
       <div className="mx-auto max-w-2xl space-y-4">
         <SectionCard title="Visit logged">
           <p className="text-sm text-[var(--ink)]">Visit saved for {justSaved.patientName}.</p>
+          {justSaved.paymentError && (
+            <div className="mt-3">
+              <ErrorNote message={`The visit was saved, but the payment was not recorded: ${justSaved.paymentError} Use Take payment to record it.`} />
+            </div>
+          )}
           <div className="mt-4 flex flex-wrap gap-2">
             {paymentDue > 0 && (
               <button type="button" className={btnPrimary} onClick={() => setTakingPayment(true)}>
