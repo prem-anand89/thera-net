@@ -46,6 +46,7 @@ export function NoticeHost() {
       </div>
       {current && (
         <ConfirmDialog
+          key={current.id}
           open
           title={current.title}
           message={current.message}

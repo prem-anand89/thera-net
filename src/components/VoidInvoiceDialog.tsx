@@ -22,7 +22,7 @@ export function VoidInvoiceDialog({
   receivedPaise: number;
   onClose: () => void;
 }) {
-  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose, () => !busy);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

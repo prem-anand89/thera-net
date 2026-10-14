@@ -294,17 +294,7 @@ export function WorkspacePage() {
     const todays = clinic.enablePatientComms
       ? expectedToday
       : expectedToday.filter((a) => a.status === 'arrived' && !a.visitId);
-    // An appointment carried over from an earlier day that was completed today
-    // (the visit is logged today): keep it in Done so it doesn't just vanish
-    // from this list the moment its visit is saved.
-    const finishedToday = (workspaceAppointments ?? []).filter((a) => {
-      const day = toLocalDateStr(new Date(a.scheduledAt));
-      return (
-        Boolean(a.visitId) && day < todayStr && toLocalDateStr(new Date(a.updatedAt)) === todayStr &&
-        (!scope.scopeTherapistId || a.therapistId === scope.scopeTherapistId)
-      );
-    });
-    return [...olderOpen, ...finishedToday, ...todays];
+    return [...olderOpen, ...todays];
   }, [workspaceAppointments, expectedToday, scope.scopeTherapistId, clinic.enablePatientComms]);
   const toCompleteCount = todayAppointments.filter((a) => a.status === 'arrived' && !a.visitId).length;
   // The Appointments tab: always with patient comms; otherwise only while a
@@ -651,6 +641,19 @@ export function WorkspacePage() {
   // Today's visits that still owe money (true) or are settled (false), for the
   // finished appointments' Due / Paid markers.
   const dueByVisitId = new Map((today?.visits ?? []).map((row) => [row.visitId, hasDue(row.paymentState)]));
+  // An appointment carried over from an earlier day whose visit was logged today:
+  // keep it listed (under Done) so it doesn't vanish when its visit is saved.
+  const todayVisitIds = new Set((today?.visits ?? []).map((row) => row.visitId));
+  const appointmentsForList = [
+    ...(workspaceAppointments ?? []).filter(
+      (a) =>
+        a.visitId &&
+        todayVisitIds.has(a.visitId) &&
+        toLocalDateStr(new Date(a.scheduledAt)) < toLocalDateStr(new Date()) &&
+        (!scope.scopeTherapistId || a.therapistId === scope.scopeTherapistId)
+    ),
+    ...todayAppointments,
+  ];
   const appointmentsLeft =
     todayAppointments.filter((a) => (a.status === 'confirmed' || a.status === 'rescheduled' || (a.status === 'arrived' && !a.visitId))).length +
     pendingRequestCount;
@@ -832,7 +835,7 @@ export function WorkspacePage() {
                   onClick={() => setTodayTab(tab)}
                   className={`min-h-9 rounded-md px-3 text-xs font-medium ${todayTab === tab ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}
                 >
-                  {tab === 'appointments' ? (appointmentsLeft > 0 ? `Appointments (${appointmentsLeft} left)` : `Appointments (${todayAppointments.length + pendingRequestCount})`) : `Visits (${today?.visits.length ?? 0})`}
+                  {tab === 'appointments' ? (appointmentsLeft > 0 ? `Appointments (${appointmentsLeft} left)` : `Appointments (${appointmentsForList.length + pendingRequestCount})`) : `Visits (${today?.visits.length ?? 0})`}
                 </button>
               ))}
             </div>
@@ -842,7 +845,7 @@ export function WorkspacePage() {
         {showAppointmentsTab && todayTab === 'appointments' ? (
           <>
             <TodayAppointments
-              appointments={todayAppointments}
+              appointments={appointmentsForList}
               slotMinutes={clinic.slotDurationMinutes || 30}
               nextUpId={nextUpId}
               colorFor={appointmentColor}

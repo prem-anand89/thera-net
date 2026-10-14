@@ -466,7 +466,10 @@ export function createDashboardService(repos: Repos) {
         .filter(
           (inv) =>
             !supersededInvoiceIds.has(inv.id) &&
-            statusByInvoiceId.get(inv.id) === 'outstanding'
+            statusByInvoiceId.get(inv.id) === 'outstanding' &&
+            // Fully covered by recorded payments but still flagged outstanding
+            // (a stale flag): nothing is owed, so it is not a due.
+            Math.max(0, inv.totalPaise - (paidByInvoiceId.get(inv.id) ?? 0)) > 0
         )
         .map((inv) => {
           const paidPaise = paidByInvoiceId.get(inv.id) ?? 0;

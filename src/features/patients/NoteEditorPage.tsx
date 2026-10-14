@@ -240,6 +240,7 @@ function useTreatmentConsentStatus(clinicId: string, patientId: string) {
  * user-selectable — see docs/CORE-ASSESSMENT-PORT-PLAN.md.
  */
 export function NoteEditorPage() {
+  const confirmingRedFlagsRef = useRef(false);
   const clinic = useClinic();
   const navigate = useNavigate();
   const { canViewClinicalNotes } = usePermissions();
@@ -648,10 +649,16 @@ export function NoteEditorPage() {
         return false;
       }
       if (nextStatus === 'completed' && derived.redFlagCount > 0) {
+        // The old native confirm blocked the thread; this one doesn't, so a
+        // second tap on Complete must not queue a second confirm.
+        if (confirmingRedFlagsRef.current) return false;
+        confirmingRedFlagsRef.current = true;
         const proceed = await askConfirm({
           title: 'Mark completed anyway?',
           message: `This note has ${derived.redFlagCount} red flag${derived.redFlagCount > 1 ? 's' : ''} marked in Screening.`,
           confirmLabel: 'Mark completed',
+        }).finally(() => {
+          confirmingRedFlagsRef.current = false;
         });
         if (!proceed) return false;
       }

@@ -32,7 +32,7 @@ export function RecordAdvanceDialog({
   backTo?: PatientProfileBackTarget;
   onClose: () => void;
 }) {
-  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose, () => !busy);
   const [amountRupees, setAmountRupees] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [receivedDate, setReceivedDate] = useState(() => toLocalDateStr(new Date()));

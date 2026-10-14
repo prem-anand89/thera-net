@@ -100,7 +100,7 @@ export function BookSlotSheet({
   const today = toLocalDateStr(new Date());
   const isReschedule = Boolean(rescheduleAppointment);
 
-  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
+  const dialogRef = useDialogBehavior<HTMLDivElement>(isOpen, onClose, () => !busy);
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [lengthMinutes, setLengthMinutes] = useState(slotMinutes);
@@ -221,13 +221,6 @@ export function BookSlotSheet({
       setSelectedTime(null);
     }
   }, [isOpen, patientId, rescheduleAppointment, appointments, therapistTouched, lockTherapist, slotMinutes]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, busy, onClose]);
 
   if (!isOpen) return null;
 

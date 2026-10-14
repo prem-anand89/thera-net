@@ -15,11 +15,6 @@ export function isNavActive(pathname: string, to: MainNavPath): boolean {
   return under(pathname, to);
 }
 
-/** Settings and Guided Setup live in the account menu on larger screens. */
-export function isAccountAreaActive(pathname: string): boolean {
-  return under(pathname, '/settings') || under(pathname, '/setup');
-}
-
 /** Phone bottom bar: Patients highlights Ledger; Reports, Settings and Setup are reached via More. */
 export function activePhoneTab(pathname: string): PhoneTabPath | null {
   if (under(pathname, '/workspace')) return '/workspace';

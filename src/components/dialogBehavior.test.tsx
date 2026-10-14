@@ -77,3 +77,48 @@ describe('wrapFocusTarget', () => {
     expect(wrapFocusTarget([], a, false)).toBeNull();
   });
 });
+
+function Controlled({ open, onClose, canClose }: { open: boolean; onClose: () => void; canClose?: () => boolean }) {
+  const ref = useDialogBehavior<HTMLDivElement>(open, onClose, canClose);
+  if (!open) return null;
+  return (
+    <div ref={ref} role="dialog">
+      <input aria-label="name" autoFocus />
+    </div>
+  );
+}
+
+describe('useDialogBehavior edge cases', () => {
+  it('a closed, always-mounted dialog never takes Escape', () => {
+    const closedClose = vi.fn();
+    const openClose = vi.fn();
+    render(
+      <>
+        <Controlled open={false} onClose={closedClose} />
+        <Controlled open onClose={openClose} />
+      </>
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(openClose).toHaveBeenCalledTimes(1);
+    expect(closedClose).not.toHaveBeenCalled();
+  });
+
+  it('canClose can refuse Escape (e.g. while saving)', () => {
+    const onClose = vi.fn();
+    render(<Controlled open onClose={onClose} canClose={() => false} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('restores focus to the opener even when the dialog has an autoFocus field', () => {
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    const { rerender } = render(<Controlled open={false} onClose={() => {}} />);
+    rerender(<Controlled open onClose={() => {}} />);
+    expect(screen.getByLabelText('name')).toHaveFocus();
+    rerender(<Controlled open={false} onClose={() => {}} />);
+    expect(opener).toHaveFocus();
+    opener.remove();
+  });
+});

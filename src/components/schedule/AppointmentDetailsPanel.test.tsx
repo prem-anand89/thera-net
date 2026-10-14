@@ -131,7 +131,7 @@ describe('AppointmentDetailsPanel restore actions', () => {
     const restoreCancelledAppointment = vi.fn(async () => {});
     const bs = (await import('@/services')).bookingService as unknown as Record<string, unknown>;
     bs.restoreCancelledAppointment = restoreCancelledAppointment;
-    show(appt({ status: 'cancelled' }));
+    show(appt({ status: 'cancelled', scheduledAt: new Date(Date.now() + 86_400_000).toISOString() }));
     fireEvent.click(screen.getByRole('button', { name: 'Restore appointment' }));
     expect(restoreCancelledAppointment).toHaveBeenCalledWith('a1');
   });
@@ -140,7 +140,10 @@ describe('AppointmentDetailsPanel restore actions', () => {
     show(appt({ status: 'no_show' }), false);
     expect(screen.queryByRole('button', { name: 'Undo no-show' })).not.toBeInTheDocument();
     cleanup();
-    show(appt({ status: 'cancelled', visitId: 'v1' }));
+    show(appt({ status: 'cancelled', visitId: 'v1', scheduledAt: new Date(Date.now() + 86_400_000).toISOString() }));
+    expect(screen.queryByRole('button', { name: 'Restore appointment' })).not.toBeInTheDocument();
+    cleanup();
+    show(appt({ status: 'cancelled' })); // its time has passed: the server would refuse
     expect(screen.queryByRole('button', { name: 'Restore appointment' })).not.toBeInTheDocument();
   });
 });

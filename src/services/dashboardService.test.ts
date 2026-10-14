@@ -1245,4 +1245,14 @@ describe('dashboardService.monthlyNewCounts', () => {
     expect(summary.rows[0]).toMatchObject({ totalPaise: rs(1500), paidPaise: rs(600), remainingPaise: rs(900) });
     expect(summary.totalPaise).toBe(rs(900));
   });
+
+  it('does not list an invoice that payments already cover in full, even if still flagged outstanding', async () => {
+    fake.invoices.set('inv-1', baseInvoice('inv-1', { totalPaise: rs(1000) }));
+    fake.invoicePayments.set('p1', { id: 'p1', clinicId: 'clinic-1', invoiceId: 'inv-1', status: 'outstanding', paidAt: null, updatedAt: '' });
+    fake.visits.set('v1', baseVisit('v1', { invoiceId: 'inv-1', actualBillPaise: rs(1000) }));
+    fake.payments.set('pay-1', { id: 'pay-1', clinicId: 'clinic-1', visitId: 'v1', amountPaise: rs(1000), method: 'cash', receivedDate: '2026-06-01', notes: null, updatedAt: '' });
+    const summary = await createDashboardService(fake.repos).outstandingInvoices('clinic-1');
+    expect(summary.rows).toEqual([]);
+    expect(summary.totalPaise).toBe(0);
+  });
 });

@@ -396,4 +396,12 @@ describe('paymentService.reconcileInvoiceStatus', () => {
     await svc.reconcileInvoiceStatus('clinic-1', invoice());
     expect((await fake.repos.invoicePayments.getByInvoiceId('inv-1'))?.status).toBe('void');
   });
+
+  it('leaves an invoice alone when every visit on it was deleted (nothing to derive a balance from)', async () => {
+    const fake = makeInvoicePaymentFlowRepos([{ ...visit(), deleted: true }]);
+    const svc = createPaymentService(fake.repos);
+    await svc.setStatus('inv-1', 'clinic-1', 'paid');
+    await svc.reconcileInvoiceStatus('clinic-1', invoice());
+    expect((await fake.repos.invoicePayments.getByInvoiceId('inv-1'))?.status).toBe('paid');
+  });
 });

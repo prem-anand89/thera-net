@@ -219,7 +219,7 @@ export function HelpFeedbackDialog({ isOpen, onClose }: HelpFeedbackDialogProps)
                       <details className="mb-2 group">
                         <summary className="cursor-pointer font-medium text-[var(--teal)] hover:underline">How do I set up my clinic?</summary>
                         <p className="mt-1 pl-4 text-xs leading-relaxed text-[var(--muted)]">
-                          Open the <strong>Settings</strong> page from your Account Menu. 
+                          Open <strong>Settings</strong> from the top navigation (More on a phone). 
                           In the <strong>Profile</strong> tab, you can set your MRNO prefix.
                           In the <strong>Catalog</strong> tab, define the services you offer.
                           In the <strong>Team</strong> tab, you can invite other therapists or front desk staff.

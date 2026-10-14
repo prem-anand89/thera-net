@@ -12,6 +12,7 @@ import type {
 } from '@/domain/types';
 import type { CoreAssessmentPayload } from '@/domain/coreAssessment';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
+import { notify } from '@/components/notify';
 import { invoiceService, paymentService, repos } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import { treatmentsDisplayText } from '@/components/VisitCard';
@@ -77,7 +78,7 @@ export function IssueInvoiceDialog({
    *  opens from both Ledger and Workspace. */
   returnTo: InvoicePrintBackTarget;
 }) {
-  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose, () => !busy);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('UPI');
   const [collectedNow, setCollectedNow] = useState(target.alreadyCollected ?? true);
   const [error, setError] = useState<string | null>(null);
@@ -229,6 +230,7 @@ export function IssueInvoiceDialog({
       setStatusProblem(false);
     } catch (e) {
       console.error('Could not record payment status', e);
+      notify.error(`Still could not record the payment: ${toFriendlyMessage(e)}`);
     } finally {
       setBusy(false);
     }

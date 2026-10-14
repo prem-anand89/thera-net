@@ -349,7 +349,7 @@ export function AppointmentDetailsPanel({
           </div>
         )}
 
-        {appointment.status === 'cancelled' && canManage && !appointment.visitId && (
+        {appointment.status === 'cancelled' && canManage && !appointment.visitId && new Date(appointment.scheduledAt).getTime() > Date.now() && (
           <div className="mt-4 rounded-lg bg-[var(--paper)] p-3">
             <p className="text-sm text-[var(--ink)]">Cancelled by mistake? Bringing it back checks that the time is still free.</p>
             <div className="mt-2">

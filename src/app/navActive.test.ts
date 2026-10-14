@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activePhoneTab, isAccountAreaActive, isNavActive, pageTitleFor } from './navActive';
+import { activePhoneTab, isNavActive, pageTitleFor } from './navActive';
 
 describe('isNavActive', () => {
   it('ignores search params and matches nested paths', () => {
@@ -11,15 +11,6 @@ describe('isNavActive', () => {
 
   it('does not match a path that only shares a prefix', () => {
     expect(isNavActive('/ledgerx', '/ledger')).toBe(false);
-  });
-});
-
-describe('isAccountAreaActive', () => {
-  it('is true on settings and setup pages', () => {
-    expect(isAccountAreaActive('/settings')).toBe(true);
-    expect(isAccountAreaActive('/settings/import-visits')).toBe(true);
-    expect(isAccountAreaActive('/setup')).toBe(true);
-    expect(isAccountAreaActive('/workspace')).toBe(false);
   });
 });
 

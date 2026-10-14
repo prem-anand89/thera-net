@@ -42,4 +42,16 @@ describe('NoticeHost', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(await answer).toBe(false);
   });
+
+  it('a second queued confirm starts with an empty type-to-confirm box', async () => {
+    render(<NoticeHost />);
+    act(() => {
+      void askConfirm({ title: 'Delete A', message: 'm', typeToConfirm: { placeholder: 'A', isMatch: (t) => t === 'A' } });
+      void askConfirm({ title: 'Delete B', message: 'm', typeToConfirm: { placeholder: 'B', isMatch: (t) => t === 'B' } });
+    });
+    await userEvent.type(screen.getByPlaceholderText('A'), 'A');
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(screen.getByText('Delete B')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('B')).toHaveValue('');
+  });
 });

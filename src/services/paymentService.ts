@@ -152,6 +152,12 @@ export function createPaymentService(repos: Repos) {
   async function reconcileInvoiceStatus(clinicId: UUID, invoice: Invoice): Promise<void> {
     const existing = await repos.invoicePayments.getByInvoiceId(invoice.id);
     if (existing?.status === 'void') return;
+    // Payments hang off visits. With every visit deleted there is nothing to
+    // derive a balance from, and "no payments" would wrongly read as unpaid.
+    const liveVisits = (await repos.visits.list({ clinicId })).filter(
+      (v) => v.invoiceId === invoice.id && !v.deleted
+    );
+    if (liveVisits.length === 0) return;
     const { remainingPaise } = await invoiceBalance(clinicId, invoice);
     await setStatus(invoice.id, clinicId, remainingPaise === 0 ? 'paid' : 'outstanding');
   }

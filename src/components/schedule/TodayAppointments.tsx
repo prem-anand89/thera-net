@@ -171,7 +171,8 @@ export function TodayAppointments({
         <button
           type="button"
           className="min-h-11 rounded-full border sm:min-h-9 border-[var(--rust)] px-3 text-xs font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
-          onClick={() => onCollect?.(a.visitId!)}
+          aria-label={`Collect payment from ${a.patientName}`}
+onClick={() => onCollect?.(a.visitId!)}
         >
           Due · Collect
         </button>
@@ -185,7 +186,8 @@ export function TodayAppointments({
           <button
             type="button"
             className="min-h-11 rounded-full border sm:min-h-9 border-[var(--rust)] px-3 text-xs font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
-            onClick={() => onUndoNoShow(a)}
+            aria-label={`Undo no-show for ${a.patientName}`}
+onClick={() => onUndoNoShow(a)}
           >
             Undo
           </button>
@@ -275,7 +277,8 @@ export function TodayAppointments({
                   <button
                     type="button"
                     className="min-h-11 rounded-full border sm:min-h-9 border-[var(--teal)] px-3 text-xs font-medium text-[var(--teal)] hover:bg-[var(--teal-light)]"
-                    onClick={() => onMarkArrived(a)}
+                    aria-label={`Mark ${a.patientName} arrived`}
+onClick={() => onMarkArrived(a)}
                   >
                     Arrived
                   </button>

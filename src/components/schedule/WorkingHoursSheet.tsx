@@ -54,11 +54,6 @@ export function WorkingHoursSheet({
     setHours(value ?? defaultWorkingHours(clinic));
     setError(null);
     setBusy(false);
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when opened
   }, [open]);
 

@@ -45,7 +45,7 @@ export function TakePaymentDialog({
   patientId?: string;
   onClose: () => void;
 }) {
-  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose);
+  const dialogRef = useDialogBehavior<HTMLDivElement>(true, onClose, () => !busy);
   const [method, setMethod] = useState<PaymentMethod>('cash');
   // When the money actually arrived — today by default, not the visit's date:
   // collecting on an old visit would otherwise land in a past Daybook day.

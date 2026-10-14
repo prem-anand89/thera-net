@@ -145,7 +145,7 @@ describe('TodayAppointments quick actions', () => {
         onMarkArrived={onMarkArrived}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Arrived' }));
+    fireEvent.click(screen.getByRole('button', { name: /Mark .* arrived/ }));
     expect(onMarkArrived).toHaveBeenCalledWith(a);
   });
 
@@ -171,10 +171,10 @@ describe('TodayAppointments quick actions', () => {
     );
     expect(screen.getByText('Done (3)')).toBeInTheDocument();
     expect(screen.getByText(/1 no-show · 1 due/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Due · Collect' }));
+    fireEvent.click(screen.getByRole('button', { name: /Collect payment from Owes/ }));
     expect(onCollect).toHaveBeenCalledWith('v-due');
     expect(screen.getByText('Paid ✓')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    fireEvent.click(screen.getByRole('button', { name: /Undo no-show for Missed/ }));
     expect(onUndoNoShow).toHaveBeenCalledWith(missed);
   });
 });
