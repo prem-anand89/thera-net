@@ -102,14 +102,6 @@ export function AppointmentDetailsPanel({
   const [confirmSeries, setConfirmSeries] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    if (!appointment) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [appointment, onClose]);
   useEffect(() => setCopied(false), [appointment?.id]);
 
   if (!appointment) return null;
