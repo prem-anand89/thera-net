@@ -209,10 +209,11 @@ export function HistoryView({
                   const fill = appointmentFill(appointment, color);
                   const reason = appointmentReason(appointment, flagContext)?.text;
                   const detail = [reason, therapists.length ? therapistNameFor(appointment) : null].filter(Boolean).join(', ');
+                  const statusLabel = appointment.visitId ? 'Visit logged' : APPOINTMENT_STATUS_LABEL[appointment.status];
                   return (
                     <li key={appointment.id} className="border-l-4" style={{ borderLeftColor: color, background: fill.background }}>
-                      <button type="button" onClick={() => onSelect(appointment)} className="flex w-full items-center gap-3 py-2.5 pl-3 pr-4 text-left">
-                        <span className="w-16 shrink-0 whitespace-nowrap text-[13px] tabular-nums text-[var(--muted)]">
+                      <button type="button" onClick={() => onSelect(appointment)} className="flex w-full items-start gap-3 py-2.5 pl-3 pr-4 text-left">
+                        <span className="w-16 shrink-0 whitespace-nowrap pt-0.5 text-[13px] tabular-nums text-[var(--muted)]">
                           {minutesLabel(minutesOfDay(appointment.scheduledAt))}
                         </span>
                         <span className="min-w-0 flex-1">
@@ -222,9 +223,12 @@ export function HistoryView({
                             </span>
                             <PatientFlagPills flags={patientFlags(appointment, flagContext)} max={1} />
                           </span>
-                          {detail && <span className="block truncate text-xs text-[var(--muted)]">{detail}</span>}
+                          <span className="block truncate text-xs text-[var(--muted)] sm:hidden">
+                            {[statusLabel, detail].filter(Boolean).join(' · ')}
+                          </span>
+                          {detail && <span className="hidden truncate text-xs text-[var(--muted)] sm:block">{detail}</span>}
                         </span>
-                        <span className="shrink-0">
+                        <span className="hidden shrink-0 self-start pt-0.5 sm:block">
                           {appointment.visitId ? (
                             <Pill tone="green">Visit logged</Pill>
                           ) : (

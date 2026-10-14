@@ -63,38 +63,59 @@ export function TodayAppointments({
   const hasRequests = requests.length > 0 && Boolean(onConfirmRequest && onDeclineRequest);
   const sectionCount = [hasRequests, inProgress.length > 0, upcoming.length > 0].filter(Boolean).length;
 
-  const row = (a: Appointment, end: ReactNode, note?: string) => {
+  const row = (a: Appointment, end: ReactNode, note?: string, showEndOnMobile = false) => {
     const length = lengthLabel(appointmentMinutes(a, slotMinutes));
     const color = colorFor(a);
     // Same colour code as the Schedule grid: therapist edge + status fill.
     const fill = appointmentFill(a, color);
     const flags = patientFlags(a, flagContext);
     const reason = appointmentReason(a, flagContext);
-    const phoneDetail = [note, reason?.text, length, showTherapist ? therapistNameFor(a) : null].filter(Boolean).join(', ');
     const wideDetail = [note, reason?.text].filter(Boolean).join(', ');
+    const noteClass =
+      note === 'Rescheduled'
+        ? 'font-medium text-[var(--amber-strong,#b45309)]'
+        : note === 'No-show'
+          ? 'font-medium text-[var(--rust)]'
+          : note === 'Walk-in' || note === 'Arrived'
+            ? 'font-medium text-[var(--ink)]'
+            : 'font-medium';
     return (
       <li
         key={a.id}
-        className="flex items-center gap-3 border-l-4 py-2.5 pl-4 pr-5"
+        className="flex items-start gap-3 border-l-4 py-2.5 pl-4 pr-5"
         style={{ borderLeftColor: color, background: fill.background }}
       >
-        <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => onSelect(a)}>
-          <span className="w-16 shrink-0 whitespace-nowrap text-[13px] tabular-nums text-[var(--muted)] sm:w-[4.5rem] sm:text-sm">{minutesLabel(minutesOfDay(a.scheduledAt))}</span>
+        <button type="button" className="flex min-w-0 flex-1 items-start gap-3 text-left" onClick={() => onSelect(a)}>
+          <span className="w-16 shrink-0 whitespace-nowrap pt-0.5 text-[13px] tabular-nums text-[var(--muted)] sm:w-[4.5rem] sm:text-sm">{minutesLabel(minutesOfDay(a.scheduledAt))}</span>
           <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-2">
+            <span className="flex min-w-0 items-center gap-1.5">
               <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : 'text-[var(--ink)]'}`}>
                 {a.patientName}
               </span>
-              {a.id === nextUpId && <Pill tone="teal">Next</Pill>}
+              {a.id === nextUpId && (
+                <span className="shrink-0 rounded-full bg-[var(--teal)] px-1.5 text-[10px] font-medium leading-4 text-white">Next</span>
+              )}
               <PatientFlagPills flags={flags} max={2} />
             </span>
-            <span className="block truncate text-xs text-[var(--muted)] sm:hidden">{phoneDetail}</span>
+            <span className="block truncate text-xs text-[var(--muted)] sm:hidden">
+              {note && (
+                <span className={noteClass}>
+                  {note}
+                  {[reason?.text, length, showTherapist ? therapistNameFor(a) : null].some(Boolean) ? ' · ' : ''}
+                </span>
+              )}
+              {[reason?.text, length, showTherapist ? therapistNameFor(a) : null].filter(Boolean).join(', ')}
+            </span>
             {wideDetail && <span className="hidden truncate text-xs text-[var(--muted)] sm:block">{wideDetail}</span>}
           </span>
-          {showTherapist && <span className="hidden w-36 shrink-0 truncate text-xs text-[var(--muted)] sm:block">{therapistNameFor(a)}</span>}
-          <span className="hidden w-14 shrink-0 text-xs text-[var(--muted)] sm:block">{length}</span>
+          {showTherapist && <span className="hidden w-36 shrink-0 truncate pt-0.5 text-xs text-[var(--muted)] sm:block">{therapistNameFor(a)}</span>}
+          <span className="hidden w-14 shrink-0 pt-0.5 text-xs text-[var(--muted)] sm:block">{length}</span>
         </button>
-        <span className="shrink-0">{end}</span>
+        {end && (
+          <span className={`shrink-0 self-start pt-0.5 ${showEndOnMobile ? '' : 'hidden sm:block'}`}>
+            {end}
+          </span>
+        )}
       </li>
     );
   };
@@ -102,10 +123,7 @@ export function TodayAppointments({
     a.visitId ? (
       <Pill tone="green">Visit logged</Pill>
     ) : (
-      // "Confirmed" is the default state — on phones it gives its width to the name.
-      <span className={a.status === 'confirmed' ? 'hidden sm:inline' : undefined}>
-        <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>{APPOINTMENT_STATUS_LABEL[a.status]}</Pill>
-      </span>
+      <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>{APPOINTMENT_STATUS_LABEL[a.status]}</Pill>
     );
 
   const requestsSection = hasRequests ? (
@@ -162,7 +180,8 @@ export function TodayAppointments({
                     <span className="hidden sm:inline">Complete visit</span>
                   </Link>
                 </span>,
-                a.source === 'walk_in' ? 'Walk-in' : 'Arrived'
+                a.source === 'walk_in' ? 'Walk-in' : 'Arrived',
+                true
               )
             )}
           </ul>
@@ -172,7 +191,16 @@ export function TodayAppointments({
       {upcoming.length > 0 && (
         <section aria-label="Upcoming">
           {sectionCount > 1 && <h3 className={sectionHeading}>Upcoming</h3>}
-          <ul className={listCls}>{shownUpcoming.map((a) => row(a, statusPill(a)))}</ul>
+          <ul className={listCls}>
+            {shownUpcoming.map((a) =>
+              row(
+                a,
+                statusPill(a),
+                a.status === 'rescheduled' ? 'Rescheduled' : undefined,
+                false
+              )
+            )}
+          </ul>
           {upcoming.length > UPCOMING_LIMIT && (
             <button type="button" className="mt-2 min-h-9 text-sm font-medium text-[var(--teal)]" onClick={() => setShowAll((current) => !current)}>
               {showAll ? 'Show fewer' : `Show all ${upcoming.length} upcoming`}
@@ -188,7 +216,16 @@ export function TodayAppointments({
       {done.length > 0 && (
         <details>
           <summary className="min-h-9 cursor-pointer text-sm text-[var(--muted)]">Done ({done.length})</summary>
-          <ul className={`${listCls} mt-1`}>{done.map((a) => row(a, statusPill(a)))}</ul>
+          <ul className={`${listCls} mt-1`}>
+            {done.map((a) =>
+              row(
+                a,
+                statusPill(a),
+                a.visitId ? 'Visit logged' : APPOINTMENT_STATUS_LABEL[a.status],
+                false
+              )
+            )}
+          </ul>
         </details>
       )}
     </div>

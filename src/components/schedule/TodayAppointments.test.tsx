@@ -64,6 +64,25 @@ describe('TodayAppointments', () => {
     expect(screen.queryByRole('region', { name: 'In progress' })).not.toBeInTheDocument();
   });
 
+  it('renders rescheduled status and next badge in upcoming list', () => {
+    const a1 = appt('10:30', { id: 'next-1', status: 'rescheduled', patientName: 'Ananya' });
+    render(
+      <TodayAppointments
+        appointments={[a1]}
+        slotMinutes={30}
+        nextUpId="next-1"
+        colorFor={() => '#000'}
+        therapistNameFor={() => 'Prem Anand'}
+        showTherapist
+        onSelect={vi.fn()}
+      />
+    );
+    const upcomingList = screen.getByRole('region', { name: 'Upcoming' });
+    expect(within(upcomingList).getByText('Ananya')).toBeInTheDocument();
+    expect(within(upcomingList).getByText('Next')).toBeInTheDocument();
+    expect(within(upcomingList).getAllByText(/Rescheduled/).length).toBeGreaterThan(0);
+  });
+
   it('handles an empty day', () => {
     setup([]);
     expect(screen.getByText('No appointments today.')).toBeInTheDocument();
