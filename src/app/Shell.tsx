@@ -38,6 +38,14 @@ import {
   IconSettings,
 } from '@/components/NavIcons';
 import { AccountMenu } from './AccountMenu';
+import { ForeignPendingScreen } from './ForeignPendingScreen';
+import {
+  LAST_USER_META_KEY,
+  consumeVoluntarySignOut,
+  decideOnSessionStart,
+  decideOnSignedOut,
+} from './sessionLoss';
+import { requestPersistentStorage } from '@/lib/persistStorage';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { ClinicSwitcher } from './ClinicSwitcher';
 import { AppLoading, BrandMark } from '@/components/BrandMark';
@@ -63,11 +71,20 @@ export function filterNavItems(role: string) {
   );
 }
 
+async function clearLocalData() {
+  await syncEngine.stop();
+  for (const table of ALL_SYNCED_TABLES) await db.table(table).clear();
+  await db.outbox.clear();
+  await db.meta.clear();
+  syncStatus.reset();
+}
+
 export function Shell() {
   const { loading, session } = useSession();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [syncKicked, setSyncKicked] = useState(false);
+  const [foreignPending, setForeignPending] = useState<number | null>(null);
   const sync = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
 
   const clinics = useLiveQuery(() => db.clinics.toArray(), []);
@@ -132,27 +149,49 @@ export function Shell() {
 
     const currentUserId = session?.user?.id ?? null;
     const isSwappingUsers = prevUserId.current != null && currentUserId !== prevUserId.current;
+    prevUserId.current = currentUserId;
+    let cancelled = false;
 
-    // Clear local Dexie data when user signs out OR when hot-swapping to a 
-    // different account (e.g. clicking a magic link while already logged in)
-    // to prevent leaking cached data from one account to another. 
-    if (!session || isSwappingUsers) {
-      void (async () => {
+    void (async () => {
+      // Signed out, or hot-swapping to another account (e.g. a magic link while
+      // already logged in): clear local data so one account's cache can't leak
+      // into the next — EXCEPT when the session was lost involuntarily (expired
+      // or revoked token, sign-out in another tab) with work still unsynced:
+      // that outbox is the only copy, so keep it and let the login screen say so.
+      if (!session || isSwappingUsers) {
+        const outboxCount = await db.outbox.count();
+        if (!session && decideOnSignedOut({ voluntary: consumeVoluntarySignOut(), outboxCount }) === 'keep') {
+          await syncEngine.stop();
+          syncStatus.reset();
+          return;
+        }
+        await clearLocalData();
+        if (!session) return;
+      }
+
+      // A session is starting. If this device still holds ANOTHER account's
+      // unsynced work, pause (syncing would push it under the wrong account).
+      const lastUserId = ((await db.meta.get(LAST_USER_META_KEY))?.value as string | undefined) ?? null;
+      const outboxCount = await db.outbox.count();
+      const decision = decideOnSessionStart({ lastUserId, userId: currentUserId!, outboxCount });
+      if (cancelled) return;
+      if (decision === 'confirm-discard') {
         await syncEngine.stop();
-        for (const table of ALL_SYNCED_TABLES) await db.table(table).clear();
-        await db.outbox.clear();
-        await db.meta.clear();
-        syncStatus.reset();
-      })();
-    }
-
-    if (session) {
+        setForeignPending(outboxCount);
+        return;
+      }
+      if (decision === 'clear-then-resume') await clearLocalData();
+      await db.meta.put({ key: LAST_USER_META_KEY, value: currentUserId! });
+      setForeignPending(null);
       syncEngine.start();
       syncEngine.schedule(0);
       setSyncKicked(true);
-    }
+      void requestPersistentStorage();
+    })();
 
-    prevUserId.current = currentUserId;
+    return () => {
+      cancelled = true;
+    };
   }, [session, loading]);
 
   // Default the active clinic to the first membership once data arrives,
@@ -264,6 +303,25 @@ export function Shell() {
 
   if (loading) return <AppLoading />;
   if (!session) return <LoginPage />;
+  if (foreignPending !== null) {
+    return (
+      <ForeignPendingScreen
+        count={foreignPending}
+        onDiscard={() => {
+          void (async () => {
+            await clearLocalData();
+            await db.meta.put({ key: LAST_USER_META_KEY, value: session.user.id });
+            setForeignPending(null);
+            syncEngine.start();
+            syncEngine.schedule(0);
+            setSyncKicked(true);
+          })();
+        }}
+        // Not marked voluntary: the other account's outbox is kept for its owner.
+        onSignOut={() => void getSupabase()?.auth.signOut()}
+      />
+    );
+  }
 
   if (!clinic) {
     // `clinics`/`activeClinicId` are undefined until Dexie's own async

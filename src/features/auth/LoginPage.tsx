@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { getSupabase } from '@/lib/supabase';
 import { hasSupabaseConfig } from '@/lib/env';
 import { toFriendlyMessage } from '@/lib/errors';
+import { UnsyncedNotice } from '@/app/UnsyncedNotice';
 import { Field, inputCls, btnPrimary, ErrorNote, AuthBrandHeader } from '@/components/ui';
 
 /** Google's official four-color "G" mark, per Google's Sign in with Google
@@ -310,6 +311,7 @@ export function LoginPage() {
   return (
     <div className="mx-auto mt-24 max-w-sm">
       <AuthBrandHeader subtitle="Sign in" />
+      <UnsyncedNotice />
       <div className="space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
         <GoogleButton onClick={onGoogleSignIn} busy={busy} label="Sign in with Google" />
         <ErrorNote message={error} />

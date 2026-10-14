@@ -184,7 +184,9 @@ export class SyncEngine {
   }
 
   async sync(): Promise<void> {
-    if (!this.supabase || !navigator.onLine) return;
+    // Stopped (signed out, or paused while another account's unsynced work is
+    // awaiting a decision): never push, a stray schedule() must not leak it.
+    if (!this.started || !this.supabase || !navigator.onLine) return;
     if (this.running) {
       this.rerunRequested = true;
       return;

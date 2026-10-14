@@ -2,11 +2,12 @@ import { db } from '@/lib/db';
 import { getSupabase } from '@/lib/supabase';
 import { syncEngine } from '@/sync/engine';
 import { disablePushForThisDevice } from '@/features/notifications/pushSubscription';
+import { markVoluntarySignOut } from './sessionLoss';
 
 /**
  * Sign-out entry point shared by every "Sign out" button. `Shell.tsx`'s
- * cleanup effect wipes the entire outbox unconditionally the moment
- * `auth.signOut()` resolves and `session` goes null — necessary so one
+ * cleanup effect wipes the outbox when `auth.signOut()` resolves and
+ * `session` goes null after a deliberate sign-out — necessary so one
  * account's cached data can't leak into the next login on a shared
  * device, but that means anything still queued (an offline-created visit,
  * a still-in-flight edit) is discarded with it, silently. This gives the
@@ -39,5 +40,8 @@ export async function signOutSafely(): Promise<void> {
   await syncEngine.stop();
   // Must run while the session still exists: the row's RLS needs auth.uid().
   await disablePushForThisDevice().catch(() => {});
+  // A deliberate sign-out (any unsynced work was warned about above) is the
+  // only case where Shell may wipe the local store; an involuntary loss keeps it.
+  markVoluntarySignOut();
   await supabase.auth.signOut();
 }
