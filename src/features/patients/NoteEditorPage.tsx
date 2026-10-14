@@ -1,5 +1,5 @@
 import { useUnsavedWorkProbe } from '@/lib/unsavedWork';
-import { askConfirm } from '@/components/notify';
+import { askConfirm } from '@/lib/notify';
 import { toLocalDateStr } from '@/domain/schedule';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useBlocker, useNavigate, useParams, useSearch } from '@tanstack/react-router';

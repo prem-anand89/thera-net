@@ -1,4 +1,4 @@
-import { askConfirm } from '@/components/notify';
+import { askConfirm } from '@/lib/notify';
 import { useMemo, useState, useCallback } from 'react';
 import { BackLink } from '@/components/BackLink';
 import { Link, useParams, useSearch } from '@tanstack/react-router';

@@ -6,7 +6,7 @@ import type { Appointment } from '@/domain/types';
 import { localDateTime } from '@/domain/schedule';
 
 const askConfirmMock = vi.fn(async () => false);
-vi.mock('@/components/notify', () => ({ askConfirm: (...a: unknown[]) => askConfirmMock(...(a as [])), notify: { error: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/notify', () => ({ askConfirm: (...a: unknown[]) => askConfirmMock(...(a as [])), notify: { error: vi.fn(), info: vi.fn() } }));
 
 // ---- mocks -----------------------------------------------------------------
 const scope = { myTherapistId: 't1' as string | undefined };

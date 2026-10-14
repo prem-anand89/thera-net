@@ -1,4 +1,3 @@
-import { notify } from '@/components/notify';
 /**
  * Renders a DOM node — the same content the browser's own "Print / Save
  * PDF" button shows — into a paginated PDF entirely on-device, no server
@@ -17,6 +16,7 @@ import { notify } from '@/components/notify';
  * mean everyone downloads that weight just to view an invoice, whether or
  * not they ever click Share.
  */
+import { notify } from '@/lib/notify';
 export async function renderElementToPdf(
   element: HTMLElement,
   fileName: string,

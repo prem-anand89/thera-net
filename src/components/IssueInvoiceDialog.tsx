@@ -12,7 +12,7 @@ import type {
 } from '@/domain/types';
 import type { CoreAssessmentPayload } from '@/domain/coreAssessment';
 import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/components/ui';
-import { notify } from '@/components/notify';
+import { notify } from '@/lib/notify';
 import { invoiceService, paymentService, repos } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import { treatmentsDisplayText } from '@/components/VisitCard';

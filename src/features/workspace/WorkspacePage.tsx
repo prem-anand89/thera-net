@@ -1,6 +1,6 @@
 import { hasDue } from '@/domain/paymentState';
-import { askConfirm } from '@/components/notify';
-import { notify } from '@/components/notify';
+import { askConfirm } from '@/lib/notify';
+import { notify } from '@/lib/notify';
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';

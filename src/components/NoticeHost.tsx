@@ -1,25 +1,36 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { ConfirmDialog } from '@/components/ui';
-import { noticeStore, type Notice } from './notify';
+import { noticeStore, type Notice } from '@/lib/notify';
 
 const AUTO_DISMISS_MS = { error: 30_000, info: 5_000 } as const;
 
 function NoticeItem({ notice }: { notice: Notice }) {
+  // Hovering or focusing a notice pauses its auto-dismiss, so it can be read and copied.
+  const [paused, setPaused] = useState(false);
   useEffect(() => {
+    if (paused) return;
     const id = window.setTimeout(() => noticeStore.dismiss(notice.id), AUTO_DISMISS_MS[notice.kind]);
     return () => window.clearTimeout(id);
-  }, [notice.id, notice.kind]);
+    // `count` restarts the timer when the same message is raised again.
+  }, [notice.id, notice.kind, notice.count, paused]);
   const error = notice.kind === 'error';
   return (
     <div
       role={error ? 'alert' : 'status'}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
       className={`pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-lg ${
         error
           ? 'border-[var(--rust)] bg-[var(--rust-light)] text-[var(--rust)]'
           : 'border-[var(--border)] bg-[var(--surface)] text-[var(--ink)]'
       }`}
     >
-      <span className="min-w-0 flex-1">{notice.message}</span>
+      <span className="min-w-0 flex-1">
+        {notice.message}
+        {notice.count > 1 && <span className="ml-1.5 rounded-full bg-black/10 px-1.5 text-xs font-medium">×{notice.count}</span>}
+      </span>
       <button
         type="button"
         aria-label="Dismiss"

@@ -1,4 +1,4 @@
-import { askConfirm } from '@/components/notify';
+import { askConfirm } from '@/lib/notify';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -640,11 +640,13 @@ export function LedgerPage() {
           phone bar's + is New visit). */}
       <h1 className="sr-only">Ledger</h1>
       <div className="flex flex-wrap items-center gap-2">
-        <div className="hide-scrollbar flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-1">
+        <div role="tablist" aria-label="Ledger sections" className="hide-scrollbar flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-1">
           {filterLedgerTabs({ canBill, entitlementsLoading }).map((v) => (
             <button
               key={v.key}
               type="button"
+              role="tab"
+              aria-selected={recordsView === v.key}
               className={`whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-medium transition-colors sm:px-4 ${
                 recordsView === v.key
                   ? 'bg-[var(--teal)] text-white shadow-sm'

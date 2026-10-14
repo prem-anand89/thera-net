@@ -4530,12 +4530,12 @@ version" lock for breaking releases. Not browser-tested at the time of writing;
 the flow to verify on a real deploy is open app, push, wait for the banner,
 Refresh.
 
-### 0a. Dialogs, notices and confirms (`components/dialogBehavior.ts`, `notify.ts`, `NoticeHost.tsx`)
+### 0a. Dialogs, notices and confirms (`components/dialogBehavior.ts`, `lib/notify.ts`, `components/NoticeHost.tsx`)
 Native `alert()` / `confirm()` / `prompt()` are not used for user-facing messages (they look wrong in a
 phone PWA and iOS standalone can suppress them). `notify.error()` / `notify.info()` show a dismissable
 notice (`role="alert"` / `status`, auto-dismiss) and `askConfirm({ title, message, confirmLabel,
 destructive, typeToConfirm })` returns a `Promise<boolean>` for a styled confirm (type-to-confirm replaces
-`prompt()`); both work from non-React code, and `NoticeHost` (mounted once in `main.tsx`) renders them.
+`prompt()`); both work from non-React code, and `NoticeHost` (mounted once in `main.tsx`) renders them: the same message raised again shows a count (×N) instead of a stack of copies, at most 3 notices are on screen (oldest dropped), errors stay 30 s and info 5 s, and hovering or focusing a notice pauses its timer. Segmented controls expose their state to assistive tech (`aria-pressed` on the date presets and Patients chips, `role=tablist`/`tab` + `aria-selected` on the Ledger tabs).
 `ConfirmDialog` takes `open`/`onConfirm`/`onCancel` for places that own the state. **The main dialogs and sheets use
 `useDialogBehavior(open, onClose, canClose?)`** on their `role="dialog"` panel (a dialog that stays mounted while closed must pass its real `open`, and one that can be mid-save passes `canClose` so Escape can't interrupt it); every modal component uses it (payment/invoice/advance dialogs, booking and schedule sheets, account dialogs, `StartVisitSheet`, `AssignShift*`, `UpiQrModal`, the letterhead preview); only the two inline dialogs inside `SettingsPage` and `ScheduleBookingsView` still hand-roll theirs: Escape closes only the topmost
 open dialog, Tab/Shift+Tab stay inside it, focus moves in on open and back to the opener on close.

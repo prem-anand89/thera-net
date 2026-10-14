@@ -20,10 +20,10 @@ const { upsert, serverMrnos, fakeClient } = vi.hoisted(() => {
   return { upsert, serverMrnos, fakeClient };
 });
 vi.mock('@/lib/supabase', () => ({ getSupabase: () => fakeClient }));
-vi.mock('@/components/notify', () => ({ notify: { info: vi.fn(), error: vi.fn() }, askConfirm: vi.fn() }));
+vi.mock('@/lib/notify', () => ({ notify: { info: vi.fn(), error: vi.fn() }, askConfirm: vi.fn() }));
 
 import { SyncEngine } from '../engine';
-import { notify } from '@/components/notify';
+import { notify } from '@/lib/notify';
 
 const collision = { code: '23505', message: 'duplicate key value violates unique constraint "patients_clinic_id_mrno_key"' };
 

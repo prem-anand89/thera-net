@@ -1,4 +1,4 @@
-import { askConfirm } from '@/components/notify';
+import { askConfirm } from '@/lib/notify';
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';

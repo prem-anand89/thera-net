@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { afterEach, describe, expect, it } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NoticeHost } from './NoticeHost';
-import { askConfirm, notify, noticeStore } from './notify';
+import { askConfirm, notify, noticeStore } from '@/lib/notify';
 
 afterEach(() => {
   cleanup();
@@ -53,5 +53,40 @@ describe('NoticeHost', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     expect(screen.getByText('Delete B')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('B')).toHaveValue('');
+  });
+
+  it('counts a repeated message instead of stacking copies, and caps how many show', () => {
+    render(<NoticeHost />);
+    act(() => {
+      notify.error('Could not save');
+      notify.error('Could not save');
+      notify.error('Could not save');
+    });
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByText('×3')).toBeInTheDocument();
+    act(() => {
+      notify.error('A');
+      notify.error('B');
+      notify.error('C');
+    });
+    expect(screen.getAllByRole('alert')).toHaveLength(3); // oldest dropped
+    expect(screen.queryByText(/Could not save/)).not.toBeInTheDocument();
+  });
+
+  it('pauses auto-dismiss while hovered', () => {
+    vi.useFakeTimers();
+    render(<NoticeHost />);
+    act(() => notify.info('Saved'));
+    fireEvent.mouseEnter(screen.getByRole('status'));
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    fireEvent.mouseLeave(screen.getByRole('status'));
+    act(() => {
+      vi.advanceTimersByTime(6_000);
+    });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    vi.useRealTimers();
   });
 });

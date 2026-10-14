@@ -1,4 +1,4 @@
-import { askConfirm } from '@/components/notify';
+import { askConfirm } from '@/lib/notify';
 import { db } from '@/lib/db';
 import { getSupabase } from '@/lib/supabase';
 import { syncEngine } from '@/sync/engine';

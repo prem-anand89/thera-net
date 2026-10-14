@@ -7,7 +7,7 @@ import { onLocalWrite } from '@/repositories/local';
 import { syncStatus, isPermanentFailure } from './status';
 import { coerceReferringSource, type Patient } from '@/domain/types';
 import { isMrnoCollision, reissueWalkInMrno } from '@/domain/walkInMrno';
-import { notify } from '@/components/notify';
+import { notify } from '@/lib/notify';
 
 /** Shown (and matched by toFriendlyMessage) when the server can't be reached. */
 const LAST_SUCCESS_META_KEY = 'lastSuccessAt';

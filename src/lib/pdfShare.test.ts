@@ -1,4 +1,4 @@
-import { noticeStore } from '@/components/notify';
+import { noticeStore } from '@/lib/notify';
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildWhatsAppSendUrl,

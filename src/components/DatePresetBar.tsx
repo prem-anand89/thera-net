@@ -20,11 +20,12 @@ export function DatePresetBar({
   presets = DATE_PRESETS,
 }: DatePresetBarProps) {
   return (
-    <div className="hide-scrollbar flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+    <div role="group" aria-label="Date range" className="hide-scrollbar flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
       {presets.map((p) => (
         <button
           key={p.key}
           type="button"
+          aria-pressed={value === p.key}
           className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${
             value === p.key
               ? 'bg-[var(--teal)] text-white'

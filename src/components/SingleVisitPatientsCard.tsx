@@ -1,4 +1,4 @@
-import { notify } from '@/components/notify';
+import { notify } from '@/lib/notify';
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { formatDateDMY } from '@/domain/fiscalYear';

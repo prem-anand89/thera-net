@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { notify } from '@/components/notify';
+import { notify } from '@/lib/notify';
 import { btnSecondary } from '@/components/ui';
 import { collectUnsyncedRows } from './unsyncedWork';
 

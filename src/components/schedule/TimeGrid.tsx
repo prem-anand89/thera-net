@@ -1,4 +1,4 @@
-import { notify } from '@/components/notify';
+import { notify } from '@/lib/notify';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Appointment, UUID } from '@/domain/types';
 import { APPOINTMENT_BLOCK_STYLE } from '@/domain/appointmentStatus';

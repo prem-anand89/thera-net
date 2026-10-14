@@ -1,4 +1,4 @@
-import { notify } from '@/components/notify';
+import { notify } from '@/lib/notify';
 import { edgeFunctionErrorMessage } from '@/lib/edgeFunctionError';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Link, useBlocker, useNavigate, useSearch } from '@tanstack/react-router';

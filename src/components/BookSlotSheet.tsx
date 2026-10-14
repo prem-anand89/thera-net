@@ -1,5 +1,5 @@
 import { useDialogBehavior } from '@/components/dialogBehavior';
-import { askConfirm } from '@/components/notify';
+import { askConfirm } from '@/lib/notify';
 import { useUnsavedWorkProbe } from '@/lib/unsavedWork';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';

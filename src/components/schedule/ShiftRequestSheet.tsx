@@ -1,5 +1,5 @@
 import { useDialogBehavior } from '@/components/dialogBehavior';
-import { notify } from '@/components/notify';
+import { notify } from '@/lib/notify';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService } from '@/services';

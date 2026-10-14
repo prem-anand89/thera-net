@@ -11,6 +11,8 @@ export interface Notice {
   id: number;
   kind: 'error' | 'info';
   message: string;
+  /** How many times this same message was raised while it was on screen. */
+  count: number;
 }
 
 export interface ConfirmRequest {
@@ -57,8 +59,17 @@ export const noticeStore = {
   },
 };
 
+/** At most this many notices are on screen; the oldest is dropped first. */
+export const MAX_NOTICES = 3;
+
 function push(kind: Notice['kind'], message: string) {
-  notices = [...notices, { id: nextId++, kind, message }];
+  // The same message again (a repeated failure): count it instead of stacking copies.
+  const existing = notices.find((n) => n.kind === kind && n.message === message);
+  if (existing) {
+    notices = notices.map((n) => (n.id === existing.id ? { ...n, count: n.count + 1 } : n));
+  } else {
+    notices = [...notices, { id: nextId++, kind, message, count: 1 }].slice(-MAX_NOTICES);
+  }
   emit();
 }
 

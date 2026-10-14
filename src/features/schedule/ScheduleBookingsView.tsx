@@ -1,4 +1,4 @@
-import { notify } from '@/components/notify';
+import { notify } from '@/lib/notify';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';

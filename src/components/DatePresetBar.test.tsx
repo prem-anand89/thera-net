@@ -36,3 +36,11 @@ describe('DatePresetBar', () => {
     expect(monthBtn).toHaveClass('text-white');
   });
 });
+
+describe('DatePresetBar accessibility', () => {
+  it('exposes the selected preset with aria-pressed', () => {
+    render(<DatePresetBar value="month" onChange={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'This month' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'This week' })).toHaveAttribute('aria-pressed', 'false');
+  });
+});

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { askConfirm } from '@/components/notify';
+import { askConfirm } from '@/lib/notify';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -45,7 +45,7 @@ afterEach(() => {
   therapists = [];
 });
 
-vi.mock('@/components/notify', () => ({ askConfirm: vi.fn(), notify: { error: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/notify', () => ({ askConfirm: vi.fn(), notify: { error: vi.fn(), info: vi.fn() } }));
 
 describe('ShiftTemplatesSection', () => {
   it('lists existing templates with their hours and break', () => {
