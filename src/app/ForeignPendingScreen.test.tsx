@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 let pending = 0;
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: () => pending }));
 vi.mock('@/lib/db', () => ({ db: { outbox: { count: () => pending } } }));
+vi.mock('./unsyncedWork', () => ({ collectUnsyncedRows: async () => [] }));
 
 import { ForeignPendingScreen } from './ForeignPendingScreen';
 import { UnsyncedNotice } from './UnsyncedNotice';
@@ -31,7 +32,7 @@ describe('ForeignPendingScreen', () => {
     const onDiscard = vi.fn();
     const onSignOut = vi.fn();
     render(<ForeignPendingScreen count={2} onDiscard={onDiscard} onSignOut={onSignOut} />);
-    expect(screen.getByText(/2 unsynced changes from a different account/)).toBeInTheDocument();
+    expect(screen.getByText(/2 unsynced changes from a different or unknown account/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Discard and continue' }));
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(onDiscard).toHaveBeenCalledTimes(1);

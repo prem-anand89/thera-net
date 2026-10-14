@@ -19,7 +19,8 @@ describe('decideOnSignedOut', () => {
 
 describe('decideOnSessionStart', () => {
   it.each([
-    { lastUserId: null, userId: 'a', outboxCount: 5, expected: 'resume' },
+    { lastUserId: null, userId: 'a', outboxCount: 0, expected: 'resume' },
+    { lastUserId: null, userId: 'a', outboxCount: 5, expected: 'confirm-discard' },
     { lastUserId: 'a', userId: 'a', outboxCount: 5, expected: 'resume' },
     { lastUserId: 'a', userId: 'b', outboxCount: 0, expected: 'clear-then-resume' },
     { lastUserId: 'a', userId: 'b', outboxCount: 2, expected: 'confirm-discard' },

@@ -39,6 +39,7 @@ import {
 } from '@/components/NavIcons';
 import { AccountMenu } from './AccountMenu';
 import { ForeignPendingScreen } from './ForeignPendingScreen';
+import { purgeAllButOutbox } from './unsyncedWork';
 import { PreparingEscape } from './PreparingEscape';
 import {
   LAST_USER_META_KEY,
@@ -173,6 +174,9 @@ export function Shell() {
         if (cancelled) return;
         if (decideOnSignedOut({ voluntary: consumeVoluntarySignOut(), outboxCount }) === 'keep') {
           await syncEngine.stop();
+          // Nobody is signed in: keep only what the outbox needs, not the whole
+          // readable patient cache (protected health data).
+          await purgeAllButOutbox();
           syncStatus.reset();
           return;
         }

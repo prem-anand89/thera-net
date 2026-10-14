@@ -1,4 +1,5 @@
 import { btnPrimary, btnSecondary } from '@/components/ui';
+import { DownloadUnsyncedButton } from './DownloadUnsyncedButton';
 
 /**
  * Shown when someone signs in on a device that still holds another account's
@@ -18,11 +19,13 @@ export function ForeignPendingScreen({
     <div className="mx-auto mt-24 max-w-sm space-y-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-6">
       <h1 className="font-display text-lg font-semibold text-[var(--ink)]">Unsynced changes from another account</h1>
       <p className="text-sm text-[var(--ink)]">
-        This device still holds {count} unsynced {count === 1 ? 'change' : 'changes'} from a different account. Signing in
-        here would discard {count === 1 ? 'it' : 'them'}. To keep {count === 1 ? 'it' : 'them'}, sign out and sign back in
-        with the original account so {count === 1 ? 'it' : 'they'} can sync first.
+        This device still holds {count} unsynced {count === 1 ? 'change' : 'changes'} from a different or unknown account.
+        Signing in here would discard {count === 1 ? 'it' : 'them'}. To keep {count === 1 ? 'it' : 'them'}, sign out and
+        sign back in with the original account so {count === 1 ? 'it' : 'they'} can sync first, or download{' '}
+        {count === 1 ? 'it' : 'them'} below.
       </p>
       <div className="flex flex-wrap justify-end gap-2">
+        <DownloadUnsyncedButton />
         <button type="button" className={btnSecondary} onClick={onSignOut}>
           Sign out
         </button>

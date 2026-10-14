@@ -41,6 +41,10 @@ export function decideOnSessionStart(input: {
   userId: string;
   outboxCount: number;
 }): 'resume' | 'clear-then-resume' | 'confirm-discard' {
-  if (!input.lastUserId || input.lastUserId === input.userId) return 'resume';
-  return input.outboxCount === 0 ? 'clear-then-resume' : 'confirm-discard';
+  if (input.lastUserId === input.userId) return 'resume';
+  // No recorded owner: a device that held data from before owners were recorded.
+  // With nothing pending the cache is just a cache (clear it, it re-pulls); with
+  // pending work we cannot tell whose it is, so ask rather than push it blind.
+  // A brand-new, empty device has no outbox, so this never prompts on first use.
+  return input.outboxCount === 0 ? (input.lastUserId ? 'clear-then-resume' : 'resume') : 'confirm-discard';
 }
