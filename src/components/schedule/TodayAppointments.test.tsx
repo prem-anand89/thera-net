@@ -249,4 +249,28 @@ describe('TodayAppointments end of day and cancelled', () => {
     fireEvent.click(screen.getByRole('button', { name: /Restore Later/ }));
     expect(onRestoreCancelled).toHaveBeenCalledWith(future);
   });
+
+  it('ignores a second tap on Arrived while the first request is still running', async () => {
+    let release: () => void = () => {};
+    const onMarkArrived = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+    const a = appt('10:00', { patientName: 'Slow' });
+    render(
+      <TodayAppointments
+        appointments={[a]}
+        slotMinutes={30}
+        nextUpId={null}
+        colorFor={() => '#000'}
+        therapistNameFor={() => 'Dr A'}
+        showTherapist
+        onSelect={vi.fn()}
+        onMarkArrived={onMarkArrived}
+      />
+    );
+    const button = screen.getByRole('button', { name: /Mark Slow arrived/ });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(onMarkArrived).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    release();
+  });
 });

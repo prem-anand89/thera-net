@@ -65,13 +65,27 @@ export function TodayAppointments({
   dueByVisitId?: Map<string, boolean>;
   onCollect?: (visitId: string) => void;
   /** One-tap "Arrived" on an upcoming row (otherwise it takes row, panel, button). */
-  onMarkArrived?: (appointment: Appointment) => void;
+  onMarkArrived?: (appointment: Appointment) => void | Promise<unknown>;
   /** Reverses a mistaken no-show; Rebook is the row itself (opens the panel with Reschedule). */
-  onUndoNoShow?: (appointment: Appointment) => void;
+  onUndoNoShow?: (appointment: Appointment) => void | Promise<unknown>;
   /** Brings a cancelled appointment back (managers). Shown only while its time is still ahead. */
-  onRestoreCancelled?: (appointment: Appointment) => void;
+  onRestoreCancelled?: (appointment: Appointment) => void | Promise<unknown>;
 }) {
   const [showAll, setShowAll] = useState(false);
+  // One request per row at a time: a second tap on Arrived / Undo / Restore while the first
+  // is in flight would send a second call that the server rejects with an error toast.
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
+  const guarded = (id: string, action: () => unknown) => {
+    if (pendingIds.has(id)) return;
+    setPendingIds((current) => new Set(current).add(id));
+    void Promise.resolve(action()).finally(() =>
+      setPendingIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      })
+    );
+  };
   // Finished rows carry Paid / Due / Undo, so they stay open unless the user folds them (remembered per device).
   const [doneOpen, setDoneOpen] = useState(() => {
     try {
@@ -191,7 +205,8 @@ onClick={() => onCollect?.(a.visitId!)}
             type="button"
             className="min-h-11 rounded-full border sm:min-h-9 border-[var(--rust)] px-3 text-xs font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
             aria-label={`Undo no-show for ${a.patientName}`}
-onClick={() => onUndoNoShow(a)}
+disabled={pendingIds.has(a.id)}
+            onClick={() => guarded(a.id, () => onUndoNoShow(a))}
           >
             Undo
           </button>
@@ -282,7 +297,8 @@ onClick={() => onUndoNoShow(a)}
                     type="button"
                     className="min-h-11 rounded-full border sm:min-h-9 border-[var(--teal)] px-3 text-xs font-medium text-[var(--teal)] hover:bg-[var(--teal-light)]"
                     aria-label={`Mark ${a.patientName} arrived`}
-onClick={() => onMarkArrived(a)}
+disabled={pendingIds.has(a.id)}
+                    onClick={() => guarded(a.id, () => onMarkArrived(a))}
                   >
                     Arrived
                   </button>
@@ -341,7 +357,8 @@ onClick={() => onMarkArrived(a)}
                     type="button"
                     aria-label={`Restore ${a.patientName}'s appointment`}
                     className="min-h-11 rounded-full border border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)] sm:min-h-9"
-                    onClick={() => onRestoreCancelled(a)}
+                    disabled={pendingIds.has(a.id)}
+                    onClick={() => guarded(a.id, () => onRestoreCancelled(a))}
                   >
                     Restore
                   </button>

@@ -2,12 +2,17 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type OutboxEntry } from '@/lib/db';
 import { syncStatus, isPermanentFailure } from '@/sync/status';
-import { syncEngine } from '@/sync/engine';
+import { syncEngine, NETWORK_UNREACHABLE } from '@/sync/engine';
 import { toFriendlyMessage } from '@/lib/errors';
 import { formatLastSynced, isSyncStale, syncFailureHeadline, syncRecordLabel } from '@/domain/syncCopy';
 import { btnPrimary, btnSecondary } from '@/components/ui';
 import { useDialogBehavior } from '@/components/dialogBehavior';
 import { isMrnoCollision } from '@/domain/walkInMrno';
+
+// When this page loaded: a device that has not completed ONE sync within a couple of
+// minutes must not read as "Synced" just because there is nothing to compare against.
+const APP_STARTED_AT = Date.now();
+const NEVER_SYNCED_AFTER_MS = 2 * 60 * 1000;
 
 /** Re-renders every minute so "N min ago" and the stale check keep moving. */
 function useMinuteClock(): number {
@@ -56,7 +61,9 @@ export function SyncBadge() {
   const [discarding, setDiscarding] = useState<OutboxEntry | null>(null);
   const failed = useLiveQuery(() => db.outbox.filter((e) => !!e.error).toArray(), []) ?? [];
   const now = useMinuteClock();
-  const stale = status.online && !status.error && isSyncStale(status.lastSuccessAt, now);
+  const neverSynced = status.online && !status.syncing && status.lastSuccessAt === undefined && now - APP_STARTED_AT > NEVER_SYNCED_AFTER_MS;
+  const stale = status.online && !status.error && (isSyncStale(status.lastSuccessAt, now) || neverSynced);
+  const cantReach = status.error === NETWORK_UNREACHABLE;
   const lastSynced = formatLastSynced(status.lastSuccessAt, now);
 
   const dot = !status.online
@@ -76,12 +83,16 @@ export function SyncBadge() {
       : failed.length > 0
         ? syncFailureHeadline(failed.map((e) => e.table))
         : status.error
-          ? 'Sync issue'
+          ? cantReach
+            ? "Can't reach the server"
+            : 'Sync issue'
           : pending > 0
             ? `${pending} pending`
-            : stale
-              ? 'Not synced recently'
-              : 'Synced';
+            : neverSynced
+              ? 'Not synced yet'
+              : stale
+                ? 'Not synced recently'
+                : 'Synced';
 
   // "Quiet" = the boring, common case (online, nothing queued, nothing
   // failed) — the one state where collapsing to just the dot costs

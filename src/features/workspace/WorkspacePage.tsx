@@ -1,5 +1,5 @@
+import { confirmAndDeleteVisit } from '@/features/visits/confirmDeleteVisit';
 import { hasDue } from '@/domain/paymentState';
-import { askConfirm } from '@/lib/notify';
 import { notify } from '@/lib/notify';
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
@@ -865,17 +865,17 @@ export function WorkspacePage() {
               }}
               onMarkArrived={
                 canManageBookings || scope.myTherapistId
-                  ? (a) => void bookingService.markAppointmentArrived(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
+                  ? (a) => bookingService.markAppointmentArrived(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
                   : undefined
               }
               onRestoreCancelled={
                 canManageBookings || scope.myTherapistId
-                  ? (a) => void bookingService.restoreCancelledAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
+                  ? (a) => bookingService.restoreCancelledAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
                   : undefined
               }
               onUndoNoShow={
                 canManageBookings || scope.myTherapistId
-                  ? (a) => void bookingService.restoreNoShowAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
+                  ? (a) => bookingService.restoreNoShowAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
                   : undefined
               }
             />
@@ -908,13 +908,7 @@ export function WorkspacePage() {
                 }
                 : undefined
             }
-            onDelete={(row) => {
-              void askConfirm({ title: 'Delete this visit?', message: 'It is removed from the records.', confirmLabel: 'Delete visit', destructive: true }).then(
-                (ok) => {
-                  if (ok) void repos.visits.softDelete(row.visitId);
-                }
-              );
-            }}
+            onDelete={(row) => void confirmAndDeleteVisit(row.visitId)}
             onAskForFeedback={(row) => {
               void feedbackService
                 .askForFeedback(row.visitId, row.patientName, row.patientPhone ?? null, clinic.name)

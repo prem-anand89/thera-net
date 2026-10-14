@@ -32,19 +32,22 @@ export default defineConfig({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
+      // The ONE web app manifest (index.html no longer links a hand-written one).
       manifest: {
-        name: 'Thera.Net',
+        name: 'Thera.Net — Patient Visit Ledger',
         short_name: 'Thera.Net',
-        description: 'Patient Visit Ledger',
-        theme_color: '#1e5054',
-        background_color: '#ffffff',
+        description: 'Patient visits, billing, and clinical notes for physiotherapy clinics.',
+        start_url: '/',
         display: 'standalone',
+        background_color: '#f5f5f4',
+        theme_color: '#1e5054',
         icons: [
-          { src: '/favicon-16.png', sizes: '16x16', type: 'image/png' },
-          { src: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
-          { src: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png', purpose: 'apple touch icon' }
-        ]
-      }
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png', purpose: 'apple touch icon' },
+        ],
+      },
     })
   ],
   resolve: {
