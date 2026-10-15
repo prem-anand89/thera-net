@@ -15,7 +15,6 @@ import {
   monthsOfFiscalYear,
   monthDateRange,
   fiscalYearDateRange,
-  fiscalYearToDateRange,
   monthName,
   formatDateDMY,
   formatDateDM,
@@ -30,6 +29,7 @@ import {
   KebabMenu,
   menuItem,
   TherapistPill,
+  chipSelectChevron,
 } from '@/components/ui';
 import { patientIdentityLine, CardDetailRow } from '@/components/VisitCard';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
@@ -80,16 +80,18 @@ export function PatientsList() {
   const [booking, setBooking] = useState<Patient | null>(null);
   const sort = useSort<PatientSortKey>('lastVisit', 'desc');
 
-  const currentFy = fiscalYearOf(new Date(), clinic.fyStartMonth);
+  const now = useMemo(() => new Date(), []);
+  const currentFy = fiscalYearOf(now, clinic.fyStartMonth);
   const [fyStartYear, setFyStartYear] = useState(currentFy.startYear);
-  // '' = Full FY, 'ytd' = year to date, 'custom' = customFrom/customTo,
-  // otherwise a specific "YYYY-M" month value.
-  const [month, setMonth] = useState('');
+  const currentMonthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+  // Defaults to current month to avoid DOM bloat/lag for busy clinics seeing 30-50 patients/day.
+  // '' = Full FY, 'custom' = customFrom/customTo, otherwise a specific "YYYY-M" month value.
+  const [month, setMonth] = useState(currentMonthKey);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
   const selectedPeriod = useMemo(() => {
-    if (!month || month === 'ytd' || month === 'custom') return null;
+    if (!month || month === 'custom') return null;
     const [y, m] = month.split('-').map(Number);
     return { year: y, month: m };
   }, [month]);
@@ -99,7 +101,6 @@ export function PatientsList() {
   // unfiltered "every patient ever" view isn't offered by this control.
   const selectedRange = useMemo(() => {
     if (selectedPeriod) return monthDateRange(selectedPeriod);
-    if (month === 'ytd') return fiscalYearToDateRange(fyStartYear, clinic.fyStartMonth);
     if (month === 'custom') return { from: customFrom, to: customTo };
     return fiscalYearDateRange(fyStartYear, clinic.fyStartMonth);
   }, [selectedPeriod, month, fyStartYear, clinic.fyStartMonth, customFrom, customTo]);
@@ -208,7 +209,9 @@ export function PatientsList() {
       p.name.toLowerCase().includes(q) ||
       (phoneQ.length >= 3 && (p.phone ?? '').replace(/\D/g, '').includes(phoneQ));
     if (!matchesQuery) return false;
-    if (periodPatientIds !== null && !periodPatientIds.has(p.id)) return false;
+    // When a search term is typed, search across the entire clinic directory;
+    // otherwise scope to the selected month/fiscal year.
+    if (!q && periodPatientIds !== null && !periodPatientIds.has(p.id)) return false;
     const stats = visitStatsByPatient.get(p.id);
     if (chip === 'mine') {
       return stats?.latestVisit.therapistId === myTherapistId;
@@ -277,7 +280,11 @@ export function PatientsList() {
           select (financial year + month in one) on the right. Phones: the
           chips scroll on one row, search and period share the next. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div role="group" aria-label="Patient filter" className="hide-scrollbar flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
+        <div
+          role="group"
+          aria-label="Patient filter"
+          className="hide-scrollbar flex h-10 w-fit max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1"
+        >
           {(
             [
               { key: 'all', label: 'All' },
@@ -288,10 +295,10 @@ export function PatientsList() {
               key={c.key}
               type="button"
               aria-pressed={chip === c.key}
-              className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 chip === c.key
-                  ? 'bg-[var(--teal)] text-white'
-                  : 'text-[var(--muted)] hover:bg-[var(--surface)]'
+                  ? 'bg-[var(--teal)] text-white shadow-sm'
+                  : 'text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]'
               }`}
               onClick={() => setChip(c.key)}
             >
@@ -300,24 +307,55 @@ export function PatientsList() {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-          <input
-            type="search"
-            aria-label="Search patients"
-            className="min-h-10 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-base focus:border-[var(--teal)] focus:outline-none sm:w-64 sm:flex-none sm:text-sm"
-            placeholder="Search ID, name or phone"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          <div className="relative flex-1 sm:w-64 sm:flex-none">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--muted)]">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 20 20"
+                fill="none"
+                aria-hidden="true"
+                className="h-4 w-4"
+              >
+                <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M13.5 13.5L18 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </div>
+            <input
+              type="search"
+              aria-label="Search patients"
+              className="h-10 min-h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] pl-9 pr-8 text-sm text-[var(--ink)] placeholder-[var(--muted)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20 [&::-webkit-search-cancel-button]:hidden"
+              placeholder="Search ID, name or phone"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {query && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+                onClick={() => setQuery('')}
+              >
+                ✕
+              </button>
+            )}
+          </div>
           <select
             aria-label="Fiscal year"
-            className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+            className="h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-2 pl-3 pr-8 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
+            style={chipSelectChevron}
             value={month === 'custom' ? 'custom' : String(fyStartYear)}
             onChange={(e) => {
               if (e.target.value === 'custom') {
                 setMonth('custom');
               } else {
-                setFyStartYear(Number(e.target.value));
-                setMonth('');
+                const selectedYear = Number(e.target.value);
+                setFyStartYear(selectedYear);
+                if (selectedYear === currentFy.startYear) {
+                  setMonth(currentMonthKey);
+                } else {
+                  setMonth('');
+                }
               }
             }}
           >
@@ -334,19 +372,29 @@ export function PatientsList() {
           {month !== 'custom' && (
             <select
               aria-label="Period within fiscal year"
-              className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+              className="h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-2 pl-3 pr-8 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
+              style={chipSelectChevron}
               value={month}
               onChange={(e) => setMonth(e.target.value)}
             >
               <option value="">Full year</option>
-              {fyStartYear === currentFy.startYear && (
-                <option value="ytd">To date</option>
-              )}
-              {monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth).map((m) => (
-                <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
-                  {monthName(m.month)} {m.year}
-                </option>
-              ))}
+              {monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth)
+                .filter((m) => {
+                  if (fyStartYear !== currentFy.startYear) return true;
+                  return (
+                    m.year < now.getFullYear() ||
+                    (m.year === now.getFullYear() && m.month <= now.getMonth() + 1)
+                  );
+                })
+                .map((m) => {
+                  const isCurrent =
+                    m.year === now.getFullYear() && m.month === now.getMonth() + 1;
+                  return (
+                    <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
+                      {monthName(m.month)} {m.year}{isCurrent ? ' (This month)' : ''}
+                    </option>
+                  );
+                })}
             </select>
           )}
         </div>
@@ -355,7 +403,7 @@ export function PatientsList() {
         <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
           <input
             type="date"
-            className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+            className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
             value={customFrom}
             onChange={(e) => setCustomFrom(e.target.value)}
             aria-label="From date"
@@ -363,7 +411,7 @@ export function PatientsList() {
           <span>–</span>
           <input
             type="date"
-            className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+            className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
             value={customTo}
             onChange={(e) => setCustomTo(e.target.value)}
             aria-label="To date"
@@ -546,14 +594,14 @@ export function PatientsList() {
                           <Link
                             to="/visits/new"
                             search={{ patientId: p.id, from: '/patients' }}
-                            className="rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]"
+                            className="inline-flex min-h-8 items-center rounded-full bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--teal-strong)]"
                           >
                             + Visit
                           </Link>
                           {canBook && (
                             <button
                               type="button"
-                              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+                              className="inline-flex min-h-8 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--paper)]"
                               onClick={() => setBooking(p)}
                             >
                               Book
@@ -573,7 +621,7 @@ export function PatientsList() {
                             isStale(stats.lastVisitOn) && (
                               <button
                                 type="button"
-                                className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                                className="inline-flex min-h-8 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--teal)] transition-colors hover:bg-[var(--teal-light)]"
                                 onClick={() => {
                                   void feedbackService
                                     .sendReturnReminder(clinic.id, p.name, p.phone, clinic.name)
@@ -801,7 +849,7 @@ function PatientCard({
           {onBook && (
             <button
               type="button"
-              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+              className="inline-flex min-h-8 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--paper)]"
               onClick={onBook}
             >
               Book
@@ -810,7 +858,7 @@ function PatientCard({
           {onRemind && (
             <button
               type="button"
-              className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+              className="inline-flex min-h-8 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--teal)] transition-colors hover:bg-[var(--teal-light)]"
               onClick={onRemind}
             >
               Remind
@@ -819,11 +867,7 @@ function PatientCard({
           <Link
             to="/visits/new"
             search={{ patientId: p.id, from: '/patients' }}
-            className={
-              nextAction === 'invoice'
-                ? 'rounded-full bg-[var(--teal)] px-2.5 py-1 text-xs font-medium text-white hover:bg-[var(--teal-strong)]'
-                : 'rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]'
-            }
+            className="inline-flex min-h-8 items-center rounded-full bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--teal-strong)]"
           >
             {nextAction === 'invoice' ? 'Needs invoice' : '+ Visit'}
           </Link>
