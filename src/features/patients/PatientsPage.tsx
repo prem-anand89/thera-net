@@ -299,7 +299,7 @@ export function PatientsList() {
             </button>
           ))}
         </div>
-        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
           <input
             type="search"
             aria-label="Search patients"
@@ -309,35 +309,46 @@ export function PatientsList() {
             onChange={(e) => setQuery(e.target.value)}
           />
           <select
-            aria-label="Period"
-            className="min-h-10 w-[9.5rem] shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none sm:w-auto sm:text-sm"
-            value={month === 'custom' ? 'custom' : `${fyStartYear}:${month}`}
+            aria-label="Fiscal year"
+            className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+            value={month === 'custom' ? 'custom' : String(fyStartYear)}
             onChange={(e) => {
               if (e.target.value === 'custom') {
                 setMonth('custom');
-                return;
+              } else {
+                setFyStartYear(Number(e.target.value));
+                setMonth('');
               }
-              const [fy, m] = e.target.value.split(':');
-              setFyStartYear(Number(fy));
-              setMonth(m);
             }}
           >
             {[currentFy.startYear, currentFy.startYear - 1, currentFy.startYear - 2].map((y) => {
               const label = fiscalYearOf(new Date(y, clinic.fyStartMonth - 1, 1), clinic.fyStartMonth).label;
               return (
-                <optgroup key={y} label={`FY ${label}`}>
-                  <option value={`${y}:`}>FY {label} · full year</option>
-                  <option value={`${y}:ytd`}>FY {label} · to date</option>
-                  {monthsOfFiscalYear(y, clinic.fyStartMonth).map((m) => (
-                    <option key={`${m.year}-${m.month}`} value={`${y}:${m.year}-${m.month}`}>
-                      {monthName(m.month)} {m.year}
-                    </option>
-                  ))}
-                </optgroup>
+                <option key={y} value={y}>
+                  FY {label}{y === currentFy.startYear ? ' (Current)' : ''}
+                </option>
               );
             })}
             <option value="custom">Custom range…</option>
           </select>
+          {month !== 'custom' && (
+            <select
+              aria-label="Period within fiscal year"
+              className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+            >
+              <option value="">Full year</option>
+              {fyStartYear === currentFy.startYear && (
+                <option value="ytd">To date</option>
+              )}
+              {monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth).map((m) => (
+                <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
+                  {monthName(m.month)} {m.year}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
       {month === 'custom' && (
