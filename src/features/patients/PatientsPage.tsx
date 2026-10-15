@@ -37,6 +37,7 @@ import {
   pillNeutral,
 } from '@/components/ui';
 import { Pager, usePagination } from '@/components/Pager';
+import { EmptyState } from '@/components/EmptyState';
 import { IconCalendar } from '@/components/NavIcons';
 import { patientIdentityLine, CardDetailRow } from '@/components/VisitCard';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
@@ -436,13 +437,28 @@ export function PatientsList() {
       <ErrorNote message={error} />
 
       {rows.length === 0 ? (
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center text-sm text-[var(--muted)] shadow-sm">
-          {q
-            ? 'No patients match your search.'
-            : (all ?? []).filter((p) => !p.deletedAt).length === 0
-              ? 'No patients yet - they\'re created from the "New visit" flow.'
-              : 'No patients were seen in this period.'}
-        </div>
+        <EmptyState
+          title={
+            q
+              ? 'No patients match your search'
+              : (all ?? []).filter((p) => !p.deletedAt).length === 0
+                ? 'No patients yet'
+                : 'No patients were seen in this period'
+          }
+          hint={
+            q
+              ? 'Check the spelling, or try the ID or phone number.'
+              : (all ?? []).filter((p) => !p.deletedAt).length === 0
+                ? 'Patients are created from the New visit flow.'
+                : 'Widen the period to see everyone.'
+          }
+          actions={[
+            ...(q ? [{ label: 'Clear search', onClick: () => setQuery('') }] : []),
+            ...(!q && (all ?? []).some((p) => !p.deletedAt) && month !== ''
+              ? [{ label: 'Show full year', onClick: () => setMonth('') }]
+              : []),
+          ]}
+        />
       ) : (
         <>
           {/* Below tab: (744px) — framed card list */}

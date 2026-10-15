@@ -31,6 +31,7 @@ import {
 } from '@/domain/types';
 import {
   btnPrimary,
+  pillPrimary,
   th,
   thNum,
   td,
@@ -43,6 +44,8 @@ import {
   chipSelectChevron,
 } from '@/components/ui';
 import { Pager, usePagination } from '@/components/Pager';
+import { EmptyState } from '@/components/EmptyState';
+import { loadLedgerPrefs, presetRange, saveLedgerPrefs } from './ledgerPrefs';
 import { PatientOverview } from './PatientOverview';
 import { useDueLandingScope } from './useDueLandingScope';
 import { EditVisitModal } from './EditVisitModal';
@@ -239,20 +242,29 @@ export function LedgerPage() {
     if (entitlementsLoading) return;
     if ((recordsView === 'invoices' || recordsView === 'daybook') && !canBill) setRecordsView('visits');
   }, [recordsView, canBill, entitlementsLoading, setRecordsView]);
-  const initialWeek = currentWeekRange();
-  const [from, setFrom] = useState(dueLanding ? '' : initialWeek.from);
-  const [to, setTo] = useState(dueLanding ? '' : initialWeek.to);
-  const [datePreset, setDatePreset] = useState<DatePreset>(dueLanding ? 'all' : 'week');
+  // The last tab and Visits filters are remembered per clinic on this device. A Dues landing
+  // (or a patient deep link) always wins and never overwrites what was remembered.
+  const [prefs] = useState(() => (dueLanding ? {} : loadLedgerPrefs(clinic.id)));
+  const initialPreset: DatePreset = dueLanding ? 'all' : (prefs.datePreset ?? 'week');
+  const initialRange =
+    initialPreset === 'custom'
+      ? { from: prefs.from ?? '', to: prefs.to ?? '' }
+      : (presetRange(initialPreset) ?? currentWeekRange());
+  const [from, setFrom] = useState(initialRange.from);
+  const [to, setTo] = useState(initialRange.to);
+  const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
   // A therapist landing from their own Dues sees just their visits.
-  const [therapistId, setTherapistId] = useState('');
+  const [therapistId, setTherapistId] = useState(prefs.therapistId ?? '');
   // A therapist landing from their own Dues sees just their visits.
   useDueLandingScope({ dueLanding, isClinicWideView, myTherapistId, setTherapistId });
-  const [onlyCollectedNoReceipt, setOnlyCollectedNoReceipt] = useState(false);
-  const [onlyNotCollected, setOnlyNotCollected] = useState(dueLanding);
-  const [onlyNotDocumented, setOnlyNotDocumented] = useState(false);
+  const [onlyCollectedNoReceipt, setOnlyCollectedNoReceipt] = useState(prefs.onlyCollectedNoReceipt ?? false);
+  const [onlyNotCollected, setOnlyNotCollected] = useState(dueLanding || (prefs.onlyNotCollected ?? false));
+  const [onlyNotDocumented, setOnlyNotDocumented] = useState(prefs.onlyNotDocumented ?? false);
   // Phones fold therapist + the three "only" checkboxes behind a Filters
   // button (with a count of what's on); from sm: they're always shown.
-  const [filtersOpen, setFiltersOpen] = useState(dueLanding);
+  const [filtersOpen, setFiltersOpen] = useState(
+    dueLanding || Boolean(prefs.therapistId || prefs.onlyCollectedNoReceipt || prefs.onlyNotCollected || prefs.onlyNotDocumented)
+  );
   const [patientQuery, setPatientQuery] = useState('');
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
@@ -265,24 +277,22 @@ export function LedgerPage() {
 
   function applyDatePreset(preset: DatePreset) {
     setDatePreset(preset);
-    const now = new Date();
-    if (preset === 'week') {
-      const { from: weekFrom, to: weekTo } = currentWeekRange(now);
-      setFrom(weekFrom);
-      setTo(weekTo);
-    } else if (preset === 'month') {
-      setFrom(toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)));
-      setTo(toIsoDate(now));
-    } else if (preset === 'lastMonth') {
-      setFrom(toIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
-      setTo(toIsoDate(new Date(now.getFullYear(), now.getMonth(), 0)));
-    } else if (preset === 'all') {
-      setFrom('');
-      setTo('');
-    } else if (preset === 'custom') {
-      // Custom: just set the preset, don't auto-fill dates
+    // Custom just switches on the From/To inputs; every other preset means a range from today.
+    const range = presetRange(preset);
+    if (range) {
+      setFrom(range.from);
+      setTo(range.to);
     }
   }
+
+  // Restore the last tab when arriving with no tab/patient/dues in the URL (the entitlement
+  // guard above still bounces a tab the user can no longer see). Runs once.
+  useEffect(() => {
+    if (!search.tab && !search.patientId && !dueLanding && prefs.tab && prefs.tab !== 'visits') {
+      setRecordsView(prefs.tab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
@@ -533,6 +543,44 @@ export function LedgerPage() {
     [cardRows, onlyCollectedNoReceipt, onlyNotCollected, onlyNotDocumented]
   );
 
+  useEffect(() => {
+    if (dueLanding) return;
+    saveLedgerPrefs(clinic.id, {
+      tab: recordsView,
+      datePreset,
+      ...(datePreset === 'custom' ? { from, to } : {}),
+      therapistId,
+      onlyCollectedNoReceipt,
+      onlyNotCollected,
+      onlyNotDocumented,
+    });
+  }, [clinic.id, dueLanding, recordsView, datePreset, from, to, therapistId, onlyCollectedNoReceipt, onlyNotCollected, onlyNotDocumented]);
+
+  // A remembered therapist who has since been removed would silently hide every visit.
+  useEffect(() => {
+    if (therapistId && therapists && !therapists.some((t) => t.id === therapistId)) setTherapistId('');
+  }, [therapistId, therapists]);
+
+  const filtersAreDefault =
+    datePreset === 'week' && !therapistId && !onlyCollectedNoReceipt && !onlyNotCollected && !onlyNotDocumented;
+  function resetFilters() {
+    applyDatePreset('week');
+    setTherapistId('');
+    setOnlyCollectedNoReceipt(false);
+    setOnlyNotCollected(false);
+    setOnlyNotDocumented(false);
+    setPatientQuery('');
+  }
+
+  // Next steps for an empty Visits list: widen the range first, then drop filters.
+  const emptyActions = [
+    ...(datePreset !== 'all' && datePreset !== 'lastMonth' ? [{ label: 'Show last month', onClick: () => applyDatePreset('lastMonth') }] : []),
+    ...(datePreset !== 'all' ? [{ label: 'Show all time', onClick: () => applyDatePreset('all') }] : []),
+    ...(therapistId || onlyCollectedNoReceipt || onlyNotCollected || onlyNotDocumented
+      ? [{ label: 'Clear filters', onClick: () => { setTherapistId(''); setOnlyCollectedNoReceipt(false); setOnlyNotCollected(false); setOnlyNotDocumented(false); } }]
+      : []),
+  ];
+
   const visitsPager = usePagination(
     visibleRows,
     `${from}|${to}|${therapistId}|${filteredPatient?.id ?? ''}|${onlyCollectedNoReceipt}|${onlyNotCollected}|${onlyNotDocumented}`,
@@ -677,9 +725,16 @@ export function LedgerPage() {
           ))}
         </div>
         {filteredPatient && recordsView === 'visits' && (
-          <span className="rounded-full bg-[var(--teal-light)] px-3 py-1 text-xs text-[var(--teal)]">
-            {filteredPatient.name} ({filteredPatient.mrno})
-            <Link to="/ledger" className="ml-2 font-medium" aria-label="Clear patient filter">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--teal-light)] py-1 pl-3 pr-1.5 text-xs text-[var(--teal-strong)]">
+            <span>
+              Visits for <strong className="font-semibold">{filteredPatient.name}</strong> ({filteredPatient.mrno})
+            </span>
+            <Link
+              to="/ledger"
+              aria-label="Clear patient filter"
+              title="Show all patients"
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full font-medium hover:bg-white/70"
+            >
               ✕
             </Link>
           </span>
@@ -697,6 +752,11 @@ export function LedgerPage() {
               therapist inside Filters. */}
           <div className="flex flex-wrap items-center gap-2">
             <DatePresetBar value={datePreset} onChange={applyDatePreset} />
+            {!filtersAreDefault && (
+              <button type="button" className="text-xs font-medium text-[var(--teal)] hover:underline" onClick={resetFilters}>
+                Reset filters
+              </button>
+            )}
             {datePreset === 'custom' && (
               <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
                 <input
@@ -1061,31 +1121,51 @@ export function LedgerPage() {
                 backTo="/ledger"
               />
               <Pager list={visitsPager} noun="visits" />
-              <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm shadow-[0_-2px_6px_rgba(0,0,0,0.06)]">
-                <span className="font-medium text-[var(--ink)]">
-                  Totals: <span className="font-semibold">{visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'}</span>
-                </span>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm">
-                  <span>Billed <strong className="font-num text-[var(--ink)]">{formatINR(totals.bill)}</strong></span>
-                  <span className="text-[var(--border)]">·</span>
-                  <span>Collected <strong className="font-num text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong></span>
-                  <span className="text-[var(--border)]">·</span>
-                  <span>Outstanding <strong className="font-num text-[var(--rust)]">{formatINR(totals.outstanding)}</strong></span>
+              <div
+                className="sticky bottom-0 z-10 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-2.5 text-sm shadow-[0_-2px_6px_rgba(0,0,0,0.06)]"
+                aria-label="Totals for the filtered visits"
+              >
+                {/* Phones: three compact columns (label over amount) so it stays one short strip.
+                    sm+: one inline line. */}
+                <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3">
+                  <span className="col-span-3 text-xs font-medium text-[var(--ink)] sm:col-span-1 sm:text-sm">
+                    {visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'}
+                  </span>
+                  <div className="text-center sm:text-left">
+                    <div className="text-[11px] text-[var(--muted)] sm:inline sm:text-sm">Billed</div>{' '}
+                    <strong className="font-num text-[var(--ink)]">{formatINR(totals.bill)}</strong>
+                  </div>
+                  <div className="text-center sm:text-left">
+                    <div className="text-[11px] text-[var(--muted)] sm:inline sm:text-sm">Collected</div>{' '}
+                    <strong className="font-num text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong>
+                  </div>
+                  <div className="text-center sm:text-left">
+                    <div className="text-[11px] text-[var(--muted)] sm:inline sm:text-sm">Outstanding</div>{' '}
+                    <strong className="font-num text-[var(--rust)]">{formatINR(totals.outstanding)}</strong>
+                  </div>
                 </div>
               </div>
             </>
           ) : (
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center text-sm text-[var(--muted)] shadow-sm">
-              No visits match these filters in this range{activeFilterNames.length > 0 ? ` (${activeFilterNames.join(', ')})` : ''}.
-            </div>
+            <EmptyState
+              title="No visits match these filters"
+              hint={activeFilterNames.length > 0 ? `Active: ${activeFilterNames.join(', ')}.` : 'Try a wider date range.'}
+              actions={emptyActions}
+            />
           )}
         </div>
       )}
 
       {recordsView === 'visits' && visits?.length === 0 && (
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center text-sm text-[var(--muted)] shadow-sm">
-          No visits match - log one with "New visit".
-        </div>
+        <EmptyState
+          title={datePreset === 'all' ? 'No visits logged yet' : 'No visits in this date range'}
+          hint={datePreset === 'all' ? 'Log the first one with New visit.' : 'Widen the range, or log a visit.'}
+          actions={emptyActions}
+        >
+          <Link to="/visits/new" search={{ from: '/ledger' }} className={pillPrimary}>
+            + New visit
+          </Link>
+        </EmptyState>
       )}
 
       {recordsView === 'patients' && <PatientsList />}

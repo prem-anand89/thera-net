@@ -15,6 +15,8 @@ const toIsoDate = (d: Date) =>
 import { DatePresetBar, type DatePreset } from '@/components/DatePresetBar';
 import { buildUpiPayUri, clinicCanShowUpiQr, clinicUpiPayeeName } from '@/domain/upiPay';
 import { th, thNum, td, tdNum, btnPrimary, ErrorNote, Pill, SectionCard } from '@/components/ui';
+import { Pager, usePagination } from '@/components/Pager';
+import { EmptyState } from '@/components/EmptyState';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
 import { openPatientWhatsAppChat } from '@/lib/pdfShare';
@@ -165,6 +167,9 @@ export function InvoicesPage() {
     [filteredInvoices, sort]
   );
 
+  const invPager = usePagination(sortedInvoices, `${from}|${to}|${sort.key}|${sort.dir}`, 'invoices');
+  const needsReceiptPager = usePagination(needsReceipt ?? [], 'needs-receipt', 'invoices-needs-receipt', 10);
+
   const supersededInvoiceIds = useMemo(
     () =>
       new Set(
@@ -221,6 +226,20 @@ export function InvoicesPage() {
       setBusy(false);
     }
   }
+
+  const noneIssued = (invoices?.length ?? 0) === 0;
+  const invoicesEmpty = noneIssued ? (
+    <EmptyState title="No invoices issued yet" hint="Issue one from a visit in the Visits tab." />
+  ) : (
+    <EmptyState
+      title="No invoices in this date range"
+      hint="Invoices exist outside the dates selected."
+      actions={[
+        ...(datePreset !== 'lastMonth' ? [{ label: 'Show last month', onClick: () => applyDatePreset('lastMonth') }] : []),
+        { label: 'Show all time', onClick: () => applyDatePreset('all') },
+      ]}
+    />
+  );
 
   return (
     <div className="space-y-6">
@@ -288,7 +307,7 @@ export function InvoicesPage() {
                 primary "Issue invoice" button) to scroll sideways on a
                 phone. */}
             <div className="tab:hidden space-y-2">
-              {needsReceipt.map((row) => (
+              {needsReceiptPager.visible.map((row) => (
                 <div
                   key={row.visitId}
                   className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm"
@@ -339,7 +358,7 @@ export function InvoicesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {needsReceipt.map((row) => (
+                  {needsReceiptPager.visible.map((row) => (
                     <tr key={row.visitId} className="hover:bg-[var(--paper)]">
                       <td className={td}>{formatDateDM(row.visitDate)}</td>
                       <td className={`${td} font-display`}>
@@ -371,6 +390,7 @@ export function InvoicesPage() {
                 </tbody>
               </table>
             </div>
+            <Pager list={needsReceiptPager} noun="visits" />
           </div>
         </SectionCard>
       )}
@@ -381,7 +401,7 @@ export function InvoicesPage() {
               and Packages use, instead of forcing this 8-column table to
               scroll sideways on a phone. */}
           <div className="tab:hidden space-y-2">
-            {sortedInvoices.map((inv) => {
+            {invPager.visible.map((inv) => {
               const isSuperseded = supersededInvoiceIds.has(inv.id);
               const status = invoiceStatus(inv.id);
               const { paidPaise, remainingPaise } = balanceFor(inv);
@@ -477,11 +497,7 @@ export function InvoicesPage() {
                 </div>
               );
             })}
-            {sortedInvoices.length === 0 && (
-              <p className="py-8 text-center text-sm text-[var(--muted)]">
-                No invoices issued yet — issue one from the Visits table.
-              </p>
-            )}
+            {sortedInvoices.length === 0 && invoicesEmpty}
           </div>
 
           <div className="hidden tab:block overflow-x-auto">
@@ -499,7 +515,7 @@ export function InvoicesPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedInvoices.map((inv) => {
+                {invPager.visible.map((inv) => {
                   const isSuperseded = supersededInvoiceIds.has(inv.id);
                   const status = invoiceStatus(inv.id);
                   const { paidPaise, remainingPaise } = balanceFor(inv);
@@ -578,16 +594,17 @@ export function InvoicesPage() {
                     </tr>
                   );
                 })}
-                {invoices?.length === 0 && (
+                {invoices !== undefined && sortedInvoices.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-3 py-8 text-center text-sm text-[var(--muted)]">
-                      No invoices issued yet — issue one from the Visits table.
+                    <td colSpan={8} className="p-3">
+                      {invoicesEmpty}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+          <Pager list={invPager} noun="invoices" />
           {error && <ErrorNote message={error} />}
           <p className="text-xs text-[var(--muted)]">
             Issued invoices are immutable; numbering is sequential per fiscal year and gap-free.

@@ -77,12 +77,6 @@ export function PatientOverview({ patient }: { patient: Patient }) {
           >
             View profile →
           </Link>
-          <Link
-            to="/ledger"
-            className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
-          >
-            Clear filter
-          </Link>
         </div>
       </div>
 
