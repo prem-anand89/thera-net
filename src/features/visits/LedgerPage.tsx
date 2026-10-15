@@ -42,6 +42,7 @@ import {
   menuItem,
   chipSelectChevron,
 } from '@/components/ui';
+import { Pager, usePagination } from '@/components/Pager';
 import { PatientOverview } from './PatientOverview';
 import { useDueLandingScope } from './useDueLandingScope';
 import { EditVisitModal } from './EditVisitModal';
@@ -532,6 +533,12 @@ export function LedgerPage() {
     [cardRows, onlyCollectedNoReceipt, onlyNotCollected, onlyNotDocumented]
   );
 
+  const visitsPager = usePagination(
+    visibleRows,
+    `${from}|${to}|${therapistId}|${filteredPatient?.id ?? ''}|${onlyCollectedNoReceipt}|${onlyNotCollected}|${onlyNotDocumented}`,
+    'ledger-visits'
+  );
+
   // Billed = every visit's bill amount, same as before. Collected/outstanding
   // now read the same paymentState the chips show, rather than being
   // (accidentally) impossible to tell apart from "has an invoiceId".
@@ -983,7 +990,7 @@ export function LedgerPage() {
           {visibleRows.length > 0 ? (
             <>
               <ResponsiveVisitList
-                rows={visibleRows}
+                rows={visitsPager.visible}
                 showDate={true}
                 showPatient={true}
                 groupByDate={true}
@@ -1053,6 +1060,7 @@ export function LedgerPage() {
                 canInvoice={canBill}
                 backTo="/ledger"
               />
+              <Pager list={visitsPager} noun="visits" />
               <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm shadow-[0_-2px_6px_rgba(0,0,0,0.06)]">
                 <span className="font-medium text-[var(--ink)]">
                   Totals: <span className="font-semibold">{visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'}</span>

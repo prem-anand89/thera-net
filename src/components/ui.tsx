@@ -24,6 +24,15 @@ export const btnPrimary =
   'min-h-11 rounded-lg bg-[var(--teal)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--teal-strong)] disabled:opacity-50';
 export const btnSecondary =
   'min-h-11 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--paper)] disabled:opacity-50';
+/** Compact pill actions for list rows. One clear ladder so adjacent buttons never look alike:
+ *  primary (the main action) > attention (needs doing) > accent (outlined teal, secondary) >
+ *  neutral (quiet). */
+const pillBase =
+  'inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50';
+export const pillPrimary = `${pillBase} bg-[var(--teal)] text-white hover:bg-[var(--teal-strong)]`;
+export const pillAttention = `${pillBase} border border-[var(--amber)] bg-[var(--amber-light)] text-[var(--amber)] hover:bg-[var(--amber)] hover:text-white`;
+export const pillAccent = `${pillBase} border border-[var(--teal)] bg-[var(--surface)] text-[var(--teal)] hover:bg-[var(--teal-light)]`;
+export const pillNeutral = `${pillBase} border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]`;
 /** A row inside a `KebabMenu` dropdown — pair with `menuItemDestructive` for Delete-style actions. */
 export const menuItem =
   'block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]';

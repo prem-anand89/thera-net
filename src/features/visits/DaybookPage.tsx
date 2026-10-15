@@ -157,7 +157,7 @@ export function DaybookPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="flex flex-wrap items-center gap-2">
-        <DatePresetBar presets={DAYBOOK_DATE_PRESETS} value={preset} onChange={(p) => setPreset(p as typeof preset)} />
+        <DatePresetBar presets={DAYBOOK_DATE_PRESETS} value={preset} onChange={setPreset} />
         {preset === 'custom' && (
           <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
             <input

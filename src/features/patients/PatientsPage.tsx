@@ -15,6 +15,7 @@ import {
   monthsOfFiscalYear,
   monthDateRange,
   fiscalYearDateRange,
+  fiscalYearToDateRange,
   monthName,
   formatDateDMY,
   formatDateDM,
@@ -30,7 +31,13 @@ import {
   menuItem,
   TherapistPill,
   chipSelectChevron,
+  pillPrimary,
+  pillAttention,
+  pillAccent,
+  pillNeutral,
 } from '@/components/ui';
+import { Pager, usePagination } from '@/components/Pager';
+import { IconCalendar } from '@/components/NavIcons';
 import { patientIdentityLine, CardDetailRow } from '@/components/VisitCard';
 import { applySort, byNumber, byString, SortHeader, useSort } from '@/components/sortable';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -80,18 +87,18 @@ export function PatientsList() {
   const [booking, setBooking] = useState<Patient | null>(null);
   const sort = useSort<PatientSortKey>('lastVisit', 'desc');
 
-  const now = useMemo(() => new Date(), []);
+  const now = new Date();
   const currentFy = fiscalYearOf(now, clinic.fyStartMonth);
   const [fyStartYear, setFyStartYear] = useState(currentFy.startYear);
-  const currentMonthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
-  // Defaults to current month to avoid DOM bloat/lag for busy clinics seeing 30-50 patients/day.
-  // '' = Full FY, 'custom' = customFrom/customTo, otherwise a specific "YYYY-M" month value.
-  const [month, setMonth] = useState(currentMonthKey);
+  // '' = Full FY, 'ytd' = year to date (current FY only), 'custom' = customFrom/customTo,
+  // otherwise a specific "YYYY-M" month value. A long list is paged (see Pager below),
+  // so the wide default doesn't bloat the page.
+  const [month, setMonth] = useState('');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
   const selectedPeriod = useMemo(() => {
-    if (!month || month === 'custom') return null;
+    if (!month || month === 'ytd' || month === 'custom') return null;
     const [y, m] = month.split('-').map(Number);
     return { year: y, month: m };
   }, [month]);
@@ -101,6 +108,7 @@ export function PatientsList() {
   // unfiltered "every patient ever" view isn't offered by this control.
   const selectedRange = useMemo(() => {
     if (selectedPeriod) return monthDateRange(selectedPeriod);
+    if (month === 'ytd') return fiscalYearToDateRange(fyStartYear, clinic.fyStartMonth);
     if (month === 'custom') return { from: customFrom, to: customTo };
     return fiscalYearDateRange(fyStartYear, clinic.fyStartMonth);
   }, [selectedPeriod, month, fyStartYear, clinic.fyStartMonth, customFrom, customTo]);
@@ -220,6 +228,11 @@ export function PatientsList() {
   });
   const hidden = (all ?? []).filter((p) => p.deletedAt);
   const rows = applySort(active, comparators, sort);
+  const pager = usePagination(
+    rows,
+    `${q}|${chip}|${fyStartYear}|${month}|${customFrom}|${customTo}|${sort.key}|${sort.dir}`,
+    'patients'
+  );
 
   async function hide(p: Patient) {
     const ok = await askConfirm({
@@ -349,13 +362,8 @@ export function PatientsList() {
               if (e.target.value === 'custom') {
                 setMonth('custom');
               } else {
-                const selectedYear = Number(e.target.value);
-                setFyStartYear(selectedYear);
-                if (selectedYear === currentFy.startYear) {
-                  setMonth(currentMonthKey);
-                } else {
-                  setMonth('');
-                }
+                setFyStartYear(Number(e.target.value));
+                setMonth('');
               }
             }}
           >
@@ -378,6 +386,7 @@ export function PatientsList() {
               onChange={(e) => setMonth(e.target.value)}
             >
               <option value="">Full year</option>
+              {fyStartYear === currentFy.startYear && <option value="ytd">Year to date</option>}
               {monthsOfFiscalYear(fyStartYear, clinic.fyStartMonth)
                 .filter((m) => {
                   if (fyStartYear !== currentFy.startYear) return true;
@@ -438,7 +447,7 @@ export function PatientsList() {
         <>
           {/* Below tab: (744px) — framed card list */}
           <div className="tab:hidden overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
-            {rows.map((p) => (
+            {pager.visible.map((p) => (
               <div key={p.id} className="p-4 sm:p-5">
                 <PatientCard
                   patient={p}
@@ -490,7 +499,7 @@ export function PatientsList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
-                {rows.map((p) => {
+                {pager.visible.map((p) => {
                   const stats = visitStatsByPatient.get(p.id);
                   const billing = billingByPatient.get(p.id);
                   const referral = patientReferralLine(p, referringSources);
@@ -594,16 +603,17 @@ export function PatientsList() {
                           <Link
                             to="/visits/new"
                             search={{ patientId: p.id, from: '/patients' }}
-                            className="inline-flex min-h-8 items-center rounded-full bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--teal-strong)]"
+                            className={pillPrimary}
                           >
                             + Visit
                           </Link>
                           {canBook && (
                             <button
                               type="button"
-                              className="inline-flex min-h-8 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--paper)]"
+                              className={pillAccent}
                               onClick={() => setBooking(p)}
                             >
+                              <IconCalendar className="h-3.5 w-3.5" />
                               Book
                             </button>
                           )}
@@ -621,7 +631,7 @@ export function PatientsList() {
                             isStale(stats.lastVisitOn) && (
                               <button
                                 type="button"
-                                className="inline-flex min-h-8 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--teal)] transition-colors hover:bg-[var(--teal-light)]"
+                                className={pillNeutral}
                                 onClick={() => {
                                   void feedbackService
                                     .sendReturnReminder(clinic.id, p.name, p.phone, clinic.name)
@@ -639,6 +649,7 @@ export function PatientsList() {
               </tbody>
             </table>
           </div>
+          <Pager list={pager} noun="patients" />
         </>
       )}
 
@@ -849,28 +860,32 @@ function PatientCard({
           {onBook && (
             <button
               type="button"
-              className="inline-flex min-h-8 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition-colors hover:bg-[var(--paper)]"
+              className={pillAccent}
               onClick={onBook}
             >
+              <IconCalendar className="h-3.5 w-3.5" />
               Book
             </button>
           )}
           {onRemind && (
             <button
               type="button"
-              className="inline-flex min-h-8 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--teal)] transition-colors hover:bg-[var(--teal-light)]"
+              className={pillNeutral}
               onClick={onRemind}
             >
               Remind
             </button>
           )}
-          <Link
-            to="/visits/new"
-            search={{ patientId: p.id, from: '/patients' }}
-            className="inline-flex min-h-8 items-center rounded-full bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--teal-strong)]"
-          >
-            {nextAction === 'invoice' ? 'Needs invoice' : '+ Visit'}
-          </Link>
+          {nextAction === 'invoice' ? (
+            // Opens this patient's visits in the Ledger, where the Invoice action lives.
+            <Link to="/ledger" search={{ tab: 'visits', patientId: p.id }} className={pillAttention}>
+              Needs invoice
+            </Link>
+          ) : (
+            <Link to="/visits/new" search={{ patientId: p.id, from: '/patients' }} className={pillPrimary}>
+              + Visit
+            </Link>
+          )}
         </div>
       </div>
     </div>
