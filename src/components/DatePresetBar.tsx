@@ -40,7 +40,6 @@ export function DatePresetBar({
           {p.key === 'custom' ? (
             <span className="flex items-center justify-center">
               <IconCalendar className="h-4 w-4" />
-              <span className="sr-only">{p.label}</span>
             </span>
           ) : (
             p.label

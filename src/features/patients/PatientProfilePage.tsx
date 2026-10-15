@@ -153,12 +153,12 @@ export function PatientProfilePage() {
   );
   const latestTherapistId = visitRows[0]?.therapistId;
   const upcomingAppointments = useMemo(() => {
-    const now = new Date().toISOString();
+    const now = Date.now();
     return (allAppointments ?? [])
       .filter(
         (a) =>
           a.patientId === patientId &&
-          a.scheduledAt >= now &&
+          new Date(a.scheduledAt).getTime() >= now &&
           a.status !== 'cancelled' &&
           a.status !== 'no_show'
       )
@@ -511,7 +511,7 @@ export function PatientProfilePage() {
                   </a>
                   <button
                     type="button"
-                    onClick={() => openPatientWhatsAppChat('', patient.phone)}
+                    onClick={() => openPatientWhatsAppChat(`Hello ${patient.name}, this is ${clinic.name}.`, patient.phone)}
                     className="inline-flex items-center gap-1 rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-xs font-medium text-[var(--teal)] transition-colors hover:bg-[var(--teal)] hover:text-white"
                     title="Chat on WhatsApp"
                   >
