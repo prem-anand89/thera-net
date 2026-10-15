@@ -140,8 +140,9 @@ export function IconCalendar({ className }: { className?: string }) {
       aria-hidden="true"
       className={className}
     >
-      <rect x="4" y="5" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M4 9h12M7 4v3M13 4v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <rect x="3.5" y="4.5" width="13" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M3.5 8.5h13M6.5 3v3M13.5 3v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M6.5 11.5h.01M10 11.5h.01M13.5 11.5h.01M6.5 14.2h.01M10 14.2h.01M13.5 14.2h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }

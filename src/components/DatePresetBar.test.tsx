@@ -14,7 +14,7 @@ describe('DatePresetBar', () => {
 
     expect(screen.getByRole('button', { name: 'Week' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Month' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Prev Mo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Last Month' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Custom' })).toBeInTheDocument();
   });

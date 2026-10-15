@@ -5,7 +5,7 @@ export type DatePreset = 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
 export const DATE_PRESETS: readonly { key: DatePreset; label: string }[] = [
   { key: 'week', label: 'Week' },
   { key: 'month', label: 'Month' },
-  { key: 'lastMonth', label: 'Prev Mo' },
+  { key: 'lastMonth', label: 'Last Month' },
   { key: 'all', label: 'All' },
   { key: 'custom', label: 'Custom' },
 ] as const;
@@ -39,7 +39,7 @@ export function DatePresetBar({
         >
           {p.key === 'custom' ? (
             <span className="flex items-center justify-center">
-              <IconCalendar className="h-3.5 w-3.5" />
+              <IconCalendar className="h-4 w-4" />
               <span className="sr-only">{p.label}</span>
             </span>
           ) : (
