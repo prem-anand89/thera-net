@@ -234,15 +234,15 @@ export function InvoicesPage() {
                 aria-label="From date"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
-                className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+                className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
               />
-              –
+              <span className="font-medium text-[var(--muted)]">–</span>
               <input
                 type="date"
                 aria-label="To date"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+                className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
               />
             </div>
           )}

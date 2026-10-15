@@ -40,6 +40,7 @@ import {
   CountBadge,
   KebabMenu,
   menuItem,
+  chipSelectChevron,
 } from '@/components/ui';
 import { PatientOverview } from './PatientOverview';
 import { useDueLandingScope } from './useDueLandingScope';
@@ -619,10 +620,14 @@ export function LedgerPage() {
   ].filter(Boolean) as string[];
 
   // Compact toolbar controls (no field labels; aria-labels instead).
-  const toolInput =
-    'min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-base text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none sm:text-sm';
   const therapistSelect = (
-    <select aria-label="Therapist" className={toolInput} value={therapistId} onChange={(e) => setTherapistId(e.target.value)}>
+    <select
+      aria-label="Therapist"
+      className="h-10 min-h-10 appearance-none rounded-lg border border-[var(--border)] bg-[var(--surface)] bg-[length:12px] bg-[right_10px_center] bg-no-repeat py-2 pl-3 pr-8 text-sm font-medium text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
+      style={chipSelectChevron}
+      value={therapistId}
+      onChange={(e) => setTherapistId(e.target.value)}
+    >
       <option value="">All therapists</option>
       {(therapists ?? []).map((t) => (
         <option key={t.id} value={t.id}>
@@ -687,24 +692,62 @@ export function LedgerPage() {
             <DatePresetBar value={datePreset} onChange={applyDatePreset} />
             {datePreset === 'custom' && (
               <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                <input type="date" aria-label="From date" className={toolInput} value={from} onChange={(e) => setFrom(e.target.value)} />
-                –
-                <input type="date" aria-label="To date" className={toolInput} value={to} onChange={(e) => setTo(e.target.value)} />
+                <input
+                  type="date"
+                  aria-label="From date"
+                  className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                />
+                <span className="font-medium text-[var(--muted)]">–</span>
+                <input
+                  type="date"
+                  aria-label="To date"
+                  className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                />
               </div>
             )}
             <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
-              <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
+              <div className="relative min-w-0 flex-1 sm:w-60 sm:flex-none">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--muted)]">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    aria-hidden="true"
+                    className="h-4 w-4"
+                  >
+                    <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M13.5 13.5L18 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                </div>
                 <input
                   type="search"
                   aria-label="Find patient"
-                  className={`${toolInput} w-full`}
-                  placeholder="Find patient or ID"
+                  className="h-10 min-h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] pl-9 pr-8 text-sm text-[var(--ink)] placeholder-[var(--muted)] transition-colors hover:border-[var(--muted)] focus:border-[var(--teal)] focus:outline-none focus:ring-2 focus:ring-[var(--teal)]/20 [&::-webkit-search-cancel-button]:hidden"
+                  placeholder="Search patient or ID"
                   value={patientQuery}
                   onChange={(e) => setPatientQuery(e.target.value)}
                   onBlur={() => setTimeout(() => setPatientQuery(''), 150)}
                 />
+                {patientQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setPatientQuery('');
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
                 {patientMatches.length > 0 && (
-                  <div className="absolute left-0 sm:left-auto sm:right-0 z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-sm">
+                  <div className="absolute left-0 sm:left-auto sm:right-0 z-10 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-md">
                     {patientMatches.map((p) => (
                       <button
                         key={p.id}
@@ -732,14 +775,34 @@ export function LedgerPage() {
                 type="button"
                 aria-expanded={filtersOpen}
                 onClick={() => setFiltersOpen((current) => !current)}
-                className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium ${activeFilterCount > 0 ? 'border-[var(--teal)] text-[var(--teal)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]'}`}
+                className={`flex h-10 min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${
+                  activeFilterCount > 0
+                    ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal)]'
+                    : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
+                }`}
               >
-                Filters
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5"
+                >
+                  <path
+                    d="M2 3.5h12M4.5 8h7M7 12.5h2"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span>Filters</span>
                 {activeFilterCount > 0 && (
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--teal)] px-1 text-[11px] font-semibold text-white">
                     {activeFilterCount}
                   </span>
                 )}
+                <span className="text-xs opacity-60">{filtersOpen ? '▲' : '▼'}</span>
               </button>
               <div className="flex min-h-10 shrink-0 items-center">
                 <KebabMenu ariaLabel="More ledger options">
@@ -761,20 +824,35 @@ export function LedgerPage() {
           </div>
 
           {filtersOpen && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--ink)] shadow-sm">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--ink)] shadow-sm">
               <div className="sm:hidden">{therapistSelect}</div>
-              <label className="flex min-h-10 items-center gap-2">
-                <input type="checkbox" checked={onlyCollectedNoReceipt} onChange={(e) => setOnlyCollectedNoReceipt(e.target.checked)} />
-                Collected, no invoice
+              <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-[var(--paper)]">
+                <input
+                  type="checkbox"
+                  className="rounded text-[var(--teal)] focus:ring-[var(--teal)]"
+                  checked={onlyCollectedNoReceipt}
+                  onChange={(e) => setOnlyCollectedNoReceipt(e.target.checked)}
+                />
+                <span>Collected, no invoice</span>
               </label>
-              <label className="flex min-h-10 items-center gap-2">
-                <input type="checkbox" checked={onlyNotCollected} onChange={(e) => setOnlyNotCollected(e.target.checked)} />
-                Not collected
+              <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-[var(--paper)]">
+                <input
+                  type="checkbox"
+                  className="rounded text-[var(--teal)] focus:ring-[var(--teal)]"
+                  checked={onlyNotCollected}
+                  onChange={(e) => setOnlyNotCollected(e.target.checked)}
+                />
+                <span>Not collected</span>
               </label>
               {clinic.clinicalDocsEnabled && (
-                <label className="flex min-h-10 items-center gap-2">
-                  <input type="checkbox" checked={onlyNotDocumented} onChange={(e) => setOnlyNotDocumented(e.target.checked)} />
-                  Not documented
+                <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-[var(--paper)]">
+                  <input
+                    type="checkbox"
+                    className="rounded text-[var(--teal)] focus:ring-[var(--teal)]"
+                    checked={onlyNotDocumented}
+                    onChange={(e) => setOnlyNotDocumented(e.target.checked)}
+                  />
+                  <span>Not documented</span>
                 </label>
               )}
             </div>
@@ -975,10 +1053,17 @@ export function LedgerPage() {
                 canInvoice={canBill}
                 backTo="/ledger"
               />
-              <div className="sticky bottom-0 z-10 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm font-semibold text-[var(--ink)] shadow-[0_-2px_6px_rgba(0,0,0,0.06)]">
-                Totals: {visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'} · Billed{' '}
-                {formatINR(totals.bill)} · Collected {formatINR(totals.collected)} · Outstanding{' '}
-                {formatINR(totals.outstanding)}
+              <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm shadow-[0_-2px_6px_rgba(0,0,0,0.06)]">
+                <span className="font-medium text-[var(--ink)]">
+                  Totals: <span className="font-semibold">{visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'}</span>
+                </span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm">
+                  <span>Billed <strong className="font-num text-[var(--ink)]">{formatINR(totals.bill)}</strong></span>
+                  <span className="text-[var(--border)]">·</span>
+                  <span>Collected <strong className="font-num text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong></span>
+                  <span className="text-[var(--border)]">·</span>
+                  <span>Outstanding <strong className="font-num text-[var(--rust)]">{formatINR(totals.outstanding)}</strong></span>
+                </div>
               </div>
             </>
           ) : (
@@ -1083,7 +1168,7 @@ function OutstandingInvoiceActions({
     return (
       <button
         type="button"
-        className="min-h-9 text-sm font-medium text-[var(--teal)] hover:underline"
+        className="inline-flex min-h-8 items-center rounded-full bg-[var(--teal)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--teal-strong)]"
         onClick={() => onTakePayment(row)}
       >
         Take payment
@@ -1091,22 +1176,21 @@ function OutstandingInvoiceActions({
     );
   }
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <p className="text-xs text-[var(--muted)]">Its visit was removed, so no payment can be recorded.</p>
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="min-h-9 text-sm font-medium text-[var(--rust)] hover:underline"
+          className="inline-flex min-h-8 items-center rounded-full border border-[var(--rust)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--rust)] transition-colors hover:bg-[var(--rust-light)]"
           onClick={() => onVoid(row)}
         >
           Void invoice
         </button>
-        <span className="text-xs text-[var(--border)]">·</span>
         <Link
           to="/invoices/$invoiceId/print"
           params={{ invoiceId: row.invoiceId }}
           search={{ from: '/ledger' }}
-          className="inline-flex min-h-9 items-center text-xs text-[var(--muted)] hover:underline"
+          className="inline-flex min-h-8 items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--paper)] hover:text-[var(--ink)]"
         >
           Review
         </Link>

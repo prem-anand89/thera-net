@@ -70,7 +70,7 @@ export function VisitTable({
         <div className="relative">
           <button
             type="button"
-            className="rounded-md px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--paper)]"
+            className="inline-flex min-h-8 items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--paper)] hover:text-[var(--ink)]"
             onClick={() => setPickerOpen((o) => !o)}
           >
             Columns ▾

@@ -200,7 +200,7 @@ export function SharedVisitCard({
         {showCollect ? (
           <button
             type="button"
-            className={`rounded-full px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 ${
+            className={`inline-flex min-h-8 items-center rounded-full px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 ${
               badge.kind === 'overdue' ? 'bg-[var(--rust)]' : 'bg-[var(--amber)]'
             }`}
             onClick={onTakePayment}
