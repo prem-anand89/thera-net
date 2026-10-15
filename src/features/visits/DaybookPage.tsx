@@ -5,6 +5,7 @@ import { useClinic } from '@/app/clinicContext';
 import { formatINR } from '@/domain/money';
 import { formatDateDMY, currentWeekRange } from '@/domain/fiscalYear';
 import { th, td, tdNum, thNum, SectionCard, Pill } from '@/components/ui';
+import { DatePresetBar, DAYBOOK_DATE_PRESETS, type DatePreset } from '@/components/DatePresetBar';
 
 // Local Y/M/D components
 const toIsoDate = (d: Date) =>
@@ -15,7 +16,7 @@ export function DaybookPage() {
   const todayIso = useMemo(() => toIsoDate(new Date()), []);
   const [from, setFrom] = useState(todayIso);
   const [to, setTo] = useState(todayIso);
-  const [preset, setPreset] = useState<'today' | 'yesterday' | 'week' | 'month' | 'custom'>('today');
+  const [preset, setPreset] = useState<DatePreset>('today');
 
   const yesterdayIso = useMemo(() => {
     const d = new Date();
@@ -31,6 +32,13 @@ export function DaybookPage() {
     return { from: mFrom, to: toIsoDate(now) };
   }, []);
 
+  const lastMonthRange = useMemo(() => {
+    const now = new Date();
+    const lmFrom = toIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    const lmTo = toIsoDate(new Date(now.getFullYear(), now.getMonth(), 0));
+    return { from: lmFrom, to: lmTo };
+  }, []);
+
   useEffect(() => {
     if (preset === 'today') {
       setFrom(todayIso);
@@ -44,8 +52,11 @@ export function DaybookPage() {
     } else if (preset === 'month') {
       setFrom(monthRange.from);
       setTo(monthRange.to);
+    } else if (preset === 'lastMonth') {
+      setFrom(lastMonthRange.from);
+      setTo(lastMonthRange.to);
     }
-  }, [preset, todayIso, yesterdayIso, weekRange, monthRange]);
+  }, [preset, todayIso, yesterdayIso, weekRange, monthRange, lastMonthRange]);
   
   const data = useLiveQuery(async () => {
     const payments = await db.payments.where('clinicId').equals(clinic.id)
@@ -145,77 +156,22 @@ export function DaybookPage() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex max-w-full flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
-          <button
-            type="button"
-            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-              preset === 'today'
-                ? 'bg-[var(--teal)] text-white'
-                : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-            }`}
-            onClick={() => setPreset('today')}
-          >
-            Today
-          </button>
-          <button
-            type="button"
-            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-              preset === 'yesterday'
-                ? 'bg-[var(--teal)] text-white'
-                : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-            }`}
-            onClick={() => setPreset('yesterday')}
-          >
-            Yesterday
-          </button>
-          <button
-            type="button"
-            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-              preset === 'week'
-                ? 'bg-[var(--teal)] text-white'
-                : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-            }`}
-            onClick={() => setPreset('week')}
-          >
-            This week
-          </button>
-          <button
-            type="button"
-            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-              preset === 'month'
-                ? 'bg-[var(--teal)] text-white'
-                : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-            }`}
-            onClick={() => setPreset('month')}
-          >
-            This month
-          </button>
-          <button
-            type="button"
-            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-              preset === 'custom'
-                ? 'bg-[var(--teal)] text-white'
-                : 'text-[var(--muted)] hover:bg-[var(--surface)]'
-            }`}
-            onClick={() => setPreset('custom')}
-          >
-            Custom date
-          </button>
-        </div>
-
+      <div className="flex flex-wrap items-center gap-2">
+        <DatePresetBar presets={DAYBOOK_DATE_PRESETS} value={preset} onChange={(p) => setPreset(p as typeof preset)} />
         {preset === 'custom' && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
             <input
               type="date"
-              className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm"
+              aria-label="From date"
+              className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
             />
-            <span className="text-[var(--muted)] text-sm">to</span>
+            <span>–</span>
             <input
               type="date"
-              className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm"
+              aria-label="To date"
+              className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
               value={to}
               onChange={(e) => setTo(e.target.value)}
             />

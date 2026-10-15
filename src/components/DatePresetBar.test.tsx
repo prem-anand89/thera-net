@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { DatePresetBar, DATE_PRESETS } from './DatePresetBar';
+import { DatePresetBar, DATE_PRESETS, DAYBOOK_DATE_PRESETS } from './DatePresetBar';
 
 afterEach(cleanup);
 
@@ -34,6 +34,21 @@ describe('DatePresetBar', () => {
     const monthBtn = screen.getByRole('button', { name: 'Month' });
     expect(monthBtn).toHaveClass('bg-[var(--teal)]');
     expect(monthBtn).toHaveClass('text-white');
+  });
+
+  it('renders custom presets like DAYBOOK_DATE_PRESETS correctly', () => {
+    const onChange = vi.fn();
+    render(<DatePresetBar presets={DAYBOOK_DATE_PRESETS} value="today" onChange={onChange} />);
+
+    expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Yesterday' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Week' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Month' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Last Month' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Custom' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Yesterday' }));
+    expect(onChange).toHaveBeenCalledWith('yesterday');
   });
 });
 

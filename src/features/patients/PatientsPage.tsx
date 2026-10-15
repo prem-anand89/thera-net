@@ -271,12 +271,12 @@ export function PatientsList() {
   }
 
   return (
-    <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm sm:p-5">
+    <div className="space-y-4">
       {/* The page title above already says "Patients", so no card heading.
           One toolbar: the chips on the left; search and a single period
           select (financial year + month in one) on the right. Phones: the
           chips scroll on one row, search and period share the next. */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div role="group" aria-label="Patient filter" className="hide-scrollbar flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper)] p-1">
           {(
             [
@@ -341,10 +341,22 @@ export function PatientsList() {
         </div>
       </div>
       {month === 'custom' && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-          <input type="date" className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm text-[var(--ink)]" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} aria-label="From date" />
-          –
-          <input type="date" className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-sm text-[var(--ink)]" value={customTo} onChange={(e) => setCustomTo(e.target.value)} aria-label="To date" />
+        <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+          <input
+            type="date"
+            className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+            value={customFrom}
+            onChange={(e) => setCustomFrom(e.target.value)}
+            aria-label="From date"
+          />
+          <span>–</span>
+          <input
+            type="date"
+            className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs text-[var(--ink)] focus:border-[var(--teal)] focus:outline-none"
+            value={customTo}
+            onChange={(e) => setCustomTo(e.target.value)}
+            aria-label="To date"
+          />
           {!customFrom || !customTo ? (
             <span>Pick a From and To date.</span>
           ) : customFrom > customTo ? (
@@ -356,7 +368,7 @@ export function PatientsList() {
       <ErrorNote message={error} />
 
       {rows.length === 0 ? (
-        <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-8 text-center text-sm text-[var(--muted)]">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-8 text-center text-sm text-[var(--muted)] shadow-sm">
           {q
             ? 'No patients match your search.'
             : (all ?? []).filter((p) => !p.deletedAt).length === 0
@@ -365,10 +377,10 @@ export function PatientsList() {
         </div>
       ) : (
         <>
-          {/* Below tab: (744px) — flat rows inside SectionCard, same as visit lists. */}
-          <div className="tab:hidden -mx-4 divide-y divide-[var(--border)] sm:-mx-5">
+          {/* Below tab: (744px) — framed card list */}
+          <div className="tab:hidden overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border)]">
             {rows.map((p) => (
-              <div key={p.id} className="px-4 sm:px-5">
+              <div key={p.id} className="p-4 sm:p-5">
                 <PatientCard
                   patient={p}
                   stats={visitStatsByPatient.get(p.id)}
@@ -643,7 +655,7 @@ export function PatientsList() {
         prefilledPatientId={booking?.id}
         prefilledTherapistId={booking ? visitStatsByPatient.get(booking.id)?.latestVisit.therapistId ?? undefined : undefined}
       />
-    </section>
+    </div>
   );
 }
 

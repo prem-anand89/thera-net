@@ -1,12 +1,21 @@
 import { IconCalendar } from '@/components/NavIcons';
 
-export type DatePreset = 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
+export type DatePreset = 'today' | 'yesterday' | 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
 
 export const DATE_PRESETS: readonly { key: DatePreset; label: string }[] = [
   { key: 'week', label: 'Week' },
   { key: 'month', label: 'Month' },
   { key: 'lastMonth', label: 'Last Month' },
   { key: 'all', label: 'All' },
+  { key: 'custom', label: 'Custom' },
+] as const;
+
+export const DAYBOOK_DATE_PRESETS: readonly { key: DatePreset; label: string }[] = [
+  { key: 'today', label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+  { key: 'lastMonth', label: 'Last Month' },
   { key: 'custom', label: 'Custom' },
 ] as const;
 
