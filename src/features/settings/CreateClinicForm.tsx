@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { db } from '@/lib/db';
+import { setActiveClinic } from '@/app/useActiveClinic';
 import { OnboardingProgress } from '@/features/onboarding/OnboardingProgress';
 import { repos } from '@/services';
 import { Field, inputCls, btnPrimary, btnSecondary, ErrorNote } from '@/components/ui';
@@ -181,7 +181,7 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
       if (logoFile && logoPath !== row.logo_path) {
         await repos.clinics.put(clinic);
       }
-      await db.meta.put({ key: 'activeClinicId', value: clinic.id });
+      await setActiveClinic(clinic.id);
 
       setBusy(false);
       if (variant === 'page') {

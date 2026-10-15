@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { db } from '@/lib/db';
+import { setActiveClinic } from '@/app/useActiveClinic';
 import { syncEngine } from '@/sync/engine';
 import { AddClinicDialog } from '@/components/AddClinicDialog';
 import type { Clinic } from '@/domain/types';
@@ -44,10 +44,10 @@ export function ClinicSwitcher({
     setOpen(!open);
   }
 
-  function switchTo(id: string) {
+  async function switchTo(id: string) {
     setOpen(false);
     if (id === clinic.id) return;
-    void db.meta.put({ key: 'activeClinicId', value: id });
+    await setActiveClinic(id);
     void navigate({ to: '/workspace' });
   }
 
@@ -109,7 +109,7 @@ export function ClinicSwitcher({
                 type="button"
                 role="menuitemradio"
                 aria-checked={c.id === clinic.id}
-                onClick={() => switchTo(c.id)}
+                onClick={() => void switchTo(c.id)}
                 className={`flex min-h-10 w-full items-center gap-2 px-3 py-2 text-left text-sm ${
                   c.id === clinic.id ? 'bg-[var(--teal-light)] font-medium text-[var(--teal-strong)]' : 'text-[var(--ink)] hover:bg-[var(--paper)]'
                 }`}

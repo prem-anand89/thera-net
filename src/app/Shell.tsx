@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useActiveClinic } from '@/app/useActiveClinic';
 import { db, ALL_SYNCED_TABLES } from '@/lib/db';
 import { getSupabase, publicLogoUrl } from '@/lib/supabase';
 import { toLocalDateStr } from '@/domain/schedule';
@@ -95,13 +96,7 @@ export function Shell() {
   const [foreignPending, setForeignPending] = useState<number | null>(null);
   const sync = useSyncExternalStore(syncStatus.subscribe, () => syncStatus.get());
 
-  const clinics = useLiveQuery(() => db.clinics.toArray(), []);
-  const activeClinicId = useLiveQuery(
-    async () => (await db.meta.get('activeClinicId'))?.value ?? null,
-    []
-  );
-  const clinic =
-    clinics?.find((c) => c.id === activeClinicId) ?? (clinics?.length === 1 ? clinics[0] : null);
+  const { clinics, clinic, status: clinicStatus } = useActiveClinic();
   const logoUrl = useMemo(() => publicLogoUrl(clinic?.logoPath), [clinic?.logoPath]);
   // Can't use usePermissions()/useWorkspaceScope() here — both need
   // ClinicContext, and this component is the one that provides it further
@@ -221,18 +216,6 @@ export function Shell() {
       cancelled = true;
     };
   }, [userId, loading]);
-
-  // Default the active clinic to the first membership once data arrives,
-  // and repair a stale pointer — `activeClinicId` can be set to an id that
-  // no longer matches any locally known clinic (a removed membership, or
-  // leftover device state from before a resync) — rather than leaving
-  // `clinic` stuck at null forever with no UI able to fix it.
-  const activeClinicKnown = activeClinicId != null && clinics?.some((c) => c.id === activeClinicId);
-  useEffect(() => {
-    if (clinics?.length && !activeClinicKnown) {
-      void db.meta.put({ key: 'activeClinicId', value: clinics[0].id });
-    }
-  }, [clinics, activeClinicKnown]);
 
   // Staff "Active today" presence — once per device per (clinic, user) per
   // day, so a shared front-desk kiosk logged into by two staff members on
@@ -372,18 +355,7 @@ export function Shell() {
     // for it here is what actually confirms "zero clinics," not just
     // "haven't checked yet."
     const initialSyncSettled = sync.lastSyncAt != null;
-    // A non-empty `clinics` list whose `activeClinicId` doesn't (yet)
-    // match any of them is the repair effect above mid-flight, not a
-    // confirmed zero-clinic account — wait for it rather than flashing
-    // CreateClinicForm at someone who already has clinics.
-    const repairingStalePointer = Boolean(clinics?.length) && !activeClinicKnown;
-    if (
-      !syncKicked ||
-      clinics === undefined ||
-      activeClinicId === undefined ||
-      !initialSyncSettled ||
-      repairingStalePointer
-    ) {
+    if (!syncKicked || clinicStatus === 'loading' || !initialSyncSettled) {
       return (
         <AppLoading label="Preparing…">
           {syncKicked && !initialSyncSettled && sync.online === false && (

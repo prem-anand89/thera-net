@@ -4400,13 +4400,19 @@ plan/seat-count) — the gap was entirely client-side UI, closed as follows:
   item — gated to `role === 'admin'` of the currently active clinic, same
   as the Settings-tab gate. Creating a clinic from either entry point
   makes it the new active clinic immediately.
-- **Stale `activeClinicId` self-repair**: `Shell.tsx`'s auto-pick effect
-  now also fires when `activeClinicId` no longer matches any locally
-  known clinic (not just when it was never set) — a removed membership or
-  leftover device state resolves back to `clinics[0]` instead of leaving
-  the app stuck showing "Preparing…" or, worse, misreading a real
-  multi-clinic account as having zero clinics and offering to create a
-  duplicate.
+- **Active clinic resolution** (`src/app/useActiveClinic.ts`, one place):
+  `resolveActiveClinic(clinics, pointer)` treats `undefined` (Dexie query
+  still loading) differently from `null` (pointer never set). The stored
+  pointer `meta.activeClinicId` is the user's choice and is written only by
+  `setActiveClinic(id)` (an explicit switch/create, awaited before
+  navigating) or once to seed it when it has never been set. A stale pointer
+  (removed membership, mid-resync) is never overwritten: the first clinic is
+  shown meanwhile and the choice returns when that clinic is known again.
+  This replaced a Shell effect that overwrote the pointer with `clinics[0]`
+  whenever `clinics` resolved before the pointer read, resetting multi-clinic
+  users on refresh. A non-empty `clinics` list always yields a clinic once the
+  pointer read settles, so the zero-clinic `CreateClinicForm` only shows for a
+  settled, truly empty account.
 - **Sync cursor reconciliation** (`SyncEngine.reconcileClinicMembership`,
   `src/sync/engine.ts`) — every table's pull cursor (`db.meta` key
   `` `cursor:${table}` ``) only moves forward against `updated_at`, so a
