@@ -1,10 +1,12 @@
+import { IconCalendar } from '@/components/NavIcons';
+
 export type DatePreset = 'week' | 'month' | 'lastMonth' | 'all' | 'custom';
 
 export const DATE_PRESETS: readonly { key: DatePreset; label: string }[] = [
-  { key: 'week', label: 'This week' },
-  { key: 'month', label: 'This month' },
-  { key: 'lastMonth', label: 'Last month' },
-  { key: 'all', label: 'All time' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+  { key: 'lastMonth', label: 'Prev Mo' },
+  { key: 'all', label: 'All' },
   { key: 'custom', label: 'Custom' },
 ] as const;
 
@@ -25,6 +27,8 @@ export function DatePresetBar({
         <button
           key={p.key}
           type="button"
+          aria-label={p.key === 'custom' ? p.label : undefined}
+          title={p.key === 'custom' ? 'Custom date range' : undefined}
           aria-pressed={value === p.key}
           className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium ${
             value === p.key
@@ -33,7 +37,14 @@ export function DatePresetBar({
           }`}
           onClick={() => onChange(p.key)}
         >
-          {p.label}
+          {p.key === 'custom' ? (
+            <span className="flex items-center justify-center">
+              <IconCalendar className="h-3.5 w-3.5" />
+              <span className="sr-only">{p.label}</span>
+            </span>
+          ) : (
+            p.label
+          )}
         </button>
       ))}
     </div>

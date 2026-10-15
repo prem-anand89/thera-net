@@ -199,7 +199,7 @@ const patientsRoute = createRoute({
   },
 });
 
-const PATIENT_PROFILE_BACK_TARGETS = ['/patients', '/workspace', '/ledger'] as const;
+const PATIENT_PROFILE_BACK_TARGETS = ['/patients', '/workspace', '/ledger', '/schedule'] as const;
 export type PatientProfileBackTarget = (typeof PATIENT_PROFILE_BACK_TARGETS)[number];
 
 export type PatientsBackResult =

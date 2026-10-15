@@ -713,7 +713,11 @@ export function LedgerPage() {
                         onMouseDown={(e) => {
                           e.preventDefault();
                           setPatientQuery('');
-                          void navigate({ to: '/ledger', search: { patientId: p.id } });
+                          void navigate({
+                            to: '/patients/$patientId',
+                            params: { patientId: p.id },
+                            search: { from: '/ledger' },
+                          });
                         }}
                       >
                         <span className="font-display">{p.name}</span>{' '}

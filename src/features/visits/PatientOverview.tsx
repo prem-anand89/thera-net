@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, dashboardService } from '@/services';
 import { formatINR } from '@/domain/money';
@@ -66,6 +67,22 @@ export function PatientOverview({ patient }: { patient: Patient }) {
           {referral && (
             <div className="mt-1 text-xs text-[var(--muted)]">Referred by: {referral}</div>
           )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/patients/$patientId"
+            params={{ patientId: patient.id }}
+            search={{ from: '/ledger' }}
+            className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+          >
+            View profile →
+          </Link>
+          <Link
+            to="/ledger"
+            className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] hover:bg-[var(--paper)]"
+          >
+            Clear filter
+          </Link>
         </div>
       </div>
 

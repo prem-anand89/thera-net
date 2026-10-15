@@ -30,6 +30,9 @@ import { toFriendlyMessage } from '@/lib/errors';
 import { EditPatientModal } from './EditPatientModal';
 import { AddPatientDetailsModal } from '@/features/visits/AddPatientDetailsModal';
 import { RecordAdvanceDialog } from '@/components/RecordAdvanceDialog';
+import { IconPhone, IconMessage } from '@/components/StatIcons';
+import { openPatientWhatsAppChat } from '@/lib/pdfShare';
+import { BookSlotSheet } from '@/components/BookSlotSheet';
 
 /** How many notes the side panel lists before collapsing the rest into a
  *  "+N older" line — the full history stays reachable by opening any note. */
@@ -72,6 +75,7 @@ export function PatientProfilePage() {
   // without the viewer choosing it.
   const [hideZeroBilled, setHideZeroBilled] = useState(false);
   const [recordingAdvance, setRecordingAdvance] = useState(false);
+  const [bookingOpen, setBookingOpen] = useState(false);
 
   const patient = useLiveQuery(() => repos.patients.get(patientId), [patientId]);
   // Billing & Notes Rebuild Phase 1, 1.6 — total open-advance balance for
@@ -143,6 +147,23 @@ export function PatientProfilePage() {
         .sort((a, b) => b.visitDate.localeCompare(a.visitDate)),
     [visits]
   );
+  const allAppointments = useLiveQuery(
+    () => repos.appointments.listByClinic(clinic.id),
+    [clinic.id]
+  );
+  const latestTherapistId = visitRows[0]?.therapistId;
+  const upcomingAppointments = useMemo(() => {
+    const now = new Date().toISOString();
+    return (allAppointments ?? [])
+      .filter(
+        (a) =>
+          a.patientId === patientId &&
+          a.scheduledAt >= now &&
+          a.status !== 'cancelled' &&
+          a.status !== 'no_show'
+      )
+      .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+  }, [allAppointments, patientId]);
 
   const patientPackages = useMemo(
     () => (openPackages ?? []).filter((p) => p.patientId === patientId),
@@ -404,11 +425,10 @@ export function PatientProfilePage() {
     .map((w) => w[0]?.toUpperCase() ?? '')
     .join('');
 
-  const meta = [
+  const ageSex = [
     patient.age != null ? `${patient.age} yrs` : null,
     patient.sex,
-    patient.phone,
-  ].filter(Boolean);
+  ].filter(Boolean).join(' · ');
 
   const matchedReferralName = patient.referringSourceId
     ? referringSources.find((s) => s.id === patient.referringSourceId)?.name
@@ -473,12 +493,33 @@ export function PatientProfilePage() {
                 ✎
               </button>
             </div>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-[var(--muted)]">
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--muted)]">
               <span>
                 <span className="text-[var(--muted)]/70">Patient ID</span>{' '}
                 <span className="font-num">{patient.mrno}</span>
               </span>
-              {meta.length > 0 && <span className="font-num">{meta.join(' · ')}</span>}
+              {ageSex && <span className="font-num">{ageSex}</span>}
+              {patient.phone && (
+                <span className="inline-flex items-center gap-2">
+                  <a
+                    href={`tel:${patient.phone}`}
+                    className="font-num inline-flex items-center gap-1 text-[var(--ink)] hover:text-[var(--teal)] hover:underline"
+                    title="Call patient"
+                  >
+                    <IconPhone className="h-3.5 w-3.5 text-[var(--teal)]" />
+                    {patient.phone}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => openPatientWhatsAppChat('', patient.phone)}
+                    className="inline-flex items-center gap-1 rounded-full bg-[var(--teal-light)] px-2 py-0.5 text-xs font-medium text-[var(--teal)] transition-colors hover:bg-[var(--teal)] hover:text-white"
+                    title="Chat on WhatsApp"
+                  >
+                    <IconMessage className="h-3 w-3" />
+                    WhatsApp
+                  </button>
+                </span>
+              )}
             </div>
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               {billingSummary.outstandingBalance > 0 && (
@@ -503,8 +544,48 @@ export function PatientProfilePage() {
                 </span>
               )}
             </div>
+            {upcomingAppointments.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-xs text-[var(--ink)]">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[var(--teal)]" />
+                  <span className="font-medium text-[var(--teal)]">Next appointment:</span>
+                  <span className="font-num font-semibold">
+                    {new Date(upcomingAppointments[0].scheduledAt).toLocaleDateString('en-IN', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                    })}{' '}
+                    at{' '}
+                    {new Date(upcomingAppointments[0].scheduledAt).toLocaleTimeString('en-IN', {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true,
+                    })}
+                  </span>
+                  {upcomingAppointments[0].therapistId && (
+                    <span className="text-[var(--muted)]">
+                      · {therapistName.get(upcomingAppointments[0].therapistId)}
+                    </span>
+                  )}
+                </div>
+                <Link
+                  to="/schedule"
+                  search={{ date: upcomingAppointments[0].scheduledAt.slice(0, 10) }}
+                  className="font-medium text-[var(--teal)] hover:underline"
+                >
+                  View in schedule →
+                </Link>
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={btnSecondary}
+              onClick={() => setBookingOpen(true)}
+            >
+              Book appointment
+            </button>
             {canBill && (
               <button
                 type="button"
@@ -699,7 +780,14 @@ export function PatientProfilePage() {
               </div>
             )}
             {visitRows.length === 0 ? (
-              <p className="p-4 text-sm text-[var(--muted)]">No visits recorded yet.</p>
+              <div className="p-8 text-center">
+                <p className="text-sm text-[var(--muted)]">No visits recorded yet.</p>
+                <div className="mt-3">
+                  <Link to="/visits/new" search={{ patientId }} className={btnPrimary}>
+                    Record first visit
+                  </Link>
+                </div>
+              </div>
             ) : visibleVisitCardRows.length === 0 ? (
               <p className="p-4 text-sm text-[var(--muted)]">
                 All visits are ₹0 (package sessions) — uncheck "Hide ₹0 visits" to see them.
@@ -764,6 +852,18 @@ export function PatientProfilePage() {
           patientLabel={patient.name}
           backTo={backTo}
           onClose={() => setRecordingAdvance(false)}
+        />
+      )}
+
+      {bookingOpen && (
+        <BookSlotSheet
+          isOpen={bookingOpen}
+          onClose={() => setBookingOpen(false)}
+          appointments={allAppointments ?? []}
+          prefilledPatientId={patientId}
+          prefilledPatientName={patient.name}
+          prefilledPatientPhone={patient.phone ?? undefined}
+          prefilledTherapistId={latestTherapistId ?? myTherapistId ?? undefined}
         />
       )}
     </div>

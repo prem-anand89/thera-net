@@ -12,10 +12,10 @@ describe('DatePresetBar', () => {
     const onChange = vi.fn();
     render(<DatePresetBar value="week" onChange={onChange} />);
 
-    expect(screen.getByRole('button', { name: 'This week' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'This month' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Last month' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'All time' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Week' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Month' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prev Mo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Custom' })).toBeInTheDocument();
   });
 
@@ -23,7 +23,7 @@ describe('DatePresetBar', () => {
     const onChange = vi.fn();
     render(<DatePresetBar value="week" onChange={onChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'This month' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Month' }));
     expect(onChange).toHaveBeenCalledWith('month');
   });
 
@@ -31,7 +31,7 @@ describe('DatePresetBar', () => {
     const onChange = vi.fn();
     render(<DatePresetBar value="month" onChange={onChange} />);
 
-    const monthBtn = screen.getByRole('button', { name: 'This month' });
+    const monthBtn = screen.getByRole('button', { name: 'Month' });
     expect(monthBtn).toHaveClass('bg-[var(--teal)]');
     expect(monthBtn).toHaveClass('text-white');
   });
@@ -40,7 +40,7 @@ describe('DatePresetBar', () => {
 describe('DatePresetBar accessibility', () => {
   it('exposes the selected preset with aria-pressed', () => {
     render(<DatePresetBar value="month" onChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: 'This month' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'This week' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'false');
   });
 });
