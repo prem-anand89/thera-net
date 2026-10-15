@@ -562,9 +562,9 @@ export function PatientProfilePage() {
                       hour12: true,
                     })}
                   </span>
-                  {upcomingAppointments[0].therapistId && (
+                  {therapistName.get(upcomingAppointments[0].therapistId ?? '') && (
                     <span className="text-[var(--muted)]">
-                      · {therapistName.get(upcomingAppointments[0].therapistId)}
+                      · {therapistName.get(upcomingAppointments[0].therapistId ?? '')}
                     </span>
                   )}
                 </div>
