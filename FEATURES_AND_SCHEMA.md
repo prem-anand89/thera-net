@@ -448,6 +448,7 @@ queued with a visible error.
 #### Onboarding
 - **Therapist invites** from Settings → Team create login *and* service-roster entry in one step
 - **Admin/front_desk invites** only need login
+- **Bookable admin/front_desk invites**: the form sends `bookable: true` and `invite-therapist` creates/links the roster row to the new login (same `linkTherapistRosterRow` as therapist invites), so one person is one card. The client never creates an unlinked roster row for an invited login.
 - **Deactivation** (keeps history intact) or **permanent deletion** (zero visits/notes/invoices only)
 - **Invite email → password setup**: `invite-therapist` calls
   `auth.admin.inviteUserByEmail()` with `redirectTo` set to the inviting

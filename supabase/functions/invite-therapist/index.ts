@@ -15,6 +15,9 @@ interface InviteRequest {
    *  instead of needing a separate manual "add to roster, then link"
    *  step an admin has to remember to do afterward. */
   name?: string;
+  /** Also put this person on the bookable roster (linked to their login) when
+   *  the role isn't therapist. Therapist invites always get a roster row. */
+  bookable?: boolean;
   /** Resend path: the pending member's auth.users id. */
   userId?: string;
   /** The inviting browser's own origin (`window.location.origin`) — used
@@ -184,7 +187,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   try {
     const body: InviteRequest = await req.json();
-    const { clinicId, email, role, name, redirectOrigin, action = 'invite', userId } = body;
+    const { clinicId, email, role, name, redirectOrigin, action = 'invite', userId, bookable } = body;
 
     if (!clinicId) {
       return json({ error: 'Missing required field: clinicId' }, 400);
@@ -492,7 +495,7 @@ export default async function handler(req: Request): Promise<Response> {
     // nothing. Best-effort: the invite and clinic access already succeeded
     // above, so a failure here is reported but doesn't undo either --  the
     // existing manual roster path still works as a fallback.
-    if (role === 'therapist') {
+    if (role === 'therapist' || bookable === true) {
       const therapistWarning = await linkTherapistRosterRow(
         serviceClient,
         clinicId,

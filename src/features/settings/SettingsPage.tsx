@@ -3030,6 +3030,7 @@ function AddTeamMemberForm({
               email: email.trim(),
               name: name.trim(),
               role,
+              bookable,
               redirectOrigin: window.location.origin,
             },
           }
@@ -3037,27 +3038,6 @@ function AddTeamMemberForm({
         if (invokeError) throw new Error(await edgeFunctionErrorMessage(invokeError));
         const payload = result as { error?: string; success?: boolean } | null;
         if (payload?.error) throw new Error(payload.error);
-
-        // If it's not a therapist role but we want them bookable, we must manually create a roster row
-        // because invite-therapist only creates one if role === 'therapist'.
-        if (bookable && role !== 'therapist') {
-          // Wait, we don't have their new user_id easily unless invite-therapist returns it.
-          // It might not. We can just refetch members and handle linking later, or just
-          // inform the user.
-          // Actually, if we want an admin to be bookable right away, we need their user_id.
-          // For now, we can create an unlinked roster row, and the user can link it, or 
-          // ideally we just create it. But since invite-therapist doesn't return user_id...
-          // Let's create an unlinked roster entry with the same name. They can link it manually if needed,
-          // or we can just warn.
-          await repos.therapists.put({
-            id: crypto.randomUUID(),
-            clinicId,
-            name: name.trim(),
-            active: true,
-            userId: null, 
-            updatedAt: new Date().toISOString(),
-          });
-        }
       } else if (bookable) {
         // Just a roster entry
         await repos.therapists.put({
