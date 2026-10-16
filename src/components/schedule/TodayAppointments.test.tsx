@@ -275,3 +275,40 @@ describe('TodayAppointments end of day and cancelled', () => {
     release();
   });
 });
+
+describe('TodayAppointments all-done wording', () => {
+  afterEach(cleanup);
+  const baseProps = {
+    slotMinutes: 30,
+    nextUpId: null,
+    colorFor: () => '#000',
+    therapistNameFor: () => 'Dr A',
+    showTherapist: true,
+    onSelect: vi.fn(),
+  };
+
+  it('does not claim "All done" while booking requests are still waiting', () => {
+    const request: AppointmentRequest = {
+      id: 'r1', clinicId: 'c', name: 'Req', phone: '98', email: null, preferredTherapistId: 't1', notes: null,
+      preferredDate: null, preferredTimeText: 'evening', status: 'pending', appointmentId: null,
+      createdAt: new Date().toISOString(), updatedAt: '',
+    };
+    render(
+      <TodayAppointments
+        {...baseProps}
+        appointments={[appt('09:00', { status: 'arrived', visitId: 'v1' })]}
+        requests={[request]}
+        onConfirmRequest={vi.fn()}
+        onDeclineRequest={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('region', { name: 'Requests to confirm' })).toBeInTheDocument();
+    expect(screen.queryByText(/All done for today/)).not.toBeInTheDocument();
+  });
+
+  it('never says "0 seen" when every appointment was a no-show or cancelled', () => {
+    render(<TodayAppointments {...baseProps} appointments={[appt('09:00', { status: 'no_show' })]} />);
+    expect(screen.getByText('✓ Nothing left for today')).toBeInTheDocument();
+    expect(screen.queryByText(/0 seen/)).not.toBeInTheDocument();
+  });
+});

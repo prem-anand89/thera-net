@@ -110,6 +110,7 @@ export function TodayAppointments({
     const fill = appointmentFill(a, color);
     const flags = patientFlags(a, flagContext);
     const reason = appointmentReason(a, flagContext);
+    const isOtherDay = toLocalDateStr(new Date(a.scheduledAt)) !== toLocalDateStr(new Date());
     const wideDetail = [note, reason?.text].filter(Boolean).join(', ');
     // Only states worth a word on a phone; "Visit logged" / "Done" are said by the Paid / Due marker.
     const mobileNote = note && note !== 'Visit logged' && note !== 'Done' ? note : undefined;
@@ -124,19 +125,22 @@ export function TodayAppointments({
     return (
       <li
         key={a.id}
-        className="flex min-h-14 items-start gap-3 border-l-4 py-2.5 pl-4 pr-5"
+        className="flex min-h-14 items-center gap-2 border-l-4 py-2 pl-3 pr-3 sm:gap-3 sm:py-2.5 sm:pl-4 sm:pr-5"
         style={{ borderLeftColor: color, background: fill.background }}
       >
-        <button type="button" className="flex min-h-11 min-w-0 flex-1 items-start gap-3 text-left" onClick={() => onSelect(a)}>
-          <span className="w-16 shrink-0 whitespace-nowrap pt-0.5 text-[13px] tabular-nums font-semibold text-[var(--ink)] sm:w-[4.5rem] sm:text-sm">
+        <button type="button" className="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left" onClick={() => onSelect(a)}>
+          {/* sm+: a fixed time column so every row lines up. Phones put the time inline on line 1. */}
+          <span className="hidden w-[4.5rem] shrink-0 self-start whitespace-nowrap pt-0.5 text-sm font-semibold tabular-nums text-[var(--ink)] sm:block">
             {minutesLabel(minutesOfDay(a.scheduledAt))}
-            {toLocalDateStr(new Date(a.scheduledAt)) !== toLocalDateStr(new Date()) && (
-              <span className="block text-[11px] font-normal text-[var(--muted)]">{formatDateDM(a.scheduledAt)}</span>
-            )}
+            {isOtherDay && <span className="block text-[11px] font-normal text-[var(--muted)]">{formatDateDM(a.scheduledAt)}</span>}
           </span>
           <span className="min-w-0 flex-1">
-            {/* Line 1: Name + Next chip only (avoids truncation on mobile) */}
+            {/* Line 1: (time on phones) name + Next chip only, so the name keeps the width */}
             <span className="flex min-w-0 items-center gap-1.5">
+              <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold tabular-nums text-[var(--ink)] sm:hidden">
+                {minutesLabel(minutesOfDay(a.scheduledAt))}
+                {isOtherDay && <span className="font-normal text-[var(--muted)]"> · {formatDateDM(a.scheduledAt)}</span>}
+              </span>
               <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : fill.kind === 'cancelled' ? 'text-[var(--muted)] line-through' : 'text-[var(--ink)]'}`}>
                 {a.patientName}
               </span>
@@ -160,11 +164,11 @@ export function TodayAppointments({
               <PatientFlagPills flags={flags} max={2} />
             </span>
           </span>
-          {showTherapist && <span className="hidden w-36 shrink-0 truncate pt-0.5 text-xs text-[var(--muted)] sm:block">{therapistNameFor(a)}</span>}
-          <span className="hidden w-14 shrink-0 pt-0.5 text-xs text-[var(--muted)] sm:block">{length}</span>
+          {showTherapist && <span className="hidden w-32 shrink-0 truncate text-xs text-[var(--muted)] sm:block">{therapistNameFor(a)}</span>}
+          <span className="hidden w-12 shrink-0 text-right text-xs tabular-nums text-[var(--muted)] sm:block">{length}</span>
         </button>
         {end && (
-          <span className={`shrink-0 self-start pt-0.5 sm:flex sm:w-40 sm:justify-end ${showEndOnMobile ? '' : 'hidden sm:flex'}`}>
+          <span className={`shrink-0 self-center sm:flex sm:w-44 sm:justify-end ${showEndOnMobile ? '' : 'hidden sm:flex'}`}>
             {end}
           </span>
         )}
@@ -215,7 +219,7 @@ export function TodayAppointments({
           </button>
           <button
             type="button"
-            className={`hidden min-h-11 sm:min-h-8 ${pillNeutral} sm:inline-flex`}
+            className={`hidden min-h-9 sm:min-h-8 ${pillNeutral} sm:inline-flex`}
             onClick={() => onSelect(a)}
           >
             Rebook
@@ -267,9 +271,6 @@ export function TodayAppointments({
               row(
                 a,
                 <span className="flex items-center gap-2">
-                  <span className="hidden sm:inline">
-                    <Pill tone="amber">{a.source === 'walk_in' ? 'Walk-in' : 'Arrived'}</Pill>
-                  </span>
                   <Link
                     to="/visits/new"
                     search={{
@@ -279,7 +280,7 @@ export function TodayAppointments({
                       ...(a.patientId ? { patientId: a.patientId } : {}),
                       from: '/workspace',
                     }}
-                    className={`min-h-11 sm:min-h-8 ${pillPrimary}`}
+                    className={`min-h-9 whitespace-nowrap sm:min-h-8 ${pillPrimary}`}
                   >
                     <span className="sm:hidden">Complete</span>
                     <span className="hidden sm:inline">Complete visit</span>
@@ -303,7 +304,7 @@ export function TodayAppointments({
                 onMarkArrived ? (
                   <button
                     type="button"
-                    className={`min-h-11 sm:min-h-8 ${pillAccent}`}
+                    className={`min-h-9 sm:min-h-8 ${pillAccent}`}
                     aria-label={`Mark ${a.patientName} arrived`}
                     disabled={pendingIds.has(a.id)}
                     onClick={() => guarded(a.id, () => onMarkArrived(a))}
@@ -326,10 +327,10 @@ export function TodayAppointments({
         </section>
       )}
 
-      {pendingCount === 0 && (
+      {pendingCount === 0 && !hasRequests && (
         <p className="text-sm text-[var(--muted)]">
           {doneCount > 0 ? (
-            `✓ All done for today (${logged.length} seen)`
+            logged.length > 0 ? `✓ All done for today (${logged.length} seen)` : '✓ Nothing left for today'
           ) : (
             <span>
               No appointments today ·{' '}
@@ -386,7 +387,7 @@ export function TodayAppointments({
                       <button
                         type="button"
                         aria-label={`Restore ${a.patientName}'s appointment`}
-                        className={`min-h-11 sm:min-h-8 ${pillAccent}`}
+                        className={`min-h-9 sm:min-h-8 ${pillAccent}`}
                         disabled={pendingIds.has(a.id)}
                         onClick={() => guarded(a.id, () => onRestoreCancelled(a))}
                       >

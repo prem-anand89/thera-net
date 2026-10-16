@@ -206,6 +206,41 @@ function visitToCardData(
 
 type InvoicingTarget = IssueInvoiceTarget;
 
+/** The Due figure in the totals strip: a two-way toggle for the Not-collected filter. */
+function DueToggle({
+  active,
+  outstanding,
+  unpaidCount,
+  onToggle,
+  long = false,
+}: {
+  active: boolean;
+  outstanding: number;
+  unpaidCount: number;
+  onToggle: () => void;
+  /** sm+: spell the count out ("2 unpaid visits") instead of "(2)". */
+  long?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={`Due ${formatINR(outstanding)} across ${unpaidCount} unpaid visit${unpaidCount === 1 ? '' : 's'}`}
+      title={active ? 'Showing unpaid visits only. Tap to show all.' : 'Show only unpaid visits'}
+      className={`min-h-8 rounded-md px-2.5 py-1 font-num font-bold transition-colors ${
+        active
+          ? 'bg-[var(--rust)] text-white hover:bg-[var(--rust)]/90'
+          : 'bg-[var(--rust-light)] text-[var(--rust)] hover:bg-[var(--rust-light)]/80'
+      }`}
+      onClick={onToggle}
+    >
+      {long
+        ? `Due ${formatINR(outstanding)} · ${unpaidCount} unpaid visit${unpaidCount === 1 ? '' : 's'}`
+        : `Due ${formatINR(outstanding)} (${unpaidCount})`}
+    </button>
+  );
+}
+
 export function LedgerPage() {
   const clinic = useClinic();
   const { canBill, isAdmin, canViewClinicalNotes, canViewPayouts, entitlementsLoading } =
@@ -589,6 +624,14 @@ export function LedgerPage() {
   );
 
   const totals = useMemo(() => summariseTotals(visibleRows), [visibleRows]);
+  const toggleUnpaid = () => {
+    if (onlyNotCollected) {
+      setOnlyNotCollected(false);
+    } else {
+      setOnlyNotCollected(true);
+      setFiltersOpen(true);
+    }
+  };
 
   // Describes the currently-applied filter so a downloaded CSV is never
   // ambiguous about what it's a snapshot of.
@@ -1104,7 +1147,7 @@ export function LedgerPage() {
               {/* Totals for EVERY filtered visit (not just this page). On phones it sits above the
                   fixed bottom nav instead of underneath it. */}
               <div
-                className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[9] rounded-xl border border-[var(--border)] bg-[var(--paper)]/95 px-3 py-2 text-xs shadow-[0_-2px_8px_rgba(0,0,0,0.06)] backdrop-blur-sm sm:bottom-0 sm:px-4 sm:py-2.5 sm:text-sm"
+                className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[9] rounded-xl border border-[var(--teal)]/25 border-t-2 border-t-[var(--teal)] bg-[var(--surface)] px-3 py-2 text-xs shadow-[0_-6px_18px_rgba(38,38,36,0.14),0_1px_3px_rgba(38,38,36,0.08)] ring-1 ring-[var(--teal)]/15 sm:bottom-0 sm:px-4 sm:py-2.5 sm:text-sm"
                 role="group"
                 aria-label="Totals for all filtered visits"
                 title={filterDescription}
@@ -1124,26 +1167,12 @@ export function LedgerPage() {
                         Billed <strong className="font-num text-[var(--ink)]">{formatINR(totals.bill)}</strong>
                       </span>
                       <span className="text-[var(--muted)]">·</span>
-                      <button
-                        type="button"
-                        aria-pressed={onlyNotCollected}
-                        aria-label={`Due ${formatINR(totals.outstanding)} across ${totals.unpaidCount} unpaid visits`}
-                        className={`rounded px-2 py-0.5 font-num font-bold transition-colors ${
-                          onlyNotCollected
-                            ? 'bg-[var(--rust)] text-white hover:bg-[var(--rust)]/90'
-                            : 'bg-[var(--rust-light)] text-[var(--rust)] hover:bg-[var(--rust-light)]/80'
-                        }`}
-                        onClick={() => {
-                          if (onlyNotCollected) {
-                            setOnlyNotCollected(false);
-                          } else {
-                            setOnlyNotCollected(true);
-                            setFiltersOpen(true);
-                          }
-                        }}
-                      >
-                        Due {formatINR(totals.outstanding)} ({totals.unpaidCount})
-                      </button>
+                      <DueToggle
+                        active={onlyNotCollected}
+                        outstanding={totals.outstanding}
+                        unpaidCount={totals.unpaidCount}
+                        onToggle={toggleUnpaid}
+                      />
                     </>
                   )}
                   {totals.state === 'clear' && (
@@ -1183,26 +1212,13 @@ export function LedgerPage() {
                           Collected <strong className="font-num text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong>
                         </span>
                         <span className="text-[var(--muted)]">·</span>
-                        <button
-                          type="button"
-                          aria-pressed={onlyNotCollected}
-                          aria-label={`Due ${formatINR(totals.outstanding)} across ${totals.unpaidCount} unpaid visits`}
-                          className={`rounded px-2 py-0.5 font-num font-bold transition-colors ${
-                            onlyNotCollected
-                              ? 'bg-[var(--rust)] text-white hover:bg-[var(--rust)]/90'
-                              : 'bg-[var(--rust-light)] text-[var(--rust)] hover:bg-[var(--rust-light)]/80'
-                          }`}
-                          onClick={() => {
-                            if (onlyNotCollected) {
-                              setOnlyNotCollected(false);
-                            } else {
-                              setOnlyNotCollected(true);
-                              setFiltersOpen(true);
-                            }
-                          }}
-                        >
-                          Due {formatINR(totals.outstanding)} · {totals.unpaidCount} unpaid visit{totals.unpaidCount === 1 ? '' : 's'}
-                        </button>
+                        <DueToggle
+                          active={onlyNotCollected}
+                          outstanding={totals.outstanding}
+                          unpaidCount={totals.unpaidCount}
+                          onToggle={toggleUnpaid}
+                          long
+                        />
                       </>
                     )}
                     {totals.state === 'clear' && (
