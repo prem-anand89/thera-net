@@ -14,7 +14,8 @@ import { useGoogleReviewEligibleRequestIds } from '@/features/schedule/scheduleS
 import { formatINR } from '@/domain/money';
 import { formatDateDMY, formatDateDM, currentWeekRange } from '@/domain/fiscalYear';
 import { visitsToCsv, type VisitsCsvRow } from '@/domain/visitsCsv';
-import { computeVisitPaymentState, hasDue, isCollected, visitDuePaise } from '@/domain/paymentState';
+import { computeVisitPaymentState, hasDue } from '@/domain/paymentState';
+import { summariseTotals } from './ledgerTotals';
 import { noteForVisit } from '@/domain/noteLinks';
 import { syncFreshnessCaption } from '@/domain/syncCopy';
 import {
@@ -587,30 +588,7 @@ export function LedgerPage() {
     'ledger-visits'
   );
 
-  // Billed = every visit's bill amount, same as before. Collected/outstanding
-  // now read the same paymentState the chips show, rather than being
-  // (accidentally) impossible to tell apart from "has an invoiceId".
-  const totals = useMemo(
-    () =>
-      visibleRows.reduce(
-        (acc, r) => ({
-          bill: acc.bill + r.billPaise,
-          // Billed = collected + outstanding: a part-paid visit splits.
-          collected:
-            acc.collected +
-            (isCollected(r.paymentState)
-              ? r.billPaise
-              : r.paymentState === 'partially_collected'
-                ? r.collectedPaise
-                : 0),
-          outstanding: acc.outstanding + visitDuePaise(r.paymentState, r.billPaise, r.collectedPaise),
-        }),
-        { bill: 0, collected: 0, outstanding: 0 }
-      ),
-    [visibleRows]
-  );
-
-  const collectedPct = totals.bill > 0 ? Math.min(100, Math.round((totals.collected / totals.bill) * 100)) : null;
+  const totals = useMemo(() => summariseTotals(visibleRows), [visibleRows]);
 
   // Describes the currently-applied filter so a downloaded CSV is never
   // ambiguous about what it's a snapshot of.
@@ -1126,62 +1104,118 @@ export function LedgerPage() {
               {/* Totals for EVERY filtered visit (not just this page). On phones it sits above the
                   fixed bottom nav instead of underneath it. */}
               <div
-                className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[9] rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm shadow-[0_-2px_6px_rgba(0,0,0,0.06)] sm:bottom-0"
+                className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[9] rounded-xl border border-[var(--border)] bg-[var(--paper)]/95 px-3 py-2 text-xs shadow-[0_-2px_8px_rgba(0,0,0,0.06)] backdrop-blur-sm sm:bottom-0 sm:px-4 sm:py-2.5 sm:text-sm"
                 role="group"
                 aria-label="Totals for all filtered visits"
+                title={filterDescription}
               >
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs text-[var(--muted)]">
+                {/* Phone (<sm): compact single line, wraps gracefully up to 2 lines if needed */}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
                   <span>
                     <span className="font-medium text-[var(--ink)]">
-                      {visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'}
+                      {totals.visitCount} visit{totals.visitCount === 1 ? '' : 's'}
+                    </span>
+                    {visitsPager.pageCount > 1 && ' (all pages)'}
+                  </span>
+                  {totals.state === 'dues' && (
+                    <>
+                      <span className="text-[var(--muted)]">·</span>
+                      <span>
+                        Billed <strong className="font-num text-[var(--ink)]">{formatINR(totals.bill)}</strong>
+                      </span>
+                      <span className="text-[var(--muted)]">·</span>
+                      <button
+                        type="button"
+                        aria-pressed={onlyNotCollected}
+                        aria-label={`Due ${formatINR(totals.outstanding)} across ${totals.unpaidCount} unpaid visits`}
+                        className={`rounded px-2 py-0.5 font-num font-bold transition-colors ${
+                          onlyNotCollected
+                            ? 'bg-[var(--rust)] text-white hover:bg-[var(--rust)]/90'
+                            : 'bg-[var(--rust-light)] text-[var(--rust)] hover:bg-[var(--rust-light)]/80'
+                        }`}
+                        onClick={() => {
+                          if (onlyNotCollected) {
+                            setOnlyNotCollected(false);
+                          } else {
+                            setOnlyNotCollected(true);
+                            setFiltersOpen(true);
+                          }
+                        }}
+                      >
+                        Due {formatINR(totals.outstanding)} ({totals.unpaidCount})
+                      </button>
+                    </>
+                  )}
+                  {totals.state === 'clear' && (
+                    <>
+                      <span className="text-[var(--muted)]">·</span>
+                      <span>
+                        <strong className="font-num font-medium text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong> collected
+                      </span>
+                      <span className="text-[var(--muted)]">·</span>
+                      <span className="font-medium text-[var(--moss-strong)]">All clear ✓</span>
+                    </>
+                  )}
+                  {totals.state === 'no_charge' && (
+                    <>
+                      <span className="text-[var(--muted)]">·</span>
+                      <span className="text-[var(--muted)]">no charges</span>
+                    </>
+                  )}
+                </div>
+
+                {/* iPad / Desktop (sm+): single row, left visits count, right aligned figures */}
+                <div className="hidden items-center justify-between gap-4 sm:flex">
+                  <span>
+                    <span className="font-medium text-[var(--ink)]">
+                      {totals.visitCount} visit{totals.visitCount === 1 ? '' : 's'}
                     </span>
                     {visitsPager.pageCount > 1 && ' across all pages'}
                   </span>
-                  {collectedPct !== null && (
-                    <span>
-                      <span className="font-num font-medium text-[var(--moss-strong)]">{collectedPct}%</span> collected
-                    </span>
-                  )}
-                </div>
-                {collectedPct !== null && (
-                  <div
-                    className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--border)]"
-                    role="progressbar"
-                    aria-label="Share of the billed amount collected"
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={collectedPct}
-                  >
-                    <div className="h-full rounded-full bg-[var(--moss-strong)]" style={{ width: `${collectedPct}%` }} />
-                  </div>
-                )}
-                <div className="mt-2 grid grid-cols-3 gap-2 text-center sm:text-left">
-                  <div>
-                    <div className="text-[11px] text-[var(--muted)]">Billed</div>
-                    <strong className="font-num text-[var(--ink)]">{formatINR(totals.bill)}</strong>
-                  </div>
-                  <div>
-                    <div className="text-[11px] text-[var(--muted)]">Collected</div>
-                    <strong className="font-num text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong>
-                  </div>
-                  <div>
-                    <div className="text-[11px] text-[var(--muted)]">Outstanding</div>
-                    {totals.outstanding > 0 && !onlyNotCollected ? (
-                      <button
-                        type="button"
-                        className="font-num font-bold text-[var(--rust)] underline decoration-dotted underline-offset-2 hover:decoration-solid"
-                        title="Show only the unpaid visits"
-                        onClick={() => {
-                          setOnlyNotCollected(true);
-                          setFiltersOpen(true);
-                        }}
-                      >
-                        {formatINR(totals.outstanding)}
-                      </button>
-                    ) : (
-                      <strong className={`font-num ${totals.outstanding > 0 ? 'text-[var(--rust)]' : 'text-[var(--muted)]'}`}>
-                        {formatINR(totals.outstanding)}
-                      </strong>
+                  <div className="flex items-center gap-x-3 text-right">
+                    {totals.state === 'dues' && (
+                      <>
+                        <span>
+                          Billed <strong className="font-num text-[var(--ink)]">{formatINR(totals.bill)}</strong>
+                        </span>
+                        <span className="text-[var(--muted)]">·</span>
+                        <span>
+                          Collected <strong className="font-num text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong>
+                        </span>
+                        <span className="text-[var(--muted)]">·</span>
+                        <button
+                          type="button"
+                          aria-pressed={onlyNotCollected}
+                          aria-label={`Due ${formatINR(totals.outstanding)} across ${totals.unpaidCount} unpaid visits`}
+                          className={`rounded px-2 py-0.5 font-num font-bold transition-colors ${
+                            onlyNotCollected
+                              ? 'bg-[var(--rust)] text-white hover:bg-[var(--rust)]/90'
+                              : 'bg-[var(--rust-light)] text-[var(--rust)] hover:bg-[var(--rust-light)]/80'
+                          }`}
+                          onClick={() => {
+                            if (onlyNotCollected) {
+                              setOnlyNotCollected(false);
+                            } else {
+                              setOnlyNotCollected(true);
+                              setFiltersOpen(true);
+                            }
+                          }}
+                        >
+                          Due {formatINR(totals.outstanding)} · {totals.unpaidCount} unpaid visit{totals.unpaidCount === 1 ? '' : 's'}
+                        </button>
+                      </>
+                    )}
+                    {totals.state === 'clear' && (
+                      <>
+                        <span>
+                          <strong className="font-num text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong> collected
+                        </span>
+                        <span className="text-[var(--muted)]">·</span>
+                        <span className="font-medium text-[var(--moss-strong)]">All clear ✓</span>
+                      </>
+                    )}
+                    {totals.state === 'no_charge' && (
+                      <span className="text-[var(--muted)]">no charges</span>
                     )}
                   </div>
                 </div>
