@@ -610,6 +610,8 @@ export function LedgerPage() {
     [visibleRows]
   );
 
+  const collectedPct = totals.bill > 0 ? Math.min(100, Math.round((totals.collected / totals.bill) * 100)) : null;
+
   // Describes the currently-applied filter so a downloaded CSV is never
   // ambiguous about what it's a snapshot of.
   const filterDescription = useMemo(() => {
@@ -1121,27 +1123,66 @@ export function LedgerPage() {
                 backTo="/ledger"
               />
               <Pager list={visitsPager} noun="visits" />
+              {/* Totals for EVERY filtered visit (not just this page). On phones it sits above the
+                  fixed bottom nav instead of underneath it. */}
               <div
-                className="sticky bottom-0 z-10 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-2.5 text-sm shadow-[0_-2px_6px_rgba(0,0,0,0.06)]"
-                aria-label="Totals for the filtered visits"
+                className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[9] rounded-xl border border-[var(--border)] bg-[var(--paper)] px-4 py-3 text-sm shadow-[0_-2px_6px_rgba(0,0,0,0.06)] sm:bottom-0"
+                role="group"
+                aria-label="Totals for all filtered visits"
               >
-                {/* Phones: three compact columns (label over amount) so it stays one short strip.
-                    sm+: one inline line. */}
-                <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3">
-                  <span className="col-span-3 text-xs font-medium text-[var(--ink)] sm:col-span-1 sm:text-sm">
-                    {visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'}
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs text-[var(--muted)]">
+                  <span>
+                    <span className="font-medium text-[var(--ink)]">
+                      {visibleRows.length} visit{visibleRows.length === 1 ? '' : 's'}
+                    </span>
+                    {visitsPager.pageCount > 1 && ' across all pages'}
                   </span>
-                  <div className="text-center sm:text-left">
-                    <div className="text-[11px] text-[var(--muted)] sm:inline sm:text-sm">Billed</div>{' '}
+                  {collectedPct !== null && (
+                    <span>
+                      <span className="font-num font-medium text-[var(--moss-strong)]">{collectedPct}%</span> collected
+                    </span>
+                  )}
+                </div>
+                {collectedPct !== null && (
+                  <div
+                    className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--border)]"
+                    role="progressbar"
+                    aria-label="Share of the billed amount collected"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={collectedPct}
+                  >
+                    <div className="h-full rounded-full bg-[var(--moss-strong)]" style={{ width: `${collectedPct}%` }} />
+                  </div>
+                )}
+                <div className="mt-2 grid grid-cols-3 gap-2 text-center sm:text-left">
+                  <div>
+                    <div className="text-[11px] text-[var(--muted)]">Billed</div>
                     <strong className="font-num text-[var(--ink)]">{formatINR(totals.bill)}</strong>
                   </div>
-                  <div className="text-center sm:text-left">
-                    <div className="text-[11px] text-[var(--muted)] sm:inline sm:text-sm">Collected</div>{' '}
+                  <div>
+                    <div className="text-[11px] text-[var(--muted)]">Collected</div>
                     <strong className="font-num text-[var(--moss-strong)]">{formatINR(totals.collected)}</strong>
                   </div>
-                  <div className="text-center sm:text-left">
-                    <div className="text-[11px] text-[var(--muted)] sm:inline sm:text-sm">Outstanding</div>{' '}
-                    <strong className="font-num text-[var(--rust)]">{formatINR(totals.outstanding)}</strong>
+                  <div>
+                    <div className="text-[11px] text-[var(--muted)]">Outstanding</div>
+                    {totals.outstanding > 0 && !onlyNotCollected ? (
+                      <button
+                        type="button"
+                        className="font-num font-bold text-[var(--rust)] underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                        title="Show only the unpaid visits"
+                        onClick={() => {
+                          setOnlyNotCollected(true);
+                          setFiltersOpen(true);
+                        }}
+                      >
+                        {formatINR(totals.outstanding)}
+                      </button>
+                    ) : (
+                      <strong className={`font-num ${totals.outstanding > 0 ? 'text-[var(--rust)]' : 'text-[var(--muted)]'}`}>
+                        {formatINR(totals.outstanding)}
+                      </strong>
+                    )}
                   </div>
                 </div>
               </div>
