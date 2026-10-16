@@ -55,13 +55,13 @@ describe('TodayAppointments', () => {
     expect(within(upcomingList).getAllByRole('button').filter((b) => b.textContent?.includes('P'))).toHaveLength(7);
   });
 
-  it('folds finished appointments under Done', () => {
+  it('folds finished appointments under Done today', () => {
     setup([
       appt('09:00', { status: 'arrived', visitId: 'v1', patientName: 'Seen' }),
       appt('09:30', { status: 'no_show', patientName: 'Missed' }),
       appt('11:00', { patientName: 'Later' }),
     ]);
-    expect(screen.getByText('Done (2)')).toBeInTheDocument();
+    expect(screen.getByText(/Done today \(2\)/)).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'In progress' })).not.toBeInTheDocument();
   });
 
@@ -86,7 +86,7 @@ describe('TodayAppointments', () => {
 
   it('handles an empty day', () => {
     setup([]);
-    expect(screen.getByText('No appointments today.')).toBeInTheDocument();
+    expect(screen.getByText(/No appointments today/)).toBeInTheDocument();
   });
 
   it('lists booking requests first, with Confirm / Decline and See all past three', () => {
@@ -102,7 +102,7 @@ describe('TodayAppointments', () => {
       <TodayAppointments
         appointments={[]}
         slotMinutes={30}
-          nextUpId={null}
+        nextUpId={null}
         colorFor={() => '#000'}
         therapistNameFor={() => 'Dr A'}
         showTherapist
@@ -123,7 +123,7 @@ describe('TodayAppointments', () => {
     expect(onDecline).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }));
     fireEvent.click(within(section).getByRole('button', { name: 'See all 4 requests' }));
     expect(onSeeAll).toHaveBeenCalled();
-    expect(screen.getByText('No appointments today.')).toBeInTheDocument();
+    expect(screen.getByText(/No appointments today/)).toBeInTheDocument();
   });
 });
 
@@ -149,8 +149,7 @@ describe('TodayAppointments quick actions', () => {
     expect(onMarkArrived).toHaveBeenCalledWith(a);
   });
 
-  it('finished rows show Due (with Collect) or Paid, and the Done summary counts them', () => {
-    const onCollect = vi.fn();
+  it('finished rows show Due or Paid marker, and the Done summary counts them', () => {
     const onUndoNoShow = vi.fn();
     const owes = appt('09:00', { status: 'arrived', visitId: 'v-due', patientName: 'Owes' });
     const paid = appt('09:30', { status: 'arrived', visitId: 'v-paid', patientName: 'Paid up' });
@@ -165,14 +164,16 @@ describe('TodayAppointments quick actions', () => {
         showTherapist
         onSelect={vi.fn()}
         dueByVisitId={new Map([['v-due', true], ['v-paid', false]])}
-        onCollect={onCollect}
         onUndoNoShow={onUndoNoShow}
       />
     );
-    expect(screen.getByText('Done (3)')).toBeInTheDocument();
-    expect(screen.getByText(/1 no-show · 1 due/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Collect payment from Owes/ }));
-    expect(onCollect).toHaveBeenCalledWith('v-due');
+    expect(screen.getByText(/Done today \(3\)/)).toBeInTheDocument();
+    expect(screen.getByText(/2 logged · 1 no-show · 1 due/)).toBeInTheDocument();
+    // Open fold
+    const details = screen.getByText(/Done today \(3\)/).closest('details')!;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(screen.getByText('Due')).toBeInTheDocument();
     expect(screen.getByText('Paid ✓')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Undo no-show for Missed/ }));
     expect(onUndoNoShow).toHaveBeenCalledWith(missed);
@@ -185,7 +186,7 @@ describe('TodayAppointments carried-over and Done defaults', () => {
     localStorage.clear();
   });
 
-  it('Done is open by default, and a closed choice is remembered', () => {
+  it('Done is closed by default, and an open choice is remembered', () => {
     localStorage.clear();
     render(
       <TodayAppointments
@@ -198,11 +199,11 @@ describe('TodayAppointments carried-over and Done defaults', () => {
         onSelect={vi.fn()}
       />
     );
-    const details = screen.getByText('Done (1)').closest('details')!;
-    expect(details.open).toBe(true);
-    details.open = false;
+    const details = screen.getByText(/Done today \(1\)/).closest('details')!;
+    expect(details.open).toBe(false);
+    details.open = true;
     fireEvent(details, new Event('toggle'));
-    expect(localStorage.getItem('theranet:today-done-open')).toBe('closed');
+    expect(localStorage.getItem('theranet:today-done-open')).toBe('open');
   });
 
   it('shows the date under the time for an appointment from another day', () => {
@@ -235,7 +236,7 @@ describe('TodayAppointments end of day and cancelled', () => {
 
   it('says all done (not "no more appointments") when everything is finished', () => {
     render(<TodayAppointments {...baseProps} appointments={[appt('09:00', { status: 'arrived', visitId: 'v1' })]} />);
-    expect(screen.getByText('All done for today ✓')).toBeInTheDocument();
+    expect(screen.getByText(/All done for today/)).toBeInTheDocument();
     expect(screen.queryByText('No more appointments today.')).not.toBeInTheDocument();
   });
 

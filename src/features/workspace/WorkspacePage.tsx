@@ -296,24 +296,9 @@ export function WorkspacePage() {
     return [...olderOpen, ...todays];
   }, [workspaceAppointments, expectedToday, scope.scopeTherapistId, clinic.enablePatientComms]);
   const toCompleteCount = todayAppointments.filter((a) => a.status === 'arrived' && !a.visitId).length;
-  // The Appointments tab: always with patient comms; otherwise only while a
+  // The Appointments card: always with patient comms; otherwise only while a
   // walk-in visit is in progress.
-  const showAppointmentsTab = Boolean(clinic.enablePatientComms) || toCompleteCount > 0;
-  const [todayTab, setTodayTabState] = useState<'appointments' | 'visits'>(() => {
-    try {
-      return (window.localStorage.getItem('thera-net:workspace-today-tab') as 'appointments' | 'visits') ?? 'appointments';
-    } catch {
-      return 'appointments';
-    }
-  });
-  const setTodayTab = (tab: 'appointments' | 'visits') => {
-    setTodayTabState(tab);
-    try {
-      window.localStorage.setItem('thera-net:workspace-today-tab', tab);
-    } catch {
-      // Private mode: the tab just isn't remembered.
-    }
-  };
+  const showAppointmentsCard = Boolean(clinic.enablePatientComms) || toCompleteCount > 0;
   // "Next up": the first still-to-come appointment (15 minutes' grace for late arrivals).
   const nextUpId = expectedToday.find(
     (a) => (a.status === 'confirmed' || a.status === 'rescheduled') && minutesOfDay(a.scheduledAt) >= nowMinutes - 15
@@ -820,70 +805,57 @@ export function WorkspacePage() {
         <SplitChangeBanner clinicId={clinic.id} changedAt={clinic.lastSplitChangeAt} />
       )}
 
-
-      <SectionCard
-        title="Today"
-        action={
-          showAppointmentsTab ? (
-            <div className="flex rounded-lg border border-[var(--border)] p-0.5" role="tablist" aria-label="Today">
-              {(['appointments', 'visits'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  role="tab"
-                  aria-selected={todayTab === tab}
-                  onClick={() => setTodayTab(tab)}
-                  className={`min-h-9 rounded-md px-3 text-xs font-medium ${todayTab === tab ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}
-                >
-                  {tab === 'appointments' ? (appointmentsLeft > 0 ? `Appointments (${appointmentsLeft} left)` : appointmentsForList.filter((a) => a.status !== 'cancelled').length > 0 ? 'Appointments (all done ✓)' : `Appointments (${pendingRequestCount})`) : `Visits (${today?.visits.length ?? 0})`}
-                </button>
-              ))}
-            </div>
-          ) : undefined
-        }
-      >
-        {showAppointmentsTab && todayTab === 'appointments' ? (
-          <>
-            <TodayAppointments
-              appointments={appointmentsForList}
-              slotMinutes={clinic.slotDurationMinutes || 30}
-              nextUpId={nextUpId}
-              colorFor={appointmentColor}
-              therapistNameFor={appointmentTherapistName}
-              showTherapist={canManageBookings}
-              onSelect={(a) => setOpenAppointmentId(a.id)}
-              requests={pendingRequests}
-              therapistNameForId={(id) => (id ? therapistRoster.get(id)?.name ?? null : null)}
-              onConfirmRequest={setConfirmingRequest}
-              onDeclineRequest={setDecliningRequest}
-              onSeeAllRequests={() => void navigate({ to: '/schedule', search: { tab: 'bookings', view: 'requests' } })}
-              flagContext={flagContext}
-              dueByVisitId={dueByVisitId}
-              onCollect={(visitId) => {
-                const row = today?.visits.find((r) => r.visitId === visitId);
-                if (row) setTakingPayment(todayCardFor(row));
-              }}
-              onMarkArrived={
-                canManageBookings || scope.myTherapistId
-                  ? (a) => bookingService.markAppointmentArrived(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
-                  : undefined
-              }
-              onRestoreCancelled={
-                canManageBookings || scope.myTherapistId
-                  ? (a) => bookingService.restoreCancelledAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
-                  : undefined
-              }
-              onUndoNoShow={
-                canManageBookings || scope.myTherapistId
-                  ? (a) => bookingService.restoreNoShowAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
-                  : undefined
-              }
-            />
-            <Link to="/schedule" className="mt-3 inline-block text-sm font-medium text-[var(--teal)] hover:underline">
+      {showAppointmentsCard && (
+        <SectionCard
+          title={
+            appointmentsLeft > 0
+              ? `Appointments · ${appointmentsLeft} left`
+              : appointmentsForList.some((a) => a.status !== 'cancelled')
+                ? 'Appointments · all done ✓'
+                : 'Appointments'
+          }
+          action={
+            <Link to="/schedule" className="text-xs font-medium text-[var(--teal)] hover:underline">
               Open schedule →
             </Link>
-          </>
-        ) : !today || today.visits.length === 0 ? (
+          }
+        >
+          <TodayAppointments
+            appointments={appointmentsForList}
+            slotMinutes={clinic.slotDurationMinutes || 30}
+            nextUpId={nextUpId}
+            colorFor={appointmentColor}
+            therapistNameFor={appointmentTherapistName}
+            showTherapist={canManageBookings}
+            onSelect={(a) => setOpenAppointmentId(a.id)}
+            requests={pendingRequests}
+            therapistNameForId={(id) => (id ? therapistRoster.get(id)?.name ?? null : null)}
+            onConfirmRequest={setConfirmingRequest}
+            onDeclineRequest={setDecliningRequest}
+            onSeeAllRequests={() => void navigate({ to: '/schedule', search: { tab: 'bookings', view: 'requests' } })}
+            flagContext={flagContext}
+            dueByVisitId={dueByVisitId}
+            onMarkArrived={
+              canManageBookings || scope.myTherapistId
+                ? (a) => bookingService.markAppointmentArrived(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
+                : undefined
+            }
+            onRestoreCancelled={
+              canManageBookings || scope.myTherapistId
+                ? (a) => bookingService.restoreCancelledAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
+                : undefined
+            }
+            onUndoNoShow={
+              canManageBookings || scope.myTherapistId
+                ? (a) => bookingService.restoreNoShowAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
+                : undefined
+            }
+          />
+        </SectionCard>
+      )}
+
+      <SectionCard title={`Today's visits · ${today?.visits.length ?? 0}`}>
+        {!today || today.visits.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">
             No visits logged today — log one with &ldquo;+ New visit&rdquo;.
           </p>

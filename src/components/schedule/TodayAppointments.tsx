@@ -1,10 +1,12 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { Appointment, AppointmentRequest } from '@/domain/types';
 import { appointmentMinutes, lengthLabel, minutesLabel, minutesOfDay, toLocalDateStr } from '@/domain/schedule';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
 import { Pill, pillAccent, pillDanger, pillNeutral, pillPrimary } from '@/components/ui';
+import { useShowMore, ShowMoreFooter } from '@/components/ShowMore';
+import { partitionTodayAppointments } from './todayPartition';
 import { RequestsInbox } from './RequestsInbox';
 import { appointmentFill } from './scheduleColors';
 import { PatientFlagPills } from './PatientFlagPills';
@@ -41,7 +43,6 @@ export function TodayAppointments({
   onSeeAllRequests,
   flagContext,
   dueByVisitId,
-  onCollect,
   onMarkArrived,
   onUndoNoShow,
   onRestoreCancelled,
@@ -63,7 +64,6 @@ export function TodayAppointments({
   flagContext?: PatientFlagContext;
   /** Today's logged visits: true = still owes money, false = settled. Finished rows show Due / Paid from it. */
   dueByVisitId?: Map<string, boolean>;
-  onCollect?: (visitId: string) => void;
   /** One-tap "Arrived" on an upcoming row (otherwise it takes row, panel, button). */
   onMarkArrived?: (appointment: Appointment) => void | Promise<unknown>;
   /** Reverses a mistaken no-show; Rebook is the row itself (opens the panel with Reschedule). */
@@ -86,18 +86,19 @@ export function TodayAppointments({
       })
     );
   };
-  // Finished rows carry Paid / Due / Undo, so they stay open unless the user folds them (remembered per device).
+  // Concluded appointments fold is closed by default, remembered per device.
   const [doneOpen, setDoneOpen] = useState(() => {
     try {
-      return localStorage.getItem(DONE_OPEN_KEY) !== 'closed';
+      return localStorage.getItem(DONE_OPEN_KEY) === 'open';
     } catch {
-      return true;
+      return false;
     }
   });
-  const inProgress = appointments.filter((a) => a.status === 'arrived' && !a.visitId);
-  const upcoming = appointments.filter((a) => a.status === 'confirmed' || a.status === 'rescheduled');
-  const done = appointments.filter((a) => a.visitId || a.status === 'no_show');
-  const cancelled = appointments.filter((a) => a.status === 'cancelled' && !a.visitId);
+
+  const { inProgress, upcoming, logged, noShows, cancelled, pendingCount, doneCount } =
+    useMemo(() => partitionTodayAppointments(appointments), [appointments]);
+  const loggedMore = useShowMore(logged, logged.length, 10);
+
   const shownUpcoming = showAll ? upcoming : upcoming.slice(0, UPCOMING_LIMIT);
   const hasRequests = requests.length > 0 && Boolean(onConfirmRequest && onDeclineRequest);
   const sectionCount = [hasRequests, inProgress.length > 0, upcoming.length > 0].filter(Boolean).length;
@@ -177,31 +178,28 @@ export function TodayAppointments({
       <Pill tone={APPOINTMENT_STATUS_TONE[a.status]}>{APPOINTMENT_STATUS_LABEL[a.status]}</Pill>
     );
 
-  const dueCount = done.filter((a) => a.visitId && dueByVisitId?.get(a.visitId)).length;
-  const noShowCount = done.filter((a) => a.status === 'no_show' && !a.visitId).length;
+  const dueCount = logged.filter((a) => dueByVisitId?.get(a.visitId!)).length;
   const doneSummary = [
-    noShowCount > 0 ? `${noShowCount} no-show` : null,
+    logged.length > 0 ? `${logged.length} logged` : null,
+    noShows.length > 0 ? `${noShows.length} no-show` : null,
+    cancelled.length > 0 ? `${cancelled.length} cancelled` : null,
     dueCount > 0 ? `${dueCount} due` : null,
   ]
     .filter(Boolean)
     .map((part) => ` · ${part}`)
     .join('');
 
-  /** What a finished row's right side is for: payment state on a logged visit, undo on a no-show. */
+  /** What a finished row's right side is for: payment state on a logged visit (read-only), undo on a no-show. */
   const doneEnd = (a: Appointment): ReactNode => {
-    if (a.visitId && dueByVisitId?.has(a.visitId)) {
-      return dueByVisitId.get(a.visitId) ? (
-        <button
-          type="button"
-          className={pillDanger}
-          aria-label={`Collect payment from ${a.patientName}`}
-          onClick={() => onCollect?.(a.visitId!)}
-        >
-          Due · Collect
-        </button>
-      ) : (
-        <span className="text-xs font-medium text-[var(--moss-strong,var(--teal))]">Paid ✓</span>
-      );
+    if (a.visitId) {
+      if (dueByVisitId?.has(a.visitId)) {
+        return dueByVisitId.get(a.visitId) ? (
+          <span className="font-num text-xs font-semibold text-[var(--rust)]">Due</span>
+        ) : (
+          <span className="text-xs font-medium text-[var(--moss-strong,var(--teal))]">Paid ✓</span>
+        );
+      }
+      return <span className="text-xs font-medium text-[var(--muted)]">Visit logged</span>;
     }
     if (a.status === 'no_show' && !a.visitId && onUndoNoShow) {
       return (
@@ -247,7 +245,12 @@ export function TodayAppointments({
     return (
       <div className="space-y-4">
         {requestsSection}
-        <p className="text-sm text-[var(--muted)]">No appointments today.</p>
+        <p className="text-sm text-[var(--muted)]">
+          No appointments today ·{' '}
+          <Link to="/schedule" className="font-medium text-[var(--teal)] hover:underline">
+            Open schedule →
+          </Link>
+        </p>
       </div>
     );
   }
@@ -323,11 +326,22 @@ export function TodayAppointments({
         </section>
       )}
 
-      {upcoming.length === 0 && inProgress.length === 0 && (
-        <p className="text-sm text-[var(--muted)]">{done.length > 0 ? 'All done for today ✓' : 'No more appointments today.'}</p>
+      {pendingCount === 0 && (
+        <p className="text-sm text-[var(--muted)]">
+          {doneCount > 0 ? (
+            `✓ All done for today (${logged.length} seen)`
+          ) : (
+            <span>
+              No appointments today ·{' '}
+              <Link to="/schedule" className="font-medium text-[var(--teal)] hover:underline">
+                Open schedule →
+              </Link>
+            </span>
+          )}
+        </p>
       )}
 
-      {done.length > 0 && (
+      {doneCount > 0 && (
         <details
           open={doneOpen}
           onToggle={(e) => {
@@ -341,38 +355,51 @@ export function TodayAppointments({
           }}
         >
           <summary className="min-h-9 cursor-pointer text-sm text-[var(--muted)]">
-            Done ({done.length})
-            <span className="text-xs">{doneSummary}</span>
+            Done today ({doneCount})
+            {doneSummary && <span className="text-xs">{doneSummary}</span>}
           </summary>
-          <ul className={`${listCls} mt-1`}>
-            {done.map((a) => row(a, doneEnd(a), a.visitId ? 'Visit logged' : APPOINTMENT_STATUS_LABEL[a.status], Boolean(a.visitId ? dueByVisitId : onUndoNoShow)))}
-          </ul>
-        </details>
-      )}
-
-      {cancelled.length > 0 && (
-        <details>
-          <summary className="min-h-9 cursor-pointer text-sm text-[var(--muted)]">Cancelled ({cancelled.length})</summary>
-          <ul className={`${listCls} mt-1`}>
-            {cancelled.map((a) =>
-              row(
-                a,
-                onRestoreCancelled && new Date(a.scheduledAt).getTime() > Date.now() ? (
-                  <button
-                    type="button"
-                    aria-label={`Restore ${a.patientName}'s appointment`}
-                    className={`min-h-11 sm:min-h-8 ${pillAccent}`}
-                    disabled={pendingIds.has(a.id)}
-                    onClick={() => guarded(a.id, () => onRestoreCancelled(a))}
-                  >
-                    Restore
-                  </button>
-                ) : null,
-                'Cancelled',
-                Boolean(onRestoreCancelled)
-              )
-            )}
-          </ul>
+          {logged.length > 0 && (
+            <div className="mt-2">
+              <h4 className="px-1 text-xs font-medium text-[var(--muted)]">Logged ({logged.length})</h4>
+              <ul className={`${listCls} mt-1`}>
+                {loggedMore.visible.map((a) => row(a, doneEnd(a), 'Visit logged', Boolean(dueByVisitId)))}
+              </ul>
+              <ShowMoreFooter list={loggedMore} noun="logged appointments" />
+            </div>
+          )}
+          {noShows.length > 0 && (
+            <div className="mt-3">
+              <h4 className="px-1 text-xs font-medium text-[var(--rust)]">No-show ({noShows.length})</h4>
+              <ul className={`${listCls} mt-1`}>
+                {noShows.map((a) => row(a, doneEnd(a), 'No-show', Boolean(onUndoNoShow)))}
+              </ul>
+            </div>
+          )}
+          {cancelled.length > 0 && (
+            <div className="mt-3">
+              <h4 className="px-1 text-xs font-medium text-[var(--muted)]">Cancelled ({cancelled.length})</h4>
+              <ul className={`${listCls} mt-1`}>
+                {cancelled.map((a) =>
+                  row(
+                    a,
+                    onRestoreCancelled && new Date(a.scheduledAt).getTime() > Date.now() ? (
+                      <button
+                        type="button"
+                        aria-label={`Restore ${a.patientName}'s appointment`}
+                        className={`min-h-11 sm:min-h-8 ${pillAccent}`}
+                        disabled={pendingIds.has(a.id)}
+                        onClick={() => guarded(a.id, () => onRestoreCancelled(a))}
+                      >
+                        Restore
+                      </button>
+                    ) : null,
+                    'Cancelled',
+                    Boolean(onRestoreCancelled)
+                  )
+                )}
+              </ul>
+            </div>
+          )}
         </details>
       )}
     </div>
