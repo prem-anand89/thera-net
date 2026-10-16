@@ -4,7 +4,7 @@ import type { Appointment, AppointmentRequest } from '@/domain/types';
 import { appointmentMinutes, lengthLabel, minutesLabel, minutesOfDay, toLocalDateStr } from '@/domain/schedule';
 import { formatDateDM } from '@/domain/fiscalYear';
 import { APPOINTMENT_STATUS_LABEL, APPOINTMENT_STATUS_TONE } from '@/domain/appointmentStatus';
-import { Pill } from '@/components/ui';
+import { Pill, pillAccent, pillDanger, pillNeutral, pillPrimary } from '@/components/ui';
 import { RequestsInbox } from './RequestsInbox';
 import { appointmentFill } from './scheduleColors';
 import { PatientFlagPills } from './PatientFlagPills';
@@ -127,13 +127,14 @@ export function TodayAppointments({
         style={{ borderLeftColor: color, background: fill.background }}
       >
         <button type="button" className="flex min-h-11 min-w-0 flex-1 items-start gap-3 text-left" onClick={() => onSelect(a)}>
-          <span className="w-16 shrink-0 whitespace-nowrap pt-0.5 text-[13px] tabular-nums text-[var(--muted)] sm:w-[4.5rem] sm:text-sm">
+          <span className="w-16 shrink-0 whitespace-nowrap pt-0.5 text-[13px] tabular-nums font-semibold text-[var(--ink)] sm:w-[4.5rem] sm:text-sm">
             {minutesLabel(minutesOfDay(a.scheduledAt))}
             {toLocalDateStr(new Date(a.scheduledAt)) !== toLocalDateStr(new Date()) && (
-              <span className="block text-[11px]">{formatDateDM(a.scheduledAt)}</span>
+              <span className="block text-[11px] font-normal text-[var(--muted)]">{formatDateDM(a.scheduledAt)}</span>
             )}
           </span>
           <span className="min-w-0 flex-1">
+            {/* Line 1: Name + Next chip only (avoids truncation on mobile) */}
             <span className="flex min-w-0 items-center gap-1.5">
               <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : fill.kind === 'cancelled' ? 'text-[var(--muted)] line-through' : 'text-[var(--ink)]'}`}>
                 {a.patientName}
@@ -141,18 +142,22 @@ export function TodayAppointments({
               {a.id === nextUpId && (
                 <span className="shrink-0 rounded-full bg-[var(--teal)] px-1.5 text-[10px] font-medium leading-4 text-white">Next</span>
               )}
-              <PatientFlagPills flags={flags} max={2} />
             </span>
-            {/* Phones: two clean lines. Length and therapist live in the detail
-                panel (the colour edge already says whose column it is). */}
-            {(mobileNote || reason?.text) && (
-              <span className="block truncate text-xs text-[var(--muted)] sm:hidden">
+            {/* Line 2: Note, reason, and patient flags */}
+            {(mobileNote || reason?.text || flags.length > 0) && (
+              <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-[var(--muted)] sm:hidden">
                 {mobileNote && <span className={noteClass}>{mobileNote}</span>}
-                {mobileNote && reason?.text ? ' · ' : ''}
-                {reason?.text}
+                {mobileNote && (reason?.text || flags.length > 0) && <span>·</span>}
+                {reason?.text && <span className="truncate">{reason.text}</span>}
+                {reason?.text && flags.length > 0 && <span>·</span>}
+                <PatientFlagPills flags={flags} max={2} />
               </span>
             )}
-            {wideDetail && <span className="hidden truncate text-xs text-[var(--muted)] sm:block">{wideDetail}</span>}
+            <span className="mt-0.5 hidden min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-[var(--muted)] sm:flex">
+              {wideDetail && <span className="truncate">{wideDetail}</span>}
+              {wideDetail && flags.length > 0 && <span>·</span>}
+              <PatientFlagPills flags={flags} max={2} />
+            </span>
           </span>
           {showTherapist && <span className="hidden w-36 shrink-0 truncate pt-0.5 text-xs text-[var(--muted)] sm:block">{therapistNameFor(a)}</span>}
           <span className="hidden w-14 shrink-0 pt-0.5 text-xs text-[var(--muted)] sm:block">{length}</span>
@@ -188,9 +193,9 @@ export function TodayAppointments({
       return dueByVisitId.get(a.visitId) ? (
         <button
           type="button"
-          className="min-h-11 rounded-full border sm:min-h-9 border-[var(--rust)] px-3 text-xs font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
+          className={pillDanger}
           aria-label={`Collect payment from ${a.patientName}`}
-onClick={() => onCollect?.(a.visitId!)}
+          onClick={() => onCollect?.(a.visitId!)}
         >
           Due · Collect
         </button>
@@ -203,16 +208,16 @@ onClick={() => onCollect?.(a.visitId!)}
         <span className="flex items-center gap-2">
           <button
             type="button"
-            className="min-h-11 rounded-full border sm:min-h-9 border-[var(--rust)] px-3 text-xs font-medium text-[var(--rust)] hover:bg-[var(--rust-light)]"
+            className={pillDanger}
             aria-label={`Undo no-show for ${a.patientName}`}
-disabled={pendingIds.has(a.id)}
+            disabled={pendingIds.has(a.id)}
             onClick={() => guarded(a.id, () => onUndoNoShow(a))}
           >
             Undo
           </button>
           <button
             type="button"
-            className="hidden min-h-11 rounded-full border sm:min-h-9 border-[var(--border)] px-3 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)] sm:inline-block"
+            className={`hidden min-h-11 sm:min-h-8 ${pillNeutral} sm:inline-flex`}
             onClick={() => onSelect(a)}
           >
             Rebook
@@ -271,7 +276,7 @@ disabled={pendingIds.has(a.id)}
                       ...(a.patientId ? { patientId: a.patientId } : {}),
                       from: '/workspace',
                     }}
-                    className="inline-flex min-h-11 items-center rounded-full bg-[var(--teal)] px-3 text-xs font-medium text-white hover:bg-[var(--teal-strong)] sm:min-h-0 sm:px-2.5 sm:py-1"
+                    className={`min-h-11 sm:min-h-8 ${pillPrimary}`}
                   >
                     <span className="sm:hidden">Complete</span>
                     <span className="hidden sm:inline">Complete visit</span>
@@ -295,9 +300,9 @@ disabled={pendingIds.has(a.id)}
                 onMarkArrived ? (
                   <button
                     type="button"
-                    className="min-h-11 rounded-full border sm:min-h-9 border-[var(--teal)] px-3 text-xs font-medium text-[var(--teal)] hover:bg-[var(--teal-light)]"
+                    className={`min-h-11 sm:min-h-8 ${pillAccent}`}
                     aria-label={`Mark ${a.patientName} arrived`}
-disabled={pendingIds.has(a.id)}
+                    disabled={pendingIds.has(a.id)}
                     onClick={() => guarded(a.id, () => onMarkArrived(a))}
                   >
                     Arrived
@@ -356,7 +361,7 @@ disabled={pendingIds.has(a.id)}
                   <button
                     type="button"
                     aria-label={`Restore ${a.patientName}'s appointment`}
-                    className="min-h-11 rounded-full border border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)] sm:min-h-9"
+                    className={`min-h-11 sm:min-h-8 ${pillAccent}`}
                     disabled={pendingIds.has(a.id)}
                     onClick={() => guarded(a.id, () => onRestoreCancelled(a))}
                   >

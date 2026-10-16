@@ -33,6 +33,8 @@ export const pillPrimary = `${pillBase} bg-[var(--teal)] text-white hover:bg-[va
 export const pillAttention = `${pillBase} border border-[var(--amber)] bg-[var(--amber-light)] text-[var(--amber)] hover:bg-[var(--amber)] hover:text-white`;
 export const pillAccent = `${pillBase} border border-[var(--teal)] bg-[var(--surface)] text-[var(--teal)] hover:bg-[var(--teal-light)]`;
 export const pillNeutral = `${pillBase} border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]`;
+export const pillDanger =
+  'inline-flex min-h-11 sm:min-h-8 items-center gap-1.5 rounded-full border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-1.5 text-xs font-medium text-[var(--rust)] transition-colors hover:bg-[var(--rust)] hover:text-white disabled:opacity-50';
 /** A row inside a `KebabMenu` dropdown — pair with `menuItemDestructive` for Delete-style actions. */
 export const menuItem =
   'block w-full px-3 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--paper)]';
