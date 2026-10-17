@@ -21,6 +21,49 @@ import { RowActionsMenu } from './VisitRowActions';
  *  so sticky cells stripe and hover the same as the rest of the row. */
 const VISIT_ROW_CELL_BG = 'bg-[var(--td-bg)] group-hover:bg-[var(--teal-light)]';
 
+export function VisitColumnPicker({
+  columnPrefs,
+  onColumnPrefsChange,
+  className,
+}: {
+  columnPrefs: Record<VisitColumnKey, boolean>;
+  onColumnPrefsChange: (key: VisitColumnKey, visible: boolean) => void;
+  className?: string;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  return (
+    <div className={`relative ${className ?? ''}`}>
+      <button
+        type="button"
+        className="inline-flex min-h-8 items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--paper)] hover:text-[var(--ink)]"
+        onClick={() => setPickerOpen((o) => !o)}
+      >
+        Columns ▾
+      </button>
+      {pickerOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
+          <div className="absolute right-0 top-full z-20 mt-1 min-w-40 rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 shadow-lg">
+            {VISIT_OPTIONAL_COLUMN_ORDER.map((key) => (
+              <label
+                key={key}
+                className="flex items-center gap-2 px-1 py-1 text-xs text-[var(--ink)]"
+              >
+                <input
+                  type="checkbox"
+                  checked={columnPrefs[key]}
+                  onChange={(e) => onColumnPrefsChange(key, e.target.checked)}
+                />
+                {VISIT_COLUMN_LABELS[key]}
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** Table rendering of the same VisitCardData rows the card uses — the
  *  Columns picker and every action here reads from the same data shape and
  *  callbacks as SharedVisitCard, so Seen Today and Ledger can share this
@@ -43,6 +86,7 @@ export function VisitTable({
   canInvoice,
   selection,
   backTo,
+  showColumnPicker = true,
 }: {
   rows: VisitCardData[];
   showDate: boolean;
@@ -61,42 +105,18 @@ export function VisitTable({
   canInvoice: boolean;
   selection?: VisitSelectionProps;
   backTo?: PatientProfileBackTarget;
+  showColumnPicker?: boolean;
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-
   return (
     <div>
-      <div className="flex justify-end pb-2">
-        <div className="relative">
-          <button
-            type="button"
-            className="inline-flex min-h-8 items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--paper)] hover:text-[var(--ink)]"
-            onClick={() => setPickerOpen((o) => !o)}
-          >
-            Columns ▾
-          </button>
-          {pickerOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
-              <div className="absolute right-0 top-full z-20 mt-1 min-w-40 rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 shadow-lg">
-                {VISIT_OPTIONAL_COLUMN_ORDER.map((key) => (
-                  <label
-                    key={key}
-                    className="flex items-center gap-2 px-1 py-1 text-xs text-[var(--ink)]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={columnPrefs[key]}
-                      onChange={(e) => onColumnPrefsChange(key, e.target.checked)}
-                    />
-                    {VISIT_COLUMN_LABELS[key]}
-                  </label>
-                ))}
-              </div>
-            </>
-          )}
+      {showColumnPicker && (
+        <div className="flex justify-end pb-2">
+          <VisitColumnPicker
+            columnPrefs={columnPrefs}
+            onColumnPrefsChange={onColumnPrefsChange}
+          />
         </div>
-      </div>
+      )}
 
       {/* overflow-y-visible is deliberate, not decorative: setting only
           overflow-x leaves overflow-y at its browser-computed default of

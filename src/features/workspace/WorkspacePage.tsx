@@ -46,7 +46,12 @@ import {
   td,
   tdNum,
 } from '@/components/ui';
-import { ResponsiveVisitList, type VisitCardData } from '@/components/VisitCard';
+import {
+  ResponsiveVisitList,
+  VisitColumnPicker,
+  type VisitCardData,
+} from '@/components/VisitCard';
+import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
 import {
   useNewFeedbackResponseCount,
   useGoogleReviewEligibleRequestIds,
@@ -348,6 +353,7 @@ export function WorkspacePage() {
   const [decliningRequest, setDecliningRequest] = useState<AppointmentRequest | null>(null);
   const [invoicing, setInvoicing] = useState<InvoicingTarget | null>(null);
   const [takingPayment, setTakingPayment] = useState<VisitCardData | null>(null);
+  const { prefs: visitColumnPrefs, setPref: setVisitColumnPref } = useVisitColumnPrefs();
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
   const [, setVisitEditError] = useState<string | null>(null);
@@ -858,7 +864,19 @@ export function WorkspacePage() {
         </SectionCard>
       )}
 
-      <SectionCard title={`Today's visits · ${today?.visits.length ?? 0}`}>
+      <SectionCard
+        title={`Today's visits · ${today?.visits.length ?? 0}`}
+        action={
+          today && today.visits.length > 0 ? (
+            <div className="hidden tab:block">
+              <VisitColumnPicker
+                columnPrefs={visitColumnPrefs}
+                onColumnPrefsChange={setVisitColumnPref}
+              />
+            </div>
+          ) : undefined
+        }
+      >
         {!today || today.visits.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">
             No visits logged today — log one with &ldquo;+ New visit&rdquo;.
@@ -868,6 +886,7 @@ export function WorkspacePage() {
             rows={today.visits.map(todayCardFor)}
             showDate={false}
             showPatient={true}
+            showColumnPicker={false}
             onInvoice={(row) => openInvoiceFor(row)}
             onTakePayment={(row) => setTakingPayment(row)}
             onEditPatient={(row) => setEditPatientId(row.patientId)}

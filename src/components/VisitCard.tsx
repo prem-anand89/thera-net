@@ -14,11 +14,18 @@ import { SharedSplitLine } from './visit/VisitSharedSplit';
 import { PAYMENT_CHIP } from './visit/VisitPaymentDisplay';
 import { VisitNoteLink, VisitFeedbackLink } from './visit/VisitNotesFeedback';
 import { RowActionsMenu } from './visit/VisitRowActions';
-import { VisitTable } from './visit/VisitTable';
+import { VisitTable, VisitColumnPicker } from './visit/VisitTable';
 
 // Re-export extracted types and components that other files import from here
 export type { VisitCardData, VisitSelectionProps };
-export { PAYMENT_CHIP, treatmentsDisplayText, patientIdentityLine, VisitNoteLink, VisitFeedbackLink };
+export {
+  PAYMENT_CHIP,
+  treatmentsDisplayText,
+  patientIdentityLine,
+  VisitNoteLink,
+  VisitFeedbackLink,
+  VisitColumnPicker,
+};
 
 /** Label + value rows for mobile cards — same field order as the optional table columns. */
 export function CardDetailRow({
@@ -334,6 +341,7 @@ export function ResponsiveVisitList({
   canInvoice = true,
   selection,
   backTo,
+  showColumnPicker = true,
 }: {
   rows: VisitCardData[];
   showDate: boolean;
@@ -356,6 +364,7 @@ export function ResponsiveVisitList({
   /** Where the patient name link's "← Back" should return to. Omit when
    *  showPatient is false, or when this list is the patient's own profile. */
   backTo?: PatientProfileBackTarget;
+  showColumnPicker?: boolean;
 }) {
   const { prefs, setPref } = useVisitColumnPrefs();
 
@@ -462,6 +471,7 @@ export function ResponsiveVisitList({
           canInvoice={canInvoice}
           selection={selection}
           backTo={backTo}
+          showColumnPicker={showColumnPicker}
         />
       </div>
     </>
