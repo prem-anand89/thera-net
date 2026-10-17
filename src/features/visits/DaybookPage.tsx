@@ -155,7 +155,7 @@ export function DaybookPage() {
   }, [data]);
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
         <DatePresetBar presets={DAYBOOK_DATE_PRESETS} value={preset} onChange={setPreset} />
         {preset === 'custom' && (
@@ -179,48 +179,62 @@ export function DaybookPage() {
         )}
       </div>
 
-      <SectionCard title={`Collections for ${from === to ? formatDateDMY(from) : `${formatDateDMY(from)} – ${formatDateDMY(to)}`}`}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)]">
-                <th className={th}>Payment Method</th>
-                <th className={thNum}>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
-                <td className={td}>Cash</td>
-                <td className={tdNum}>{formatINR(cash)}</td>
-              </tr>
-              <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
-                <td className={td}>UPI</td>
-                <td className={tdNum}>{formatINR(upi)}</td>
-              </tr>
-              <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
-                <td className={td}>Card</td>
-                <td className={tdNum}>{formatINR(card)}</td>
-              </tr>
-              {other > 0 && (
-                <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
-                  <td className={td}>Other (Bank/Cheque)</td>
-                  <td className={tdNum}>{formatINR(other)}</td>
+      <div className="max-w-xl">
+        <SectionCard title={`Collections for ${from === to ? formatDateDMY(from) : `${formatDateDMY(from)} – ${formatDateDMY(to)}`}`}>
+          <div className="overflow-x-auto">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col className="w-3/5" />
+                <col className="w-2/5" />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-[var(--border)]">
+                  <th className={th}>Payment Method</th>
+                  <th className={thNum}>Amount</th>
                 </tr>
-              )}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td className="py-3 px-3 text-right font-semibold text-[var(--ink)]">Total Collected</td>
-                <td className="py-3 px-3 text-right text-base font-bold text-[var(--ink)]">{formatINR(total)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </SectionCard>
+              </thead>
+              <tbody>
+                <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
+                  <td className={td}>Cash</td>
+                  <td className={tdNum}>{formatINR(cash)}</td>
+                </tr>
+                <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
+                  <td className={td}>UPI</td>
+                  <td className={tdNum}>{formatINR(upi)}</td>
+                </tr>
+                <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
+                  <td className={td}>Card</td>
+                  <td className={tdNum}>{formatINR(card)}</td>
+                </tr>
+                {other > 0 && (
+                  <tr className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
+                    <td className={td}>Other (Bank/Cheque)</td>
+                    <td className={tdNum}>{formatINR(other)}</td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td className="py-3 px-3 text-right font-semibold text-[var(--ink)]">Total Collected</td>
+                  <td className="py-3 px-3 text-right text-base font-bold text-[var(--ink)]">{formatINR(total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </SectionCard>
+      </div>
 
       <SectionCard title="Transaction Log">
         <div className="overflow-x-auto">
-          <table className="hidden tab:table w-full text-sm">
+          <table className="hidden tab:table w-full min-w-[700px] table-fixed text-sm">
+            <colgroup>
+              <col className="w-28" />
+              <col className="w-48" />
+              <col className="w-36" />
+              <col className="w-24" />
+              <col className="w-32" />
+              <col />
+            </colgroup>
             <thead>
               <tr className="border-b border-[var(--border)]">
                 <th className={th}>Date</th>
@@ -235,7 +249,7 @@ export function DaybookPage() {
               {transactions.map((t) => (
                 <tr key={t.id} className="border-b border-[var(--border)] group hover:bg-[var(--paper)]">
                   <td className={td}>{formatDateDMY(t.date)}</td>
-                  <td className={`${td} font-medium`}>{t.patientName}</td>
+                  <td className={`${td} font-medium truncate`} title={t.patientName}>{t.patientName}</td>
                   <td className={td}>
                     <Pill tone={t.type === 'Advance Deposit' ? 'amber' : t.type === 'Discount' ? 'rust' : t.type === 'Price Top-up' ? 'teal' : 'green'}>
                       {t.type}
@@ -243,7 +257,7 @@ export function DaybookPage() {
                   </td>
                   <td className={td}>{t.method === '—' ? '—' : t.method.toUpperCase()}</td>
                   <td className={tdNum}>{formatINR(t.amount)}</td>
-                  <td className={`${td} text-[var(--muted)] whitespace-normal break-words max-w-[250px] leading-snug`} title={t.notes}>{t.notes || '—'}</td>
+                  <td className={`${td} text-[var(--muted)] whitespace-normal break-words leading-snug`} title={t.notes}>{t.notes || '—'}</td>
                 </tr>
               ))}
               {transactions.length === 0 && (
