@@ -327,18 +327,12 @@ export function TodayAppointments({
         </section>
       )}
 
-      {pendingCount === 0 && !hasRequests && (
+      {pendingCount === 0 && !hasRequests && doneCount === 0 && (
         <p className="text-sm text-[var(--muted)]">
-          {doneCount > 0 ? (
-            logged.length > 0 ? `✓ All done for today (${logged.length} seen)` : '✓ Nothing left for today'
-          ) : (
-            <span>
-              No appointments today ·{' '}
-              <Link to="/schedule" className="font-medium text-[var(--teal)] hover:underline">
-                Open schedule →
-              </Link>
-            </span>
-          )}
+          No appointments today ·{' '}
+          <Link to="/schedule" className="font-medium text-[var(--teal)] hover:underline">
+            Open schedule →
+          </Link>
         </p>
       )}
 

@@ -811,12 +811,16 @@ export function WorkspacePage() {
             appointmentsLeft > 0
               ? `Appointments · ${appointmentsLeft} left`
               : appointmentsForList.some((a) => a.status !== 'cancelled')
-                ? 'Appointments · all done ✓'
+                ? 'Appointments · all done'
                 : 'Appointments'
           }
           action={
-            <Link to="/schedule" className="text-xs font-medium text-[var(--teal)] hover:underline">
-              Open schedule →
+            <Link
+              to="/schedule"
+              className="shrink-0 whitespace-nowrap text-xs font-medium text-[var(--teal)] hover:underline"
+            >
+              <span className="sm:hidden">Schedule →</span>
+              <span className="hidden sm:inline">Open schedule →</span>
             </Link>
           }
         >

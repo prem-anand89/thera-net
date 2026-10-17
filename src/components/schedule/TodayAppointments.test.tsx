@@ -234,9 +234,9 @@ describe('TodayAppointments end of day and cancelled', () => {
     onSelect: vi.fn(),
   };
 
-  it('says all done (not "no more appointments") when everything is finished', () => {
+  it('shows Done today fold (not "no more appointments") when everything is finished', () => {
     render(<TodayAppointments {...baseProps} appointments={[appt('09:00', { status: 'arrived', visitId: 'v1' })]} />);
-    expect(screen.getByText(/All done for today/)).toBeInTheDocument();
+    expect(screen.getByText(/Done today/)).toBeInTheDocument();
     expect(screen.queryByText('No more appointments today.')).not.toBeInTheDocument();
   });
 
@@ -308,7 +308,8 @@ describe('TodayAppointments all-done wording', () => {
 
   it('never says "0 seen" when every appointment was a no-show or cancelled', () => {
     render(<TodayAppointments {...baseProps} appointments={[appt('09:00', { status: 'no_show' })]} />);
-    expect(screen.getByText('✓ Nothing left for today')).toBeInTheDocument();
+    expect(screen.getByText(/Done today/)).toBeInTheDocument();
+    expect(screen.getByText(/1 no-show/)).toBeInTheDocument();
     expect(screen.queryByText(/0 seen/)).not.toBeInTheDocument();
   });
 });
