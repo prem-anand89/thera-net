@@ -723,14 +723,14 @@ export function LedgerPage() {
           phone bar's + is New visit). */}
       <h1 className="sr-only">Ledger</h1>
       <div className="flex flex-wrap items-center gap-2">
-        <div role="tablist" aria-label="Ledger sections" className="hide-scrollbar flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-1">
+        <div role="tablist" aria-label="Ledger sections" className="hide-scrollbar flex w-fit max-w-full gap-0.5 overflow-x-auto rounded-full border border-[var(--border)] bg-[var(--surface)] p-0.5 sm:gap-1 sm:p-1">
           {filterLedgerTabs({ canBill, entitlementsLoading }).map((v) => (
             <button
               key={v.key}
               type="button"
               role="tab"
               aria-selected={recordsView === v.key}
-              className={`whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-medium transition-colors sm:px-4 ${
+              className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium transition-colors sm:px-4 sm:py-1.5 sm:text-sm ${
                 recordsView === v.key
                   ? 'bg-[var(--teal)] text-white shadow-sm'
                   : 'text-[var(--muted)] hover:bg-[var(--paper)] hover:text-[var(--ink)]'
