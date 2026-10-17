@@ -347,7 +347,14 @@ export function InvoicesPage() {
             </div>
 
             <div className="hidden tab:block overflow-x-auto">
-              <table className="w-full min-w-[700px] text-sm">
+              <table className="w-full min-w-[700px] table-fixed text-sm">
+                <colgroup>
+                  <col className="w-24" />
+                  <col className="w-56" />
+                  <col className="w-48" />
+                  <col className="w-32" />
+                  <col className="w-28" />
+                </colgroup>
                 <thead>
                   <tr className="border-b border-[var(--border)]">
                     <th className={th}>Date</th>
@@ -501,7 +508,17 @@ export function InvoicesPage() {
           </div>
 
           <div className="hidden tab:block overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
+            <table className="w-full min-w-[900px] table-fixed text-sm">
+              <colgroup>
+                <col className="w-36" />
+                <col className="w-24" />
+                <col className="w-44" />
+                <col className="w-28" />
+                <col className="w-28" />
+                <col className="w-24" />
+                <col className="w-60" />
+                <col className="w-20" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-[var(--border)]">
                   <SortHeader label="Invoice No" k="no" sort={sort} firstDir="desc" />
@@ -524,7 +541,7 @@ export function InvoicesPage() {
                     <tr key={inv.id} className="hover:bg-[var(--paper)]">
                       <td className={`${td} font-medium`}>{inv.invoiceNo}</td>
                       <td className={td}>{formatDateDM(inv.issuedAt)}</td>
-                      <td className={`${td} font-display`}>{inv.patientSnapshot.name}</td>
+                      <td className={`${td} font-display truncate`} title={inv.patientSnapshot.name}>{inv.patientSnapshot.name}</td>
                       <td className={td}>{inv.patientSnapshot.mrno}</td>
                       <td className={tdNum}>{formatINR(inv.totalPaise)}</td>
                       <td className={td}>{inv.paymentMode}</td>

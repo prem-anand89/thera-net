@@ -501,7 +501,17 @@ export function PatientsList() {
           </div>
 
           <div className="hidden tab:block overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
-            <table className="min-w-full divide-y divide-[var(--border)]">
+            <table className="w-full min-w-[900px] table-fixed divide-y divide-[var(--border)]">
+              <colgroup>
+                <col className="w-32" />
+                <col className="w-48" />
+                <col className="w-32" />
+                <col className="w-36" />
+                <col className="w-44" />
+                <col className="w-32" />
+                <col className="w-32" />
+                <col className="w-44" />
+              </colgroup>
               <thead className="bg-[var(--paper)]">
                 <tr>
                   <SortHeader label="Patient ID" k="mrno" sort={sort} />
