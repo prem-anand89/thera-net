@@ -503,20 +503,18 @@ export function PatientsList() {
           <div className="hidden tab:block overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)]">
             <table className="w-full min-w-[900px] table-fixed divide-y divide-[var(--border)]">
               <colgroup>
+                <col className="w-28" />
+                <col className="w-56" />
                 <col className="w-32" />
-                <col className="w-48" />
-                <col className="w-32" />
-                <col className="w-36" />
-                <col className="w-44" />
-                <col className="w-32" />
-                <col className="w-32" />
-                <col className="w-44" />
+                <col className="w-40" />
+                <col className="w-28" />
+                <col className="w-28" />
+                <col className="w-56" />
               </colgroup>
               <thead className="bg-[var(--paper)]">
                 <tr>
                   <SortHeader label="Patient ID" k="mrno" sort={sort} />
                   <SortHeader label="Name" k="name" sort={sort} />
-                  <th className={th}>Phone</th>
                   <th className={th}>Therapist</th>
                   <SortHeader label="Primary condition" k="condition" sort={sort} />
                   <SortHeader label="Last visit" k="lastVisit" sort={sort} firstDir="desc" />
@@ -561,19 +559,19 @@ export function PatientsList() {
                         >
                           {p.name}
                         </Link>
-                        {(p.age || p.sex) && (
-                          <div className="text-xs text-[var(--muted)]">
-                            {p.age ?? '-'} / {p.sex ?? '-'}
+                        {(p.age || p.sex || p.phone) && (
+                          <div className="flex flex-wrap items-center gap-x-2 text-xs text-[var(--muted)]">
+                            {(p.age || p.sex) && (
+                              <span>
+                                {p.age ?? '-'} / {p.sex ?? '-'}
+                              </span>
+                            )}
+                            {p.phone && (
+                              <a href={`tel:${p.phone}`} className="whitespace-nowrap hover:text-[var(--teal)] hover:underline">
+                                {p.phone}
+                              </a>
+                            )}
                           </div>
-                        )}
-                      </td>
-                      <td className={`${td} whitespace-nowrap`}>
-                        {p.phone ? (
-                          <a href={`tel:${p.phone}`} className="hover:underline">
-                            {p.phone}
-                          </a>
-                        ) : (
-                          <span className="text-[var(--muted)]">—</span>
                         )}
                       </td>
                       <td className={td}>

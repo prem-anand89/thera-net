@@ -303,7 +303,10 @@ describe('TodayAppointments all-done wording', () => {
       />
     );
     expect(screen.getByRole('region', { name: 'Requests to confirm' })).toBeInTheDocument();
+    // Finished work stays reachable, but nothing claims the day is over or empty while a request waits.
+    expect(screen.getByText(/Done today/)).toBeInTheDocument();
     expect(screen.queryByText(/All done for today/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No appointments today/)).not.toBeInTheDocument();
   });
 
   it('never says "0 seen" when every appointment was a no-show or cancelled', () => {
@@ -311,5 +314,6 @@ describe('TodayAppointments all-done wording', () => {
     expect(screen.getByText(/Done today/)).toBeInTheDocument();
     expect(screen.getByText(/1 no-show/)).toBeInTheDocument();
     expect(screen.queryByText(/0 seen/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No appointments today/)).not.toBeInTheDocument();
   });
 });
