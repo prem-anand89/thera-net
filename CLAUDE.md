@@ -75,3 +75,23 @@ shows exactly which one broke.
 
 The pre-commit hook automatically lints and fixes files before commit, so
 button type issues will be caught before they reach the PR.
+
+## Working with Gemini (isolation, review, merge)
+
+Gemini works in its own worktree, never in this checkout:
+
+- **Setup / state:** `bash scripts/gemini-worktree.sh setup | status | review | merge | sync`.
+  It works in `../thera-net-gemini` on branch `gemini/work`; its push URL is disabled and the
+  pre-push hook refuses `gemini/*` (never use `--no-verify`).
+- **Review** every Gemini commit: `scripts/gemini-worktree.sh review` (commits, files and the
+  weakened-test check), read the diff at phone and desktop widths, and compare against the
+  plan's "Decided with the user" block. Gemini finishes a task with `npm run gemini:report`
+  (real typecheck / lint / test output, verdict computed: only "ALL GREEN" means verified).
+- **Merge:** `scripts/gemini-worktree.sh merge` rebases `gemini/work` on `main` and
+  fast-forwards `main` (local only). Pushing is still done only when the user asks. After the
+  merge run `sync` so Gemini starts from the new `main`.
+- **Tests:** on `gemini/*` the commit-msg hook blocks any commit that removes or changes an
+  existing assertion unless the message has `[test-change: <why>]` (see
+  `scripts/testEditCheck.mjs`). A committed `.only` is blocked everywhere.
+- Rules Gemini reads: `docs/gemini/HANDOFF_RULES.md`. Keep migrations, RLS, sync, edge
+  functions, money and architecture plans with Claude.
