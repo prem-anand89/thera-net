@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos } from '@/services';
-import { db } from '@/lib/db';
+import { useSession } from '@/app/useSession';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -19,7 +19,6 @@ import {
 import type { UUID } from '@/domain/types';
 import { ScheduleBookingsView } from './ScheduleBookingsView';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
-import { requestsLastViewedKey, therapistAppointmentsLastViewedKey } from './scheduleSignals';
 
 /** SVG stars, replacing the old text-glyph `★★★☆☆` — same glance-first
  *  spirit as the icon+word markers on the visit row (`VisitCard.tsx`'s
@@ -249,24 +248,22 @@ export function SchedulePage() {
   }, [responses, requestById, therapistFilter, today]);
 
   // Marks every response caught up as of this visit — Workspace's "new
-  // response" count reads this same key, so opening this page is what
-  // clears it, not a separate per-row acknowledgement (there's no
-  // in-progress/resolved state here yet, just "have I looked").
+  // response" count reads this same synced marker, so opening this page is what
+  // clears it (on every device), not a separate per-row acknowledgement
+  // (there's no in-progress/resolved state here yet, just "have I looked").
+  const userId = useSession().session?.user?.id;
   useEffect(() => {
-    if (!isAdmin) return;
-    void db.meta.put({ key: requestsLastViewedKey(clinic.id), value: new Date().toISOString() });
-  }, [clinic.id, isAdmin]);
+    if (!isAdmin || !userId) return;
+    void repos.userSeenMarkers.markSeen(userId, clinic.id, 'feedback');
+  }, [clinic.id, isAdmin, userId]);
 
   // Same idea, scoped to a plain therapist's own "new/changed appointment"
   // bell count (`useNewTherapistAppointmentCount`) — opening their own
   // schedule is what clears it.
   useEffect(() => {
-    if (role !== 'therapist' || !myTherapistId) return;
-    void db.meta.put({
-      key: therapistAppointmentsLastViewedKey(clinic.id, myTherapistId),
-      value: new Date().toISOString(),
-    });
-  }, [clinic.id, role, myTherapistId]);
+    if (role !== 'therapist' || !myTherapistId || !userId) return;
+    void repos.userSeenMarkers.markSeen(userId, clinic.id, 'therapist_appointments');
+  }, [clinic.id, role, myTherapistId, userId]);
 
   // Therapists get their own schedule only — no Feedback / Bookings tab row.
   if (!isAdmin && !canSeeBookings) {

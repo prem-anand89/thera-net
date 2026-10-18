@@ -758,10 +758,11 @@ still falls through to the existing share sheet, unchanged.
     role** (including admin) — it's the busier, more actionable surface
     day to day; the un-parameterized `/schedule` URL defaults to
     `?tab=bookings` rather than `?tab=feedback`.
-  - **Workspace "new response" banner** — admin + module-on only, reading
-    a `db.meta` "last viewed Requests" timestamp (clinic-scoped key, same
-    pattern as `lastBackupMetaKey`) that gets stamped the moment
-    `SchedulePage` mounts; the count is exported from a small
+  - **Workspace "new response" banner** — admin + module-on only, counting
+    responses newer than the user's synced **`user_seen_markers`** "feedback"
+    marker (see that table's section; it replaced a per-device `db.meta`
+    "last viewed" timestamp, which made a new phone or browser show every old
+    response as new) that gets stamped the moment `SchedulePage` mounts; the count is exported from a small
     `scheduleSignals.ts` module rather than `SchedulePage.tsx` itself so
     that reading it from the eagerly-bundled `WorkspacePage.tsx` doesn't
     pull the route-code-split Requests page into that eager bundle.
@@ -1532,6 +1533,10 @@ RPCs (all `security definer`, revoked from `anon`): `create_shift_template`/`upd
 **Sync.** Both tables carry a `before update` trigger (`set_shift_scheduling_updated_at()` — updated_at only; the shared `set_updated_at()` also writes `updated_by`/`created_by`, which these tables don't have), and every RPC UPDATE also sets `updated_at = now()`, so the sync engine's `updated_at > cursor` pull sees approve/decline/supersede changes. Client mirror: Dexie `version(22)` adds `shift_templates` (`id, clinicId, active`) and `therapist_shift_assignments` (`id, clinicId, therapistId, status, shiftTemplateId`), read-only sync like `appointment_requests`.
 
 **UI.** Settings → Team: `ShiftTemplatesSection` (template CRUD/deactivate) and `ShiftAssignmentsSection` (per-therapist current assignment, a pending-request badge showing the requested shift + weekdays or the actual custom hours / "Reset to clinic hours", the therapist's note, Approve, and Decline with an optional reason). Team member cards display real schedule summaries (`describeSchedule`: template name and days or custom intervals, never generic "Custom schedule" for shift therapists) and a "Set working hours" button opening `SetWorkingHoursFlow` with upcoming conflict checks (`appointmentsOutsideHours`). `AssignShiftDialog` offers a "Custom hours (individual)" option replacing shifts. Coverage grid displays the span of intervals (e.g. `9–5`) rather than "Custom". Schedule view: admin/front desk see a "N pending shift request(s). Review" banner linking to Settings → Team whenever any request is pending. Therapist side: `ShiftRequestSheet` (account menu → My working hours), which displays a "Your current schedule" block (headline, change notice, Mon–Sun hours with breaks, pending request, declined request with note), break control, and the request form with `WorkingHoursSheet` fallback.
+
+#### `user_seen_markers`
+
+Per-user "I have seen X up to <time>" markers behind the notification bell's "new" counts, so they follow a person to every device (migration `20261018120000_user_seen_markers.sql`, Dexie `version(24)`). One row per (user, clinic, marker): `id text` (**deterministic** `"<user_id>:<clinic_id>:<marker_key>"`, enforced by a check constraint, so two devices write the same row), `user_id`, `clinic_id`, `marker_key` (`feedback` | `therapist_appointments`), `seen_at`, `created_at`, `updated_at`. RLS: a user selects/inserts/updates only their own rows (`user_id = auth.uid()` and `is_clinic_member`); no delete policy. A `before insert or update` trigger (`user_seen_markers_guard`) makes `seen_at` **only move forward** and never more than 5 minutes past `now()` (a stale device can't undo a newer look; a wrong clock can't silence the bell), and sets `updated_at`. In `ALL_SYNCED_TABLES` and `CLIENT_WRITABLE_TABLES` (outbox), published to realtime. **Client:** `repos.userSeenMarkers.markSeen/get`; `scheduleSignals.ts` hooks (`useNewFeedbackResponseCount`, `useNewLowRatingFeedbackCount`, `useNewTherapistAppointmentCount`) take the user id and count items newer than `effectiveSeenSince(marker, legacy)` (`domain/seenMarker.ts`): the newest of the synced marker and any old per-device `db.meta` value (carried over into the synced marker once, then deleted), or, with neither, only the **last 30 days** so a cold device never shows years of feedback as new. Counts read **0 until this device has synced once** (no flash). `SchedulePage` stamps the marker on open.
 
 #### `service_catalog`
 ```sql
@@ -2557,10 +2562,11 @@ Team's Invite form locks (with the same informational-only copy) once
     role** (including admin) — it's the busier, more actionable surface
     day to day; the un-parameterized `/schedule` URL defaults to
     `?tab=bookings` rather than `?tab=feedback`.
-  - **Workspace "new response" banner** — admin + module-on only, reading
-    a `db.meta` "last viewed Requests" timestamp (clinic-scoped key, same
-    pattern as `lastBackupMetaKey`) that gets stamped the moment
-    `SchedulePage` mounts; the count is exported from a small
+  - **Workspace "new response" banner** — admin + module-on only, counting
+    responses newer than the user's synced **`user_seen_markers`** "feedback"
+    marker (see that table's section; it replaced a per-device `db.meta`
+    "last viewed" timestamp, which made a new phone or browser show every old
+    response as new) that gets stamped the moment `SchedulePage` mounts; the count is exported from a small
     `scheduleSignals.ts` module rather than `SchedulePage.tsx` itself so
     that reading it from the eagerly-bundled `WorkspacePage.tsx` doesn't
     pull the route-code-split Requests page into that eager bundle.
@@ -3324,6 +3330,10 @@ RPCs (all `security definer`, revoked from `anon`): `create_shift_template`/`upd
 **Sync.** Both tables carry a `before update` trigger (`set_shift_scheduling_updated_at()` — updated_at only; the shared `set_updated_at()` also writes `updated_by`/`created_by`, which these tables don't have), and every RPC UPDATE also sets `updated_at = now()`, so the sync engine's `updated_at > cursor` pull sees approve/decline/supersede changes. Client mirror: Dexie `version(22)` adds `shift_templates` (`id, clinicId, active`) and `therapist_shift_assignments` (`id, clinicId, therapistId, status, shiftTemplateId`), read-only sync like `appointment_requests`.
 
 **UI.** Settings → Team: `ShiftTemplatesSection` (template CRUD/deactivate) and `ShiftAssignmentsSection` (per-therapist current assignment, a pending-request badge showing the requested shift + weekdays or the actual custom hours / "Reset to clinic hours", the therapist's note, Approve, and Decline with an optional reason). Team member cards display real schedule summaries (`describeSchedule`: template name and days or custom intervals, never generic "Custom schedule" for shift therapists) and a "Set working hours" button opening `SetWorkingHoursFlow` with upcoming conflict checks (`appointmentsOutsideHours`). `AssignShiftDialog` offers a "Custom hours (individual)" option replacing shifts. Coverage grid displays the span of intervals (e.g. `9–5`) rather than "Custom". Schedule view: admin/front desk see a "N pending shift request(s). Review" banner linking to Settings → Team whenever any request is pending. Therapist side: `ShiftRequestSheet` (account menu → My working hours), which displays a "Your current schedule" block (headline, change notice, Mon–Sun hours with breaks, pending request, declined request with note), break control, and the request form with `WorkingHoursSheet` fallback.
+
+#### `user_seen_markers`
+
+Per-user "I have seen X up to <time>" markers behind the notification bell's "new" counts, so they follow a person to every device (migration `20261018120000_user_seen_markers.sql`, Dexie `version(24)`). One row per (user, clinic, marker): `id text` (**deterministic** `"<user_id>:<clinic_id>:<marker_key>"`, enforced by a check constraint, so two devices write the same row), `user_id`, `clinic_id`, `marker_key` (`feedback` | `therapist_appointments`), `seen_at`, `created_at`, `updated_at`. RLS: a user selects/inserts/updates only their own rows (`user_id = auth.uid()` and `is_clinic_member`); no delete policy. A `before insert or update` trigger (`user_seen_markers_guard`) makes `seen_at` **only move forward** and never more than 5 minutes past `now()` (a stale device can't undo a newer look; a wrong clock can't silence the bell), and sets `updated_at`. In `ALL_SYNCED_TABLES` and `CLIENT_WRITABLE_TABLES` (outbox), published to realtime. **Client:** `repos.userSeenMarkers.markSeen/get`; `scheduleSignals.ts` hooks (`useNewFeedbackResponseCount`, `useNewLowRatingFeedbackCount`, `useNewTherapistAppointmentCount`) take the user id and count items newer than `effectiveSeenSince(marker, legacy)` (`domain/seenMarker.ts`): the newest of the synced marker and any old per-device `db.meta` value (carried over into the synced marker once, then deleted), or, with neither, only the **last 30 days** so a cold device never shows years of feedback as new. Counts read **0 until this device has synced once** (no flash). `SchedulePage` stamps the marker on open.
 
 #### `service_catalog`
 ```sql

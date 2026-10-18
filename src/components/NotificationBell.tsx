@@ -24,11 +24,14 @@ import type { UUID } from '@/domain/types';
  */
 export function NotificationBell({
   clinicId,
+  userId,
   pendingRequestsCount,
   isAdmin,
   therapistId,
 }: {
   clinicId: UUID;
+  /** The signed-in user: "new" is counted since THEIR last look, synced across devices. */
+  userId: UUID | undefined;
   pendingRequestsCount: number;
   isAdmin: boolean;
   /** Set only for a therapist viewer. Omit for admin/front_desk. */
@@ -36,9 +39,9 @@ export function NotificationBell({
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const newFeedbackCount = useNewFeedbackResponseCount(clinicId, isAdmin);
-  const lowRatingCount = useNewLowRatingFeedbackCount(clinicId, isAdmin);
-  const newAppointmentCount = useNewTherapistAppointmentCount(clinicId, therapistId, !!therapistId);
+  const newFeedbackCount = useNewFeedbackResponseCount(clinicId, userId, isAdmin);
+  const lowRatingCount = useNewLowRatingFeedbackCount(clinicId, userId, isAdmin);
+  const newAppointmentCount = useNewTherapistAppointmentCount(clinicId, userId, therapistId, !!therapistId);
   const total = pendingRequestsCount + newFeedbackCount + newAppointmentCount;
   const alert = lowRatingCount > 0;
 

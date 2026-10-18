@@ -297,6 +297,26 @@ export interface TherapistShiftAssignment {
   updatedAt: string;
 }
 
+/** Which "have I looked at this yet?" signal a seen marker carries. */
+export type SeenMarkerKey = 'feedback' | 'therapist_appointments';
+
+/**
+ * "This user has looked at <marker> up to <seenAt>" — one row per (user, clinic,
+ * marker). Replaces the per-device `db.meta` last-viewed timestamps so a new
+ * phone or browser doesn't show everything as new. The id is deterministic
+ * (see `seenMarkerId`) so two devices write the same row instead of two
+ * competing ones. Client-writable (outbox) and only ever moves forward.
+ */
+export interface UserSeenMarker {
+  id: string;
+  userId: UUID;
+  clinicId: UUID;
+  markerKey: SeenMarkerKey;
+  seenAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CatalogItem {
   id: UUID;
   clinicId: UUID;

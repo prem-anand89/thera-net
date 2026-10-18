@@ -1,6 +1,7 @@
 import { db, type SyncedTable } from '@/lib/db';
 import { listPendingLinks, withPendingLinks } from '@/sync/pendingLinks';
 import type {
+  UserSeenMarker,
   Clinic,
   Therapist,
   CatalogItem,
@@ -18,7 +19,9 @@ import type {
   UUID,
 } from '@/domain/types';
 import { coerceReferringSource } from '@/domain/types';
+import { seenMarkerId } from '@/domain/seenMarker';
 import type {
+  UserSeenMarkersRepo,
   ClinicRepo,
   TherapistRepo,
   CatalogRepo,
@@ -432,6 +435,26 @@ const therapistShiftAssignments: TherapistShiftAssignmentsRepo = {
     db.therapist_shift_assignments.where('therapistId').equals(therapistId).toArray(),
 };
 
+const userSeenMarkers: UserSeenMarkersRepo = {
+  get: (userId, clinicId, key) => db.user_seen_markers.get(seenMarkerId(userId, clinicId, key)),
+  async markSeen(userId, clinicId, key, at = new Date().toISOString()) {
+    const id = seenMarkerId(userId, clinicId, key);
+    const existing = await db.user_seen_markers.get(id);
+    if (existing && existing.seenAt >= at) return;
+    const now = new Date().toISOString();
+    const row: UserSeenMarker = {
+      id,
+      userId,
+      clinicId,
+      markerKey: key,
+      seenAt: at,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    await putWithOutbox('user_seen_markers', row);
+  },
+};
+
 export const repos: Repos = {
   clinics,
   therapists,
@@ -456,6 +479,7 @@ export const repos: Repos = {
   clinicClosedDates,
   shiftTemplates,
   therapistShiftAssignments,
+  userSeenMarkers,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers

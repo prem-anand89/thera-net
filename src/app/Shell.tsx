@@ -453,6 +453,7 @@ export function Shell() {
               {(role === 'admin' || role === 'front_desk') && (
                 <NotificationBell
                   clinicId={clinic.id}
+                  userId={session?.user?.id}
                   pendingRequestsCount={pendingRequestsCount}
                   isAdmin={role === 'admin'}
                 />
@@ -460,6 +461,7 @@ export function Shell() {
               {role === 'therapist' && myTherapistId && (
                 <NotificationBell
                   clinicId={clinic.id}
+                  userId={session?.user?.id}
                   pendingRequestsCount={0}
                   isAdmin={false}
                   therapistId={myTherapistId}

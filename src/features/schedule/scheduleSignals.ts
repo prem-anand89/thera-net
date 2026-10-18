@@ -1,75 +1,114 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, feedbackService } from '@/services';
 import { db } from '@/lib/db';
+import { syncStatus } from '@/sync/status';
 import { isActiveAppointmentStatus } from '@/domain/appointmentStatus';
-import type { UUID } from '@/domain/types';
+import { effectiveSeenSince } from '@/domain/seenMarker';
+import type { SeenMarkerKey, UUID } from '@/domain/types';
 
 /**
  * Split out of `SchedulePage.tsx` so `WorkspacePage.tsx` — eagerly bundled,
  * unlike every other route — can read the "new response" count without
  * pulling the (route-code-split) Schedule page component into that eager
  * bundle. Keep this file free of anything page-shaped.
+ *
+ * "New" means "after the last time THIS USER looked", stored as a synced
+ * per-user marker (`user_seen_markers`) so it follows them to every device.
+ * It used to be a timestamp in this device's own `db.meta`, which is why a
+ * fresh phone or browser showed every old response as new.
  */
 
-/** Scoped per clinic, same reasoning as `lastBackupMetaKey` — `db.meta` is
- *  one global table shared by every clinic on this device, so an unscoped
- *  key would clear the "new response" signal for every clinic at once.
- *  The key string itself (`requestsLastViewedAt:...`) is left as-is even
- *  though the page it refers to is now Schedule, not Requests — this is a
- *  persisted key on real devices, and renaming the string would reset every
- *  existing user's last-viewed marker, making all historical feedback
- *  responses look new again. Don't "fix" this string. */
+/** LEGACY per-device key (pre-synced markers). Scoped per clinic, same reasoning as
+ *  `lastBackupMetaKey` — `db.meta` is one global table shared by every clinic on this
+ *  device. Kept only so an existing device's marker can be carried over to the synced
+ *  one (see `useSeenSince`); the string itself must not change or that carry-over would
+ *  miss it. Don't "fix" this string. */
 export function requestsLastViewedKey(clinicId: string): string {
   return `requestsLastViewedAt:${clinicId}`;
 }
 
-/** Count of responses created after this clinic's own last-viewed
- *  timestamp — Workspace's "new response" surface, cleared by opening
- *  `/schedule?tab=feedback` (see that page's own mark-as-viewed effect). */
-export function useNewFeedbackResponseCount(clinicId: string, enabled: boolean): number {
-  const responses = useLiveQuery(
-    () => (enabled ? repos.feedbackResponses.listByClinic(clinicId) : undefined),
-    [clinicId, enabled]
-  );
-  const lastViewed = useLiveQuery(
-    () => (enabled ? db.meta.get(requestsLastViewedKey(clinicId)) : undefined),
-    [clinicId, enabled]
-  );
-  return useMemo(() => {
-    if (!enabled || !responses) return 0;
-    const since = lastViewed?.value;
-    if (!since) return responses.length;
-    return responses.filter((r) => r.createdAt > since).length;
-  }, [enabled, responses, lastViewed]);
-}
-
-/** Same "since last viewed" window as `useNewFeedbackResponseCount`, narrowed
- *  to 1-2 star responses — the Notification Bell's "turn red" signal
- *  (Phase 6.5). Admin-only, same RLS reasoning as the count above: a
- *  front_desk caller's Dexie never receives `feedback_responses` rows at
- *  all, so `enabled` must stay false for them. */
-export function useNewLowRatingFeedbackCount(clinicId: string, enabled: boolean): number {
-  const responses = useLiveQuery(
-    () => (enabled ? repos.feedbackResponses.listByClinic(clinicId) : undefined),
-    [clinicId, enabled]
-  );
-  const lastViewed = useLiveQuery(
-    () => (enabled ? db.meta.get(requestsLastViewedKey(clinicId)) : undefined),
-    [clinicId, enabled]
-  );
-  return useMemo(() => {
-    if (!enabled || !responses) return 0;
-    const since = lastViewed?.value;
-    return responses.filter((r) => r.rating <= 2 && (!since || r.createdAt > since)).length;
-  }, [enabled, responses, lastViewed]);
-}
-
-/** Scoped per clinic AND per therapist — two therapists at the same clinic,
- *  or the same therapist across clinics, must not share one "last viewed"
- *  marker. */
+/** LEGACY per-device key, scoped per clinic AND per therapist. See `requestsLastViewedKey`. */
 export function therapistAppointmentsLastViewedKey(clinicId: string, therapistId: string): string {
   return `therapistAppointmentsLastViewedAt:${clinicId}:${therapistId}`;
+}
+
+/** True once this device has completed a sync, so synced markers have had their chance to arrive. */
+function useFirstSyncDone(): boolean {
+  return useSyncExternalStore(
+    syncStatus.subscribe,
+    () => syncStatus.get().lastSuccessAt != null
+  );
+}
+
+/**
+ * The timestamp after which items count as "new" for this user, or `undefined` while it
+ * isn't known yet (counts then read 0 instead of flashing everything as new). Combines
+ * the synced marker with any legacy per-device value (newest wins) and, once, carries
+ * that legacy value over into the synced marker.
+ */
+function useSeenSince(
+  clinicId: UUID,
+  userId: UUID | undefined,
+  key: SeenMarkerKey,
+  legacyKey: string | null,
+  enabled: boolean
+): string | undefined {
+  const active = enabled && !!userId;
+  const syncDone = useFirstSyncDone();
+  const marker = useLiveQuery(
+    async () => (active ? ((await repos.userSeenMarkers.get(userId!, clinicId, key)) ?? null) : undefined),
+    [active, userId, clinicId, key]
+  );
+  const legacy = useLiveQuery(
+    async () => (active && legacyKey ? ((await db.meta.get(legacyKey)) ?? null) : undefined),
+    [active, legacyKey]
+  );
+
+  useEffect(() => {
+    if (!active || !legacyKey || !legacy?.value) return;
+    void repos.userSeenMarkers
+      .markSeen(userId!, clinicId, key, legacy.value)
+      .then(() => db.meta.delete(legacyKey))
+      .catch(() => {
+        /* keep the legacy value; it is retried on the next load */
+      });
+  }, [active, userId, clinicId, key, legacyKey, legacy?.value]);
+
+  if (!active || !syncDone || marker === undefined) return undefined;
+  if (legacyKey && legacy === undefined) return undefined;
+  return effectiveSeenSince(marker?.seenAt, legacy?.value);
+}
+
+/** Count of responses created after this user's last look at feedback — Workspace's
+ *  "new response" surface, cleared by opening `/schedule?tab=feedback` (see that page's
+ *  own mark-as-seen effect). */
+export function useNewFeedbackResponseCount(clinicId: string, userId: UUID | undefined, enabled: boolean): number {
+  const responses = useLiveQuery(
+    () => (enabled ? repos.feedbackResponses.listByClinic(clinicId) : undefined),
+    [clinicId, enabled]
+  );
+  const since = useSeenSince(clinicId, userId, 'feedback', requestsLastViewedKey(clinicId), enabled);
+  return useMemo(() => {
+    if (!enabled || !responses || since === undefined) return 0;
+    return responses.filter((r) => r.createdAt > since).length;
+  }, [enabled, responses, since]);
+}
+
+/** Same "since last seen" window as `useNewFeedbackResponseCount`, narrowed to 1-2 star
+ *  responses — the Notification Bell's "turn red" signal (Phase 6.5). Admin-only, same RLS
+ *  reasoning as the count above: a front_desk caller's Dexie never receives
+ *  `feedback_responses` rows at all, so `enabled` must stay false for them. */
+export function useNewLowRatingFeedbackCount(clinicId: string, userId: UUID | undefined, enabled: boolean): number {
+  const responses = useLiveQuery(
+    () => (enabled ? repos.feedbackResponses.listByClinic(clinicId) : undefined),
+    [clinicId, enabled]
+  );
+  const since = useSeenSince(clinicId, userId, 'feedback', requestsLastViewedKey(clinicId), enabled);
+  return useMemo(() => {
+    if (!enabled || !responses || since === undefined) return 0;
+    return responses.filter((r) => r.rating <= 2 && r.createdAt > since).length;
+  }, [enabled, responses, since]);
 }
 
 /**
@@ -88,30 +127,28 @@ export function therapistAppointmentsLastViewedKey(clinicId: string, therapistId
  * therapist about. */
 export function useNewTherapistAppointmentCount(
   clinicId: string,
+  userId: UUID | undefined,
   therapistId: string | undefined,
   enabled: boolean
 ): number {
+  const on = enabled && !!therapistId;
   const appointments = useLiveQuery(
-    () => (enabled && therapistId ? repos.appointments.listByClinic(clinicId) : undefined),
-    [clinicId, therapistId, enabled]
+    () => (on ? repos.appointments.listByClinic(clinicId) : undefined),
+    [clinicId, on]
   );
-  const lastViewed = useLiveQuery(
-    () =>
-      enabled && therapistId
-        ? db.meta.get(therapistAppointmentsLastViewedKey(clinicId, therapistId))
-        : undefined,
-    [clinicId, therapistId, enabled]
+  const since = useSeenSince(
+    clinicId,
+    userId,
+    'therapist_appointments',
+    therapistId ? therapistAppointmentsLastViewedKey(clinicId, therapistId) : null,
+    on
   );
   return useMemo(() => {
-    if (!enabled || !therapistId || !appointments) return 0;
-    const since = lastViewed?.value;
+    if (!on || !appointments || since === undefined) return 0;
     return appointments.filter(
-      (a) =>
-        a.therapistId === therapistId &&
-        isActiveAppointmentStatus(a.status) &&
-        (!since || a.updatedAt > since)
+      (a) => a.therapistId === therapistId && isActiveAppointmentStatus(a.status) && a.updatedAt > since
     ).length;
-  }, [enabled, therapistId, appointments, lastViewed]);
+  }, [on, therapistId, appointments, since]);
 }
 
 /**

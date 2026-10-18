@@ -218,6 +218,10 @@ function makeFakeRepos() {
       listByClinic: async () => [],
       listByTherapist: async () => [],
     },
+    userSeenMarkers: {
+      get: async () => undefined,
+      markSeen: async () => undefined,
+    },
   };
   return {
     repos,

@@ -27,13 +27,13 @@ describe('NotificationBell', () => {
   });
 
   it('shows no badge when there is nothing new', () => {
-    render(<NotificationBell clinicId="c1" pendingRequestsCount={0} isAdmin />);
+    render(<NotificationBell clinicId="c1" userId="u1" pendingRequestsCount={0} isAdmin />);
     expect(screen.queryByText(/^\d+$/)).not.toBeInTheDocument();
     expect(screen.getByRole('button')).toHaveAccessibleName('No new notifications');
   });
 
   it('badges the combined count and stays teal with only pending requests', () => {
-    render(<NotificationBell clinicId="c1" pendingRequestsCount={3} isAdmin />);
+    render(<NotificationBell clinicId="c1" userId="u1" pendingRequestsCount={3} isAdmin />);
     const button = screen.getByRole('button');
     expect(button).toHaveTextContent('3');
     expect(button.className).toContain('text-[var(--muted)]');
@@ -43,7 +43,7 @@ describe('NotificationBell', () => {
   it('turns red and names the low-rating response when one is unread', () => {
     newFeedbackCount = 2;
     lowRatingCount = 1;
-    render(<NotificationBell clinicId="c1" pendingRequestsCount={1} isAdmin />);
+    render(<NotificationBell clinicId="c1" userId="u1" pendingRequestsCount={1} isAdmin />);
     const button = screen.getByRole('button');
     expect(button).toHaveTextContent('3');
     expect(button.className).toContain('text-[var(--rust)]');
@@ -53,7 +53,7 @@ describe('NotificationBell', () => {
   it('opens a dropdown row for each unread category and routes to its tab', () => {
     newFeedbackCount = 1;
     newAppointmentCount = 0;
-    render(<NotificationBell clinicId="c1" pendingRequestsCount={2} isAdmin />);
+    render(<NotificationBell clinicId="c1" userId="u1" pendingRequestsCount={2} isAdmin />);
     fireEvent.click(screen.getByRole('button'));
     expect(screen.getByRole('menuitem', { name: /2 new booking requests/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /1 new feedback response/ })).toBeInTheDocument();
@@ -66,7 +66,7 @@ describe('NotificationBell', () => {
   });
 
   it('says so in the dropdown when nothing is new', () => {
-    render(<NotificationBell clinicId="c1" pendingRequestsCount={0} isAdmin />);
+    render(<NotificationBell clinicId="c1" userId="u1" pendingRequestsCount={0} isAdmin />);
     fireEvent.click(screen.getByRole('button'));
     expect(screen.getByText('No new notifications.')).toBeInTheDocument();
   });
@@ -74,7 +74,7 @@ describe('NotificationBell', () => {
   it('badges a therapist viewer with their own new/changed appointment count', () => {
     newAppointmentCount = 2;
     render(
-      <NotificationBell clinicId="c1" pendingRequestsCount={0} isAdmin={false} therapistId="th-1" />
+      <NotificationBell clinicId="c1" userId="u1" pendingRequestsCount={0} isAdmin={false} therapistId="th-1" />
     );
     const button = screen.getByRole('button');
     expect(button).toHaveTextContent('2');
@@ -88,7 +88,7 @@ describe('NotificationBell', () => {
 
   it('moves focus between items with arrow keys and closes on Escape', () => {
     newFeedbackCount = 1;
-    render(<NotificationBell clinicId="c1" pendingRequestsCount={1} isAdmin />);
+    render(<NotificationBell clinicId="c1" userId="u1" pendingRequestsCount={1} isAdmin />);
     const trigger = screen.getByRole('button');
     fireEvent.click(trigger);
 
@@ -110,7 +110,7 @@ describe('NotificationBell', () => {
 
   it('opens from the keyboard with ArrowDown on the bell', () => {
     newFeedbackCount = 1;
-    render(<NotificationBell clinicId="c1" pendingRequestsCount={0} isAdmin />);
+    render(<NotificationBell clinicId="c1" userId="u1" pendingRequestsCount={0} isAdmin />);
     fireEvent.keyDown(screen.getByRole('button'), { key: 'ArrowDown' });
     expect(screen.getByRole('menuitem')).toHaveFocus();
   });

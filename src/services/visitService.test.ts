@@ -199,6 +199,10 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       listByClinic: async () => [],
       listByTherapist: async () => [],
     },
+    userSeenMarkers: {
+      get: async () => undefined,
+      markSeen: async () => undefined,
+    },
   };
   return { repos, visits };
 }

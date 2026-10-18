@@ -23,6 +23,7 @@ import type {
   ClinicClosedDate,
   ShiftTemplate,
   TherapistShiftAssignment,
+  UserSeenMarker,
 } from '@/domain/types';
 
 /**
@@ -75,7 +76,8 @@ export type SyncedTable =
   | 'appointments'
   | 'clinic_closed_dates'
   | 'shift_templates'
-  | 'therapist_shift_assignments';
+  | 'therapist_shift_assignments'
+  | 'user_seen_markers';
 
 /**
  * Every table the sync engine pushes/pulls — the single source of truth
@@ -110,6 +112,7 @@ export const ALL_SYNCED_TABLES = [
   'clinic_closed_dates',
   'shift_templates',
   'therapist_shift_assignments',
+  'user_seen_markers',
 ] as const satisfies readonly SyncedTable[];
 type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number]
   ? true
@@ -152,6 +155,7 @@ export const CLIENT_WRITABLE_TABLES = [
   'consultation_notes',
   'patient_module_enrollments',
   'patient_advances',
+  'user_seen_markers',
 ] as const satisfies readonly SyncedTable[];
 
 export class ClinicDB extends Dexie {
@@ -178,6 +182,7 @@ export class ClinicDB extends Dexie {
   clinic_closed_dates!: Table<ClinicClosedDate, string>;
   shift_templates!: Table<ShiftTemplate, string>;
   therapist_shift_assignments!: Table<TherapistShiftAssignment, string>;
+  user_seen_markers!: Table<UserSeenMarker, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 
@@ -294,6 +299,10 @@ export class ClinicDB extends Dexie {
     // and one day's payments (Daybook).
     this.version(23).stores({
       payments: 'id, clinicId, visitId, receivedDate, advanceId, [clinicId+receivedDate]',
+    });
+    // Per-user "seen up to" markers (replace the device-only last-viewed timestamps).
+    this.version(24).stores({
+      user_seen_markers: 'id, clinicId, userId, [userId+clinicId+markerKey]',
     });
   }
 }

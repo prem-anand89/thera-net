@@ -24,6 +24,7 @@ const TABLE_PHRASE: Record<SyncedTable, { one: string; many: string }> = {
   clinic_closed_dates: { one: 'closed day', many: 'closed days' },
   shift_templates: { one: 'shift template', many: 'shift templates' },
   therapist_shift_assignments: { one: 'shift assignment', many: 'shift assignments' },
+  user_seen_markers: { one: 'notification marker', many: 'notification markers' },
 };
 
 export function syncFailureHeadline(tables: string[]): string {

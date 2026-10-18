@@ -1,4 +1,6 @@
 import type {
+  SeenMarkerKey,
+  UserSeenMarker,
   Clinic,
   Therapist,
   CatalogItem,
@@ -269,6 +271,12 @@ export interface TherapistShiftAssignmentsRepo {
   listByTherapist(therapistId: UUID): Promise<TherapistShiftAssignment[]>;
 }
 
+export interface UserSeenMarkersRepo {
+  get(userId: UUID, clinicId: UUID, key: SeenMarkerKey): Promise<UserSeenMarker | undefined>;
+  /** Moves the marker forward to `at` (default now). A no-op when it is already at or past `at`, so it never goes backwards. */
+  markSeen(userId: UUID, clinicId: UUID, key: SeenMarkerKey, at?: string): Promise<void>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -293,4 +301,5 @@ export interface Repos {
   clinicClosedDates: ClinicClosedDateRepo;
   shiftTemplates: ShiftTemplatesRepo;
   therapistShiftAssignments: TherapistShiftAssignmentsRepo;
+  userSeenMarkers: UserSeenMarkersRepo;
 }

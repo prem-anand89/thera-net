@@ -52,6 +52,7 @@ import {
   type VisitCardData,
 } from '@/components/VisitCard';
 import { useVisitColumnPrefs } from '@/app/useVisitColumnPrefs';
+import { useSession } from '@/app/useSession';
 import {
   useNewFeedbackResponseCount,
   useGoogleReviewEligibleRequestIds,
@@ -232,8 +233,10 @@ export function WorkspacePage() {
   // Patient Communications, Slice 2 — "something arrived" surface per the
   // handoff doc's own question table: admin-only (feedback content is
   // admin-only at RLS too), gated on the module being on.
+  const { session } = useSession();
   const newFeedbackCount = useNewFeedbackResponseCount(
     clinic.id,
+    session?.user?.id,
     canEditSettings && (clinic.enablePatientComms ?? false)
   );
   // Front-desk-only fallback for the Google review nudge — admin doesn't
