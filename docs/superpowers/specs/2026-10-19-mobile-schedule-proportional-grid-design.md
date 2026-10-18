@@ -1,7 +1,7 @@
 # Design Spec: Mobile Schedule Proportional Time Grid (v3)
 
 - **Date**: 2026-10-19
-- **Status**: Proposed
+- **Status**: SUPERSEDED by `2026-10-19-mobile-schedule-grid-v4.md` (do not implement this version)
 - **Author**: Antigravity & User
 
 ---
