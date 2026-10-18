@@ -22,7 +22,11 @@ const appt = (over: Partial<Appointment> = {}): Appointment => ({
   requestId: null, visitId: null, rescheduleCount: 0, previousScheduledAt: null, createdAt: '', updatedAt: '', ...over,
 });
 
-function show(appointment: Appointment, canManage = true) {
+function show(
+  appointment: Appointment,
+  canManage = true,
+  extra: { condition?: string | null; requestNotes?: string | null } = {}
+) {
   render(
     <AppointmentDetailsPanel
       appointment={appointment}
@@ -31,6 +35,8 @@ function show(appointment: Appointment, canManage = true) {
       therapistPhone={null}
       slotMinutes={30}
       canManage={canManage}
+      condition={extra.condition}
+      requestNotes={extra.requestNotes}
       onClose={() => {}}
       onReschedule={() => {}}
       onStartNote={() => {}}
@@ -40,6 +46,79 @@ function show(appointment: Appointment, canManage = true) {
 
 describe('AppointmentDetailsPanel', () => {
   afterEach(cleanup);
+
+  it('colleague appointment (canManage = false): hides patient phone, call, WhatsApp/remind, notes, and management actions', () => {
+    show(
+      appt({
+        patientId: 'p1',
+        patientPhone: '9032323890',
+      }),
+      false,
+      {
+        condition: 'Lumbar strain',
+        requestNotes: 'Lower back stiffness for 2 weeks',
+      }
+    );
+
+    // Patient name is rendered as plain text, not a link to patient file
+    expect(screen.getByText('Prem')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Prem' })).not.toBeInTheDocument();
+
+    // Sensitive info hidden
+    expect(screen.queryByText('9032323890')).not.toBeInTheDocument();
+    expect(screen.queryByText('Condition')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lumbar strain')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patient says')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lower back stiffness for 2 weeks')).not.toBeInTheDocument();
+
+    // Communication actions hidden
+    expect(screen.queryByText('Call')).not.toBeInTheDocument();
+    expect(screen.queryByText('Remind')).not.toBeInTheDocument();
+
+    // Management actions hidden
+    expect(screen.queryByRole('button', { name: /Mark arrived/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start note' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Create visit')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reschedule')).not.toBeInTheDocument();
+    expect(screen.queryByText('No-show')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cancel appointment')).not.toBeInTheDocument();
+  });
+
+  it('own appointment (canManage = true): displays phone, call, remind, notes, and management actions as expected', () => {
+    show(
+      appt({
+        patientId: 'p1',
+        patientPhone: '9032323890',
+      }),
+      true,
+      {
+        condition: 'Lumbar strain',
+        requestNotes: 'Lower back stiffness for 2 weeks',
+      }
+    );
+
+    // Patient name is rendered as a link to patient file
+    expect(screen.getByRole('link', { name: 'Prem' })).toBeInTheDocument();
+
+    // Sensitive info shown
+    expect(screen.getByText('9032323890')).toBeInTheDocument();
+    expect(screen.getByText('Condition')).toBeInTheDocument();
+    expect(screen.getByText('Lumbar strain')).toBeInTheDocument();
+    expect(screen.getByText('Patient says')).toBeInTheDocument();
+    expect(screen.getByText('Lower back stiffness for 2 weeks')).toBeInTheDocument();
+
+    // Communication actions shown
+    expect(screen.getByText('Call')).toBeInTheDocument();
+    expect(screen.getByText('Remind')).toBeInTheDocument();
+
+    // Management actions shown
+    expect(screen.getByRole('button', { name: /Mark arrived/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start note' })).toBeInTheDocument();
+    expect(screen.getByText('Create visit')).toBeInTheDocument();
+    expect(screen.getByText('Reschedule')).toBeInTheDocument();
+    expect(screen.getByText('No-show')).toBeInTheDocument();
+    expect(screen.getByText('Cancel appointment')).toBeInTheDocument();
+  });
 
   it('before arrival: Mark arrived is the main action; Start note and Create visit sit beside it; length in minutes', () => {
     show(appt());

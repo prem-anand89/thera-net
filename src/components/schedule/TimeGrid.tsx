@@ -56,6 +56,8 @@ type DayColumnProps = {
   drag?: ColumnDrag;
   /** When true, renders textless color blocks with tooltip on hover (multi-therapist week view). */
   minimalBlocks?: boolean;
+  /** Colleague column viewed read-only by an individual therapist. */
+  isColleague?: boolean;
 };
 
 export type DragGhost = { columnKey: string; appointmentId: string; start: number; duration: number; valid: boolean };
@@ -402,6 +404,8 @@ export type GridColumn = {
   working?: Interval[];
   /** Resource grid: the column's therapist ('' = Unassigned, not a drop target). */
   therapistId?: string;
+  /** Colleague column viewed read-only by an individual therapist. */
+  isColleague?: boolean;
 };
 
 export type MoveTarget = { date: string; therapistId: string | null; start: number; duration: number };
@@ -441,7 +445,7 @@ export function useGridDrag(input: {
   const validate = useCallback((columnKey: string, appointmentId: string, start: number, duration: number) => {
     const { columns: cols, slotMinutes: slot, today: day, nowMinutes: now } = latest.current;
     const column = cols.find((c) => c.key === columnKey);
-    if (!column || column.therapistId === '') return false;
+    if (!column || column.therapistId === '' || column.isColleague) return false;
     return dropAllowed({
       columnAppointments: column.appointments,
       movingId: appointmentId,
@@ -679,8 +683,8 @@ function GridFrame({
             slotMinutes={slotMinutes}
             closed={column.closed}
             colorFor={colorFor}
-            reasonFor={reasonFor}
-            flagContext={flagContext}
+            reasonFor={column.isColleague ? undefined : reasonFor}
+            flagContext={column.isColleague ? undefined : flagContext}
             nowMinutes={column.date === today ? nowMinutes : null}
             isPastDay={column.date < today}
             selectedId={selectedId}
@@ -689,6 +693,7 @@ function GridFrame({
             dense={minColumnWidth < 150}
             working={column.working}
             drag={columnDrag(column)}
+            isColleague={column.isColleague}
           />
         ))}
       </div>
@@ -742,34 +747,41 @@ export function ResourceDayGrid({
   workingFor?: (therapistId: string) => Interval[];
   drag?: GridDragOptions;
 }) {
-  const columns: GridColumn[] = therapists.map((therapist) => ({
-    therapistId: therapist.id,
-    working: therapist.id && workingFor ? workingFor(therapist.id) : undefined,
-    key: therapist.id || 'unassigned',
-    label: therapist.name,
-    date,
-    closed,
-    appointments: appointments.filter(
-      (appointment) =>
-        appointmentStartsOnDate(appointment, date) &&
-        (therapist.id
-          ? appointment.therapistId === therapist.id
-          : !therapists.some((t) => t.id && t.id === appointment.therapistId))
-    ),
-    header: (
-      <div className="min-w-0">
-        <p className="flex items-center gap-1.5 truncate text-sm font-medium text-[var(--ink)]">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: therapist.color }} aria-hidden />
-          {therapist.name}
-        </p>
-        <LoadLine summary={summaryFor(therapist.id)} color={therapist.color} />
-      </div>
-    ),
-    onBook:
-      therapist.id && canBookFor(therapist.id)
-        ? (time: string) => onBook({ time, therapistId: therapist.id })
-        : undefined,
-  }));
+  const columns: GridColumn[] = therapists.map((therapist) => {
+    const isColleague = Boolean(therapist.id && !canBookFor(therapist.id));
+    return {
+      therapistId: therapist.id,
+      isColleague,
+      working: therapist.id && workingFor ? workingFor(therapist.id) : undefined,
+      key: therapist.id || 'unassigned',
+      label: therapist.name,
+      date,
+      closed,
+      appointments: appointments.filter(
+        (appointment) =>
+          appointmentStartsOnDate(appointment, date) &&
+          (therapist.id
+            ? appointment.therapistId === therapist.id
+            : !therapists.some((t) => t.id && t.id === appointment.therapistId))
+      ),
+      header: (
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 truncate text-sm font-medium text-[var(--ink)]">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: therapist.color }} aria-hidden />
+            {therapist.name}
+            {isColleague && (
+              <span className="ml-1 text-[11px] font-normal text-[var(--muted)]">· view only</span>
+            )}
+          </p>
+          <LoadLine summary={summaryFor(therapist.id)} color={therapist.color} />
+        </div>
+      ),
+      onBook:
+        therapist.id && canBookFor(therapist.id)
+          ? (time: string) => onBook({ time, therapistId: therapist.id })
+          : undefined,
+    };
+  });
 
   return (
     <GridFrame

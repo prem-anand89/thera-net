@@ -160,6 +160,75 @@ export function selectedTherapistIds(
 }
 
 /**
+ * Toggles a therapist ID in the selection list.
+ * Rules:
+ * - If role === 'therapist' and id === myTherapistId: cannot be removed (no-op).
+ * - For role === 'therapist': starting base defaults to [myTherapistId] if empty.
+ * - For other roles: starting base defaults to all roster IDs if empty.
+ * - Always ensures myTherapistId remains in the selection for role 'therapist'.
+ */
+export function toggleTherapistSelection(
+  id: string,
+  currentSelected: string[],
+  allRosterIds: string[],
+  role: string | undefined,
+  myTherapistId: string | null | undefined
+): string[] {
+  const isTherapist = role === 'therapist';
+  if (isTherapist && myTherapistId && id === myTherapistId) {
+    return currentSelected.length ? currentSelected : [myTherapistId];
+  }
+
+  const base = currentSelected.length
+    ? currentSelected
+    : isTherapist && myTherapistId
+      ? [myTherapistId]
+      : allRosterIds;
+
+  const next = base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
+  if (isTherapist && myTherapistId && !next.includes(myTherapistId)) {
+    next.unshift(myTherapistId);
+  }
+  return next.length ? next : [id];
+}
+
+/**
+ * Computes the search param value for therapist filter.
+ * Rules:
+ * - For role === 'therapist':
+ *   - Only valid roster IDs are kept.
+ *   - myTherapistId is guaranteed to be present if provided.
+ *   - If any colleague is selected, returns explicit comma-separated IDs (e.g. "myId,colleague1,colleague2").
+ *     Crucially: does NOT collapse to undefined when all therapists are selected, because undefined
+ *     means "own column only" for therapists.
+ *   - If only own column is selected (no colleagues), returns undefined (clean URL).
+ * - For other roles (admin, front desk):
+ *   - If 1 to (roster.length - 1) therapists selected, returns comma-separated IDs.
+ *   - If 0 or all therapists selected, returns undefined (meaning show all).
+ */
+export function nextTherapistSearchParam(
+  selectedIds: string[],
+  allRosterIds: string[],
+  role: string | undefined,
+  myTherapistId: string | null | undefined
+): string | undefined {
+  const rosterSet = new Set(allRosterIds);
+  const isTherapist = role === 'therapist';
+
+  if (isTherapist) {
+    const cleaned = selectedIds.filter((id) => rosterSet.has(id));
+    if (myTherapistId && rosterSet.has(myTherapistId) && !cleaned.includes(myTherapistId)) {
+      cleaned.unshift(myTherapistId);
+    }
+    const hasColleagues = cleaned.some((id) => id !== myTherapistId);
+    return hasColleagues ? cleaned.join(',') : undefined;
+  }
+
+  const valid = selectedIds.filter((id) => rosterSet.has(id));
+  return valid.length > 0 && valid.length < allRosterIds.length ? valid.join(',') : undefined;
+}
+
+/**
  * Checks whether the current user has permission to manage (book, move, cancel) an appointment.
  */
 export function canManageAppointment(
@@ -185,3 +254,4 @@ export function isColleagueAppointment(
     appointment.therapistId !== myTherapistId
   );
 }
+

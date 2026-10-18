@@ -12,6 +12,8 @@ import {
   selectedTherapistIds,
   canManageAppointment,
   isColleagueAppointment,
+  toggleTherapistSelection,
+  nextTherapistSearchParam,
   PHONE_VIEW_STORAGE_KEY,
 } from './schedulePhoneHelpers';
 
@@ -225,6 +227,75 @@ describe('schedulePhoneHelpers', () => {
 
     it('returns false for unassigned appointment', () => {
       expect(isColleagueAppointment({ therapistId: null }, 'therapist', 'th-1')).toBe(false);
+    });
+  });
+
+  describe('toggleTherapistSelection', () => {
+    const roster = ['th-1', 'th-2', 'th-3'];
+
+    describe('when role is therapist', () => {
+      it('cannot remove own column (unticking own ID is a no-op)', () => {
+        expect(toggleTherapistSelection('th-1', ['th-1', 'th-2'], roster, 'therapist', 'th-1')).toEqual(['th-1', 'th-2']);
+        expect(toggleTherapistSelection('th-1', ['th-1'], roster, 'therapist', 'th-1')).toEqual(['th-1']);
+        expect(toggleTherapistSelection('th-1', [], roster, 'therapist', 'th-1')).toEqual(['th-1']);
+      });
+
+      it('toggles colleague and preserves own ID', () => {
+        // Ticking colleague th-2 from base of own column
+        expect(toggleTherapistSelection('th-2', ['th-1'], roster, 'therapist', 'th-1')).toEqual(['th-1', 'th-2']);
+        // Unticking colleague th-2
+        expect(toggleTherapistSelection('th-2', ['th-1', 'th-2'], roster, 'therapist', 'th-1')).toEqual(['th-1']);
+      });
+
+      it('ticking all colleagues keeps own column and all colleagues', () => {
+        const withTwo = toggleTherapistSelection('th-2', ['th-1'], roster, 'therapist', 'th-1');
+        const withAll = toggleTherapistSelection('th-3', withTwo, roster, 'therapist', 'th-1');
+        expect(withAll).toEqual(['th-1', 'th-2', 'th-3']);
+      });
+    });
+
+    describe('when role is admin or other', () => {
+      it('unticking one from empty (all) leaves the remaining therapists', () => {
+        expect(toggleTherapistSelection('th-2', [], roster, 'admin', null)).toEqual(['th-1', 'th-3']);
+      });
+
+      it('ticking missing therapist returns full list', () => {
+        expect(toggleTherapistSelection('th-2', ['th-1', 'th-3'], roster, 'admin', null)).toEqual(['th-1', 'th-3', 'th-2']);
+      });
+    });
+  });
+
+  describe('nextTherapistSearchParam', () => {
+    const roster = ['th-1', 'th-2', 'th-3'];
+
+    describe('when role is therapist', () => {
+      it('returns undefined when only own column is selected (clean URL default)', () => {
+        expect(nextTherapistSearchParam(['th-1'], roster, 'therapist', 'th-1')).toBeUndefined();
+        expect(nextTherapistSearchParam([], roster, 'therapist', 'th-1')).toBeUndefined();
+      });
+
+      it('returns explicit comma-separated IDs when colleagues are selected', () => {
+        expect(nextTherapistSearchParam(['th-1', 'th-2'], roster, 'therapist', 'th-1')).toBe('th-1,th-2');
+      });
+
+      it('crucial: keeps explicit list when ALL colleagues are selected (never collapses to undefined)', () => {
+        expect(nextTherapistSearchParam(['th-1', 'th-2', 'th-3'], roster, 'therapist', 'th-1')).toBe('th-1,th-2,th-3');
+      });
+
+      it('ensures own column is included even if omitted in input', () => {
+        expect(nextTherapistSearchParam(['th-2', 'th-3'], roster, 'therapist', 'th-1')).toBe('th-1,th-2,th-3');
+      });
+    });
+
+    describe('when role is admin or other', () => {
+      it('returns undefined when all or no therapists are selected', () => {
+        expect(nextTherapistSearchParam([], roster, 'admin', null)).toBeUndefined();
+        expect(nextTherapistSearchParam(['th-1', 'th-2', 'th-3'], roster, 'admin', null)).toBeUndefined();
+      });
+
+      it('returns comma-separated string for a subset', () => {
+        expect(nextTherapistSearchParam(['th-1', 'th-3'], roster, 'admin', null)).toBe('th-1,th-3');
+      });
     });
   });
 });

@@ -165,7 +165,7 @@ export function AppointmentDetailsPanel({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 id="appointment-details-title" className="font-display text-lg font-semibold text-[var(--ink)]">
-              {appointment.patientId ? (
+              {canManage && appointment.patientId ? (
                 <Link to="/patients/$patientId" params={{ patientId: appointment.patientId }} className="text-[var(--teal)] hover:underline">
                   {appointment.patientName}
                 </Link>
@@ -176,7 +176,7 @@ export function AppointmentDetailsPanel({
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Pill tone={APPOINTMENT_STATUS_TONE[appointment.status]}>{APPOINTMENT_STATUS_LABEL[appointment.status]}</Pill>
               {seriesLabel && <span className="text-xs text-[var(--muted)]">{seriesLabel}</span>}
-              <PatientFlagPills flags={flags.filter((flag) => flag.key !== 'noshow')} />
+              {canManage && <PatientFlagPills flags={flags.filter((flag) => flag.key !== 'noshow')} />}
             </div>
           </div>
           <button
@@ -203,7 +203,7 @@ export function AppointmentDetailsPanel({
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: therapistColor }} aria-hidden />
               {therapistName}
             </dd>
-            {appointment.patientPhone && (
+            {canManage && appointment.patientPhone && (
               <>
                 <dt className="sr-only">Phone</dt>
                 <dd>
@@ -215,19 +215,19 @@ export function AppointmentDetailsPanel({
               </>
             )}
           </div>
-          {condition && (
+          {canManage && condition && (
             <div className="flex gap-2">
               <dt className="w-24 shrink-0 text-[var(--muted)]">Condition</dt>
               <dd className="text-[var(--ink)]">{condition}</dd>
             </div>
           )}
-          {requestNotes && (
+          {canManage && requestNotes && (
             <div className="flex gap-2">
               <dt className="w-24 shrink-0 text-[var(--muted)]">Patient says</dt>
               <dd className="text-[var(--ink)]">{requestNotes}</dd>
             </div>
           )}
-          {movedFrom && (
+          {canManage && movedFrom && (
             <div className="flex gap-2">
               <dt className="w-24 shrink-0 text-[var(--muted)]">Moved from</dt>
               <dd className="text-[var(--muted)]">{movedFrom}</dd>
@@ -235,14 +235,16 @@ export function AppointmentDetailsPanel({
           )}
         </dl>
 
-        <div className="mt-3">
-          <AttendanceNote attendance={attendance ?? null} />
-        </div>
+        {canManage && (
+          <div className="mt-3">
+            <AttendanceNote attendance={attendance ?? null} />
+          </div>
+        )}
 
         {/* One main action by state: Mark arrived before they come, Complete
             visit once they have. Start note / Create visit sit beside each
             other as the secondary pair. */}
-        {open && (
+        {open && canManage && (
           <div className="mt-4 space-y-2">
             {active && (
               <button
@@ -286,7 +288,7 @@ export function AppointmentDetailsPanel({
           </div>
         )}
 
-        {active && (appointment.patientPhone || therapistPhone || canManage) && (
+        {active && canManage && (appointment.patientPhone || therapistPhone) && (
           <div className="mt-3 grid auto-cols-fr grid-flow-col gap-1 border-t border-[var(--border)] pt-3">
             {appointment.patientPhone && (
               <a href={`tel:${appointment.patientPhone}`} className={quickCls}>
@@ -365,7 +367,7 @@ export function AppointmentDetailsPanel({
           </div>
         )}
 
-        {appointment.status === 'cancelled' && (
+        {appointment.status === 'cancelled' && canManage && (
           <div className="mt-4 rounded-lg bg-[var(--paper)] p-3">
             <p className="text-sm text-[var(--ink)]">Let them know it's cancelled:</p>
             <div className="mt-2 flex flex-wrap gap-2">

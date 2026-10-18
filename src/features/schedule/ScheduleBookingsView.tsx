@@ -46,6 +46,7 @@ import { TherapistFilter } from '@/components/schedule/TherapistFilter';
 import { HistoryView } from '@/components/schedule/HistoryView';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
 import { appointmentsOutsideHours } from './hoursConflicts';
+import { nextTherapistSearchParam, selectedTherapistIds, toggleTherapistSelection } from './schedulePhoneHelpers';
 import { isActiveAppointmentStatus } from '@/domain/appointmentStatus';
 import { appointmentReason, patientFlags } from '@/domain/patientFlags';
 import { matchingWaitlistEntries, timeOfDayFor } from '@/domain/waitlistMatch';
@@ -191,16 +192,17 @@ export function ScheduleBookingsView({
     [rosterById]
   );
 
-  // A therapist only ever works with their own column.
+  // Selected therapists to display in columns.
   const selectedIds = useMemo(() => {
-    if (isTherapist) return myTherapistId ? [myTherapistId] : [];
-    return (search.therapist ?? '').split(',').filter((id) => rosterById.has(id));
-  }, [isTherapist, myTherapistId, search.therapist, rosterById]);
+    return selectedTherapistIds(
+      scope.role,
+      myTherapistId,
+      search.therapist,
+      roster.map((t) => t.id)
+    );
+  }, [scope.role, myTherapistId, search.therapist, roster]);
   const [showCancelled, setShowCancelled] = useState(false);
-  const scopedAppointments = useMemo(() => {
-    const rows = allAppointments ?? [];
-    return isTherapist ? rows.filter((a) => myTherapistId && a.therapistId === myTherapistId) : rows;
-  }, [allAppointments, isTherapist, myTherapistId]);
+  const scopedAppointments = useMemo(() => allAppointments ?? [], [allAppointments]);
   const visibleAppointments = useMemo(
     () =>
       scopedAppointments.filter(
@@ -223,12 +225,10 @@ export function ScheduleBookingsView({
 
   const visibleRoster = useMemo(
     () =>
-      isTherapist
-        ? roster.filter((t) => t.id === myTherapistId)
-        : selectedIds.length
-          ? roster.filter((t) => selectedIds.includes(t.id) && (t.active !== false || dayAppointments.some((a) => a.therapistId === t.id)))
-          : roster.filter((t) => t.active !== false || dayAppointments.some(a => a.therapistId === t.id)),
-    [isTherapist, myTherapistId, selectedIds, roster, dayAppointments]
+      selectedIds.length
+        ? roster.filter((t) => selectedIds.includes(t.id) && (t.active !== false || dayAppointments.some((a) => a.therapistId === t.id)))
+        : roster.filter((t) => t.active !== false || dayAppointments.some((a) => a.therapistId === t.id)),
+    [selectedIds, roster, dayAppointments]
   );
   const singleTherapist = visibleRoster.length === 1 ? visibleRoster[0] : null;
   // Week view is available for both single-therapist and multi-therapist (matrix) modes.
@@ -448,12 +448,23 @@ export function ScheduleBookingsView({
   );
 
   function setTherapists(ids: string[]) {
-    setSchedule({ therapist: ids.length && ids.length < roster.length ? ids.join(',') : undefined });
+    const nextParam = nextTherapistSearchParam(
+      ids,
+      roster.map((t) => t.id),
+      scope.role,
+      myTherapistId
+    );
+    setSchedule({ therapist: nextParam });
   }
   function toggleTherapist(id: UUID) {
-    const current = selectedIds.length ? selectedIds : roster.map((t) => t.id);
-    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
-    setTherapists(next.length ? next : [id]);
+    const next = toggleTherapistSelection(
+      id,
+      selectedIds,
+      roster.map((t) => t.id),
+      scope.role,
+      myTherapistId
+    );
+    setTherapists(next);
   }
 
   function openBooking(input: SheetState = {}) {
@@ -517,6 +528,7 @@ export function ScheduleBookingsView({
       const isDifferentTherapist = Boolean(target.therapistId && target.therapistId !== appointment.therapistId);
       const isDifferentDate = target.date !== dateForAppointment(appointment);
       const targetTherapistId = target.therapistId ?? appointment.therapistId;
+      if (targetTherapistId && !canBookFor(targetTherapistId)) return;
       const targetWorking = targetTherapistId ? workingFor(targetTherapistId, target.date) : [];
       const status = slotHoursStatus({
         minutes: target.start,
@@ -656,8 +668,8 @@ export function ScheduleBookingsView({
               therapists={roster.filter(t => t.active !== false).map((t) => ({ ...t, summary: summaryFor(t.id) }))}
               visibleIds={selectedIds}
               onToggleTherapist={toggleTherapist}
-              onShowAll={() => setTherapists([])}
-              showTherapistToggles={canManageAll && roster.length > 1}
+              onShowAll={() => setTherapists(isTherapist ? roster.map((t) => t.id) : [])}
+              showTherapistToggles={roster.length > 1}
               closures={closures}
               canEditClosures={canManageAll}
               onAddClosure={() => setClosedSheetOpen(true)}
@@ -729,9 +741,14 @@ export function ScheduleBookingsView({
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                {canManageAll && roster.length > 1 && (
+                {roster.length > 1 && (
                   <div className="desktop:hidden">
-                    <TherapistFilter therapists={roster.filter(t => t.active !== false)} visibleIds={selectedIds} onToggle={toggleTherapist} onShowAll={() => setTherapists([])} />
+                    <TherapistFilter
+                      therapists={roster.filter(t => t.active !== false)}
+                      visibleIds={selectedIds}
+                      onToggle={toggleTherapist}
+                      onShowAll={() => setTherapists(isTherapist ? roster.map((t) => t.id) : [])}
+                    />
                   </div>
                 )}
                 {weekAvailable && (
