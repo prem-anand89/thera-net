@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Gemini works in its own git worktree on branch gemini/work so it can never touch the main
-# checkout, never push, and Claude can review `main..gemini/work` before anything lands.
+# OPTIONAL. By default Gemini works on main in the main checkout (see CLAUDE.md). Use this only
+# when Gemini and Claude must work IN PARALLEL: Gemini gets its own worktree on gemini/work, so it
+# can never touch the main checkout or push, and Claude reviews `main..gemini/work` before anything lands.
 #
 #   scripts/gemini-worktree.sh setup    create ../thera-net-gemini (push disabled, deps installed)
 #   scripts/gemini-worktree.sh status   where gemini/work is relative to main

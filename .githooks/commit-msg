@@ -1,9 +1,7 @@
 #!/bin/sh
-# Blocks commits that weaken existing tests (see scripts/testEditCheck.mjs). Strict on agent
-# branches (gemini/*); elsewhere it only prints a warning.
-branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-case "$branch" in
-  gemini/*) strict="--strict" ;;
-  *) strict="" ;;
-esac
-node scripts/check-test-edits.mjs --message-file "$1" $strict
+# Blocks commits that weaken existing tests (see scripts/testEditCheck.mjs): a removed or
+# changed assertion, a removed test, a deleted test file or a skipped test needs
+# [test-change: <why, 10+ characters>] in the commit message. A committed `.only` always fails.
+# Strict for EVERY commit (agents and humans commit as the same git user, so there is no way
+# to tell them apart), which also leaves a written reason for each deliberate test change.
+node scripts/check-test-edits.mjs --message-file "$1" --strict

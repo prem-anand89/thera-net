@@ -2,11 +2,12 @@
 # Writes GEMINI_REPORT.md with REAL output: commits, files, typecheck, lint, the full test
 # suite, the weakened-test check and (with --build) the production build. Gemini finishes a
 # task by running this and pasting the report; "verified" means this file says ALL GREEN.
+# It covers every commit that is not on GitHub yet (origin/main..HEAD).
 #   npm run gemini:report            # typecheck + lint + tests
 #   npm run gemini:report -- --build # plus npm run build
 set -u
 cd "$(git rev-parse --show-toplevel)"
-BASE="${GEMINI_BASE:-main}"
+BASE="${GEMINI_BASE:-origin/main}"  # = every commit not pushed yet (use GEMINI_BASE=main in the optional worktree)
 OUT="GEMINI_REPORT.md"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

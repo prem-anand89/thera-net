@@ -9,6 +9,8 @@
    - Stage ONLY with explicit paths: `git add <file1> <file2>`.
    - **NEVER** use `git add -A` or `git add .`.
    - **NEVER** use `git stash`, `git reset --hard`, `git checkout -- <file>`, `git push`, `--force`, or `--no-verify`.
+   - Pushing is impossible by design (push URL disabled): commit locally; Claude reviews every unpushed commit and is the only one who pushes, when the owner asks.
+   - One agent edits at a time. Finish with a clean working tree so Claude can take over.
 3. **Database Safety:**
    - **Never touch the live database.** Do NOT apply migrations or execute SQL against live Supabase during feature execution.
    - For any schema change or RPC, **only create the migration file** at `supabase/migrations/YYYYMMDDNNNNNN_name.sql`.
@@ -31,6 +33,13 @@
    - Never edit or delete plan files in `~/.claude/plans/`. Claude manages them.
 9. **Evidence Before Assertions:**
    - Never state or report that code is verified without running the commands and pasting real output tails.
+10. **Test Integrity (enforced by the commit-msg hook):**
+   - Adding tests is always fine. Never edit or remove an existing assertion or test to make it pass.
+   - If behaviour changed on purpose, the commit message must contain `[test-change: <why, 10+ characters>]`; otherwise the commit is rejected. No `.only`; no `.skip`/`.todo` without that tag.
+11. **Locked Decisions:**
+   - A plan's "Decided with the user" block is locked. If your work would change one, stop and ask; never change agreed behaviour and then adjust tests or docs to match.
+12. **Layout Checks:**
+   - Check every screen you touch at phone (360px) and desktop (1280px). A table with a horizontal scrollbar at desktop is a bug (fixed column widths must add up to under ~1120px).
 
 ---
 
@@ -43,9 +52,5 @@
    - Run `npm run build` **only** if shared components, routing, or Tailwind config changed.
    - **Do NOT** re-run the full suite after a documentation-only commit.
 3. **Plan Completion Report Format:**
-   - Commits list (`hash + message`).
-   - Files changed (`git diff --stat`).
-   - Output tails of the verification commands.
-   - Deviations & skipped items.
-   - Open questions or unexpected findings.
-   - Paths of unapplied migration files created.
+   - Run `npm run gemini:report` (add `-- --build` for shared components, routing or Tailwind) and paste `GEMINI_REPORT.md`. It lists commits, files changed and the real typecheck / lint / test output for every unpushed commit, and computes the verdict. Only "ALL GREEN" means verified.
+   - Then fill in the section it leaves for you: screenshots (phone and desktop), deviations & skipped items, open questions, and paths of unapplied migration files created.
