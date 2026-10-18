@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import type { Appointment } from '@/domain/types';
 import type { PatientFlagContext } from '@/domain/patientFlags';
-import { DayColumn, WeekTimeGrid } from './TimeGrid';
+import { DayColumn } from './TimeGrid';
 
 afterEach(cleanup);
 
@@ -110,51 +110,6 @@ describe('DayColumn off-hours booking and display', () => {
       />
     );
     expect(getByText('Priya')).toBeInTheDocument();
-  });
-});
-
-describe('WeekTimeGrid props and responsive container', () => {
-  const weekProps = {
-    days: ['2026-10-01', '2026-10-02', '2026-10-03'],
-    today: '2026-10-01',
-    nowMinutes: 600,
-    appointments: [] as Appointment[],
-    hours: { startHour: 9, endHour: 18 },
-    slotMinutes: 30,
-    closedFor: () => ({ closed: false, kind: null, label: null }),
-    colorFor: () => '#2c5f63',
-    selectedId: null,
-    onSelect: () => {},
-    onOpenDay: () => {},
-  };
-
-  it('renders container with phone-friendly min/max heights and overscroll-contain', () => {
-    const { container } = render(<WeekTimeGrid {...weekProps} />);
-    const scrollBox = container.querySelector('[class*="overscroll-contain"]');
-    expect(scrollBox).toBeInTheDocument();
-    expect(scrollBox?.className).toContain('min-h-[320px]');
-    expect(scrollBox?.className).toContain('tab:min-h-[420px]');
-    expect(scrollBox?.className).toContain('max-h-[calc(100dvh-20rem)]');
-    expect(scrollBox?.className).toContain('tab:max-h-[calc(100vh-240px)]');
-  });
-
-  it('accepts custom minColumnWidth and formats template accordingly', () => {
-    const { container } = render(<WeekTimeGrid {...weekProps} minColumnWidth={98} />);
-    const gridEl = container.querySelector('.grid');
-    expect(gridEl?.getAttribute('style')).toContain('minmax(98px, 1fr)');
-  });
-
-  it('passes minimalBlocks down to DayColumn', () => {
-    const appt: Appointment = {
-      id: 'a1', clinicId: 'c1', patientId: 'p1', patientName: 'Priya Sharma', patientPhone: '+91 98200 00001',
-      therapistId: 't1', scheduledAt: '2026-10-01T04:30:00Z', durationMinutes: 30, status: 'confirmed',
-      requestId: null, visitId: null, rescheduleCount: 0, previousScheduledAt: null, createdAt: '', updatedAt: '',
-    };
-    const { container } = render(
-      <WeekTimeGrid {...weekProps} appointments={[appt]} minimalBlocks={true} />
-    );
-    // In minimalBlocks, the block renders with simple single-line name and time without detailed extra layout
-    expect(container.querySelector('[class*="text-[10px]"]')).toBeInTheDocument();
   });
 });
 

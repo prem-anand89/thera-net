@@ -607,7 +607,6 @@ function GridFrame({
   scrollKey,
   minColumnWidth,
   drag,
-  minimalBlocks = false,
 }: {
   columns: GridColumn[];
   hours: GridHours;
@@ -624,7 +623,6 @@ function GridFrame({
   scrollKey: string;
   minColumnWidth: number;
   drag?: GridDragOptions;
-  minimalBlocks?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const showsToday = columns.some((column) => column.date === today);
@@ -655,7 +653,7 @@ function GridFrame({
     )}
     <div
       ref={scrollRef}
-      className="min-h-[320px] tab:min-h-[420px] max-h-[calc(100dvh-20rem)] tab:max-h-[calc(100vh-240px)] overscroll-contain overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)]"
+      className="max-h-[calc(100vh-240px)] min-h-[420px] overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)]"
     >
       <div className="grid" style={{ gridTemplateColumns: template }}>
         <div className="sticky left-0 top-0 z-[5] border-b border-[var(--border)] bg-[var(--surface)]" />
@@ -691,7 +689,6 @@ function GridFrame({
             dense={minColumnWidth < 150}
             working={column.working}
             drag={columnDrag(column)}
-            minimalBlocks={minimalBlocks}
           />
         ))}
       </div>
@@ -811,8 +808,6 @@ export function WeekTimeGrid({
   onOpenDay,
   workingFor,
   drag,
-  minColumnWidth = 110,
-  minimalBlocks = false,
 }: {
   days: string[];
   today: string;
@@ -832,8 +827,6 @@ export function WeekTimeGrid({
   onOpenDay: (date: string) => void;
   workingFor?: (date: string) => Interval[];
   drag?: GridDragOptions;
-  minColumnWidth?: number;
-  minimalBlocks?: boolean;
 }) {
   const columns: GridColumn[] = days.map((day) => {
     const value = new Date(`${day}T00:00:00`);
@@ -879,9 +872,8 @@ export function WeekTimeGrid({
       selectedId={selectedId}
       onSelect={onSelect}
       scrollKey={days[0]}
-      minColumnWidth={minColumnWidth}
+      minColumnWidth={110}
       drag={drag}
-      minimalBlocks={minimalBlocks}
     />
   );
 }
