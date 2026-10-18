@@ -69,6 +69,8 @@ import {
   getPhoneStepAmount,
   isPhoneTodayVisible,
   formatThreeDayRange,
+  readStoredLongPressHintDismissed,
+  writeStoredLongPressHintDismissed,
 } from './schedulePhoneView';
 
 type BookingView = 'schedule' | 'requests' | 'history';
@@ -154,6 +156,11 @@ export function ScheduleBookingsView({
     writeStoredPhoneView(next);
   }, []);
   const [calendarStripOpen, setCalendarStripOpen] = useState(false);
+  const [hintDismissed, setHintDismissed] = useState(readStoredLongPressHintDismissed);
+  const dismissHint = useCallback(() => {
+    setHintDismissed(true);
+    writeStoredLongPressHintDismissed();
+  }, []);
 
   const now = useNowMinutes();
   const today = now.today;
@@ -1033,7 +1040,22 @@ export function ScheduleBookingsView({
                 />
               )}
             </div>
-            <div className="tab:hidden">
+            <div className="tab:hidden space-y-3">
+              {!hintDismissed && (phoneView === 'day' || phoneView === '3day') && (
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-xs text-[var(--muted)]">
+                  <span>
+                    <strong className="text-[var(--ink)]">Tip:</strong> Long-press an appointment to move or reschedule it.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={dismissHint}
+                    className="min-h-[44px] min-w-[44px] shrink-0 font-medium text-[var(--teal)] hover:text-[var(--teal-strong)]"
+                    aria-label="Dismiss long-press tip"
+                  >
+                    Got it
+                  </button>
+                </div>
+              )}
               {findTime ? (
                 <FindTimePanel
                   date={date}
@@ -1105,8 +1127,22 @@ export function ScheduleBookingsView({
                     : (selectedIds.length === 1 ? (rosterById.get(selectedIds[0]) ?? null) : null);
                   if (!threeDayTherapist) {
                     return (
-                      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-center text-sm text-[var(--muted)]">
-                        <p className="font-medium text-[var(--ink)]">Pick a therapist to view their 3-day schedule.</p>
+                      <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-center">
+                        <p className="font-medium text-[var(--ink)]">Pick a therapist</p>
+                        <p className="mt-1 text-xs text-[var(--muted)]">3-Day view displays one therapist's schedule at a time.</p>
+                        <div className="mt-3 flex flex-wrap justify-center gap-2">
+                          {roster.filter((t) => t.active !== false).map((t) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => setTherapists([t.id])}
+                              className="flex min-h-[44px] items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--paper)] px-3 text-xs font-medium text-[var(--ink)] hover:border-[var(--teal)] hover:bg-[var(--surface)]"
+                            >
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.color }} aria-hidden="true" />
+                              <span>{t.name}</span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     );
                   }

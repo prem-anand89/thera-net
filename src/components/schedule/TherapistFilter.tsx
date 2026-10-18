@@ -35,15 +35,14 @@ export function TherapistFilter({
         aria-haspopup="true"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="flex min-h-9 max-w-[12rem] items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)]"
+        className="flex min-h-[44px] max-w-[12rem] items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--ink)] hover:bg-[var(--paper)] sm:min-h-9"
       >
         <span className="flex -space-x-1" aria-hidden>
           {shown.slice(0, 3).map((t) => (
             <span key={t.id} className="h-2.5 w-2.5 rounded-full ring-2 ring-[var(--surface)]" style={{ background: t.color }} />
           ))}
         </span>
-        <span className="hidden truncate sm:inline">{label}</span>
-        <span className="sr-only sm:hidden">{label}</span>
+        <span className="truncate max-w-[5.5rem] sm:max-w-none">{label}</span>
         <svg aria-hidden className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" viewBox="0 0 16 16" fill="none">
           <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

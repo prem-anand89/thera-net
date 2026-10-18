@@ -9,6 +9,9 @@ import {
   isPhoneTodayVisible,
   readStoredPhoneView,
   writeStoredPhoneView,
+  readStoredLongPressHintDismissed,
+  writeStoredLongPressHintDismissed,
+  SCHEDULE_LONG_PRESS_HINT_KEY,
 } from './schedulePhoneView';
 
 describe('schedulePhoneView', () => {
@@ -96,6 +99,18 @@ describe('schedulePhoneView', () => {
 
     it('formats dates across different months cleanly', () => {
       expect(formatThreeDayRange('2026-10-30')).toBe('30 Oct – 1 Nov');
+    });
+  });
+
+  describe('long-press hint persistence', () => {
+    it('defaults to not dismissed when key is absent', () => {
+      expect(readStoredLongPressHintDismissed()).toBe(false);
+    });
+
+    it('persists dismissed state', () => {
+      writeStoredLongPressHintDismissed();
+      expect(localStorage.getItem(SCHEDULE_LONG_PRESS_HINT_KEY)).toBe('dismissed');
+      expect(readStoredLongPressHintDismissed()).toBe(true);
     });
   });
 });

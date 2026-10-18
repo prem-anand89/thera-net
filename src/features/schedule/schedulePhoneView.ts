@@ -69,3 +69,24 @@ export function formatThreeDayRange(startDate: string): string {
   const endStr = end.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   return `${startStr} – ${endStr}`;
 }
+
+export const SCHEDULE_LONG_PRESS_HINT_KEY = 'theranet:schedule-long-press-hint';
+
+export function readStoredLongPressHintDismissed(): boolean {
+  try {
+    return typeof window !== 'undefined' && localStorage.getItem(SCHEDULE_LONG_PRESS_HINT_KEY) === 'dismissed';
+  } catch {
+    return false;
+  }
+}
+
+export function writeStoredLongPressHintDismissed(): void {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SCHEDULE_LONG_PRESS_HINT_KEY, 'dismissed');
+    }
+  } catch {
+    // ignore storage unavailable
+  }
+}
+
