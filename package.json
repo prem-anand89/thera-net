@@ -13,7 +13,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:fast": "bash scripts/check-fast.sh",
-    "gemini:report": "bash scripts/gemini-report.sh",
     "e2e": "playwright test",
     "prepare": "git config core.hooksPath .githooks"
   },

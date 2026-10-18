@@ -1,7 +1,0 @@
-#!/bin/sh
-# Blocks commits that weaken existing tests (see scripts/testEditCheck.mjs): a removed or
-# changed assertion, a removed test, a deleted test file or a skipped test needs
-# [test-change: <why, 10+ characters>] in the commit message. A committed `.only` always fails.
-# Strict for EVERY commit (agents and humans commit as the same git user, so there is no way
-# to tell them apart), which also leaves a written reason for each deliberate test change.
-node scripts/check-test-edits.mjs --message-file "$1" --strict

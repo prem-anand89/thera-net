@@ -75,28 +75,3 @@ shows exactly which one broke.
 
 The pre-commit hook automatically lints and fixes files before commit, so
 button type issues will be caught before they reach the PR.
-
-## Working with Gemini (main + review gates)
-
-Gemini works on `main` in this checkout and commits locally; Claude reviews everything before it
-reaches GitHub and may edit Gemini's code directly. Nothing is pushed unless the user asks.
-
-- **Pushing:** `origin`'s push URL is disabled in this repo's config, so an accidental
-  `git push origin ...` fails. Claude pushes to the real URL explicitly:
-  `git push "$(git remote get-url origin)" main && git fetch origin main` (the fetch refreshes
-  the local `origin/main`, which a push by explicit URL does not, and the report and
-  `git log origin/main..main` depend on it). A push includes EVERY unpushed commit,
-  Gemini's too, so review `git log origin/main..main` first.
-- **Taking turns:** one agent edits at a time (shared working tree). Before touching anything,
-  run `git status --short`; Gemini hands back with a clean tree and `npm run gemini:report`
-  (real typecheck / lint / test output over `origin/main..HEAD`; only "ALL GREEN" means verified).
-- **Review checklist per Gemini commit:** nothing pushed, no weakened tests, no change to a
-  "Decided with the user" item, layout checked at 360px and desktop, migrations applied only by Claude.
-- **Tests:** the commit-msg hook blocks any commit (everyone's) that removes or changes an
-  existing assertion, removes a test, deletes a test file or skips one, unless the message has
-  `[test-change: <why, 10+ characters>]` (see `scripts/testEditCheck.mjs`). A committed `.only` always fails.
-- **Rules Gemini reads:** `.agents/rules/STANDING_HANDOFF_RULES.md` and `docs/gemini/HANDOFF_RULES.md`.
-  Keep migrations, RLS, sync, edge functions, money and architecture plans with Claude.
-- **Optional parallel mode:** `bash scripts/gemini-worktree.sh setup | status | review | merge | sync`
-  gives Gemini its own worktree (`../thera-net-gemini`, branch `gemini/work`, push disabled) for
-  when both agents must work at the same time; Claude merges after review.
