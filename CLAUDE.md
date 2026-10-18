@@ -83,7 +83,9 @@ reaches GitHub and may edit Gemini's code directly. Nothing is pushed unless the
 
 - **Pushing:** `origin`'s push URL is disabled in this repo's config, so an accidental
   `git push origin ...` fails. Claude pushes to the real URL explicitly:
-  `git push "$(git remote get-url origin)" main`. A push includes EVERY unpushed commit,
+  `git push "$(git remote get-url origin)" main && git fetch origin main` (the fetch refreshes
+  the local `origin/main`, which a push by explicit URL does not, and the report and
+  `git log origin/main..main` depend on it). A push includes EVERY unpushed commit,
   Gemini's too, so review `git log origin/main..main` first.
 - **Taking turns:** one agent edits at a time (shared working tree). Before touching anything,
   run `git status --short`; Gemini hands back with a clean tree and `npm run gemini:report`
