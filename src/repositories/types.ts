@@ -1,6 +1,8 @@
+import type { PushCategory } from '@/domain/pushPreferences';
 import type {
   SeenMarkerKey,
   UserSeenMarker,
+  UserPushPreference,
   Clinic,
   Therapist,
   CatalogItem,
@@ -277,6 +279,12 @@ export interface UserSeenMarkersRepo {
   markSeen(userId: UUID, clinicId: UUID, key: SeenMarkerKey, at?: string): Promise<void>;
 }
 
+export interface UserPushPreferencesRepo {
+  /** Every explicit choice this user has made in this clinic. A missing alert means "on". */
+  listForUser(userId: UUID, clinicId: UUID): Promise<UserPushPreference[]>;
+  setEnabled(userId: UUID, clinicId: UUID, category: PushCategory, enabled: boolean): Promise<void>;
+}
+
 export interface Repos {
   clinics: ClinicRepo;
   therapists: TherapistRepo;
@@ -302,4 +310,5 @@ export interface Repos {
   shiftTemplates: ShiftTemplatesRepo;
   therapistShiftAssignments: TherapistShiftAssignmentsRepo;
   userSeenMarkers: UserSeenMarkersRepo;
+  userPushPreferences: UserPushPreferencesRepo;
 }

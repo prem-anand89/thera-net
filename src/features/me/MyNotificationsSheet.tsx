@@ -1,17 +1,14 @@
 import { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Panel, ErrorNote } from '@/components/ui';
 import { PushSettingsCard } from '@/features/notifications/PushSettingsCard';
 import { repos } from '@/services';
+import { useClinic } from '@/app/clinicContext';
+import { useSession } from '@/app/useSession';
 import { toFriendlyMessage } from '@/lib/errors';
+import { PUSH_CATEGORY_COPY, pushCategoriesFor, type PushCategory } from '@/domain/pushPreferences';
 import type { ClinicRole } from '@/app/useClinicRole';
 import type { Therapist } from '@/domain/types';
-
-function alertsFor(role: ClinicRole, linkedTherapist: boolean): string {
-  if (role === 'admin') return 'You get an alert for every new booking request and for low-rated feedback.';
-  if (role === 'front_desk') return 'You get an alert for every new booking request.';
-  if (linkedTherapist) return 'You get an alert when one of your appointments is confirmed, rescheduled or cancelled.';
-  return 'Ask an admin to link your login to your therapist profile to get appointment alerts.';
-}
 
 export function MyNotificationsSheet({
   open,
@@ -24,8 +21,17 @@ export function MyNotificationsSheet({
   role: ClinicRole;
   therapist: Therapist | undefined;
 }) {
+  const clinic = useClinic();
+  const userId = useSession().session?.user?.id;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const categories = pushCategoriesFor(role, Boolean(therapist));
+  // Only explicit choices are stored; an alert with no row is on.
+  const choices = useLiveQuery(
+    async () => (userId ? await repos.userPushPreferences.listForUser(userId, clinic.id) : undefined),
+    [userId, clinic.id]
+  );
+  const isOn = (category: PushCategory) => choices?.find((c) => c.category === category)?.enabled !== false;
   const emailOn = therapist?.emailAppointmentUpdates !== false;
 
   async function setEmail(next: boolean) {
@@ -45,11 +51,53 @@ export function MyNotificationsSheet({
     }
   }
 
+  async function setAlert(category: PushCategory, enabled: boolean) {
+    if (!userId) return;
+    setError(null);
+    try {
+      await repos.userPushPreferences.setEnabled(userId, clinic.id, category, enabled);
+    } catch (e) {
+      setError(toFriendlyMessage(e));
+    }
+  }
+
   return (
     <Panel open={open} onClose={onClose} title="Notifications">
       <div className="space-y-5">
-        <p className="text-sm text-[var(--muted)]">{alertsFor(role, Boolean(therapist))}</p>
         <PushSettingsCard />
+        {categories.length === 0 ? (
+          <p className="text-sm text-[var(--muted)]">
+            Ask an admin to link your login to your therapist profile to get appointment alerts.
+          </p>
+        ) : (
+          <div className="space-y-1 border-t border-[var(--border)] pt-4">
+            <h3 className="text-sm font-semibold">Which alerts do you want?</h3>
+            <p className="text-xs text-[var(--muted)]">
+              These apply on all your devices for this clinic. Everything is on unless you switch it off.
+            </p>
+            {categories.map((category) => (
+              <label key={category} className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
+                <span>
+                  <span className="block text-sm font-medium text-[var(--ink)]">
+                    {PUSH_CATEGORY_COPY[category].label}
+                  </span>
+                  <span className="block text-xs text-[var(--muted)]">
+                    {PUSH_CATEGORY_COPY[category].description}
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  className="h-5 w-5 shrink-0 accent-[var(--teal)]"
+                  aria-label={PUSH_CATEGORY_COPY[category].label}
+                  checked={isOn(category)}
+                  disabled={!userId}
+                  onChange={(e) => void setAlert(category, e.target.checked)}
+                />
+              </label>
+            ))}
+          </div>
+        )}
         {therapist && (
           <div className="space-y-1.5 border-t border-[var(--border)] pt-4">
             <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">

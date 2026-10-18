@@ -2,6 +2,7 @@ import { db, type SyncedTable } from '@/lib/db';
 import { listPendingLinks, withPendingLinks } from '@/sync/pendingLinks';
 import type {
   UserSeenMarker,
+  UserPushPreference,
   Clinic,
   Therapist,
   CatalogItem,
@@ -20,8 +21,10 @@ import type {
 } from '@/domain/types';
 import { coerceReferringSource } from '@/domain/types';
 import { seenMarkerId } from '@/domain/seenMarker';
+import { pushPreferenceId } from '@/domain/pushPreferences';
 import type {
   UserSeenMarkersRepo,
+  UserPushPreferencesRepo,
   ClinicRepo,
   TherapistRepo,
   CatalogRepo,
@@ -455,6 +458,27 @@ const userSeenMarkers: UserSeenMarkersRepo = {
   },
 };
 
+const userPushPreferences: UserPushPreferencesRepo = {
+  listForUser: (userId, clinicId) =>
+    db.user_push_preferences.where('clinicId').equals(clinicId).filter((p) => p.userId === userId).toArray(),
+  async setEnabled(userId, clinicId, category, enabled) {
+    const id = pushPreferenceId(userId, clinicId, category);
+    const existing = await db.user_push_preferences.get(id);
+    if (existing && existing.enabled === enabled) return;
+    const now = new Date().toISOString();
+    const row: UserPushPreference = {
+      id,
+      userId,
+      clinicId,
+      category,
+      enabled,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    await putWithOutbox('user_push_preferences', row);
+  },
+};
+
 export const repos: Repos = {
   clinics,
   therapists,
@@ -480,6 +504,7 @@ export const repos: Repos = {
   shiftTemplates,
   therapistShiftAssignments,
   userSeenMarkers,
+  userPushPreferences,
 };
 
 // Narrow re-exports used by the sync engine and UI helpers

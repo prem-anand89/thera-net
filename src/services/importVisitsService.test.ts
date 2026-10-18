@@ -202,6 +202,10 @@ function makeFakeRepos() {
       get: async () => undefined,
       markSeen: async () => undefined,
     },
+    userPushPreferences: {
+      listForUser: async () => [],
+      setEnabled: async () => undefined,
+    },
   };
   return { repos, patients, visits };
 }

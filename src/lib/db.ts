@@ -24,6 +24,7 @@ import type {
   ShiftTemplate,
   TherapistShiftAssignment,
   UserSeenMarker,
+  UserPushPreference,
 } from '@/domain/types';
 
 /**
@@ -77,7 +78,8 @@ export type SyncedTable =
   | 'clinic_closed_dates'
   | 'shift_templates'
   | 'therapist_shift_assignments'
-  | 'user_seen_markers';
+  | 'user_seen_markers'
+  | 'user_push_preferences';
 
 /**
  * Every table the sync engine pushes/pulls — the single source of truth
@@ -113,6 +115,7 @@ export const ALL_SYNCED_TABLES = [
   'shift_templates',
   'therapist_shift_assignments',
   'user_seen_markers',
+  'user_push_preferences',
 ] as const satisfies readonly SyncedTable[];
 type _AssertAllSyncedTablesCovered = SyncedTable extends (typeof ALL_SYNCED_TABLES)[number]
   ? true
@@ -156,6 +159,7 @@ export const CLIENT_WRITABLE_TABLES = [
   'patient_module_enrollments',
   'patient_advances',
   'user_seen_markers',
+  'user_push_preferences',
 ] as const satisfies readonly SyncedTable[];
 
 export class ClinicDB extends Dexie {
@@ -183,6 +187,7 @@ export class ClinicDB extends Dexie {
   shift_templates!: Table<ShiftTemplate, string>;
   therapist_shift_assignments!: Table<TherapistShiftAssignment, string>;
   user_seen_markers!: Table<UserSeenMarker, string>;
+  user_push_preferences!: Table<UserPushPreference, string>;
   outbox!: Table<OutboxEntry, number>;
   meta!: Table<MetaEntry, string>;
 
@@ -303,6 +308,10 @@ export class ClinicDB extends Dexie {
     // Per-user "seen up to" markers (replace the device-only last-viewed timestamps).
     this.version(24).stores({
       user_seen_markers: 'id, clinicId, userId, [userId+clinicId+markerKey]',
+    });
+    // Per-person push alert switches (read by the send-push edge function).
+    this.version(25).stores({
+      user_push_preferences: 'id, clinicId, userId, [userId+clinicId+category]',
     });
   }
 }

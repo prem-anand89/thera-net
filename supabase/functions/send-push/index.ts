@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 import { encryptPayload, vapidAuthHeader } from '../_shared/webPush.ts';
 import { buildBookingRequestPayload, buildPayload, type PushKind, type PushPayload } from './templates.ts';
+import { PUSH_CATEGORY_BY_KIND, withoutOptedOut, type PushCategory } from './preferences.ts';
 
 const CLINIC_TZ = 'Asia/Kolkata';
 
@@ -80,13 +81,33 @@ async function resolveRecipients(req: SendRequest): Promise<{ userIds: string[];
   return { userIds: (admins ?? []).map((m) => m.user_id), payload: buildPayload(req.kind, null, CLINIC_TZ) };
 }
 
+/**
+ * Drops recipients who switched this alert off in Settings (user_push_preferences). Everyone
+ * is on by default, so only explicit "off" rows matter. Fails OPEN: if the lookup errors, the
+ * alert is sent rather than silently lost.
+ */
+async function withoutSwitchedOff(userIds: string[], req: SendRequest): Promise<string[]> {
+  const category = (PUSH_CATEGORY_BY_KIND as Record<string, PushCategory | undefined>)[req.kind];
+  if (!category) return userIds;
+  const { data, error } = await admin
+    .from('user_push_preferences').select('user_id')
+    .eq('clinic_id', req.clinic_id).eq('category', category).eq('enabled', false).in('user_id', userIds);
+  if (error) {
+    console.error('push preference lookup failed, sending anyway:', error.message);
+    return userIds;
+  }
+  return withoutOptedOut(userIds, (data ?? []).map((r) => r.user_id as string));
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405);
 
   const body = (await request.json()) as SendRequest;
-  const { userIds, payload } = await resolveRecipients(body);
-  if (userIds.length === 0 || !payload) return json({ sent: 0, removed: 0 }, 200);
+  const { userIds: resolved, payload } = await resolveRecipients(body);
+  if (resolved.length === 0 || !payload) return json({ sent: 0, removed: 0 }, 200);
+  const userIds = await withoutSwitchedOff(resolved, body);
+  if (userIds.length === 0) return json({ sent: 0, removed: 0 }, 200);
 
   const { data: subs } = await admin
     .from('push_subscriptions').select('id, endpoint, p256dh, auth').in('user_id', userIds);

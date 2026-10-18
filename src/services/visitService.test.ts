@@ -203,6 +203,10 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       get: async () => undefined,
       markSeen: async () => undefined,
     },
+    userPushPreferences: {
+      listForUser: async () => [],
+      setEnabled: async () => undefined,
+    },
   };
   return { repos, visits };
 }

@@ -297,6 +297,21 @@ export interface TherapistShiftAssignment {
   updatedAt: string;
 }
 
+/**
+ * One person's switch for one kind of push alert in one clinic. Everyone is ON by default,
+ * so a row only exists once someone has chosen. The send-push edge function reads the
+ * "off" rows before sending. Client-writable (outbox); deterministic id, see `pushPreferenceId`.
+ */
+export interface UserPushPreference {
+  id: string;
+  userId: UUID;
+  clinicId: UUID;
+  category: import('./pushPreferences').PushCategory;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Which "have I looked at this yet?" signal a seen marker carries. */
 export type SeenMarkerKey = 'feedback' | 'therapist_appointments';
 

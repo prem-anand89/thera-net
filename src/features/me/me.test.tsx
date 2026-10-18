@@ -1,13 +1,22 @@
 // @vitest-environment jsdom
+import 'fake-indexeddb/auto';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Therapist } from '@/domain/types';
 
 const put = vi.fn().mockResolvedValue(undefined);
+const setEnabled = vi.fn().mockResolvedValue(undefined);
+let savedChoices: { category: string; enabled: boolean }[] = [];
 const signOut = vi.fn().mockResolvedValue({ error: null });
 vi.mock('@/services', () => ({
-  repos: { therapists: { put: (t: unknown) => put(t) } },
+  repos: {
+    therapists: { put: (t: unknown) => put(t) },
+    userPushPreferences: {
+      listForUser: () => Promise.resolve(savedChoices),
+      setEnabled: (...args: unknown[]) => setEnabled(...args),
+    },
+  },
   bookingService: { setWorkingHours: vi.fn() },
 }));
 vi.mock('@/lib/supabase', () => ({
@@ -17,6 +26,7 @@ vi.mock('@/lib/supabase', () => ({
 vi.mock('@/app/useSession', () => ({
   useSession: () => ({ session: { user: { id: 'u1', email: 'ritu@clinic.test' } } }),
 }));
+vi.mock('@/app/clinicContext', () => ({ useClinic: () => ({ id: 'c1' }) }));
 vi.mock('@/features/notifications/PushSettingsCard', () => ({ PushSettingsCard: () => <div>push card</div> }));
 
 import { MyAccountSheet } from './MyAccountSheet';
@@ -36,6 +46,8 @@ const therapist: Therapist = {
 afterEach(() => {
   cleanup();
   put.mockClear();
+  setEnabled.mockClear();
+  savedChoices = [];
   signOut.mockClear();
 });
 
@@ -44,7 +56,7 @@ describe('MyNotificationsSheet', () => {
     const { rerender } = render(
       <MyNotificationsSheet open onClose={() => {}} role="front_desk" therapist={undefined} />
     );
-    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: /email me appointment updates/i })).not.toBeInTheDocument();
     expect(screen.getByText('push card')).toBeInTheDocument();
 
     rerender(<MyNotificationsSheet open onClose={() => {}} role="therapist" therapist={therapist} />);
@@ -57,7 +69,44 @@ describe('MyNotificationsSheet', () => {
 
   it('treats an older row with no value as on', () => {
     render(<MyNotificationsSheet open onClose={() => {}} role="therapist" therapist={therapist} />);
-    expect(screen.getByRole('switch')).toBeChecked();
+    expect(screen.getByRole('switch', { name: /email me appointment updates/i })).toBeChecked();
+  });
+
+  it('offers only the alerts that apply to the role', () => {
+    const names = () => screen.queryAllByRole('switch').map((el) => el.getAttribute('aria-label') ?? '');
+    const { rerender } = render(<MyNotificationsSheet open onClose={() => {}} role="front_desk" therapist={undefined} />);
+    expect(names()).toEqual(['New booking requests']);
+
+    rerender(<MyNotificationsSheet open onClose={() => {}} role="admin" therapist={undefined} />);
+    expect(names()).toEqual(['New booking requests', 'Low-rated feedback']);
+
+    // An admin who is also a therapist gets appointment alerts too.
+    rerender(<MyNotificationsSheet open onClose={() => {}} role="admin" therapist={therapist} />);
+    expect(names().slice(0, 3)).toEqual(['New booking requests', 'Changes to my appointments', 'Low-rated feedback']);
+
+    rerender(<MyNotificationsSheet open onClose={() => {}} role="therapist" therapist={therapist} />);
+    expect(names().slice(0, 1)).toEqual(['Changes to my appointments']);
+  });
+
+  it('says to link the profile when a therapist login has no therapist profile', () => {
+    render(<MyNotificationsSheet open onClose={() => {}} role="therapist" therapist={undefined} />);
+    expect(screen.getByText(/link your login to your therapist profile/i)).toBeInTheDocument();
+    expect(screen.queryAllByRole('switch')).toHaveLength(0);
+  });
+
+  it('every alert is on by default, and switching one off saves it for this user and clinic', async () => {
+    render(<MyNotificationsSheet open onClose={() => {}} role="admin" therapist={undefined} />);
+    const toggle = screen.getByRole('switch', { name: 'Low-rated feedback' });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    await waitFor(() => expect(setEnabled).toHaveBeenCalledWith('u1', 'c1', 'low_rating_feedback', false));
+  });
+
+  it('shows an alert as off when it was switched off earlier (e.g. on another device)', async () => {
+    savedChoices = [{ category: 'booking_request', enabled: false }];
+    render(<MyNotificationsSheet open onClose={() => {}} role="admin" therapist={undefined} />);
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'New booking requests' })).not.toBeChecked());
+    expect(screen.getByRole('switch', { name: 'Low-rated feedback' })).toBeChecked();
   });
 });
 
