@@ -13,3 +13,6 @@ deno.lock
 
 # local scratch files
 scratch/
+
+# Gemini task report (generated, see scripts/gemini-report.sh)
+GEMINI_REPORT.md

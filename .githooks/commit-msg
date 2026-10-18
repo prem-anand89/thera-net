@@ -1,0 +1,9 @@
+#!/bin/sh
+# Blocks commits that weaken existing tests (see scripts/testEditCheck.mjs). Strict on agent
+# branches (gemini/*); elsewhere it only prints a warning.
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+case "$branch" in
+  gemini/*) strict="--strict" ;;
+  *) strict="" ;;
+esac
+node scripts/check-test-edits.mjs --message-file "$1" $strict
