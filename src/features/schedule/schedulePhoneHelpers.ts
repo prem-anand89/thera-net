@@ -255,3 +255,18 @@ export function isColleagueAppointment(
   );
 }
 
+/**
+ * Resolves appointments shown in History view:
+ * For therapists, stays strictly own-only to prevent leaking colleagues' patient flags/reasons/history.
+ * For clinic-wide roles (admin/front desk), includes all clinic appointments.
+ */
+export function historyAppointments<T extends { therapistId: string | null }>(
+  allAppointments: T[],
+  role: string | undefined,
+  myTherapistId: string | null | undefined
+): T[] {
+  if (role === 'therapist') {
+    return myTherapistId ? allAppointments.filter((a) => a.therapistId === myTherapistId) : [];
+  }
+  return allAppointments;
+}

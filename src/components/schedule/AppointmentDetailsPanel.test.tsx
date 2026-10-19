@@ -120,6 +120,24 @@ describe('AppointmentDetailsPanel', () => {
     expect(screen.getByText('Cancel appointment')).toBeInTheDocument();
   });
 
+  it('when canManage is true but appointment has no patient phone or therapist phone: Reschedule and No-show still show', () => {
+    show(
+      appt({
+        patientPhone: '',
+      }),
+      true
+    );
+
+    // Communication actions hidden because no phone
+    expect(screen.queryByText('Call')).not.toBeInTheDocument();
+    expect(screen.queryByText('Remind')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tell therapist')).not.toBeInTheDocument();
+
+    // Management quick actions MUST still show (no regression for managers/own appointments)
+    expect(screen.getByText('Reschedule')).toBeInTheDocument();
+    expect(screen.getByText('No-show')).toBeInTheDocument();
+  });
+
   it('before arrival: Mark arrived is the main action; Start note and Create visit sit beside it; length in minutes', () => {
     show(appt());
     expect(screen.getByRole('button', { name: /Mark arrived/ })).toBeInTheDocument();

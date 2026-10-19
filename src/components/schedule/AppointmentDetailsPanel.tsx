@@ -288,7 +288,7 @@ export function AppointmentDetailsPanel({
           </div>
         )}
 
-        {active && canManage && (appointment.patientPhone || therapistPhone) && (
+        {active && canManage && (
           <div className="mt-3 grid auto-cols-fr grid-flow-col gap-1 border-t border-[var(--border)] pt-3">
             {appointment.patientPhone && (
               <a href={`tel:${appointment.patientPhone}`} className={quickCls}>
@@ -312,23 +312,19 @@ export function AppointmentDetailsPanel({
                 Tell therapist
               </button>
             )}
-            {canManage && (
-              <>
-                <button type="button" disabled={busy} className={quickCls} onClick={() => onReschedule(appointment)}>
-                  <IconReschedule />
-                  Reschedule
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  className={`${quickCls} !text-[var(--muted)]`}
-                  onClick={() => setConfirmNoShow(true)}
-                >
-                  <IconNoShow />
-                  No-show
-                </button>
-              </>
-            )}
+            <button type="button" disabled={busy} className={quickCls} onClick={() => onReschedule(appointment)}>
+              <IconReschedule />
+              Reschedule
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              className={`${quickCls} !text-[var(--muted)]`}
+              onClick={() => setConfirmNoShow(true)}
+            >
+              <IconNoShow />
+              No-show
+            </button>
           </div>
         )}
 

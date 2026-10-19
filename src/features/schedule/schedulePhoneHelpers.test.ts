@@ -14,6 +14,7 @@ import {
   isColleagueAppointment,
   toggleTherapistSelection,
   nextTherapistSearchParam,
+  historyAppointments,
   PHONE_VIEW_STORAGE_KEY,
 } from './schedulePhoneHelpers';
 
@@ -296,6 +297,31 @@ describe('schedulePhoneHelpers', () => {
       it('returns comma-separated string for a subset', () => {
         expect(nextTherapistSearchParam(['th-1', 'th-3'], roster, 'admin', null)).toBe('th-1,th-3');
       });
+    });
+  });
+
+  describe('historyAppointments', () => {
+    const list = [
+      { id: 'a1', therapistId: 'th-1' },
+      { id: 'a2', therapistId: 'th-2' },
+      { id: 'a3', therapistId: 'th-1' },
+      { id: 'a4', therapistId: 'th-3' },
+    ];
+
+    it('for therapist role: filters strictly to own appointments', () => {
+      expect(historyAppointments(list, 'therapist', 'th-1')).toEqual([
+        { id: 'a1', therapistId: 'th-1' },
+        { id: 'a3', therapistId: 'th-1' },
+      ]);
+    });
+
+    it('for therapist role without myTherapistId: returns empty array (fail-closed)', () => {
+      expect(historyAppointments(list, 'therapist', null)).toEqual([]);
+    });
+
+    it('for admin/front-desk role: returns all appointments', () => {
+      expect(historyAppointments(list, 'admin', null)).toEqual(list);
+      expect(historyAppointments(list, 'front_desk', 'th-1')).toEqual(list);
     });
   });
 });

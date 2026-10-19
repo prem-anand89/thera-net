@@ -32,6 +32,7 @@ export function AgendaList({
   onBookGap,
   highlightId,
   flagContext,
+  isColleague,
 }: {
   appointments: Appointment[];
   slotMinutes: number;
@@ -48,6 +49,8 @@ export function AgendaList({
   highlightId?: string | null;
   /** Patient flags + condition (`usePatientFlagContext`). */
   flagContext?: PatientFlagContext;
+  /** Returns true if an appointment is a colleague's appointment (read-only for therapists). */
+  isColleague?: (appointment: Appointment) => boolean;
 }) {
   const rows: (Row & { sortAt: number })[] = [
     ...appointments.map((appointment) => {
@@ -98,8 +101,9 @@ export function AgendaList({
         const color = colorFor(appointment);
         // Same colour code as the grid and Workspace's Today rows.
         const fill = appointmentFill(appointment, color);
-        const flags = patientFlags(appointment, flagContext);
-        const reason = appointmentReason(appointment, flagContext)?.text;
+        const isReadonly = isColleague ? isColleague(appointment) : false;
+        const flags = isReadonly ? [] : patientFlags(appointment, flagContext);
+        const reason = isReadonly ? undefined : appointmentReason(appointment, flagContext)?.text;
         return (
           <li key={appointment.id}>
             <button
@@ -115,10 +119,13 @@ export function AgendaList({
               <span className="min-w-0 flex-1">
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span className={`truncate font-display text-sm font-medium ${style.text}`}>{appointment.patientName}</span>
+                  {isReadonly && (
+                    <span className="shrink-0 text-[11px] font-normal text-[var(--muted)]">· view only</span>
+                  )}
                   {highlightId === appointment.id && (
                     <span className="shrink-0 rounded-full bg-[var(--teal)] px-1.5 text-[10px] font-medium leading-4 text-white">Next</span>
                   )}
-                  <PatientFlagPills flags={flags} max={2} />
+                  {flags.length > 0 && <PatientFlagPills flags={flags} max={2} />}
                 </span>
                 {reason && <span className="block truncate text-xs text-[var(--ink)]/80">{reason}</span>}
                 <span className="block truncate text-xs text-[var(--muted)]">

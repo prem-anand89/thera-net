@@ -46,7 +46,13 @@ import { TherapistFilter } from '@/components/schedule/TherapistFilter';
 import { HistoryView } from '@/components/schedule/HistoryView';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
 import { appointmentsOutsideHours } from './hoursConflicts';
-import { nextTherapistSearchParam, selectedTherapistIds, toggleTherapistSelection } from './schedulePhoneHelpers';
+import {
+  historyAppointments,
+  isColleagueAppointment,
+  nextTherapistSearchParam,
+  selectedTherapistIds,
+  toggleTherapistSelection,
+} from './schedulePhoneHelpers';
 import { isActiveAppointmentStatus } from '@/domain/appointmentStatus';
 import { appointmentReason, patientFlags } from '@/domain/patientFlags';
 import { matchingWaitlistEntries, timeOfDayFor } from '@/domain/waitlistMatch';
@@ -203,6 +209,10 @@ export function ScheduleBookingsView({
   }, [scope.role, myTherapistId, search.therapist, roster]);
   const [showCancelled, setShowCancelled] = useState(false);
   const scopedAppointments = useMemo(() => allAppointments ?? [], [allAppointments]);
+  const historyList = useMemo(
+    () => historyAppointments(allAppointments ?? [], scope.role, myTherapistId),
+    [allAppointments, scope.role, myTherapistId]
+  );
   const visibleAppointments = useMemo(
     () =>
       scopedAppointments.filter(
@@ -975,6 +985,7 @@ export function ScheduleBookingsView({
                     if (targetId && !canBookFor(targetId)) return;
                     openBooking({ date, time, therapistId: targetId });
                   }}
+                  isColleague={(a) => isColleagueAppointment(a, scope.role, myTherapistId)}
                 />
               )}
             </div>
@@ -1003,7 +1014,7 @@ export function ScheduleBookingsView({
 
       {activeView === 'history' && (
         <HistoryView
-          appointments={scopedAppointments}
+          appointments={historyList}
           therapists={canManageAll ? roster.filter(t => t.active !== false) : []}
           today={today}
           colorFor={colorFor}
