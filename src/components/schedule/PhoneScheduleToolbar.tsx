@@ -3,7 +3,6 @@ import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
 import type { PhoneView } from '@/features/schedule/schedulePhoneHelpers';
 
 const VIEWS: { value: PhoneView; label: string }[] = [
-  { value: 'list', label: 'List' },
   { value: 'day', label: 'Day' },
   { value: '3day', label: '3-Day' },
 ];

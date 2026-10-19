@@ -43,7 +43,8 @@ describe('PhoneScheduleToolbar', () => {
   it('marks the active view and reports changes', () => {
     const props = setup();
     expect(screen.getByRole('button', { name: 'Day' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: '3-Day' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('button', { name: 'List' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '3-Day' }));
     expect(props.onViewChange).toHaveBeenCalledWith('3day');
   });

@@ -256,7 +256,9 @@ export function ScheduleBookingsView({
 
   // Phone presentation: List · Day · 3-Day. The URL mode is untouched (Day/Week stay for tablet and desktop).
   const isPhone = useIsPhone();
-  const [phoneView, setPhoneViewState] = useState<PhoneView>(readStoredPhoneView);
+  // 'list' was a separate phone view once; it is now the single-therapist Day (cards), so treat it as Day.
+  const [storedPhoneView, setPhoneViewState] = useState<PhoneView>(readStoredPhoneView);
+  const phoneView: PhoneView = storedPhoneView === 'list' ? 'day' : storedPhoneView;
   const setPhoneView = useCallback((next: PhoneView) => {
     setPhoneViewState(next);
     writeStoredPhoneView(next);
@@ -270,7 +272,9 @@ export function ScheduleBookingsView({
       return false;
     }
   });
-  const showPhoneGrid = isPhone && phoneView !== 'list';
+  // Phone Day: cards for one therapist, the multi-column grid (like 3-Day) for several.
+  const phoneDayIsGrid = visibleRoster.length > 1;
+  const showPhoneGrid = isPhone && (phoneView === '3day' || phoneDayIsGrid);
   const threeDays = useMemo(() => threeDayDates(date), [date]);
   const threeDayTherapist =
     visibleRoster.length === 1 ? visibleRoster[0] : visibleRoster.find((t) => t.id === threeDayPick) ?? null;
@@ -904,7 +908,7 @@ export function ScheduleBookingsView({
                 </div>
             )}
 
-            <div className={`desktop:hidden ${isPhone && phoneView !== 'list' && !phoneCalendarOpen ? 'hidden' : ''}`}>
+            <div className={`desktop:hidden ${showPhoneGrid && !phoneCalendarOpen ? 'hidden' : ''}`}>
               <MiniCalendarStrip
                 selectedDate={date}
                 onSelectDate={(selected) => setSchedule({ date: selected })}
@@ -1111,7 +1115,7 @@ export function ScheduleBookingsView({
                 )}
               </div>
             )}
-            {(!isPhone || phoneView === 'list' || findTime) && (
+            {(!isPhone || !showPhoneGrid || findTime) && (
             <div className="tab:hidden">
               {findTime ? (
                 <FindTimePanel
@@ -1155,17 +1159,6 @@ export function ScheduleBookingsView({
                     openBooking({ date, time, therapistId: targetId });
                   }}
                   isColleague={(a) => isColleagueAppointment(a, scope.role, myTherapistId)}
-                  sections={
-                    visibleRoster.length > 1
-                      ? visibleRoster.map((t) => ({
-                          id: t.id,
-                          name: t.name,
-                          color: t.color,
-                          readOnly: !canBookFor(t.id),
-                          summary: summaryFor(t.id).text,
-                        }))
-                      : undefined
-                  }
                 />
               )}
             </div>
