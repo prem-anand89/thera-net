@@ -73,7 +73,7 @@ import { ScheduleRail, rangeLabel } from '@/components/schedule/ScheduleRail';
 import { ResourceDayGrid, WeekTimeGrid, type GridDragOptions, type GridTherapist, type LoadSummary, type MoveTarget } from '@/components/schedule/TimeGrid';
 import { MultiResourceWeekGrid } from '@/components/schedule/MultiResourceWeekGrid';
 import { MobileDayGrid, MobileThreeDayGrid } from '@/components/schedule/MobileGrids';
-import { PhoneScheduleToolbar } from '@/components/schedule/PhoneScheduleToolbar';
+import { PhoneScheduleToolbar, PhoneStatusLine } from '@/components/schedule/PhoneScheduleToolbar';
 import { BookFab } from '@/components/schedule/BookFab';
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
 
@@ -687,6 +687,11 @@ export function ScheduleBookingsView({
 
   // ---- phone (List · Day · 3-Day) ----
   const phoneTitle = phoneView === '3day' ? formatThreeDayTitle(date) : shortDate(date);
+  const threeDayBooked = visibleAppointments.filter(
+    (a) => a.status !== 'cancelled' && threeDays.includes(dateForAppointment(a))
+  ).length;
+  const phoneStatusSummary =
+    phoneView === '3day' ? (threeDayBooked ? `${threeDayBooked} booked` : 'Nothing booked yet') : daySummary;
   const phoneTodayDisabled = phoneView === '3day' ? threeDays.includes(today) : date === today;
   const dismissHoldHint = () => {
     setHoldHintDismissed(true);
@@ -825,20 +830,18 @@ export function ScheduleBookingsView({
                 Replaces the old header row and the chips/summary row. */}
             {isPhone ? (
               <PhoneScheduleToolbar
-                title={phoneTitle}
-                summary={phoneView === 'day' ? daySummary : undefined}
-                onToday={() => setSchedule({ date: today })}
-                todayDisabled={phoneTodayDisabled}
                 view={phoneView}
                 onViewChange={setPhoneView}
                 filter={
                   roster.length > 1 ? (
                     <TherapistFilter
-                      therapists={roster.filter((t) => t.active !== false)}
+                      therapists={roster.filter((t) => t.active !== false).map((t) => ({ ...t, summary: summaryFor(t.id).text }))}
                       visibleIds={selectedIds}
                       onToggle={toggleTherapist}
                       onShowAll={() => setTherapists(isTherapist ? roster.map((t) => t.id) : [])}
+                      onOnly={(id) => setTherapists([id])}
                       showLabel
+                      sheet
                     />
                   ) : null
                 }
@@ -909,6 +912,14 @@ export function ScheduleBookingsView({
                 closedFor={closedFor}
               />
             </div>
+            {isPhone && (
+              <PhoneStatusLine
+                label={date === today && phoneView === 'day' ? 'Today' : phoneTitle}
+                summary={phoneStatusSummary}
+                onToday={() => setSchedule({ date: today })}
+                showToday={!phoneTodayDisabled}
+              />
+            )}
 
             {closedToday.closed && (
               <div className={`${dayAppointments.length === 0 && mode === 'day' && !showPhoneGrid ? 'hidden tab:flex' : 'flex'} flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--slate-light)] px-3 py-2 text-sm text-[var(--slate)]`}>

@@ -2,17 +2,13 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { PhoneScheduleToolbar } from './PhoneScheduleToolbar';
+import { PhoneScheduleToolbar, PhoneStatusLine } from './PhoneScheduleToolbar';
 import { BookFab } from './BookFab';
 import { TherapistFilter } from './TherapistFilter';
 import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
 
 function setup(overrides: Partial<Parameters<typeof PhoneScheduleToolbar>[0]> = {}) {
   const props = {
-    title: 'Mon, 19 Oct',
-    summary: '3 booked, 1 still to come',
-    onToday: vi.fn(),
-    todayDisabled: false,
     view: 'day' as const,
     onViewChange: vi.fn(),
     filter: <button type="button">All therapists</button>,
@@ -26,29 +22,14 @@ function setup(overrides: Partial<Parameters<typeof PhoneScheduleToolbar>[0]> = 
 describe('PhoneScheduleToolbar', () => {
   afterEach(cleanup);
 
-  it('has the date headline over the summary, then a second row with filter and view switch', () => {
-    setup({ todayDisabled: true });
-    const rows = document.querySelector('[data-phone-toolbar]')!.children;
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toContainElement(screen.getByRole('heading', { name: 'Mon, 19 Oct' }));
-    expect(rows[0]).toContainElement(screen.getByText('3 booked, 1 still to come'));
-    expect(rows[0]).toContainElement(screen.getByRole('button', { name: 'More' }));
-    expect(rows[1]).toContainElement(screen.getByRole('button', { name: 'All therapists' }));
-    expect(rows[1]).toContainElement(screen.getByRole('button', { name: 'Day' }));
-  });
-
-  it('shows a Today button only when away from today, and it fires', () => {
-    const props = setup({ todayDisabled: false });
-    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
-    expect(props.onToday).toHaveBeenCalled();
-    cleanup();
-    setup({ todayDisabled: true });
-    expect(screen.queryByRole('button', { name: 'Today' })).not.toBeInTheDocument();
-  });
-
-  it('has no previous/next date buttons (the week strip navigates)', () => {
+  it('is one row: therapist filter, Day/3-Day switch and menu — no date headline or Today button', () => {
     setup();
-    expect(screen.queryByRole('button', { name: /previous|next/i })).not.toBeInTheDocument();
+    const root = document.querySelector('[data-phone-toolbar]')!;
+    for (const name of ['All therapists', 'Day', '3-Day', 'More']) {
+      expect(root).toContainElement(screen.getByRole('button', { name }));
+    }
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /today|previous|next/i })).not.toBeInTheDocument();
   });
 
   it('marks the active view, offers only Day and 3-Day, and reports changes', () => {
@@ -59,7 +40,21 @@ describe('PhoneScheduleToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: '3-Day' }));
     expect(props.onViewChange).toHaveBeenCalledWith('3day');
   });
+});
 
+describe('PhoneStatusLine', () => {
+  afterEach(cleanup);
+
+  it('shows the label and summary, with Today only when away from today', () => {
+    const onToday = vi.fn();
+    const { rerender } = render(<PhoneStatusLine label="Tue, 20 Oct" summary="Nothing booked yet" onToday={onToday} showToday />);
+    expect(screen.getByText('Tue, 20 Oct')).toBeInTheDocument();
+    expect(screen.getByText(/Nothing booked yet/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Today/ }));
+    expect(onToday).toHaveBeenCalledTimes(1);
+    rerender(<PhoneStatusLine label="Today" summary="2 booked" onToday={onToday} showToday={false} />);
+    expect(screen.queryByRole('button', { name: /Today/ })).not.toBeInTheDocument();
+  });
 });
 
 describe('BookFab', () => {
@@ -107,5 +102,50 @@ describe('MiniCalendarStrip range', () => {
     rerender(<MiniCalendarStrip selectedDate="2026-10-15" onSelectDate={vi.fn()} appointmentDates={[]} />);
     expect(container.querySelectorAll('[data-in-range]')).toHaveLength(0);
     expect(container.querySelectorAll('[aria-selected="true"]')).toHaveLength(1);
+  });
+});
+
+describe('TherapistFilter bottom sheet (phones)', () => {
+  afterEach(cleanup);
+  const therapists = [
+    { id: 't1', name: 'Dr Asha', color: '#2f6690', summary: '2 booked' },
+    { id: 't2', name: 'Dr Ravi', color: '#a6552f', summary: 'Off today' },
+  ];
+
+  it('opens a sheet (not a popover) with a row per therapist, summaries, Only, and Done', () => {
+    const onToggle = vi.fn();
+    const onOnly = vi.fn();
+    render(<TherapistFilter therapists={therapists} visibleIds={['t1']} onToggle={onToggle} onShowAll={vi.fn()} onOnly={onOnly} showLabel sheet />);
+    expect(screen.queryByText('Show therapists')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Dr Asha/ }));
+    expect(screen.getByText('Show therapists')).toBeInTheDocument();
+    expect(screen.getByText('2 booked')).toBeInTheDocument();
+    expect(screen.getByText('Off today')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Dr Ravi/ }));
+    expect(onToggle).toHaveBeenCalledWith('t2');
+    fireEvent.click(screen.getByRole('button', { name: 'Only Dr Ravi' }));
+    expect(onOnly).toHaveBeenCalledWith('t2');
+    expect(screen.queryByText('Show therapists')).not.toBeInTheDocument();
+  });
+
+  it('Show all appears only when the list is narrowed, and Done closes the sheet', () => {
+    const onShowAll = vi.fn();
+    render(<TherapistFilter therapists={therapists} visibleIds={['t1']} onToggle={vi.fn()} onShowAll={onShowAll} showLabel sheet />);
+    fireEvent.click(screen.getByRole('button', { name: /Dr Asha/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }));
+    expect(onShowAll).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByText('Show therapists')).not.toBeInTheDocument();
+    cleanup();
+    render(<TherapistFilter therapists={therapists} visibleIds={[]} onToggle={vi.fn()} onShowAll={vi.fn()} showLabel sheet />);
+    fireEvent.click(screen.getByRole('button', { name: /All therapists/ }));
+    expect(screen.queryByRole('button', { name: 'Show all' })).not.toBeInTheDocument();
+  });
+
+  it('without sheet the desktop popover is unchanged', () => {
+    render(<TherapistFilter therapists={therapists} visibleIds={[]} onToggle={vi.fn()} onShowAll={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /All therapists/ }));
+    expect(screen.getByText('Show therapists')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
   });
 });
