@@ -70,6 +70,16 @@
 
 **Tests:** existing `ResourceDayGrid.test.tsx` must pass unchanged; add one test asserting the tint class on a free slot without `phone`.
 
+## 4b. Revisions after review (2026-10-20, owner agreed) — these override steps 4–7 below where they differ
+
+Built so far: steps 1–3, plus the in-column hour rail, page scroll on phones (≤ 3 columns) and the fixes in `e93927e`.
+**Order of work: step 4 → step 7 → step 5 → step 6.**
+
+- **Step 4:** drop the per-column-header "Only" button (the therapist sheet and the desktop rail already have "Only"). Keep the date headline on `tab:` and up — iPad has no week strip.
+- **Step 5:** no new chip row. In 3-Day the toolbar's therapist chip becomes **single choice** ("Kiran ▾"); the same bottom sheet picks one therapist, held in local state `threeDayPick` (URL filter unchanged). Keep the load dots and the start time on tall blocks.
+- **Step 6:** precedence is (1) `therapist` in the URL, (2) the saved selection minus anyone off that day, (3) who's working. Apply a saved selection with a history **replace**, never a new entry. "N off" goes in the status line as a tappable part ("Today · 6 booked · 2 off"), not a new line.
+- **Step 7:** at most **3 lanes** per time in a day column; further overlaps collapse into a "+N" chip that opens a short list of those appointments (tap → details panel). The < 72px initials rule applies to the remaining lanes. Free time is tinted only where at least one selected, bookable therapist is free **and working**; time outside everyone's hours stays blank. Tests: 5 overlapping appointments show 3 lanes + "+2".
+
 ## 5. Step 4 — Desktop / iPad toolbar aligned with phones
 
 **Build in `ScheduleBookingsView.tsx` (the non-phone toolbar branch):** same order as phones — ‹ › + date headline + summary, Today, labelled therapist chip (below `desktop:`; the rail covers desktop), `Day | Week`, **Find a time** as a visible button (from `tab:`; today it is only in ⋮ on phones), ⋮. Extract the toolbar into `src/components/schedule/ScheduleToolbar.tsx` if it removes ≥ 40 lines from the view (it should).
