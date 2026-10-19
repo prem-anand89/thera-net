@@ -195,6 +195,16 @@ export function DayColumn({
           style={{ top: index * 60 * pxPerMinute }}
         />
       ))}
+      {rail &&
+        Array.from({ length: hours.endHour - hours.startHour }, (_, index) => (
+          <div
+            key={`half-${index}`}
+            className="pointer-events-none absolute border-t border-dashed border-[var(--border)]/60"
+            style={{ top: (index * 60 + 30) * pxPerMinute, left: RAIL_W, right: 0 }}
+            aria-hidden
+            data-half-hour
+          />
+        ))}
       {offHours.map((range) => (
         <div
           key={range.start}
@@ -220,6 +230,10 @@ export function DayColumn({
           <div className="pointer-events-none absolute inset-y-0 z-[1] w-px bg-[var(--border)]" style={{ left: 16 }} aria-hidden data-rail />
           {Array.from({ length: hours.endHour - hours.startHour }, (_, index) => {
             const hour = hours.startHour + index;
+            // The Now badge takes the rail's place when it is within a label's height of an hour line.
+            const labelTop = index === 0 ? 13 : index * 60 * pxPerMinute;
+            const nowTop = nowMinutes === null ? null : (nowMinutes - hours.startHour * 60) * pxPerMinute;
+            if (nowTop !== null && Math.abs(nowTop - labelTop) < 12) return null;
             return (
               <span
                 key={index}
@@ -295,7 +309,7 @@ export function DayColumn({
             title={`${appointment.patientName} · ${minutesLabel(start)}–${minutesLabel(end)}${reason ? ` · ${reason}` : ''}${flags.length ? ` · ${flags.map((f) => f.label).join(', ')}` : ''}${draggable ? ' · drag to move' : ''}`}
             className={`group/block absolute z-[2] overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-left text-xs transition-shadow hover:shadow-md ${look.className} ${
               selectedId === appointment.id ? 'outline outline-2 outline-[var(--teal)]' : ''
-            } ${draggable ? 'pointer-fine:cursor-grab' : ''} ${drag?.draggingId === appointment.id ? 'opacity-40' : over ? 'opacity-60' : ''}`}
+            } ${draggable ? 'pointer-fine:cursor-grab' : ''} ${drag?.draggingId === appointment.id ? 'opacity-40' : over ? 'opacity-75' : ''}`}
             style={{
               top: geometry.top,
               height: geometry.height - 1,

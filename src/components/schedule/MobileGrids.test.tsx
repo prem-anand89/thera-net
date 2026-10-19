@@ -151,8 +151,8 @@ describe('MobileDayGrid', () => {
         })}
       />
     );
-    expect(screen.getByRole('button', { name: /Past One/ }).className).toContain('opacity-60');
-    expect(screen.getByRole('button', { name: /Next One/ }).className).not.toContain('opacity-60');
+    expect(screen.getByRole('button', { name: /Past One/ }).className).toContain('opacity-75');
+    expect(screen.getByRole('button', { name: /Next One/ }).className).not.toContain('opacity-75');
   });
 
   it('draws the Now line thin and translucent so it never hides text', () => {
@@ -215,4 +215,20 @@ describe('MobileThreeDayGrid', () => {
     render(<MobileThreeDayGrid {...weekProps({ isColleague: true })} />);
     expect(screen.queryByRole('button', { name: /^Book / })).not.toBeInTheDocument();
   });
+
+  it('single-column Day marks half hours with a faint dashed line (not the multi-therapist grid)', () => {
+    const { container } = render(<MobileDayGrid {...dayProps({ therapists: [therapists[0]], appointments: [] })} />);
+    expect(container.querySelectorAll('[data-half-hour]').length).toBeGreaterThan(0);
+    cleanup();
+    const multi = render(<MobileDayGrid {...dayProps()} />);
+    expect(multi.container.querySelector('[data-half-hour]')).toBeNull();
+  });
+
+  it('the rail hides an hour label while the Now badge sits on it, and shows it again otherwise', () => {
+    const { rerender } = render(<MobileDayGrid {...dayProps({ therapists: [therapists[0]], nowMinutes: 11 * 60 })} />);
+    expect(screen.queryByText('11')).not.toBeInTheDocument();
+    rerender(<MobileDayGrid {...dayProps({ therapists: [therapists[0]], nowMinutes: 11 * 60 + 20 })} />);
+    expect(screen.getByText('11')).toBeInTheDocument();
+  });
+
 });
