@@ -47,12 +47,19 @@ import { HistoryView } from '@/components/schedule/HistoryView';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
 import { appointmentsOutsideHours } from './hoursConflicts';
 import {
+  formatThreeDayTitle,
   historyAppointments,
   isColleagueAppointment,
   nextTherapistSearchParam,
+  readStoredPhoneView,
   selectedTherapistIds,
+  stepThreeDay,
+  threeDayDates,
   toggleTherapistSelection,
+  writeStoredPhoneView,
+  type PhoneView,
 } from './schedulePhoneHelpers';
+import { useIsPhone } from './useIsPhone';
 import { isActiveAppointmentStatus } from '@/domain/appointmentStatus';
 import { appointmentReason, patientFlags } from '@/domain/patientFlags';
 import { matchingWaitlistEntries, timeOfDayFor } from '@/domain/waitlistMatch';
@@ -66,6 +73,8 @@ import { FindTimePanel } from '@/components/schedule/FindTimePanel';
 import { ScheduleRail, rangeLabel } from '@/components/schedule/ScheduleRail';
 import { ResourceDayGrid, WeekTimeGrid, type GridDragOptions, type GridTherapist, type LoadSummary, type MoveTarget } from '@/components/schedule/TimeGrid';
 import { MultiResourceWeekGrid } from '@/components/schedule/MultiResourceWeekGrid';
+import { MobileDayGrid, MobileThreeDayGrid } from '@/components/schedule/MobileGrids';
+import { PhoneScheduleToolbar } from '@/components/schedule/PhoneScheduleToolbar';
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
 
 type BookingView = 'schedule' | 'requests' | 'history';
@@ -244,6 +253,40 @@ export function ScheduleBookingsView({
   // Week view is available for both single-therapist and multi-therapist (matrix) modes.
   const weekAvailable = true;
   const mode = search.mode ?? 'day';
+
+  // Phone presentation: List · Day · 3-Day. The URL mode is untouched (Day/Week stay for tablet and desktop).
+  const isPhone = useIsPhone();
+  const [phoneView, setPhoneViewState] = useState<PhoneView>(readStoredPhoneView);
+  const setPhoneView = useCallback((next: PhoneView) => {
+    setPhoneViewState(next);
+    writeStoredPhoneView(next);
+  }, []);
+  const [phoneCalendarOpen, setPhoneCalendarOpen] = useState(false);
+  const [threeDayPick, setThreeDayPick] = useState<string | null>(null);
+  const [holdHintDismissed, setHoldHintDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('theranet:schedule-phone-hint') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const showPhoneGrid = isPhone && phoneView !== 'list';
+  const threeDays = useMemo(() => threeDayDates(date), [date]);
+  const threeDayTherapist =
+    visibleRoster.length === 1 ? visibleRoster[0] : visibleRoster.find((t) => t.id === threeDayPick) ?? null;
+  const phoneHours = useMemo(() => {
+    if (phoneView !== '3day') {
+      return displayHoursFor({ clinicHours: hours, appointments: dayAppointments, mode: 'day', date, slotMinutes });
+    }
+    const wanted = new Set(threeDays);
+    return displayHoursFor({
+      clinicHours: hours,
+      appointments: visibleAppointments.filter((a) => wanted.has(dateForAppointment(a))),
+      mode: 'day',
+      date,
+      slotMinutes,
+    });
+  }, [phoneView, hours, dayAppointments, visibleAppointments, threeDays, date, slotMinutes]);
 
   const displayHours = useMemo(
     () =>
@@ -637,6 +680,63 @@ export function ScheduleBookingsView({
   const closureForDate = closures.find((range) => range.from <= date && range.to >= date)
     ?? groupClosedRanges(closedDates ?? []).find((range) => range.from <= date && range.to >= date);
 
+  // ---- phone (List · Day · 3-Day) ----
+  const phoneTitle = phoneView === '3day' ? formatThreeDayTitle(date) : shortDate(date);
+  const phoneStep = (direction: 1 | -1) =>
+    setSchedule({ date: phoneView === '3day' ? stepThreeDay(date, direction) : addDays(date, direction) });
+  const phoneTodayDisabled = phoneView === '3day' ? threeDays.includes(today) : date === today;
+  const dismissHoldHint = () => {
+    setHoldHintDismissed(true);
+    try {
+      localStorage.setItem('theranet:schedule-phone-hint', '1');
+    } catch {
+      // storage unavailable: the hint just comes back next time
+    }
+  };
+
+  const moreMenu = (
+  <KebabMenu ariaLabel="More schedule options">
+    {(close) => (
+      <>
+        <button type="button" className={`${menuItem} tab:hidden`} onClick={() => { setFindTime((current) => !current); close(); }}>
+          {findTime ? 'Back to the day' : 'Find a time'}
+        </button>
+        <button type="button" className={menuItem} onClick={() => { setShowCancelled((current) => !current); close(); }}>
+          {showCancelled ? 'Hide cancelled' : 'Show cancelled'}
+        </button>
+        {canManageAll && (
+          <button type="button" className={`${menuItem} tab:hidden`} onClick={() => { setReminderOpen(true); close(); }}>
+            Send reminders
+          </button>
+        )}
+        {canManageAll && (
+          <button type="button" className={menuItem} onClick={() => { setClosedSheetOpen(true); close(); }}>
+            Set closed days
+          </button>
+        )}
+        {canManageAll && (
+          <button type="button" className={menuItem} onClick={() => { setAddWaitlistOpen(true); close(); }}>
+            Add to waitlist
+          </button>
+        )}
+        {canManageAll && (
+          <button type="button" className={menuItem} onClick={() => { chooseTherapist('shift'); close(); }}>
+            Assign shift…
+          </button>
+        )}
+        {canManageAll && (
+          <button type="button" className={menuItem} onClick={() => { chooseTherapist('hours'); close(); }}>
+            Working hours…
+          </button>
+        )}
+        <button type="button" className={`${menuItem} hidden pointer-fine:block`} onClick={() => { setShortcutsOpen(true); close(); }}>
+          Keyboard shortcuts
+        </button>
+      </>
+    )}
+  </KebabMenu>
+  );
+
   return (
     <div className="space-y-4 pb-20">
       <ScheduleTabs
@@ -720,100 +820,89 @@ export function ScheduleBookingsView({
             {/* One toolbar for the day: date as the headline with ‹ › and
                 Today, a plain-language summary, then the view controls.
                 Replaces the old header row and the chips/summary row. */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <div className="flex min-w-0 flex-1 items-center gap-1">
-                <button type="button" className="hidden min-h-9 min-w-9 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--paper)] tab:flex" aria-label={mode === 'day' ? 'Previous day' : 'Previous week'} onClick={() => step(-1)}>
-                  <IconChevronLeft className="h-5 w-5" />
-                </button>
-                <button type="button" className="hidden min-h-9 min-w-9 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--paper)] tab:flex" aria-label={mode === 'day' ? 'Next day' : 'Next week'} onClick={() => step(1)}>
-                  <IconChevronRight className="h-5 w-5" />
-                </button>
-                <div className="min-w-0 tab:ml-1">
-                  <h2 className="flex items-baseline gap-2 truncate font-display text-lg font-semibold leading-tight text-[var(--ink)]">
-                    {mode === 'day' ? (
-                      <>
-                        <span className="sm:hidden">{shortDate(date)}</span>
-                        <span className="hidden sm:inline">{longDate(date)}</span>
-                      </>
-                    ) : (
-                      `Week of ${shortDate(getWeekStart(date))}`
-                    )}
-                  </h2>
-                  {mode === 'day' && <p className="truncate text-xs text-[var(--muted)]">{daySummary}</p>}
-                </div>
-                <button 
-                  type="button" 
-                  disabled={mode === 'day' ? date === today : getWeekStart(date) === getWeekStart(today)}
-                  className="ml-1 min-h-9 shrink-0 rounded-lg border border-[var(--border)] px-2.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)] disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent" 
-                  onClick={() => setSchedule({ date: today })}
-                >
-                  Today
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                {roster.length > 1 && (
-                  <div className="desktop:hidden">
+            {isPhone ? (
+              <PhoneScheduleToolbar
+                title={phoneTitle}
+                summary={phoneView === 'day' ? daySummary : undefined}
+                prevLabel={phoneView === '3day' ? 'Previous 3 days' : 'Previous day'}
+                nextLabel={phoneView === '3day' ? 'Next 3 days' : 'Next day'}
+                onPrev={() => phoneStep(-1)}
+                onNext={() => phoneStep(1)}
+                onToday={() => setSchedule({ date: today })}
+                todayDisabled={phoneTodayDisabled}
+                calendarOpen={phoneCalendarOpen}
+                onToggleCalendar={() => setPhoneCalendarOpen((open) => !open)}
+                view={phoneView}
+                onViewChange={setPhoneView}
+                filter={
+                  roster.length > 1 ? (
                     <TherapistFilter
-                      therapists={roster.filter(t => t.active !== false)}
+                      therapists={roster.filter((t) => t.active !== false)}
                       visibleIds={selectedIds}
                       onToggle={toggleTherapist}
                       onShowAll={() => setTherapists(isTherapist ? roster.map((t) => t.id) : [])}
                     />
+                  ) : null
+                }
+                menu={moreMenu}
+              />
+            ) : (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-1">
+                    <button type="button" className="hidden min-h-9 min-w-9 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--paper)] tab:flex" aria-label={mode === 'day' ? 'Previous day' : 'Previous week'} onClick={() => step(-1)}>
+                      <IconChevronLeft className="h-5 w-5" />
+                    </button>
+                    <button type="button" className="hidden min-h-9 min-w-9 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--paper)] tab:flex" aria-label={mode === 'day' ? 'Next day' : 'Next week'} onClick={() => step(1)}>
+                      <IconChevronRight className="h-5 w-5" />
+                    </button>
+                    <div className="min-w-0 tab:ml-1">
+                      <h2 className="flex items-baseline gap-2 truncate font-display text-lg font-semibold leading-tight text-[var(--ink)]">
+                        {mode === 'day' ? (
+                          <>
+                            <span className="sm:hidden">{shortDate(date)}</span>
+                            <span className="hidden sm:inline">{longDate(date)}</span>
+                          </>
+                        ) : (
+                          `Week of ${shortDate(getWeekStart(date))}`
+                        )}
+                      </h2>
+                      {mode === 'day' && <p className="truncate text-xs text-[var(--muted)]">{daySummary}</p>}
+                    </div>
+                    <button 
+                      type="button" 
+                      disabled={mode === 'day' ? date === today : getWeekStart(date) === getWeekStart(today)}
+                      className="ml-1 min-h-9 shrink-0 rounded-lg border border-[var(--border)] px-2.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)] disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent" 
+                      onClick={() => setSchedule({ date: today })}
+                    >
+                      Today
+                    </button>
                   </div>
-                )}
-                {weekAvailable && (
-                  <div className="hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5 tab:flex" role="group" aria-label="View">
-                    {(['day', 'week'] as const).map((candidate) => (
-                      <button key={candidate} type="button" aria-pressed={mode === candidate} onClick={() => setSchedule({ mode: candidate })} className={`min-h-8 rounded-md px-3 text-xs font-medium ${mode === candidate ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}>
-                        {candidate === 'day' ? 'Day' : 'Week'}
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-2">
+                    {roster.length > 1 && (
+                      <div className="desktop:hidden">
+                        <TherapistFilter
+                          therapists={roster.filter(t => t.active !== false)}
+                          visibleIds={selectedIds}
+                          onToggle={toggleTherapist}
+                          onShowAll={() => setTherapists(isTherapist ? roster.map((t) => t.id) : [])}
+                        />
+                      </div>
+                    )}
+                    {weekAvailable && (
+                      <div className="hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5 tab:flex" role="group" aria-label="View">
+                        {(['day', 'week'] as const).map((candidate) => (
+                          <button key={candidate} type="button" aria-pressed={mode === candidate} onClick={() => setSchedule({ mode: candidate })} className={`min-h-8 rounded-md px-3 text-xs font-medium ${mode === candidate ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}>
+                            {candidate === 'day' ? 'Day' : 'Week'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {moreMenu}
                   </div>
-                )}
-                <KebabMenu ariaLabel="More schedule options">
-                  {(close) => (
-                    <>
-                      <button type="button" className={`${menuItem} tab:hidden`} onClick={() => { setFindTime((current) => !current); close(); }}>
-                        {findTime ? 'Back to the day' : 'Find a time'}
-                      </button>
-                      <button type="button" className={menuItem} onClick={() => { setShowCancelled((current) => !current); close(); }}>
-                        {showCancelled ? 'Hide cancelled' : 'Show cancelled'}
-                      </button>
-                      {canManageAll && (
-                        <button type="button" className={`${menuItem} tab:hidden`} onClick={() => { setReminderOpen(true); close(); }}>
-                          Send reminders
-                        </button>
-                      )}
-                      {canManageAll && (
-                        <button type="button" className={menuItem} onClick={() => { setClosedSheetOpen(true); close(); }}>
-                          Set closed days
-                        </button>
-                      )}
-                      {canManageAll && (
-                        <button type="button" className={menuItem} onClick={() => { setAddWaitlistOpen(true); close(); }}>
-                          Add to waitlist
-                        </button>
-                      )}
-                      {canManageAll && (
-                        <button type="button" className={menuItem} onClick={() => { chooseTherapist('shift'); close(); }}>
-                          Assign shift…
-                        </button>
-                      )}
-                      {canManageAll && (
-                        <button type="button" className={menuItem} onClick={() => { chooseTherapist('hours'); close(); }}>
-                          Working hours…
-                        </button>
-                      )}
-                      <button type="button" className={`${menuItem} hidden pointer-fine:block`} onClick={() => { setShortcutsOpen(true); close(); }}>
-                        Keyboard shortcuts
-                      </button>
-                    </>
-                  )}
-                </KebabMenu>
-              </div>
-            </div>
+                </div>
+            )}
 
-            <div className="desktop:hidden">
+            <div className={`desktop:hidden ${isPhone && phoneView !== 'list' && !phoneCalendarOpen ? 'hidden' : ''}`}>
               <MiniCalendarStrip
                 selectedDate={date}
                 onSelectDate={(selected) => setSchedule({ date: selected })}
@@ -823,7 +912,7 @@ export function ScheduleBookingsView({
             </div>
 
             {closedToday.closed && (
-              <div className={`${dayAppointments.length === 0 && mode === 'day' ? 'hidden tab:flex' : 'flex'} flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--slate-light)] px-3 py-2 text-sm text-[var(--slate)]`}>
+              <div className={`${dayAppointments.length === 0 && mode === 'day' && !showPhoneGrid ? 'hidden tab:flex' : 'flex'} flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--slate-light)] px-3 py-2 text-sm text-[var(--slate)]`}>
                 <span>
                   <strong>
                     {closedToday.kind === 'holiday'
@@ -867,7 +956,7 @@ export function ScheduleBookingsView({
               </div>
             )}
 
-            {isAllTherapistsWeek && (
+            {isAllTherapistsWeek && !isPhone && (
               <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-xs text-[var(--muted)]">
                 <span>
                   Showing first <strong>{maxWeekTherapists}</strong> therapists in week view. Use the left sidebar to select specific team members.
@@ -875,74 +964,152 @@ export function ScheduleBookingsView({
               </div>
             )}
 
-            {/* Phones always show the day (agenda); Week is tab+ only. */}
-            <div className="hidden tab:block">
-              {mode === 'week' ? (
-                singleTherapist ? (
-                  <WeekTimeGrid
+            {/* Phones: Day / 3-Day grids, or the List below. Tablet and desktop keep Day/Week. */}
+            {showPhoneGrid && !findTime && (
+              <div className="space-y-2">
+                {!holdHintDismissed && (
+                  <p className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
+                    <span>Tap a free time to book. Press and hold an appointment to move it.</span>
+                    <button type="button" className="min-h-8 shrink-0 px-2 font-medium text-[var(--teal)]" onClick={dismissHoldHint}>
+                      Got it
+                    </button>
+                  </p>
+                )}
+                {phoneView === 'day' ? (
+                  <MobileDayGrid
                     reasonFor={reasonFor}
                     flagContext={flagContext}
-                    days={weekDays(date)}
+                    date={date}
                     today={today}
                     nowMinutes={now.minutes}
-                    appointments={visibleAppointments.filter((a) => a.therapistId === singleTherapist.id)}
-                    hours={displayHours}
+                    therapists={gridTherapists}
+                    appointments={dayAppointments}
+                    hours={phoneHours}
+                    slotMinutes={slotMinutes}
+                    closed={closedToday}
+                    colorFor={colorFor}
+                    selectedId={selectedId}
+                    onSelect={(a) => setSelectedId(a.id)}
+                    canBookFor={canBookFor}
+                    onBook={({ time, therapistId }) => openBooking({ date, time, therapistId })}
+                    summaryFor={summaryFor}
+                    workingFor={(therapistId) => workingFor(therapistId, date)}
+                    drag={dragOptions}
+                  />
+                ) : threeDayTherapist ? (
+                  <MobileThreeDayGrid
+                    reasonFor={reasonFor}
+                    flagContext={flagContext}
+                    days={threeDays}
+                    today={today}
+                    nowMinutes={now.minutes}
+                    appointments={visibleAppointments.filter((a) => a.therapistId === threeDayTherapist.id)}
+                    hours={phoneHours}
                     slotMinutes={slotMinutes}
                     closedFor={closedFor}
                     colorFor={colorFor}
                     selectedId={selectedId}
                     onSelect={(a) => setSelectedId(a.id)}
-                    onBook={canBookFor(singleTherapist.id) ? ({ date: day, time }) => openBooking({ date: day, time, therapistId: singleTherapist.id }) : undefined}
-                    onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
-                    workingFor={(day) => workingFor(singleTherapist.id, day)}
+                    onBook={({ date: day, time }) => openBooking({ date: day, time, therapistId: threeDayTherapist.id })}
+                    isColleague={!canBookFor(threeDayTherapist.id)}
+                    onOpenDay={(day) => {
+                      setPhoneView('day');
+                      setSchedule({ date: day });
+                    }}
+                    workingFor={(day) => workingFor(threeDayTherapist.id, day)}
                     drag={dragOptions}
                   />
                 ) : (
-                  <MultiResourceWeekGrid
-                    days={weekDays(date)}
-                    today={today}
-                    nowMinutes={now.minutes}
-                    therapists={weekGridTherapists}
-                    appointments={visibleAppointments}
-                    hours={displayHours}
-                    slotMinutes={slotMinutes}
-                    closedFor={closedFor}
-                    colorFor={colorFor}
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                    <p className="text-sm font-medium text-[var(--ink)]">Pick a therapist</p>
+                    <p className="mt-0.5 text-xs text-[var(--muted)]">3-Day shows one therapist at a time.</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {visibleRoster.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[var(--border)] px-4 text-sm text-[var(--ink)]"
+                          onClick={() => (isTherapist ? setThreeDayPick(t.id) : setTherapists([t.id]))}
+                        >
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.color }} aria-hidden />
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {!isPhone && (
+              <div className="hidden tab:block">
+                {mode === 'week' ? (
+                  singleTherapist ? (
+                    <WeekTimeGrid
+                      reasonFor={reasonFor}
+                      flagContext={flagContext}
+                      days={weekDays(date)}
+                      today={today}
+                      nowMinutes={now.minutes}
+                      appointments={visibleAppointments.filter((a) => a.therapistId === singleTherapist.id)}
+                      hours={displayHours}
+                      slotMinutes={slotMinutes}
+                      closedFor={closedFor}
+                      colorFor={colorFor}
+                      selectedId={selectedId}
+                      onSelect={(a) => setSelectedId(a.id)}
+                      onBook={canBookFor(singleTherapist.id) ? ({ date: day, time }) => openBooking({ date: day, time, therapistId: singleTherapist.id }) : undefined}
+                      onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
+                      workingFor={(day) => workingFor(singleTherapist.id, day)}
+                      drag={dragOptions}
+                    />
+                  ) : (
+                    <MultiResourceWeekGrid
+                      days={weekDays(date)}
+                      today={today}
+                      nowMinutes={now.minutes}
+                      therapists={weekGridTherapists}
+                      appointments={visibleAppointments}
+                      hours={displayHours}
+                      slotMinutes={slotMinutes}
+                      closedFor={closedFor}
+                      colorFor={colorFor}
+                      reasonFor={reasonFor}
+                      flagContext={flagContext}
+                      selectedId={selectedId}
+                      onSelect={(a) => setSelectedId(a.id)}
+                      onBook={({ date: day, time, therapistId }) => {
+                        if (canBookFor(therapistId)) openBooking({ date: day, time, therapistId });
+                      }}
+                      onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
+                      workingFor={(therapistId, day) => workingFor(therapistId, day)}
+                      drag={dragOptions}
+                    />
+                  )
+                ) : (
+                  <ResourceDayGrid
                     reasonFor={reasonFor}
                     flagContext={flagContext}
+                    date={date}
+                    today={today}
+                    nowMinutes={now.minutes}
+                    therapists={gridTherapists}
+                    appointments={dayAppointments}
+                    hours={displayHours}
+                    slotMinutes={slotMinutes}
+                    closed={closedToday}
+                    colorFor={colorFor}
                     selectedId={selectedId}
                     onSelect={(a) => setSelectedId(a.id)}
-                    onBook={({ date: day, time, therapistId }) => {
-                      if (canBookFor(therapistId)) openBooking({ date: day, time, therapistId });
-                    }}
-                    onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
-                    workingFor={(therapistId, day) => workingFor(therapistId, day)}
+                    canBookFor={canBookFor}
+                    onBook={({ time, therapistId }) => openBooking({ date, time, therapistId })}
+                    summaryFor={summaryFor}
+                    workingFor={(therapistId) => workingFor(therapistId, date)}
                     drag={dragOptions}
                   />
-                )
-              ) : (
-                <ResourceDayGrid
-                  reasonFor={reasonFor}
-                  flagContext={flagContext}
-                  date={date}
-                  today={today}
-                  nowMinutes={now.minutes}
-                  therapists={gridTherapists}
-                  appointments={dayAppointments}
-                  hours={displayHours}
-                  slotMinutes={slotMinutes}
-                  closed={closedToday}
-                  colorFor={colorFor}
-                  selectedId={selectedId}
-                  onSelect={(a) => setSelectedId(a.id)}
-                  canBookFor={canBookFor}
-                  onBook={({ time, therapistId }) => openBooking({ date, time, therapistId })}
-                  summaryFor={summaryFor}
-                  workingFor={(therapistId) => workingFor(therapistId, date)}
-                  drag={dragOptions}
-                />
-              )}
-            </div>
+                )}
+              </div>
+            )}
+            {(!isPhone || phoneView === 'list' || findTime) && (
             <div className="tab:hidden">
               {findTime ? (
                 <FindTimePanel
@@ -989,6 +1156,7 @@ export function ScheduleBookingsView({
                 />
               )}
             </div>
+            )}
           </div>
         </div>
       )}

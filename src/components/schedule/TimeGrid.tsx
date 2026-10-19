@@ -860,7 +860,7 @@ export function ResourceDayGrid({
       selectedId={selectedId}
       onSelect={onSelect}
       scrollKey={date}
-      minColumnWidth={phone ? 104 : 170}
+      minColumnWidth={phone ? 96 : 170}
       drag={drag}
       phone={phone}
       pxPerMinute={pxPerMinute}
@@ -959,7 +959,7 @@ export function WeekTimeGrid({
       selectedId={selectedId}
       onSelect={onSelect}
       scrollKey={days[0]}
-      minColumnWidth={phone ? 98 : 110}
+      minColumnWidth={phone ? 92 : 110}
       drag={drag}
       phone={phone}
       pxPerMinute={pxPerMinute}
