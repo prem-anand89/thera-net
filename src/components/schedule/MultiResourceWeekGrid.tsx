@@ -241,7 +241,7 @@ export function MultiResourceWeekGrid({
               key={`day-header-${day}`}
               data-day-header={day}
               className={`sticky top-0 z-20 flex h-[38px] items-center justify-center border-b border-l border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-center ${
-                isToday ? 'bg-[var(--teal-light)]/30' : ''
+                isToday ? '[background-image:linear-gradient(color-mix(in_srgb,var(--teal-light)_30%,transparent),color-mix(in_srgb,var(--teal-light)_30%,transparent))]' : ''
               }`}
               style={{ gridColumn: `span ${span}` }}
             >
