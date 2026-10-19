@@ -7,13 +7,13 @@
 ## 0. Decisions (LOCKED — ask before changing)
 
 1. **Booking for colleagues stays admin / front desk only.** Therapists keep: own column by default, colleagues addable read-only, book / move / manage only their own. No server or RLS change in this plan. `canBookFor` and `canManageAppointment` in `ScheduleBookingsView.tsx` are not to be changed.
-2. Phone views stay **Day · 3-Day**. Phone Day = card timeline for one therapist, column grid for two or more. No phone Week grid.
+2. Phone views stay **Day · 3-Day**. Phone Day is the proportional grid for one or many therapists (decision 7). No phone Week grid.
 3. Desktop / iPad keep **Day · Week**. 3-Day stays phone-only.
 4. The URL contract stays `mode = 'day' | 'week'`; don't touch `router.tsx` or `src/app/schedule.ts`.
-5. Free time in the **grids** is shown by a light tint only (no text). In the phone **card timeline** it is a small labelled block ("Free" + time buttons) — owner decision 8 below, reversing the earlier "no free wording" for that view only.
+5. Free time is shown by a light tint only, **empty — no text, no labelled block, no time buttons** — in every grid, including the phone Day for one therapist (decision 8).
 6. Every tap target ≥ 44px on phones. Every `<button>` has `type`.
-7. **Phone card Day keeps the timeline rail** (owner chose it over Gemini's full-width cards). Keep the rail narrow (≤ 48px) so cards stay wide.
-8. **Card-timeline free time = labelled block** ("Free" heading + time buttons), light, not a solid tile.
+7. **Phone Day is always a proportional timeline** (owner, after asking for the Now line to cross cards "like the 3-Day / Week calendar"): with one therapist it is the same grid as with several, just **one full-width column**. The separate card timeline / rail design is dropped.
+8. **Free time is literally empty** (tinted space on the grid; tap it to book). The labelled "Free" block and bare time buttons are dropped.
 9. **Desktop / iPad Week with several therapists = always a true time grid** (Gemini's direction): one column per day, appointments at their real times, overlaps side by side, each block carrying a therapist pill. No 4-therapist cap. The roster idea is dropped.
 10. **Phone booking = round 56px "+" floating button** (not the extended "+ Book" pill).
 11. Therapist chips use the therapist's colour dot — there are no therapist photos in the app.
@@ -41,20 +41,24 @@
 
 **Tests:** toolbar renders month line + Today state; therapist chip label for 1 / many / all; FAB opens booking (component test with `onBook` spy); `MiniCalendarStrip` highlights `rangeDays`.
 
-## 3. Step 2 — Phone Day card timeline (one therapist)
+## 3. Step 2 — Phone Day for one therapist = one wide grid column
 
-**Problem:** cards float without a time structure; free times are heavy dashed boxes; passed time vanishes, so a morning looks unbooked; "Confirmed" adds noise; time shows as "10:00 AM / 60m".
+**Problem:** with one therapist selected, phone Day uses a different, list-based layout (`AgendaList`) from the several-therapist Day. The Now line can only sit between cards, free time is a pile of boxes, and finished time vanishes so a morning looks unbooked.
 
-**Build in `src/components/schedule/AgendaList.tsx`** (one-therapist path only; the component already receives `gaps`, `nowMinutes`, `slotMinutes`):
-- A **timeline rail**: a 2px vertical line in a fixed left column (≈ 52px) with hour labels ("9 AM") at each clock hour that has content; appointment cards and free-time rows hang to the right. Pure CSS, no measuring.
-- **Free time** = one light block per contiguous gap: a small "Free" label (muted moss, `text-xs`) and the `gapHourRows` start times as time buttons inside (`min-h-11`, white background, moss border/text). Background `bg-[var(--moss-light)]/40`, no dashed border, no heavy fill. Long gaps: show the first two hour rows and a "Show N more" toggle.
-- **Card:** one header line = time range `10:00–11:00 AM` (no "(60m)", no divider) with the "Next · in N min" tag right-aligned; second line = patient name + up to 2 flag pills; second line = reason; status line **only** for `arrived`, `completed`/visit logged, `no_show`, `rescheduled`, `cancelled` (not for `confirmed`). Keep the colour edge and `appointmentFill`.
-- **Now:** a rail dot + a thin line + "Now 3:19 PM" **between** rows at the right place — never drawn inside a card or a free block (Gemini's mockup did this; it reads as if the free block ends at now). The next upcoming appointment gets a small "Next · in 25 min" tag (computed from `nowMinutes`; hide when > 3h away).
-- **Passed time:** for today, appointments that ended before now are rendered at 60% opacity; if passed working time had no appointments, show one quiet rail line "Earlier today · 9:00 AM – 12:00 PM" (no buttons).
-- **Day off / closed** for the single therapist: one calm line ("Prem Anand is off today" / "Closed · {label}") plus one action (`Find a time` for another therapist when the viewer can book for others, else nothing). Replace the current `EmptyDay` for this path only.
-- **Sticky date:** not needed after step 1 (the strip is directly above); skip.
+**Build:**
+- In `ScheduleBookingsView.tsx`, make phone Day **always** render `MobileDayGrid` (remove `phoneDayIsGrid`; `showPhoneGrid` becomes `isPhone`). With one therapist, `gridTherapists` has one entry, so the grid has a single column that fills the width (the CSS template already uses `1fr`). Keep `Find a time` (⋮ menu) and its panel exactly as they are.
+- **Full density by width:** a single column is ≈ 290px, so `densityFor` returns `full`: time range, patient name, flags (`BlockFlagBadges`) and reason on blocks ≥ 60 min. Make sure a 30-minute block (one slot tall, ≥ 44px) still shows name and range on two lines and the reason is dropped, not clipped.
+- **Now line:** the existing `data-now-line` in `DayColumn` already crosses blocks at the exact time; keep it above blocks (`z-[3]`) and keep the axis badge. Verify visually that it reads across a block in progress.
+- **Finished appointments:** for today, a block whose end is before now renders at 60% opacity (`opacity-60`), phone and desktop alike (`DayColumn`: compare `end` with `nowMinutes`). Cancelled / no-show styling is unchanged.
+- **Free time:** the tint from step 3 only; no "+" glyph or labels. The dismissible one-line hint ("Tap a free time to book. Press and hold an appointment to move it.") stays and is the discoverability aid; show it again only after the owner clears site data.
+- **Quiet days:** initial scroll goes to Now (today) or the first appointment (`initialScrollTop`), so an empty morning is not the first thing seen. No compression of the time axis — it stays proportional.
+- **Day off / closed** for the single therapist: the existing hatched closed column plus the closed banner; for an off therapist the column shows the off-hours shading. No extra lines needed.
+- **Delete dead code in the same commit:** `AgendaList.tsx`, `AgendaList.test.tsx`, `gapHourRows`, the `dayGaps` memo and `onBookGap` wiring in the phone branch, the `EmptyDay` phone usage — only if `grep -rn` shows nothing else imports them (the waitlist banner still uses `dayGaps`; keep that memo if so). Do not delete `FindTimePanel`.
+- Update `FEATURES_AND_SCHEMA.md` (both copies of the phone-views paragraph, written in the previous commit `5d60595`): phone Day is the grid for one or many therapists; the card timeline and `AgendaList` are gone.
 
-**Tests:** rail hour labels appear only for hours with content; a free block shows the "Free" label and its time buttons call `onBookGap` with the right time; "Show N more" expands a long gap; status line hidden for confirmed, shown for arrived / no-show; past appointments get the dimmed class today only; "Next · in N min" logic (pure helper `nextUpLabel(appointments, nowMinutes)` with unit tests); off-day line. Update the one existing assertion only if unavoidable and report it.
+**Acceptance:** at 390×844 with one therapist: one column spans the width; a 60-minute block shows time range, name, flags and reason; the Now line is exact and crosses a block in progress; free time is tinted and empty; every free slot ≥ 44px tall (also for 15-minute clinics); tapping a free slot opens the booking sheet for that therapist and time; long-press move works.
+
+**Tests:** single-therapist `MobileDayGrid` renders one column with `full` density content (reason visible on a 60-minute block, hidden on a 30-minute one); a block ending before `nowMinutes` has the dimmed class and a future one does not; the Now line renders for today only; no element in a free slot contains text. Existing `ResourceDayGrid.test.tsx` and `MobileGrids.test.tsx` pass unchanged.
 
 ## 4. Step 3 — Same free-time look on every device
 
