@@ -94,6 +94,56 @@ describe('MobileDayGrid', () => {
     expect(container.querySelector('[data-now-badge]')).toBeNull();
   });
 
+  it('free time is empty on phones: tinted, tappable, and contains no text', () => {
+    render(<MobileDayGrid {...dayProps()} />);
+    const slot = screen.getByRole('button', { name: 'Book Dr Ravi at 11:00 AM' });
+    expect(slot.className).toContain('bg-[var(--moss-light)]/40');
+    expect(slot.textContent).toBe('');
+  });
+
+  it('one therapist is one wide column with full detail: the reason shows on a 60-minute block, not on a 30-minute one', () => {
+    setColumnWidth(290);
+    render(
+      <MobileDayGrid
+        {...dayProps({
+          therapists: [therapists[0]],
+          appointments: [
+            appointment({ id: 'long', patientName: 'Long Visit', durationMinutes: 60 }),
+            appointment({ id: 'short', patientName: 'Short Visit', durationMinutes: 30, scheduledAt: localDateTime('2026-10-01', '12:00').toISOString() }),
+          ],
+        })}
+      />
+    );
+    expect(document.querySelectorAll('[data-grid-header]')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /Long Visit/ })).toHaveTextContent('Lumbar strain');
+    expect(screen.getByRole('button', { name: /Short Visit/ })).not.toHaveTextContent('Lumbar strain');
+  });
+
+  it('fades appointments that ended before now (today) and not later ones', () => {
+    render(
+      <MobileDayGrid
+        {...dayProps({
+          nowMinutes: 11 * 60,
+          therapists: [therapists[0]],
+          appointments: [
+            appointment({ id: 'past', patientName: 'Past One', scheduledAt: localDateTime('2026-10-01', '09:00').toISOString() }),
+            appointment({ id: 'next', patientName: 'Next One', scheduledAt: localDateTime('2026-10-01', '12:00').toISOString() }),
+          ],
+        })}
+      />
+    );
+    expect(screen.getByRole('button', { name: /Past One/ }).className).toContain('opacity-60');
+    expect(screen.getByRole('button', { name: /Next One/ }).className).not.toContain('opacity-60');
+  });
+
+  it('draws the Now line thin and translucent so it never hides text', () => {
+    const { container } = render(<MobileDayGrid {...dayProps({ therapists: [therapists[0]] })} />);
+    const line = container.querySelector('[data-now-line]')!;
+    expect(line.className).toContain('border-t ');
+    expect(line.className).not.toContain('border-t-2');
+    expect(line.className).toContain('/55');
+  });
+
   it('colleague column: header says view only, no reason or flags, no free slots to book', () => {
     setColumnWidth(180);
     render(

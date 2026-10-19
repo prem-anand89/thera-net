@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
-import { ConfirmDialog, Panel, btnPrimary, btnSecondary } from '@/components/ui';
+import { ConfirmDialog, Panel } from '@/components/ui';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -49,7 +49,6 @@ import { appointmentsOutsideHours } from './hoursConflicts';
 import {
   formatThreeDayTitle,
   historyAppointments,
-  isColleagueAppointment,
   nextTherapistSearchParam,
   readStoredPhoneView,
   selectedTherapistIds,
@@ -64,7 +63,6 @@ import { appointmentReason, patientFlags } from '@/domain/patientFlags';
 import { matchingWaitlistEntries, timeOfDayFor } from '@/domain/waitlistMatch';
 import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
-import { AgendaList } from '@/components/schedule/AgendaList';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
 import { ClosedDaysSheet } from '@/components/schedule/ClosedDaysSheet';
 import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
@@ -272,9 +270,8 @@ export function ScheduleBookingsView({
       return false;
     }
   });
-  // Phone Day: cards for one therapist, the multi-column grid (like 3-Day) for several.
-  const phoneDayIsGrid = visibleRoster.length > 1;
-  const showPhoneGrid = isPhone && (phoneView === '3day' || phoneDayIsGrid);
+  // Phone Day and 3-Day are always grids (Day with one therapist is one wide column).
+  const showPhoneGrid = isPhone;
   const threeDays = useMemo(() => threeDayDates(date), [date]);
   const threeDayTherapist =
     visibleRoster.length === 1 ? visibleRoster[0] : visibleRoster.find((t) => t.id === threeDayPick) ?? null;
@@ -373,7 +370,7 @@ export function ScheduleBookingsView({
 
   // Pending requests that now fit an opening on the day currently being
   // viewed — reuses the same free-gap data already computed for the phone
-  // agenda's "+ Book" rows (dayGaps), so this is live, not tied to a
+  // free-gap data (dayGaps), so this is live, not tied to a
   // specific cancel/reschedule event.
   const waitlistMatches = useMemo(() => {
     if (!dayGaps.length || !pendingRequests.length) return [];
@@ -916,7 +913,7 @@ export function ScheduleBookingsView({
             )}
 
             {closedToday.closed && (
-              <div className={`${dayAppointments.length === 0 && mode === 'day' && !showPhoneGrid ? 'hidden tab:flex' : 'flex'} flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--slate-light)] px-3 py-2 text-sm text-[var(--slate)]`}>
+              <div className={`flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--slate-light)] px-3 py-2 text-sm text-[var(--slate)]`}>
                 <span>
                   <strong>
                     {closedToday.kind === 'holiday'
@@ -1113,53 +1110,18 @@ export function ScheduleBookingsView({
                 )}
               </div>
             )}
-            {(!isPhone || !showPhoneGrid || findTime) && (
-            <div className="tab:hidden">
-              {findTime ? (
-                <FindTimePanel
-                  date={date}
-                  therapists={visibleRoster.filter((t) => canBookFor(t.id))}
-                  appointments={dayAppointments}
-                  hours={hours}
-                  slotMinutes={slotMinutes}
-                  closed={closedToday}
-                  nowMinutes={dayNow}
-                  onPick={({ therapistId, time }) => { setFindTime(false); openBooking({ date, time, therapistId }); }}
-                  workingFor={(therapistId) => workingFor(therapistId, date)}
-                />
-              ) : dayAppointments.length === 0 && dayGaps.length === 0 ? (
-                <EmptyDay
-                  closedTitle={
-                    closedToday.closed
-                      ? closedToday.kind === 'holiday'
-                        ? `Closed${closedToday.label ? ` for ${closedToday.label}` : ''}`
-                        : `Closed every ${new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long' })}`
-                      : null
-                  }
-                  onReopen={canManageAll && closedToday.kind === 'holiday' && closureForDate ? () => setRemoving(closureForDate) : undefined}
-                  onBook={() => openBooking({ date })}
-                  onFindTime={() => setFindTime(true)}
-                />
-              ) : (
-                <AgendaList
-                  flagContext={flagContext}
-                  appointments={dayAppointments}
-                  slotMinutes={slotMinutes}
-                  colorFor={colorFor}
-                  therapistNameFor={therapistNameFor}
-                  showTherapist={!singleTherapist}
-                  gaps={dayGaps}
-                  nowMinutes={dayNow}
-                  onSelect={(a) => setSelectedId(a.id)}
-                  onBookGap={(time, therapistId) => {
-                    const targetId = therapistId ?? (singleTherapist ? singleTherapist.id : undefined);
-                    if (targetId && !canBookFor(targetId)) return;
-                    openBooking({ date, time, therapistId: targetId });
-                  }}
-                  isColleague={(a) => isColleagueAppointment(a, scope.role, myTherapistId)}
-                />
-              )}
-            </div>
+            {isPhone && findTime && (
+              <FindTimePanel
+                date={date}
+                therapists={visibleRoster.filter((t) => canBookFor(t.id))}
+                appointments={dayAppointments}
+                hours={hours}
+                slotMinutes={slotMinutes}
+                closed={closedToday}
+                nowMinutes={dayNow}
+                onPick={({ therapistId, time }) => { setFindTime(false); openBooking({ date, time, therapistId }); }}
+                workingFor={(therapistId) => workingFor(therapistId, date)}
+              />
             )}
           </div>
         </div>
@@ -1498,52 +1460,6 @@ function ScheduleSkeleton() {
       {Array.from({ length: 5 }, (_, index) => (
         <div key={index} className="h-14 rounded-xl bg-[var(--border)]/40" />
       ))}
-    </div>
-  );
-}
-
-/** Phone day view with nothing booked. On a closed day it is also the
- *  closed notice (the separate banner hides), so the two don't stack. */
-function EmptyDay({
-  closedTitle,
-  onReopen,
-  onBook,
-  onFindTime,
-}: {
-  closedTitle: string | null;
-  onReopen?: () => void;
-  onBook: () => void;
-  onFindTime: () => void;
-}) {
-  if (closedTitle) {
-    return (
-      <div className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--slate-light)] px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-[var(--ink)]">{closedTitle}</p>
-          <p className="text-xs text-[var(--slate)]">
-            Public booking is off. You can still book here.
-            {onReopen && (
-              <>
-                {' '}
-                <button type="button" className="font-medium text-[var(--rust)] underline" onClick={onReopen}>
-                  Reopen
-                </button>
-              </>
-            )}
-          </p>
-        </div>
-        <button type="button" className={`${btnSecondary} shrink-0`} onClick={onBook}>Book</button>
-      </div>
-    );
-  }
-  return (
-    <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-4 py-6 text-center">
-      <p className="font-medium text-[var(--ink)]">Nothing booked yet</p>
-      <p className="mt-1 text-sm text-[var(--muted)]">Tap Find a time to see free slots, or book directly.</p>
-      <div className="mt-3 flex justify-center gap-2">
-        <button type="button" className={btnPrimary} onClick={onBook}>New booking</button>
-        <button type="button" className={btnSecondary} onClick={onFindTime}>Find a time</button>
-      </div>
     </div>
   );
 }

@@ -229,17 +229,16 @@ export function DayColumn({
             }`}
             style={{ top: geometry.top + 1, height: geometry.height - 2 }}
           >
-            {/* Free time stays blank so bookings stand out; touch screens (no
-                hover) get a faint "+" so it's still discoverable. */}
-            <span
-              className={`px-1.5 opacity-40 group-hover:!hidden group-focus-visible:!hidden ${phone ? 'inline' : 'hidden pointer-coarse:inline'}`}
-              aria-hidden
-            >
-              +
-            </span>
-            <span className={`hidden px-1.5 group-hover:inline group-focus-visible:inline ${minimalBlocks ? 'text-[10px]' : ''}`}>
-              {minimalBlocks ? '+' : `+ ${slot.label}`}
-            </span>
+            {/* Free time stays blank so bookings stand out. Phones show nothing at all (the tint is
+                the affordance); pointer devices reveal "+ time" on hover, touch tablets a faint "+". */}
+            {!phone && (
+              <>
+                <span className="hidden px-1.5 opacity-40 pointer-coarse:inline group-hover:!hidden group-focus-visible:!hidden" aria-hidden>+</span>
+                <span className={`hidden px-1.5 group-hover:inline group-focus-visible:inline ${minimalBlocks ? 'text-[10px]' : ''}`}>
+                  {minimalBlocks ? '+' : `+ ${slot.label}`}
+                </span>
+              </>
+            )}
           </button>
         );
       })}
@@ -252,6 +251,8 @@ export function DayColumn({
         const flags = patientFlags(appointment, flagContext);
         const density = phone ? densityFor(columnWidth, geometry.height) : null;
         const compact = density ? density === 'compact' && geometry.height < 34 : geometry.height < 34;
+        // Over for today: ended before now (the morning reads as done, not empty).
+        const over = nowMinutes !== null && end <= nowMinutes && appointment.status !== 'cancelled';
         const draggable = Boolean(drag?.canDrag(appointment)) && !isPastDay;
         return (
           <button
@@ -266,7 +267,7 @@ export function DayColumn({
             title={`${appointment.patientName} · ${minutesLabel(start)}–${minutesLabel(end)}${reason ? ` · ${reason}` : ''}${flags.length ? ` · ${flags.map((f) => f.label).join(', ')}` : ''}${draggable ? ' · drag to move' : ''}`}
             className={`group/block absolute z-[2] overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-left text-xs transition-shadow hover:shadow-md ${look.className} ${
               selectedId === appointment.id ? 'outline outline-2 outline-[var(--teal)]' : ''
-            } ${draggable ? 'pointer-fine:cursor-grab' : ''} ${drag?.draggingId === appointment.id ? 'opacity-40' : ''}`}
+            } ${draggable ? 'pointer-fine:cursor-grab' : ''} ${drag?.draggingId === appointment.id ? 'opacity-40' : over ? 'opacity-60' : ''}`}
             style={{
               top: geometry.top,
               height: geometry.height - 1,
@@ -348,12 +349,12 @@ export function DayColumn({
       )}
       {nowMinutes !== null && nowMinutes >= hours.startHour * 60 && nowMinutes <= hours.endHour * 60 && (
         <div
-          className="pointer-events-none absolute inset-x-0 z-[3] border-t-2 border-[var(--rust)]"
+          className="pointer-events-none absolute inset-x-0 z-[3] border-t border-[var(--rust)]/55"
           style={{ top: (nowMinutes - hours.startHour * 60) * pxPerMinute }}
           data-now-line
           aria-hidden
         >
-          <span className="absolute -left-1 -top-[5px] h-2 w-2 rounded-full bg-[var(--rust)]" />
+          <span className="absolute -left-[3px] -top-[4px] h-[7px] w-[7px] rounded-full bg-[var(--rust)]" />
         </div>
       )}
     </div>
