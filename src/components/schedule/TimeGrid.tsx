@@ -22,6 +22,8 @@ import { CLOSED_HATCH_STYLE, appointmentFill } from './scheduleColors';
 import { LoadLine, type LoadSummary } from './LoadLine';
 import { patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
 import { BlockFlagBadges } from './BlockFlagBadges';
+import { useElementWidth } from './useElementWidth';
+import { densityFor } from '@/features/schedule/schedulePhoneHelpers';
 export type { LoadSummary } from './LoadLine';
 
 /** 30 minutes = 48px: tall enough for two lines of text in a 30-minute block. */
@@ -58,6 +60,10 @@ type DayColumnProps = {
   minimalBlocks?: boolean;
   /** Colleague column viewed read-only by an individual therapist. */
   isColleague?: boolean;
+  /** Pixels per minute; phones raise it so a free slot is always tappable. */
+  pxPerMinute?: number;
+  /** Phone presentation: block detail adapts to column width, free time is visibly tinted. */
+  phone?: boolean;
 };
 
 export type DragGhost = { columnKey: string; appointmentId: string; start: number; duration: number; valid: boolean };
@@ -108,8 +114,20 @@ export function DayColumn({
   working,
   drag,
   minimalBlocks = false,
+  isColleague = false,
+  pxPerMinute = PX_PER_MINUTE,
+  phone = false,
 }: DayColumnProps) {
-  const height = (hours.endHour - hours.startHour) * 60 * PX_PER_MINUTE;
+  const [columnElement, setColumnElement] = useState<HTMLDivElement | null>(null);
+  const columnWidth = useElementWidth(phone ? columnElement : null, 150);
+  // Stable ref callback (it also feeds the drag hook) so the measured element isn't re-set each render.
+  const dragRegister = useRef(drag?.register);
+  dragRegister.current = drag?.register;
+  const registerColumn = useCallback((element: HTMLDivElement | null) => {
+    setColumnElement(element);
+    dragRegister.current?.(element);
+  }, []);
+  const height = (hours.endHour - hours.startHour) * 60 * pxPerMinute;
   const blocks = useMemo(
     () =>
       appointments.map((appointment) => {
@@ -157,16 +175,17 @@ export function DayColumn({
 
   return (
     <div
-      ref={drag?.register}
+      ref={registerColumn}
       className="relative border-l border-[var(--border)]"
       style={{ height, ...(closed.closed ? CLOSED_HATCH_STYLE : {}) }}
       aria-label={`${label}, ${date}`}
+      data-colleague={isColleague ? true : undefined}
     >
       {Array.from({ length: hours.endHour - hours.startHour }, (_, index) => (
         <div
           key={index}
           className="pointer-events-none absolute inset-x-0 border-t border-[var(--border)]"
-          style={{ top: index * 60 * PX_PER_MINUTE }}
+          style={{ top: index * 60 * pxPerMinute }}
         />
       ))}
       {offHours.map((range) => (
@@ -177,7 +196,7 @@ export function DayColumn({
               ? 'pointer-events-none absolute inset-x-0 border-y border-dashed border-[var(--border)] bg-[var(--amber-light)]/40'
               : 'pointer-events-none absolute inset-x-0 bg-[var(--paper)]'
           }
-          style={{ top: (range.start - hours.startHour * 60) * PX_PER_MINUTE, height: (range.end - range.start) * PX_PER_MINUTE }}
+          style={{ top: (range.start - hours.startHour * 60) * pxPerMinute, height: (range.end - range.start) * pxPerMinute }}
           aria-hidden
           data-off-hours
           data-break={range.kind === 'break' ? true : undefined}
@@ -189,7 +208,7 @@ export function DayColumn({
         </div>
       )}
       {freeSlots.map((slot) => {
-        const geometry = blockGeometry(slot.minutes, slotMinutes, hours.startHour, PX_PER_MINUTE);
+        const geometry = blockGeometry(slot.minutes, slotMinutes, hours.startHour, pxPerMinute);
         const isOffHours = Boolean(working && !withinWorking(working, slot.minutes, slotMinutes));
         return (
           <button
@@ -205,14 +224,19 @@ export function DayColumn({
               isOffHours
                 ? 'text-slate-400 hover:bg-slate-100/70 focus-visible:bg-slate-100'
                 : 'text-[var(--moss-strong)] hover:bg-[var(--moss-light)] focus-visible:bg-[var(--moss-light)]'
-            } ${
+            } ${phone ? (isOffHours ? 'bg-slate-100/40' : 'bg-[var(--moss-light)]/40') : ''} ${
               drag?.placing ? 'border border-dashed border-[var(--moss)]/60 bg-[var(--moss-light)]/60' : ''
             }`}
             style={{ top: geometry.top + 1, height: geometry.height - 2 }}
           >
             {/* Free time stays blank so bookings stand out; touch screens (no
                 hover) get a faint "+" so it's still discoverable. */}
-            <span className="hidden px-1.5 opacity-40 pointer-coarse:inline group-hover:!hidden group-focus-visible:!hidden" aria-hidden>+</span>
+            <span
+              className={`px-1.5 opacity-40 group-hover:!hidden group-focus-visible:!hidden ${phone ? 'inline' : 'hidden pointer-coarse:inline'}`}
+              aria-hidden
+            >
+              +
+            </span>
             <span className={`hidden px-1.5 group-hover:inline group-focus-visible:inline ${minimalBlocks ? 'text-[10px]' : ''}`}>
               {minimalBlocks ? '+' : `+ ${slot.label}`}
             </span>
@@ -220,13 +244,14 @@ export function DayColumn({
         );
       })}
       {blocks.map(({ appointment, start, end }) => {
-        const geometry = blockGeometry(start, end - start, hours.startHour, PX_PER_MINUTE);
+        const geometry = blockGeometry(start, end - start, hours.startHour, pxPerMinute);
         const lane = lanes.get(appointment.id) ?? { lane: 0, lanes: 1 };
         const style = APPOINTMENT_BLOCK_STYLE[appointment.status];
         const look = blockLook(appointment, colorFor(appointment));
         const reason = reasonFor?.(appointment) ?? null;
         const flags = patientFlags(appointment, flagContext);
-        const compact = geometry.height < 34;
+        const density = phone ? densityFor(columnWidth, geometry.height) : null;
+        const compact = density ? density === 'compact' && geometry.height < 34 : geometry.height < 34;
         const draggable = Boolean(drag?.canDrag(appointment)) && !isPastDay;
         return (
           <button
@@ -263,7 +288,7 @@ export function DayColumn({
             )}
             {!minimalBlocks ? (
               <>
-                <BlockFlagBadges flags={flags} />
+                {density !== 'compact' && <BlockFlagBadges flags={flags} />}
                 {compact ? (
                   <span className="block truncate">
                     {style.mark && <span aria-hidden>{style.mark} </span>}
@@ -275,10 +300,12 @@ export function DayColumn({
                       {style.mark && <span aria-hidden>{style.mark} </span>}
                       {appointment.patientName}
                     </span>
-                    <span className="block truncate text-[11px] opacity-80">
-                      {dense ? minutesLabel(start) : `${minutesLabel(start)}–${minutesLabel(end)}`}
-                    </span>
-                    {reason && geometry.height >= 60 * PX_PER_MINUTE && (
+                    {density !== 'compact' && (
+                      <span className="block truncate text-[11px] opacity-80">
+                        {dense || density === 'medium' ? minutesLabel(start) : `${minutesLabel(start)}–${minutesLabel(end)}`}
+                      </span>
+                    )}
+                    {reason && (!density || density === 'full') && geometry.height >= 60 * pxPerMinute && (
                       <span className="mt-0.5 block truncate text-[11px] italic opacity-80">{reason}</span>
                     )}
                   </>
@@ -310,8 +337,8 @@ export function DayColumn({
             drag.ghost.valid ? 'border-[var(--teal)] bg-[var(--teal-light)]/70 text-[var(--teal)]' : 'border-[var(--rust)] bg-[var(--rust-light)]/70 text-[var(--rust)]'
           }`}
           style={{
-            top: (drag.ghost.start - hours.startHour * 60) * PX_PER_MINUTE,
-            height: Math.max(drag.ghost.duration * PX_PER_MINUTE, 18),
+            top: (drag.ghost.start - hours.startHour * 60) * pxPerMinute,
+            height: Math.max(drag.ghost.duration * pxPerMinute, 18),
           }}
           data-drag-ghost
         >
@@ -322,7 +349,7 @@ export function DayColumn({
       {nowMinutes !== null && nowMinutes >= hours.startHour * 60 && nowMinutes <= hours.endHour * 60 && (
         <div
           className="pointer-events-none absolute inset-x-0 z-[3] border-t-2 border-[var(--rust)]"
-          style={{ top: (nowMinutes - hours.startHour * 60) * PX_PER_MINUTE }}
+          style={{ top: (nowMinutes - hours.startHour * 60) * pxPerMinute }}
           data-now-line
           aria-hidden
         >
@@ -333,20 +360,38 @@ export function DayColumn({
   );
 }
 
-export function TimeAxis({ hours }: { hours: GridHours }) {
+export function TimeAxis({
+  hours,
+  pxPerMinute = PX_PER_MINUTE,
+  nowMinutes = null,
+}: {
+  hours: GridHours;
+  pxPerMinute?: number;
+  /** When set, a "now" time badge is drawn on the axis at that time. */
+  nowMinutes?: number | null;
+}) {
   return (
-    <div className="relative" style={{ height: (hours.endHour - hours.startHour) * 60 * PX_PER_MINUTE }}>
+    <div className="relative" style={{ height: (hours.endHour - hours.startHour) * 60 * pxPerMinute }}>
       {Array.from({ length: hours.endHour - hours.startHour }, (_, index) => (
         <span
           key={index}
           // Labels centre on their hour line, except the first, which would
           // otherwise sit half under the sticky column headers.
           className={`absolute right-2 text-[11px] text-[var(--muted)] ${index === 0 ? 'top-0.5' : '-translate-y-1/2'}`}
-          style={index === 0 ? undefined : { top: index * 60 * PX_PER_MINUTE }}
+          style={index === 0 ? undefined : { top: index * 60 * pxPerMinute }}
         >
           {minutesLabel((hours.startHour + index) * 60).replace(':00', '')}
         </span>
       ))}
+      {nowMinutes !== null && nowMinutes >= hours.startHour * 60 && nowMinutes <= hours.endHour * 60 && (
+        <span
+          className="pointer-events-none absolute right-0.5 z-[1] -translate-y-1/2 rounded bg-[var(--rust)] px-1 text-[9px] font-semibold leading-4 text-white"
+          style={{ top: (nowMinutes - hours.startHour * 60) * pxPerMinute }}
+          data-now-badge
+        >
+          {minutesLabel(nowMinutes).replace(' ', '')}
+        </span>
+      )}
     </div>
   );
 }
@@ -359,21 +404,21 @@ export function TimeAxis({ hours }: { hours: GridHours }) {
  */
 export function initialScrollTop(
   hours: GridHours,
-  options: { nowMinutes: number | null; firstStart: number | null; viewportHeight: number }
+  options: { nowMinutes: number | null; firstStart: number | null; viewportHeight: number; pxPerMinute?: number }
 ): number {
   const open = hours.startHour * 60;
   const close = hours.endHour * 60;
-  const { nowMinutes, firstStart, viewportHeight } = options;
+  const { nowMinutes, firstStart, viewportHeight, pxPerMinute = PX_PER_MINUTE } = options;
   const focus =
     nowMinutes !== null && nowMinutes >= open && nowMinutes < close
       ? nowMinutes
       : firstStart !== null && firstStart >= open && firstStart < close
         ? firstStart
         : open;
-  const focusTop = (focus - open) * PX_PER_MINUTE;
+  const focusTop = (focus - open) * pxPerMinute;
   // Keep ~1.5 hours visible under the focus before scrolling at all.
-  if (focusTop + 90 * PX_PER_MINUTE <= viewportHeight) return 0;
-  return Math.max(0, focusTop - 60 * PX_PER_MINUTE);
+  if (focusTop + 90 * pxPerMinute <= viewportHeight) return 0;
+  return Math.max(0, focusTop - 60 * pxPerMinute);
 }
 
 /** Positions the grid once per date/week — never again while the user scrolls. */
@@ -429,8 +474,9 @@ export function useGridDrag(input: {
   today: string;
   nowMinutes: number;
   options?: GridDragOptions;
+  pxPerMinute?: number;
 }) {
-  const { columns, hours, slotMinutes, today, nowMinutes, options } = input;
+  const { columns, hours, slotMinutes, today, nowMinutes, options, pxPerMinute = PX_PER_MINUTE } = input;
   const elements = useRef(new Map<string, HTMLDivElement>());
   const [ghost, setGhost] = useState<DragGhost | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -521,9 +567,9 @@ export function useGridDrag(input: {
             const rect = element.getBoundingClientRect();
             if (move.clientX >= rect.left && move.clientX <= rect.right) columnKey = key;
           }
-          start = dragTarget({ originalStart: originStart, duration, deltaPx: move.clientY - startY, pxPerMinute: PX_PER_MINUTE, hours: h });
+          start = dragTarget({ originalStart: originStart, duration, deltaPx: move.clientY - startY, pxPerMinute, hours: h });
         } else {
-          length = resizeTarget({ start: originStart, originalDuration: duration, deltaPx: move.clientY - startY, pxPerMinute: PX_PER_MINUTE, hours: h });
+          length = resizeTarget({ start: originStart, originalDuration: duration, deltaPx: move.clientY - startY, pxPerMinute, hours: h });
         }
         current = { columnKey, appointmentId: appointment.id, start, duration: length, valid: validate(columnKey, appointment.id, start, length) };
         setGhost(current);
@@ -549,7 +595,7 @@ export function useGridDrag(input: {
       window.addEventListener('pointerup', onUp);
       window.addEventListener('keydown', onKey);
     },
-    [finish, validate]
+    [finish, validate, pxPerMinute]
   );
 
   const place = useCallback(
@@ -611,6 +657,8 @@ function GridFrame({
   scrollKey,
   minColumnWidth,
   drag,
+  phone = false,
+  pxPerMinute = PX_PER_MINUTE,
 }: {
   columns: GridColumn[];
   hours: GridHours;
@@ -627,6 +675,9 @@ function GridFrame({
   scrollKey: string;
   minColumnWidth: number;
   drag?: GridDragOptions;
+  /** Phone presentation: narrow time axis, adaptive blocks, visible free time, viewport-height scroll box. */
+  phone?: boolean;
+  pxPerMinute?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const showsToday = columns.some((column) => column.date === today);
@@ -636,12 +687,12 @@ function GridFrame({
   const focusNow = showsToday ? nowMinutes : null;
   const computeScroll = useCallback(
     (viewportHeight: number) =>
-      initialScrollTop(hours, { nowMinutes: focusNow, firstStart: firstStart ?? null, viewportHeight }),
-    [hours, focusNow, firstStart]
+      initialScrollTop(hours, { nowMinutes: focusNow, firstStart: firstStart ?? null, viewportHeight, pxPerMinute }),
+    [hours, focusNow, firstStart, pxPerMinute]
   );
   useInitialScroll(scrollRef, scrollKey, computeScroll);
-  const template = `56px repeat(${columns.length}, minmax(${minColumnWidth}px, 1fr))`;
-  const { columnDrag, placing, cancelPlacing } = useGridDrag({ columns, hours, slotMinutes, today, nowMinutes, options: drag });
+  const template = `${phone ? 52 : 56}px repeat(${columns.length}, minmax(${minColumnWidth}px, 1fr))`;
+  const { columnDrag, placing, cancelPlacing } = useGridDrag({ columns, hours, slotMinutes, today, nowMinutes, options: drag, pxPerMinute });
 
   return (
     <>
@@ -657,7 +708,12 @@ function GridFrame({
     )}
     <div
       ref={scrollRef}
-      className="max-h-[calc(100vh-240px)] min-h-[420px] overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)]"
+      className={`overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] ${
+        phone
+          ? 'max-h-[calc(100dvh-17rem)] min-h-[320px] overscroll-contain'
+          : 'max-h-[calc(100vh-240px)] min-h-[420px]'
+      }`}
+      data-schedule-grid
     >
       <div className="grid" style={{ gridTemplateColumns: template }}>
         <div className="sticky left-0 top-0 z-[5] border-b border-[var(--border)] bg-[var(--surface)]" />
@@ -671,7 +727,7 @@ function GridFrame({
           </div>
         ))}
         <div className="sticky left-0 z-[4] bg-[var(--surface)]">
-          <TimeAxis hours={hours} />
+          <TimeAxis hours={hours} pxPerMinute={pxPerMinute} nowMinutes={phone && showsToday ? nowMinutes : null} />
         </div>
         {columns.map((column) => (
           <DayColumn
@@ -691,6 +747,8 @@ function GridFrame({
             onSelect={onSelect}
             onBook={column.onBook}
             dense={minColumnWidth < 150}
+            phone={phone}
+            pxPerMinute={pxPerMinute}
             working={column.working}
             drag={columnDrag(column)}
             isColleague={column.isColleague}
@@ -724,6 +782,8 @@ export function ResourceDayGrid({
   summaryFor,
   workingFor,
   drag,
+  phone = false,
+  pxPerMinute,
 }: {
   date: string;
   today: string;
@@ -746,6 +806,9 @@ export function ResourceDayGrid({
   /** Working intervals for a therapist on this date; omit = booking hours. */
   workingFor?: (therapistId: string) => Interval[];
   drag?: GridDragOptions;
+  /** Phone presentation (see GridFrame). */
+  phone?: boolean;
+  pxPerMinute?: number;
 }) {
   const columns: GridColumn[] = therapists.map((therapist) => {
     const isColleague = Boolean(therapist.id && !canBookFor(therapist.id));
@@ -769,10 +832,11 @@ export function ResourceDayGrid({
           <p className="flex items-center gap-1.5 truncate text-sm font-medium text-[var(--ink)]">
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: therapist.color }} aria-hidden />
             {therapist.name}
-            {isColleague && (
+            {isColleague && !phone && (
               <span className="ml-1 text-[11px] font-normal text-[var(--muted)]">· view only</span>
             )}
           </p>
+          {isColleague && phone && <p className="truncate text-[11px] text-[var(--muted)]">view only</p>}
           <LoadLine summary={summaryFor(therapist.id)} color={therapist.color} />
         </div>
       ),
@@ -796,8 +860,10 @@ export function ResourceDayGrid({
       selectedId={selectedId}
       onSelect={onSelect}
       scrollKey={date}
-      minColumnWidth={170}
+      minColumnWidth={phone ? 104 : 170}
       drag={drag}
+      phone={phone}
+      pxPerMinute={pxPerMinute}
     />
   );
 }
@@ -820,6 +886,9 @@ export function WeekTimeGrid({
   onOpenDay,
   workingFor,
   drag,
+  phone = false,
+  pxPerMinute,
+  isColleague = false,
 }: {
   days: string[];
   today: string;
@@ -839,6 +908,11 @@ export function WeekTimeGrid({
   onOpenDay: (date: string) => void;
   workingFor?: (date: string) => Interval[];
   drag?: GridDragOptions;
+  /** Phone presentation (see GridFrame); used with 3 days for the phone 3-Day view. */
+  phone?: boolean;
+  pxPerMinute?: number;
+  /** The shown therapist is a colleague: read-only, no reasons or flags. */
+  isColleague?: boolean;
 }) {
   const columns: GridColumn[] = days.map((day) => {
     const value = new Date(`${day}T00:00:00`);
@@ -866,8 +940,9 @@ export function WeekTimeGrid({
           </span>
         </button>
       ),
-      onBook: onBook ? (time: string) => onBook({ date: day, time }) : undefined,
+      onBook: onBook && !isColleague ? (time: string) => onBook({ date: day, time }) : undefined,
       working: workingFor ? workingFor(day) : undefined,
+      isColleague,
     };
   });
 
@@ -884,8 +959,10 @@ export function WeekTimeGrid({
       selectedId={selectedId}
       onSelect={onSelect}
       scrollKey={days[0]}
-      minColumnWidth={110}
+      minColumnWidth={phone ? 98 : 110}
       drag={drag}
+      phone={phone}
+      pxPerMinute={pxPerMinute}
     />
   );
 }

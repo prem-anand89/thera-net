@@ -1,0 +1,149 @@
+// @vitest-environment jsdom
+import '@testing-library/jest-dom/vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import type { Appointment } from '@/domain/types';
+import { localDateTime } from '@/domain/schedule';
+import type { GridTherapist } from './TimeGrid';
+import { MobileDayGrid, MobileThreeDayGrid } from './MobileGrids';
+
+const OPEN = { closed: false, kind: null, label: null } as const;
+
+function appointment(overrides: Partial<Appointment>): Appointment {
+  return {
+    id: 'a1', clinicId: 'c1', patientId: null, patientName: 'Priya', patientPhone: '1',
+    therapistId: 't1', scheduledAt: localDateTime('2026-10-01', '10:00').toISOString(),
+    durationMinutes: 60, status: 'confirmed', requestId: null, visitId: null,
+    rescheduleCount: 0, previousScheduledAt: null, createdAt: '', updatedAt: '',
+    ...overrides,
+  };
+}
+
+const therapists: GridTherapist[] = [
+  { id: 't1', name: 'Dr Asha', color: '#468adb' },
+  { id: 't2', name: 'Dr Ravi', color: '#ee7c4e' },
+];
+
+type DayProps = Parameters<typeof MobileDayGrid>[0];
+
+function dayProps(overrides: Partial<DayProps> = {}): DayProps {
+  return {
+    date: '2026-10-01',
+    today: '2026-10-01',
+    nowMinutes: 9 * 60 + 35,
+    therapists,
+    appointments: [appointment({})],
+    hours: { startHour: 9, endHour: 13 },
+    slotMinutes: 30,
+    closed: OPEN,
+    colorFor: () => '#468adb',
+    reasonFor: () => 'Lumbar strain',
+    selectedId: null,
+    onSelect: vi.fn(),
+    canBookFor: () => true,
+    onBook: vi.fn(),
+    summaryFor: () => ({ text: 'None', ratio: null }),
+    ...overrides,
+  };
+}
+
+function setColumnWidth(width: number) {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    width, height: 0, top: 0, left: 0, right: width, bottom: 0, x: 0, y: 0, toJSON: () => ({}),
+  });
+}
+
+describe('MobileDayGrid', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    cleanup();
+  });
+
+  it.each([
+    [180, 'full', true, true],
+    [130, 'medium', false, true],
+    [90, 'compact', false, false],
+  ])('at %ipx a column shows %s detail', (width, _name, showsReason, showsTime) => {
+    setColumnWidth(width);
+    render(<MobileDayGrid {...dayProps()} />);
+    const block = screen.getByRole('button', { name: /Priya/ });
+    expect(block).toHaveTextContent('Priya');
+    if (showsReason) expect(block).toHaveTextContent('Lumbar strain');
+    else expect(block).not.toHaveTextContent('Lumbar strain');
+    if (showsTime) expect(block).toHaveTextContent('10:00 AM');
+    else expect(block).not.toHaveTextContent('10:00 AM');
+  });
+
+  it('keeps a free slot at least 44px tall even for 15-minute slots', () => {
+    render(<MobileDayGrid {...dayProps({ slotMinutes: 15 })} />);
+    const slot = screen.getByRole('button', { name: 'Book Dr Ravi at 11:00 AM' });
+    expect(parseFloat(slot.style.height) + 2).toBeGreaterThanOrEqual(44);
+  });
+
+  it('tints free time so it is visible without hovering', () => {
+    render(<MobileDayGrid {...dayProps()} />);
+    expect(screen.getByRole('button', { name: 'Book Dr Ravi at 11:00 AM' }).className).toContain('bg-[var(--moss-light)]/40');
+  });
+
+  it('draws the Now line and a time badge on today only', () => {
+    const { container, rerender } = render(<MobileDayGrid {...dayProps()} />);
+    expect(container.querySelectorAll('[data-now-line]')).toHaveLength(2);
+    expect(container.querySelector('[data-now-badge]')).toHaveTextContent('9:35AM');
+    rerender(<MobileDayGrid {...dayProps({ today: '2026-09-30' })} />);
+    expect(container.querySelector('[data-now-line]')).toBeNull();
+    expect(container.querySelector('[data-now-badge]')).toBeNull();
+  });
+
+  it('colleague column: header says view only, no reason or flags, no free slots to book', () => {
+    setColumnWidth(180);
+    render(
+      <MobileDayGrid
+        {...dayProps({
+          appointments: [appointment({ therapistId: 't2', patientName: 'Kiran' })],
+          canBookFor: (id) => id === 't1',
+        })}
+      />
+    );
+    expect(screen.getByText('view only')).toBeInTheDocument();
+    const block = screen.getByRole('button', { name: /Kiran/ });
+    expect(block).not.toHaveTextContent('Lumbar strain');
+    expect(screen.queryByRole('button', { name: /Book Dr Ravi/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Book Dr Asha at 11:00 AM' })).toBeInTheDocument();
+  });
+});
+
+describe('MobileThreeDayGrid', () => {
+  afterEach(cleanup);
+
+  const days = ['2026-10-01', '2026-10-02', '2026-10-03'];
+  type WeekProps = Parameters<typeof MobileThreeDayGrid>[0];
+  const weekProps = (overrides: Partial<WeekProps> = {}): WeekProps => ({
+    days,
+    today: '2026-10-01',
+    nowMinutes: 600,
+    appointments: [appointment({})],
+    hours: { startHour: 9, endHour: 13 },
+    slotMinutes: 30,
+    closedFor: () => OPEN,
+    colorFor: () => '#468adb',
+    selectedId: null,
+    onSelect: vi.fn(),
+    onBook: vi.fn(),
+    onOpenDay: vi.fn(),
+    ...overrides,
+  });
+
+  it('shows three date columns, Now only in today, and header taps open the day', () => {
+    const props = weekProps();
+    const { container } = render(<MobileThreeDayGrid {...props} />);
+    expect(container.querySelectorAll('[data-grid-header]')).toHaveLength(3);
+    expect(container.querySelectorAll('[data-now-line]')).toHaveLength(1);
+    screen.getByRole('button', { name: 'Open 2026-10-02 in day view' }).click();
+    expect(props.onOpenDay).toHaveBeenCalledWith('2026-10-02');
+  });
+
+  it('a colleague 3-day view offers no booking', () => {
+    render(<MobileThreeDayGrid {...weekProps({ isColleague: true })} />);
+    expect(screen.queryByRole('button', { name: /^Book / })).not.toBeInTheDocument();
+  });
+});
