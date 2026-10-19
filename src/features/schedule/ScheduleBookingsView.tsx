@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
 import { MiniCalendarStrip } from '@/components/MiniCalendarStrip';
-import { ConfirmDialog, KebabMenu, Panel, btnPrimary, btnSecondary, menuItem } from '@/components/ui';
+import { ConfirmDialog, Panel, btnPrimary, btnSecondary } from '@/components/ui';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
 import { toFriendlyMessage } from '@/lib/errors';
@@ -75,6 +75,7 @@ import { MultiResourceWeekGrid } from '@/components/schedule/MultiResourceWeekGr
 import { MobileDayGrid, MobileThreeDayGrid } from '@/components/schedule/MobileGrids';
 import { PhoneScheduleToolbar, PhoneStatusLine } from '@/components/schedule/PhoneScheduleToolbar';
 import { BookFab } from '@/components/schedule/BookFab';
+import { ScheduleMenu, type ScheduleMenuItem } from '@/components/schedule/ScheduleMenu';
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
 
 type BookingView = 'schedule' | 'requests' | 'history';
@@ -702,48 +703,41 @@ export function ScheduleBookingsView({
     }
   };
 
-  const moreMenu = (
-  <KebabMenu ariaLabel="More schedule options">
-    {(close) => (
-      <>
-        <button type="button" className={`${menuItem} tab:hidden`} onClick={() => { setFindTime((current) => !current); close(); }}>
-          {findTime ? 'Back to the day' : 'Find a time'}
-        </button>
-        <button type="button" className={menuItem} onClick={() => { setShowCancelled((current) => !current); close(); }}>
-          {showCancelled ? 'Hide cancelled' : 'Show cancelled'}
-        </button>
-        {canManageAll && (
-          <button type="button" className={`${menuItem} tab:hidden`} onClick={() => { setReminderOpen(true); close(); }}>
-            Send reminders
-          </button>
-        )}
-        {canManageAll && (
-          <button type="button" className={menuItem} onClick={() => { setClosedSheetOpen(true); close(); }}>
-            Set closed days
-          </button>
-        )}
-        {canManageAll && (
-          <button type="button" className={menuItem} onClick={() => { setAddWaitlistOpen(true); close(); }}>
-            Add to waitlist
-          </button>
-        )}
-        {canManageAll && (
-          <button type="button" className={menuItem} onClick={() => { chooseTherapist('shift'); close(); }}>
-            Assign shift…
-          </button>
-        )}
-        {canManageAll && (
-          <button type="button" className={menuItem} onClick={() => { chooseTherapist('hours'); close(); }}>
-            Working hours…
-          </button>
-        )}
-        <button type="button" className={`${menuItem} hidden pointer-fine:block`} onClick={() => { setShortcutsOpen(true); close(); }}>
-          Keyboard shortcuts
-        </button>
-      </>
-    )}
-  </KebabMenu>
-  );
+  const menuItems: ScheduleMenuItem[] = [
+    // On tablet and desktop Find a time / Reminders live in the page's own controls.
+    ...(isPhone
+      ? [
+          {
+            id: 'find-time',
+            label: findTime ? 'Back to the day' : 'Find a time',
+            hint: findTime ? undefined : 'See free start times for each therapist',
+            icon: 'find' as const,
+            group: 'view' as const,
+            onSelect: () => setFindTime((current) => !current),
+          },
+        ]
+      : []),
+    {
+      id: 'show-cancelled',
+      label: showCancelled ? 'Hide cancelled' : 'Show cancelled',
+      icon: 'cancelled',
+      group: 'view',
+      onSelect: () => setShowCancelled((current) => !current),
+    },
+    ...(canManageAll
+      ? ([
+          ...(isPhone
+            ? [{ id: 'reminders', label: 'Send reminders', hint: 'WhatsApp reminders for upcoming appointments', icon: 'bell' as const, group: 'actions' as const, onSelect: () => setReminderOpen(true) }]
+            : []),
+          { id: 'waitlist', label: 'Add to waitlist', hint: 'Someone waiting for an earlier slot', icon: 'waitlist', group: 'actions', onSelect: () => setAddWaitlistOpen(true) },
+          { id: 'closed-days', label: 'Set closed days', hint: 'Holidays and days off for the clinic', icon: 'closed', group: 'manage', onSelect: () => setClosedSheetOpen(true) },
+          { id: 'assign-shift', label: 'Assign shift…', hint: 'Give a therapist a shift', icon: 'shift', group: 'manage', onSelect: () => chooseTherapist('shift') },
+          { id: 'working-hours', label: 'Working hours…', hint: "Change a therapist's hours", icon: 'hours', group: 'manage', onSelect: () => chooseTherapist('hours') },
+        ] satisfies ScheduleMenuItem[])
+      : []),
+    { id: 'shortcuts', label: 'Keyboard shortcuts', icon: 'keys', group: 'view', desktopOnly: true, onSelect: () => setShortcutsOpen(true) },
+  ];
+  const moreMenu = <ScheduleMenu items={menuItems} isPhone={isPhone} />;
 
   return (
     <div className="space-y-4 pb-24 tab:pb-20">
