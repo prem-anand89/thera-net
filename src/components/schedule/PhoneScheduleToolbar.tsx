@@ -7,9 +7,11 @@ const VIEWS: { value: PhoneView; label: string }[] = [
 ];
 
 /**
- * Phone schedule toolbar. The week strip below it is the date navigation, so
- * this has no ‹ › row: a month line (month, the day's summary, Today) and one
- * row of therapist chip, Day / 3-Day switch and the ⋮ menu.
+ * Phone schedule toolbar, one row. The week strip below it is the date
+ * navigation, so there is no ‹ › here. Left: a two-line block with a short
+ * month ("Oct '26") over the day's summary; when the viewer is away from today
+ * the second line becomes a tappable "Today" instead. Then the therapist chip
+ * (takes the spare width), the Day / 3-Day switch and the ⋮ menu.
  */
 export function PhoneScheduleToolbar({
   month,
@@ -21,7 +23,7 @@ export function PhoneScheduleToolbar({
   filter,
   menu,
 }: {
-  /** e.g. "October 2026". */
+  /** Short month, e.g. "Oct '26". */
   month: string;
   summary?: string;
   onToday: () => void;
@@ -31,39 +33,42 @@ export function PhoneScheduleToolbar({
   filter: ReactNode;
   menu: ReactNode;
 }) {
+  const heading = (
+    <span className="block truncate font-display text-[17px] font-semibold leading-tight text-[var(--ink)]">{month}</span>
+  );
   return (
-    <div className="space-y-2" data-phone-toolbar>
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate font-display text-lg font-semibold leading-tight text-[var(--ink)]">{month}</h2>
+    <div className="flex items-center gap-1.5" data-phone-toolbar>
+      {todayDisabled ? (
+        <div className="min-w-0 shrink-0">
+          <h2 className="m-0">{heading}</h2>
           {summary && <p className="truncate text-xs text-[var(--muted)]">{summary}</p>}
         </div>
+      ) : (
         <button
           type="button"
-          disabled={todayDisabled}
-          className="min-h-11 shrink-0 rounded-lg border border-[var(--border)] px-3.5 text-xs font-medium text-[var(--teal)] disabled:opacity-50"
+          aria-label={`${month}. Go to today`}
           onClick={onToday}
+          className="min-h-11 min-w-0 shrink-0 text-left"
         >
-          Today
+          {heading}
+          <span className="block truncate text-xs font-medium text-[var(--teal)]">↩ Today</span>
         </button>
+      )}
+      <div className="min-w-0 flex-1 [&>div]:min-w-0 [&_button[aria-haspopup]]:w-full [&_button]:min-h-11">{filter}</div>
+      <div className="flex shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5" role="group" aria-label="View">
+        {VIEWS.map((candidate) => (
+          <button
+            key={candidate.value}
+            type="button"
+            aria-pressed={view === candidate.value}
+            onClick={() => onViewChange(candidate.value)}
+            className={`min-h-10 rounded-md px-2 text-xs font-medium ${view === candidate.value ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}
+          >
+            {candidate.label}
+          </button>
+        ))}
       </div>
-      <div className="flex items-center gap-2">
-        <div className="min-w-0 flex-1 [&_button]:min-h-11">{filter}</div>
-        <div className="flex shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5" role="group" aria-label="View">
-          {VIEWS.map((candidate) => (
-            <button
-              key={candidate.value}
-              type="button"
-              aria-pressed={view === candidate.value}
-              onClick={() => onViewChange(candidate.value)}
-              className={`min-h-10 rounded-md px-3.5 text-xs font-medium ${view === candidate.value ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}
-            >
-              {candidate.label}
-            </button>
-          ))}
-        </div>
-        {menu}
-      </div>
+      {menu}
     </div>
   );
 }

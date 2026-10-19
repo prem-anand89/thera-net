@@ -685,7 +685,10 @@ export function ScheduleBookingsView({
     ?? groupClosedRanges(closedDates ?? []).find((range) => range.from <= date && range.to >= date);
 
   // ---- phone (List · Day · 3-Day) ----
-  const phoneMonth = new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  const phoneMonth = (() => {
+    const value = new Date(`${date}T00:00:00`);
+    return `${value.toLocaleDateString('en-IN', { month: 'short' })} '${String(value.getFullYear()).slice(2)}`;
+  })();
   const phoneTodayDisabled = phoneView === '3day' ? threeDays.includes(today) : date === today;
   const dismissHoldHint = () => {
     setHoldHintDismissed(true);

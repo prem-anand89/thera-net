@@ -26,16 +26,22 @@ function setup(overrides: Partial<Parameters<typeof PhoneScheduleToolbar>[0]> = 
 describe('PhoneScheduleToolbar', () => {
   afterEach(cleanup);
 
-  it('is a month line (month, summary, Today) above one row of filter, view switch and menu', () => {
-    setup();
-    const rows = document.querySelector('[data-phone-toolbar]')!.children;
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toContainElement(screen.getByRole('heading', { name: 'October 2026' }));
-    expect(rows[0]).toContainElement(screen.getByText('3 booked, 1 still to come'));
-    expect(rows[0]).toContainElement(screen.getByRole('button', { name: 'Today' }));
-    expect(rows[1]).toContainElement(screen.getByRole('button', { name: 'All therapists' }));
-    expect(rows[1]).toContainElement(screen.getByRole('button', { name: 'Day' }));
-    expect(rows[1]).toContainElement(screen.getByRole('button', { name: 'More' }));
+  it('is a single row: short month over the summary, then filter, view switch and menu', () => {
+    setup({ month: "Oct '26", todayDisabled: true });
+    const root = document.querySelector('[data-phone-toolbar]')!;
+    expect(root.children).toHaveLength(4);
+    expect(screen.getByRole('heading', { name: "Oct '26" })).toBeInTheDocument();
+    expect(screen.getByText('3 booked, 1 still to come')).toBeInTheDocument();
+    for (const name of ['All therapists', 'Day', 'More']) {
+      expect(root).toContainElement(screen.getByRole('button', { name }));
+    }
+  });
+
+  it('away from today the second line is a Today button instead of the summary', () => {
+    const props = setup({ month: "Oct '26", todayDisabled: false });
+    expect(screen.queryByText('3 booked, 1 still to come')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: "Oct '26. Go to today" }));
+    expect(props.onToday).toHaveBeenCalled();
   });
 
   it('has no previous/next date buttons (the week strip navigates)', () => {
@@ -52,13 +58,9 @@ describe('PhoneScheduleToolbar', () => {
     expect(props.onViewChange).toHaveBeenCalledWith('3day');
   });
 
-  it('Today fires, and can be disabled', () => {
-    const props = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
-    expect(props.onToday).toHaveBeenCalled();
-    cleanup();
+  it('on today there is no Today button to press', () => {
     setup({ todayDisabled: true });
-    expect(screen.getByRole('button', { name: 'Today' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /today/i })).not.toBeInTheDocument();
   });
 });
 
@@ -82,10 +84,10 @@ describe('TherapistFilter phone chip', () => {
   ];
 
   it.each([
-    [[], 'All therapists'],
-    [['t1'], 'Dr Asha'],
-    [['t1', 't2'], '2 of 3 therapists'],
-  ])('shows the label %j as visible text when showLabel is on', (visibleIds, label) => {
+    [[], 'All'],
+    [['t1'], 'Asha'],
+    [['t1', 't2'], '2 of 3'],
+  ])('shows the compact label %j as visible text when showLabel is on', (visibleIds, label) => {
     render(<TherapistFilter therapists={therapists} visibleIds={visibleIds} onToggle={vi.fn()} onShowAll={vi.fn()} showLabel />);
     expect(screen.getByText(label)).toHaveClass('inline');
   });

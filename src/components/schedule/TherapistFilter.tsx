@@ -24,12 +24,20 @@ export function TherapistFilter({
 }) {
   const [open, setOpen] = useState(false);
   const shown = visibleIds.length === 0 ? therapists : therapists.filter((t) => visibleIds.includes(t.id));
-  const label =
+  const fullLabel =
     visibleIds.length === 0
       ? 'All therapists'
       : shown.length === 1
         ? shown[0].name
         : `${shown.length} of ${therapists.length} therapists`;
+  // The phone chip is narrow: "All", the first name without "Dr" ("Asha"), "2 of 3".
+  const compactLabel =
+    visibleIds.length === 0
+      ? 'All'
+      : shown.length === 1
+        ? shown[0].name.replace(/^dr\.?\s+/i, '').split(/\s+/)[0]
+        : `${shown.length} of ${therapists.length}`;
+  const label = showLabel ? compactLabel : fullLabel;
 
   return (
     <div className="relative">
@@ -45,7 +53,7 @@ export function TherapistFilter({
             <span key={t.id} className="h-2.5 w-2.5 rounded-full ring-2 ring-[var(--surface)]" style={{ background: t.color }} />
           ))}
         </span>
-        <span className={`truncate ${showLabel ? 'inline' : 'hidden sm:inline'}`}>{label}</span>
+        <span className={`min-w-0 truncate ${showLabel ? 'inline' : 'hidden sm:inline'}`}>{label}</span>
         {!showLabel && <span className="sr-only sm:hidden">{label}</span>}
         <svg aria-hidden className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" viewBox="0 0 16 16" fill="none">
           <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
