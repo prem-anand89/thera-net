@@ -266,13 +266,12 @@ export function DayColumn({
               isOffHours
                 ? 'text-slate-400 hover:bg-slate-100/70 focus-visible:bg-slate-100'
                 : 'text-[var(--moss-strong)] hover:bg-[var(--moss-light)] focus-visible:bg-[var(--moss-light)]'
-            } ${phone ? (isOffHours ? 'bg-slate-100/40' : 'bg-[var(--moss-light)]/40') : ''} ${
+            } ${isOffHours ? 'bg-slate-100/40' : 'bg-[var(--moss-light)]/40'} ${
               drag?.placing ? 'border border-dashed border-[var(--moss)]/60 bg-[var(--moss-light)]/60' : ''
             }`}
             style={{ top: geometry.top + 1, height: geometry.height - 2 }}
           >
-            {/* Free time stays blank so bookings stand out. Phones show nothing at all (the tint is
-                the affordance); pointer devices reveal "+ time" on hover, touch tablets a faint "+". */}
+            {/* Free time stays blank so bookings stand out. The tint is the affordance on every size; phones show nothing more; pointer devices reveal "+ time" on hover, touch tablets a faint "+". */}
             {!phone && (
               <>
                 <span className="hidden px-1.5 opacity-40 pointer-coarse:inline group-hover:!hidden group-focus-visible:!hidden" aria-hidden>+</span>

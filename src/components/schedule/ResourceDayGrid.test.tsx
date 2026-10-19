@@ -76,6 +76,11 @@ describe('ResourceDayGrid', () => {
     expect(props.onBook).toHaveBeenCalledWith({ time: '09:30', therapistId: 't2' });
   });
 
+  it('tints free time on desktop too, not only on phones', () => {
+    render(<ResourceDayGrid {...baseProps()} />);
+    expect(screen.getByRole('button', { name: 'Book Dr Asha at 11:00 AM' }).className).toContain('bg-[var(--moss-light)]/40');
+  });
+
   it('hides booking where the viewer may not book', () => {
     render(<ResourceDayGrid {...baseProps({ canBookFor: (id) => id === 't1' })} />);
     expect(screen.queryByRole('button', { name: /Book Dr Ravi/ })).not.toBeInTheDocument();
