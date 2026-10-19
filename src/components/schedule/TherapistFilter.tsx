@@ -19,25 +19,17 @@ export function TherapistFilter({
   visibleIds: UUID[];
   onToggle: (id: UUID) => void;
   onShowAll: () => void;
-  /** Show the selection's name at every width (phone chip: "Dr Asha", "3 therapists"). */
+  /** Show the selection's name at every width (phone chip: "Dr Asha", "2 of 3 therapists", "All therapists"). */
   showLabel?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const shown = visibleIds.length === 0 ? therapists : therapists.filter((t) => visibleIds.includes(t.id));
-  const fullLabel =
+  const label =
     visibleIds.length === 0
       ? 'All therapists'
       : shown.length === 1
         ? shown[0].name
         : `${shown.length} of ${therapists.length} therapists`;
-  // The phone chip is narrow: "All", the first name without "Dr" ("Asha"), "2 of 3".
-  const compactLabel =
-    visibleIds.length === 0
-      ? 'All'
-      : shown.length === 1
-        ? shown[0].name.replace(/^dr\.?\s+/i, '').split(/\s+/)[0]
-        : `${shown.length} of ${therapists.length}`;
-  const label = showLabel ? compactLabel : fullLabel;
 
   return (
     <div className="relative">

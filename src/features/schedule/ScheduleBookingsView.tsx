@@ -47,6 +47,7 @@ import { HistoryView } from '@/components/schedule/HistoryView';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
 import { appointmentsOutsideHours } from './hoursConflicts';
 import {
+  formatThreeDayTitle,
   historyAppointments,
   isColleagueAppointment,
   nextTherapistSearchParam,
@@ -685,10 +686,7 @@ export function ScheduleBookingsView({
     ?? groupClosedRanges(closedDates ?? []).find((range) => range.from <= date && range.to >= date);
 
   // ---- phone (List · Day · 3-Day) ----
-  const phoneMonth = (() => {
-    const value = new Date(`${date}T00:00:00`);
-    return `${value.toLocaleDateString('en-IN', { month: 'short' })} '${String(value.getFullYear()).slice(2)}`;
-  })();
+  const phoneTitle = phoneView === '3day' ? formatThreeDayTitle(date) : shortDate(date);
   const phoneTodayDisabled = phoneView === '3day' ? threeDays.includes(today) : date === today;
   const dismissHoldHint = () => {
     setHoldHintDismissed(true);
@@ -827,7 +825,7 @@ export function ScheduleBookingsView({
                 Replaces the old header row and the chips/summary row. */}
             {isPhone ? (
               <PhoneScheduleToolbar
-                month={phoneMonth}
+                title={phoneTitle}
                 summary={phoneView === 'day' ? daySummary : undefined}
                 onToday={() => setSchedule({ date: today })}
                 todayDisabled={phoneTodayDisabled}
