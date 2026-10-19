@@ -312,16 +312,18 @@ export function ScheduleBookingsView({
   const dayGaps = useMemo(() => {
     if (closedToday.closed || date < today) return [];
     const activeIds = selectedIds.length ? selectedIds : roster.map((t) => t.id);
-    if (activeIds.length > 3) return []; // Don't overwhelm the mobile view if too many therapists
+    if (activeIds.length > 6) return []; // Don't overwhelm the mobile view if too many therapists
     return activeIds
       .flatMap((id) => {
         const t = rosterById.get(id);
         if (!t || t.active === false) return [];
+        // Free time is only offered where the viewer can book (a colleague's column is view-only).
+        if (!canManageAll && id !== myTherapistId) return [];
         const gaps = freeGaps(dayAppointments, id, date, hours, slotMinutes, { notBefore: dayNow ?? undefined, alignToSlots: true, working: workingFor(id, date) });
         return gaps.map((g) => ({ ...g, therapistId: id, therapistName: t.name }));
       })
       .sort((a, b) => a.start - b.start);
-  }, [closedToday.closed, date, today, selectedIds, roster, rosterById, dayAppointments, hours, slotMinutes, dayNow, workingFor]);
+  }, [closedToday.closed, date, today, selectedIds, roster, rosterById, dayAppointments, hours, slotMinutes, dayNow, workingFor, canManageAll, myTherapistId]);
   const closures = useMemo(
     () => groupClosedRanges(closedDates ?? []).filter((range) => range.to >= today).slice(0, 8),
     [closedDates, today]
@@ -1153,6 +1155,17 @@ export function ScheduleBookingsView({
                     openBooking({ date, time, therapistId: targetId });
                   }}
                   isColleague={(a) => isColleagueAppointment(a, scope.role, myTherapistId)}
+                  sections={
+                    visibleRoster.length > 1
+                      ? visibleRoster.map((t) => ({
+                          id: t.id,
+                          name: t.name,
+                          color: t.color,
+                          readOnly: !canBookFor(t.id),
+                          summary: summaryFor(t.id).text,
+                        }))
+                      : undefined
+                  }
                 />
               )}
             </div>

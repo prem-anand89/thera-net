@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Appointment } from '@/domain/types';
 import { localDateTime } from '@/domain/schedule';
-import { AgendaList } from './AgendaList';
+import { AgendaList, gapStarts } from './AgendaList';
 
 const appt = (time: string, over: Partial<Appointment> = {}): Appointment => ({
   id: `a-${time}`,
@@ -146,5 +146,60 @@ describe('AgendaList', () => {
     // Reason and flags ARE rendered for own row
     expect(screen.getByText('Knee rehab')).toBeInTheDocument();
     expect(screen.getByText('Balance due')).toBeInTheDocument();
+  });
+
+  describe('free time and therapist sections', () => {
+    const base = {
+      slotMinutes: 30,
+      colorFor: () => '#468adb',
+      therapistNameFor: (a: Appointment) => (a.therapistId === 't2' ? 'Dr Ravi' : 'Dr Asha'),
+      showTherapist: true,
+      nowMinutes: null,
+      onSelect: vi.fn(),
+    };
+
+    it('gapStarts lists every slot that fits wholly inside the gap', () => {
+      expect(gapStarts({ start: 9 * 60, end: 10 * 60 + 15 }, 30)).toEqual([540, 570]);
+      expect(gapStarts({ start: 540, end: 560 }, 30)).toEqual([]);
+    });
+
+    it('a free gap offers tappable start times, with the rest behind "more"', () => {
+      const onBookGap = vi.fn();
+      render(
+        <AgendaList
+          {...base}
+          appointments={[]}
+          gaps={[{ start: 9 * 60, end: 13 * 60, therapistId: 't1', therapistName: 'Dr Asha' }]}
+          onBookGap={onBookGap}
+        />
+      );
+      expect(screen.getAllByRole('button', { name: /^Book / })).toHaveLength(4);
+      fireEvent.click(screen.getByRole('button', { name: '+4 more' }));
+      expect(screen.getAllByRole('button', { name: /^Book / })).toHaveLength(8);
+      fireEvent.click(screen.getByRole('button', { name: 'Book Dr Asha at 9:30 AM' }));
+      expect(onBookGap).toHaveBeenCalledWith('09:30', 't1');
+    });
+
+    it('groups rows under one section per therapist, with the day summary and view-only label', () => {
+      render(
+        <AgendaList
+          {...base}
+          appointments={[appt('10:00', { patientName: 'Mine' }), appt('11:00', { patientName: 'Theirs', therapistId: 't2' })]}
+          gaps={[]}
+          sections={[
+            { id: 't1', name: 'Dr Asha', color: '#468adb', readOnly: false, summary: '1 booked' },
+            { id: 't2', name: 'Dr Ravi', color: '#ee7c4e', readOnly: true, summary: '1 booked' },
+            { id: 't3', name: 'Dr Kiran', color: '#3a9d6e', readOnly: true },
+          ]}
+        />
+      );
+      const asha = screen.getByRole('region', { name: 'Dr Asha' });
+      const ravi = screen.getByRole('region', { name: 'Dr Ravi' });
+      expect(within(asha).getByText('Mine')).toBeInTheDocument();
+      expect(within(asha).queryByText('Theirs')).not.toBeInTheDocument();
+      expect(within(ravi).getByText('Theirs')).toBeInTheDocument();
+      expect(within(ravi).getByText('· view only')).toBeInTheDocument();
+      expect(within(screen.getByRole('region', { name: 'Dr Kiran' })).getByText('Nothing booked')).toBeInTheDocument();
+    });
   });
 });
