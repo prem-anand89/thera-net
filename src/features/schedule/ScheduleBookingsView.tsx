@@ -732,6 +732,10 @@ export function ScheduleBookingsView({
           { id: 'working-hours', label: 'Working hours…', hint: "Change a therapist's hours", icon: 'hours', group: 'manage', onSelect: () => chooseTherapist('hours') },
         ] satisfies ScheduleMenuItem[])
       : []),
+    // Phones: "My hours" lives here so the tab row stays just Schedule · History.
+    ...(isPhone && isTherapist && myTherapistId
+      ? [{ id: 'my-hours', label: 'My hours', hint: 'See your hours or request a change', icon: 'hours' as const, group: 'manage' as const, onSelect: () => setMyHoursOpen(true) }]
+      : []),
     { id: 'shortcuts', label: 'Keyboard shortcuts', icon: 'keys', group: 'view', desktopOnly: true, onSelect: () => setShortcutsOpen(true) },
   ];
   const moreMenu = <ScheduleMenu items={menuItems} isPhone={isPhone} />;
@@ -743,7 +747,7 @@ export function ScheduleBookingsView({
         actions={
           <>
             {isTherapist && myTherapistId && (
-              <button type="button" className={`${tabAction} inline-flex`} onClick={() => setMyHoursOpen(true)}>
+              <button type="button" className={`${tabAction} hidden tab:inline-flex`} onClick={() => setMyHoursOpen(true)}>
                 My hours
               </button>
             )}

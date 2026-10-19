@@ -1,4 +1,5 @@
 import { notify } from '@/lib/notify';
+import { appHeaderHeight } from '@/lib/appHeaderHeight';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Appointment, UUID } from '@/domain/types';
 import { APPOINTMENT_BLOCK_STYLE } from '@/domain/appointmentStatus';
@@ -481,7 +482,7 @@ export function initialScrollTop(
   return Math.max(0, focusTop - 60 * pxPerMinute);
 }
 
-/** Phone page scroll: the app header (60px + 1px border) the column headers stick under, and the bottom nav. */
+/** Phone page scroll: fallback app header height (60px + 1px border) until the shell measures it, and the bottom nav. */
 const PHONE_STICKY_TOP = 61;
 const PHONE_BOTTOM_NAV = 64;
 
@@ -496,15 +497,19 @@ function useInitialScroll(
   useEffect(() => {
     const element = ref.current;
     if (!element || positionedFor.current === key) return;
+    const firstTime = positionedFor.current === null;
     positionedFor.current = key;
     // Column headers take the top of the scroll box.
     const header = element.querySelector<HTMLElement>('[data-grid-header]')?.offsetHeight ?? 0;
     if (pageScroll) {
-      // The page scrolls, not the grid: only move when the focus is below the fold.
-      const visible = window.innerHeight - PHONE_STICKY_TOP - PHONE_BOTTOM_NAV - header;
+      // The page scrolls, not the grid: position once when the grid opens, never on a
+      // later date change (that would scroll the date strip the user just tapped out of view).
+      if (!firstTime) return;
+      const headerTop = appHeaderHeight(PHONE_STICKY_TOP);
+      const visible = window.innerHeight - headerTop - PHONE_BOTTOM_NAV - header;
       const offset = compute(visible);
       if (offset > 0) {
-        window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - PHONE_STICKY_TOP + offset });
+        window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - headerTop + offset });
       }
       return;
     }
@@ -767,7 +772,7 @@ function GridFrame({
   // Phone grids up to three columns fit the screen width, so the page scrolls and the grid has no box of its own.
   const pageScroll = phone && columns.length <= 3;
   useInitialScroll(scrollRef, scrollKey, computeScroll, pageScroll);
-  const stickyTop = pageScroll ? { top: `calc(${PHONE_STICKY_TOP}px + env(safe-area-inset-top))` } : undefined;
+  const stickyTop = pageScroll ? { top: `var(--app-header-h, calc(${PHONE_STICKY_TOP}px + env(safe-area-inset-top)))` } : undefined;
   // One-column phone Day: no axis column — the hour rail lives inside the column so the cards get the width.
   const railMode = phone && columns.length === 1;
   const template = railMode
@@ -778,7 +783,14 @@ function GridFrame({
   return (
     <>
     {placing && (
-      <div role="status" className="mb-2 flex items-center justify-between gap-3 rounded-xl bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--ink)]">
+      <div
+        role="status"
+        className={`flex items-center justify-between gap-3 rounded-xl bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--ink)] ${
+          // Page scroll: the top of the grid may be off-screen, so the bar sits above the bottom nav.
+          pageScroll ? 'fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom)+0.5rem)] z-[10] shadow-lg' : 'mb-2'
+        }`}
+        data-placing-bar
+      >
         <span>
           Tap a free time to move <strong>{placing.appointment.patientName}</strong>.
         </span>

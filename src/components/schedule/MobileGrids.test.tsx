@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Appointment } from '@/domain/types';
 import { localDateTime } from '@/domain/schedule';
 import type { GridTherapist } from './TimeGrid';
@@ -233,6 +233,33 @@ describe('MobileThreeDayGrid', () => {
     const many = Array.from({ length: 4 }, (_, i) => ({ ...therapists[0], id: `t-many-${i}`, name: `Therapist ${i}` }));
     const wide = render(<MobileDayGrid {...dayProps({ therapists: many, appointments: [] })} />);
     expect(wide.container.querySelector<HTMLElement>('[data-schedule-grid]')!.className).toContain('overflow-auto');
+  });
+
+  it('page scroll: positions the page once when the grid opens, not again on a date change', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const props = dayProps({ therapists: [therapists[0]], appointments: [], hours: { startHour: 8, endHour: 21 }, nowMinutes: 19 * 60 });
+    const { rerender } = render(<MobileDayGrid {...props} />);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    // The next day's first appointment is late too, so only the once-per-mount rule keeps the page still.
+    const late = appointment({ id: 'late', scheduledAt: localDateTime('2026-10-02', '19:00').toISOString() });
+    rerender(<MobileDayGrid {...props} date="2026-10-02" appointments={[late]} />);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
+  it('page scroll: the "tap a free time to move" bar is pinned above the bottom nav', () => {
+    vi.useFakeTimers();
+    try {
+      render(<MobileDayGrid {...dayProps({ therapists: [therapists[0]], nowMinutes: 8 * 60, drag: { canDrag: () => true, onMove: vi.fn() } })} />);
+      fireEvent.pointerDown(screen.getByRole('button', { name: /Priya/ }), { pointerType: 'touch', clientX: 150, clientY: 100 });
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      fireEvent.pointerUp(window, { pointerType: 'touch' });
+      expect(screen.getByRole('status')).toHaveTextContent('Tap a free time to move Priya');
+      expect(document.querySelector('[data-placing-bar]')!.className).toContain('fixed');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('the rail hides an hour label while the Now badge sits on it, and shows it again otherwise', () => {

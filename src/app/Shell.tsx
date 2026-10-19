@@ -50,6 +50,7 @@ import {
 } from './sessionLoss';
 import { requestPersistentStorage } from '@/lib/persistStorage';
 import { UpdateBanner } from '@/components/UpdateBanner';
+import { trackAppHeaderHeight } from '@/lib/appHeaderHeight';
 import { ClinicSwitcher } from './ClinicSwitcher';
 import { AppLoading, BrandMark } from '@/components/BrandMark';
 
@@ -394,7 +395,7 @@ export function Shell() {
   return (
     <ClinicContext.Provider value={clinic}>
       <div className="min-h-screen bg-[var(--paper)]">
-        <header className="no-print sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)]">
+        <header ref={trackAppHeaderHeight} className="no-print sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)] pt-[env(safe-area-inset-top)]">
           {/* Header layout. Left: the Thera.Net mark (the product; wordmark
               from desktop:). Middle: nav, sm:-and-up only — the bottom tab
               bar replaces it on phones. Right: the clinic pill (where you
