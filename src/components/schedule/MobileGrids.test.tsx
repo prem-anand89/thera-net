@@ -101,8 +101,25 @@ describe('MobileDayGrid', () => {
     expect(slot.textContent).toBe('');
   });
 
-  it('one therapist is one wide column with full detail: the reason shows on a 60-minute block, not on a 30-minute one', () => {
-    setColumnWidth(290);
+  it('one therapist is one wide column with an in-column hour rail instead of an axis column', () => {
+    const { container } = render(<MobileDayGrid {...dayProps({ therapists: [therapists[0]] })} />);
+    expect(document.querySelectorAll('[data-grid-header]')).toHaveLength(1);
+    expect(container.querySelector('[data-rail]')).not.toBeNull();
+    // Hour labels read "9 AM" and live inside the column.
+    expect(screen.getAllByText('AM').length).toBeGreaterThan(0);
+    // Several therapists keep the separate axis and no rail.
+    cleanup();
+    const multi = render(<MobileDayGrid {...dayProps()} />);
+    expect(multi.container.querySelector('[data-rail]')).toBeNull();
+  });
+
+  it('one therapist uses the denser scale: 80px per hour, a 30-minute block is 40px', () => {
+    render(<MobileDayGrid {...dayProps({ therapists: [therapists[0]], appointments: [appointment({ durationMinutes: 30 })] })} />);
+    const block = screen.getByRole('button', { name: /Priya/ });
+    expect(parseFloat(block.style.height) + 1).toBeCloseTo(40, 0);
+  });
+
+  it('cards show name and time, then the reason, even on a 30-minute block (two lines)', () => {
     render(
       <MobileDayGrid
         {...dayProps({
@@ -114,9 +131,11 @@ describe('MobileDayGrid', () => {
         })}
       />
     );
-    expect(document.querySelectorAll('[data-grid-header]')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: /Long Visit/ })).toHaveTextContent('Lumbar strain');
-    expect(screen.getByRole('button', { name: /Short Visit/ })).not.toHaveTextContent('Lumbar strain');
+    for (const name of [/Long Visit/, /Short Visit/]) {
+      const card = screen.getByRole('button', { name });
+      expect(card).toHaveTextContent('Lumbar strain');
+    }
+    expect(screen.getByRole('button', { name: /Short Visit/ })).toHaveTextContent('12:00–12:30');
   });
 
   it('fades appointments that ended before now (today) and not later ones', () => {

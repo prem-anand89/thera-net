@@ -8,6 +8,7 @@ import {
   stepThreeDay,
   isDateInThreeDayWindow,
   phonePxPerMinute,
+  phoneSingleColumnPxPerMinute,
   densityFor,
   selectedTherapistIds,
   canManageAppointment,
@@ -323,5 +324,14 @@ describe('schedulePhoneHelpers', () => {
       expect(historyAppointments(list, 'admin', null)).toEqual(list);
       expect(historyAppointments(list, 'front_desk', 'th-1')).toEqual(list);
     });
+  });
+});
+
+describe('phoneSingleColumnPxPerMinute', () => {
+  it('is 80px per hour for 30-minute slots (a slot is 40px) and never makes a slot shorter than 40px', () => {
+    expect(phoneSingleColumnPxPerMinute(30) * 60).toBeCloseTo(80, 5);
+    expect(phoneSingleColumnPxPerMinute(30) * 30).toBeGreaterThanOrEqual(40);
+    expect(phoneSingleColumnPxPerMinute(15) * 15).toBeGreaterThanOrEqual(40);
+    expect(phoneSingleColumnPxPerMinute(60) * 60).toBeGreaterThanOrEqual(80);
   });
 });

@@ -22,6 +22,7 @@ import { CLOSED_HATCH_STYLE, appointmentFill } from './scheduleColors';
 import { LoadLine, type LoadSummary } from './LoadLine';
 import { patientFlags, type PatientFlagContext } from '@/domain/patientFlags';
 import { BlockFlagBadges } from './BlockFlagBadges';
+import { WideBlock } from './WideBlock';
 import { useElementWidth } from './useElementWidth';
 import { densityFor } from '@/features/schedule/schedulePhoneHelpers';
 export type { LoadSummary } from './LoadLine';
@@ -30,6 +31,9 @@ export type { LoadSummary } from './LoadLine';
 export const PX_PER_MINUTE = 1.6;
 
 export type GridHours = { startHour: number; endHour: number };
+
+/** Width of the in-column time rail used by the single-column phone Day (no separate axis column). */
+const RAIL_W = 34;
 
 type DayColumnProps = {
   label: string;
@@ -64,6 +68,8 @@ type DayColumnProps = {
   pxPerMinute?: number;
   /** Phone presentation: block detail adapts to column width, free time is visibly tinted. */
   phone?: boolean;
+  /** Single-column phone Day: hour labels on a continuous rail inside the column, wide appointment cards. */
+  rail?: boolean;
 };
 
 export type DragGhost = { columnKey: string; appointmentId: string; start: number; duration: number; valid: boolean };
@@ -117,6 +123,7 @@ export function DayColumn({
   isColleague = false,
   pxPerMinute = PX_PER_MINUTE,
   phone = false,
+  rail = false,
 }: DayColumnProps) {
   const [columnElement, setColumnElement] = useState<HTMLDivElement | null>(null);
   const columnWidth = useElementWidth(phone ? columnElement : null, 150);
@@ -207,6 +214,26 @@ export function DayColumn({
           Closed{closed.label ? ` · ${closed.label}` : ''}
         </div>
       )}
+      {rail && (
+        <>
+          <div className="pointer-events-none absolute inset-y-0 z-[3] w-px bg-[var(--border)]" style={{ left: 16 }} aria-hidden data-rail />
+          {Array.from({ length: hours.endHour - hours.startHour }, (_, index) => {
+            const hour = hours.startHour + index;
+            return (
+              <span
+                key={index}
+                className="pointer-events-none absolute left-0 z-[4] w-[33px] -translate-y-1/2 whitespace-nowrap bg-[var(--surface)] py-px text-center text-[10px] leading-[1.05] tabular-nums text-[var(--muted)]"
+                style={{ top: index === 0 ? 13 : index * 60 * pxPerMinute }}
+                aria-hidden
+              >
+                {hour % 12 || 12}
+                <small className="ml-px text-[8px] opacity-75">{hour >= 12 ? 'PM' : 'AM'}</small>
+              </span>
+            );
+          })}
+        </>
+      )}
+      <div className="absolute inset-y-0 right-0" style={{ left: rail ? RAIL_W : 0 }}>
       {freeSlots.map((slot) => {
         const geometry = blockGeometry(slot.minutes, slotMinutes, hours.startHour, pxPerMinute);
         const isOffHours = Boolean(working && !withinWorking(working, slot.minutes, slotMinutes));
@@ -287,7 +314,17 @@ export function DayColumn({
                 }}
               />
             )}
-            {!minimalBlocks ? (
+            {rail ? (
+              <WideBlock
+                name={appointment.patientName}
+                start={start}
+                end={end}
+                reason={reason}
+                flags={flags}
+                height={geometry.height - 1}
+                mark={style.mark || undefined}
+              />
+            ) : !minimalBlocks ? (
               <>
                 {density !== 'compact' && <BlockFlagBadges flags={flags} />}
                 {compact ? (
@@ -347,14 +384,22 @@ export function DayColumn({
           {!drag.ghost.valid && ' · not free'}
         </div>
       )}
+      </div>
       {nowMinutes !== null && nowMinutes >= hours.startHour * 60 && nowMinutes <= hours.endHour * 60 && (
         <div
-          className="pointer-events-none absolute inset-x-0 z-[3] border-t border-[var(--rust)]/55"
+          className={`pointer-events-none absolute right-0 z-[3] border-t border-[var(--rust)]/55 ${rail ? 'left-4' : 'left-0'}`}
           style={{ top: (nowMinutes - hours.startHour * 60) * pxPerMinute }}
           data-now-line
           aria-hidden
         >
-          <span className="absolute -left-[3px] -top-[4px] h-[7px] w-[7px] rounded-full bg-[var(--rust)]" />
+          {rail ? (
+            // The time badge sits on the rail (left of the cards) so it never covers card text.
+            <span className="absolute left-0.5 top-0 z-[6] -translate-y-1/2 rounded bg-[var(--rust)] px-1 text-[9px] font-semibold leading-[13px] text-white" data-now-badge>
+              {Math.floor(nowMinutes / 60) % 12 || 12}:{String(nowMinutes % 60).padStart(2, '0')}
+            </span>
+          ) : (
+            <span className="absolute -left-[3px] -top-[4px] h-[7px] w-[7px] rounded-full bg-[var(--rust)]" />
+          )}
         </div>
       )}
     </div>
@@ -692,7 +737,11 @@ function GridFrame({
     [hours, focusNow, firstStart, pxPerMinute]
   );
   useInitialScroll(scrollRef, scrollKey, computeScroll);
-  const template = `${phone ? 52 : 56}px repeat(${columns.length}, minmax(${minColumnWidth}px, 1fr))`;
+  // One-column phone Day: no axis column — the hour rail lives inside the column so the cards get the width.
+  const railMode = phone && columns.length === 1;
+  const template = railMode
+    ? `minmax(${minColumnWidth}px, 1fr)`
+    : `${phone ? 52 : 56}px repeat(${columns.length}, minmax(${minColumnWidth}px, 1fr))`;
   const { columnDrag, placing, cancelPlacing } = useGridDrag({ columns, hours, slotMinutes, today, nowMinutes, options: drag, pxPerMinute });
 
   return (
@@ -717,19 +766,21 @@ function GridFrame({
       data-schedule-grid
     >
       <div className="grid" style={{ gridTemplateColumns: template }}>
-        <div className="sticky left-0 top-0 z-[5] border-b border-[var(--border)] bg-[var(--surface)]" />
+        {!railMode && <div className="sticky left-0 top-0 z-[5] border-b border-[var(--border)] bg-[var(--surface)]" />}
         {columns.map((column) => (
           <div
             key={column.key}
-            className="sticky top-0 z-[4] border-b border-l border-[var(--border)] bg-[var(--surface)] px-2 py-2"
+            className={`sticky top-0 z-[4] border-b border-[var(--border)] bg-[var(--surface)] px-2 py-2 ${railMode ? '' : 'border-l'}`}
             data-grid-header
           >
             {column.header}
           </div>
         ))}
-        <div className="sticky left-0 z-[4] bg-[var(--surface)]">
-          <TimeAxis hours={hours} pxPerMinute={pxPerMinute} nowMinutes={phone && showsToday ? nowMinutes : null} />
-        </div>
+        {!railMode && (
+          <div className="sticky left-0 z-[4] bg-[var(--surface)]">
+            <TimeAxis hours={hours} pxPerMinute={pxPerMinute} nowMinutes={phone && showsToday ? nowMinutes : null} />
+          </div>
+        )}
         {columns.map((column) => (
           <DayColumn
             key={column.key}
@@ -749,6 +800,7 @@ function GridFrame({
             onBook={column.onBook}
             dense={minColumnWidth < 150}
             phone={phone}
+            rail={railMode}
             pxPerMinute={pxPerMinute}
             working={column.working}
             drag={columnDrag(column)}

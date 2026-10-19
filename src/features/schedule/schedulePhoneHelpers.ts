@@ -97,6 +97,14 @@ export function phonePxPerMinute(slotMinutes: number): number {
   return Math.max(1.6, 44 / safeMinutes);
 }
 
+/**
+ * Pixels per minute for the single-column phone Day: 80px per hour (a 30-minute
+ * block is 40px, room for two lines) and never less than 40px for one slot.
+ */
+export function phoneSingleColumnPxPerMinute(slotMinutes: number): number {
+  return Math.max(80 / 60, 40 / Math.max(1, slotMinutes));
+}
+
 export type ScheduleBlockDensity = 'full' | 'medium' | 'compact';
 
 /**

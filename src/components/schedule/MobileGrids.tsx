@@ -1,5 +1,5 @@
 import { ResourceDayGrid, WeekTimeGrid } from './TimeGrid';
-import { phonePxPerMinute } from '@/features/schedule/schedulePhoneHelpers';
+import { phonePxPerMinute, phoneSingleColumnPxPerMinute } from '@/features/schedule/schedulePhoneHelpers';
 
 type ResourceProps = React.ComponentProps<typeof ResourceDayGrid>;
 type WeekProps = React.ComponentProps<typeof WeekTimeGrid>;
@@ -10,7 +10,15 @@ type WeekProps = React.ComponentProps<typeof WeekTimeGrid>;
  * switches on the phone presentation and the tap-size scale.
  */
 export function MobileDayGrid(props: Omit<ResourceProps, 'phone' | 'pxPerMinute'>) {
-  return <ResourceDayGrid {...props} phone pxPerMinute={phonePxPerMinute(props.slotMinutes)} />;
+  // One therapist = one wide column with an in-column hour rail and a denser scale.
+  const single = props.therapists.length === 1;
+  return (
+    <ResourceDayGrid
+      {...props}
+      phone
+      pxPerMinute={single ? phoneSingleColumnPxPerMinute(props.slotMinutes) : phonePxPerMinute(props.slotMinutes)}
+    />
+  );
 }
 
 /** Phone 3-Day view: one therapist, three date columns. `days` must hold the 3 dates. */
