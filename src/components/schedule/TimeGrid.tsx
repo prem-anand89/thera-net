@@ -482,11 +482,16 @@ export function initialScrollTop(
   return Math.max(0, focusTop - 60 * pxPerMinute);
 }
 
+/** Phone page scroll: the app header (60px + 1px border) the column headers stick under, and the bottom nav. */
+const PHONE_STICKY_TOP = 61;
+const PHONE_BOTTOM_NAV = 64;
+
 /** Positions the grid once per date/week — never again while the user scrolls. */
 function useInitialScroll(
   ref: React.RefObject<HTMLDivElement | null>,
   key: string,
-  compute: (viewportHeight: number) => number
+  compute: (viewportHeight: number) => number,
+  pageScroll = false
 ) {
   const positionedFor = useRef<string | null>(null);
   useEffect(() => {
@@ -495,8 +500,17 @@ function useInitialScroll(
     positionedFor.current = key;
     // Column headers take the top of the scroll box.
     const header = element.querySelector<HTMLElement>('[data-grid-header]')?.offsetHeight ?? 0;
+    if (pageScroll) {
+      // The page scrolls, not the grid: only move when the focus is below the fold.
+      const visible = window.innerHeight - PHONE_STICKY_TOP - PHONE_BOTTOM_NAV - header;
+      const offset = compute(visible);
+      if (offset > 0) {
+        window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - PHONE_STICKY_TOP + offset });
+      }
+      return;
+    }
     element.scrollTop = compute(element.clientHeight - header);
-  }, [ref, key, compute]);
+  }, [ref, key, compute, pageScroll]);
 }
 
 export type GridColumn = {
@@ -751,7 +765,10 @@ function GridFrame({
       initialScrollTop(hours, { nowMinutes: focusNow, firstStart: firstStart ?? null, viewportHeight, pxPerMinute }),
     [hours, focusNow, firstStart, pxPerMinute]
   );
-  useInitialScroll(scrollRef, scrollKey, computeScroll);
+  // Phone grids up to three columns fit the screen width, so the page scrolls and the grid has no box of its own.
+  const pageScroll = phone && columns.length <= 3;
+  useInitialScroll(scrollRef, scrollKey, computeScroll, pageScroll);
+  const stickyTop = pageScroll ? { top: `calc(${PHONE_STICKY_TOP}px + env(safe-area-inset-top))` } : undefined;
   // One-column phone Day: no axis column — the hour rail lives inside the column so the cards get the width.
   const railMode = phone && columns.length === 1;
   const template = railMode
@@ -773,19 +790,22 @@ function GridFrame({
     )}
     <div
       ref={scrollRef}
-      className={`overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] ${
-        phone
-          ? 'max-h-[calc(100dvh-17rem)] min-h-[320px] overscroll-contain'
-          : 'max-h-[calc(100vh-240px)] min-h-[420px]'
+      className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] ${
+        pageScroll
+          ? ''
+          : phone
+            ? 'max-h-[calc(100dvh-17rem)] min-h-[320px] overflow-auto overscroll-contain'
+            : 'max-h-[calc(100vh-240px)] min-h-[420px] overflow-auto'
       }`}
       data-schedule-grid
     >
       <div className="grid" style={{ gridTemplateColumns: template }}>
-        {!railMode && <div className="sticky left-0 top-0 z-[5] border-b border-[var(--border)] bg-[var(--surface)]" />}
+        {!railMode && <div className="sticky left-0 top-0 z-[5] border-b border-[var(--border)] bg-[var(--surface)]" style={stickyTop} />}
         {columns.map((column) => (
           <div
             key={column.key}
             className={`sticky top-0 z-[4] border-b border-[var(--border)] bg-[var(--surface)] px-2 py-2 ${railMode ? '' : 'border-l'}`}
+            style={stickyTop}
             data-grid-header
           >
             {column.header}

@@ -224,6 +224,17 @@ describe('MobileThreeDayGrid', () => {
     expect(multi.container.querySelector('[data-half-hour]')).toBeNull();
   });
 
+  it('up to three columns scroll with the page; a wider grid keeps its own scroll box', () => {
+    const { container } = render(<MobileDayGrid {...dayProps({ therapists: [therapists[0]] })} />);
+    const grid = container.querySelector<HTMLElement>('[data-schedule-grid]')!;
+    expect(grid.className).not.toContain('overflow-auto');
+    expect(container.querySelector<HTMLElement>('[data-grid-header]')!.style.top).toContain('61px');
+    cleanup();
+    const many = Array.from({ length: 4 }, (_, i) => ({ ...therapists[0], id: `t-many-${i}`, name: `Therapist ${i}` }));
+    const wide = render(<MobileDayGrid {...dayProps({ therapists: many, appointments: [] })} />);
+    expect(wide.container.querySelector<HTMLElement>('[data-schedule-grid]')!.className).toContain('overflow-auto');
+  });
+
   it('the rail hides an hour label while the Now badge sits on it, and shows it again otherwise', () => {
     const { rerender } = render(<MobileDayGrid {...dayProps({ therapists: [therapists[0]], nowMinutes: 11 * 60 })} />);
     expect(screen.queryByText('11')).not.toBeInTheDocument();
