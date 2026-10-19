@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { PhoneScheduleToolbar, PhoneStatusLine } from './PhoneScheduleToolbar';
 import { BookFab } from './BookFab';
 import { TherapistFilter } from './TherapistFilter';
@@ -65,6 +65,29 @@ describe('BookFab', () => {
     render(<BookFab onClick={onClick} />);
     fireEvent.click(screen.getByRole('button', { name: 'Book appointment' }));
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('BookFab scroll behaviour', () => {
+  afterEach(cleanup);
+
+  it('hides while scrolling down inside a scroll box and returns on scroll up', () => {
+    const box = document.createElement('div');
+    document.body.appendChild(box);
+    render(<BookFab onClick={vi.fn()} />);
+    const fab = screen.getByLabelText('Book appointment', { selector: 'button' });
+    const scrollTo = (top: number) => {
+      box.scrollTop = top;
+      act(() => {
+        box.dispatchEvent(new Event('scroll'));
+      });
+    };
+    scrollTo(10);
+    scrollTo(300);
+    expect(fab).toHaveAttribute('data-hidden', 'true');
+    scrollTo(240);
+    expect(fab).not.toHaveAttribute('data-hidden');
+    box.remove();
   });
 });
 

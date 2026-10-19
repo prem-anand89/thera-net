@@ -216,13 +216,14 @@ export function DayColumn({
       )}
       {rail && (
         <>
-          <div className="pointer-events-none absolute inset-y-0 z-[3] w-px bg-[var(--border)]" style={{ left: 16 }} aria-hidden data-rail />
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-[1] bg-[var(--surface)]" style={{ width: RAIL_W }} aria-hidden />
+          <div className="pointer-events-none absolute inset-y-0 z-[1] w-px bg-[var(--border)]" style={{ left: 16 }} aria-hidden data-rail />
           {Array.from({ length: hours.endHour - hours.startHour }, (_, index) => {
             const hour = hours.startHour + index;
             return (
               <span
                 key={index}
-                className="pointer-events-none absolute left-0 z-[4] w-[33px] -translate-y-1/2 whitespace-nowrap bg-[var(--surface)] py-px text-center text-[10px] leading-[1.05] tabular-nums text-[var(--muted)]"
+                className="pointer-events-none absolute left-0 z-[2] w-[33px] -translate-y-1/2 whitespace-nowrap bg-[var(--surface)] py-px text-center text-[10px] leading-[1.05] tabular-nums text-[var(--muted)]"
                 style={{ top: index === 0 ? 13 : index * 60 * pxPerMinute }}
                 aria-hidden
               >
@@ -394,7 +395,7 @@ export function DayColumn({
         >
           {rail ? (
             // The time badge sits on the rail (left of the cards) so it never covers card text.
-            <span className="absolute left-0.5 top-0 z-[6] -translate-y-1/2 rounded bg-[var(--rust)] px-1 text-[9px] font-semibold leading-[13px] text-white" data-now-badge>
+            <span className="absolute left-0.5 top-0 z-[3] -translate-y-1/2 rounded bg-[var(--rust)] px-1 text-[9px] font-semibold leading-[13px] text-white" data-now-badge>
               {Math.floor(nowMinutes / 60) % 12 || 12}:{String(nowMinutes % 60).padStart(2, '0')}
             </span>
           ) : (
