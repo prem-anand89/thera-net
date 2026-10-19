@@ -13,11 +13,14 @@ export function TherapistFilter({
   visibleIds,
   onToggle,
   onShowAll,
+  showLabel = false,
 }: {
   therapists: FilterTherapist[];
   visibleIds: UUID[];
   onToggle: (id: UUID) => void;
   onShowAll: () => void;
+  /** Show the selection's name at every width (phone chip: "Dr Asha", "3 therapists"). */
+  showLabel?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const shown = visibleIds.length === 0 ? therapists : therapists.filter((t) => visibleIds.includes(t.id));
@@ -42,8 +45,8 @@ export function TherapistFilter({
             <span key={t.id} className="h-2.5 w-2.5 rounded-full ring-2 ring-[var(--surface)]" style={{ background: t.color }} />
           ))}
         </span>
-        <span className="hidden truncate sm:inline">{label}</span>
-        <span className="sr-only sm:hidden">{label}</span>
+        <span className={`truncate ${showLabel ? 'inline' : 'hidden sm:inline'}`}>{label}</span>
+        {!showLabel && <span className="sr-only sm:hidden">{label}</span>}
         <svg aria-hidden className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" viewBox="0 0 16 16" fill="none">
           <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

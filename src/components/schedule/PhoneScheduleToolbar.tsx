@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
 import type { PhoneView } from '@/features/schedule/schedulePhoneHelpers';
 
 const VIEWS: { value: PhoneView; label: string }[] = [
@@ -8,64 +7,41 @@ const VIEWS: { value: PhoneView; label: string }[] = [
 ];
 
 /**
- * Phone schedule toolbar in two rows so the date never competes with the
- * controls: row 1 is date navigation, row 2 is therapists, view and menu.
+ * Phone schedule toolbar. The week strip below it is the date navigation, so
+ * this has no ‹ › row: a month line (month, the day's summary, Today) and one
+ * row of therapist chip, Day / 3-Day switch and the ⋮ menu.
  */
 export function PhoneScheduleToolbar({
-  title,
+  month,
   summary,
-  prevLabel,
-  nextLabel,
-  onPrev,
-  onNext,
   onToday,
   todayDisabled,
-  calendarOpen,
-  onToggleCalendar,
   view,
   onViewChange,
   filter,
   menu,
 }: {
-  title: string;
+  /** e.g. "October 2026". */
+  month: string;
   summary?: string;
-  prevLabel: string;
-  nextLabel: string;
-  onPrev: () => void;
-  onNext: () => void;
   onToday: () => void;
   todayDisabled: boolean;
-  calendarOpen: boolean;
-  onToggleCalendar: () => void;
   view: PhoneView;
   onViewChange: (view: PhoneView) => void;
   filter: ReactNode;
   menu: ReactNode;
 }) {
-  const icon = 'flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-[var(--teal)] active:bg-[var(--paper)]';
   return (
     <div className="space-y-2" data-phone-toolbar>
-      <div className="flex items-center gap-1">
-        <button type="button" className={icon} aria-label={prevLabel} onClick={onPrev}>
-          <IconChevronLeft className="h-5 w-5" />
-        </button>
-        <button
-          type="button"
-          className="min-h-11 min-w-0 flex-1 rounded-lg px-1 text-center active:bg-[var(--paper)]"
-          aria-expanded={calendarOpen}
-          aria-label={`${title}. ${calendarOpen ? 'Hide' : 'Show'} calendar`}
-          onClick={onToggleCalendar}
-        >
-          <span className="block truncate font-display text-lg font-semibold leading-tight text-[var(--ink)]">{title}</span>
-          {summary && <span className="block truncate text-xs text-[var(--muted)]">{summary}</span>}
-        </button>
-        <button type="button" className={icon} aria-label={nextLabel} onClick={onNext}>
-          <IconChevronRight className="h-5 w-5" />
-        </button>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate font-display text-lg font-semibold leading-tight text-[var(--ink)]">{month}</h2>
+          {summary && <p className="truncate text-xs text-[var(--muted)]">{summary}</p>}
+        </div>
         <button
           type="button"
           disabled={todayDisabled}
-          className="min-h-11 shrink-0 rounded-lg border border-[var(--border)] px-3 text-xs font-medium text-[var(--teal)] disabled:opacity-50"
+          className="min-h-11 shrink-0 rounded-lg border border-[var(--border)] px-3.5 text-xs font-medium text-[var(--teal)] disabled:opacity-50"
           onClick={onToday}
         >
           Today
@@ -80,7 +56,7 @@ export function PhoneScheduleToolbar({
               type="button"
               aria-pressed={view === candidate.value}
               onClick={() => onViewChange(candidate.value)}
-              className={`min-h-10 rounded-md px-3 text-xs font-medium ${view === candidate.value ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}
+              className={`min-h-10 rounded-md px-3.5 text-xs font-medium ${view === candidate.value ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}
             >
               {candidate.label}
             </button>

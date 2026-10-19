@@ -12,6 +12,8 @@ interface MiniCalendarStripProps {
   appointmentDates: string[]; // YYYY-MM-DD, one entry per appointment
   /** Marks weekly closed days and holidays with a hatch. */
   closedFor?: (date: string) => ClosedDayInfo;
+  /** Dates shown as one connected highlighted range (the phone 3-Day window); omit for a single selected day. */
+  rangeDays?: string[];
 }
 
 /** One-row Monday–Sunday week navigator (‹ days ›). "Today" lives in the
@@ -21,6 +23,7 @@ export function MiniCalendarStrip({
   onSelectDate,
   appointmentDates,
   closedFor,
+  rangeDays,
 }: MiniCalendarStripProps) {
   const days = useMemo(() => weekDays(selectedDate), [selectedDate]);
   const counts = useMemo(() => {
@@ -74,9 +77,12 @@ export function MiniCalendarStrip({
         {days.map((date) => {
           const value = new Date(`${date}T00:00:00`);
           const selected = date === selectedDate;
+          const rangeIndex = rangeDays ? rangeDays.indexOf(date) : -1;
+          const inRange = rangeIndex >= 0;
+          const highlighted = selected || inRange;
           const count = counts.get(date) ?? 0;
           const closed = closedFor?.(date);
-          const tone = selected
+          const tone = highlighted
             ? 'bg-[var(--teal)] text-white'
             : date === today
               ? 'bg-[var(--teal-light)] text-[var(--teal-strong)]'
@@ -90,17 +96,22 @@ export function MiniCalendarStrip({
               aria-label={`${value.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}, ${closed?.closed ? `closed${closed.label ? ` (${closed.label})` : ''}, ` : ''}${count} appointments`}
               tabIndex={selected ? 0 : -1}
               onClick={() => onSelectDate(date)}
-              className={`relative flex h-12 flex-col items-center justify-center rounded-lg leading-none ${tone}`}
-              style={closed?.closed && !selected ? CLOSED_HATCH : undefined}
+              data-in-range={inRange ? true : undefined}
+              className={`relative flex h-12 flex-col items-center justify-center leading-none ${tone} ${
+                inRange
+                  ? `${rangeIndex === 0 ? 'rounded-l-lg' : 'rounded-l-none'} ${rangeIndex === (rangeDays?.length ?? 0) - 1 ? 'rounded-r-lg' : 'rounded-r-none -mr-1'}`
+                  : 'rounded-lg'
+              }`}
+              style={closed?.closed && !highlighted ? CLOSED_HATCH : undefined}
             >
-              <span className={`text-[10px] font-medium ${selected ? 'text-white/80' : 'text-[var(--muted)]'}`}>
+              <span className={`text-[10px] font-medium ${highlighted ? 'text-white/80' : 'text-[var(--muted)]'}`}>
                 {value.toLocaleDateString('en-IN', { weekday: 'short' })}
               </span>
               <span className="mt-0.5 mb-1.5 text-sm font-semibold tabular-nums">{value.getDate()}</span>
               {/* Up to three dots — "some", "busy", "full" — the exact count is in the label. */}
               <span className="absolute bottom-1.5 flex gap-0.5" aria-hidden>
                 {Array.from({ length: Math.min(3, Math.ceil(count / 3)) }, (_, i) => (
-                  <span key={i} className={`h-1 w-1 rounded-full ${selected ? 'bg-white' : 'bg-[var(--teal)]'}`} />
+                  <span key={i} className={`h-1 w-1 rounded-full ${highlighted ? 'bg-white' : 'bg-[var(--teal)]'}`} />
                 ))}
               </span>
             </button>

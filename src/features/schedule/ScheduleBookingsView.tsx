@@ -47,13 +47,11 @@ import { HistoryView } from '@/components/schedule/HistoryView';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
 import { appointmentsOutsideHours } from './hoursConflicts';
 import {
-  formatThreeDayTitle,
   historyAppointments,
   isColleagueAppointment,
   nextTherapistSearchParam,
   readStoredPhoneView,
   selectedTherapistIds,
-  stepThreeDay,
   threeDayDates,
   toggleTherapistSelection,
   writeStoredPhoneView,
@@ -75,6 +73,7 @@ import { ResourceDayGrid, WeekTimeGrid, type GridDragOptions, type GridTherapist
 import { MultiResourceWeekGrid } from '@/components/schedule/MultiResourceWeekGrid';
 import { MobileDayGrid, MobileThreeDayGrid } from '@/components/schedule/MobileGrids';
 import { PhoneScheduleToolbar } from '@/components/schedule/PhoneScheduleToolbar';
+import { BookFab } from '@/components/schedule/BookFab';
 import { UNASSIGNED_COLOR, therapistColor } from '@/components/schedule/scheduleColors';
 
 type BookingView = 'schedule' | 'requests' | 'history';
@@ -121,7 +120,7 @@ function shortDate(date: string) {
 const tabAction =
   'h-9 items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--ink)] hover:bg-[var(--paper)]';
 const tabPrimary =
-  'inline-flex h-9 items-center rounded-lg bg-[var(--teal)] px-3.5 text-sm font-medium text-white hover:bg-[var(--teal-strong)]';
+  'h-9 items-center rounded-lg bg-[var(--teal)] px-3.5 text-sm font-medium text-white hover:bg-[var(--teal-strong)]';
 
 /** Re-renders every minute so the "now" line and past-slot checks stay current. */
 function useNowMinutes() {
@@ -263,7 +262,6 @@ export function ScheduleBookingsView({
     setPhoneViewState(next);
     writeStoredPhoneView(next);
   }, []);
-  const [phoneCalendarOpen, setPhoneCalendarOpen] = useState(false);
   const [threeDayPick, setThreeDayPick] = useState<string | null>(null);
   const [holdHintDismissed, setHoldHintDismissed] = useState(() => {
     try {
@@ -687,9 +685,7 @@ export function ScheduleBookingsView({
     ?? groupClosedRanges(closedDates ?? []).find((range) => range.from <= date && range.to >= date);
 
   // ---- phone (List · Day · 3-Day) ----
-  const phoneTitle = phoneView === '3day' ? formatThreeDayTitle(date) : shortDate(date);
-  const phoneStep = (direction: 1 | -1) =>
-    setSchedule({ date: phoneView === '3day' ? stepThreeDay(date, direction) : addDays(date, direction) });
+  const phoneMonth = new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
   const phoneTodayDisabled = phoneView === '3day' ? threeDays.includes(today) : date === today;
   const dismissHoldHint = () => {
     setHoldHintDismissed(true);
@@ -744,7 +740,7 @@ export function ScheduleBookingsView({
   );
 
   return (
-    <div className="space-y-4 pb-20">
+    <div className="space-y-4 pb-24 tab:pb-20">
       <ScheduleTabs
         {...tabs}
         actions={
@@ -759,7 +755,7 @@ export function ScheduleBookingsView({
                 Reminders
               </button>
             )}
-            <button type="button" className={tabPrimary} onClick={() => openBooking()}>+ Book</button>
+            <button type="button" className={`${tabPrimary} hidden tab:inline-flex`} onClick={() => openBooking()}>+ Book</button>
           </>
         }
       />
@@ -828,16 +824,10 @@ export function ScheduleBookingsView({
                 Replaces the old header row and the chips/summary row. */}
             {isPhone ? (
               <PhoneScheduleToolbar
-                title={phoneTitle}
+                month={phoneMonth}
                 summary={phoneView === 'day' ? daySummary : undefined}
-                prevLabel={phoneView === '3day' ? 'Previous 3 days' : 'Previous day'}
-                nextLabel={phoneView === '3day' ? 'Next 3 days' : 'Next day'}
-                onPrev={() => phoneStep(-1)}
-                onNext={() => phoneStep(1)}
                 onToday={() => setSchedule({ date: today })}
                 todayDisabled={phoneTodayDisabled}
-                calendarOpen={phoneCalendarOpen}
-                onToggleCalendar={() => setPhoneCalendarOpen((open) => !open)}
                 view={phoneView}
                 onViewChange={setPhoneView}
                 filter={
@@ -847,6 +837,7 @@ export function ScheduleBookingsView({
                       visibleIds={selectedIds}
                       onToggle={toggleTherapist}
                       onShowAll={() => setTherapists(isTherapist ? roster.map((t) => t.id) : [])}
+                      showLabel
                     />
                   ) : null
                 }
@@ -908,8 +899,9 @@ export function ScheduleBookingsView({
                 </div>
             )}
 
-            <div className={`desktop:hidden ${showPhoneGrid && !phoneCalendarOpen ? 'hidden' : ''}`}>
+            <div className="desktop:hidden">
               <MiniCalendarStrip
+                rangeDays={isPhone && phoneView === '3day' ? threeDays : undefined}
                 selectedDate={date}
                 onSelectDate={(selected) => setSchedule({ date: selected })}
                 appointmentDates={visibleAppointments.filter((a) => a.status !== 'cancelled').map(dateForAppointment)}
@@ -1483,6 +1475,11 @@ export function ScheduleBookingsView({
           if (range) void bookingService.removeClosedDates(clinic.id, range.from, range.to).catch((e) => notify.error(toFriendlyMessage(e)));
         }}
       />
+
+      {/* Phones: Book is a round floating button above the bottom nav (the tab-row button starts at `tab:`). */}
+      {isPhone && activeView === 'schedule' && (
+        <BookFab onClick={() => openBooking()} />
+      )}
     </div>
   );
 }
