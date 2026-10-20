@@ -208,7 +208,7 @@ export function AppointmentDetailsPanel({
             </dl>
           )}
           <dl className="space-y-2">
-            <div className="flex min-h-9 items-center justify-between gap-2">
+            <div className="flex min-h-9 items-center gap-2">
               <dt className="sr-only">Therapist</dt>
               <dd className="flex min-w-0 items-center gap-2 text-[var(--ink)]">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: therapistColor }} aria-hidden />
