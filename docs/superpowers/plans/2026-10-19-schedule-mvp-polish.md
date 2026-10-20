@@ -132,3 +132,4 @@ Never kill processes with `pkill -f` (it can kill the agent's own shell); kill y
 ## 10. Out of scope
 
 Booking for colleagues by therapists (decision 0.1); a week roster view (dropped, decision 9); phone Week grid; multi-day drag; server / RLS / migration changes; Workspace and Ledger screens; notifications.
+- **Narrow lanes, revised 2026-10-20 after real use:** 72px+ = pill + patient + time; 40–72px = first name + therapist short name; < 40px = initials. Initials alone were unreadable at two lanes in a 100px column.

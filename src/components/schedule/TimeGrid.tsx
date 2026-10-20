@@ -53,8 +53,10 @@ export type MultiLaneConfig = {
 
 /** Width reserved at a cluster's right edge for its "+N" chip. */
 const OVERFLOW_CHIP_W = 26;
-/** Lanes narrower than this show only initials. */
+/** Lanes narrower than this drop the therapist pill and time (first name + therapist only). */
 const NARROW_LANE_PX = 72;
+/** Lanes narrower than this show only initials; from here up a first name still fits. */
+const TINY_LANE_PX = 40;
 
 type DayColumnProps = {
   label: string;
@@ -322,6 +324,7 @@ export function DayColumn({
         const reserve = capped && 'hasOverflow' in lane && lane.hasOverflow ? OVERFLOW_CHIP_W : 0;
         const laneWidth = (columnWidth - reserve) / lane.lanes - 4;
         const narrowLane = Boolean(multi) && laneWidth < NARROW_LANE_PX;
+        const tinyLane = Boolean(multi) && laneWidth < TINY_LANE_PX;
         const pill = multi ? multi.pillFor(appointment) : null;
         const style = APPOINTMENT_BLOCK_STYLE[appointment.status];
         const look = blockLook(appointment, colorFor(appointment));
@@ -345,7 +348,7 @@ export function DayColumn({
             // Narrow lanes show only initials, so give the block its full name for screen readers.
             aria-label={multi ? `${appointment.patientName}, ${minutesLabel(start)}${pill ? `, ${pill.name}` : ''}` : undefined}
             title={`${appointment.patientName} · ${minutesLabel(start)}–${minutesLabel(end)}${reason ? ` · ${reason}` : ''}${flags.length ? ` · ${flags.map((f) => f.label).join(', ')}` : ''}${draggable ? ' · drag to move' : ''}`}
-            className={`group/block absolute z-[2] overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-left text-xs transition-shadow hover:shadow-md ${look.className} ${
+            className={`group/block absolute z-[2] overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-left text-xs transition-shadow hover:shadow-md ${narrowLane ? 'px-0.5' : ''} ${look.className} ${
               selectedId === appointment.id ? 'outline outline-2 outline-[var(--teal)]' : ''
             } ${draggable ? 'pointer-fine:cursor-grab' : ''} ${drag?.draggingId === appointment.id ? 'opacity-40' : over ? 'opacity-75' : ''}`}
             style={{
@@ -379,11 +382,24 @@ export function DayColumn({
                 mark={style.mark || undefined}
               />
             ) : multi ? (
-              narrowLane ? (
+              tinyLane ? (
                 <span className="block truncate text-center text-[10px] font-semibold leading-tight">
                   {style.mark && <span aria-hidden>{style.mark}</span>}
                   {initials(appointment.patientName)}
                 </span>
+              ) : narrowLane ? (
+                // Two or three lanes in a narrow column: the first name still fits, and the therapist below it.
+                <>
+                  <span className="block truncate text-[10px] tracking-tight font-semibold leading-tight">
+                    {style.mark && <span aria-hidden>{style.mark}</span>}
+                    {appointment.patientName.trim().split(/\s+/)[0]}
+                  </span>
+                  {pill && geometry.height >= 34 && (
+                    <span className="block truncate text-[9px] leading-tight opacity-70" data-lane-therapist>
+                      {pill.name}
+                    </span>
+                  )}
+                </>
               ) : (
                 <>
                   {pill && (

@@ -59,13 +59,35 @@ describe('WeekTimeGrid with several therapists', () => {
     expect(screen.getByText('10:00 AM')).toBeInTheDocument();
   });
 
-  it('simultaneous appointments of different therapists sit side by side (narrow lanes show initials, no hover needed)', () => {
-    const appts = ['t1', 't2', 't3'].map((t, i) => appointment({ id: `a${i}`, therapistId: t, patientName: `Patient${i} Test` }));
-    const { container } = render(<WeekTimeGrid {...props({ appointments: appts })} />);
-    expect(container.querySelectorAll('[data-therapist-pill]')).toHaveLength(0);
-    expect(screen.getAllByText('PT')).toHaveLength(3);
+  const threeAtTen = () =>
+    ['t1', 't2', 't3'].map((t, i) => appointment({ id: `a${i}`, therapistId: t, patientName: `Patient${i} Test` }));
+  const setColumnWidth = (width: number) =>
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width, height: 0, top: 0, left: 0, right: width, bottom: 0, x: 0, y: 0, toJSON: () => ({}),
+    });
+
+  it('simultaneous appointments of different therapists sit side by side', () => {
+    render(<WeekTimeGrid {...props({ appointments: threeAtTen() })} />);
     const lefts = screen.getAllByRole('button', { name: /^Patient\d Test/ }).map((b) => b.style.left);
     expect(new Set(lefts).size).toBe(3);
+  });
+
+  it('lanes of 40-72px show the first name and the therapist, not just initials', () => {
+    setColumnWidth(150);
+    const { container } = render(<WeekTimeGrid {...props({ appointments: threeAtTen() })} />);
+    expect(container.querySelectorAll('[data-therapist-pill]')).toHaveLength(0);
+    expect(screen.getAllByText('Patient0')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-lane-therapist]')).toHaveLength(3);
+    expect(container.querySelector('[data-lane-therapist]')).toHaveTextContent('Name1');
+    vi.restoreAllMocks();
+  });
+
+  it('lanes under 40px show initials only, and every block keeps a full accessible name', () => {
+    setColumnWidth(90);
+    render(<WeekTimeGrid {...props({ appointments: threeAtTen() })} />);
+    expect(screen.getAllByText('PT')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: /^Patient1 Test, 10:00 AM, Name2/ })).toBeInTheDocument();
+    vi.restoreAllMocks();
   });
 
   it('shows at most three lanes; the rest sit behind a +N chip that lists them and opens details', () => {
