@@ -49,15 +49,15 @@ export function ScheduleToolbar({
   const [monthOpen, setMonthOpen] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2" data-schedule-toolbar>
-      <div className="flex min-w-0 flex-1 items-center gap-1">
+      <div className="flex flex-1 shrink-0 items-center gap-1">
         <button type="button" className="hidden min-h-9 min-w-9 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--paper)] tab:flex" aria-label={`Previous ${stepLabel}`} onClick={() => onStep(-1)}>
           <IconChevronLeft className="h-5 w-5" />
         </button>
         <button type="button" className="hidden min-h-9 min-w-9 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--paper)] tab:flex" aria-label={`Next ${stepLabel}`} onClick={() => onStep(1)}>
           <IconChevronRight className="h-5 w-5" />
         </button>
-        <div className="relative min-w-0 tab:ml-1">
-          <h2 className="truncate font-display text-lg font-semibold leading-tight text-[var(--ink)]">
+        <div className="relative tab:ml-1">
+          <h2 className="whitespace-nowrap text-base font-semibold leading-tight tracking-tight text-[var(--ink)]">
             {monthPicker ? (
               <button
                 type="button"
@@ -65,11 +65,11 @@ export function ScheduleToolbar({
                 aria-expanded={monthOpen}
                 aria-label="Pick a date"
                 onClick={() => setMonthOpen((open) => !open)}
-                className="-mx-1 flex max-w-full items-baseline gap-1.5 truncate rounded-lg px-1 text-left hover:bg-[var(--paper)]"
+                className="-mx-1 flex items-center gap-1.5 rounded-lg px-1 py-0.5 text-left hover:bg-[var(--paper)]"
               >
-                <span className="truncate sm:hidden">{headline.short}</span>
-                <span className="hidden truncate sm:inline">{headline.long}</span>
-                <svg aria-hidden className="h-3.5 w-3.5 shrink-0 self-center text-[var(--muted)]" viewBox="0 0 16 16" fill="none">
+                <span className="sm:hidden">{headline.short}</span>
+                <span className="hidden sm:inline">{headline.long}</span>
+                <svg aria-hidden className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]" viewBox="0 0 16 16" fill="none">
                   <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
