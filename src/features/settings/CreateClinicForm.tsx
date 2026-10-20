@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { PhoneField } from '@/components/PhoneField';
 import { useNavigate } from '@tanstack/react-router';
 import { setActiveClinic } from '@/app/useActiveClinic';
 import { OnboardingProgress } from '@/features/onboarding/OnboardingProgress';
@@ -255,14 +256,8 @@ export function CreateClinicForm({ onSuccess, variant = 'page' }: CreateClinicFo
           onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
         />
       </Field>
-      <Field label="Phone">
-        <input
-          type="tel"
-          className={inputCls}
-          placeholder="Enter phone number"
-          value={form.phone}
-          onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-        />
+      <Field label="Phone" htmlFor="clinic-phone">
+        <PhoneField id="clinic-phone" value={form.phone} onChange={(phone) => setForm((f) => ({ ...f, phone }))} />
       </Field>
       <Field label="Address *">
         <input

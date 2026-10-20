@@ -129,7 +129,7 @@ describe('MyAccountSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
     await waitFor(() => expect(put).toHaveBeenCalled());
     const saved = put.mock.calls[0][0] as Therapist;
-    expect(saved).toMatchObject({ id: 't1', userId: 'u1', active: true, name: 'Dr. Ritu Sharma', phone: '88888' });
+    expect(saved).toMatchObject({ id: 't1', userId: 'u1', active: true, name: 'Dr. Ritu Sharma', phone: '+91 88888' });
   });
 
   it('shows no therapist fields for someone without a linked profile', () => {

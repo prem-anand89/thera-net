@@ -11,6 +11,7 @@ export function PhoneField({
   value,
   onChange,
   id,
+  ariaLabel,
   autoFocus,
   disabled,
   placeholder,
@@ -19,6 +20,8 @@ export function PhoneField({
   value: string;
   onChange: (stored: string) => void;
   id?: string;
+  /** Names the number input when no visible label points at `id`. */
+  ariaLabel?: string;
   autoFocus?: boolean;
   disabled?: boolean;
   placeholder?: string;
@@ -70,6 +73,7 @@ export function PhoneField({
         type="tel"
         inputMode="tel"
         autoComplete="tel-national"
+        aria-label={ariaLabel}
         autoFocus={autoFocus}
         disabled={disabled}
         placeholder={placeholder ?? (code === '+91' ? '98765 43210' : code ? 'Phone number' : '+ full number')}

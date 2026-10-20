@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import type { Patient, ReferringSourceItem } from '@/domain/types';
 import { REFERRING_SOURCE_LABELS } from '@/domain/types';
 import { useClinic } from '@/app/clinicContext';
+import { PhoneField } from '@/components/PhoneField';
 import { toFriendlyMessage } from '@/lib/errors';
 import { patientService, repos } from '@/services';
 
@@ -143,13 +144,11 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
 
           <div className="field-block">
             <label className="field-label">Phone</label>
-            <input
-              type="tel"
+            <PhoneField
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className="field-input"
+              onChange={(phone) => setFormData({ ...formData, phone })}
               disabled={saving}
-              aria-label="Phone"
+              ariaLabel="Phone"
             />
           </div>
 
@@ -248,13 +247,11 @@ export function EditPatientModal({ patient, open, onClose, onSave }: EditPatient
               </div>
               <div className="field-block">
                 <label className="field-label">Alternate phone</label>
-                <input
-                  type="tel"
+                <PhoneField
                   value={formData.altPhone}
-                  onChange={(e) => setFormData({ ...formData, altPhone: e.target.value })}
-                  className="field-input"
+                  onChange={(altPhone) => setFormData({ ...formData, altPhone })}
                   disabled={saving}
-                  aria-label="Alternate phone"
+                  ariaLabel="Alternate phone"
                 />
               </div>
               <div className="field-block">

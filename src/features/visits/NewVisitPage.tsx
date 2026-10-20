@@ -1109,13 +1109,12 @@ export function NewVisitPage() {
                     onChange={(e) => setNewPatient({ ...newPatient, email: e.target.value })}
                   />
                 </Field>
-                <Field label="Alternate phone">
-                  <input
-                    type="tel"
-                    className={inputCls}
+                <Field label="Alternate phone" htmlFor="new-visit-alt-phone">
+                  <PhoneField
+                    id="new-visit-alt-phone"
                     placeholder="Family member, landline…"
                     value={newPatient.altPhone}
-                    onChange={(e) => setNewPatient({ ...newPatient, altPhone: e.target.value })}
+                    onChange={(altPhone) => setNewPatient({ ...newPatient, altPhone })}
                   />
                 </Field>
                 <Field label="Patient ID">

@@ -166,7 +166,7 @@ export function AppointmentDetailsPanel({
           <div className="min-w-0">
             <h2 id="appointment-details-title" className="font-display text-lg font-semibold text-[var(--ink)]">
               {canManage && appointment.patientId ? (
-                <Link to="/patients/$patientId" params={{ patientId: appointment.patientId }} className="text-[var(--teal)] hover:underline">
+                <Link to="/patients/$patientId" params={{ patientId: appointment.patientId }} className="text-[var(--teal)] outline-none hover:underline focus-visible:underline">
                   {appointment.patientName}
                 </Link>
               ) : (
@@ -189,61 +189,52 @@ export function AppointmentDetailsPanel({
           </button>
         </div>
 
-        {/* Facts in reading order: the patient (phone, condition), then the therapist, then the booking. */}
-        <dl className="mt-3 space-y-1.5 text-sm">
-          {canManage && appointment.patientPhone && (
-            <div className="flex gap-2">
-              <dt className="sr-only">Phone</dt>
-              <dd>
-                <a href={`tel:${appointment.patientPhone}`} className="text-[var(--teal)] hover:underline">
-                  {appointment.patientPhone}
-                </a>
+        {/* Facts in reading order. The patient's clinical lines sit in a soft card; then the therapist and the booking. The phone is not shown here: Call dials it and Remind uses it. */}
+        <div className="mt-4 space-y-3 text-sm">
+          {canManage && (condition || requestNotes) && (
+            <dl className="space-y-2 rounded-xl bg-[var(--paper)] px-3 py-2.5">
+              {condition && (
+                <div className="grid grid-cols-[5.5rem_1fr] gap-x-2">
+                  <dt className="text-[var(--muted)]">Condition</dt>
+                  <dd className="text-[var(--ink)]">{condition}</dd>
+                </div>
+              )}
+              {requestNotes && (
+                <div className="grid grid-cols-[5.5rem_1fr] gap-x-2">
+                  <dt className="text-[var(--muted)]">Patient says</dt>
+                  <dd className="text-[var(--ink)]">{requestNotes}</dd>
+                </div>
+              )}
+            </dl>
+          )}
+          <dl className="space-y-2">
+            <div className="flex min-h-9 items-center justify-between gap-2">
+              <dt className="sr-only">Therapist</dt>
+              <dd className="flex min-w-0 items-center gap-2 text-[var(--ink)]">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: therapistColor }} aria-hidden />
+                <span className="truncate">{therapistName}</span>
               </dd>
+              {active && canManage && therapistPhone && (
+                <button
+                  type="button"
+                  aria-label="Message therapist"
+                  className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                  onClick={() => bookingService.messageTherapist(appointment.status === 'rescheduled' ? 'rescheduled' : 'booked', therapistInput)}
+                >
+                  <IconMessage />
+                  Message
+                </button>
+              )}
             </div>
-          )}
-          {canManage && condition && (
-            <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-[var(--muted)]">Condition</dt>
-              <dd className="text-[var(--ink)]">{condition}</dd>
+            <div>
+              <dt className="sr-only">When</dt>
+              <dd className="font-medium text-[var(--ink)]">
+                {dateLabel} · {timeRange} <span className="font-normal text-[var(--muted)]">· {lengthLabel(minutes)}</span>
+              </dd>
+              {canManage && movedFrom && <dd className="mt-0.5 text-xs text-[var(--muted)]">Moved from {movedFrom}</dd>}
             </div>
-          )}
-          {canManage && requestNotes && (
-            <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-[var(--muted)]">Patient says</dt>
-              <dd className="text-[var(--ink)]">{requestNotes}</dd>
-            </div>
-          )}
-          <div className="flex items-center justify-between gap-2 pt-1.5">
-            <dt className="sr-only">Therapist</dt>
-            <dd className="flex min-w-0 items-center gap-1.5 text-[var(--ink)]">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: therapistColor }} aria-hidden />
-              <span className="truncate">{therapistName}</span>
-            </dd>
-            {active && canManage && therapistPhone && (
-              <button
-                type="button"
-                aria-label="Message therapist"
-                className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
-                onClick={() => bookingService.messageTherapist(appointment.status === 'rescheduled' ? 'rescheduled' : 'booked', therapistInput)}
-              >
-                <IconMessage />
-                Message
-              </button>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <dt className="sr-only">When</dt>
-            <dd className="text-[var(--ink)]">
-              {dateLabel} · {timeRange} <span className="text-[var(--muted)]">· {lengthLabel(minutes)}</span>
-            </dd>
-          </div>
-          {canManage && movedFrom && (
-            <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-[var(--muted)]">Moved from</dt>
-              <dd className="text-[var(--muted)]">{movedFrom}</dd>
-            </div>
-          )}
-        </dl>
+          </dl>
+        </div>
 
         {canManage && (
           <div className="mt-3">
@@ -299,9 +290,9 @@ export function AppointmentDetailsPanel({
         )}
 
         {active && canManage && (
-          <div className="mt-3 grid auto-cols-fr grid-flow-col gap-1 border-t border-[var(--border)] pt-3">
+          <div className="mt-4 grid auto-cols-fr grid-flow-col gap-1 border-t border-[var(--border)] pt-3">
             {appointment.patientPhone && (
-              <a href={`tel:${appointment.patientPhone}`} className={quickCls}>
+              <a href={`tel:${appointment.patientPhone}`} title={appointment.patientPhone} className={quickCls}>
                 <IconPhone />
                 Call
               </a>
@@ -381,7 +372,7 @@ export function AppointmentDetailsPanel({
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--border)] pt-2 text-xs">
+        <div className="mt-1 flex items-center justify-between gap-3 text-xs">
           <button type="button" className="min-h-11 text-[var(--muted)] hover:text-[var(--ink)]" onClick={copyDetails}>
             {copied ? 'Copied' : 'Copy details'}
           </button>

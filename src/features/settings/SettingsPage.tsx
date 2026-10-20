@@ -1,4 +1,5 @@
 import { notify } from '@/lib/notify';
+import { PhoneField } from '@/components/PhoneField';
 import { edgeFunctionErrorMessage } from '@/lib/edgeFunctionError';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Link, useBlocker, useNavigate, useSearch } from '@tanstack/react-router';
@@ -1086,11 +1087,10 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
                     <div className="flex flex-wrap gap-4 pt-1">
                       <div className="flex-1 min-w-[140px]">
                         <label className="block text-[11px] font-semibold text-[var(--muted)] mb-1.5">Phone</label>
-                        <input 
-                          className={inputCls} 
-                          value={form.phone ?? ''} 
-                          onChange={(e) => set({ phone: e.target.value || null })} 
-                          placeholder="Phone number" 
+                        <PhoneField
+                          value={form.phone ?? ''}
+                          onChange={(phone) => set({ phone: phone || null })}
+                          ariaLabel="Clinic phone"
                         />
                       </div>
                       <div className="flex-1 min-w-[180px]">
@@ -2586,13 +2586,15 @@ export function TeamMemberCard({
       }
 
       if (therapist) {
+        const isNowFrontDesk = roleDraft === 'front_desk';
         await repos.therapists.put({
           ...therapist,
           name: nameDraft.trim() || therapist.name,
-          registrationNo: regDraft.trim() || null,
+          active: isNowFrontDesk ? false : therapist.active,
+          registrationNo: isNowFrontDesk ? null : regDraft.trim() || null,
           phone: phoneDraft.trim() || null,
           color: colorDraft.trim() || null,
-          publicBookable: publicBookableDraft,
+          publicBookable: isNowFrontDesk ? false : publicBookableDraft,
           updatedAt: new Date().toISOString(),
         });
       }
@@ -2644,7 +2646,7 @@ export function TeamMemberCard({
 
 
   const isUnlinkedTherapist = !member && therapist;
-  const isBookable = !!therapist;
+  const isBookable = !!therapist && role !== 'front_desk' && therapist.active !== false;
 
   return (
     <div className={`flex h-full flex-col gap-3 rounded-2xl border ${therapist && therapist.active === false ? 'border-dashed border-[var(--border)] bg-[var(--paper)] opacity-80' : 'border-[var(--border)] bg-[var(--surface)] shadow-sm'} p-4 transition-all`}>
@@ -2749,7 +2751,7 @@ export function TeamMemberCard({
             Edit
           </button>
           
-          {therapist && (
+          {therapist && role !== 'front_desk' && (
             <button
               type="button"
               className="text-xs font-medium text-[var(--teal)] hover:underline"
@@ -2882,7 +2884,7 @@ export function TeamMemberCard({
                   </Field>
                 )}
 
-                {therapist && (
+                {therapist && roleDraft !== 'front_desk' && (
                   <>
                     <Field label="Registration no.">
                       <input
@@ -2892,13 +2894,8 @@ export function TeamMemberCard({
                         onChange={(e) => setRegDraft(e.target.value)}
                       />
                     </Field>
-                    <Field label="Phone">
-                      <input
-                        className={inputCls}
-                        placeholder="WhatsApp number"
-                        value={phoneDraft}
-                        onChange={(e) => setPhoneDraft(e.target.value)}
-                      />
+                    <Field label="Phone" htmlFor="therapist-edit-phone">
+                      <PhoneField id="therapist-edit-phone" placeholder="WhatsApp number" value={phoneDraft} onChange={setPhoneDraft} />
                     </Field>
                     <Field label="Schedule Color">
                       <div className="flex items-center gap-3">
@@ -2971,7 +2968,7 @@ export function TeamMemberCard({
           </div>
         )}
 
-        {showHoursFlow && therapist && (
+        {showHoursFlow && therapist && roleDraft !== 'front_desk' && (
           <SetWorkingHoursFlow
             open={showHoursFlow}
             therapist={therapist}
@@ -3013,7 +3010,8 @@ function AddTeamMemberForm({
     e.preventDefault();
     if (!name.trim()) return setError('Name is required');
     if (needsLogin && !email.trim()) return setError('Email is required for login');
-    if (!needsLogin && !bookable) return setError('Must either need a login or be bookable');
+    const effectiveBookable = role === 'front_desk' ? false : bookable;
+    if (!needsLogin && !effectiveBookable) return setError('Must either need a login or be bookable');
 
     setBusy(true);
     setError(null);
@@ -3030,7 +3028,7 @@ function AddTeamMemberForm({
               email: email.trim(),
               name: name.trim(),
               role,
-              bookable,
+              bookable: effectiveBookable,
               redirectOrigin: window.location.origin,
             },
           }
@@ -3038,7 +3036,7 @@ function AddTeamMemberForm({
         if (invokeError) throw new Error(await edgeFunctionErrorMessage(invokeError));
         const payload = result as { error?: string; success?: boolean } | null;
         if (payload?.error) throw new Error(payload.error);
-      } else if (bookable) {
+      } else if (effectiveBookable) {
         // Just a roster entry
         await repos.therapists.put({
           id: crypto.randomUUID(),
@@ -3109,21 +3107,23 @@ function AddTeamMemberForm({
           />
           Needs login (can sign in to Theranet)
         </label>
-        <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
-          <input
-            type="checkbox"
-            checked={bookable}
-            onChange={(e) => setBookable(e.target.checked)}
-          />
-          Bookable (appears in schedule and invoices)
-        </label>
+        {role !== 'front_desk' && (
+          <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
+            <input
+              type="checkbox"
+              checked={bookable}
+              onChange={(e) => setBookable(e.target.checked)}
+            />
+            Bookable (appears in schedule and invoices)
+          </label>
+        )}
       </div>
 
       <div className="mt-2 flex items-center gap-3">
         <button
           type="submit"
           className={btnPrimary}
-          disabled={busy || (!needsLogin && !bookable)}
+          disabled={busy || (!needsLogin && (role === 'front_desk' || !bookable))}
         >
           {busy ? 'Adding…' : 'Add member'}
         </button>

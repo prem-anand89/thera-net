@@ -47,10 +47,10 @@ function show(
 describe('AppointmentDetailsPanel', () => {
   afterEach(cleanup);
 
-  it('reads in order: patient phone and condition, then the therapist, then the booking time', () => {
+  it('reads in order: the patient\'s condition, then the therapist, then the booking time', () => {
     show(appt({ patientPhone: '9032323890' }), true, { condition: 'Ankle sprain', therapistPhone: '9000000000' });
-    const text = document.querySelector('dl')!.textContent!;
-    const order = ['9032323890', 'Ankle sprain', 'Bm', '10:00'].map((t) => text.indexOf(t));
+    const text = document.querySelector('aside')!.textContent!;
+    const order = ['Ankle sprain', 'Bm', '10:00'].map((t) => text.indexOf(t));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
@@ -60,7 +60,7 @@ describe('AppointmentDetailsPanel', () => {
     const button = screen.getByRole('button', { name: 'Message therapist' });
     expect(button).toHaveTextContent('Message');
     expect(button.closest('dl')).not.toBeNull();
-    expect(document.querySelector('dl')!.contains(button)).toBe(true);
+    expect(button.closest('dl')).not.toBeNull();
     cleanup();
     show(appt({}), true);
     expect(screen.queryByRole('button', { name: 'Message therapist' })).toBeNull();
@@ -123,7 +123,9 @@ describe('AppointmentDetailsPanel', () => {
     expect(screen.getByRole('link', { name: 'Prem' })).toBeInTheDocument();
 
     // Sensitive info shown
-    expect(screen.getByText('9032323890')).toBeInTheDocument();
+    // The number itself is not printed in the panel: Call dials it (shown as the link's tooltip).
+    expect(screen.queryByText('9032323890')).not.toBeInTheDocument();
+    expect(screen.getByTitle('9032323890')).toHaveTextContent('Call');
     expect(screen.getByText('Condition')).toBeInTheDocument();
     expect(screen.getByText('Lumbar strain')).toBeInTheDocument();
     expect(screen.getByText('Patient says')).toBeInTheDocument();
@@ -179,10 +181,10 @@ describe('AppointmentDetailsPanel', () => {
 
   it('shows "Moved from" only when the time actually moved', () => {
     show(appt({ status: 'rescheduled', previousScheduledAt: at('10:00') }));
-    expect(screen.queryByText('Moved from')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Moved from/)).not.toBeInTheDocument();
     cleanup();
     show(appt({ status: 'rescheduled', previousScheduledAt: at('09:00') }));
-    expect(screen.getByText('Moved from')).toBeInTheDocument();
+    expect(screen.getByText(/Moved from/)).toBeInTheDocument();
   });
 
   it('without manage rights: no Reschedule, No-show or Cancel', () => {

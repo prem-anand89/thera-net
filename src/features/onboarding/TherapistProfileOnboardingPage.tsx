@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { PhoneField } from '@/components/PhoneField';
 import { useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
@@ -100,13 +101,8 @@ export function TherapistProfileOnboardingPage() {
             onChange={(e) => setRegistrationNo(e.target.value)}
           />
         </Field>
-        <Field label="Phone">
-          <input
-            className={inputCls}
-            placeholder="+91 …"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
+        <Field label="Phone" htmlFor="therapist-phone">
+          <PhoneField id="therapist-phone" value={phone} onChange={setPhone} />
         </Field>
       </div>
       <ErrorNote message={error} />

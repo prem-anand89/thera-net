@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { PhoneField } from '@/components/PhoneField';
 import { Panel, ConfirmDialog, Field, ErrorNote, inputCls, btnPrimary, btnSecondary } from '@/components/ui';
 import { useSession } from '@/app/useSession';
 import { repos } from '@/services';
@@ -176,15 +177,8 @@ export function MyAccountSheet({
                     onChange={(e) => setRegistrationNo(e.target.value)}
                   />
                 </Field>
-                <Field label="Phone">
-                  <input
-                    className={inputCls}
-                    inputMode="tel"
-                    autoComplete="tel"
-                    placeholder="+91 …"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                  />
+                <Field label="Phone" htmlFor="account-phone">
+                  <PhoneField id="account-phone" value={phone} onChange={setPhone} />
                 </Field>
               </div>
             </>
