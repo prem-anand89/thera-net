@@ -99,7 +99,7 @@ export function WorkingHoursSheet({
             Working hours · {therapistName}
           </h2>
           <p className="text-sm text-[var(--muted)]">
-            Set the start and end of the day, and optionally add one or more breaks. Only the available time is offered for booking.
+            Set the day's start and end. Add breaks if needed. Only working time is bookable.
           </p>
           <div className="mt-3 flex rounded-lg border border-[var(--border)] p-0.5" role="radiogroup" aria-label="Hours">
             {[false, true].map((candidate) => (

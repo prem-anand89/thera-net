@@ -718,13 +718,13 @@ export function ScheduleBookingsView({
   const daySummary = liveDay.length
     ? [
         `${liveDay.length} booked`,
-        upcoming ? `${upcoming} still to come` : '',
+        upcoming ? `${upcoming} to come` : '',
         arrived ? `${arrived} arrived` : '',
         noShow ? `${noShow} no-show` : '',
       ]
         .filter(Boolean)
-        .join(', ')
-    : 'Nothing booked yet';
+        .join(' · ')
+    : 'No appointments';
   const closureForDate = closures.find((range) => range.from <= date && range.to >= date)
     ?? groupClosedRanges(closedDates ?? []).find((range) => range.from <= date && range.to >= date);
 
@@ -732,7 +732,7 @@ export function ScheduleBookingsView({
   const phoneTitle = phoneView === '3day' ? formatThreeDayTitle(date) : shortDate(date);
   const threeDayBooked = threeDayAppointments.filter((a) => a.status !== 'cancelled').length;
   const phoneStatusSummary =
-    phoneView === '3day' ? (threeDayBooked ? `${threeDayBooked} booked` : 'Nothing booked yet') : daySummary;
+    phoneView === '3day' ? (threeDayBooked ? `${threeDayBooked} booked` : 'No appointments') : daySummary;
   const phoneTodayDisabled = phoneView === '3day' ? threeDays.includes(today) : date === today;
   const dismissHoldHint = () => {
     setHoldHintDismissed(true);
@@ -749,8 +749,8 @@ export function ScheduleBookingsView({
       ? [
           {
             id: 'find-time',
-            label: findTime ? 'Back to the day' : 'Find a time',
-            hint: findTime ? undefined : 'See free start times for each therapist',
+            label: findTime ? 'Back to schedule' : 'Find a time',
+            hint: findTime ? undefined : 'Free times by therapist',
             icon: 'find' as const,
             group: 'view' as const,
             onSelect: () => setFindTime((current) => !current),
@@ -767,17 +767,17 @@ export function ScheduleBookingsView({
     ...(canManageAll
       ? ([
           ...(isPhone
-            ? [{ id: 'reminders', label: 'Send reminders', hint: 'WhatsApp reminders for upcoming appointments', icon: 'bell' as const, group: 'actions' as const, onSelect: () => setReminderOpen(true) }]
+            ? [{ id: 'reminders', label: 'Send reminders', hint: 'WhatsApp, one tap each', icon: 'bell' as const, group: 'actions' as const, onSelect: () => setReminderOpen(true) }]
             : []),
-          { id: 'waitlist', label: 'Add to waitlist', hint: 'Someone waiting for an earlier slot', icon: 'waitlist', group: 'actions', onSelect: () => setAddWaitlistOpen(true) },
-          { id: 'closed-days', label: 'Set closed days', hint: 'Holidays and days off for the clinic', icon: 'closed', group: 'manage', onSelect: () => setClosedSheetOpen(true) },
-          { id: 'assign-shift', label: 'Assign shift…', hint: 'Give a therapist a shift', icon: 'shift', group: 'manage', onSelect: () => chooseTherapist('shift') },
-          { id: 'working-hours', label: 'Working hours…', hint: "Change a therapist's hours", icon: 'hours', group: 'manage', onSelect: () => chooseTherapist('hours') },
+          { id: 'waitlist', label: 'Add to waitlist', hint: 'For an earlier slot', icon: 'waitlist', group: 'actions', onSelect: () => setAddWaitlistOpen(true) },
+          { id: 'closed-days', label: 'Set closed days', hint: 'Clinic holidays', icon: 'closed', group: 'manage', onSelect: () => setClosedSheetOpen(true) },
+          { id: 'assign-shift', label: 'Assign shift…', hint: 'Per therapist', icon: 'shift', group: 'manage', onSelect: () => chooseTherapist('shift') },
+          { id: 'working-hours', label: 'Working hours…', hint: 'Hours and breaks', icon: 'hours', group: 'manage', onSelect: () => chooseTherapist('hours') },
         ] satisfies ScheduleMenuItem[])
       : []),
     // Phones: "My hours" lives here so the tab row stays just Schedule · History.
     ...(isPhone && isTherapist && myTherapistId
-      ? [{ id: 'my-hours', label: 'My hours', hint: 'See your hours or request a change', icon: 'hours' as const, group: 'manage' as const, onSelect: () => setMyHoursOpen(true) }]
+      ? [{ id: 'my-hours', label: 'My hours', hint: 'View or request changes', icon: 'hours' as const, group: 'manage' as const, onSelect: () => setMyHoursOpen(true) }]
       : []),
     { id: 'shortcuts', label: 'Keyboard shortcuts', icon: 'keys', group: 'view', desktopOnly: true, onSelect: () => setShortcutsOpen(true) },
   ];
@@ -849,7 +849,7 @@ export function ScheduleBookingsView({
           </div>}
 
           <div className="min-w-0 space-y-3">
-            <InstallAppBanner message={isTherapist ? 'Open My schedule in one tap — add Thera.Net to your home screen.' : undefined} />
+            <InstallAppBanner message={isTherapist ? 'Add Thera.Net to your home screen to open My schedule in one tap.' : undefined} />
             {canManageAll && (
               <div className={showRail ? 'desktop:hidden' : ''}>
                 <RequestsInbox
@@ -913,6 +913,7 @@ export function ScheduleBookingsView({
                 }
                 summary={daySummary}
                 offCount={offTodayCount}
+                offIsToday={date === today}
                 onShowOff={() => setShowOffToday(true)}
                 filter={
                   roster.length > 1 ? (
@@ -971,7 +972,7 @@ export function ScheduleBookingsView({
                       ? `Closed${closedToday.label ? ` for ${closedToday.label}` : ''}`
                       : `Closed every ${new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long' })}`}
                   </strong>
-                  {closedToday.kind === 'holiday' && closureForDate ? ` (${rangeLabel(closureForDate)})` : ''}. Public booking is off for this day.
+                  {closedToday.kind === 'holiday' && closureForDate ? ` (${rangeLabel(closureForDate)})` : ''}. Online booking is off.
                 </span>
                 {canManageAll && closedToday.kind === 'holiday' && closureForDate && (
                   <button type="button" className="text-xs font-medium text-[var(--rust)] hover:underline" onClick={() => setRemoving(closureForDate)}>
@@ -984,7 +985,7 @@ export function ScheduleBookingsView({
             {canManageAll && pendingShiftRequestCount > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--teal-strong)]">
                 <span>
-                  <strong>{pendingShiftRequestCount}</strong> pending shift request{pendingShiftRequestCount === 1 ? '' : 's'}.
+                  <strong>{pendingShiftRequestCount}</strong> shift request{pendingShiftRequestCount === 1 ? '' : 's'} pending.
                 </span>
                 <Link to="/settings" search={{ tab: 'team' }} className="text-xs font-medium underline hover:no-underline">
                   Review
@@ -995,7 +996,7 @@ export function ScheduleBookingsView({
             {mode === 'day' && waitlistMatches.length > 0 && dismissedWaitlistBannerDate !== date && (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--teal-strong)]">
                 <span>
-                  <strong>{waitlistMatches.length} waiting patient{waitlistMatches.length === 1 ? '' : 's'}</strong> could take an opening today.
+                  <strong>{waitlistMatches.length} on the waitlist</strong> could fit today.
                 </span>
                 <span className="flex items-center gap-3">
                   <button type="button" className="text-xs font-medium underline" onClick={() => setSchedule({ view: 'requests' })}>
@@ -1013,7 +1014,7 @@ export function ScheduleBookingsView({
               <div className="space-y-2">
                 {!holdHintDismissed && (
                   <p className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
-                    <span>Tap a free time to book. Press and hold an appointment to move it.</span>
+                    <span>Tap a free time to book. Hold an appointment to move it.</span>
                     <button type="button" className="min-h-8 shrink-0 px-2 font-medium text-[var(--teal)]" onClick={dismissHoldHint}>
                       Got it
                     </button>
@@ -1156,7 +1157,7 @@ export function ScheduleBookingsView({
 
       <Panel open={requestsPanelOpen} onClose={() => setSchedule({ view: 'schedule' })} title={`Booking requests (${pendingRequests.length})`}>
         {pendingRequests.length === 0 ? (
-          <p className="py-6 text-center text-sm text-[var(--muted)]">No pending booking requests.</p>
+          <p className="py-6 text-center text-sm text-[var(--muted)]">No requests.</p>
         ) : (
           <RequestsInbox
             variant="list"
@@ -1208,7 +1209,7 @@ export function ScheduleBookingsView({
                   })
                 }
               >
-                WhatsApp patient
+                Message patient
               </button>
             )}
             {rosterById.get(confirmed.therapistId)?.phone && (
@@ -1225,7 +1226,7 @@ export function ScheduleBookingsView({
                   })
                 }
               >
-                Notify therapist
+                Message therapist
               </button>
             )}
             <button type="button" className="text-xs font-medium text-[var(--muted)]" onClick={() => setConfirmed(null)}>Dismiss</button>
@@ -1343,7 +1344,7 @@ export function ScheduleBookingsView({
         onClose={() => setAssignShiftTherapistId(null)}
       />
 
-      <Panel open={pickingFor !== null} onClose={() => setPickingFor(null)} title={pickingFor === 'shift' ? 'Assign shift to…' : 'Working hours for…'}>
+      <Panel open={pickingFor !== null} onClose={() => setPickingFor(null)} title={pickingFor === 'shift' ? 'Choose therapist' : 'Choose therapist'}>
         <ul className="divide-y divide-[var(--border)]">
           {roster.filter((t) => t.active !== false).map((t) => (
             <li key={t.id}>
@@ -1406,11 +1407,11 @@ export function ScheduleBookingsView({
                 pendingMove.target.therapistId !== pendingMove.appointment.therapistId
                   ? `${rosterById.get(pendingMove.target.therapistId ?? '')?.name ?? 'another therapist'}, `
                   : ''
-              }${longDate(pendingMove.target.date)} at ${minutesLabel(pendingMove.target.start)}.${
+              }${shortDate(pendingMove.target.date)}, ${minutesLabel(pendingMove.target.start)}.${
                 pendingMove.status === 'outside_clinic'
-                  ? ' This is outside clinic hours.'
+                  ? ' Outside clinic hours.'
                   : pendingMove.status === 'outside_therapist'
-                    ? ' This is outside scheduled working hours.'
+                    ? ' Outside working hours.'
                     : ''
               }`
             : ''
@@ -1427,7 +1428,7 @@ export function ScheduleBookingsView({
       <ConfirmDialog
         open={declining !== null}
         title="Decline this request?"
-        message={declining ? `${declining.name}'s request will be removed from the list. Let them know separately if needed.` : ''}
+        message={declining ? `Removes ${declining.name}'s request. Message them separately if needed.` : ''}
         confirmLabel="Decline"
         destructive
         onCancel={() => setDeclining(null)}
@@ -1440,10 +1441,10 @@ export function ScheduleBookingsView({
 
       <ConfirmDialog
         open={pendingHoursSave !== null}
-        title="Save these hours anyway?"
+        title="Save hours anyway?"
         message={
           pendingHoursSave
-            ? `${pendingHoursSave.count} upcoming appointment${pendingHoursSave.count === 1 ? '' : 's'} fall outside these new hours. Save anyway?`
+            ? `${pendingHoursSave.count} upcoming appointment${pendingHoursSave.count === 1 ? '' : 's'} fall outside them.`
             : ''
         }
         confirmLabel="Save anyway"
@@ -1462,7 +1463,7 @@ export function ScheduleBookingsView({
       <ConfirmDialog
         open={removing !== null}
         title="Reopen these days?"
-        message={removing ? `${removing.label ?? 'Closed'} · ${rangeLabel(removing)} will be bookable again, including on your public booking page.` : ''}
+        message={removing ? `${removing.label ?? 'Closed'} · ${rangeLabel(removing)} becomes bookable again, online too.` : ''}
         confirmLabel="Reopen"
         onCancel={() => setRemoving(null)}
         onConfirm={() => {

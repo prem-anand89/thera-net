@@ -103,6 +103,21 @@ describe('MobileDayGrid', () => {
     expect(slot.textContent).toBe('');
   });
 
+  it('three or more therapist columns show first names in the header (no "Dr"), with the full name as tooltip', () => {
+    const three: GridTherapist[] = [
+      { id: 't1', name: 'Dr Shravya Reddy', color: '#468adb' },
+      { id: 't2', name: 'Dr Shriya Gupta', color: '#ee7c4e' },
+      { id: 't3', name: 'Stella Baptist', color: '#5b8f5b' },
+    ];
+    const { container } = render(<MobileDayGrid {...dayProps({ therapists: three, appointments: [] })} />);
+    const headers = [...container.querySelectorAll('[data-grid-header] p[title]')];
+    expect(headers.map((h) => h.textContent)).toEqual(['Shravya', 'Shriya', 'Stella']);
+    expect(headers[0]).toHaveAttribute('title', 'Dr Shravya Reddy');
+    cleanup();
+    const two = render(<MobileDayGrid {...dayProps()} />);
+    expect(two.container.querySelector('[data-grid-header] p[title]')).toHaveTextContent('Dr Asha');
+  });
+
   it('one therapist is one wide column with an in-column hour rail instead of an axis column', () => {
     const { container } = render(<MobileDayGrid {...dayProps({ therapists: [therapists[0]] })} />);
     expect(document.querySelectorAll('[data-grid-header]')).toHaveLength(1);
@@ -275,7 +290,7 @@ describe('MobileThreeDayGrid', () => {
         vi.advanceTimersByTime(500);
       });
       fireEvent.pointerUp(window, { pointerType: 'touch' });
-      expect(screen.getByRole('status')).toHaveTextContent('Tap a free time to move Priya');
+      expect(screen.getByRole('status')).toHaveTextContent('Tap free time to move Priya');
       expect(document.querySelector('[data-placing-bar]')!.className).toContain('fixed');
     } finally {
       vi.useRealTimers();

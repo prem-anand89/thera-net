@@ -51,7 +51,7 @@ describe('ScheduleToolbar', () => {
     expect(props.onToggleFindTime).toHaveBeenCalled();
     cleanup();
     setup({ findTimeActive: true });
-    expect(screen.getByRole('button', { name: 'Back to the day' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Back to schedule' })).toHaveAttribute('aria-pressed', 'true');
     cleanup();
     setup({ mode: 'week' });
     expect(screen.queryByRole('button', { name: 'Find a time' })).toBeNull();
@@ -63,13 +63,16 @@ describe('ScheduleToolbar', () => {
     expect(props.onModeChange).toHaveBeenCalledWith('week');
   });
 
-  it('shows "N off · Show" beside the summary only when someone is left out, and Show calls back', () => {
+  it('shows "N off today · Show" beside the summary only when someone is left out, and Show calls back', () => {
     const props = setup({ offCount: 2, onShowOff: vi.fn() });
     fireEvent.click(screen.getByRole('button', { name: '2 off · Show' }));
     expect(props.onShowOff).toHaveBeenCalled();
     cleanup();
+    setup({ offCount: 2, offIsToday: true, onShowOff: vi.fn() });
+    expect(screen.getByRole('button', { name: '2 off today · Show' })).toBeInTheDocument();
+    cleanup();
     setup({ offCount: 0, onShowOff: vi.fn() });
-    expect(screen.queryByText(/off · Show/)).toBeNull();
+    expect(screen.queryByText(/off.*Show/)).toBeNull();
   });
 
   it('the headline opens a month calendar when one is provided, and closes it again', () => {

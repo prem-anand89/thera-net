@@ -500,28 +500,28 @@ describe('dayLoad', () => {
   it('counts booked minutes against working time (other days: slot count)', () => {
     const list = [at9(60), appt({ id: 'y', scheduledAt: at(d, '11:00'), durationMinutes: 30, status: 'cancelled' })];
     expect(dayLoad(list, 't1', d, hours, 30, working)).toMatchObject({
-      count: 1, bookedMinutes: 60, workingMinutes: 240, freeSlots: 6, ratio: 0.25, tone: 'normal', text: '6 slots free',
+      count: 1, bookedMinutes: 60, workingMinutes: 240, freeSlots: 6, ratio: 0.25, tone: 'normal', text: '6 free',
     });
   });
 
   it('today: free now, free from, almost full, fully booked, finished', () => {
-    expect(dayLoad([], 't1', d, hours, 30, working, 9 * 60 + 5).text).toBe('Free now, 7 slots');
-    expect(dayLoad([at9(90)], 't1', d, hours, 30, working, 9 * 60).text).toBe('Free from 10:30 AM, 5 slots');
+    expect(dayLoad([], 't1', d, hours, 30, working, 9 * 60 + 5).text).toBe('7 free now');
+    expect(dayLoad([at9(90)], 't1', d, hours, 30, working, 9 * 60).text).toBe('5 free from 10:30 AM');
     const almost = dayLoad([at9(210)], 't1', d, hours, 30, working, 9 * 60);
-    expect(almost).toMatchObject({ text: 'Almost full, free from 12:30 PM', tone: 'busy' });
+    expect(almost).toMatchObject({ text: '1 free from 12:30 PM', tone: 'busy' });
     expect(dayLoad([at9(240)], 't1', d, hours, 30, working, 9 * 60)).toMatchObject({ text: 'Fully booked', tone: 'full' });
-    expect(dayLoad([], 't1', d, hours, 30, working, 13 * 60)).toMatchObject({ text: 'Done for today', tone: 'done' });
-    expect(dayLoad([at9(60), { ...at9(30), id: 'x', status: 'no_show' }], 't1', d, hours, 30, working, 13 * 60).text).toBe('Done · 1 seen');
+    expect(dayLoad([], 't1', d, hours, 30, working, 13 * 60)).toMatchObject({ text: 'Finished today', tone: 'done' });
+    expect(dayLoad([at9(60), { ...at9(30), id: 'x', status: 'no_show' }], 't1', d, hours, 30, working, 13 * 60).text).toBe('Finished · 1 seen');
   });
 
   it('today: on a break between two working intervals', () => {
     const split = [{ start: 9 * 60, end: 11 * 60 }, { start: 12 * 60, end: 13 * 60 }];
-    expect(dayLoad([], 't1', d, hours, 30, split, 11 * 60 + 10).text).toBe('On break until 12:00 PM');
+    expect(dayLoad([], 't1', d, hours, 30, split, 11 * 60 + 10).text).toBe('Break till 12:00 PM');
   });
 
   it('is amber (busy) from 70% booked or one slot left', () => {
     expect(dayLoad([at9(180)], 't1', d, hours, 30, working).tone).toBe('busy');
-    expect(dayLoad([at9(210)], 't1', d, hours, 30, working)).toMatchObject({ tone: 'busy', text: 'Almost full, 1 slot free' });
+    expect(dayLoad([at9(210)], 't1', d, hours, 30, working)).toMatchObject({ tone: 'busy', text: '1 free' });
   });
 
   it('reads Off today / Day off / Closed with no bar', () => {

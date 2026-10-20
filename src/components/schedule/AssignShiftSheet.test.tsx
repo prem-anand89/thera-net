@@ -34,7 +34,7 @@ describe('AssignShiftSheet', () => {
   it('shows a message with no fallback link when no templates exist', () => {
     templates = [];
     render(<AssignShiftSheet open therapistId="th1" therapistName="Priya" clinicId="c1" onClose={() => {}} />);
-    expect(screen.getByText(/No shift templates set up yet/)).toBeInTheDocument();
+    expect(screen.getByText(/No shifts set up yet/)).toBeInTheDocument();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 

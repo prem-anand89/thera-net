@@ -47,9 +47,9 @@ describe('PhoneStatusLine', () => {
 
   it('shows the label and summary, with Today only when away from today', () => {
     const onToday = vi.fn();
-    const { rerender } = render(<PhoneStatusLine label="Tue, 20 Oct" summary="Nothing booked yet" onToday={onToday} showToday />);
+    const { rerender } = render(<PhoneStatusLine label="Tue, 20 Oct" summary="No appointments" onToday={onToday} showToday />);
     expect(screen.getByText('Tue, 20 Oct')).toBeInTheDocument();
-    expect(screen.getByText(/Nothing booked yet/)).toBeInTheDocument();
+    expect(screen.getByText(/No appointments/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Today/ }));
     expect(onToday).toHaveBeenCalledTimes(1);
     rerender(<PhoneStatusLine label="Today" summary="2 booked" onToday={onToday} showToday={false} />);
@@ -157,7 +157,7 @@ describe('TherapistFilter phone chip', () => {
     const onSelect = vi.fn();
     render(
       <TherapistFilter
-        therapists={therapists.map((t, i) => ({ ...t, summary: i === 0 ? '5 booked' : 'Nothing booked' }))}
+        therapists={therapists.map((t, i) => ({ ...t, summary: i === 0 ? '5 booked' : '0 booked' }))}
         visibleIds={[]}
         onToggle={vi.fn()}
         onShowAll={vi.fn()}

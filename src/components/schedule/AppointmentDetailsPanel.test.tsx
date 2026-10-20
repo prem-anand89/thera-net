@@ -77,7 +77,7 @@ describe('AppointmentDetailsPanel', () => {
 
     // Management actions hidden
     expect(screen.queryByRole('button', { name: /Mark arrived/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Start note' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument();
     expect(screen.queryByText('Create visit')).not.toBeInTheDocument();
     expect(screen.queryByText('Reschedule')).not.toBeInTheDocument();
     expect(screen.queryByText('No-show')).not.toBeInTheDocument();
@@ -113,7 +113,7 @@ describe('AppointmentDetailsPanel', () => {
 
     // Management actions shown
     expect(screen.getByRole('button', { name: /Mark arrived/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start note' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add note' })).toBeInTheDocument();
     expect(screen.getByText('Create visit')).toBeInTheDocument();
     expect(screen.getByText('Reschedule')).toBeInTheDocument();
     expect(screen.getByText('No-show')).toBeInTheDocument();
@@ -131,17 +131,17 @@ describe('AppointmentDetailsPanel', () => {
     // Communication actions hidden because no phone
     expect(screen.queryByText('Call')).not.toBeInTheDocument();
     expect(screen.queryByText('Remind')).not.toBeInTheDocument();
-    expect(screen.queryByText('Tell therapist')).not.toBeInTheDocument();
+    expect(screen.queryByText('Message therapist')).not.toBeInTheDocument();
 
     // Management quick actions MUST still show (no regression for managers/own appointments)
     expect(screen.getByText('Reschedule')).toBeInTheDocument();
     expect(screen.getByText('No-show')).toBeInTheDocument();
   });
 
-  it('before arrival: Mark arrived is the main action; Start note and Create visit sit beside it; length in minutes', () => {
+  it('before arrival: Mark arrived is the main action; Add note and Create visit sit beside it; length in minutes', () => {
     show(appt());
     expect(screen.getByRole('button', { name: /Mark arrived/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start note' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add note' })).toBeInTheDocument();
     expect(screen.getByText('Create visit')).toBeInTheDocument();
     expect(screen.getByText('· 60m')).toBeInTheDocument();
     for (const name of ['Call', 'Remind', 'Reschedule', 'No-show', 'Cancel appointment']) {
@@ -203,7 +203,7 @@ describe('AppointmentDetailsPanel confirmations', () => {
       />
     );
     fireEvent.click(screen.getByText('Cancel appointment'));
-    fireEvent.click(screen.getByText('Cancel this and all following sessions…'));
+    fireEvent.click(screen.getByText('Cancel this and later sessions…'));
     expect(onCancelSeries).not.toHaveBeenCalled();
     expect(screen.getByText('Cancel 5 sessions?')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel 5 sessions' }));

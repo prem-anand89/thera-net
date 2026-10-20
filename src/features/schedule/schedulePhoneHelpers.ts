@@ -279,7 +279,7 @@ export function historyAppointments<T extends { therapistId: string | null }>(
   return allAppointments;
 }
 
-/** "5 booked" over the given days for one therapist, or "Nothing booked" (the 3-Day therapist sheet's second line). */
+/** "5 booked" over the given days for one therapist, or "0 booked" (the 3-Day therapist sheet's second line). */
 export function threeDayCountLabel(
   appointments: { therapistId: string | null; status: string; scheduledAt: string }[],
   therapistId: string,
@@ -292,7 +292,7 @@ export function threeDayCountLabel(
       (showCancelled || a.status !== 'cancelled') &&
       days.includes(toLocalDateStr(new Date(a.scheduledAt)))
   ).length;
-  return count ? `${count} booked` : 'Nothing booked';
+  return count ? `${count} booked` : '0 booked';
 }
 
 const THERAPIST_SELECTION_KEY_PREFIX = 'theranet:schedule-therapists:';

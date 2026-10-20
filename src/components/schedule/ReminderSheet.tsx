@@ -80,7 +80,7 @@ export function ReminderSheet({
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 id="reminder-sheet-title" className="font-display text-lg font-semibold text-[var(--ink)]">Send reminders</h2>
-              <p className="text-sm text-[var(--muted)]">Each Send opens WhatsApp with the message ready — one tap per person.</p>
+              <p className="text-sm text-[var(--muted)]">Opens WhatsApp with the message ready. One tap each.</p>
             </div>
             <button type="button" className="min-h-11 px-2 text-sm text-[var(--muted)]" onClick={onClose}>Close</button>
           </div>
@@ -110,7 +110,7 @@ export function ReminderSheet({
         <ul className="flex-1 space-y-2 overflow-y-auto p-4 sm:p-5">
           {tab === 'patients' &&
             (day.length === 0 ? (
-              <li className="py-6 text-center text-sm text-[var(--muted)]">No upcoming appointments on this day.</li>
+              <li className="py-6 text-center text-sm text-[var(--muted)]">None upcoming.</li>
             ) : (
               day.map((a) => {
                 const done = sent.has(`p:${a.id}`);
@@ -144,7 +144,7 @@ export function ReminderSheet({
             ))}
           {tab === 'therapists' &&
             (therapistRows.length === 0 ? (
-              <li className="py-6 text-center text-sm text-[var(--muted)]">No therapist has appointments on this day.</li>
+              <li className="py-6 text-center text-sm text-[var(--muted)]">No appointments this day.</li>
             ) : (
               therapistRows.map(({ therapist, list }) => {
                 const done = sent.has(`t:${therapist.id}`);

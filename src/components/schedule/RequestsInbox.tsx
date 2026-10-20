@@ -9,13 +9,13 @@ export function timeAgo(iso: string, now = Date.now()): string {
 }
 
 export function requestWants(request: AppointmentRequest): string {
-  if (!request.preferredDate) return request.preferredTimeText ? `Wants ${request.preferredTimeText}` : 'Any day';
+  if (!request.preferredDate) return request.preferredTimeText ? request.preferredTimeText : 'Any day';
   const day = new Date(`${request.preferredDate}T00:00:00`).toLocaleDateString('en-IN', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
   });
-  return `Wants ${day}${request.preferredTimeText ? `, ${request.preferredTimeText}` : ''}`;
+  return `${day}${request.preferredTimeText ? `, ${request.preferredTimeText}` : ''}`;
 }
 
 function RequestRow({
@@ -154,7 +154,7 @@ export function RequestsInbox({
       <section aria-label="Booking requests" className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Requests <span className="ml-1 rounded-full bg-[var(--rust)] px-1.5 text-[10px] text-white">{requests.length}</span>
+            Booking requests <span className="ml-1 rounded-full bg-[var(--rust)] px-1.5 text-[10px] text-white">{requests.length}</span>
           </h3>
           <button type="button" className="text-xs font-medium text-[var(--teal)]" onClick={onSeeAll}>
             All
@@ -174,7 +174,7 @@ export function RequestsInbox({
         className="flex min-h-11 w-full items-center justify-between gap-2 px-3 text-left text-sm text-[var(--ink)]"
       >
         <span>
-          <strong>{requests.length} booking request{requests.length === 1 ? '' : 's'} waiting</strong>
+          <strong>{requests.length} booking request{requests.length === 1 ? '' : 's'}</strong>
           <span className="text-[var(--muted)]"> · oldest {timeAgo(oldest.createdAt)}</span>
         </span>
         <span className="text-xs font-medium text-[var(--teal)]">{open ? 'Hide' : 'Review'}</span>

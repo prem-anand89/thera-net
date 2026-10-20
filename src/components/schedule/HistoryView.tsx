@@ -245,7 +245,7 @@ export function HistoryView({
         </div>
       ) : (
         <p className="rounded-2xl border border-dashed border-[var(--border)] py-10 text-center text-sm text-[var(--muted)]">
-          {query || status || therapistId ? 'No appointments match these filters.' : when === 'past' ? 'No past appointments in this range.' : 'Nothing booked in this range yet.'}
+          {query || status || therapistId ? 'No matches.' : when === 'past' ? 'No past appointments in this range.' : 'Nothing booked in this range yet.'}
         </p>
       )}
 

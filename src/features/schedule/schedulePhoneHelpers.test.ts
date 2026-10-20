@@ -349,7 +349,7 @@ describe('threeDayCountLabel', () => {
     const list = [at('2026-10-01', 't1'), at('2026-10-02', 't1'), at('2026-10-02', 't1', 'cancelled'), at('2026-10-02', 't2'), at('2026-10-05', 't1')];
     expect(threeDayCountLabel(list, 't1', days)).toBe('2 booked');
     expect(threeDayCountLabel(list, 't1', days, true)).toBe('3 booked');
-    expect(threeDayCountLabel(list, 't3', days)).toBe('Nothing booked');
+    expect(threeDayCountLabel(list, 't3', days)).toBe('0 booked');
   });
 });
 

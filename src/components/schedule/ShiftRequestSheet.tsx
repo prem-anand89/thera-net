@@ -65,7 +65,7 @@ export function ShiftRequestSheet({
           setSubmitted(true);
           // WorkingHoursSheet closes itself right after onSave resolves (other
           // callers rely on that), so confirm here before it does.
-          notify.info('Submitted — waiting on approval. Your current hours stay in effect until then.');
+          notify.info('Sent for approval. Current hours stay until then.');
         }}
         onClose={onClose}
       />
@@ -128,11 +128,11 @@ export function ShiftRequestSheet({
           <BreakPlacementControl therapistId={therapistId} clinicId={clinicId} />
         </div>
         {submitted ? (
-          <p className="mt-3 text-sm text-[var(--ink)]">Submitted — waiting on approval. Your current hours stay in effect until then.</p>
+          <p className="mt-3 text-sm text-[var(--ink)]">Sent for approval. Current hours stay until then.</p>
         ) : (templates ?? []).length === 0 ? (
           <div>
-            <p className="mt-2 text-sm text-[var(--muted)]">No shift templates set up yet.</p>
-            <button type="button" className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-[var(--teal)] underline" onClick={() => setCustomMode(true)}>Set custom hours instead</button>
+            <p className="mt-2 text-sm text-[var(--muted)]">No shifts set up yet.</p>
+            <button type="button" className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-[var(--teal)] underline" onClick={() => setCustomMode(true)}>Use custom hours</button>
           </div>
         ) : (
           <>

@@ -52,7 +52,7 @@ export function FindTimePanel({
               <span className="text-xs font-normal text-[var(--muted)]">· {starts.length} free</span>
             </p>
             {starts.length === 0 ? (
-              <p className="text-xs text-[var(--muted)]">No free time this day.</p>
+              <p className="text-xs text-[var(--muted)]">No free time.</p>
             ) : (
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
                 {starts.map((at) => (

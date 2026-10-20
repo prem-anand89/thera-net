@@ -160,7 +160,7 @@ describe('BookSlotSheet', () => {
     fireEvent.change(screen.getByLabelText('Patient search'), { target: { value: 'p2' } });
     fireEvent.click(slot('9:00 AM'));
     fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
-    expect(await screen.findByText(/no phone on file/)).toBeInTheDocument();
+    expect(await screen.findByText(/No phone on file/)).toBeInTheDocument();
     expect(confirmBookingSlot).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText('Phone (none on file)'), { target: { value: '9820000003' } });

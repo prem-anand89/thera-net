@@ -124,9 +124,9 @@ export function AddToWaitlistSheet({
         </div>
         {therapists.length > 0 && (
           <div className="mt-3">
-            <Field label="Preferred clinician (optional)">
+            <Field label="Therapist (optional)">
               <select className={inputCls} value={preferredTherapistId} onChange={(event) => setPreferredTherapistId(event.target.value)}>
-                <option value="">Anyone available</option>
+                <option value="">Any</option>
                 {therapists.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}

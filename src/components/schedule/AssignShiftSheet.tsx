@@ -76,7 +76,7 @@ export function AssignShiftSheet({
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full rounded-t-2xl bg-[var(--surface)] p-4 sm:max-w-md sm:rounded-2xl sm:p-6" onClick={(e) => e.stopPropagation()}>
         <h2 id={titleId} className="font-display text-lg font-semibold text-[var(--ink)]">Assign shift, {therapistName}</h2>
         {(templates ?? []).length === 0 ? (
-          <p className="mt-2 text-sm text-[var(--muted)]">No shift templates set up yet. Use "Working hours, {therapistName}" to set custom hours instead.</p>
+          <p className="mt-2 text-sm text-[var(--muted)]">No shifts set up yet. Use "Working hours, {therapistName}" to set custom hours instead.</p>
         ) : (
           <>
             <div className="mt-3 flex flex-col gap-3">

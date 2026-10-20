@@ -228,14 +228,14 @@ describe('ShiftRequestSheet', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 't1' } });
     fireEvent.click(screen.getByLabelText('Mon'));
     fireEvent.click(screen.getByRole('button', { name: /submit request/i }));
-    await screen.findByText(/waiting on approval/i);
+    await screen.findByText(/sent for approval/i);
     expect(requestShiftAssignment).toHaveBeenCalledWith({ therapistId: 'th1', shiftTemplateId: 't1', weekdays: [1] });
   });
 
   it('falls through to custom hours when no templates exist', () => {
     templates = [];
     render(<ShiftRequestSheet open therapistId="th1" therapistName="Priya" clinicId="c1" clinic={clinic} currentWorkingHours={null} onClose={() => {}} />);
-    fireEvent.click(screen.getByText(/set custom hours instead/i));
+    fireEvent.click(screen.getByText(/use custom hours/i));
     expect(screen.getByText('custom-hours-sheet')).toBeInTheDocument();
   });
 
@@ -244,11 +244,11 @@ describe('ShiftRequestSheet', () => {
     const current = { '1': [[540, 780]] as [number, number][] };
     noticeStore.reset();
     render(<ShiftRequestSheet open therapistId="th1" therapistName="Priya" clinicId="c1" clinic={clinic} currentWorkingHours={current} onClose={() => {}} />);
-    fireEvent.click(screen.getByText(/set custom hours instead/i));
+    fireEvent.click(screen.getByText(/use custom hours/i));
     expect(workingHoursProps?.value).toBe(current);
     await workingHoursProps!.onSave(null);
     expect(requestCustomHours).toHaveBeenCalledWith('th1', null);
-    expect(noticeStore.notices().map((n) => n.message).join(' ')).toMatch(/waiting on approval/i);
+    expect(noticeStore.notices().map((n) => n.message).join(' ')).toMatch(/sent for approval/i);
   });
 
   it('labels the dialog by its heading and the shift select', () => {

@@ -174,7 +174,7 @@ describe('ResourceDayGrid drag', () => {
         vi.advanceTimersByTime(500);
       });
       fireEvent.pointerUp(window, { pointerType: 'touch' });
-      expect(screen.getByRole('status')).toHaveTextContent('Tap a free time to move Priya');
+      expect(screen.getByRole('status')).toHaveTextContent('Tap free time to move Priya');
       fireEvent.click(screen.getByRole('button', { name: 'Move here: Dr Ravi at 11:00 AM' }));
       expect(onMove).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ therapistId: 't2', start: 660, duration: 45 }));
     } finally {

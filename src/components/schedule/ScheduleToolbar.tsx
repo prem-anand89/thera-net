@@ -17,6 +17,7 @@ export function ScheduleToolbar({
   headline,
   summary,
   offCount = 0,
+  offIsToday = false,
   onShowOff,
   filter,
   monthPicker,
@@ -37,6 +38,8 @@ export function ScheduleToolbar({
   summary: string | null;
   /** Therapists left out because they are off this day; tapping the note shows them. */
   offCount?: number;
+  /** The day shown is today (the note then says "off today"). */
+  offIsToday?: boolean;
   onShowOff?: () => void;
   filter: ReactNode;
   /** Renders a month calendar for the headline to open (the left panel's month is hidden in Week view). */
@@ -95,7 +98,7 @@ export function ScheduleToolbar({
                 <>
                   {' · '}
                   <button type="button" className="font-medium text-[var(--teal)] hover:underline" onClick={onShowOff}>
-                    {offCount} off · Show
+                    {offCount} off{offIsToday ? ' today' : ''} · Show
                   </button>
                 </>
               )}
@@ -131,7 +134,7 @@ export function ScheduleToolbar({
               findTimeActive ? 'border-[var(--teal)] bg-[var(--teal-light)] text-[var(--teal-strong)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--teal)] hover:bg-[var(--paper)]'
             }`}
           >
-            {findTimeActive ? 'Back to the day' : 'Find a time'}
+            {findTimeActive ? 'Back to schedule' : 'Find a time'}
           </button>
         )}
         {menu}

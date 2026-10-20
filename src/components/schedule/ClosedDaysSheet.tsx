@@ -43,7 +43,7 @@ export function ClosedDaysSheet({
   if (!open) return null;
 
   async function save() {
-    if (!from || !to || to < from) return setError('Choose an end date on or after the start date.');
+    if (!from || !to || to < from) return setError('End date can\'t be before the start.');
     setBusy(true);
     setError(null);
     try {

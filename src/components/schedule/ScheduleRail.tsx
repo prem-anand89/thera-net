@@ -163,7 +163,7 @@ export function ScheduleRail({
           )}
         </div>
         {closures.length === 0 ? (
-          <p className="text-xs text-[var(--muted)]">No upcoming closures.</p>
+          <p className="text-xs text-[var(--muted)]">None upcoming.</p>
         ) : (
           <ul className="space-y-1">
             {closures.map((range) => (
@@ -183,7 +183,7 @@ export function ScheduleRail({
                     onClick={() => onRemoveClosure(range)}
                     aria-label={`Reopen ${range.label ?? 'closed days'} ${rangeLabel(range)}`}
                   >
-                    Remove
+                    Reopen
                   </button>
                 )}
               </li>

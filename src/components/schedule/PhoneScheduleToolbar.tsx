@@ -66,8 +66,8 @@ export function PhoneStatusLine({
   onShowOff?: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 text-xs text-[var(--muted)]" data-phone-status>
-      <p className="min-w-0 truncate">
+    <div className="flex flex-wrap items-center justify-between gap-x-3 text-xs text-[var(--muted)]" data-phone-status>
+      <p className="max-w-full shrink-0 truncate">
         <span className="font-semibold text-[var(--ink)]">{label}</span> · {summary}
       </p>
       {offCount > 0 && onShowOff && (

@@ -317,7 +317,7 @@ export function BookSlotSheet({
       workingFor: (id, date) =>
         workingIntervals((therapists ?? []).find((t) => t.id === id)?.workingHours, date, { startHour, endHour }),
     });
-    if (!found) return setError('No free time in the next 3 weeks for this length.');
+    if (!found) return setError('No free time in 3 weeks for this length.');
     setError(null);
     setSelectedDate(found.date);
     setShowLater(found.date > addDays(today, 6));
@@ -362,19 +362,19 @@ export function BookSlotSheet({
 
   async function submit() {
     if (!therapistId) return setError('Choose a therapist first.');
-    if (!selectedTime) return setError('Choose an available time.');
+    if (!selectedTime) return setError('Choose a time.');
 
     if (!rescheduleAppointment) {
       const existing = patientId ? patients?.find((patient) => patient.id === patientId) : undefined;
       const finalName = patientMode === 'find' ? existing?.name ?? '' : patientName.trim();
       const finalPhone = patientMode === 'find' ? (existing?.phone || patientPhone).trim() : patientPhone.trim();
-      if (patientMode === 'find' && !existing) return setError('Choose an existing patient, or switch to New patient.');
-      if (!finalName) return setError('Enter the patient name.');
-      if (!finalPhone) return setError('This patient has no phone on file — enter one so the booking can be confirmed.');
+      if (patientMode === 'find' && !existing) return setError('Choose a patient, or switch to New patient.');
+      if (!finalName) return setError('Enter a patient name.');
+      if (!finalPhone) return setError('No phone on file. Enter one to confirm the booking.');
 
       if (repeat) {
-        if (activeRows.length < 2) return setError('A repeat booking needs at least two sessions.');
-        if (unresolved > 0) return setError('Some sessions clash — pick another time or skip them.');
+        if (activeRows.length < 2) return setError('Repeat bookings need 2 or more sessions.');
+        if (unresolved > 0) return setError('Some sessions clash. Change their time or skip them.');
       }
     }
 
@@ -556,7 +556,7 @@ export function BookSlotSheet({
         <div className="flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-6">
           {requestId && (requestNotes || requestPreferredTimeText) && (
             <div className="rounded-xl bg-[var(--amber-light)] px-3 py-2.5 text-sm text-[var(--ink)]">
-              {requestPreferredTimeText && <p><span className="text-[var(--muted)]">Asked for</span> {requestPreferredTimeText}</p>}
+              {requestPreferredTimeText && <p><span className="text-[var(--muted)]">Requested</span> {requestPreferredTimeText}</p>}
               {requestNotes && <p className="mt-0.5"><span className="text-[var(--muted)]">Reason</span> {requestNotes}</p>}
             </div>
           )}
@@ -701,7 +701,7 @@ export function BookSlotSheet({
               </p>
             )}
             {!therapistId ? (
-              <p className="rounded-lg bg-[var(--paper)] p-3 text-sm text-[var(--muted)]">Choose a therapist to see their free times.</p>
+              <p className="rounded-lg bg-[var(--paper)] p-3 text-sm text-[var(--muted)]">Choose a therapist to see free times.</p>
             ) : (
               <>
                 {workingSlots.length === 0 && (
@@ -748,7 +748,7 @@ export function BookSlotSheet({
               <label className="flex min-h-12 cursor-pointer items-center justify-between gap-3 px-3 text-sm font-medium text-[var(--ink)]">
                 <span>
                   Repeat this booking
-                  <span className="block text-xs font-normal text-[var(--muted)]">Same time on chosen weekdays</span>
+                  <span className="block text-xs font-normal text-[var(--muted)]">Same time, selected days</span>
                 </span>
                 <input
                   type="checkbox"
@@ -805,7 +805,7 @@ export function BookSlotSheet({
                     )}
                   </div>
                   {!selectedTime ? (
-                    <p className="text-xs text-[var(--muted)]">Pick a time above to see the dates.</p>
+                    <p className="text-xs text-[var(--muted)]">Pick a time to see the dates.</p>
                   ) : (
                     <ul className="max-h-64 space-y-1.5 overflow-y-auto" aria-label="Planned sessions">
                       {plannedRows.map((row, index) => (

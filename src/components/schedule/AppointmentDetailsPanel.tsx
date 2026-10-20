@@ -253,18 +253,18 @@ export function AppointmentDetailsPanel({
                 className="flex min-h-11 w-full items-center justify-center rounded-lg bg-[var(--moss)] px-3 text-sm font-medium text-white hover:bg-[var(--moss-strong)] disabled:opacity-50"
                 onClick={() => void run(() => bookingService.markAppointmentArrived(appointment.id))}
               >
-                ✓ Mark arrived
+                Mark arrived
               </button>
             )}
             {arrived && (
               <p className="rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber)]">
-                In progress — add the service and payment with Complete visit.
+                Complete visit to add service and payment.
               </p>
             )}
             <div className="flex gap-2">
               {onStartNote && (
                 <button type="button" className={`${actionCls} flex-1 text-[var(--teal)]`} onClick={() => onStartNote(appointment)}>
-                  Start note
+                  Add note
                 </button>
               )}
               <Link
@@ -309,7 +309,7 @@ export function AppointmentDetailsPanel({
                 onClick={() => bookingService.messageTherapist(appointment.status === 'rescheduled' ? 'rescheduled' : 'booked', therapistInput)}
               >
                 <IconMessage />
-                Tell therapist
+                Message therapist
               </button>
             )}
             <button type="button" disabled={busy} className={quickCls} onClick={() => onReschedule(appointment)}>
@@ -330,7 +330,7 @@ export function AppointmentDetailsPanel({
 
         {appointment.status === 'no_show' && canManage && !appointment.visitId && (
           <div className="mt-4 rounded-lg bg-[var(--paper)] p-3">
-            <p className="text-sm text-[var(--ink)]">Marked as a no-show. Marked by mistake, or did they call to rebook?</p>
+            <p className="text-sm text-[var(--ink)]">No-show. Marked by mistake? Undo, or rebook.</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -349,7 +349,7 @@ export function AppointmentDetailsPanel({
 
         {appointment.status === 'cancelled' && canManage && !appointment.visitId && new Date(appointment.scheduledAt).getTime() > Date.now() && (
           <div className="mt-4 rounded-lg bg-[var(--paper)] p-3">
-            <p className="text-sm text-[var(--ink)]">Cancelled by mistake? Bringing it back checks that the time is still free.</p>
+            <p className="text-sm text-[var(--ink)]">Cancelled by mistake? Restore checks the time is free.</p>
             <div className="mt-2">
               <button
                 type="button"
@@ -365,16 +365,16 @@ export function AppointmentDetailsPanel({
 
         {appointment.status === 'cancelled' && canManage && (
           <div className="mt-4 rounded-lg bg-[var(--paper)] p-3">
-            <p className="text-sm text-[var(--ink)]">Let them know it's cancelled:</p>
+            <p className="text-sm text-[var(--ink)]">Let them know:</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {appointment.patientPhone && (
                 <button type="button" className={`${actionCls} text-[var(--teal)]`} onClick={() => bookingService.messagePatient('cancelled', messageInput)}>
-                  Tell patient
+                  Message patient
                 </button>
               )}
               {therapistPhone && (
                 <button type="button" className={`${actionCls} text-[var(--teal)]`} onClick={() => bookingService.messageTherapist('cancelled', therapistInput)}>
-                  Tell therapist
+                  Message therapist
                 </button>
               )}
             </div>
@@ -410,7 +410,7 @@ export function AppointmentDetailsPanel({
                   setConfirmSeries(true);
                 }}
               >
-                Cancel this and all following sessions…
+                Cancel this and later sessions…
               </button>
             )}
           </>

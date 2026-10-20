@@ -791,7 +791,7 @@ export function useGridDrag(input: {
         valid: validate(columnKey, placing.appointment.id, start, placing.duration),
       };
       if (!target.valid) {
-        notify.error('That time is not free for the whole appointment.');
+        notify.error('Not free for the full length.');
         return;
       }
       setPlacing(null);
@@ -895,7 +895,7 @@ function GridFrame({
         data-placing-bar
       >
         <span>
-          Tap a free time to move <strong>{placing.appointment.patientName}</strong>.
+          Tap free time to move <strong>{placing.appointment.patientName}</strong>.
         </span>
         <button type="button" className="min-h-9 text-xs font-medium text-[var(--teal)]" onClick={cancelPlacing}>
           Cancel
@@ -1032,9 +1032,10 @@ export function ResourceDayGrid({
       ),
       header: (
         <div className="min-w-0">
-          <p className="flex items-center gap-1.5 truncate text-sm font-medium text-[var(--ink)]">
+          <p className="flex items-center gap-1.5 truncate text-sm font-medium text-[var(--ink)]" title={therapist.name}>
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: therapist.color }} aria-hidden />
-            {therapist.name}
+            {/* Three or more phone columns are narrow: the first name is what tells them apart ("Dr" would cost the space). */}
+            {phone && therapists.length > 2 ? shortName(therapist.name) : therapist.name}
             {isColleague && !phone && (
               <span className="ml-1 text-[11px] font-normal text-[var(--muted)]">· view only</span>
             )}

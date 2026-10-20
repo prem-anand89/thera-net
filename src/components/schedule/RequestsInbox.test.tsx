@@ -34,11 +34,11 @@ describe('RequestsInbox', () => {
         onSeeAll={vi.fn()}
       />
     );
-    expect(screen.getByText('2 booking requests waiting')).toBeInTheDocument();
+    expect(screen.getByText('2 booking requests')).toBeInTheDocument();
     expect(screen.getByText(/oldest 2h ago/)).toBeInTheDocument();
     expect(screen.queryByText('Meera')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Review/ }));
-    expect(screen.getByText(/Wants Fri, 2 Oct, 10:30 AM · Dr Asha/)).toBeInTheDocument();
+    expect(screen.getByText(/Fri, 2 Oct, 10:30 AM · Dr Asha/)).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'Confirm' })[0]);
     expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
     fireEvent.click(screen.getAllByRole('button', { name: 'Decline' })[1]);

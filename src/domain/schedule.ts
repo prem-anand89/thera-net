@@ -703,9 +703,9 @@ export interface DayLoad {
   /** normal → therapist colour; busy (≥70% or one slot left) → amber;
    *  full → rust; off → no bar; done (today, hours over) → grey bar. */
   tone: DayLoadTone;
-  /** The next useful thing to know, in plain words: "Free now, 4 slots",
-   *  "Free from 2:30 PM, 3 slots", "On break until 2:00 PM", "Almost full",
-   *  "Fully booked", "Done · 6 seen", "No more slots today", "6 slots free",
+  /** The next useful thing to know, in plain words: "4 free now",
+   *  "3 free from 2:30 PM", "Break till 2:00 PM", "Fully booked",
+   *  "Finished · 6 seen", "No slots left", "6 free",
    *  "Off today", "Closed". */
   text: string;
 }
@@ -743,31 +743,29 @@ export function dayLoad(
   const freeSlots = gaps.reduce((sum, gap) => sum + Math.floor((gap.end - gap.start) / slotMinutes), 0);
   const ratio = Math.min(1, bookedMinutes / workingMinutes);
   const tone: DayLoadTone = freeSlots === 0 || ratio >= 1 ? 'full' : freeSlots === 1 || ratio >= 0.7 ? 'busy' : 'normal';
-  const slots = `${freeSlots} ${freeSlots === 1 ? 'slot' : 'slots'}`;
   const result = (text: string): DayLoad => ({ ...base, freeSlots, ratio, tone, text });
 
   if (!isToday) {
     if (freeSlots === 0) return result('Fully booked');
-    if (freeSlots === 1) return result('Almost full, 1 slot free');
-    return result(`${slots} free`);
+    return result(`${freeSlots} free`);
   }
 
   // Hours over: a quiet recap (grey, not the rust "full" alarm).
   const lastEnd = Math.max(...working.map((w) => w.end));
   if (now >= lastEnd) {
     const seen = live.filter((a) => a.status !== 'no_show').length;
-    return { ...base, freeSlots, ratio, tone: 'done', text: seen ? `Done · ${seen} seen` : 'Done for today' };
+    return { ...base, freeSlots, ratio, tone: 'done', text: seen ? `Finished · ${seen} seen` : 'Finished today' };
   }
-  if (freeSlots === 0) return result(live.length === 0 ? 'No more slots today' : 'Fully booked');
+  if (freeSlots === 0) return result(live.length === 0 ? 'No slots left' : 'Fully booked');
 
   // Between two working intervals (a break), with more work later today.
   const inWork = working.some((w) => now >= w.start && now < w.end);
   const firstStart = Math.min(...working.map((w) => w.start));
   const nextWork = working.filter((w) => w.start > now).sort((x, y) => x.start - y.start)[0];
-  if (!inWork && now > firstStart && nextWork) return result(`On break until ${minutesLabel(nextWork.start)}`);
+  if (!inWork && now > firstStart && nextWork) return result(`Break till ${minutesLabel(nextWork.start)}`);
 
   const first = gaps.find((gap) => gap.end - gap.start >= slotMinutes);
   if (!first) return result('Fully booked');
-  const when = first.start - now < slotMinutes ? 'Free now' : `Free from ${minutesLabel(first.start)}`;
-  return result(freeSlots === 1 ? `Almost full, ${when.charAt(0).toLowerCase()}${when.slice(1)}` : `${when}, ${slots}`);
+  const when = first.start - now < slotMinutes ? 'now' : `from ${minutesLabel(first.start)}`;
+  return result(`${freeSlots} free ${when}`);
 }
