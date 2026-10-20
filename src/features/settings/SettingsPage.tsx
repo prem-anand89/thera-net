@@ -1,4 +1,6 @@
 import { notify } from '@/lib/notify';
+import { COUNTRY_CODES } from '@/domain/countryCodes';
+import { clinicCountryCode, clinicTimezone, timezoneHint, timezoneOptions } from '@/domain/clinicRegion';
 import { PhoneField } from '@/components/PhoneField';
 import { edgeFunctionErrorMessage } from '@/lib/edgeFunctionError';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
@@ -72,11 +74,12 @@ const ACCENT_VARS: Record<Accent, { color: string; light: string }> = {
 
 /** Sections that edit a slice of the clinic row and report unsaved edits.
  *  A tab can hold more than one (Billing holds billing + partner). */
-type FormKey = 'profile' | 'clinicHours' | 'billing' | 'partner' | 'patientComms';
+type FormKey = 'profile' | 'clinicHours' | 'clinicRegion' | 'billing' | 'partner' | 'patientComms';
 
 const FORM_TAB: Record<FormKey, SettingsTab> = {
   profile: 'general',
   clinicHours: 'general',
+  clinicRegion: 'general',
   billing: 'billing',
   partner: 'billing',
   patientComms: 'booking',
@@ -391,6 +394,7 @@ export function SettingsPage() {
   // and Account act immediately per row or button and never report dirty.
   const setProfileDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'profile', d)), []);
   const setClinicHoursDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'clinicHours', d)), []);
+  const setClinicRegionDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'clinicRegion', d)), []);
   const setBillingDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'billing', d)), []);
   const setPartnerDirty = useCallback((d: boolean) => setDirtyForms((s) => toggleSet(s, 'partner', d)), []);
   const setPatientCommsDirty = useCallback(
@@ -501,6 +505,7 @@ export function SettingsPage() {
             <>
               <ClinicProfileSection onDirtyChange={setProfileDirty} />
               <ClinicHoursSection onDirtyChange={setClinicHoursDirty} />
+              <ClinicRegionSection onDirtyChange={setClinicRegionDirty} />
             </>
           )}
           {activeTab === 'team' && (
@@ -1239,6 +1244,97 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
           partnerLogoUrl={partnerLogoPreviewUrl}
         />
       </div>
+    </div>
+  );
+}
+
+type ClinicRegionFields = Pick<Clinic, 'timezone' | 'defaultCountryCode'>;
+
+/** Time zone and phone country code: what every server-sent time and every new phone number starts from. */
+function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<ClinicRegionFields>(
+    (c) => ({ timezone: clinicTimezone(c), defaultCountryCode: clinicCountryCode(c) }),
+    onDirtyChange
+  );
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (editing && saved && !dirty) setEditing(false);
+  }, [editing, saved, dirty]);
+  const zones = useMemo(() => {
+    const all = timezoneOptions();
+    return form.timezone && !all.includes(form.timezone) ? [form.timezone, ...all] : all;
+  }, [form.timezone]);
+
+  return (
+    <div className="mt-6">
+      <SectionCard
+        id="settings-card-region"
+        title="Region"
+        action={editing ? undefined : <SetOnceEditButton label="Edit region" onClick={() => setEditing(true)} />}
+      >
+        <fieldset disabled={!editing} className="contents">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field
+              label={
+                <>
+                  Time zone
+                  <InfoTip text="Emails, push notifications, the daily agenda and your public booking page show times in this zone." />
+                </>
+              }
+              htmlFor="clinic-timezone"
+            >
+              <select
+                id="clinic-timezone"
+                className={inputCls}
+                value={form.timezone ?? 'Asia/Kolkata'}
+                onChange={(e) => set({ timezone: e.target.value })}
+              >
+                {zones.map((zone) => (
+                  <option key={zone} value={zone}>
+                    {zone}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-[11px] text-[var(--muted)]">{timezoneHint(form.timezone ?? 'Asia/Kolkata')}</span>
+            </Field>
+            <Field
+              label={
+                <>
+                  Phone country code
+                  <InfoTip text="New phone numbers start with this code. Each number can still use another." />
+                </>
+              }
+              htmlFor="clinic-country-code"
+            >
+              <select
+                id="clinic-country-code"
+                className={inputCls}
+                value={form.defaultCountryCode ?? '+91'}
+                onChange={(e) => set({ defaultCountryCode: e.target.value })}
+              >
+                {COUNTRY_CODES.filter((c) => c.code).map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.flag} {c.name} {c.code}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        </fieldset>
+        {editing && (
+          <SectionSaveBar
+            dirty={dirty}
+            saved={saved}
+            busy={busy}
+            onSave={() => void save()}
+            onCancel={() => {
+              cancel();
+              setEditing(false);
+            }}
+            error={error}
+          />
+        )}
+      </SectionCard>
     </div>
   );
 }

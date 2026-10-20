@@ -56,29 +56,47 @@ describe('MyNotificationsSheet', () => {
     const { rerender } = render(
       <MyNotificationsSheet open onClose={() => {}} role="front_desk" therapist={undefined} />
     );
-    expect(screen.queryByRole('switch', { name: /email me appointment updates/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: /email me each appointment/i })).not.toBeInTheDocument();
     expect(screen.getByText('push card')).toBeInTheDocument();
 
     rerender(<MyNotificationsSheet open onClose={() => {}} role="therapist" therapist={therapist} />);
-    const toggle = screen.getByRole('switch', { name: /email me appointment updates/i });
+    const toggle = screen.getByRole('switch', { name: /email me each appointment/i });
     expect(toggle).toBeChecked();
     fireEvent.click(toggle);
     await waitFor(() => expect(put).toHaveBeenCalled());
     expect(put.mock.calls[0][0]).toMatchObject({ id: 't1', emailAppointmentUpdates: false });
   });
 
+  it('the daily agenda switch is on by default and saves its own opt-out without touching the per-appointment one', async () => {
+    render(<MyNotificationsSheet open onClose={() => {}} role="therapist" therapist={therapist} />);
+    const agenda = screen.getByRole('switch', { name: /tomorrow's agenda/i });
+    expect(agenda).toBeChecked();
+    fireEvent.click(agenda);
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0][0]).toMatchObject({ id: 't1', emailDailyAgenda: false });
+    expect(put.mock.calls[0][0].emailAppointmentUpdates).toBeUndefined();
+  });
+
+  it('"hide patient names" starts off and saves an explicit on', async () => {
+    render(<MyNotificationsSheet open onClose={() => {}} role="therapist" therapist={therapist} />);
+    const hide = screen.getByRole('switch', { name: 'Hide patient names in notifications' });
+    expect(hide).not.toBeChecked();
+    fireEvent.click(hide);
+    await waitFor(() => expect(setEnabled).toHaveBeenCalledWith('u1', 'c1', 'hide_patient_names', true));
+  });
+
   it('treats an older row with no value as on', () => {
     render(<MyNotificationsSheet open onClose={() => {}} role="therapist" therapist={therapist} />);
-    expect(screen.getByRole('switch', { name: /email me appointment updates/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /email me each appointment/i })).toBeChecked();
   });
 
   it('offers only the alerts that apply to the role', () => {
     const names = () => screen.queryAllByRole('switch').map((el) => el.getAttribute('aria-label') ?? '');
     const { rerender } = render(<MyNotificationsSheet open onClose={() => {}} role="front_desk" therapist={undefined} />);
-    expect(names()).toEqual(['New booking requests']);
+    expect(names()).toEqual(['New booking requests', 'Hide patient names in notifications']);
 
     rerender(<MyNotificationsSheet open onClose={() => {}} role="admin" therapist={undefined} />);
-    expect(names()).toEqual(['New booking requests', 'Low-rated feedback']);
+    expect(names()).toEqual(['New booking requests', 'Low-rated feedback', 'Hide patient names in notifications']);
 
     // An admin who is also a therapist gets appointment alerts too.
     rerender(<MyNotificationsSheet open onClose={() => {}} role="admin" therapist={therapist} />);

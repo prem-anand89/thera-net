@@ -11,6 +11,8 @@ export interface PushPayload {
   body: string;
   tag: string;
   url: string;
+  /** Buzz again when this replaces a notification with the same tag. */
+  renotify?: boolean;
 }
 
 export interface BookingDetails {
@@ -28,10 +30,11 @@ function formatTime(iso: string, timeZone: string): string {
   }).format(new Date(iso));
 }
 
-function formatDate(ymd: string, timeZone: string): string {
+function formatDate(ymd: string, _timeZone: string): string {
+  // A calendar date has no time zone: format it as the UTC date it names.
   return new Intl.DateTimeFormat('en-IN', {
-    day: 'numeric', month: 'short', timeZone,
-  }).format(new Date(`${ymd}T00:00:00+05:30`));
+    day: 'numeric', month: 'short', timeZone: 'UTC',
+  }).format(new Date(`${ymd}T00:00:00Z`));
 }
 
 /** Only the booking form's own `H:MM AM|PM` slot labels pass; anything else is dropped. */
@@ -44,8 +47,8 @@ export function sanitizePatientName(raw: string): string {
   return raw.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, MAX_NAME_LENGTH);
 }
 
-export function buildBookingRequestPayload(details: BookingDetails, timeZone: string): PushPayload {
-  const name = sanitizePatientName(details.patientName);
+export function buildBookingRequestPayload(details: BookingDetails, timeZone: string, hideName = false): PushPayload {
+  const name = hideName ? '' : sanitizePatientName(details.patientName);
   const date = details.date ? formatDate(details.date, timeZone) : null;
   const parts = [name, date, sanitizeSlotLabel(details.timeLabel)].filter(Boolean);
   return {
@@ -54,6 +57,62 @@ export function buildBookingRequestPayload(details: BookingDetails, timeZone: st
     tag: 'booking-request',
     url: '/schedule?tab=bookings',
   };
+}
+
+/** "Today", "Tomorrow" or "Wed 21 Oct" for a local date, relative to the local date `today`. */
+export function relativeDayLabel(ymd: string, today: string): string {
+  if (ymd === today) return 'Today';
+  const [y, m, d] = today.split('-').map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  const tomorrow = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-${String(next.getUTCDate()).padStart(2, '0')}`;
+  if (ymd === tomorrow) return 'Tomorrow';
+  return new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${ymd}T00:00:00Z`));
+}
+
+export interface AppointmentPushInput {
+  kind: Exclude<PushKind, 'booking_request' | 'low_rating_feedback'>;
+  appointmentId: string;
+  therapistId: string;
+  /** Null when the recipient asked to keep patient names off notifications. */
+  patientName: string | null;
+  startsAt: string;
+  /** The appointment's local date and today's local date, both YYYY-MM-DD in the clinic's zone. */
+  localDate: string;
+  today: string;
+  timeZone: string;
+  /** Appointments added for this therapist in the last few minutes (this one included); more than one collapses into one notification. */
+  recentNewCount?: number;
+}
+
+const TITLES: Record<AppointmentPushInput['kind'], string> = {
+  appointment_confirmed: 'New appointment',
+  appointment_rescheduled: 'Appointment moved',
+  appointment_cancelled: 'Appointment cancelled',
+  appointment_reassigned: 'Appointment reassigned',
+};
+
+/**
+ * One notification per appointment change, telling what happened and to whom and when. A burst of new
+ * bookings for one therapist shares one tag, so the phone shows a single "3 new appointments" instead of three.
+ * Tapping opens that day with the appointment's details.
+ */
+export function buildAppointmentPayload(input: AppointmentPushInput): PushPayload & { renotify: boolean } {
+  const when = `${relativeDayLabel(input.localDate, input.today)}, ${formatTime(input.startsAt, input.timeZone)}`;
+  const who = input.patientName ? sanitizePatientName(input.patientName) : '';
+  const url = `/schedule?tab=bookings&view=schedule&mode=day&date=${input.localDate}&appointment=${input.appointmentId}`;
+  const burst = input.kind === 'appointment_confirmed' && (input.recentNewCount ?? 1) > 1;
+  if (input.kind === 'appointment_confirmed') {
+    return {
+      title: burst ? `${input.recentNewCount} new appointments` : TITLES.appointment_confirmed,
+      body: burst ? `Latest: ${[who, when].filter(Boolean).join(' · ')}` : [who, when].filter(Boolean).join(' · '),
+      // Every new booking for this therapist replaces the last one, so a burst reads as one count.
+      tag: `appt-new:${input.therapistId}`,
+      url,
+      renotify: true,
+    };
+  }
+  const detail = input.kind === 'appointment_reassigned' ? `${[who, when].filter(Boolean).join(' · ')} · now with someone else` : [who, when].filter(Boolean).join(' · ');
+  return { title: TITLES[input.kind], body: detail, tag: `appt:${input.appointmentId}`, url, renotify: true };
 }
 
 export function buildPayload(kind: PushKind, when: string | null, timeZone: string): PushPayload {

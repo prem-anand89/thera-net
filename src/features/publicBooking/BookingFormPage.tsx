@@ -7,6 +7,7 @@ import type { UUID, WorkingHours } from '@/domain/types';
 import { publicLogoUrl } from '@/lib/supabase';
 import { addDays, generateScheduleSlots, isPublicSlotTaken, toLocalDateStr } from '@/domain/schedule';
 import {
+  CLINIC_TIMEZONE,
   clinicNow,
   getDayStatus,
   normalizeAndValidatePhone,
@@ -235,12 +236,13 @@ function TimeGroup({
 }
 
 
-function useClinicNow() {
-  const [current, setCurrent] = useState(() => clinicNow());
+function useClinicNow(timeZone: string) {
+  const [current, setCurrent] = useState(() => clinicNow(new Date(), timeZone));
   useEffect(() => {
-    const timer = setInterval(() => setCurrent(clinicNow()), 60_000);
+    setCurrent(clinicNow(new Date(), timeZone));
+    const timer = setInterval(() => setCurrent(clinicNow(new Date(), timeZone)), 60_000);
     return () => clearInterval(timer);
-  }, []);
+  }, [timeZone]);
   return current;
 }
 
@@ -257,6 +259,8 @@ export function BookingFormPage() {
   const [slotDuration, setSlotDuration] = useState(30);
   const [startHour, setStartHour] = useState(9);
   const [endHour, setEndHour] = useState(17);
+  // The clinic's own time zone (from its settings); India until the clinic's info has loaded.
+  const [timeZone, setTimeZone] = useState(CLINIC_TIMEZONE);
   const [therapists, setTherapists] = useState<{ id: UUID; name: string }[]>([]);
   const [availability, setAvailability] = useState<AvailabilityData | null>(null);
   // The live availability call failed: without it closed days, holidays and
@@ -292,7 +296,7 @@ export function BookingFormPage() {
   const [done, setDone] = useState(false);
   const [joinedWaitlist, setJoinedWaitlist] = useState(false);
 
-  const clinicCurrent = useClinicNow();
+  const clinicCurrent = useClinicNow(timeZone);
   const todayIso = clinicCurrent.dateIso;
   const currentMinuteOfDay = clinicCurrent.minutes + 15;
   const clinicHours = useMemo(() => ({ startHour, endHour }), [startHour, endHour]);
@@ -318,6 +322,7 @@ export function BookingFormPage() {
         setSlotDuration(info.slotDurationMinutes);
         setStartHour(info.bookingStartHour);
         setEndHour(info.bookingEndHour);
+        if (info.timezone) setTimeZone(info.timezone);
         setTherapists(therapistList);
         setAvailability(avail.a);
         setAvailabilityFailed(!avail.ok);

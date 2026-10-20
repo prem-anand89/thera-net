@@ -146,7 +146,7 @@ export default async function handler(req: Request): Promise<Response> {
         .select('user_id, name, email_appointment_updates')
         .eq('id', payload.therapist_id)
         .maybeSingle(),
-      serviceClient.from('clinics').select('name').eq('id', payload.clinic_id).maybeSingle(),
+      serviceClient.from('clinics').select('name, timezone').eq('id', payload.clinic_id).maybeSingle(),
     ]);
 
     if (!therapist?.user_id) {
@@ -168,7 +168,8 @@ export default async function handler(req: Request): Promise<Response> {
 
     const clinicName = clinic?.name ?? 'Thera.Net';
     const durationMinutes = payload.duration_minutes ?? 30;
-    const when = formatWhen(payload.scheduled_at);
+    // The clinic's own zone (Settings → Region); formatWhen falls back to India when it is unset.
+    const when = formatWhen(payload.scheduled_at, clinic?.timezone || undefined);
 
     const ics = buildIcs({
       uid: payload.id,

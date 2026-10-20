@@ -8,6 +8,7 @@ import {
   PUSH_CATEGORIES,
   PUSH_CATEGORY_BY_KIND,
   PUSH_CATEGORY_COPY,
+  PUSH_CATEGORY_DEFAULT,
   pushCategoriesFor,
   pushPreferenceId,
   withoutOptedOut,
@@ -31,12 +32,15 @@ describe('push alert switches', () => {
   });
 
   it('offers each role only the alerts it can receive', () => {
-    expect(pushCategoriesFor('front_desk', false)).toEqual(['booking_request']);
-    expect(pushCategoriesFor('admin', false)).toEqual(['booking_request', 'low_rating_feedback']);
-    expect(pushCategoriesFor('therapist', true)).toEqual(['appointment_changes']);
+    expect(pushCategoriesFor('front_desk', false)).toEqual(['booking_request', 'hide_patient_names']);
+    expect(pushCategoriesFor('admin', false)).toEqual(['booking_request', 'low_rating_feedback', 'hide_patient_names']);
+    expect(pushCategoriesFor('therapist', true)).toEqual(['appointment_changes', 'hide_patient_names']);
     expect(pushCategoriesFor('therapist', false)).toEqual([]);
     // Anyone linked to a therapist profile also gets appointment alerts.
-    expect(pushCategoriesFor('admin', true)).toEqual(['booking_request', 'appointment_changes', 'low_rating_feedback']);
+    expect(pushCategoriesFor('admin', true)).toEqual(['booking_request', 'appointment_changes', 'low_rating_feedback', 'hide_patient_names']);
+    // Hiding names is the one switch that is off until chosen.
+    expect(PUSH_CATEGORY_DEFAULT.hide_patient_names).toBe(false);
+    expect(PUSH_CATEGORY_DEFAULT.booking_request).toBe(true);
   });
 
   it('removes only the people who switched the alert off', () => {

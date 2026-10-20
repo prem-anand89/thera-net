@@ -4,13 +4,13 @@ import type { WorkingHours } from './types';
 export const CLINIC_TIMEZONE = 'Asia/Kolkata';
 
 /**
- * Returns the current date and minutes-since-midnight in clinic time (Asia/Kolkata).
+ * Returns the current date and minutes-since-midnight in clinic time (the clinic's own time zone, Asia/Kolkata by default).
  * Ensures booking decisions remain pinned to the clinic's clock even when opened
  * by traveling patients across time zones.
  */
-export function clinicNow(date: Date = new Date()): { dateIso: string; minutes: number } {
+export function clinicNow(date: Date = new Date(), timeZone: string = CLINIC_TIMEZONE): { dateIso: string; minutes: number } {
   const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: CLINIC_TIMEZONE,
+    timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

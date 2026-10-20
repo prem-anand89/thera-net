@@ -446,6 +446,8 @@ const scheduleRoute = createRoute({
     mode?: (typeof SCHEDULE_MODES)[number];
     date?: string;
     therapist?: string;
+    /** An appointment to open its details panel on arrival (push notification links). */
+    appointment?: string;
   } => ({
     ...(typeof search.tab === 'string' && (SCHEDULE_TABS as readonly string[]).includes(search.tab)
       ? { tab: search.tab as (typeof SCHEDULE_TABS)[number] }
@@ -460,6 +462,7 @@ const scheduleRoute = createRoute({
       ? { date: search.date }
       : {}),
     ...(typeof search.therapist === 'string' && search.therapist ? { therapist: search.therapist } : {}),
+    ...(typeof search.appointment === 'string' && /^[0-9a-f-]{36}$/i.test(search.appointment) ? { appointment: search.appointment } : {}),
   }),
   component: SchedulePage,
 });

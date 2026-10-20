@@ -45,3 +45,59 @@ Deno.test('reassigned payload tells the previous therapist the appointment moved
   assertStringIncludes(p.body, 'moved to another therapist');
   assertStringIncludes(p.body, '4:00 pm');
 });
+
+import { buildAppointmentPayload, relativeDayLabel } from './templates.ts';
+
+const base = {
+  appointmentId: '11111111-1111-1111-1111-111111111111',
+  therapistId: 'thr-1',
+  patientName: 'Ananya Rao',
+  startsAt: '2026-10-21T04:30:00Z', // 10:00 in India
+  localDate: '2026-10-21',
+  today: '2026-10-20',
+  timeZone: 'Asia/Kolkata',
+};
+
+Deno.test('a new appointment says what happened, who and when, in clinic time', () => {
+  const p = buildAppointmentPayload({ ...base, kind: 'appointment_confirmed' });
+  assertEquals(p.title, 'New appointment');
+  assertEquals(p.body, 'Ananya Rao · Tomorrow, 10:00 am');
+});
+
+Deno.test('tapping opens that day with the appointment selected', () => {
+  const p = buildAppointmentPayload({ ...base, kind: 'appointment_rescheduled' });
+  assertEquals(p.url, '/schedule?tab=bookings&view=schedule&mode=day&date=2026-10-21&appointment=11111111-1111-1111-1111-111111111111');
+});
+
+Deno.test('hiding names leaves the time and no name', () => {
+  const p = buildAppointmentPayload({ ...base, kind: 'appointment_cancelled', patientName: null });
+  assertEquals(p.title, 'Appointment cancelled');
+  assertEquals(p.body, 'Tomorrow, 10:00 am');
+});
+
+Deno.test('a burst of new bookings shares one tag and reads as a count', () => {
+  const a = buildAppointmentPayload({ ...base, kind: 'appointment_confirmed', recentNewCount: 3 });
+  const b = buildAppointmentPayload({ ...base, kind: 'appointment_confirmed', appointmentId: '22222222-2222-2222-2222-222222222222', recentNewCount: 3 });
+  assertEquals(a.title, '3 new appointments');
+  assertEquals(a.body, 'Latest: Ananya Rao · Tomorrow, 10:00 am');
+  assertEquals(a.tag, b.tag);
+  assertEquals(a.renotify, true);
+});
+
+Deno.test('moves and cancellations each keep their own notification', () => {
+  const a = buildAppointmentPayload({ ...base, kind: 'appointment_cancelled' });
+  const b = buildAppointmentPayload({ ...base, kind: 'appointment_cancelled', appointmentId: '22222222-2222-2222-2222-222222222222' });
+  assertEquals(a.tag === b.tag, false);
+});
+
+Deno.test('relative day labels', () => {
+  assertEquals(relativeDayLabel('2026-10-20', '2026-10-20'), 'Today');
+  assertEquals(relativeDayLabel('2026-10-21', '2026-10-20'), 'Tomorrow');
+  assertStringIncludes(relativeDayLabel('2026-10-25', '2026-10-20'), '25 Oct');
+});
+
+Deno.test('a request date reads as the date it names, not shifted by the server zone', () => {
+  const p = buildBookingRequestPayload({ patientName: 'Meera', date: '2026-10-21', timeLabel: '9:00 AM' }, 'Asia/Kolkata');
+  assertStringIncludes(p.body, '21 Oct');
+  assertEquals(buildBookingRequestPayload({ patientName: 'Meera', date: null, timeLabel: null }, 'Asia/Kolkata', true).body, '');
+});

@@ -6,7 +6,7 @@ import { repos } from '@/services';
 import { useClinic } from '@/app/clinicContext';
 import { useSession } from '@/app/useSession';
 import { toFriendlyMessage } from '@/lib/errors';
-import { PUSH_CATEGORY_COPY, pushCategoriesFor, type PushCategory } from '@/domain/pushPreferences';
+import { PUSH_CATEGORY_COPY, PUSH_CATEGORY_DEFAULT, pushCategoriesFor, type PushCategory } from '@/domain/pushPreferences';
 import type { ClinicRole } from '@/app/useClinicRole';
 import type { Therapist } from '@/domain/types';
 
@@ -26,22 +26,23 @@ export function MyNotificationsSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const categories = pushCategoriesFor(role, Boolean(therapist));
-  // Only explicit choices are stored; an alert with no row is on.
+  // Only explicit choices are stored; with no row an alert is on and "hide patient names" is off.
   const choices = useLiveQuery(
     async () => (userId ? await repos.userPushPreferences.listForUser(userId, clinic.id) : undefined),
     [userId, clinic.id]
   );
-  const isOn = (category: PushCategory) => choices?.find((c) => c.category === category)?.enabled !== false;
+  const isOn = (category: PushCategory) => choices?.find((c) => c.category === category)?.enabled ?? PUSH_CATEGORY_DEFAULT[category];
   const emailOn = therapist?.emailAppointmentUpdates !== false;
+  const agendaOn = therapist?.emailDailyAgenda !== false;
 
-  async function setEmail(next: boolean) {
+  async function setEmail(next: boolean, field: 'emailAppointmentUpdates' | 'emailDailyAgenda' = 'emailAppointmentUpdates') {
     if (!therapist) return;
     setBusy(true);
     setError(null);
     try {
       await repos.therapists.put({
         ...therapist,
-        emailAppointmentUpdates: next,
+        [field]: next,
         updatedAt: new Date().toISOString(),
       });
     } catch (e) {
@@ -73,7 +74,7 @@ export function MyNotificationsSheet({
           <div className="space-y-1 border-t border-[var(--border)] pt-4">
             <h3 className="text-sm font-semibold">Which alerts do you want?</h3>
             <p className="text-xs text-[var(--muted)]">
-              These apply on all your devices for this clinic. Everything is on unless you switch it off.
+              These apply on all your devices for this clinic. Alerts are on unless you switch them off. Quiet hours: nothing is sent from 11 pm to 6 am, except changes to today's appointments.
             </p>
             {categories.map((category) => (
               <label key={category} className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
@@ -102,9 +103,26 @@ export function MyNotificationsSheet({
           <div className="space-y-1.5 border-t border-[var(--border)] pt-4">
             <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
               <span>
-                <span className="block text-sm font-medium text-[var(--ink)]">Email me appointment updates</span>
+                <span className="block text-sm font-medium text-[var(--ink)]">Email me tomorrow's agenda</span>
                 <span className="block text-xs text-[var(--muted)]">
-                  Confirmations, reschedules and cancellations, with a calendar invite.
+                  One email each evening at 8 pm listing tomorrow's appointments, with a calendar file.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                className="h-5 w-5 shrink-0 accent-[var(--teal)]"
+                aria-label="Email me tomorrow's agenda"
+                checked={agendaOn}
+                disabled={busy}
+                onChange={(e) => void setEmail(e.target.checked, 'emailDailyAgenda')}
+              />
+            </label>
+            <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
+              <span>
+                <span className="block text-sm font-medium text-[var(--ink)]">Email me each appointment</span>
+                <span className="block text-xs text-[var(--muted)]">
+                  A separate email, with a calendar invite, whenever one is confirmed.
                 </span>
               </span>
               <input

@@ -1,5 +1,5 @@
 import { notify } from '@/lib/notify';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookSlotSheet, type BookedSlot } from '@/components/BookSlotSheet';
@@ -90,6 +90,8 @@ type ScheduleSearch = {
   date?: string;
   /** Comma-separated therapist ids; empty = everyone. */
   therapist?: string;
+  /** Opens this appointment's details on arrival (push notification links). */
+  appointment?: string;
 };
 
 type SheetState = {
@@ -432,6 +434,16 @@ export function ScheduleBookingsView({
 
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // A notification link (?appointment=…) opens that appointment's details once, when it is loaded.
+  const openedFromLink = useRef<string | null>(null);
+  useEffect(() => {
+    const id = search.appointment;
+    if (!id || openedFromLink.current === id) return;
+    if (scopedAppointments.some((a) => a.id === id)) {
+      openedFromLink.current = id;
+      setSelectedId(id);
+    }
+  }, [search.appointment, scopedAppointments]);
   const [findTime, setFindTime] = useState(false);
   const [closedSheetOpen, setClosedSheetOpen] = useState(false);
   const [addWaitlistOpen, setAddWaitlistOpen] = useState(false);

@@ -2,13 +2,22 @@
 // Dependency-free on purpose: the send-push edge function and the app's settings screen
 // both import this one file, so the mapping cannot drift between them.
 
-export type PushCategory = 'booking_request' | 'appointment_changes' | 'low_rating_feedback';
+export type PushCategory = 'booking_request' | 'appointment_changes' | 'low_rating_feedback' | 'hide_patient_names';
 
 export const PUSH_CATEGORIES: readonly PushCategory[] = [
   'booking_request',
   'appointment_changes',
   'low_rating_feedback',
+  'hide_patient_names',
 ];
+
+/** What a person gets with no stored choice. Alerts are on by default; hiding names is off. */
+export const PUSH_CATEGORY_DEFAULT: Record<PushCategory, boolean> = {
+  booking_request: true,
+  appointment_changes: true,
+  low_rating_feedback: true,
+  hide_patient_names: false,
+};
 
 /** Every push kind send-push can send, and the switch that controls it. Keep in step with PushKind (templates.ts). */
 export const PUSH_CATEGORY_BY_KIND = {
@@ -33,6 +42,10 @@ export const PUSH_CATEGORY_COPY: Record<PushCategory, { label: string; descripti
     label: 'Low-rated feedback',
     description: 'When a patient rates their visit 2 stars or lower.',
   },
+  hide_patient_names: {
+    label: 'Hide patient names in notifications',
+    description: 'Notifications show the time but not the patient name, so nothing shows on a locked screen.',
+  },
 };
 
 /** The switches that apply to a person. Everyone linked to a therapist profile gets appointment alerts, whatever their role. */
@@ -41,6 +54,8 @@ export function pushCategoriesFor(role: string, hasTherapistProfile: boolean): P
   if (role === 'admin' || role === 'front_desk') out.push('booking_request');
   if (hasTherapistProfile) out.push('appointment_changes');
   if (role === 'admin') out.push('low_rating_feedback');
+  // Anyone who receives an alert naming a patient can choose to keep the name off their lock screen.
+  if (out.length) out.push('hide_patient_names');
   return out;
 }
 

@@ -39,6 +39,8 @@ interface PushData {
   body: string;
   tag: string;
   url: string;
+  /** Buzz again when a notification with the same tag is replaced (a burst of bookings becoming "3 new"). */
+  renotify?: boolean;
 }
 
 self.addEventListener('push', (event) => {
@@ -49,6 +51,8 @@ self.addEventListener('push', (event) => {
       tag: data.tag ?? 'thera-net',
       icon: '/favicon-32.png',
       data: { url: data.url ?? '/' },
+      // renotify is valid on the web but missing from the worker typings.
+      ...({ renotify: data.renotify ?? false } as object),
     })
   );
 });

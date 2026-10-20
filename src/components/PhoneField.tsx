@@ -1,6 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { COUNTRY_CODES, DEFAULT_COUNTRY_CODE, joinPhone, splitPhone } from '@/domain/countryCodes';
+import { useClinic } from '@/app/clinicContext';
+import { clinicCountryCode } from '@/domain/clinicRegion';
+import { COUNTRY_CODES, joinPhone, splitPhone } from '@/domain/countryCodes';
 import { inputCls } from './ui';
+
+/** The clinic's default code; +91 when there is no clinic context (public pages, isolated tests). */
+function useClinicCountryCode(): string {
+  try {
+    // useClinic reads one context and throws outside a clinic: the hook runs on every render either way, so the order never changes.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    return clinicCountryCode(useClinic());
+  } catch {
+    return clinicCountryCode(null);
+  }
+}
 
 /**
  * A phone number with a small country-code picker ("+91 ▾", about 60px) in front of the number.
@@ -15,7 +28,7 @@ export function PhoneField({
   autoFocus,
   disabled,
   placeholder,
-  defaultCode = DEFAULT_COUNTRY_CODE,
+  defaultCode: defaultCodeProp,
 }: {
   value: string;
   onChange: (stored: string) => void;
@@ -25,8 +38,11 @@ export function PhoneField({
   autoFocus?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  /** The code a number without one belongs to. Defaults to the clinic's own (+91 until it is set). */
   defaultCode?: string;
 }) {
+  const clinicCode = useClinicCountryCode();
+  const defaultCode = defaultCodeProp ?? clinicCode;
   const initial = splitPhone(value, defaultCode);
   const [code, setCode] = useState(initial.code);
   const [national, setNational] = useState(initial.national);

@@ -5,6 +5,7 @@ export {
   PUSH_CATEGORIES,
   PUSH_CATEGORY_BY_KIND,
   PUSH_CATEGORY_COPY,
+  PUSH_CATEGORY_DEFAULT,
   pushCategoriesFor,
   withoutOptedOut,
   type PushCategory,

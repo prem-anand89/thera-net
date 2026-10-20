@@ -125,6 +125,10 @@ export interface Clinic {
    */
   signaturePath?: string | null;
   slotDurationMinutes: number;
+  /** IANA zone (e.g. Asia/Kolkata) every server-sent time uses. Absent = India. */
+  timezone?: string;
+  /** Default country code for new phone numbers (e.g. +91). Absent = India. */
+  defaultCountryCode?: string;
   /**
    * Patient communications module (booking requests, feedback capture,
    * Google review nudges, re-engagement reminders). Off by default — see
@@ -246,6 +250,8 @@ export interface Therapist {
    *  email from `notify-therapist`. Absent or true = on (the column default);
    *  the therapist switches it from their own Notifications settings. */
   emailAppointmentUpdates?: boolean;
+  /** Whether the linked login gets tomorrow's agenda by email each evening (clinic time, 8 pm by default). Absent or true = on. */
+  emailDailyAgenda?: boolean;
   /** Whether this therapist is offered on the public online-booking page.
    *  Independent of `active` (internal roster/schedule). Absent or true = shown;
    *  only clinic admins can change it (enforced by guard_therapists_self_update). */
