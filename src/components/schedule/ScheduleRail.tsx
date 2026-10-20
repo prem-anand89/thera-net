@@ -201,7 +201,7 @@ export function rangeLabel(range: ClosedRange): string {
   return range.from === range.to ? fmt(range.from) : `${fmt(range.from)} – ${fmt(range.to)}`;
 }
 
-function MiniMonth({
+export function MiniMonth({
   date,
   today,
   onSelectDate,

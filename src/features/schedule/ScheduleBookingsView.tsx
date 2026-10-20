@@ -71,7 +71,7 @@ import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetail
 import { ClosedDaysSheet } from '@/components/schedule/ClosedDaysSheet';
 import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
 import { FindTimePanel } from '@/components/schedule/FindTimePanel';
-import { ScheduleRail, rangeLabel } from '@/components/schedule/ScheduleRail';
+import { MiniMonth, ScheduleRail, rangeLabel } from '@/components/schedule/ScheduleRail';
 import { ResourceDayGrid, WeekTimeGrid, type GridDragOptions, type GridTherapist, type LoadSummary, type MoveTarget } from '@/components/schedule/TimeGrid';
 import { MobileDayGrid, MobileThreeDayGrid } from '@/components/schedule/MobileGrids';
 import { ScheduleToolbar } from '@/components/schedule/ScheduleToolbar';
@@ -279,6 +279,8 @@ export function ScheduleBookingsView({
   // Week view is available for both single-therapist and multi-therapist (matrix) modes.
   const weekAvailable = true;
   const mode = search.mode ?? 'day';
+  // Desktop's left panel (month, therapists, requests) steps aside in Week so the day columns get its width.
+  const showRail = mode !== 'week';
 
   // Phone presentation: List · Day · 3-Day. The URL mode is untouched (Day/Week stay for tablet and desktop).
   const isPhone = useIsPhone();
@@ -812,8 +814,8 @@ export function ScheduleBookingsView({
 
 
       {activeView === 'schedule' && (
-        <div className="desktop:grid desktop:grid-cols-[240px_minmax(0,1fr)] desktop:gap-6">
-          <div className="hidden desktop:block">
+        <div className={showRail ? 'desktop:grid desktop:grid-cols-[240px_minmax(0,1fr)] desktop:gap-6' : ''}>
+          {showRail && <div className="hidden desktop:block">
             <ScheduleRail
               date={date}
               today={today}
@@ -844,12 +846,12 @@ export function ScheduleBookingsView({
                 ) : null
               }
             />
-          </div>
+          </div>}
 
           <div className="min-w-0 space-y-3">
             <InstallAppBanner message={isTherapist ? 'Open My schedule in one tap — add Thera.Net to your home screen.' : undefined} />
             {canManageAll && (
-              <div className="desktop:hidden">
+              <div className={showRail ? 'desktop:hidden' : ''}>
                 <RequestsInbox
                   variant="strip"
                   requests={pendingRequests}
@@ -914,7 +916,7 @@ export function ScheduleBookingsView({
                 onShowOff={() => setShowOffToday(true)}
                 filter={
                   roster.length > 1 ? (
-                    <div className="desktop:hidden">
+                    <div className={showRail ? 'desktop:hidden' : ''}>
                       <TherapistFilter
                         therapists={roster.filter((t) => t.active !== false)}
                         visibleIds={selectedIds}
@@ -924,6 +926,17 @@ export function ScheduleBookingsView({
                     </div>
                   ) : null
                 }
+                monthPicker={(close) => (
+                  <MiniMonth
+                    date={date}
+                    today={today}
+                    onSelectDate={(selected) => {
+                      setSchedule({ date: selected });
+                      close();
+                    }}
+                    dayState={dayState}
+                  />
+                )}
                 findTimeActive={findTime}
                 onToggleFindTime={() => setFindTime((current) => !current)}
                 menu={moreMenu}

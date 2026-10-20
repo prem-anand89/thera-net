@@ -71,4 +71,18 @@ describe('ScheduleToolbar', () => {
     setup({ offCount: 0, onShowOff: vi.fn() });
     expect(screen.queryByText(/off · Show/)).toBeNull();
   });
+
+  it('the headline opens a month calendar when one is provided, and closes it again', () => {
+    setup({ monthPicker: (close) => <button type="button" onClick={close}>pick 21</button> });
+    expect(screen.queryByRole('dialog', { name: 'Month calendar' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a date' }));
+    expect(screen.getByRole('dialog', { name: 'Month calendar' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'pick 21' }));
+    expect(screen.queryByRole('dialog', { name: 'Month calendar' })).toBeNull();
+  });
+
+  it('without a month picker the headline is plain text', () => {
+    setup();
+    expect(screen.queryByRole('button', { name: 'Pick a date' })).toBeNull();
+  });
 });

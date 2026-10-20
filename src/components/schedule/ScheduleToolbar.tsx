@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
 
 /**
@@ -19,6 +19,7 @@ export function ScheduleToolbar({
   offCount = 0,
   onShowOff,
   filter,
+  monthPicker,
   findTimeActive,
   onToggleFindTime,
   menu,
@@ -38,11 +39,14 @@ export function ScheduleToolbar({
   offCount?: number;
   onShowOff?: () => void;
   filter: ReactNode;
+  /** Renders a month calendar for the headline to open (the left panel's month is hidden in Week view). */
+  monthPicker?: (close: () => void) => ReactNode;
   findTimeActive: boolean;
   onToggleFindTime: () => void;
   menu: ReactNode;
 }) {
   const stepLabel = mode === 'day' ? 'day' : 'week';
+  const [monthOpen, setMonthOpen] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2" data-schedule-toolbar>
       <div className="flex min-w-0 flex-1 items-center gap-1">
@@ -52,11 +56,38 @@ export function ScheduleToolbar({
         <button type="button" className="hidden min-h-9 min-w-9 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--paper)] tab:flex" aria-label={`Next ${stepLabel}`} onClick={() => onStep(1)}>
           <IconChevronRight className="h-5 w-5" />
         </button>
-        <div className="min-w-0 tab:ml-1">
-          <h2 className="flex items-baseline gap-2 truncate font-display text-lg font-semibold leading-tight text-[var(--ink)]">
-            <span className="sm:hidden">{headline.short}</span>
-            <span className="hidden sm:inline">{headline.long}</span>
+        <div className="relative min-w-0 tab:ml-1">
+          <h2 className="truncate font-display text-lg font-semibold leading-tight text-[var(--ink)]">
+            {monthPicker ? (
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={monthOpen}
+                aria-label="Pick a date"
+                onClick={() => setMonthOpen((open) => !open)}
+                className="-mx-1 flex max-w-full items-baseline gap-1.5 truncate rounded-lg px-1 text-left hover:bg-[var(--paper)]"
+              >
+                <span className="truncate sm:hidden">{headline.short}</span>
+                <span className="hidden truncate sm:inline">{headline.long}</span>
+                <svg aria-hidden className="h-3.5 w-3.5 shrink-0 self-center text-[var(--muted)]" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ) : (
+              <span className="flex items-baseline gap-2">
+                <span className="sm:hidden">{headline.short}</span>
+                <span className="hidden sm:inline">{headline.long}</span>
+              </span>
+            )}
           </h2>
+          {monthPicker && monthOpen && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setMonthOpen(false)} aria-hidden />
+              <div className="absolute left-0 top-full z-30 mt-1.5 w-[17rem] shadow-lg" role="dialog" aria-label="Month calendar">
+                {monthPicker(() => setMonthOpen(false))}
+              </div>
+            </>
+          )}
           {mode === 'day' && summary && (
             <p className="truncate text-xs text-[var(--muted)]">
               {summary}
