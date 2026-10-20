@@ -1,5 +1,8 @@
 import { notify } from '@/lib/notify';
 import { appHeaderHeight } from '@/lib/appHeaderHeight';
+import { capLanes } from '@/domain/laneCap';
+import { initials, shortName } from './therapistNames';
+import { Panel } from '../ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Appointment, UUID } from '@/domain/types';
 import { APPOINTMENT_BLOCK_STYLE } from '@/domain/appointmentStatus';
@@ -36,6 +39,22 @@ export type GridHours = { startHour: number; endHour: number };
 /** Width of the in-column time rail used by the single-column phone Day (no separate axis column). */
 const RAIL_W = 34;
 
+/** A day column that holds several therapists' appointments (the multi-therapist week grid). */
+export type MultiLaneConfig = {
+  maxLanes: number;
+  /** Therapist pill for a block; null for unassigned. */
+  pillFor: (appointment: Appointment) => { name: string } | null;
+  /** True when at least one bookable therapist is free and working at that time. */
+  freeAt: (minutes: number) => boolean;
+  /** Opens the list behind a "+N" chip. */
+  onOverflow: (appointments: Appointment[], title: string) => void;
+};
+
+/** Width reserved at a cluster's right edge for its "+N" chip. */
+const OVERFLOW_CHIP_W = 26;
+/** Lanes narrower than this show only initials. */
+const NARROW_LANE_PX = 72;
+
 type DayColumnProps = {
   label: string;
   date: string;
@@ -71,6 +90,8 @@ type DayColumnProps = {
   phone?: boolean;
   /** Single-column phone Day: hour labels on a continuous rail inside the column, wide appointment cards. */
   rail?: boolean;
+  /** Several therapists share this column: capped lanes, therapist pills, shared free time. */
+  multi?: MultiLaneConfig;
 };
 
 export type DragGhost = { columnKey: string; appointmentId: string; start: number; duration: number; valid: boolean };
@@ -125,9 +146,10 @@ export function DayColumn({
   pxPerMinute = PX_PER_MINUTE,
   phone = false,
   rail = false,
+  multi,
 }: DayColumnProps) {
   const [columnElement, setColumnElement] = useState<HTMLDivElement | null>(null);
-  const columnWidth = useElementWidth(phone ? columnElement : null, 150);
+  const columnWidth = useElementWidth(phone || multi ? columnElement : null, 150);
   // Stable ref callback (it also feeds the drag hook) so the measured element isn't re-set each render.
   const dragRegister = useRef(drag?.register);
   dragRegister.current = drag?.register;
@@ -148,17 +170,24 @@ export function DayColumn({
     () => assignLanes(blocks.map((b) => ({ id: b.appointment.id, start: b.start, end: b.end }))),
     [blocks]
   );
+  const capped = useMemo(
+    () => (multi ? capLanes(blocks.map((b) => ({ id: b.appointment.id, start: b.start, end: b.end })), multi.maxLanes) : null),
+    [blocks, multi]
+  );
+  const freeAt = multi?.freeAt;
   const freeSlots = useMemo(() => {
     if ((!onBook && !drag?.placing) || closed.closed || isPastDay) return [];
     return generateScheduleSlots(slotMinutes, hours.startHour, hours.endHour).filter((slot) => {
       if (nowMinutes !== null && slot.minutes < nowMinutes) return false;
+      // Shared column: free when any bookable therapist is free and working, not when nobody is booked.
+      if (freeAt) return freeAt(slot.minutes);
       const end = slot.minutes + slotMinutes;
       // Same rule as the server: every non-cancelled appointment holds its time.
       return !blocks.some(
         (b) => b.appointment.status !== 'cancelled' && b.start < end && b.end > slot.minutes
       );
     });
-  }, [onBook, drag?.placing, closed.closed, isPastDay, slotMinutes, hours.startHour, hours.endHour, nowMinutes, blocks]);
+  }, [onBook, drag?.placing, closed.closed, isPastDay, slotMinutes, hours.startHour, hours.endHour, nowMinutes, blocks, freeAt]);
   const offHours = useMemo(() => {
     if (!working || closed.closed) return [];
     const open = hours.startHour * 60;
@@ -286,7 +315,13 @@ export function DayColumn({
       })}
       {blocks.map(({ appointment, start, end }) => {
         const geometry = blockGeometry(start, end - start, hours.startHour, pxPerMinute);
-        const lane = lanes.get(appointment.id) ?? { lane: 0, lanes: 1 };
+        const lane = capped ? capped.visible.get(appointment.id) : lanes.get(appointment.id) ?? { lane: 0, lanes: 1 };
+        // Beyond the lane cap: reachable through the cluster's "+N" chip.
+        if (!lane) return null;
+        const reserve = capped && 'hasOverflow' in lane && lane.hasOverflow ? OVERFLOW_CHIP_W : 0;
+        const laneWidth = (columnWidth - reserve) / lane.lanes - 4;
+        const narrowLane = Boolean(multi) && laneWidth < NARROW_LANE_PX;
+        const pill = multi ? multi.pillFor(appointment) : null;
         const style = APPOINTMENT_BLOCK_STYLE[appointment.status];
         const look = blockLook(appointment, colorFor(appointment));
         const reason = reasonFor?.(appointment) ?? null;
@@ -306,6 +341,8 @@ export function DayColumn({
             }}
             onPointerDown={draggable ? (event) => drag!.onPointerDown(event, appointment, 'move') : undefined}
             onContextMenu={draggable ? (event) => event.preventDefault() : undefined}
+            // Narrow lanes show only initials, so give the block its full name for screen readers.
+            aria-label={multi ? `${appointment.patientName}, ${minutesLabel(start)}${pill ? `, ${pill.name}` : ''}` : undefined}
             title={`${appointment.patientName} · ${minutesLabel(start)}–${minutesLabel(end)}${reason ? ` · ${reason}` : ''}${flags.length ? ` · ${flags.map((f) => f.label).join(', ')}` : ''}${draggable ? ' · drag to move' : ''}`}
             className={`group/block absolute z-[2] overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-left text-xs transition-shadow hover:shadow-md ${look.className} ${
               selectedId === appointment.id ? 'outline outline-2 outline-[var(--teal)]' : ''
@@ -313,8 +350,9 @@ export function DayColumn({
             style={{
               top: geometry.top,
               height: geometry.height - 1,
-              left: `calc(${(lane.lane / lane.lanes) * 100}% + 2px)`,
-              width: `calc(${100 / lane.lanes}% - 4px)`,
+              // Plain percentages unless a "+N" chip takes the right edge of this cluster.
+              left: reserve ? `calc((100% - ${reserve}px) * ${lane.lane / lane.lanes} + 2px)` : `calc(${(lane.lane / lane.lanes) * 100}% + 2px)`,
+              width: reserve ? `calc((100% - ${reserve}px) / ${lane.lanes} - 4px)` : `calc(${100 / lane.lanes}% - 4px)`,
               borderLeftColor: colorFor(appointment),
               ...look.style,
             }}
@@ -339,6 +377,32 @@ export function DayColumn({
                 height={geometry.height - 1}
                 mark={style.mark || undefined}
               />
+            ) : multi ? (
+              narrowLane ? (
+                <span className="block truncate text-center text-[10px] font-semibold leading-tight">
+                  {style.mark && <span aria-hidden>{style.mark}</span>}
+                  {initials(appointment.patientName)}
+                </span>
+              ) : (
+                <>
+                  {pill && (
+                    <span
+                      className="mb-px inline-block max-w-full truncate rounded px-1 text-[10px] font-medium leading-4 text-[var(--ink)]"
+                      style={{ background: `color-mix(in srgb, ${colorFor(appointment)} 28%, var(--surface))` }}
+                      data-therapist-pill
+                    >
+                      {pill.name}
+                    </span>
+                  )}
+                  <span className="block truncate font-medium">
+                    {style.mark && <span aria-hidden>{style.mark} </span>}
+                    {appointment.patientName}
+                  </span>
+                  {geometry.height >= 45 * pxPerMinute && (
+                    <span className="block truncate text-[11px] opacity-80">{minutesLabel(start)}</span>
+                  )}
+                </>
+              )
             ) : !minimalBlocks ? (
               <>
                 {density !== 'compact' && <BlockFlagBadges flags={flags} />}
@@ -381,6 +445,24 @@ export function DayColumn({
                 )}
               </div>
             )}
+          </button>
+        );
+      })}
+      {capped?.overflow.map((group) => {
+        const hidden = blocks.filter((b) => group.hiddenIds.includes(b.appointment.id)).sort((a, b) => a.start - b.start);
+        const geometry = blockGeometry(group.start, group.end - group.start, hours.startHour, pxPerMinute);
+        const title = `${hidden.length} more at ${minutesLabel(group.start)}`;
+        return (
+          <button
+            key={`overflow-${group.start}`}
+            type="button"
+            aria-label={`${hidden.length} more appointments at ${minutesLabel(group.start)}`}
+            onClick={() => multi!.onOverflow(hidden.map((b) => b.appointment), title)}
+            className="absolute right-0.5 z-[2] flex items-start justify-center rounded-md border border-[var(--border)] bg-[var(--surface)] pt-0.5 text-[10px] font-semibold text-[var(--teal)] shadow-sm hover:bg-[var(--teal-light)]"
+            style={{ top: geometry.top, height: Math.max(geometry.height - 1, 20), width: OVERFLOW_CHIP_W - 4 }}
+            data-lane-overflow
+          >
+            +{hidden.length}
           </button>
         );
       })}
@@ -530,6 +612,8 @@ export type GridColumn = {
   therapistId?: string;
   /** Colleague column viewed read-only by an individual therapist. */
   isColleague?: boolean;
+  /** Several therapists share this column (multi-therapist week). */
+  multi?: MultiLaneConfig;
 };
 
 export type MoveTarget = { date: string; therapistId: string | null; start: number; duration: number };
@@ -571,8 +655,10 @@ export function useGridDrag(input: {
     const { columns: cols, slotMinutes: slot, today: day, nowMinutes: now } = latest.current;
     const column = cols.find((c) => c.key === columnKey);
     if (!column || column.therapistId === '' || column.isColleague) return false;
+    // A shared column holds several therapists: only the moving appointment's own therapist can clash with it.
+    const moving = column.multi ? cols.flatMap((c) => c.appointments).find((a) => a.id === appointmentId) : null;
     return dropAllowed({
-      columnAppointments: column.appointments,
+      columnAppointments: column.multi ? column.appointments.filter((a) => a.therapistId === moving?.therapistId) : column.appointments,
       movingId: appointmentId,
       start,
       duration,
@@ -851,6 +937,7 @@ function GridFrame({
             working={column.working}
             drag={columnDrag(column)}
             isColleague={column.isColleague}
+            multi={column.multi}
           />
         ))}
       </div>
@@ -967,7 +1054,29 @@ export function ResourceDayGrid({
   );
 }
 
-/** Google-style: one therapist, seven day columns. */
+/** Several therapists in one week grid: shared day columns with a therapist pill on each block. */
+export type WeekMultiTherapist = {
+  therapists: GridTherapist[];
+  canBookFor: (therapistId: string) => boolean;
+  workingForTherapist: (therapistId: string, date: string) => Interval[];
+  /** Therapists free and working at the tapped time, so the booking sheet offers only them. */
+  onBookFree: (input: { date: string; time: string; freeTherapistIds: string[] }) => void;
+};
+
+const MAX_WEEK_LANES = 3;
+
+function mergeIntervals(intervals: Interval[]): Interval[] {
+  const sorted = [...intervals].sort((a, b) => a.start - b.start);
+  const merged: Interval[] = [];
+  for (const interval of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && interval.start <= last.end) last.end = Math.max(last.end, interval.end);
+    else merged.push({ ...interval });
+  }
+  return merged;
+}
+
+/** Google-style week: one therapist, or (with `multi`) several sharing the day columns. */
 export function WeekTimeGrid({
   days,
   today,
@@ -988,6 +1097,7 @@ export function WeekTimeGrid({
   phone = false,
   pxPerMinute,
   isColleague = false,
+  multi,
 }: {
   days: string[];
   today: string;
@@ -1012,10 +1122,49 @@ export function WeekTimeGrid({
   pxPerMinute?: number;
   /** The shown therapist is a colleague: read-only, no reasons or flags. */
   isColleague?: boolean;
+  /** Several therapists in the same columns (desktop / iPad week). */
+  multi?: WeekMultiTherapist;
 }) {
+  const [overflowList, setOverflowList] = useState<{ title: string; appointments: Appointment[] } | null>(null);
   const columns: GridColumn[] = days.map((day) => {
     const value = new Date(`${day}T00:00:00`);
     const dayAppointments = appointments.filter((a) => appointmentStartsOnDate(a, day));
+    let multiColumn: Pick<GridColumn, 'multi' | 'working' | 'onBook'> | null = null;
+    if (multi) {
+      const bookable = multi.therapists.filter((t) => t.id && multi.canBookFor(t.id));
+      const freeTherapistIds = (minutes: number) =>
+        bookable
+          .filter(
+            (t) =>
+              withinWorking(multi.workingForTherapist(t.id, day), minutes, slotMinutes) &&
+              !dayAppointments.some((a) => {
+                if (a.therapistId !== t.id || a.status === 'cancelled') return false;
+                const start = minutesOfDay(a.scheduledAt);
+                return start < minutes + slotMinutes && start + appointmentMinutes(a, slotMinutes) > minutes;
+              })
+          )
+          .map((t) => t.id);
+      const byId = new Map(multi.therapists.map((t) => [t.id, t]));
+      multiColumn = {
+        // Time nobody works stays blank: shade the union of everyone's working hours.
+        working: mergeIntervals(multi.therapists.flatMap((t) => multi.workingForTherapist(t.id, day))),
+        onBook: bookable.length
+          ? (time: string) => {
+              const [h, m] = time.split(':').map(Number);
+              multi.onBookFree({ date: day, time, freeTherapistIds: freeTherapistIds(h * 60 + m) });
+            }
+          : undefined,
+        multi: {
+          maxLanes: MAX_WEEK_LANES,
+          pillFor: (a) => {
+            const therapist = a.therapistId ? byId.get(a.therapistId) : undefined;
+            return therapist ? { name: shortName(therapist.name) } : null;
+          },
+          freeAt: (minutes) => freeTherapistIds(minutes).length > 0,
+          onOverflow: (list, title) => setOverflowList({ title, appointments: list }),
+        },
+      };
+    }
     return {
       key: day,
       label: value.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }),
@@ -1042,26 +1191,58 @@ export function WeekTimeGrid({
       onBook: onBook && !isColleague ? (time: string) => onBook({ date: day, time }) : undefined,
       working: workingFor ? workingFor(day) : undefined,
       isColleague,
+      ...multiColumn,
     };
   });
 
   return (
-    <GridFrame
-      columns={columns}
-      hours={hours}
-      slotMinutes={slotMinutes}
-      today={today}
-      nowMinutes={nowMinutes}
-      colorFor={colorFor}
-      reasonFor={reasonFor}
-      flagContext={flagContext}
-      selectedId={selectedId}
-      onSelect={onSelect}
-      scrollKey={days[0]}
-      minColumnWidth={phone ? 92 : 110}
-      drag={drag}
-      phone={phone}
-      pxPerMinute={pxPerMinute}
-    />
+    <>
+      <GridFrame
+        columns={columns}
+        hours={hours}
+        slotMinutes={slotMinutes}
+        today={today}
+        nowMinutes={nowMinutes}
+        colorFor={colorFor}
+        reasonFor={reasonFor}
+        flagContext={flagContext}
+        selectedId={selectedId}
+        onSelect={onSelect}
+        scrollKey={days[0]}
+        minColumnWidth={phone ? 92 : 110}
+        drag={drag}
+        phone={phone}
+        pxPerMinute={pxPerMinute}
+      />
+      <Panel open={overflowList !== null} onClose={() => setOverflowList(null)} title={overflowList?.title ?? ''}>
+        <ul className="divide-y divide-[var(--border)]" data-overflow-list>
+          {overflowList?.appointments.map((a) => {
+            const start = minutesOfDay(a.scheduledAt);
+            const therapist = multi?.therapists.find((t) => t.id === a.therapistId);
+            return (
+              <li key={a.id}>
+                <button
+                  type="button"
+                  className="flex min-h-11 w-full items-center gap-3 py-2 text-left"
+                  onClick={() => {
+                    setOverflowList(null);
+                    onSelect(a);
+                  }}
+                >
+                  <span aria-hidden className="h-3 w-3 shrink-0 rounded-full" style={{ background: colorFor(a) }} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-[var(--ink)]">{a.patientName}</span>
+                    <span className="block truncate text-xs text-[var(--muted)]">
+                      {therapist ? `${shortName(therapist.name)} · ` : ''}
+                      {minutesLabel(start)}–{minutesLabel(start + appointmentMinutes(a, slotMinutes))}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </Panel>
+    </>
   );
 }

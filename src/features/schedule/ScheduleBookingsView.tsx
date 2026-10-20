@@ -68,7 +68,6 @@ import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
 import { FindTimePanel } from '@/components/schedule/FindTimePanel';
 import { ScheduleRail, rangeLabel } from '@/components/schedule/ScheduleRail';
 import { ResourceDayGrid, WeekTimeGrid, type GridDragOptions, type GridTherapist, type LoadSummary, type MoveTarget } from '@/components/schedule/TimeGrid';
-import { MultiResourceWeekGrid } from '@/components/schedule/MultiResourceWeekGrid';
 import { MobileDayGrid, MobileThreeDayGrid } from '@/components/schedule/MobileGrids';
 import { ScheduleToolbar } from '@/components/schedule/ScheduleToolbar';
 import { PhoneScheduleToolbar, PhoneStatusLine } from '@/components/schedule/PhoneScheduleToolbar';
@@ -91,6 +90,8 @@ type SheetState = {
   date?: string;
   time?: string;
   therapistId?: UUID;
+  /** Offer only these therapists (free at the tapped time in the multi-therapist week). */
+  onlyTherapistIds?: UUID[];
   requestId?: UUID;
   patientName?: string;
   patientPhone?: string;
@@ -355,12 +356,10 @@ export function ScheduleBookingsView({
     return columns;
   }, [visibleRoster, selectedIds.length, dayAppointments, rosterById]);
 
-  const maxWeekTherapists = 4;
-  const isAllTherapistsWeek = mode === 'week' && !singleTherapist && !selectedIds.length && visibleRoster.length > maxWeekTherapists;
-  const weekGridTherapists: GridTherapist[] = useMemo(() => {
-    const list = isAllTherapistsWeek ? visibleRoster.slice(0, maxWeekTherapists) : visibleRoster;
-    return list.map((t) => ({ id: t.id, name: t.name, color: t.color }));
-  }, [isAllTherapistsWeek, visibleRoster]);
+  const weekGridTherapists: GridTherapist[] = useMemo(
+    () => visibleRoster.map((t) => ({ id: t.id, name: t.name, color: t.color })),
+    [visibleRoster]
+  );
 
   const pendingRequests = useMemo(
     () => (requests ?? []).filter((r) => r.status === 'pending').sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -937,14 +936,6 @@ export function ScheduleBookingsView({
               </div>
             )}
 
-            {isAllTherapistsWeek && !isPhone && (
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--paper)] px-3 py-2 text-xs text-[var(--muted)]">
-                <span>
-                  Showing first <strong>{maxWeekTherapists}</strong> therapists in week view. Use the left sidebar to select specific team members.
-                </span>
-              </div>
-            )}
-
             {/* Phones: Day / 3-Day grids, or the List below. Tablet and desktop keep Day/Week. */}
             {showPhoneGrid && !findTime && (
               <div className="space-y-2">
@@ -1044,11 +1035,10 @@ export function ScheduleBookingsView({
                       drag={dragOptions}
                     />
                   ) : (
-                    <MultiResourceWeekGrid
+                    <WeekTimeGrid
                       days={weekDays(date)}
                       today={today}
                       nowMinutes={now.minutes}
-                      therapists={weekGridTherapists}
                       appointments={visibleAppointments}
                       hours={displayHours}
                       slotMinutes={slotMinutes}
@@ -1058,12 +1048,15 @@ export function ScheduleBookingsView({
                       flagContext={flagContext}
                       selectedId={selectedId}
                       onSelect={(a) => setSelectedId(a.id)}
-                      onBook={({ date: day, time, therapistId }) => {
-                        if (canBookFor(therapistId)) openBooking({ date: day, time, therapistId });
-                      }}
                       onOpenDay={(day) => setSchedule({ date: day, mode: 'day' })}
-                      workingFor={(therapistId, day) => workingFor(therapistId, day)}
                       drag={dragOptions}
+                      multi={{
+                        therapists: weekGridTherapists,
+                        canBookFor,
+                        workingForTherapist: (therapistId, day) => workingFor(therapistId, day),
+                        onBookFree: ({ date: day, time, freeTherapistIds }) =>
+                          openBooking({ date: day, time, onlyTherapistIds: freeTherapistIds as UUID[] }),
+                      }}
                     />
                   )
                 ) : (
@@ -1240,6 +1233,7 @@ export function ScheduleBookingsView({
         prefilledDate={sheet?.date}
         prefilledTime={sheet?.time}
         prefilledTherapistId={sheet?.therapistId}
+        onlyTherapistIds={sheet?.onlyTherapistIds}
         prefilledPatientName={sheet?.patientName}
         prefilledPatientPhone={sheet?.patientPhone}
         requestId={sheet?.requestId}

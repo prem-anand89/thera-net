@@ -64,6 +64,8 @@ type BookSlotSheetProps = {
   requestPreferredTimeText?: string;
   /** Therapist logins book only for themselves. */
   lockTherapist?: boolean;
+  /** Offer only these therapists (e.g. the ones free at a time picked in the multi-therapist week grid). */
+  onlyTherapistIds?: UUID[];
   /** Set to move an existing appointment instead of creating one. Patient and
    *  therapist are then fixed; only date, time and length change. */
   rescheduleAppointment?: Appointment;
@@ -92,6 +94,7 @@ export function BookSlotSheet({
   requestNotes,
   requestPreferredTimeText,
   lockTherapist = false,
+  onlyTherapistIds,
   rescheduleAppointment,
 }: BookSlotSheetProps) {
   const clinic = useClinic();
@@ -612,7 +615,7 @@ export function BookSlotSheet({
               </p>
             ) : (
               <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="radiogroup" aria-label="Therapist">
-                {roster.map((therapist) => (
+                {roster.filter((t) => !onlyTherapistIds || onlyTherapistIds.includes(t.id) || t.id === therapistId).map((therapist) => (
                   <button
                     key={therapist.id}
                     type="button"
