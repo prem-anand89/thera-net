@@ -16,6 +16,8 @@ export function ScheduleToolbar({
   todayDisabled,
   headline,
   summary,
+  offCount = 0,
+  onShowOff,
   filter,
   findTimeActive,
   onToggleFindTime,
@@ -32,6 +34,9 @@ export function ScheduleToolbar({
   headline: { short: string; long: string };
   /** One-line day summary, shown in day mode. */
   summary: string | null;
+  /** Therapists left out because they are off this day; tapping the note shows them. */
+  offCount?: number;
+  onShowOff?: () => void;
   filter: ReactNode;
   findTimeActive: boolean;
   onToggleFindTime: () => void;
@@ -52,7 +57,19 @@ export function ScheduleToolbar({
             <span className="sm:hidden">{headline.short}</span>
             <span className="hidden sm:inline">{headline.long}</span>
           </h2>
-          {mode === 'day' && summary && <p className="truncate text-xs text-[var(--muted)]">{summary}</p>}
+          {mode === 'day' && summary && (
+            <p className="truncate text-xs text-[var(--muted)]">
+              {summary}
+              {offCount > 0 && onShowOff && (
+                <>
+                  {' · '}
+                  <button type="button" className="font-medium text-[var(--teal)] hover:underline" onClick={onShowOff}>
+                    {offCount} off · Show
+                  </button>
+                </>
+              )}
+            </p>
+          )}
         </div>
         <button
           type="button"

@@ -352,3 +352,54 @@ describe('threeDayCountLabel', () => {
     expect(threeDayCountLabel(list, 't3', days)).toBe('Nothing booked');
   });
 });
+
+import { defaultTherapistSelection, readStoredTherapists, workingTodayIds, writeStoredTherapists } from './schedulePhoneHelpers';
+
+describe('default therapist selection for admin / front desk', () => {
+  const active = ['t1', 't2', 't3'];
+
+  it('everyone working: no filter', () => {
+    expect(defaultTherapistSelection({ savedIds: [], activeIds: active, workingIds: new Set(active) })).toEqual({ ids: [], offCount: 0 });
+  });
+
+  it('leaves out those off that day and says how many', () => {
+    expect(defaultTherapistSelection({ savedIds: [], activeIds: active, workingIds: new Set(['t1']) })).toEqual({ ids: ['t1'], offCount: 2 });
+  });
+
+  it('starts from the saved selection, minus anyone off, ignoring ids no longer on the team', () => {
+    expect(defaultTherapistSelection({ savedIds: ['t2', 't3', 'gone'], activeIds: active, workingIds: new Set(['t1', 't2']) })).toEqual({ ids: ['t2'], offCount: 1 });
+  });
+
+  it('nobody working shows the candidates, not an empty day', () => {
+    expect(defaultTherapistSelection({ savedIds: ['t2'], activeIds: active, workingIds: new Set() })).toEqual({ ids: ['t2'], offCount: 0 });
+  });
+
+  it('workingTodayIds counts working hours or an appointment', () => {
+    const ids = workingTodayIds(active, (id) => id === 't1', new Set(['t3']));
+    expect([...ids].sort()).toEqual(['t1', 't3']);
+  });
+});
+
+describe('stored therapist selection', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('round-trips per clinic and clears on an empty list', () => {
+    writeStoredTherapists('c1', ['t1', 't2']);
+    expect(readStoredTherapists('c1')).toEqual(['t1', 't2']);
+    expect(readStoredTherapists('c2')).toEqual([]);
+    writeStoredTherapists('c1', []);
+    expect(readStoredTherapists('c1')).toEqual([]);
+  });
+
+  it('is safe when storage throws', () => {
+    const original = Storage.prototype.getItem;
+    Storage.prototype.getItem = () => {
+      throw new Error('denied');
+    };
+    try {
+      expect(readStoredTherapists('c1')).toEqual([]);
+    } finally {
+      Storage.prototype.getItem = original;
+    }
+  });
+});

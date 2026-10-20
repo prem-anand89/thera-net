@@ -294,3 +294,56 @@ export function threeDayCountLabel(
   ).length;
   return count ? `${count} booked` : 'Nothing booked';
 }
+
+const THERAPIST_SELECTION_KEY_PREFIX = 'theranet:schedule-therapists:';
+
+/** The therapists admin / front desk last chose, per device and clinic. Safe when storage is unavailable. */
+export function readStoredTherapists(clinicId: string): string[] {
+  try {
+    const raw = localStorage.getItem(`${THERAPIST_SELECTION_KEY_PREFIX}${clinicId}`);
+    return raw ? raw.split(',').map((id) => id.trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeStoredTherapists(clinicId: string, ids: string[]): void {
+  try {
+    const key = `${THERAPIST_SELECTION_KEY_PREFIX}${clinicId}`;
+    if (ids.length) localStorage.setItem(key, ids.join(','));
+    else localStorage.removeItem(key);
+  } catch {
+    // storage unavailable: the choice just isn't remembered
+  }
+}
+
+/** Therapists who have working time that day or an appointment on it. */
+export function workingTodayIds(
+  therapistIds: string[],
+  hasWorkingTime: (therapistId: string) => boolean,
+  idsWithAppointments: Set<string>
+): Set<string> {
+  return new Set(therapistIds.filter((id) => hasWorkingTime(id) || idsWithAppointments.has(id)));
+}
+
+/**
+ * Who admin / front desk see in Day when the link names nobody: their saved
+ * selection (else everyone), minus anyone off that day. `ids` is empty when
+ * that is everyone (no filter); `offCount` is how many were left out.
+ * If nobody is working, the candidates are shown rather than an empty screen.
+ */
+export function defaultTherapistSelection(input: {
+  savedIds: string[];
+  activeIds: string[];
+  workingIds: Set<string>;
+}): { ids: string[]; offCount: number } {
+  const { savedIds, activeIds, workingIds } = input;
+  const saved = savedIds.filter((id) => activeIds.includes(id));
+  const candidates = saved.length ? saved : activeIds;
+  const working = candidates.filter((id) => workingIds.has(id));
+  const shown = working.length ? working : candidates;
+  return {
+    ids: shown.length < activeIds.length ? shown : [],
+    offCount: working.length ? candidates.length - working.length : 0,
+  };
+}

@@ -57,6 +57,20 @@ describe('PhoneStatusLine', () => {
   });
 });
 
+describe('PhoneStatusLine off note', () => {
+  afterEach(cleanup);
+
+  it('shows a tappable "N off · Show" after the summary, and nothing when no one is off', () => {
+    const onShowOff = vi.fn();
+    render(<PhoneStatusLine label="Today" summary="4 booked" onToday={vi.fn()} showToday={false} offCount={2} onShowOff={onShowOff} />);
+    fireEvent.click(screen.getByRole('button', { name: '2 off · Show' }));
+    expect(onShowOff).toHaveBeenCalled();
+    cleanup();
+    render(<PhoneStatusLine label="Today" summary="4 booked" onToday={vi.fn()} showToday={false} offCount={0} onShowOff={onShowOff} />);
+    expect(screen.queryByText(/off · Show/)).toBeNull();
+  });
+});
+
 describe('BookFab', () => {
   afterEach(cleanup);
 

@@ -52,7 +52,11 @@ import {
   nextTherapistSearchParam,
   readStoredPhoneView,
   selectedTherapistIds,
+  defaultTherapistSelection,
+  readStoredTherapists,
   threeDayCountLabel,
+  workingTodayIds,
+  writeStoredTherapists,
   threeDayDates,
   toggleTherapistSelection,
   writeStoredPhoneView,
@@ -208,15 +212,36 @@ export function ScheduleBookingsView({
     [rosterById]
   );
 
+  // Admin / front desk with no therapist in the link: their saved selection (else everyone), minus
+  // anyone off that day, in Day only. Display-only — it never writes the URL, so there is no history
+  // entry. "Show" (or "Show all") lifts it for this session without touching the saved selection.
+  const [showOffToday, setShowOffToday] = useState(false);
+  const implicitSelection = useMemo(() => {
+    if (!canManageAll || isTherapist || search.therapist || (search.mode ?? 'day') !== 'day' || showOffToday) return null;
+    const activeIds = roster.filter((t) => t.active !== false).map((t) => t.id);
+    const withAppointments = new Set(
+      (allAppointments ?? [])
+        .filter((a) => a.status !== 'cancelled' && a.therapistId && dateForAppointment(a) === date)
+        .map((a) => a.therapistId as string)
+    );
+    return defaultTherapistSelection({
+      savedIds: readStoredTherapists(clinic.id),
+      activeIds,
+      workingIds: workingTodayIds(activeIds, (id) => workingFor(id, date).length > 0, withAppointments),
+    });
+  }, [canManageAll, isTherapist, search.therapist, search.mode, showOffToday, roster, allAppointments, date, workingFor, clinic.id]);
+  const therapistParam = search.therapist ?? (implicitSelection?.ids.length ? implicitSelection.ids.join(',') : undefined);
+  const offTodayCount = implicitSelection?.offCount ?? 0;
+
   // Selected therapists to display in columns.
   const selectedIds = useMemo(() => {
     return selectedTherapistIds(
       scope.role,
       myTherapistId,
-      search.therapist,
+      therapistParam,
       roster.map((t) => t.id)
     );
-  }, [scope.role, myTherapistId, search.therapist, roster]);
+  }, [scope.role, myTherapistId, therapistParam, roster]);
   const [showCancelled, setShowCancelled] = useState(false);
   const scopedAppointments = useMemo(() => allAppointments ?? [], [allAppointments]);
   const historyList = useMemo(
@@ -524,6 +549,11 @@ export function ScheduleBookingsView({
       myTherapistId
     );
     setSchedule({ therapist: nextParam });
+    // Admin / front desk: remember the choice on this device. "Show all" also lifts the off-today default.
+    if (canManageAll && !isTherapist) {
+      writeStoredTherapists(clinic.id, nextParam ? nextParam.split(',') : []);
+      if (!nextParam) setShowOffToday(true);
+    }
   }
   function toggleTherapist(id: UUID) {
     const next = toggleTherapistSelection(
@@ -880,6 +910,8 @@ export function ScheduleBookingsView({
                     : { short: `Week of ${shortDate(getWeekStart(date))}`, long: `Week of ${shortDate(getWeekStart(date))}` }
                 }
                 summary={daySummary}
+                offCount={offTodayCount}
+                onShowOff={() => setShowOffToday(true)}
                 filter={
                   roster.length > 1 ? (
                     <div className="desktop:hidden">
@@ -913,6 +945,8 @@ export function ScheduleBookingsView({
                 summary={phoneStatusSummary}
                 onToday={() => setSchedule({ date: today })}
                 showToday={!phoneTodayDisabled}
+                offCount={phoneView === 'day' ? offTodayCount : 0}
+                onShowOff={() => setShowOffToday(true)}
               />
             )}
 

@@ -62,4 +62,13 @@ describe('ScheduleToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Week' }));
     expect(props.onModeChange).toHaveBeenCalledWith('week');
   });
+
+  it('shows "N off · Show" beside the summary only when someone is left out, and Show calls back', () => {
+    const props = setup({ offCount: 2, onShowOff: vi.fn() });
+    fireEvent.click(screen.getByRole('button', { name: '2 off · Show' }));
+    expect(props.onShowOff).toHaveBeenCalled();
+    cleanup();
+    setup({ offCount: 0, onShowOff: vi.fn() });
+    expect(screen.queryByText(/off · Show/)).toBeNull();
+  });
 });

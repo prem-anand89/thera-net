@@ -53,17 +53,30 @@ export function PhoneStatusLine({
   summary,
   onToday,
   showToday,
+  offCount = 0,
+  onShowOff,
 }: {
   /** "Today", "Tue 20 Oct", "Mon 19 – Wed 21 Oct". */
   label: string;
   summary: string;
   onToday: () => void;
   showToday: boolean;
+  /** Therapists left out because they are off this day; tapping the note shows them. */
+  offCount?: number;
+  onShowOff?: () => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-3 text-xs text-[var(--muted)]" data-phone-status>
       <p className="min-w-0 truncate">
         <span className="font-semibold text-[var(--ink)]">{label}</span> · {summary}
+        {offCount > 0 && onShowOff && (
+          <>
+            {' · '}
+            <button type="button" className="inline min-h-11 font-medium text-[var(--teal)] underline-offset-2 hover:underline" onClick={onShowOff}>
+              {offCount} off · Show
+            </button>
+          </>
+        )}
       </p>
       {showToday && (
         <button type="button" className="min-h-11 shrink-0 pl-3 text-xs font-semibold text-[var(--teal)]" onClick={onToday}>
