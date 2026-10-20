@@ -12,7 +12,11 @@ export function BookFab({ onClick }: { onClick: () => void }) {
   useEffect(() => {
     const onScroll = (event: Event) => {
       const target = event.target;
-      const y = target instanceof HTMLElement ? target.scrollTop : window.scrollY;
+      const element = target instanceof HTMLElement ? target : document.documentElement;
+      // iOS rubber-banding reports positions past the top or bottom; clamp so the bounce
+      // never reads as a scroll direction change.
+      const max = Math.max(0, element.scrollHeight - element.clientHeight);
+      const y = Math.min(max, Math.max(0, target instanceof HTMLElement ? target.scrollTop : window.scrollY));
       const key = target instanceof HTMLElement ? target : window;
       const previous = last.current.get(key) ?? y;
       if (y > previous + 8 && y > 80) setHidden(true);

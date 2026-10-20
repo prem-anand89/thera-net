@@ -74,6 +74,9 @@ describe('BookFab scroll behaviour', () => {
   it('hides while scrolling down inside a scroll box and returns on scroll up', () => {
     const box = document.createElement('div');
     document.body.appendChild(box);
+    // jsdom has no layout: give the box 1000px of content in a 500px view.
+    Object.defineProperty(box, 'scrollHeight', { value: 1000 });
+    Object.defineProperty(box, 'clientHeight', { value: 500 });
     render(<BookFab onClick={vi.fn()} />);
     const fab = screen.getByLabelText('Book appointment', { selector: 'button' });
     const scrollTo = (top: number) => {
@@ -87,6 +90,29 @@ describe('BookFab scroll behaviour', () => {
     expect(fab).toHaveAttribute('data-hidden', 'true');
     scrollTo(240);
     expect(fab).not.toHaveAttribute('data-hidden');
+    box.remove();
+  });
+
+  it('ignores rubber-band overscroll past the bottom (no flicker)', () => {
+    const box = document.createElement('div');
+    document.body.appendChild(box);
+    Object.defineProperty(box, 'scrollHeight', { value: 1000 });
+    Object.defineProperty(box, 'clientHeight', { value: 500 });
+    render(<BookFab onClick={vi.fn()} />);
+    const fab = screen.getByLabelText('Book appointment', { selector: 'button' });
+    const scrollTo = (top: number) => {
+      box.scrollTop = top;
+      act(() => {
+        box.dispatchEvent(new Event('scroll'));
+      });
+    };
+    scrollTo(300);
+    scrollTo(500);
+    expect(fab).toHaveAttribute('data-hidden', 'true');
+    // The bounce reports 530, then settles back to 500: neither is a scroll up.
+    scrollTo(530);
+    scrollTo(500);
+    expect(fab).toHaveAttribute('data-hidden', 'true');
     box.remove();
   });
 });

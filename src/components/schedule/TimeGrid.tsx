@@ -786,8 +786,8 @@ function GridFrame({
       <div
         role="status"
         className={`flex items-center justify-between gap-3 rounded-xl bg-[var(--teal-light)] px-3 py-2 text-sm text-[var(--ink)] ${
-          // Page scroll: the top of the grid may be off-screen, so the bar sits above the bottom nav.
-          pageScroll ? 'fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom)+0.5rem)] z-[10] shadow-lg' : 'mb-2'
+          // Page scroll: the top of the grid may be off-screen, so the bar sits above the bottom nav, clear of the round Book button.
+          pageScroll ? 'fixed bottom-[calc(5rem+env(safe-area-inset-bottom)+0.5rem)] left-4 right-[5.5rem] z-[10] shadow-lg' : 'mb-2'
         }`}
         data-placing-bar
       >

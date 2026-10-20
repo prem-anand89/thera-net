@@ -79,6 +79,7 @@ Built so far: steps 1–3, plus the in-column hour rail, page scroll on phones (
 - **Step 5:** no new chip row. In 3-Day the toolbar's therapist chip becomes **single choice** ("Kiran ▾"); the same bottom sheet picks one therapist, held in local state `threeDayPick` (URL filter unchanged). Keep the load dots and the start time on tall blocks.
 - **Step 6:** precedence is (1) `therapist` in the URL, (2) the saved selection minus anyone off that day, (3) who's working. Apply a saved selection with a history **replace**, never a new entry. "N off" goes in the status line as a tappable part ("Today · 6 booked · 2 off"), not a new line.
 - **Step 7:** at most **3 lanes** per time in a day column; further overlaps collapse into a "+N" chip that opens a short list of those appointments (tap → details panel). The < 72px initials rule applies to the remaining lanes. Free time is tinted only where at least one selected, bookable therapist is free **and working**; time outside everyone's hours stays blank. Tests: 5 overlapping appointments show 3 lanes + "+2".
+- **Added after the Gemini review (2026-10-20):** (a) step 5: each therapist row in the single-choice sheet shows the appointment count for the three visible days ("Kiran · 5 booked"); (b) step 6: "Show the ones who are off" is session-only local state and never overwrites the saved selection; (c) step 7: each row of the "+N" list shows therapist colour + short name, patient, time range, and opens `AppointmentDetailsPanel` on tap.
 
 ## 5. Step 4 — Desktop / iPad toolbar aligned with phones
 
