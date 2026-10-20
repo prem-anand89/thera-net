@@ -138,6 +138,29 @@ describe('TherapistFilter phone chip', () => {
     render(<TherapistFilter therapists={therapists} visibleIds={['t1']} onToggle={vi.fn()} onShowAll={vi.fn()} />);
     expect(screen.getAllByText('Dr Asha')[0]).toHaveClass('hidden');
   });
+
+  it('single mode (3-Day) is a one-choice list: the chip shows the pick, a row selects and closes the sheet', () => {
+    const onSelect = vi.fn();
+    render(
+      <TherapistFilter
+        therapists={therapists.map((t, i) => ({ ...t, summary: i === 0 ? '5 booked' : 'Nothing booked' }))}
+        visibleIds={[]}
+        onToggle={vi.fn()}
+        onShowAll={vi.fn()}
+        showLabel
+        sheet
+        single={{ selectedId: 't2', onSelect }}
+      />
+    );
+    const chip = screen.getByRole('button', { name: /Dr Ravi/ });
+    fireEvent.click(chip);
+    expect(screen.getByRole('radio', { name: /Dr Ravi/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('5 booked')).toBeInTheDocument();
+    expect(screen.queryByText('Show all')).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: /Dr Asha/ }));
+    expect(onSelect).toHaveBeenCalledWith('t1');
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+  });
 });
 
 describe('MiniCalendarStrip range', () => {

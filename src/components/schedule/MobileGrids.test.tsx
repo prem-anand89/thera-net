@@ -65,7 +65,9 @@ describe('MobileDayGrid', () => {
     [90, 'compact', false, false],
   ])('at %ipx a column shows %s detail', (width, _name, showsReason, showsTime) => {
     setColumnWidth(width);
-    render(<MobileDayGrid {...dayProps()} />);
+    // Compact blocks 45+ minutes tall now also show the start time (covered in the 3-Day tests), so the
+    // compact case uses a short block to keep checking the bare minimum.
+    render(<MobileDayGrid {...dayProps({ appointments: [appointment({ durationMinutes: width === 90 ? 30 : 60 })] })} />);
     const block = screen.getByRole('button', { name: /Priya/ });
     expect(block).toHaveTextContent('Priya');
     if (showsReason) expect(block).toHaveTextContent('Lumbar strain');
@@ -200,6 +202,24 @@ describe('MobileThreeDayGrid', () => {
     onBook: vi.fn(),
     onOpenDay: vi.fn(),
     ...overrides,
+  });
+
+  it('day headers show up to three load dots instead of a bare count', () => {
+    const many = ['a', 'b', 'c', 'd', 'e', 'f'].map((id, i) =>
+      appointment({ id, scheduledAt: localDateTime('2026-10-02', `${String(9 + i).padStart(2, '0')}:00`).toISOString(), durationMinutes: 30 })
+    );
+    const { container } = render(<MobileThreeDayGrid {...weekProps({ appointments: [appointment({}), ...many] })} />);
+    const dots = [...container.querySelectorAll('[data-load-dots]')].map((el) => el.children.length);
+    expect(dots).toEqual([1, 3, 0]);
+  });
+
+  it('a compact-width block that is 45+ minutes tall still shows its start time', () => {
+    setColumnWidth(100);
+    render(<MobileThreeDayGrid {...weekProps({ appointments: [appointment({ durationMinutes: 45 })] })} />);
+    expect(screen.getByRole('button', { name: /Priya/ })).toHaveTextContent('10:00 AM');
+    cleanup();
+    render(<MobileThreeDayGrid {...weekProps({ appointments: [appointment({ durationMinutes: 30 })] })} />);
+    expect(screen.getByRole('button', { name: /Priya/ })).not.toHaveTextContent('10:00 AM');
   });
 
   it('shows three date columns, Now only in today, and header taps open the day', () => {

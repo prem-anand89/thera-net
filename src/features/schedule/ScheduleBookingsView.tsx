@@ -52,6 +52,7 @@ import {
   nextTherapistSearchParam,
   readStoredPhoneView,
   selectedTherapistIds,
+  threeDayCountLabel,
   threeDayDates,
   toggleTherapistSelection,
   writeStoredPhoneView,
@@ -274,21 +275,34 @@ export function ScheduleBookingsView({
   // Phone Day and 3-Day are always grids (Day with one therapist is one wide column).
   const showPhoneGrid = isPhone;
   const threeDays = useMemo(() => threeDayDates(date), [date]);
+  // 3-Day shows one therapist: the one picked in the chip, else the viewer's own, else the first in the
+  // current selection. The pick is local (the URL filter is untouched, so Day still shows everyone).
+  const threeDayCandidates = roster.filter((t) => t.active !== false);
   const threeDayTherapist =
-    visibleRoster.length === 1 ? visibleRoster[0] : visibleRoster.find((t) => t.id === threeDayPick) ?? null;
+    threeDayCandidates.find((t) => t.id === threeDayPick) ??
+    (isTherapist && myTherapistId ? threeDayCandidates.find((t) => t.id === myTherapistId) : undefined) ??
+    visibleRoster[0] ??
+    threeDayCandidates[0] ??
+    null;
+  const threeDayAppointments = useMemo(
+    () =>
+      scopedAppointments.filter(
+        (a) => a.therapistId === threeDayTherapist?.id && (showCancelled || a.status !== 'cancelled') && threeDays.includes(dateForAppointment(a))
+      ),
+    [scopedAppointments, threeDayTherapist?.id, showCancelled, threeDays]
+  );
   const phoneHours = useMemo(() => {
     if (phoneView !== '3day') {
       return displayHoursFor({ clinicHours: hours, appointments: dayAppointments, mode: 'day', date, slotMinutes });
     }
-    const wanted = new Set(threeDays);
     return displayHoursFor({
       clinicHours: hours,
-      appointments: visibleAppointments.filter((a) => wanted.has(dateForAppointment(a))),
+      appointments: threeDayAppointments,
       mode: 'day',
       date,
       slotMinutes,
     });
-  }, [phoneView, hours, dayAppointments, visibleAppointments, threeDays, date, slotMinutes]);
+  }, [phoneView, hours, dayAppointments, threeDayAppointments, date, slotMinutes]);
 
   const displayHours = useMemo(
     () =>
@@ -684,9 +698,7 @@ export function ScheduleBookingsView({
 
   // ---- phone (List · Day · 3-Day) ----
   const phoneTitle = phoneView === '3day' ? formatThreeDayTitle(date) : shortDate(date);
-  const threeDayBooked = visibleAppointments.filter(
-    (a) => a.status !== 'cancelled' && threeDays.includes(dateForAppointment(a))
-  ).length;
+  const threeDayBooked = threeDayAppointments.filter((a) => a.status !== 'cancelled').length;
   const phoneStatusSummary =
     phoneView === '3day' ? (threeDayBooked ? `${threeDayBooked} booked` : 'Nothing booked yet') : daySummary;
   const phoneTodayDisabled = phoneView === '3day' ? threeDays.includes(today) : date === today;
@@ -827,7 +839,20 @@ export function ScheduleBookingsView({
                 view={phoneView}
                 onViewChange={setPhoneView}
                 filter={
-                  roster.length > 1 ? (
+                  roster.length > 1 && phoneView === '3day' ? (
+                    <TherapistFilter
+                      therapists={threeDayCandidates.map((t) => ({
+                        ...t,
+                        summary: threeDayCountLabel(scopedAppointments, t.id, threeDays, showCancelled),
+                      }))}
+                      visibleIds={[]}
+                      onToggle={() => {}}
+                      onShowAll={() => {}}
+                      showLabel
+                      sheet
+                      single={{ selectedId: threeDayTherapist?.id ?? null, onSelect: setThreeDayPick }}
+                    />
+                  ) : roster.length > 1 ? (
                     <TherapistFilter
                       therapists={roster.filter((t) => t.active !== false).map((t) => ({ ...t, summary: summaryFor(t.id).text }))}
                       visibleIds={selectedIds}
@@ -975,7 +1000,7 @@ export function ScheduleBookingsView({
                     days={threeDays}
                     today={today}
                     nowMinutes={now.minutes}
-                    appointments={visibleAppointments.filter((a) => a.therapistId === threeDayTherapist.id)}
+                    appointments={threeDayAppointments}
                     hours={phoneHours}
                     slotMinutes={slotMinutes}
                     closedFor={closedFor}
@@ -991,25 +1016,7 @@ export function ScheduleBookingsView({
                     workingFor={(day) => workingFor(threeDayTherapist.id, day)}
                     drag={dragOptions}
                   />
-                ) : (
-                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-                    <p className="text-sm font-medium text-[var(--ink)]">Pick a therapist</p>
-                    <p className="mt-0.5 text-xs text-[var(--muted)]">3-Day shows one therapist at a time.</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {visibleRoster.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[var(--border)] px-4 text-sm text-[var(--ink)]"
-                          onClick={() => (isTherapist ? setThreeDayPick(t.id) : setTherapists([t.id]))}
-                        >
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.color }} aria-hidden />
-                          {t.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                ) : null}
               </div>
             )}
             {!isPhone && !(findTime && mode === 'day') && (

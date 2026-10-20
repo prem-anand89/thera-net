@@ -3,6 +3,7 @@ import { appHeaderHeight } from '@/lib/appHeaderHeight';
 import { capLanes } from '@/domain/laneCap';
 import { initials, shortName } from './therapistNames';
 import { Panel } from '../ui';
+import { loadDots } from './loadDots';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Appointment, UUID } from '@/domain/types';
 import { APPOINTMENT_BLOCK_STYLE } from '@/domain/appointmentStatus';
@@ -417,7 +418,7 @@ export function DayColumn({
                       {style.mark && <span aria-hidden>{style.mark} </span>}
                       {appointment.patientName}
                     </span>
-                    {density !== 'compact' && (
+                    {(density !== 'compact' || geometry.height >= 45 * pxPerMinute) && (
                       <span className="block truncate text-[11px] opacity-80">
                         {dense || density === 'medium' ? minutesLabel(start) : `${minutesLabel(start)}–${minutesLabel(end)}`}
                       </span>
@@ -1183,9 +1184,17 @@ export function WeekTimeGrid({
           >
             {value.getDate()}
           </span>
-          <span className="ml-1 text-[11px] text-[var(--muted)]">
-            {dayAppointments.filter((a) => a.status !== 'cancelled').length || ''}
-          </span>
+          {phone ? (
+            <span className="ml-1 inline-flex gap-0.5 align-middle" aria-label={`${dayAppointments.filter((a) => a.status !== 'cancelled').length} booked`} data-load-dots>
+              {Array.from({ length: loadDots(dayAppointments.filter((a) => a.status !== 'cancelled').length) }, (_, i) => (
+                <span key={i} className="h-1.5 w-1.5 rounded-full bg-[var(--teal)]" aria-hidden />
+              ))}
+            </span>
+          ) : (
+            <span className="ml-1 text-[11px] text-[var(--muted)]">
+              {dayAppointments.filter((a) => a.status !== 'cancelled').length || ''}
+            </span>
+          )}
         </button>
       ),
       onBook: onBook && !isColleague ? (time: string) => onBook({ date: day, time }) : undefined,

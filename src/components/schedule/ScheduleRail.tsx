@@ -10,6 +10,9 @@ function therapistInitials(name: string) {
 import { addDays, toLocalDateStr, type ClosedDayInfo, type ClosedRange } from '@/domain/schedule';
 import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
 import { LoadLine, type LoadSummary } from './LoadLine';
+import { loadDots } from './loadDots';
+
+export { loadDots };
 
 type RailTherapist = { id: UUID; name: string; color: string; summary: LoadSummary };
 /** Per-day state for the mini month: closed, free time left, appointments booked. */
@@ -327,10 +330,3 @@ const RAIL_CLOSED_STYLE = {
   backgroundImage: 'repeating-linear-gradient(135deg, var(--border) 0 1.5px, transparent 1.5px 5px)',
 } as const;
 
-/** Load dots under a day: 1–2 booked → 1, 3–5 → 2, 6+ → 3. */
-export function loadDots(booked: number): number {
-  if (booked <= 0) return 0;
-  if (booked <= 2) return 1;
-  if (booked <= 5) return 2;
-  return 3;
-}

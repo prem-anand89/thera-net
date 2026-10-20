@@ -1,4 +1,4 @@
-import { addDays, localDateTime } from '@/domain/schedule';
+import { addDays, localDateTime, toLocalDateStr } from '@/domain/schedule';
 
 export type PhoneView = 'list' | 'day' | '3day';
 
@@ -277,4 +277,20 @@ export function historyAppointments<T extends { therapistId: string | null }>(
     return myTherapistId ? allAppointments.filter((a) => a.therapistId === myTherapistId) : [];
   }
   return allAppointments;
+}
+
+/** "5 booked" over the given days for one therapist, or "Nothing booked" (the 3-Day therapist sheet's second line). */
+export function threeDayCountLabel(
+  appointments: { therapistId: string | null; status: string; scheduledAt: string }[],
+  therapistId: string,
+  days: string[],
+  showCancelled = false
+): string {
+  const count = appointments.filter(
+    (a) =>
+      a.therapistId === therapistId &&
+      (showCancelled || a.status !== 'cancelled') &&
+      days.includes(toLocalDateStr(new Date(a.scheduledAt)))
+  ).length;
+  return count ? `${count} booked` : 'Nothing booked';
 }

@@ -17,6 +17,7 @@ export function TherapistFilter({
   showLabel = false,
   sheet = false,
   onOnly,
+  single,
 }: {
   therapists: FilterTherapist[];
   visibleIds: UUID[];
@@ -27,11 +28,16 @@ export function TherapistFilter({
   /** Phones: open the list as a bottom sheet (a popover can run off a narrow screen) with an "Only" shortcut per row. */
   sheet?: boolean;
   onOnly?: (id: UUID) => void;
+  /** Phone 3-Day shows one therapist: the sheet becomes a single choice (radio rows, no "Show all" / "Only"). */
+  single?: { selectedId: UUID | null; onSelect: (id: UUID) => void };
 }) {
   const [open, setOpen] = useState(false);
-  const shown = visibleIds.length === 0 ? therapists : therapists.filter((t) => visibleIds.includes(t.id));
-  const label =
-    visibleIds.length === 0
+  const shown = single
+    ? therapists.filter((t) => t.id === single.selectedId)
+    : visibleIds.length === 0 ? therapists : therapists.filter((t) => visibleIds.includes(t.id));
+  const label = single
+    ? shown[0]?.name ?? 'Pick a therapist'
+    : visibleIds.length === 0
       ? 'All therapists'
       : shown.length === 1
         ? shown[0].name
@@ -57,7 +63,39 @@ export function TherapistFilter({
           <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
-      {sheet && (
+      {sheet && single && (
+        <Panel open={open} onClose={() => setOpen(false)} title="Show one therapist">
+          <ul className="-mx-4 divide-y divide-[var(--border)] border-y border-[var(--border)]" role="radiogroup" aria-label="Therapist">
+            {therapists.map((t) => (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={single.selectedId === t.id}
+                  className="flex min-h-[3.25rem] w-full items-center gap-3 px-4 text-left"
+                  onClick={() => {
+                    single.onSelect(t.id);
+                    setOpen(false);
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${single.selectedId === t.id ? 'border-[var(--teal)]' : 'border-[var(--border)]'}`}
+                  >
+                    {single.selectedId === t.id && <span className="h-2.5 w-2.5 rounded-full bg-[var(--teal)]" />}
+                  </span>
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: t.color }} aria-hidden />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm text-[var(--ink)]">{t.name}</span>
+                    {t.summary && <span className="block truncate text-xs text-[var(--muted)]">{t.summary}</span>}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
+      {sheet && !single && (
         <Panel open={open} onClose={() => setOpen(false)} title="Show therapists">
           {visibleIds.length > 0 && (
             <button type="button" className="mb-1 min-h-11 text-sm font-medium text-[var(--teal)]" onClick={onShowAll}>
@@ -106,7 +144,7 @@ export function TherapistFilter({
           </button>
         </Panel>
       )}
-      {open && !sheet && (
+      {open && !sheet && !single && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} aria-hidden />
           <div className="absolute right-0 top-full z-30 mt-1.5 w-[min(16rem,calc(100vw-1.5rem))] rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg">

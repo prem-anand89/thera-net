@@ -10,6 +10,7 @@ import {
   phonePxPerMinute,
   phoneSingleColumnPxPerMinute,
   densityFor,
+  threeDayCountLabel,
   selectedTherapistIds,
   canManageAppointment,
   isColleagueAppointment,
@@ -333,5 +334,21 @@ describe('phoneSingleColumnPxPerMinute', () => {
     expect(phoneSingleColumnPxPerMinute(30) * 30).toBeGreaterThanOrEqual(40);
     expect(phoneSingleColumnPxPerMinute(15) * 15).toBeGreaterThanOrEqual(40);
     expect(phoneSingleColumnPxPerMinute(60) * 60).toBeGreaterThanOrEqual(80);
+  });
+});
+
+describe('threeDayCountLabel', () => {
+  const at = (day: string, id: string, status = 'confirmed') => ({
+    therapistId: id,
+    status,
+    scheduledAt: new Date(`${day}T10:00:00`).toISOString(),
+  });
+  const days = ['2026-10-01', '2026-10-02', '2026-10-03'];
+
+  it('counts one therapist\'s appointments in the three days, skipping cancelled ones', () => {
+    const list = [at('2026-10-01', 't1'), at('2026-10-02', 't1'), at('2026-10-02', 't1', 'cancelled'), at('2026-10-02', 't2'), at('2026-10-05', 't1')];
+    expect(threeDayCountLabel(list, 't1', days)).toBe('2 booked');
+    expect(threeDayCountLabel(list, 't1', days, true)).toBe('3 booked');
+    expect(threeDayCountLabel(list, 't3', days)).toBe('Nothing booked');
   });
 });
