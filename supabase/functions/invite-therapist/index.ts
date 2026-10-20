@@ -495,7 +495,7 @@ export default async function handler(req: Request): Promise<Response> {
     // nothing. Best-effort: the invite and clinic access already succeeded
     // above, so a failure here is reported but doesn't undo either --  the
     // existing manual roster path still works as a fallback.
-    if (role === 'therapist' || bookable === true) {
+    if ((role === 'therapist' || bookable === true) && role !== 'front_desk') {
       const therapistWarning = await linkTherapistRosterRow(
         serviceClient,
         clinicId,
