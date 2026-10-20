@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
+import { formatWhen } from './format.ts';
 
 /** Mirrors the `appointments` row shape the Postgres trigger forwards via
  *  `row_to_json(NEW)` — see the `trigger_notify_therapist` migration.
@@ -167,13 +168,7 @@ export default async function handler(req: Request): Promise<Response> {
 
     const clinicName = clinic?.name ?? 'Thera.Net';
     const durationMinutes = payload.duration_minutes ?? 30;
-    const when = new Date(payload.scheduled_at).toLocaleString('en-IN', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+    const when = formatWhen(payload.scheduled_at);
 
     const ics = buildIcs({
       uid: payload.id,
