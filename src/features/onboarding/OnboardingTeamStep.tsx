@@ -1,4 +1,5 @@
 import { edgeFunctionErrorMessage } from '@/lib/edgeFunctionError';
+import { nextUnusedColor, therapistColor } from '@/components/schedule/scheduleColors';
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useClinic } from '@/app/clinicContext';
@@ -55,12 +56,15 @@ export function OnboardingTeamStep({
         updatedAt: now,
       });
     } else {
+      const existing = await repos.therapists.list(clinic.id, true);
       await repos.therapists.put({
         id: crypto.randomUUID(),
         clinicId: clinic.id,
         name,
         userId,
         active: true,
+        // A new therapist starts with a color nobody else uses.
+        color: nextUnusedColor(existing.filter((t) => t.active !== false).map((t) => therapistColor(t.id, t.color))),
         updatedAt: now,
       });
     }

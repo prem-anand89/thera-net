@@ -81,6 +81,15 @@ describe('ResourceDayGrid', () => {
     expect(screen.getByRole('button', { name: 'Book Dr Asha at 11:00 AM' }).className).toContain('bg-[var(--moss-light)]/40');
   });
 
+  it('the column color dot opens the color sheet only where the viewer may change it', () => {
+    const onPickColor = vi.fn();
+    const props = baseProps();
+    render(<ResourceDayGrid {...props} therapists={[{ ...props.therapists[0], onPickColor }, props.therapists[1]]} />);
+    fireEvent.click(screen.getByRole('button', { name: `Change ${props.therapists[0].name}'s color` }));
+    expect(onPickColor).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: `Change ${props.therapists[1].name}'s color` })).toBeNull();
+  });
+
   it('hides booking where the viewer may not book', () => {
     render(<ResourceDayGrid {...baseProps({ canBookFor: (id) => id === 't1' })} />);
     expect(screen.queryByRole('button', { name: /Book Dr Ravi/ })).not.toBeInTheDocument();

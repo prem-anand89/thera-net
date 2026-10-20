@@ -963,7 +963,13 @@ function GridFrame({
   );
 }
 
-export type GridTherapist = { id: UUID | ''; name: string; color: string };
+export type GridTherapist = {
+  id: UUID | '';
+  name: string;
+  color: string;
+  /** When set, the column's color dot is a button that opens the color sheet (admin, or the therapist's own column). */
+  onPickColor?: () => void;
+};
 
 /** Athena-style: one column per therapist for a single day. */
 export function ResourceDayGrid({
@@ -1033,7 +1039,21 @@ export function ResourceDayGrid({
       header: (
         <div className="min-w-0">
           <p className="flex items-center gap-1.5 truncate text-sm font-medium text-[var(--ink)]" title={therapist.name}>
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: therapist.color }} aria-hidden />
+            {therapist.onPickColor ? (
+              <button
+                type="button"
+                aria-label={`Change ${therapist.name}'s color`}
+                title="Change color"
+                className="relative h-2.5 w-2.5 shrink-0 rounded-full before:absolute before:-inset-2.5 before:content-[''] hover:ring-2 hover:ring-[var(--ink)]/30"
+                style={{ background: therapist.color }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  therapist.onPickColor?.();
+                }}
+              />
+            ) : (
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: therapist.color }} aria-hidden />
+            )}
             {/* Three or more phone columns are narrow: the first name is what tells them apart ("Dr" would cost the space). */}
             {phone && therapists.length > 2 ? shortName(therapist.name) : therapist.name}
             {isColleague && !phone && (

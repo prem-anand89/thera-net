@@ -73,6 +73,7 @@ import { ClosedDaysSheet } from '@/components/schedule/ClosedDaysSheet';
 import { AddToWaitlistSheet } from '@/components/schedule/AddToWaitlistSheet';
 import { FindTimePanel } from '@/components/schedule/FindTimePanel';
 import { MiniMonth, ScheduleRail, rangeLabel } from '@/components/schedule/ScheduleRail';
+import { TherapistColorSheet } from '@/components/schedule/TherapistColorPicker';
 import { ResourceDayGrid, WeekTimeGrid, type GridDragOptions, type GridTherapist, type LoadSummary, type MoveTarget } from '@/components/schedule/TimeGrid';
 import { MobileDayGrid, MobileThreeDayGrid } from '@/components/schedule/MobileGrids';
 import { ScheduleToolbar } from '@/components/schedule/ScheduleToolbar';
@@ -394,12 +395,23 @@ export function ScheduleBookingsView({
     [dayAppointments, rosterById, slotMinutes, date, hours, workingFor, today, now.minutes, closedFor]
   );
 
+  // Admins can recolor anyone; a therapist only their own column (the server enforces the same).
+  const [colorEditId, setColorEditId] = useState<string | null>(null);
+  const canEditColorOf = useCallback(
+    (therapistId: string) => scope.role === 'admin' || (isTherapist && therapistId === myTherapistId),
+    [scope.role, isTherapist, myTherapistId]
+  );
   const gridTherapists: GridTherapist[] = useMemo(() => {
-    const columns: GridTherapist[] = visibleRoster.map((t) => ({ id: t.id, name: t.name, color: t.color }));
+    const columns: GridTherapist[] = visibleRoster.map((t) => ({
+      id: t.id,
+      name: t.name,
+      color: t.color,
+      onPickColor: canEditColorOf(t.id) ? () => setColorEditId(t.id) : undefined,
+    }));
     const orphaned = !selectedIds.length && dayAppointments.some((a) => !a.therapistId || !rosterById.has(a.therapistId));
     if (orphaned) columns.push({ id: '', name: 'Unassigned', color: UNASSIGNED_COLOR });
     return columns;
-  }, [visibleRoster, selectedIds.length, dayAppointments, rosterById]);
+  }, [visibleRoster, selectedIds.length, dayAppointments, rosterById, canEditColorOf]);
 
   const weekGridTherapists: GridTherapist[] = useMemo(
     () => visibleRoster.map((t) => ({ id: t.id, name: t.name, color: t.color })),
@@ -1295,6 +1307,21 @@ export function ScheduleBookingsView({
               }
             : undefined
         }
+      />
+
+      <TherapistColorSheet
+        open={colorEditId !== null}
+        onClose={() => setColorEditId(null)}
+        therapistName={colorEditId ? rosterById.get(colorEditId)?.name ?? 'therapist' : ''}
+        value={colorEditId ? rosterById.get(colorEditId)?.color ?? '#468adb' : '#468adb'}
+        takenBy={Object.fromEntries(
+          roster.filter((t) => t.id !== colorEditId && t.active !== false).map((t) => [t.color.toLowerCase(), t.name])
+        )}
+        onSave={async (hex) => {
+          const target = (therapists ?? []).find((t) => t.id === colorEditId);
+          if (!target) return;
+          await repos.therapists.put({ ...target, color: hex, updatedAt: new Date().toISOString() });
+        }}
       />
 
       <BookSlotSheet

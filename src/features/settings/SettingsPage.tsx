@@ -1,4 +1,5 @@
 import { notify } from '@/lib/notify';
+import { TherapistColorPicker } from '@/components/schedule/TherapistColorPicker';
 import { COUNTRY_CODES } from '@/domain/countryCodes';
 import { clinicCountryCode, clinicTimezone, timezoneHint, timezoneOptions } from '@/domain/clinicRegion';
 import { PhoneField } from '@/components/PhoneField';
@@ -13,7 +14,7 @@ import {
   visitService,
 } from '@/services';
 import type { BackupBundle, RestoreSummary } from '@/services/backupService';
-import { therapistColor } from '@/components/schedule/scheduleColors';
+import { colorClashes, nextUnusedColor, therapistColor } from '@/components/schedule/scheduleColors';
 import { useClinic } from '@/app/clinicContext';
 import { usePermissions } from '@/app/usePermissions';
 import { useEntitlements } from '@/app/useEntitlements';
@@ -2634,6 +2635,17 @@ export function TeamMemberCard({
   const [regDraft, setRegDraft] = useState(therapist?.registrationNo ?? '');
   const [phoneDraft, setPhoneDraft] = useState(therapist?.phone ?? '');
   const [colorDraft, setColorDraft] = useState(therapist?.color ?? '');
+  // Colors other therapists already use, so the picker can mark them.
+  const clinicRoster = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
+  const colorsTakenByOthers = useMemo(
+    () =>
+      Object.fromEntries(
+        (clinicRoster ?? [])
+          .filter((t) => t.id !== therapist?.id && t.active !== false)
+          .map((t) => [therapistColor(t.id, t.color).toLowerCase(), t.name])
+      ),
+    [clinicRoster, therapist?.id]
+  );
   const [publicBookableDraft, setPublicBookableDraft] = useState(therapist ? therapist.publicBookable !== false : true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2993,23 +3005,22 @@ export function TeamMemberCard({
                     <Field label="Phone" htmlFor="therapist-edit-phone">
                       <PhoneField id="therapist-edit-phone" placeholder="WhatsApp number" value={phoneDraft} onChange={setPhoneDraft} />
                     </Field>
-                    <Field label="Schedule Color">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="color"
-                          className="h-9 w-14 cursor-pointer rounded border border-[var(--border)] bg-transparent p-1"
-                          value={colorDraft || therapistColor(therapist.id, therapist.color)}
-                          onChange={(e) => setColorDraft(e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          className="text-xs text-[var(--muted)] hover:text-[var(--ink)]"
-                          onClick={() => setColorDraft('')}
-                        >
-                          Reset to default
-                        </button>
-                      </div>
-                    </Field>
+                    <div>
+                      <span className="mb-1 block text-xs font-medium text-[var(--muted)]">Schedule color</span>
+                      <TherapistColorPicker
+                        value={colorDraft || therapistColor(therapist.id, therapist.color)}
+                        onChange={setColorDraft}
+                        takenBy={colorsTakenByOthers}
+                        name={therapist.name}
+                      />
+                      <button
+                        type="button"
+                        className="mt-1 min-h-11 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+                        onClick={() => setColorDraft('')}
+                      >
+                        Reset to default
+                      </button>
+                    </div>
 
                     <div className="rounded-xl border border-[var(--border)] bg-[var(--paper)]/60 p-3 space-y-1.5">
                       <div className="flex items-center justify-between">
@@ -3077,6 +3088,54 @@ export function TeamMemberCard({
   );
 }
 
+/** Two therapists showing in one color are hard to tell apart on the schedule: say so and fix it in one tap. */
+function ColorClashNotice({ therapists }: { therapists: Therapist[] }) {
+  const clashes = useMemo(() => colorClashes(therapists), [therapists]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  if (clashes.length === 0) return null;
+
+  async function giveNewColor(target: Therapist) {
+    setBusyId(target.id);
+    try {
+      const others = therapists.filter((t) => t.id !== target.id && t.active !== false);
+      await repos.therapists.put({
+        ...target,
+        color: nextUnusedColor(others.map((t) => therapistColor(t.id, t.color))),
+        updatedAt: new Date().toISOString(),
+      });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div role="status" className="mb-4 space-y-2 rounded-xl border border-[var(--amber)]/40 bg-[var(--amber-light)] px-3 py-2.5 text-sm text-[var(--ink)]" data-color-clash>
+      {clashes.map((clash) => {
+        const [, ...rest] = clash.therapists;
+        return (
+          <div key={clash.color} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span aria-hidden className="h-3 w-3 shrink-0 rounded-full" style={{ background: clash.color }} />
+            <span className="min-w-0 flex-1">
+              {clash.therapists.map((t) => t.name).join(' and ')} share one color on the schedule.
+            </span>
+            {rest.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                disabled={busyId === t.id}
+                className="min-h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)] disabled:opacity-50"
+                onClick={() => void giveNewColor(t)}
+              >
+                Give {t.name.split(/\s+/)[0]} a new color
+              </button>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function AddTeamMemberForm({
   clinicId,
   onAdded,
@@ -3134,12 +3193,15 @@ function AddTeamMemberForm({
         if (payload?.error) throw new Error(payload.error);
       } else if (effectiveBookable) {
         // Just a roster entry
+        const existing = await repos.therapists.list(clinicId, true);
         await repos.therapists.put({
           id: crypto.randomUUID(),
           clinicId,
           name: name.trim(),
           active: true,
           userId: null,
+          // A new therapist starts with a color nobody else uses.
+          color: nextUnusedColor(existing.filter((t) => t.active !== false).map((t) => therapistColor(t.id, t.color))),
           updatedAt: new Date().toISOString(),
         });
       }
@@ -3518,6 +3580,8 @@ function Therapists() {
           {filteredTeam.length} member{filteredTeam.length === 1 ? '' : 's'}
         </p>
       </div>
+
+      <ColorClashNotice therapists={rawTherapists ?? []} />
 
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 mb-6 items-start">
         {filteredTeam.map((p) => {
