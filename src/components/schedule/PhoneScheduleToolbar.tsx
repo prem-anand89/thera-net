@@ -69,15 +69,12 @@ export function PhoneStatusLine({
     <div className="flex items-center justify-between gap-3 text-xs text-[var(--muted)]" data-phone-status>
       <p className="min-w-0 truncate">
         <span className="font-semibold text-[var(--ink)]">{label}</span> · {summary}
-        {offCount > 0 && onShowOff && (
-          <>
-            {' · '}
-            <button type="button" className="inline min-h-11 font-medium text-[var(--teal)] underline-offset-2 hover:underline" onClick={onShowOff}>
-              {offCount} off · Show
-            </button>
-          </>
-        )}
       </p>
+      {offCount > 0 && onShowOff && (
+        <button type="button" className="ml-auto min-h-11 shrink-0 text-xs font-medium text-[var(--teal)]" onClick={onShowOff}>
+          {offCount} off · Show
+        </button>
+      )}
       {showToday && (
         <button type="button" className="min-h-11 shrink-0 pl-3 text-xs font-semibold text-[var(--teal)]" onClick={onToday}>
           ↩ Today
