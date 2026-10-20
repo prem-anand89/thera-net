@@ -1,0 +1,65 @@
+// @vitest-environment jsdom
+import '@testing-library/jest-dom/vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { ScheduleToolbar } from './ScheduleToolbar';
+
+function setup(overrides: Partial<Parameters<typeof ScheduleToolbar>[0]> = {}) {
+  const props = {
+    mode: 'day' as const,
+    weekAvailable: true,
+    onModeChange: vi.fn(),
+    onStep: vi.fn(),
+    onToday: vi.fn(),
+    todayDisabled: false,
+    headline: { short: '20 Oct', long: 'Tuesday, 20 October' },
+    summary: '4 booked',
+    filter: <span>filter</span>,
+    findTimeActive: false,
+    onToggleFindTime: vi.fn(),
+    menu: <span>menu</span>,
+    ...overrides,
+  };
+  render(<ScheduleToolbar {...props} />);
+  return props;
+}
+
+describe('ScheduleToolbar', () => {
+  afterEach(cleanup);
+
+  it('lays out controls in the phones\' order: steppers, headline, Today, filter, view switch, Find a time, menu', () => {
+    setup();
+    const text = document.querySelector('[data-schedule-toolbar]')!.textContent!;
+    const order = ['Tuesday, 20 October', 'Today', 'filter', 'Day', 'Week', 'Find a time', 'menu'].map((t) => text.indexOf(t));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it('disables Today when already there, and steps by day or week', () => {
+    const props = setup({ todayDisabled: true });
+    expect(screen.getByRole('button', { name: 'Today' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Next day' }));
+    expect(props.onStep).toHaveBeenCalledWith(1);
+    cleanup();
+    setup({ mode: 'week' });
+    expect(screen.getByRole('button', { name: 'Previous week' })).toBeInTheDocument();
+  });
+
+  it('Find a time toggles, shows its state, and is offered in day view only', () => {
+    const props = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Find a time' }));
+    expect(props.onToggleFindTime).toHaveBeenCalled();
+    cleanup();
+    setup({ findTimeActive: true });
+    expect(screen.getByRole('button', { name: 'Back to the day' })).toHaveAttribute('aria-pressed', 'true');
+    cleanup();
+    setup({ mode: 'week' });
+    expect(screen.queryByRole('button', { name: 'Find a time' })).toBeNull();
+  });
+
+  it('switching view calls onModeChange', () => {
+    const props = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Week' }));
+    expect(props.onModeChange).toHaveBeenCalledWith('week');
+  });
+});

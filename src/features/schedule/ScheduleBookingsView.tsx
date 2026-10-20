@@ -61,7 +61,6 @@ import { useIsPhone } from './useIsPhone';
 import { isActiveAppointmentStatus } from '@/domain/appointmentStatus';
 import { appointmentReason, patientFlags } from '@/domain/patientFlags';
 import { matchingWaitlistEntries, timeOfDayFor } from '@/domain/waitlistMatch';
-import { IconChevronLeft, IconChevronRight } from '@/components/StatIcons';
 import { ScheduleTabs, type ScheduleTab } from './ScheduleTabs';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
 import { ClosedDaysSheet } from '@/components/schedule/ClosedDaysSheet';
@@ -71,6 +70,7 @@ import { ScheduleRail, rangeLabel } from '@/components/schedule/ScheduleRail';
 import { ResourceDayGrid, WeekTimeGrid, type GridDragOptions, type GridTherapist, type LoadSummary, type MoveTarget } from '@/components/schedule/TimeGrid';
 import { MultiResourceWeekGrid } from '@/components/schedule/MultiResourceWeekGrid';
 import { MobileDayGrid, MobileThreeDayGrid } from '@/components/schedule/MobileGrids';
+import { ScheduleToolbar } from '@/components/schedule/ScheduleToolbar';
 import { PhoneScheduleToolbar, PhoneStatusLine } from '@/components/schedule/PhoneScheduleToolbar';
 import { BookFab } from '@/components/schedule/BookFab';
 import { ScheduleMenu, type ScheduleMenuItem } from '@/components/schedule/ScheduleMenu';
@@ -843,59 +843,35 @@ export function ScheduleBookingsView({
                 menu={moreMenu}
               />
             ) : (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <div className="flex min-w-0 flex-1 items-center gap-1">
-                    <button type="button" className="hidden min-h-9 min-w-9 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--paper)] tab:flex" aria-label={mode === 'day' ? 'Previous day' : 'Previous week'} onClick={() => step(-1)}>
-                      <IconChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button type="button" className="hidden min-h-9 min-w-9 items-center justify-center rounded-lg text-[var(--teal)] hover:bg-[var(--paper)] tab:flex" aria-label={mode === 'day' ? 'Next day' : 'Next week'} onClick={() => step(1)}>
-                      <IconChevronRight className="h-5 w-5" />
-                    </button>
-                    <div className="min-w-0 tab:ml-1">
-                      <h2 className="flex items-baseline gap-2 truncate font-display text-lg font-semibold leading-tight text-[var(--ink)]">
-                        {mode === 'day' ? (
-                          <>
-                            <span className="sm:hidden">{shortDate(date)}</span>
-                            <span className="hidden sm:inline">{longDate(date)}</span>
-                          </>
-                        ) : (
-                          `Week of ${shortDate(getWeekStart(date))}`
-                        )}
-                      </h2>
-                      {mode === 'day' && <p className="truncate text-xs text-[var(--muted)]">{daySummary}</p>}
+              <ScheduleToolbar
+                mode={mode}
+                weekAvailable={weekAvailable}
+                onModeChange={(next) => setSchedule({ mode: next })}
+                onStep={step}
+                onToday={() => setSchedule({ date: today })}
+                todayDisabled={mode === 'day' ? date === today : getWeekStart(date) === getWeekStart(today)}
+                headline={
+                  mode === 'day'
+                    ? { short: shortDate(date), long: longDate(date) }
+                    : { short: `Week of ${shortDate(getWeekStart(date))}`, long: `Week of ${shortDate(getWeekStart(date))}` }
+                }
+                summary={daySummary}
+                filter={
+                  roster.length > 1 ? (
+                    <div className="desktop:hidden">
+                      <TherapistFilter
+                        therapists={roster.filter((t) => t.active !== false)}
+                        visibleIds={selectedIds}
+                        onToggle={toggleTherapist}
+                        onShowAll={() => setTherapists(isTherapist ? roster.map((t) => t.id) : [])}
+                      />
                     </div>
-                    <button 
-                      type="button" 
-                      disabled={mode === 'day' ? date === today : getWeekStart(date) === getWeekStart(today)}
-                      className="ml-1 min-h-9 shrink-0 rounded-lg border border-[var(--border)] px-2.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)] disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent" 
-                      onClick={() => setSchedule({ date: today })}
-                    >
-                      Today
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {roster.length > 1 && (
-                      <div className="desktop:hidden">
-                        <TherapistFilter
-                          therapists={roster.filter(t => t.active !== false)}
-                          visibleIds={selectedIds}
-                          onToggle={toggleTherapist}
-                          onShowAll={() => setTherapists(isTherapist ? roster.map((t) => t.id) : [])}
-                        />
-                      </div>
-                    )}
-                    {weekAvailable && (
-                      <div className="hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5 tab:flex" role="group" aria-label="View">
-                        {(['day', 'week'] as const).map((candidate) => (
-                          <button key={candidate} type="button" aria-pressed={mode === candidate} onClick={() => setSchedule({ mode: candidate })} className={`min-h-8 rounded-md px-3 text-xs font-medium ${mode === candidate ? 'bg-[var(--teal)] text-white' : 'text-[var(--muted)]'}`}>
-                            {candidate === 'day' ? 'Day' : 'Week'}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {moreMenu}
-                  </div>
-                </div>
+                  ) : null
+                }
+                findTimeActive={findTime}
+                onToggleFindTime={() => setFindTime((current) => !current)}
+                menu={moreMenu}
+              />
             )}
 
             <div className="desktop:hidden">
@@ -1045,7 +1021,7 @@ export function ScheduleBookingsView({
                 )}
               </div>
             )}
-            {!isPhone && (
+            {!isPhone && !(findTime && mode === 'day') && (
               <div className="hidden tab:block">
                 {mode === 'week' ? (
                   singleTherapist ? (
@@ -1114,7 +1090,7 @@ export function ScheduleBookingsView({
                 )}
               </div>
             )}
-            {isPhone && findTime && (
+            {findTime && (isPhone || mode === 'day') && (
               <FindTimePanel
                 date={date}
                 therapists={visibleRoster.filter((t) => canBookFor(t.id))}
