@@ -23,6 +23,7 @@ import {
 import { appointmentStartsOnDate, minutesOfDay, patientAttendance, toLocalDateStr } from '@/domain/schedule';
 import { TodayAppointments } from '@/components/schedule/TodayAppointments';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
+import { usePatientDirectory } from '@/components/usePatientDirectory';
 import { patientFlags } from '@/domain/patientFlags';
 import { StartVisitSheet } from '@/components/StartVisitSheet';
 import { AppointmentDetailsPanel } from '@/components/schedule/AppointmentDetailsPanel';
@@ -321,6 +322,7 @@ export function WorkspacePage() {
   );
   const [openAppointmentId, setOpenAppointmentId] = useState<string | null>(null);
   const flagContext = usePatientFlagContext(clinic.id, workspaceAppointments ?? EMPTY_APPOINTMENTS);
+  const { mrnoFor } = usePatientDirectory(clinic.id);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [startVisit, setStartVisit] = useState<{ appointment?: Appointment } | null>(null);
   const hour = new Date().getHours();
@@ -661,6 +663,7 @@ export function WorkspacePage() {
         therapistName={openAppointment ? appointmentTherapistName(openAppointment) : ''}
         therapistColor={openAppointment ? appointmentColor(openAppointment) : UNASSIGNED_COLOR}
         therapistPhone={openAppointment?.therapistId ? therapistRoster.get(openAppointment.therapistId)?.phone ?? null : null}
+        patientMrno={mrnoFor(openAppointment?.patientId) ?? null}
         attendance={
           openAppointment
             ? patientAttendance(workspaceAppointments ?? [], { patientId: openAppointment.patientId, phone: openAppointment.patientPhone }, new Date(), { excludeId: openAppointment.id })
@@ -847,6 +850,7 @@ export function WorkspacePage() {
             onDeclineRequest={setDecliningRequest}
             onSeeAllRequests={() => void navigate({ to: '/schedule', search: { tab: 'bookings', view: 'requests' } })}
             flagContext={flagContext}
+            mrnoFor={mrnoFor}
             dueByVisitId={dueByVisitId}
             onMarkArrived={
               canManageBookings || scope.myTherapistId

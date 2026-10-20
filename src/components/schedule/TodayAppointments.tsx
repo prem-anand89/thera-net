@@ -42,6 +42,7 @@ export function TodayAppointments({
   onDeclineRequest,
   onSeeAllRequests,
   flagContext,
+  mrnoFor,
   dueByVisitId,
   onMarkArrived,
   onUndoNoShow,
@@ -62,6 +63,8 @@ export function TodayAppointments({
   onSeeAllRequests?: () => void;
   /** Patient flags + condition (`usePatientFlagContext`); omit to hide them. */
   flagContext?: PatientFlagContext;
+  /** Patient ID for an appointment's patient (undefined when the appointment has no patient file). */
+  mrnoFor?: (patientId: string | null | undefined) => string | undefined;
   /** Today's logged visits: true = still owes money, false = settled. Finished rows show Due / Paid from it. */
   dueByVisitId?: Map<string, boolean>;
   /** One-tap "Arrived" on an upcoming row (otherwise it takes row, panel, button). */
@@ -144,6 +147,7 @@ export function TodayAppointments({
               <span className={`truncate font-display text-sm font-medium ${fill.kind === 'done' ? 'text-[var(--muted)]' : fill.kind === 'no_show' ? 'text-[var(--rust)]' : fill.kind === 'cancelled' ? 'text-[var(--muted)] line-through' : 'text-[var(--ink)]'}`}>
                 {a.patientName}
               </span>
+              {mrnoFor?.(a.patientId) && <span className="hidden shrink-0 font-num text-[11px] text-[var(--muted)] sm:inline" data-patient-id>{mrnoFor(a.patientId)}</span>}
               {a.id === nextUpId && (
                 <span className="shrink-0 rounded-full bg-[var(--teal)] px-1.5 text-[10px] font-medium leading-4 text-white">Next</span>
               )}

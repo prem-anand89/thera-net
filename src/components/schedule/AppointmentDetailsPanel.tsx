@@ -53,6 +53,7 @@ export function AppointmentDetailsPanel({
   therapistName,
   therapistColor,
   therapistPhone,
+  patientMrno,
   slotMinutes,
   canManage,
   attendance,
@@ -71,6 +72,8 @@ export function AppointmentDetailsPanel({
   therapistName: string;
   therapistColor: string;
   therapistPhone?: string | null;
+  /** The patient's ID, so two patients with one name can be told apart. */
+  patientMrno?: string | null;
   slotMinutes: number;
   /** Admin / front desk, or the therapist the appointment belongs to. */
   canManage: boolean;
@@ -175,6 +178,7 @@ export function AppointmentDetailsPanel({
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Pill tone={APPOINTMENT_STATUS_TONE[appointment.status]}>{APPOINTMENT_STATUS_LABEL[appointment.status]}</Pill>
+              {canManage && patientMrno && <span className="font-num text-xs text-[var(--muted)]" data-patient-id>{patientMrno}</span>}
               {seriesLabel && <span className="text-xs text-[var(--muted)]">{seriesLabel}</span>}
               {canManage && <PatientFlagPills flags={flags.filter((flag) => flag.key !== 'noshow')} />}
             </div>

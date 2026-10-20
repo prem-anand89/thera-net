@@ -21,7 +21,9 @@ import { formatINR } from '@/domain/money';
 import { toLocalDateStr } from '@/domain/schedule';
 import { receivedDateAtVisit } from '@/domain/paymentDates';
 import { formatDateDMY } from '@/domain/fiscalYear';
-import { DUPLICATE_NAME_THRESHOLD, nameSimilarity } from '@/domain/nameSimilarity';
+import { findSimilarPatients } from '@/domain/similarPatients';
+import { SimilarPatients } from '@/components/SimilarPatients';
+import { usePatientDirectory } from '@/components/usePatientDirectory';
 import { isNearingCompletion } from '@/domain/packageTracking';
 import { rankTreatmentsByUsage } from '@/domain/treatmentUsage';
 import {
@@ -64,11 +66,6 @@ import { BillAdjustmentFields, billAdjustmentFromFields } from '@/components/Bil
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
 import { PhoneField } from '@/components/PhoneField';
 
-/** Digits only, so "98765 43210" and "+91-98765-43210" compare equal. */
-function phoneDigits(s: string): string {
-  // Last 10 digits: "+91 98765 43210", "098765 43210" and "9876543210" are the same number.
-  return s.replace(/\D/g, '').slice(-10);
-}
 
 interface OpenPackage {
   packageGroupId: UUID;
@@ -298,34 +295,16 @@ export function NewVisitPage() {
   );
   const allPatients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
 
-  // Live near-miss check as the create-patient form is filled in (MRNO stays
-  // the true identifier) — surfaces before submit so a typo'd name or a
-  // phone number already on file is caught while the receptionist is still
-  // looking at the field, not after. Phone is an exact match (a shared
-  // phone is a much stronger duplicate signal than a fuzzy name), and wins
-  // over a name near-miss when both are present.
-  const duplicateMatch = useMemo(() => {
-    const typed = newPatient.name.trim();
-    const typedPhoneDigits = phoneDigits(newPatient.phone);
-    if (!typed && typedPhoneDigits.length < 3) return null;
-    const active = (allPatients ?? []).filter((p) => !p.deletedAt);
-
-    if (typedPhoneDigits.length >= 3) {
-      const phoneHit = active.find((p) => p.phone && phoneDigits(p.phone) === typedPhoneDigits);
-      if (phoneHit)
-        return { name: phoneHit.name, mrno: phoneHit.mrno, matchedBy: 'phone' as const };
-    }
-
-    if (!typed) return null;
-    let best: { name: string; mrno: string; score: number } | null = null;
-    for (const p of active) {
-      const score = nameSimilarity(p.name, typed);
-      if (!best || score > best.score) best = { name: p.name, mrno: p.mrno, score };
-    }
-    return best && best.score >= DUPLICATE_NAME_THRESHOLD
-      ? { name: best.name, mrno: best.mrno, matchedBy: 'name' as const }
-      : null;
-  }, [allPatients, newPatient.name, newPatient.phone]);
+  // Look-alikes of the patient being typed (same phone, or a near-identical name), with what tells
+  // people apart. The receptionist must say "Use this patient" or "Different person" before creating.
+  const { lastVisitOn } = usePatientDirectory(clinic.id, true);
+  const similar = useMemo(
+    () => findSimilarPatients(allPatients ?? [], newPatient.name, newPatient.phone),
+    [allPatients, newPatient.name, newPatient.phone]
+  );
+  const similarKey = similar.map((m) => m.patient.id).join(',');
+  const [differentKey, setDifferentKey] = useState<string | null>(null);
+  const differentConfirmed = similar.length > 0 && differentKey === similarKey;
 
   // Most recently seen patients, for a quick-pick when the search box is
   // empty — the common case of "who's next" rather than "find someone
@@ -592,6 +571,12 @@ export function NewVisitPage() {
 
   async function createPatient() {
     setError(null);
+    if (similar.length > 0 && !differentConfirmed) {
+      return setError('This patient may already be on file. Choose "Use this patient" or "Different person".');
+    }
+    if (differentConfirmed && (!newPatient.age || !newPatient.sex)) {
+      return setError('Add age and sex so this patient can be told apart from the similar one.');
+    }
     try {
       const created = await patientService.create({
         clinicId: clinic.id,
@@ -1017,15 +1002,16 @@ export function NewVisitPage() {
                 onChange={(phone) => setNewPatient({ ...newPatient, phone })}
               />
             </Field>
-            {duplicateMatch && (
-              <p className="rounded-md border border-[var(--rust)] bg-[var(--rust-light)] px-3 py-2 text-xs text-[var(--rust)]">
-                ⚠{' '}
-                {duplicateMatch.matchedBy === 'phone'
-                  ? `A patient with this phone number — "${duplicateMatch.name}" (ID ${duplicateMatch.mrno}) — already exists.`
-                  : `A patient named "${duplicateMatch.name}" (ID ${duplicateMatch.mrno}) already exists.`}{' '}
-                Use "Back to search" below if this is the same person.
-              </p>
-            )}
+            <SimilarPatients
+              matches={similar}
+              lastVisitOn={lastVisitOn}
+              differentConfirmed={differentConfirmed}
+              onUse={(p) => {
+                selectPatientFromSearch(p);
+                setCreatingPatient(false);
+              }}
+              onDifferent={() => setDifferentKey(similarKey)}
+            />
             {!newPatient.phone.trim() && (
               <p className="text-xs text-[var(--muted)]">
                 No phone on file — fine for a walk-in with none, but it limits later search and

@@ -7,6 +7,9 @@ import { repos, bookingService, dashboardService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import { ErrorNote, Field, inputCls, btnPrimary, ConfirmDialog } from '@/components/ui';
 import { PhoneField } from '@/components/PhoneField';
+import { SimilarPatients } from '@/components/SimilarPatients';
+import { usePatientDirectory } from '@/components/usePatientDirectory';
+import { findSimilarPatients, patientSummary } from '@/domain/similarPatients';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -152,6 +155,15 @@ export function BookSlotSheet({
 
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const patients = useLiveQuery(() => repos.patients.list(clinic.id), [clinic.id]);
+  const { lastVisitOn } = usePatientDirectory(clinic.id, true);
+  // A new patient typed in may already be on file: ask before booking them as someone new.
+  const similar = useMemo(
+    () => (patientMode === 'new' ? findSimilarPatients(patients ?? [], patientName, patientPhone) : []),
+    [patientMode, patients, patientName, patientPhone]
+  );
+  const similarKey = similar.map((m) => m.patient.id).join(',');
+  const [differentKey, setDifferentKey] = useState<string | null>(null);
+  const differentConfirmed = similar.length > 0 && differentKey === similarKey;
   const closedDates = useLiveQuery(() => repos.clinicClosedDates.listByClinic(clinic.id), [clinic.id]);
   const openPackages = useLiveQuery(
     () => (isOpen && repeat && patientId ? dashboardService.openPackages(clinic.id) : undefined),
@@ -168,7 +180,7 @@ export function BookSlotSheet({
     () =>
       [...(patients ?? [])]
         .sort((a: Patient, b: Patient) => a.name.localeCompare(b.name))
-        .map((patient: Patient) => ({ value: patient.id, label: `${patient.name} (${patient.phone ?? 'no phone'})` })),
+        .map((patient: Patient) => ({ value: patient.id, label: `${patient.name} · ${patientSummary(patient)}${patient.phone ? ` · ${patient.phone}` : ''}` })),
     [patients]
   );
   const quickDates = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(today, index)), [today]);
@@ -371,6 +383,9 @@ export function BookSlotSheet({
       const finalPhone = patientMode === 'find' ? (existing?.phone || patientPhone).trim() : patientPhone.trim();
       if (patientMode === 'find' && !existing) return setError('Choose a patient, or switch to New patient.');
       if (!finalName) return setError('Enter a patient name.');
+      if (patientMode === 'new' && similar.length > 0 && !differentConfirmed) {
+        return setError('This patient may already be on file. Choose "Use this patient" or "Different person".');
+      }
       if (!finalPhone) return setError('No phone on file. Enter one to confirm the booking.');
 
       if (repeat) {
@@ -591,6 +606,18 @@ export function BookSlotSheet({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Patient name"><input className={inputCls} autoComplete="name" value={patientName} onChange={(event) => setPatientName(event.target.value)} /></Field>
                   <Field label="Phone" htmlFor="book-phone"><PhoneField id="book-phone" value={patientPhone} onChange={setPatientPhone} /></Field>
+                  <div className="sm:col-span-2">
+                    <SimilarPatients
+                      matches={similar}
+                      lastVisitOn={lastVisitOn}
+                      differentConfirmed={differentConfirmed}
+                      onUse={(p) => {
+                        setPatientMode('find');
+                        setPatientId(p.id);
+                      }}
+                      onDifferent={() => setDifferentKey(similarKey)}
+                    />
+                  </div>
                 </div>
               )}
               {(attendance || alreadyBooked) && (

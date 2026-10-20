@@ -45,6 +45,7 @@ vi.mock('@/services', () => ({
   repos: {
     therapists: { list: () => data.therapists },
     patients: { list: () => data.patients },
+    visits: { list: () => [] },
     clinicClosedDates: { listByClinic: () => data.closed },
   },
   bookingService: {
@@ -153,6 +154,23 @@ describe('BookSlotSheet', () => {
     });
     expect(onBooked).toHaveBeenCalledWith(expect.objectContaining({ kind: 'booked', appointmentId: 'new-id', durationMinutes: 45 }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('a new patient whose name is already on file must be resolved: Use this patient, or Different person', async () => {
+    const onBooked = vi.fn();
+    render(<BookSlotSheet isOpen onClose={() => {}} onBooked={onBooked} prefilledDate="2026-10-01" />);
+    fireEvent.click(screen.getByRole('button', { name: 'New patient' }));
+    fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Priya' } });
+    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '9820000077' } });
+    fireEvent.click(slot('9:00 AM'));
+    expect(screen.getByRole('region', { name: 'Similar patients' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
+    expect(await screen.findByText(/may already be on file/)).toBeInTheDocument();
+    expect(confirmBookingSlot).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Different person' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
+    await waitFor(() => expect(onBooked).toHaveBeenCalled());
+    expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ patientId: null, patientName: 'Priya' }));
   });
 
   it('asks for a phone when the chosen patient has none on file', async () => {

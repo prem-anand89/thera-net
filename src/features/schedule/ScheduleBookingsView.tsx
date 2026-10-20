@@ -45,6 +45,7 @@ import { RequestsInbox } from '@/components/schedule/RequestsInbox';
 import { TherapistFilter } from '@/components/schedule/TherapistFilter';
 import { HistoryView } from '@/components/schedule/HistoryView';
 import { usePatientFlagContext } from '@/components/schedule/usePatientFlagContext';
+import { usePatientDirectory } from '@/components/usePatientDirectory';
 import { appointmentsOutsideHours } from './hoursConflicts';
 import {
   formatThreeDayTitle,
@@ -174,6 +175,7 @@ export function ScheduleBookingsView({
   const therapists = useLiveQuery(() => repos.therapists.list(clinic.id, true), [clinic.id]);
   const allAppointments = useLiveQuery(() => repos.appointments.listByClinic(clinic.id), [clinic.id]);
   const flagContext = usePatientFlagContext(clinic.id, allAppointments ?? EMPTY_APPOINTMENTS);
+  const { mrnoFor } = usePatientDirectory(clinic.id);
   const reasonFor = useCallback((appointment: Appointment) => appointmentReason(appointment, flagContext)?.text ?? null, [flagContext]);
   const requests = useLiveQuery(
     () => (canManageAll ? repos.appointmentRequests.listByClinic(clinic.id) : undefined),
@@ -1183,6 +1185,7 @@ export function ScheduleBookingsView({
           therapistNameFor={therapistNameFor}
           onSelect={(a) => setSelectedId(a.id)}
           flagContext={flagContext}
+          mrnoFor={mrnoFor}
         />
       )}
 
@@ -1240,6 +1243,7 @@ export function ScheduleBookingsView({
         therapistName={selectedAppointment ? therapistNameFor(selectedAppointment) : ''}
         therapistColor={selectedAppointment ? colorFor(selectedAppointment) : UNASSIGNED_COLOR}
         therapistPhone={selectedAppointment?.therapistId ? rosterById.get(selectedAppointment.therapistId)?.phone ?? null : null}
+        patientMrno={mrnoFor(selectedAppointment?.patientId) ?? null}
         attendance={selectedAttendance}
         requestNotes={selectedAppointment?.requestId ? requestById.get(selectedAppointment.requestId)?.notes ?? null : null}
         seriesLabel={seriesLabel}

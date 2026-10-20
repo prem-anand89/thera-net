@@ -40,6 +40,7 @@ export function HistoryView({
   therapistNameFor,
   onSelect,
   flagContext,
+  mrnoFor,
 }: {
   appointments: Appointment[];
   /** Empty hides the therapist filter (therapist logins see only their own). */
@@ -49,6 +50,8 @@ export function HistoryView({
   therapistNameFor: (appointment: Appointment) => string;
   onSelect: (appointment: Appointment) => void;
   flagContext?: PatientFlagContext;
+  /** Patient ID for an appointment's patient (undefined when the appointment has no patient file). */
+  mrnoFor?: (patientId: string | null | undefined) => string | undefined;
 }) {
   const [when, setWhen] = useState<When>('past');
   const [range, setRange] = useState<Range>('30');
@@ -221,6 +224,7 @@ export function HistoryView({
                             <span className={`truncate font-display text-sm font-medium ${fill.kind === 'no_show' ? 'text-[var(--rust)]' : fill.kind === 'cancelled' ? 'text-[var(--muted)] line-through' : 'text-[var(--ink)]'}`}>
                               {appointment.patientName}
                             </span>
+                            {mrnoFor?.(appointment.patientId) && <span className="hidden shrink-0 font-num text-[11px] text-[var(--muted)] sm:inline" data-patient-id>{mrnoFor(appointment.patientId)}</span>}
                             <PatientFlagPills flags={patientFlags(appointment, flagContext)} max={1} />
                           </span>
                           <span className="block truncate text-xs text-[var(--muted)] sm:hidden">

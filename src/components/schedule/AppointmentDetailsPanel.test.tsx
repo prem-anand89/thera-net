@@ -25,7 +25,7 @@ const appt = (over: Partial<Appointment> = {}): Appointment => ({
 function show(
   appointment: Appointment,
   canManage = true,
-  extra: { condition?: string | null; requestNotes?: string | null; therapistPhone?: string | null } = {}
+  extra: { condition?: string | null; requestNotes?: string | null; therapistPhone?: string | null; patientMrno?: string | null } = {}
 ) {
   render(
     <AppointmentDetailsPanel
@@ -33,6 +33,7 @@ function show(
       therapistName="Bm"
       therapistColor="#a6552f"
       therapistPhone={extra.therapistPhone ?? null}
+      patientMrno={extra.patientMrno}
       slotMinutes={30}
       canManage={canManage}
       condition={extra.condition}
@@ -67,6 +68,14 @@ describe('AppointmentDetailsPanel', () => {
     cleanup();
     show(appt({}), false, { therapistPhone: '9000000000' });
     expect(screen.queryByRole('button', { name: 'Message therapist' })).toBeNull();
+  });
+
+  it('shows the patient ID beside the status, for people who can manage the appointment only', () => {
+    show(appt({}), true, { patientMrno: 'BM-0042' });
+    expect(document.querySelector('[data-patient-id]')).toHaveTextContent('BM-0042');
+    cleanup();
+    show(appt({}), false, { patientMrno: 'BM-0042' });
+    expect(document.querySelector('[data-patient-id]')).toBeNull();
   });
 
   it('colleague appointment (canManage = false): hides patient phone, call, WhatsApp/remind, notes, and management actions', () => {

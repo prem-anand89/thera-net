@@ -5,6 +5,9 @@ import { useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ErrorNote, Field, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
 import { PhoneField } from '@/components/PhoneField';
+import { SimilarPatients } from '@/components/SimilarPatients';
+import { usePatientDirectory } from '@/components/usePatientDirectory';
+import { findSimilarPatients, patientSummary } from '@/domain/similarPatients';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -52,6 +55,17 @@ export function StartVisitSheet({
   const [patientId, setPatientId] = useState<UUID | ''>('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [age, setAge] = useState('');
+  const [sex, setSex] = useState('');
+  const { lastVisitOn } = usePatientDirectory(clinic.id, true);
+  // A new patient may already be on file: choose the existing record, or confirm a different person.
+  const similar = useMemo(
+    () => (mode === 'new' ? findSimilarPatients(patients ?? [], name, phone) : []),
+    [mode, patients, name, phone]
+  );
+  const similarKey = similar.map((m) => m.patient.id).join(',');
+  const [differentKey, setDifferentKey] = useState<string | null>(null);
+  const differentConfirmed = similar.length > 0 && differentKey === similarKey;
   const [therapistId, setTherapistId] = useState<UUID | ''>('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +97,7 @@ export function StartVisitSheet({
       [...(patients ?? [])]
         .filter((p) => !p.deletedAt)
         .sort((a: Patient, b: Patient) => a.name.localeCompare(b.name))
-        .map((p: Patient) => ({ value: p.id, label: `${p.name} (${p.phone ?? p.mrno})` })),
+        .map((p: Patient) => ({ value: p.id, label: `${p.name} · ${patientSummary(p)}${p.phone ? ` · ${p.phone}` : ''}` })),
     [patients]
   );
 
@@ -98,9 +112,19 @@ export function StartVisitSheet({
       return found;
     }
     if (!name.trim()) throw new Error('Enter the patient name.');
+    if (similar.length > 0 && !differentConfirmed) {
+      throw new Error('This patient may already be on file. Choose "Use this patient" or "Different person".');
+    }
+    if (differentConfirmed && (!age || !sex)) throw new Error('Add age and sex so this patient can be told apart from the similar one.');
     const earlier = createdPatient.current;
     if (earlier && earlier.name.trim() === name.trim() && (earlier.phone ?? '').trim() === phone.trim()) return earlier;
-    const created = await patientService.create({ clinicId: clinic.id, name, phone: phone || null });
+    const created = await patientService.create({
+      clinicId: clinic.id,
+      name,
+      phone: phone || null,
+      age: age ? Number(age) : null,
+      sex: (sex || null) as Patient['sex'],
+    });
     createdPatient.current = created;
     return created;
   }
@@ -207,6 +231,33 @@ export function StartVisitSheet({
                   <Field label="Phone" htmlFor="start-visit-phone">
                     <PhoneField id="start-visit-phone" value={phone} onChange={setPhone} />
                   </Field>
+                  <div className="sm:col-span-2">
+                    <SimilarPatients
+                      matches={similar}
+                      lastVisitOn={lastVisitOn}
+                      differentConfirmed={differentConfirmed}
+                      onUse={(p) => {
+                        setMode('find');
+                        setPatientId(p.id);
+                      }}
+                      onDifferent={() => setDifferentKey(similarKey)}
+                    />
+                  </div>
+                  {differentConfirmed && (
+                    <>
+                      <Field label="Age *">
+                        <input type="number" className={inputCls} value={age} onChange={(event) => setAge(event.target.value)} />
+                      </Field>
+                      <Field label="Sex *">
+                        <select className={inputCls} value={sex} onChange={(event) => setSex(event.target.value)}>
+                          <option value="">—</option>
+                          <option value="F">Female</option>
+                          <option value="M">Male</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </Field>
+                    </>
+                  )}
                   <p className="text-xs text-[var(--muted)] sm:col-span-2">Add age, email and other details later from their profile.</p>
                 </div>
               )}
