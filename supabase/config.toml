@@ -36,3 +36,12 @@ entrypoint = "./functions/brevo-mailer/index.ts"
 # comment for why).
 [functions.notify-therapist]
 verify_jwt = false
+
+# Trigger / cron invoked (Postgres -> pg_net), never from a browser: no bearer token to verify.
+# send-push is called by the appointment, request and feedback triggers; send-agenda by pg_cron every 15 minutes
+# and it only ever does an idempotent, time-gated job.
+[functions.send-push]
+verify_jwt = false
+
+[functions.send-agenda]
+verify_jwt = false
