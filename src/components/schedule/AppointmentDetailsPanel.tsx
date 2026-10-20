@@ -189,32 +189,18 @@ export function AppointmentDetailsPanel({
           </button>
         </div>
 
-        {/* Facts, one line each: when, who, phone, what for. */}
+        {/* Facts in reading order: the patient (phone, condition), then the therapist, then the booking. */}
         <dl className="mt-3 space-y-1.5 text-sm">
-          <div className="flex gap-2">
-            <dt className="sr-only">When</dt>
-            <dd className="text-[var(--ink)]">
-              {dateLabel} · {timeRange} <span className="text-[var(--muted)]">· {lengthLabel(minutes)}</span>
-            </dd>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <dt className="sr-only">Therapist</dt>
-            <dd className="flex items-center gap-1.5 text-[var(--ink)]">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: therapistColor }} aria-hidden />
-              {therapistName}
-            </dd>
-            {canManage && appointment.patientPhone && (
-              <>
-                <dt className="sr-only">Phone</dt>
-                <dd>
-                  <span className="text-[var(--muted)]" aria-hidden>· </span>
-                  <a href={`tel:${appointment.patientPhone}`} className="text-[var(--teal)] hover:underline">
-                    {appointment.patientPhone}
-                  </a>
-                </dd>
-              </>
-            )}
-          </div>
+          {canManage && appointment.patientPhone && (
+            <div className="flex gap-2">
+              <dt className="sr-only">Phone</dt>
+              <dd>
+                <a href={`tel:${appointment.patientPhone}`} className="text-[var(--teal)] hover:underline">
+                  {appointment.patientPhone}
+                </a>
+              </dd>
+            </div>
+          )}
           {canManage && condition && (
             <div className="flex gap-2">
               <dt className="w-24 shrink-0 text-[var(--muted)]">Condition</dt>
@@ -227,6 +213,30 @@ export function AppointmentDetailsPanel({
               <dd className="text-[var(--ink)]">{requestNotes}</dd>
             </div>
           )}
+          <div className="flex items-center justify-between gap-2 pt-1.5">
+            <dt className="sr-only">Therapist</dt>
+            <dd className="flex min-w-0 items-center gap-1.5 text-[var(--ink)]">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: therapistColor }} aria-hidden />
+              <span className="truncate">{therapistName}</span>
+            </dd>
+            {active && canManage && therapistPhone && (
+              <button
+                type="button"
+                aria-label="Message therapist"
+                className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                onClick={() => bookingService.messageTherapist(appointment.status === 'rescheduled' ? 'rescheduled' : 'booked', therapistInput)}
+              >
+                <IconMessage />
+                Message
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <dt className="sr-only">When</dt>
+            <dd className="text-[var(--ink)]">
+              {dateLabel} · {timeRange} <span className="text-[var(--muted)]">· {lengthLabel(minutes)}</span>
+            </dd>
+          </div>
           {canManage && movedFrom && (
             <div className="flex gap-2">
               <dt className="w-24 shrink-0 text-[var(--muted)]">Moved from</dt>
@@ -300,16 +310,6 @@ export function AppointmentDetailsPanel({
               <button type="button" className={quickCls} onClick={() => bookingService.messagePatient('reminder', messageInput)}>
                 <IconMessage />
                 Remind
-              </button>
-            )}
-            {therapistPhone && (
-              <button
-                type="button"
-                className={quickCls}
-                onClick={() => bookingService.messageTherapist(appointment.status === 'rescheduled' ? 'rescheduled' : 'booked', therapistInput)}
-              >
-                <IconMessage />
-                Message therapist
               </button>
             )}
             <button type="button" disabled={busy} className={quickCls} onClick={() => onReschedule(appointment)}>

@@ -25,14 +25,14 @@ const appt = (over: Partial<Appointment> = {}): Appointment => ({
 function show(
   appointment: Appointment,
   canManage = true,
-  extra: { condition?: string | null; requestNotes?: string | null } = {}
+  extra: { condition?: string | null; requestNotes?: string | null; therapistPhone?: string | null } = {}
 ) {
   render(
     <AppointmentDetailsPanel
       appointment={appointment}
       therapistName="Bm"
       therapistColor="#a6552f"
-      therapistPhone={null}
+      therapistPhone={extra.therapistPhone ?? null}
       slotMinutes={30}
       canManage={canManage}
       condition={extra.condition}
@@ -46,6 +46,28 @@ function show(
 
 describe('AppointmentDetailsPanel', () => {
   afterEach(cleanup);
+
+  it('reads in order: patient phone and condition, then the therapist, then the booking time', () => {
+    show(appt({ patientPhone: '9032323890' }), true, { condition: 'Ankle sprain', therapistPhone: '9000000000' });
+    const text = document.querySelector('dl')!.textContent!;
+    const order = ['9032323890', 'Ankle sprain', 'Bm', '10:00'].map((t) => text.indexOf(t));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it('Message sits on the therapist row, not in the action bar, and only when the therapist has a phone', () => {
+    show(appt({}), true, { therapistPhone: '9000000000' });
+    const button = screen.getByRole('button', { name: 'Message therapist' });
+    expect(button).toHaveTextContent('Message');
+    expect(button.closest('dl')).not.toBeNull();
+    expect(document.querySelector('dl')!.contains(button)).toBe(true);
+    cleanup();
+    show(appt({}), true);
+    expect(screen.queryByRole('button', { name: 'Message therapist' })).toBeNull();
+    cleanup();
+    show(appt({}), false, { therapistPhone: '9000000000' });
+    expect(screen.queryByRole('button', { name: 'Message therapist' })).toBeNull();
+  });
 
   it('colleague appointment (canManage = false): hides patient phone, call, WhatsApp/remind, notes, and management actions', () => {
     show(
@@ -131,7 +153,7 @@ describe('AppointmentDetailsPanel', () => {
     // Communication actions hidden because no phone
     expect(screen.queryByText('Call')).not.toBeInTheDocument();
     expect(screen.queryByText('Remind')).not.toBeInTheDocument();
-    expect(screen.queryByText('Message therapist')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Message therapist' })).not.toBeInTheDocument();
 
     // Management quick actions MUST still show (no regression for managers/own appointments)
     expect(screen.getByText('Reschedule')).toBeInTheDocument();
