@@ -212,7 +212,7 @@ export function AppointmentDetailsPanel({
             </dl>
           )}
           <dl className="space-y-2">
-            <div className="flex min-h-9 items-center gap-2">
+            <div className="flex min-h-8 items-center gap-1.5">
               <dt className="sr-only">Therapist</dt>
               <dd className="flex min-w-0 items-center gap-2 text-[var(--ink)]">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: therapistColor }} aria-hidden />
@@ -222,7 +222,7 @@ export function AppointmentDetailsPanel({
                 <button
                   type="button"
                   aria-label="Message therapist"
-                  className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 text-xs font-medium text-[var(--teal)] hover:bg-[var(--paper)]"
+                  className="relative inline-flex min-h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-[var(--teal)] before:absolute before:-inset-x-1 before:-inset-y-2 before:content-[''] hover:bg-[var(--teal-light)] [&>svg]:h-4 [&>svg]:w-4"
                   onClick={() => bookingService.messageTherapist(appointment.status === 'rescheduled' ? 'rescheduled' : 'booked', therapistInput)}
                 >
                   <IconMessage />
