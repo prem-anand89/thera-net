@@ -1,6 +1,7 @@
 import { useDialogBehavior } from '@/components/dialogBehavior';
 import { useEffect, useRef, useState } from 'react';
 import { ErrorNote, Field, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
+import { PhoneField } from '@/components/PhoneField';
 import { toFriendlyMessage } from '@/lib/errors';
 import { bookingService } from '@/services';
 import type { UUID } from '@/domain/types';
@@ -104,8 +105,8 @@ export function AddToWaitlistSheet({
           <Field label="Name">
             <input className={inputCls} value={name} onChange={(event) => setName(event.target.value)} autoFocus />
           </Field>
-          <Field label="Phone">
-            <input type="tel" className={inputCls} value={phone} onChange={(event) => setPhone(event.target.value)} />
+          <Field label="Phone" htmlFor="waitlist-phone">
+            <PhoneField id="waitlist-phone" value={phone} onChange={setPhone} />
           </Field>
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">

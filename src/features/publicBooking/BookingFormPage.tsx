@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { COUNTRY_CODES } from '@/domain/countryCodes';
 import { useParams } from '@tanstack/react-router';
 import { hasSupabaseConfig } from '@/lib/env';
 import { bookingService } from '@/services';
@@ -233,14 +234,6 @@ function TimeGroup({
   );
 }
 
-const COUNTRY_CODES = [
-  { code: '+91', flag: '🇮🇳', name: 'India' },
-  { code: '+1', flag: '🇺🇸', name: 'US / Canada' },
-  { code: '+44', flag: '🇬🇧', name: 'UK' },
-  { code: '+61', flag: '🇦🇺', name: 'Australia' },
-  { code: '+971', flag: '🇦🇪', name: 'UAE' },
-  { code: '', flag: '🌍', name: 'Other (type full number)' },
-];
 
 function useClinicNow() {
   const [current, setCurrent] = useState(() => clinicNow());

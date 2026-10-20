@@ -6,6 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { repos, bookingService, dashboardService } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
 import { ErrorNote, Field, inputCls, btnPrimary, ConfirmDialog } from '@/components/ui';
+import { PhoneField } from '@/components/PhoneField';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -583,13 +584,13 @@ export function BookSlotSheet({
                 <div className="space-y-3">
                   <SearchableSelect label="" value={patientId} onChange={(value) => setPatientId(value as UUID)} options={patientOptions} placeholder="Search name or phone" />
                   {patientId && !patients?.find((p) => p.id === patientId)?.phone && (
-                    <Field label="Phone (none on file)"><input type="tel" inputMode="tel" autoComplete="tel" className={inputCls} value={patientPhone} onChange={(event) => setPatientPhone(event.target.value)} /></Field>
+                    <Field label="Phone (none on file)" htmlFor="book-phone"><PhoneField id="book-phone" value={patientPhone} onChange={setPatientPhone} /></Field>
                   )}
                 </div>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Patient name"><input className={inputCls} autoComplete="name" value={patientName} onChange={(event) => setPatientName(event.target.value)} /></Field>
-                  <Field label="Phone"><input type="tel" inputMode="tel" autoComplete="tel" className={inputCls} value={patientPhone} onChange={(event) => setPatientPhone(event.target.value)} /></Field>
+                  <Field label="Phone" htmlFor="book-phone"><PhoneField id="book-phone" value={patientPhone} onChange={setPatientPhone} /></Field>
                 </div>
               )}
               {(attendance || alreadyBooked) && (

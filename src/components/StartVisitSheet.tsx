@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ErrorNote, Field, btnPrimary, btnSecondary, inputCls } from '@/components/ui';
+import { PhoneField } from '@/components/PhoneField';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useClinic } from '@/app/clinicContext';
 import { useWorkspaceScope } from '@/app/useWorkspaceScope';
@@ -203,8 +204,8 @@ export function StartVisitSheet({
                   <Field label="Patient name *">
                     <input className={inputCls} value={name} onChange={(event) => setName(event.target.value)} autoFocus />
                   </Field>
-                  <Field label="Phone">
-                    <input type="tel" className={inputCls} value={phone} onChange={(event) => setPhone(event.target.value)} />
+                  <Field label="Phone" htmlFor="start-visit-phone">
+                    <PhoneField id="start-visit-phone" value={phone} onChange={setPhone} />
                   </Field>
                   <p className="text-xs text-[var(--muted)] sm:col-span-2">Add age, email and other details later from their profile.</p>
                 </div>

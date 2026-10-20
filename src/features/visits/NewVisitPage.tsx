@@ -62,10 +62,12 @@ import {
 } from '@/domain/billAdjustment';
 import { BillAdjustmentFields, billAdjustmentFromFields } from '@/components/BillAdjustmentFields';
 import { ShowUpiQrButton } from '@/components/UpiQrModal';
+import { PhoneField } from '@/components/PhoneField';
 
 /** Digits only, so "98765 43210" and "+91-98765-43210" compare equal. */
 function phoneDigits(s: string): string {
-  return s.replace(/\D/g, '');
+  // Last 10 digits: "+91 98765 43210", "098765 43210" and "9876543210" are the same number.
+  return s.replace(/\D/g, '').slice(-10);
 }
 
 interface OpenPackage {
@@ -1007,12 +1009,12 @@ export function NewVisitPage() {
                 autoFocus
               />
             </Field>
-            <Field label="Phone">
-              <input
-                className={inputCls}
-                placeholder="Recommended — used for search and quick pick"
+            <Field label="Phone" htmlFor="new-visit-phone">
+              <PhoneField
+                id="new-visit-phone"
+                placeholder="Recommended"
                 value={newPatient.phone}
-                onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
+                onChange={(phone) => setNewPatient({ ...newPatient, phone })}
               />
             </Field>
             {duplicateMatch && (

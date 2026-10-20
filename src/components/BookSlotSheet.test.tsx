@@ -145,7 +145,7 @@ describe('BookSlotSheet', () => {
       clinicId: 'c1',
       patientId: null,
       patientName: 'Meera',
-      patientPhone: '9820000002',
+      patientPhone: '+91 9820000002',
       therapistId: 't1',
       scheduledAt,
       requestId: null,
@@ -166,7 +166,7 @@ describe('BookSlotSheet', () => {
     fireEvent.change(screen.getByLabelText('Phone (none on file)'), { target: { value: '9820000003' } });
     fireEvent.click(screen.getByRole('button', { name: /^Confirm booking/ }));
     await waitFor(() =>
-      expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ patientId: 'p2', patientPhone: '9820000003' }))
+      expect(confirmBookingSlot).toHaveBeenCalledWith(expect.objectContaining({ patientId: 'p2', patientPhone: '+91 9820000003' }))
     );
   });
 
