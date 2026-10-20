@@ -96,10 +96,9 @@ export async function shareFileToWhatsApp(
       throw e;
     }
   }
-  window.open(
+  openWhatsAppUrl(
     `https://wa.me/?text=${encodeURIComponent(fallbackText)}`,
-    '_blank',
-    'noopener,noreferrer'
+    fallbackText
   );
   return 'fallback';
 }
@@ -146,11 +145,28 @@ export function notifyWhatsAppOpenFailed(shareText: string): void {
 function openWhatsAppUrl(
   url: string,
   clipboardText: string
-): void {
-  const opened = window.open(url, '_blank', 'noopener,noreferrer');
-  if (!opened) {
-    notifyWhatsAppOpenFailed(clipboardText);
+): boolean {
+  let opened: Window | null = null;
+  try {
+    // Note: Do NOT pass 'noopener,noreferrer' in the 3rd argument (windowFeatures)
+    // because per the WHATWG HTML specification, window.open returns null whenever
+    // noopener is present in windowFeatures, causing compliant browsers to falsely
+    // trigger popup blocker detection. Modern browsers isolate cross-origin _blank
+    // targets by default, and we disown opener explicitly below.
+    opened = window.open(url, '_blank');
+  } catch {
+    opened = null;
   }
+  if (opened && !opened.closed) {
+    try {
+      opened.opener = null;
+    } catch {
+      // Ignore cross-origin security restrictions if opener property is protected
+    }
+    return true;
+  }
+  notifyWhatsAppOpenFailed(clipboardText);
+  return false;
 }
 
 /**
@@ -162,12 +178,7 @@ export function openWhatsAppChat(text: string, toPhone?: string | null): boolean
     return false;
   }
   const url = buildWhatsAppSendUrl(text, toPhone);
-  const opened = window.open(url, '_blank', 'noopener,noreferrer');
-  if (!opened) {
-    notifyWhatsAppOpenFailed(text);
-    return false;
-  }
-  return true;
+  return openWhatsAppUrl(url, text);
 }
 
 export async function shareTextViaWhatsApp(

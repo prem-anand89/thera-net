@@ -16,14 +16,15 @@ describe('buildWhatsAppSendUrl', () => {
 
 describe('openPatientWhatsAppChat', () => {
   it('opens wa.me in a new tab like payment reminders', () => {
-    const open = vi.fn().mockReturnValue({} as Window);
+    const fakeWindow = { opener: {} as unknown, closed: false };
+    const open = vi.fn().mockReturnValue(fakeWindow);
     vi.stubGlobal('window', { open, location: { assign: vi.fn() } });
     openPatientWhatsAppChat('Hello', '9876543210');
     expect(open).toHaveBeenCalledWith(
       expect.stringContaining('https://wa.me/919876543210'),
-      '_blank',
-      'noopener,noreferrer'
+      '_blank'
     );
+    expect(fakeWindow.opener).toBeNull();
   });
 
   it('shows a notice when blocked after async feedback work', () => {
@@ -50,13 +51,14 @@ describe('shareTextViaWhatsApp', () => {
 
 describe('openWhatsAppChat', () => {
   it('opens a new tab when no popup is passed', () => {
-    const open = vi.fn().mockReturnValue({} as Window);
+    const fakeWindow = { opener: {} as unknown, closed: false };
+    const open = vi.fn().mockReturnValue(fakeWindow);
     vi.stubGlobal('window', { open });
     expect(openWhatsAppChat('Pay now', '8127312730')).toBe(true);
     expect(open).toHaveBeenCalledWith(
       expect.stringContaining('https://wa.me/918127312730'),
-      '_blank',
-      'noopener,noreferrer'
+      '_blank'
     );
+    expect(fakeWindow.opener).toBeNull();
   });
 });
