@@ -547,6 +547,8 @@ queued with a visible error.
 
 ### 8. Settings & Configuration
 
+**File layout** (`src/features/settings/`): `SettingsPage.tsx` is only the shell (tabs, search, unsaved-changes guard); each area lives in its own file — `ClinicSections` (profile, region and agenda, hours), `BillingSections` (billing, partner), `BookingSections` (patient communications, public booking), `PlanSection`, `DataSections` (import, backup, danger zone) and `TeamSection` (team list, `TeamMemberCard`, add member, colors) — with the shared save mechanics (`useClinicSectionForm`, `SectionSaveBar`, `LockedSectionNotice`, `SetOnceEditButton`, `BoolToggle`, accent colors) in `settingsShared.tsx`. Older mentions of `SettingsPage.tsx` below refer to these files.
+
 Admin-only, clinic-wide. One route, `/settings?tab=…`, with six sections in a fixed order (identity, then operations, then money, then system). The list lives once in `src/features/settings/sections.ts`; the router validates `?tab=` with its `parseSettingsSearch`.
 
 | Tab | Contains |
