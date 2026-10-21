@@ -300,6 +300,16 @@ export const bookingService = {
     syncEngine.schedule(0);
   },
 
+  /** Reverses "Mark arrived" pressed by mistake. The server refuses once a visit exists, and for walk-ins. */
+  async restoreArrivedAppointment(appointmentId: UUID): Promise<void> {
+    const supabase = supabaseOrThrow();
+    const { error } = await supabase.rpc('restore_arrived_appointment', {
+      p_appointment_id: appointmentId,
+    });
+    if (error) throw new Error(`Could not undo arrived: ${error.message}`);
+    syncEngine.schedule(0);
+  },
+
   /** Brings a cancelled appointment back. The server re-checks the slot and refuses if it was booked since. */
   async restoreCancelledAppointment(appointmentId: UUID): Promise<void> {
     const supabase = supabaseOrThrow();

@@ -257,6 +257,26 @@ describe('AppointmentDetailsPanel restore actions', () => {
     expect(restoreNoShowAppointment).toHaveBeenCalledWith('a1');
   });
 
+  it('an arrived appointment offers Undo arrived, which calls the restore RPC', async () => {
+    const restoreArrivedAppointment = vi.fn(async () => {});
+    const bs = (await import('@/services')).bookingService as unknown as Record<string, unknown>;
+    bs.restoreArrivedAppointment = restoreArrivedAppointment;
+    show(appt({ status: 'arrived' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo arrived' }));
+    expect(restoreArrivedAppointment).toHaveBeenCalledWith('a1');
+  });
+
+  it('Undo arrived is not offered for a walk-in, to someone who cannot manage it, or once a visit exists', () => {
+    show(appt({ status: 'arrived', source: 'walk_in' }));
+    expect(screen.queryByRole('button', { name: 'Undo arrived' })).not.toBeInTheDocument();
+    cleanup();
+    show(appt({ status: 'arrived' }), false);
+    expect(screen.queryByRole('button', { name: 'Undo arrived' })).not.toBeInTheDocument();
+    cleanup();
+    show(appt({ status: 'arrived', visitId: 'v1' }));
+    expect(screen.queryByRole('button', { name: 'Undo arrived' })).not.toBeInTheDocument();
+  });
+
   it('a cancelled appointment offers Restore, which calls the restore RPC', async () => {
     const restoreCancelledAppointment = vi.fn(async () => {});
     const bs = (await import('@/services')).bookingService as unknown as Record<string, unknown>;

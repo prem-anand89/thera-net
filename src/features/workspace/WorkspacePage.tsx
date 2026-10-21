@@ -857,6 +857,11 @@ export function WorkspacePage() {
                 ? (a) => bookingService.markAppointmentArrived(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
                 : undefined
             }
+            onUndoArrived={
+              canManageBookings || scope.myTherapistId
+                ? (a) => bookingService.restoreArrivedAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))
+                : undefined
+            }
             onRestoreCancelled={
               canManageBookings || scope.myTherapistId
                 ? (a) => bookingService.restoreCancelledAppointment(a.id).catch((e) => notify.error(toFriendlyMessage(e)))

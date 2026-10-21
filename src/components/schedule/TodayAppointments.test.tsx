@@ -180,6 +180,31 @@ describe('TodayAppointments quick actions', () => {
   });
 });
 
+describe('TodayAppointments undo arrived', () => {
+  afterEach(cleanup);
+
+  it('an in-progress booked appointment gets Undo, a walk-in does not', () => {
+    const onUndoArrived = vi.fn();
+    const booked = appt('09:00', { status: 'arrived', patientName: 'Booked' });
+    const walkIn = appt('09:30', { status: 'arrived', source: 'walk_in', patientName: 'Walker' });
+    render(
+      <TodayAppointments
+        appointments={[booked, walkIn]}
+        slotMinutes={30}
+        nextUpId={null}
+        colorFor={() => '#000'}
+        therapistNameFor={() => 'Dr A'}
+        showTherapist
+        onSelect={vi.fn()}
+        onUndoArrived={onUndoArrived}
+      />
+    );
+    expect(screen.queryByRole('button', { name: /Undo arrived for Walker/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Undo arrived for Booked/ }));
+    expect(onUndoArrived).toHaveBeenCalledWith(booked);
+  });
+});
+
 describe('TodayAppointments carried-over and Done defaults', () => {
   afterEach(() => {
     cleanup();

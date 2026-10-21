@@ -262,9 +262,20 @@ export function AppointmentDetailsPanel({
               </button>
             )}
             {arrived && (
-              <p className="rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber)]">
-                Complete visit to add service and payment.
-              </p>
+              <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--amber-light)] px-3 py-2 text-xs text-[var(--amber)]">
+                <span>Complete visit to add service and payment.</span>
+                {/* A walk-in was never booked, so there is nothing to go back to; it can be cancelled instead. */}
+                {appointment.source !== 'walk_in' && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="min-h-9 shrink-0 font-medium underline disabled:opacity-50"
+                    onClick={() => void run(() => bookingService.restoreArrivedAppointment(appointment.id))}
+                  >
+                    Undo arrived
+                  </button>
+                )}
+              </div>
             )}
             <div className="flex gap-2">
               {onStartNote && (

@@ -45,6 +45,7 @@ export function TodayAppointments({
   mrnoFor,
   dueByVisitId,
   onMarkArrived,
+  onUndoArrived,
   onUndoNoShow,
   onRestoreCancelled,
 }: {
@@ -69,6 +70,8 @@ export function TodayAppointments({
   dueByVisitId?: Map<string, boolean>;
   /** One-tap "Arrived" on an upcoming row (otherwise it takes row, panel, button). */
   onMarkArrived?: (appointment: Appointment) => void | Promise<unknown>;
+  /** Reverses a mistaken "Arrived" (booked appointments only; a walk-in has nothing to go back to). */
+  onUndoArrived?: (appointment: Appointment) => void | Promise<unknown>;
   /** Reverses a mistaken no-show; Rebook is the row itself (opens the panel with Reschedule). */
   onUndoNoShow?: (appointment: Appointment) => void | Promise<unknown>;
   /** Brings a cancelled appointment back (managers). Shown only while its time is still ahead. */
@@ -275,6 +278,17 @@ export function TodayAppointments({
               row(
                 a,
                 <span className="flex items-center gap-2">
+                  {onUndoArrived && a.source !== 'walk_in' && (
+                    <button
+                      type="button"
+                      className={`min-h-9 sm:min-h-8 ${pillNeutral}`}
+                      aria-label={`Undo arrived for ${a.patientName}`}
+                      disabled={pendingIds.has(a.id)}
+                      onClick={() => guarded(a.id, () => onUndoArrived(a))}
+                    >
+                      Undo
+                    </button>
+                  )}
                   <Link
                     to="/visits/new"
                     search={{
