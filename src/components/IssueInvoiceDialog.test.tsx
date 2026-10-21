@@ -5,6 +5,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (q: () => unknown) => q() }));
+vi.mock('@/app/usePermissions', () => ({ usePermissions: () => ({ canViewClinicalNotes: true }) }));
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
 }));

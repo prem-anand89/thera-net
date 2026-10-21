@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 import { formatWhen } from './format.ts';
+import { hookAllowed } from '../_shared/hookAuth.ts';
 
 /** Mirrors the `appointments` row shape the Postgres trigger forwards via
  *  `row_to_json(NEW)` — see the `trigger_notify_therapist` migration.
@@ -109,6 +110,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') {
     return json({ error: 'Method not allowed' }, 405);
   }
+  if (!hookAllowed(req)) return json({ error: 'Forbidden' }, 403);
 
   try {
     const payload = (await req.json()) as AppointmentPayload;

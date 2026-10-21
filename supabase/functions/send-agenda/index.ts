@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 import { addDaysYmd, DEFAULT_CLINIC_TIMEZONE, localDate, zonedDayRange, zonedParts } from '../_shared/zoned.ts';
+import { hookAllowed } from '../_shared/hookAuth.ts';
 import { buildAgendaEmail, buildAgendaIcs, type AgendaAppointment } from './agenda.ts';
 
 /**
@@ -7,8 +8,8 @@ import { buildAgendaEmail, buildAgendaIcs, type AgendaAppointment } from './agen
  * default) it emails every therapist ONE list of tomorrow's appointments, with a calendar file. agenda_log has a
  * row per therapist per day, so repeat runs inside the hour send nothing, and a failed send is retried next run.
  *
- * verify_jwt is off like the other trigger-style functions here. The request carries nothing the function trusts:
- * it only ever does this idempotent, time-gated job.
+ * verify_jwt is off like the other trigger-style functions here; the x-hook-secret header (_shared/hookAuth.ts) is
+ * what proves the call came from the database. The body carries nothing the function trusts.
  */
 /** Clinic-local hour pushes resume after quiet hours; the overnight-requests note goes out in its first quarter hour. */
 const OVERNIGHT_NUDGE_HOUR = 6;
@@ -32,6 +33,7 @@ function base64Utf8(value: string): string {
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+  if (!hookAllowed(request)) return json({ error: 'Forbidden' }, 403);
 
   const url = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -54,7 +56,11 @@ Deno.serve(async (request) => {
     if (local.hour === OVERNIGHT_NUDGE_HOUR && local.minute < 15) {
       await fetch(`${url}/functions/v1/send-push`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${serviceKey}`,
+          'x-hook-secret': Deno.env.get('EDGE_HOOK_SECRET') ?? '',
+        },
         body: JSON.stringify({ kind: 'overnight_requests', clinic_id: clinic.id, row_id: clinic.id }),
       }).catch((error) => console.error('overnight nudge failed:', error));
     }

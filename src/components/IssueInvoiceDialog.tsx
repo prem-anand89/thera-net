@@ -15,6 +15,7 @@ import { btnPrimary, btnSecondary, inputCls, ErrorNote, Field } from '@/componen
 import { notify } from '@/lib/notify';
 import { invoiceService, paymentService, repos } from '@/services';
 import { toFriendlyMessage } from '@/lib/errors';
+import { usePermissions } from '@/app/usePermissions';
 import { treatmentsDisplayText } from '@/components/VisitCard';
 import type { InvoicePrintBackTarget } from '@/app/router';
 import { formatINR } from '@/domain/money';
@@ -132,7 +133,27 @@ export function IssueInvoiceDialog({
       .find((n) => noteReferral(n));
   }, [visitNote, patientNotes]);
 
-  const referral = noteReferral(sourceNote);
+  // Front desk has no notes on the device; the server hands over just the referral block instead.
+  const { canViewClinicalNotes } = usePermissions();
+  const [serverReferral, setServerReferral] = useState<CoreAssessmentPayload['referral'] | null>(null);
+  useEffect(() => {
+    if (canViewClinicalNotes) return;
+    let live = true;
+    void invoiceService.referralForVisit(target.visitId).then((r) => {
+      if (live && r) {
+        setServerReferral({
+          diagnosis: r.diagnosis ?? '',
+          referringPhysician: r.referringPhysician ?? '',
+          physicianRegistrationNo: r.physicianRegistrationNo ?? '',
+        });
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [canViewClinicalNotes, target.visitId]);
+
+  const referral = canViewClinicalNotes ? noteReferral(sourceNote) : (serverReferral ?? undefined);
 
   const prefill: ClinicalFields = useMemo(() => {
     if (!visit) return EMPTY_CLINICAL_FIELDS;

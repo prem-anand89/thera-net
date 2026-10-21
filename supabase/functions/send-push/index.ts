@@ -3,6 +3,7 @@ import { encryptPayload, vapidAuthHeader } from '../_shared/webPush.ts';
 import { buildAppointmentPayload, buildBookingRequestPayload, buildOvernightRequestsPayload, buildPayload, type PushKind, type PushPayload } from './templates.ts';
 import { PUSH_CATEGORY_BY_KIND, withoutOptedOut, type PushCategory } from './preferences.ts';
 import { subscriptionsToRemove } from './delivery.ts';
+import { hookAllowed } from '../_shared/hookAuth.ts';
 import { DEFAULT_CLINIC_TIMEZONE, inQuietHours, localDate, zonedMidnight } from '../_shared/zoned.ts';
 
 /** Quiet hours in the clinic's own time: nothing is pushed from 11 pm to 6 am, except changes to today's appointments. */
@@ -162,6 +163,7 @@ async function usersHidingNames(userIds: string[], clinicId: string): Promise<Se
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405);
+  if (!hookAllowed(request)) return json({ error: 'forbidden' }, 403);
 
   const body = (await request.json()) as SendRequest;
   const now = new Date();

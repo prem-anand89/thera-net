@@ -374,6 +374,9 @@ queued with a visible error.
 - **Automatic sync** when connection returns
 - **Invoice issuance is deliberately online-only** — gap-free numbers need server counter
 - **Dexie (IndexedDB)** local store with Supabase sync engine
+- **Pull paging**: each table is pulled in `(updated_at, id)` order (PostgREST `or` keyset, `afterKeyFilter`) so rows that share a timestamp across a 1,000-row page edge are never skipped, and every pull starts `PULL_OVERLAP_MS` (2 minutes) before the saved cursor so a slow transaction that commits late is still picked up (re-pulled rows are identical)
+- **Deletes sync too**: an `after delete` trigger on every synced table (`record_sync_tombstone`) writes `sync_tombstones` (clinic_id, table_name, row_id, updated_at); devices pull it after the tables and delete their copy unless it has a pending edit or changed after the delete (`rowsToDelete`). Markers older than 90 days are pruned nightly by pg_cron `prune-sync-tombstones`
+- **Role changes re-pull**: memberships are remembered as `clinic:role`, so a role change resets every cursor like a new clinic does; a front-desk membership deletes clinical notes already cached for that clinic
 
 #### Historical Import
 - **Settings → Import historical visits** — one-time import from clinic's Excel ledger
@@ -420,7 +423,7 @@ queued with a visible error.
 #### Three Roles (Enforced Server-Side via RLS)
 - **admin** — full read/write on everything: roster, catalog, all therapists' visits, billing settings, feature toggles
 - **therapist** — clinic-wide reads, scoped writes (own visits/notes only), no roster/catalog/pricing changes
-- **front_desk** — reads and visit/invoice entry, no clinical-notes access, no roster/catalog writes, excluded from clinical dashboards
+- **front_desk** — reads and visit/invoice entry, no clinical-notes access (enforced by `consultation_notes` RLS since `20261022100000`, so notes never reach a front-desk device; bills get the referral block through `get_invoice_referral(visit_id)`), no roster/catalog writes, excluded from clinical dashboards
 
 #### Self-Service Sign-In (Email/Password and Google)
 - **`LoginPage.tsx`** offers both email/password (`signInWithPassword`/`signUp`)
@@ -5157,6 +5160,8 @@ scheduled — pick back up only if the underlying need actually shows up.
 - **Patient data is health data** — no anonymous read path
 - **Issued invoices and visits frozen** by DB triggers; corrections go through the invoice-amendment feature (§3b) — a new invoice that supersedes the old one, never an edit to it
 - **Rate/tax changes apply to new visits only** — history keeps the rates it was billed under
+- **Completed clinical notes are final on the server**: `consultation_notes_completed_lock` rejects (SQLSTATE 42501, so the app reverts its local copy) any change to a completed note's content, scores, mode, patient, episode or session count; linking it to its visit/appointment, reassigning the therapist and archiving stay allowed
+- **Database-only edge functions** (`send-push`, `send-agenda`, `notify-therapist`) check an `x-hook-secret` header (`_shared/hookAuth.ts`) against the `EDGE_HOOK_SECRET` setting; the database sends it from Vault secret `edge_hook_secret` through `edge_hook_headers()` (migration `20261022120000_edge_hook_secret.sql`). With no setting the functions accept every call, so the secret can be switched on after deploying
 - **Export monthly CSVs** — this app should never be the only copy of financial records
 
 ---

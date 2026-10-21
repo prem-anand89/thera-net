@@ -86,6 +86,21 @@ export function createInvoiceService(repos: Repos) {
 
   return {
     /**
+     * The referral block (diagnosis, referring physician, registration no.) for a bill's "Clinical
+     * details", read on the server for people who can't read clinical notes themselves (front desk).
+     * Null when offline, unavailable, or nothing is on file: the fields simply start empty.
+     */
+    async referralForVisit(
+      visitId: UUID
+    ): Promise<{ diagnosis?: string; referringPhysician?: string; physicianRegistrationNo?: string } | null> {
+      const supabase = getSupabase();
+      if (!supabase || !navigator.onLine) return null;
+      const { data, error } = await supabase.rpc('get_invoice_referral', { p_visit_id: visitId });
+      if (error || !data) return null;
+      return data as { diagnosis?: string; referringPhysician?: string; physicianRegistrationNo?: string };
+    },
+
+    /**
      * Issues an invoice for a visit — for package visits, every uninvoiced
      * session in the package group goes on it, so the receipt lists all
      * session dates even though usually only session 1 carried the charge.

@@ -24,9 +24,14 @@ export function isFetchFailure(message: string): boolean {
  * Offline-first sync:
  * - push: drain the outbox (current Dexie row state, so edits coalesce) as
  *   upserts; server rejections stay queued and visible rather than vanishing
- * - pull: per-table delta on updated_at > cursor (server-authoritative
- *   timestamps); rows with a pending local edit are skipped (local wins until
- *   its push lands, then the next pull settles it — last-write-wins)
+ * - pull: per-table delta from the cursor minus a short overlap, paged by
+ *   (updated_at, id) so rows sharing a timestamp across a page edge are never
+ *   skipped (server-authoritative timestamps); rows with a pending local edit
+ *   are skipped (local wins until its push lands, then the next pull settles
+ *   it — last-write-wins)
+ * - deletes: server rows deleted anywhere leave a sync_tombstones marker,
+ *   pulled after the tables; the local copy is removed unless it was changed
+ *   after the delete or has a pending edit
  * - a permanently-rejected push (RLS) is the one exception to "local wins
  *   until the push lands": it never will, so the row is fetched fresh and
  *   overwritten immediately rather than left showing a rejected edit
@@ -42,6 +47,13 @@ const SYNC_TABLES: readonly SyncedTable[] = ALL_SYNCED_TABLES;
 
 const EPOCH = '1970-01-01T00:00:00+00:00';
 const PAGE = 1000;
+/**
+ * Each pull starts this far before the saved cursor. `updated_at` is set when a transaction starts, so a
+ * slow transaction can commit after rows with later timestamps were already pulled; re-reading a short
+ * window catches it. Re-pulled rows are identical, so the cost is a few repeated rows per table.
+ */
+export const PULL_OVERLAP_MS = 2 * 60_000;
+const TOMBSTONES = 'sync_tombstones';
 
 // numeric(5,2) columns can arrive as strings depending on the PostgREST
 // version — force them back to numbers on the way in.
@@ -86,6 +98,49 @@ function validateNormalizedRow(table: SyncedTable, row: Record<string, unknown>)
  *  without mocking Supabase or Dexie. */
 export function clinicMembershipGrew(nowIds: string[], knownIds: string[]): boolean {
   return nowIds.some((id) => !knownIds.includes(id));
+}
+
+/** Where a pull starts: the saved cursor minus PULL_OVERLAP_MS, never before the epoch. */
+export function pullStartFrom(cursor: string): string {
+  const ms = Date.parse(cursor);
+  if (!Number.isFinite(ms)) return EPOCH;
+  return new Date(Math.max(0, ms - PULL_OVERLAP_MS)).toISOString();
+}
+
+/** PostgREST `or` filter for "after (updatedAt, id)": the next page of an (updated_at, id) ordered pull. */
+export function afterKeyFilter(updatedAt: string, id: string): string {
+  const ts = `"${updatedAt}"`;
+  return `updated_at.gt.${ts},and(updated_at.eq.${ts},id.gt.${id})`;
+}
+
+/** A membership as reconcileClinicMembership remembers it, so a role change counts as new access. */
+export function membershipKey(clinicId: string, role: string): string {
+  return `${clinicId}:${role}`;
+}
+
+export interface Tombstone {
+  table: string;
+  rowId: string;
+  deletedAt: string;
+}
+
+/**
+ * Which local rows a batch of tombstones removes: only synced tables, never a row with a pending local
+ * edit, and never a row changed after the delete (it was created again under the same id).
+ */
+export function rowsToDelete(
+  tombstones: Tombstone[],
+  pending: ReadonlySet<string>,
+  localUpdatedAt: (table: string, rowId: string) => string | undefined
+): { table: SyncedTable; rowId: string }[] {
+  const synced = new Set<string>(ALL_SYNCED_TABLES);
+  return tombstones
+    .filter((t) => synced.has(t.table) && !pending.has(`${t.table}:${t.rowId}`))
+    .filter((t) => {
+      const local = localUpdatedAt(t.table, t.rowId);
+      return local !== undefined && local <= t.deletedAt;
+    })
+    .map((t) => ({ table: t.table as SyncedTable, rowId: t.rowId }));
 }
 
 export class SyncEngine {
@@ -298,10 +353,15 @@ export class SyncEngine {
     const supabase = this.supabase!;
     const { data, error } = await supabase
       .from('clinic_members')
-      .select('clinic_id')
+      .select('clinic_id, role')
       .eq('user_id', userId);
     if (error) return; // best-effort — next sync cycle gets another chance
-    const nowIds = (data ?? []).map((r) => r.clinic_id as string).sort();
+    // Remembered with the role, so a role change (front desk -> therapist) re-pulls rows the old role couldn't see.
+    const nowIds = (data ?? []).map((r) => membershipKey(r.clinic_id as string, r.role as string)).sort();
+    // Front desk can't read clinical notes on the server; drop any this device cached under an earlier role.
+    for (const r of data ?? []) {
+      if (r.role === 'front_desk') await db.consultation_notes.where('clinicId').equals(r.clinic_id as string).delete();
+    }
     const knownRaw = (await db.meta.get('knownClinicIds'))?.value ?? '[]';
     let knownIds: string[];
     try {
@@ -508,18 +568,26 @@ export class SyncEngine {
     // roughly "the slowest table's round-trips," which is most of the
     // startup delay on a fresh login/device.
     await Promise.all(SYNC_TABLES.map((table) => this.pullTable(table)));
+    // After the tables, so a row deleted and then created again under the same id is already current.
+    await this.pullTombstones();
   }
 
-  private async pullTable(table: SyncedTable) {
+  /**
+   * Pages a table in (updated_at, id) order from the saved cursor (minus the overlap) and hands each page
+   * to `onPage`. The cursor moves only after a page is handled, so a failure resumes where it stopped.
+   */
+  private async pullPages(table: string, onPage: (rows: Record<string, unknown>[]) => Promise<void>) {
     const supabase = this.supabase!;
-    let cursor = (await db.meta.get(`cursor:${table}`))?.value ?? EPOCH;
+    const cursorKey = `cursor:${table}`;
+    const saved = (await db.meta.get(cursorKey))?.value ?? EPOCH;
+    let after: { updatedAt: string; id: string } | null = null;
     for (;;) {
       if (!this.started) break;
-      const { data, error } = await supabase
-        .from(table)
-        .select('*')
-        .gt('updated_at', cursor)
+      let query = supabase.from(table).select('*');
+      query = after ? query.or(afterKeyFilter(after.updatedAt, after.id)) : query.gte('updated_at', pullStartFrom(saved));
+      const { data, error } = await query
         .order('updated_at', { ascending: true })
+        .order('id', { ascending: true })
         .limit(PAGE);
       if (error) {
         // A request that never reached the server (mobile data drop, app
@@ -528,7 +596,36 @@ export class SyncEngine {
         throw new Error(`pull ${table}: ${error.message}`);
       }
       if (!data?.length) break;
+      await onPage(data as Record<string, unknown>[]);
+      const last = data[data.length - 1] as { updated_at: string; id: string };
+      after = { updatedAt: last.updated_at, id: last.id };
+      if (last.updated_at > saved) await db.meta.put({ key: cursorKey, value: last.updated_at });
+      if (data.length < PAGE) break;
+    }
+  }
 
+  private async pullTombstones() {
+    await this.pullPages(TOMBSTONES, async (rows) => {
+      const tombstones: Tombstone[] = rows.map((r) => ({
+        table: r.table_name as string,
+        rowId: r.row_id as string,
+        deletedAt: r.updated_at as string,
+      }));
+      const pending = new Set((await db.outbox.toArray()).map((e) => `${e.table}:${e.rowId}`));
+      const local = new Map<string, string>();
+      for (const t of tombstones) {
+        if (!(ALL_SYNCED_TABLES as readonly string[]).includes(t.table)) continue;
+        const row = (await db.table(t.table).get(t.rowId)) as { updatedAt?: string } | undefined;
+        if (row) local.set(`${t.table}:${t.rowId}`, row.updatedAt ?? '');
+      }
+      for (const { table, rowId } of rowsToDelete(tombstones, pending, (tb, id) => local.get(`${tb}:${id}`))) {
+        await db.table(table).delete(rowId);
+      }
+    });
+  }
+
+  private async pullTable(table: SyncedTable) {
+    await this.pullPages(table, async (data) => {
       const pendingIds = new Set(
         (await db.outbox.where('table').equals(table).toArray()).map((e) => e.rowId)
       );
@@ -550,12 +647,9 @@ export class SyncEngine {
       if (incoming.length > 0) {
         await db.table(table).bulkPut(incoming);
       }
-
-      cursor = (data[data.length - 1] as { updated_at: string }).updated_at;
-      await db.meta.put({ key: `cursor:${table}`, value: cursor });
-      if (data.length < PAGE) break;
-    }
+    });
   }
+
 }
 
 export const syncEngine = new SyncEngine();
