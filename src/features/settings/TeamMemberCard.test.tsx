@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { TeamMemberCard } from './SettingsPage';
+import { TeamMemberCard } from './TeamSection';
 import type { Clinic, ShiftTemplate, Therapist, TherapistShiftAssignment } from '@/domain/types';
 
 vi.mock('@/lib/supabase', () => ({
