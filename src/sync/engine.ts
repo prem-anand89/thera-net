@@ -126,7 +126,7 @@ export interface Tombstone {
 
 /**
  * Which local rows a batch of tombstones removes: only synced tables, never a row with a pending local
- * edit, and never a row changed after the delete (it was created again under the same id).
+ * edit, and never a row changed at or after the delete (it was created again under the same id).
  */
 export function rowsToDelete(
   tombstones: Tombstone[],
@@ -138,7 +138,8 @@ export function rowsToDelete(
     .filter((t) => synced.has(t.table) && !pending.has(`${t.table}:${t.rowId}`))
     .filter((t) => {
       const local = localUpdatedAt(t.table, t.rowId);
-      return local !== undefined && local <= t.deletedAt;
+      // Strictly older: a row deleted and created again in one transaction shares the delete's timestamp.
+      return local !== undefined && local < t.deletedAt;
     })
     .map((t) => ({ table: t.table as SyncedTable, rowId: t.rowId }));
 }

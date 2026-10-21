@@ -42,6 +42,10 @@ describe('rowsToDelete', () => {
     ]);
   });
 
+  it('keeps a row stamped at the same instant as the delete (deleted and created again in one transaction)', () => {
+    expect(rowsToDelete([{ table: 'patients', rowId: 'same', deletedAt }], new Set(), () => deletedAt)).toEqual([]);
+  });
+
   it('keeps a row changed after the delete, one with a pending edit, one not on the device, and unknown tables', () => {
     expect(
       rowsToDelete(
