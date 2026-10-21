@@ -297,6 +297,124 @@ describe('MobileThreeDayGrid', () => {
     }
   });
 
+  describe('touch drag', () => {
+    // One-column phone Day at 30-minute slots: 4/3 px per minute, so 20px is one 15-minute step.
+    const touchProps = (onMove = vi.fn(), appointments = [appointment({})]) =>
+      dayProps({ therapists: [therapists[0]], nowMinutes: 8 * 60, appointments, drag: { canDrag: () => true, onMove } });
+    const hold = (y = 300) => {
+      fireEvent.pointerDown(screen.getByRole('button', { name: /Priya/ }), { pointerType: 'touch', clientX: 150, clientY: y });
+      act(() => {
+        vi.advanceTimersByTime(350);
+      });
+    };
+
+    it('press and hold lifts the block, then the finger moves it in 15-minute steps', () => {
+      vi.useFakeTimers();
+      try {
+        const onMove = vi.fn();
+        render(<MobileDayGrid {...touchProps(onMove)} />);
+        hold();
+        fireEvent.pointerMove(window, { pointerType: 'touch', clientX: 150, clientY: 320 });
+        expect(document.querySelector('[data-drag-ghost]')).toHaveTextContent('10:15 AM');
+        fireEvent.pointerMove(window, { pointerType: 'touch', clientX: 150, clientY: 340 });
+        expect(document.querySelector('[data-drag-ghost]')).toHaveTextContent('10:30 AM');
+        fireEvent.pointerUp(window, { pointerType: 'touch' });
+        expect(onMove).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }), expect.objectContaining({ start: 630, duration: 60 }));
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a swipe before the hold scrolls instead of lifting', () => {
+      vi.useFakeTimers();
+      try {
+        const onMove = vi.fn();
+        render(<MobileDayGrid {...touchProps(onMove)} />);
+        fireEvent.pointerDown(screen.getByRole('button', { name: /Priya/ }), { pointerType: 'touch', clientX: 150, clientY: 300 });
+        fireEvent.pointerMove(window, { pointerType: 'touch', clientX: 150, clientY: 340 });
+        act(() => {
+          vi.advanceTimersByTime(500);
+        });
+        fireEvent.pointerUp(window, { pointerType: 'touch' });
+        expect(document.querySelector('[data-drag-ghost]')).toBeNull();
+        expect(screen.queryByRole('status')).not.toBeInTheDocument();
+        expect(onMove).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('stops the page scrolling only while a block is lifted', () => {
+      vi.useFakeTimers();
+      try {
+        render(<MobileDayGrid {...touchProps()} />);
+        const grid = document.querySelector('[data-schedule-grid]')!;
+        const swipe = new Event('touchmove', { cancelable: true });
+        grid.dispatchEvent(swipe);
+        expect(swipe.defaultPrevented).toBe(false);
+        hold();
+        const drag = new Event('touchmove', { cancelable: true });
+        grid.dispatchEvent(drag);
+        expect(drag.defaultPrevented).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('auto-scrolls the page while the finger is held near the bottom edge', () => {
+      vi.useFakeTimers();
+      try {
+        const scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => {});
+        render(<MobileDayGrid {...touchProps()} />);
+        hold();
+        fireEvent.pointerMove(window, { pointerType: 'touch', clientX: 150, clientY: window.innerHeight - 70 });
+        act(() => {
+          vi.advanceTimersByTime(100);
+        });
+        expect(scrollBy).toHaveBeenCalled();
+        expect(scrollBy.mock.calls.every(([, dy]) => (dy as number) > 0)).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a block held still at the edge does not auto-scroll, so letting go still offers tap targets', () => {
+      vi.useFakeTimers();
+      try {
+        const scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => {});
+        const onMove = vi.fn();
+        render(<MobileDayGrid {...touchProps(onMove)} />);
+        hold(window.innerHeight - 70);
+        act(() => {
+          vi.advanceTimersByTime(200);
+        });
+        fireEvent.pointerUp(window, { pointerType: 'touch' });
+        expect(scrollBy).not.toHaveBeenCalled();
+        expect(onMove).not.toHaveBeenCalled();
+        expect(screen.getByRole('status')).toHaveTextContent('Tap free time to move Priya');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('held and let go in place: tap targets every 30 minutes that fit the full length', () => {
+      vi.useFakeTimers();
+      try {
+        const short = appointment({ id: 'b', patientName: 'Ravi K', scheduledAt: localDateTime('2026-10-01', '11:00').toISOString(), durationMinutes: 30 });
+        render(<MobileDayGrid {...touchProps(vi.fn(), [appointment({}), short])} />);
+        hold();
+        fireEvent.pointerUp(window, { pointerType: 'touch' });
+        expect(screen.getByRole('status')).toHaveTextContent('Tap free time to move Priya');
+        const targets = screen.getAllByRole('button', { name: /^Move here/ }).map((b) => b.getAttribute('aria-label')!.replace(/.* at /, ''));
+        // The hour-long block frees its own time, can't overlap 11:00–11:30, and must end by 1 PM.
+        expect(targets).toEqual(['9:00 AM', '9:30 AM', '10:00 AM', '11:30 AM', '12:00 PM']);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   it('the rail hides an hour label while the Now badge sits on it, and shows it again otherwise', () => {
     const { rerender } = render(<MobileDayGrid {...dayProps({ therapists: [therapists[0]], nowMinutes: 11 * 60 })} />);
     expect(screen.queryByText('11')).not.toBeInTheDocument();

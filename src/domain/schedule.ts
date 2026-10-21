@@ -668,6 +668,29 @@ export function resizeTarget(input: {
   return Math.min(Math.max(next, step), Math.min(240, input.hours.endHour * 60 - input.start));
 }
 
+/**
+ * Tap-to-move targets (touch "placing" mode) every 30 minutes, whatever the
+ * clinic's slot length: 15-minute targets would be under a finger's 44px, and
+ * 15-minute moves are what dragging is for.
+ */
+export const PLACE_STEP_MINUTES = 30;
+
+/** Pixels from the top/bottom of the scroll area where a drag starts auto-scrolling. */
+export const EDGE_SCROLL_ZONE_PX = 60;
+
+/**
+ * Auto-scroll speed (px per frame) while dragging near an edge of the visible
+ * area [top, bottom]: negative near the top, positive near the bottom,
+ * growing to `max` at (or past) the edge, 0 in the middle.
+ */
+export function edgeScrollSpeed(pointerY: number, top: number, bottom: number, max = 16): number {
+  const zone = Math.min(EDGE_SCROLL_ZONE_PX, (bottom - top) / 3);
+  if (zone <= 0) return 0;
+  if (pointerY < top + zone) return -Math.round(max * Math.min(1, (top + zone - pointerY) / zone));
+  if (pointerY > bottom - zone) return Math.round(max * Math.min(1, (pointerY - (bottom - zone)) / zone));
+  return 0;
+}
+
 /** Can this block go to [start, start + duration) in a column? */
 export function dropAllowed(input: {
   columnAppointments: Appointment[];

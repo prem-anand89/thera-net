@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, edgeScrollSpeed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -471,6 +471,17 @@ describe('drag helpers', () => {
     expect(dragTarget({ originalStart: 600, duration: 30, deltaPx: 48, pxPerMinute: 1.6, hours })).toBe(630);
     expect(dragTarget({ originalStart: 600, duration: 30, deltaPx: -500, pxPerMinute: 1.6, hours })).toBe(540);
     expect(dragTarget({ originalStart: 600, duration: 60, deltaPx: 500, pxPerMinute: 1.6, hours })).toBe(660);
+  });
+
+  it('auto-scrolls faster the closer a drag gets to an edge, not at all in the middle', () => {
+    expect(edgeScrollSpeed(300, 0, 600)).toBe(0);
+    expect(edgeScrollSpeed(30, 0, 600)).toBe(-8);
+    expect(edgeScrollSpeed(-20, 0, 600)).toBe(-16);
+    expect(edgeScrollSpeed(570, 0, 600)).toBe(8);
+    expect(edgeScrollSpeed(700, 0, 600)).toBe(16);
+    // A short area shrinks the zone so the middle third never scrolls.
+    expect(edgeScrollSpeed(45, 0, 90)).toBe(0);
+    expect(edgeScrollSpeed(0, 0, 0)).toBe(0);
   });
 
   it('resizes in steps, at least 15 minutes, not past closing', () => {

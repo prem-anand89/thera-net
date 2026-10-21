@@ -14,6 +14,8 @@ import {
   blockGeometry,
   dragTarget,
   dropAllowed,
+  edgeScrollSpeed,
+  PLACE_STEP_MINUTES,
   resizeTarget,
   lengthLabel,
   generateScheduleSlots,
@@ -108,8 +110,8 @@ type ColumnDrag = {
   consumeClick: () => boolean;
   ghost: DragGhost | null;
   draggingId: string | null;
-  /** Touch "tap a free time to move" mode. */
-  placing: boolean;
+  /** Touch "tap a free time to move" mode: the moving appointment's length, else null. */
+  placing: { duration: number } | null;
   onPlace: (start: number) => void;
 };
 
@@ -178,19 +180,24 @@ export function DayColumn({
     [blocks, multi]
   );
   const freeAt = multi?.freeAt;
+  const placeLength = drag?.placing?.duration ?? null;
+  const movingId = placeLength !== null ? drag?.draggingId ?? null : null;
+  // Placing targets come every 30 minutes and must fit the moving appointment's own length; booking targets follow the clinic slot.
+  const targetStep = placeLength !== null ? PLACE_STEP_MINUTES : slotMinutes;
   const freeSlots = useMemo(() => {
-    if ((!onBook && !drag?.placing) || closed.closed || isPastDay) return [];
-    return generateScheduleSlots(slotMinutes, hours.startHour, hours.endHour).filter((slot) => {
+    if ((!onBook && placeLength === null) || closed.closed || isPastDay) return [];
+    return generateScheduleSlots(targetStep, hours.startHour, hours.endHour).filter((slot) => {
       if (nowMinutes !== null && slot.minutes < nowMinutes) return false;
+      const end = slot.minutes + (placeLength ?? slotMinutes);
+      if (placeLength !== null && end > hours.endHour * 60) return false;
       // Shared column: free when any bookable therapist is free and working, not when nobody is booked.
       if (freeAt) return freeAt(slot.minutes);
-      const end = slot.minutes + slotMinutes;
-      // Same rule as the server: every non-cancelled appointment holds its time.
+      // Same rule as the server: every non-cancelled appointment holds its time (the one being moved frees its own).
       return !blocks.some(
-        (b) => b.appointment.status !== 'cancelled' && b.start < end && b.end > slot.minutes
+        (b) => b.appointment.id !== movingId && b.appointment.status !== 'cancelled' && b.start < end && b.end > slot.minutes
       );
     });
-  }, [onBook, drag?.placing, closed.closed, isPastDay, slotMinutes, hours.startHour, hours.endHour, nowMinutes, blocks, freeAt]);
+  }, [onBook, placeLength, movingId, targetStep, closed.closed, isPastDay, slotMinutes, hours.startHour, hours.endHour, nowMinutes, blocks, freeAt]);
   const offHours = useMemo(() => {
     if (!working || closed.closed) return [];
     const open = hours.startHour * 60;
@@ -283,8 +290,8 @@ export function DayColumn({
       )}
       <div className="absolute inset-y-0 right-0" style={{ left: rail ? RAIL_W : 0 }}>
       {freeSlots.map((slot) => {
-        const geometry = blockGeometry(slot.minutes, slotMinutes, hours.startHour, pxPerMinute);
-        const isOffHours = Boolean(working && !withinWorking(working, slot.minutes, slotMinutes));
+        const geometry = blockGeometry(slot.minutes, targetStep, hours.startHour, pxPerMinute);
+        const isOffHours = Boolean(working && !withinWorking(working, slot.minutes, placeLength ?? slotMinutes));
         return (
           <button
             key={slot.time}
@@ -350,7 +357,7 @@ export function DayColumn({
             title={`${appointment.patientName} · ${minutesLabel(start)}–${minutesLabel(end)}${reason ? ` · ${reason}` : ''}${flags.length ? ` · ${flags.map((f) => f.label).join(', ')}` : ''}${draggable ? ' · drag to move' : ''}`}
             className={`group/block absolute z-[2] overflow-hidden rounded-md border-l-4 px-1.5 py-0.5 text-left text-xs transition-shadow hover:shadow-md ${narrowLane ? 'px-0.5' : ''} ${look.className} ${
               selectedId === appointment.id ? 'outline outline-2 outline-[var(--teal)]' : ''
-            } ${draggable ? 'pointer-fine:cursor-grab' : ''} ${drag?.draggingId === appointment.id ? 'opacity-40' : over ? 'opacity-75' : ''}`}
+            } ${draggable ? 'select-none [-webkit-touch-callout:none] pointer-fine:cursor-grab' : ''} ${drag?.draggingId === appointment.id ? 'opacity-40' : over ? 'opacity-75' : ''}`}
             style={{
               top: geometry.top,
               height: geometry.height - 1,
@@ -640,12 +647,17 @@ export type GridDragOptions = {
   onMove: (appointment: Appointment, target: MoveTarget) => void;
 };
 
-const LONG_PRESS_MS = 450;
+/** Touch: hold this long without moving to lift a block. */
+const LONG_PRESS_MS = 300;
+/** Touch: a finger that moves more than this before the lift is scrolling, not dragging. */
+const TOUCH_SLOP_PX = 8;
 
 /**
  * Drag state for one grid. Mouse / pen: press a block and drag (to another
- * column too), or drag its bottom edge to resize. Touch: dragging would fight
- * scrolling, so a long-press enters "tap a free time to move it" mode.
+ * column too), or drag its bottom edge to resize. Touch: a swipe scrolls as
+ * usual; press and hold lifts the block, then the finger drags it (15-minute
+ * steps). Lifting and letting go without moving enters "tap a free time to
+ * move it" mode instead. Near the top or bottom edge the grid auto-scrolls.
  */
 export function useGridDrag(input: {
   columns: GridColumn[];
@@ -655,8 +667,11 @@ export function useGridDrag(input: {
   nowMinutes: number;
   options?: GridDragOptions;
   pxPerMinute?: number;
+  /** The grid's scroll box (or, with `pageScroll`, the grid inside the scrolling page). */
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  pageScroll?: boolean;
 }) {
-  const { columns, hours, slotMinutes, today, nowMinutes, options, pxPerMinute = PX_PER_MINUTE } = input;
+  const { columns, hours, slotMinutes, today, nowMinutes, options, pxPerMinute = PX_PER_MINUTE, scrollRef, pageScroll = false } = input;
   const elements = useRef(new Map<string, HTMLDivElement>());
   const [ghost, setGhost] = useState<DragGhost | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -665,8 +680,45 @@ export function useGridDrag(input: {
   // moment: if the pointer was released elsewhere, that click never reaches
   // the block, and a plain boolean stayed set and ate the next real click.
   const suppressClickUntil = useRef(0);
-  const latest = useRef({ columns, hours, slotMinutes, today, nowMinutes, options });
-  latest.current = { columns, hours, slotMinutes, today, nowMinutes, options };
+  // A lifted touch drag owns the finger: the grid's touchmove stops the page scrolling.
+  const touchLifted = useRef(false);
+  const latest = useRef({ columns, hours, slotMinutes, today, nowMinutes, options, pageScroll });
+  latest.current = { columns, hours, slotMinutes, today, nowMinutes, options, pageScroll };
+
+  // Registered once and non-passive (a listener added mid-gesture is too late for iOS);
+  // it only cancels while a block is lifted, so ordinary swipes scroll natively.
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const onTouchMove = (event: TouchEvent) => {
+      if (touchLifted.current && event.cancelable) event.preventDefault();
+    };
+    element.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => element.removeEventListener('touchmove', onTouchMove);
+  }, [scrollRef]);
+
+  const scroller = useMemo(
+    () => ({
+      top: () => (latest.current.pageScroll ? window.scrollY : scrollRef.current?.scrollTop ?? 0),
+      by: (dy: number) => {
+        if (latest.current.pageScroll) window.scrollBy(0, dy);
+        else if (scrollRef.current) scrollRef.current.scrollTop += dy;
+      },
+      /** The visible strip of grid, below the sticky column headers (and app header / above the bottom nav on page scroll). */
+      area: () => {
+        const element = scrollRef.current;
+        const header = element?.querySelector<HTMLElement>('[data-grid-header]')?.offsetHeight ?? 0;
+        if (latest.current.pageScroll) {
+          return { top: appHeaderHeight(PHONE_STICKY_TOP) + header, bottom: window.innerHeight - PHONE_BOTTOM_NAV };
+        }
+        const rect = element?.getBoundingClientRect();
+        return rect
+          ? { top: Math.max(rect.top, 0) + header, bottom: Math.min(rect.bottom, window.innerHeight) }
+          : { top: 0, bottom: 0 };
+      },
+    }),
+    [scrollRef]
+  );
 
   const validate = useCallback((columnKey: string, appointmentId: string, start: number, duration: number) => {
     const { columns: cols, slotMinutes: slot, today: day, nowMinutes: now } = latest.current;
@@ -699,85 +751,111 @@ export function useGridDrag(input: {
   const onPointerDown = useCallback(
     (event: React.PointerEvent, appointment: Appointment, mode: 'move' | 'resize') => {
       if (!latest.current.options) return;
+      const touch = event.pointerType === 'touch';
+      if (!touch && event.button !== 0) return;
       const originStart = minutesOfDay(appointment.scheduledAt);
       const duration = appointmentMinutes(appointment, latest.current.slotMinutes);
       const originColumn = latest.current.columns.find((c) => c.appointments.some((a) => a.id === appointment.id));
       if (!originColumn) return;
 
-      if (event.pointerType === 'touch') {
-        const timer = window.setTimeout(() => {
-          suppressClickUntil.current = Date.now() + 1500;
-          setPlacing({ appointment, duration });
-          navigator.vibrate?.(15);
-        }, LONG_PRESS_MS);
-        const cancel = () => {
-          window.clearTimeout(timer);
-          window.removeEventListener('pointerup', cancel);
-          window.removeEventListener('pointercancel', cancel);
-          window.removeEventListener('pointermove', onMoveCheck);
-        };
-        const startX = event.clientX;
-        const startY = event.clientY;
-        const onMoveCheck = (move: PointerEvent) => {
-          if (Math.hypot(move.clientX - startX, move.clientY - startY) > 8) cancel();
-        };
-        window.addEventListener('pointerup', cancel);
-        window.addEventListener('pointercancel', cancel);
-        window.addEventListener('pointermove', onMoveCheck);
-        return;
-      }
-      if (event.button !== 0) return;
-
       const startX = event.clientX;
       const startY = event.clientY;
+      const startScroll = scroller.top();
+      let pointer = { x: startX, y: startY };
       let active = false;
+      // Auto-scroll waits for the finger to move: a block held still near an edge must stay put (release = tap-to-place).
+      let dragged = !touch;
       let current: DragGhost | null = null;
+      let frame = 0;
 
-      const onMove = (move: PointerEvent) => {
-        if (!active && Math.hypot(move.clientX - startX, move.clientY - startY) < 5) return;
-        if (!active) {
-          active = true;
-          setDraggingId(appointment.id);
-          document.body.style.userSelect = 'none';
-        }
+      const update = () => {
         const { hours: h } = latest.current;
+        // Auto-scroll moves the grid under a still finger, so the scrolled distance counts as dragged distance.
+        const deltaPx = pointer.y - startY + scroller.top() - startScroll;
         let columnKey = originColumn.key;
         let start = originStart;
         let length = duration;
         if (mode === 'move') {
           for (const [key, element] of elements.current) {
             const rect = element.getBoundingClientRect();
-            if (move.clientX >= rect.left && move.clientX <= rect.right) columnKey = key;
+            if (pointer.x >= rect.left && pointer.x <= rect.right) columnKey = key;
           }
-          start = dragTarget({ originalStart: originStart, duration, deltaPx: move.clientY - startY, pxPerMinute, hours: h });
+          start = dragTarget({ originalStart: originStart, duration, deltaPx, pxPerMinute, hours: h });
         } else {
-          length = resizeTarget({ start: originStart, originalDuration: duration, deltaPx: move.clientY - startY, pxPerMinute, hours: h });
+          length = resizeTarget({ start: originStart, originalDuration: duration, deltaPx, pxPerMinute, hours: h });
         }
         current = { columnKey, appointmentId: appointment.id, start, duration: length, valid: validate(columnKey, appointment.id, start, length) };
         setGhost(current);
       };
+      const autoScroll = () => {
+        const area = scroller.area();
+        const speed = dragged ? edgeScrollSpeed(pointer.y, area.top, area.bottom) : 0;
+        if (speed !== 0) {
+          scroller.by(speed);
+          update();
+        }
+        frame = requestAnimationFrame(autoScroll);
+      };
+      const lift = () => {
+        active = true;
+        touchLifted.current = touch;
+        setDraggingId(appointment.id);
+        document.body.style.userSelect = 'none';
+        frame = requestAnimationFrame(autoScroll);
+      };
+      const holdTimer = touch
+        ? window.setTimeout(() => {
+            navigator.vibrate?.(15);
+            lift();
+            update();
+          }, LONG_PRESS_MS)
+        : 0;
+
+      const onMove = (move: PointerEvent) => {
+        pointer = { x: move.clientX, y: move.clientY };
+        const moved = Math.hypot(move.clientX - startX, move.clientY - startY);
+        if (!active) {
+          // Touch before the lift: a moving finger is scrolling, so let it.
+          if (touch) {
+            if (moved > TOUCH_SLOP_PX) stop(false);
+            return;
+          }
+          if (moved < 5) return;
+          lift();
+        }
+        if (moved > TOUCH_SLOP_PX) dragged = true;
+        update();
+      };
       const stop = (commit: boolean) => {
+        window.clearTimeout(holdTimer);
+        cancelAnimationFrame(frame);
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
         window.removeEventListener('keydown', onKey);
-        document.body.style.userSelect = '';
+        touchLifted.current = false;
         if (active) {
+          document.body.style.userSelect = '';
           suppressClickUntil.current = Date.now() + 500;
-          const unchanged = current && current.columnKey === originColumn.key && current.start === originStart && current.duration === duration;
+          const unchanged = !current || (current.columnKey === originColumn.key && current.start === originStart && current.duration === duration);
           if (commit && current && !unchanged) finish(appointment, current);
+          // Held and let go in place: fall back to tapping a free time.
+          else if (commit && touch) setPlacing({ appointment, duration });
         }
         setGhost(null);
         setDraggingId(null);
       };
       const onUp = () => stop(true);
+      const onCancel = () => stop(false);
       const onKey = (key: KeyboardEvent) => {
         if (key.key === 'Escape') stop(false);
       };
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onCancel);
       window.addEventListener('keydown', onKey);
     },
-    [finish, validate, pxPerMinute]
+    [finish, validate, pxPerMinute, scroller]
   );
 
   const place = useCallback(
@@ -817,7 +895,7 @@ export function useGridDrag(input: {
           },
           ghost,
           draggingId: draggingId ?? placing?.appointment.id ?? null,
-          placing: Boolean(placing) && column.therapistId !== '',
+          placing: placing && column.therapistId !== '' ? { duration: placing.duration } : null,
           onPlace: (start) => place(column.key, start),
         }
       : undefined;
@@ -881,7 +959,7 @@ function GridFrame({
   const template = railMode
     ? `minmax(${minColumnWidth}px, 1fr)`
     : `${phone ? 52 : 56}px repeat(${columns.length}, minmax(${minColumnWidth}px, 1fr))`;
-  const { columnDrag, placing, cancelPlacing } = useGridDrag({ columns, hours, slotMinutes, today, nowMinutes, options: drag, pxPerMinute });
+  const { columnDrag, placing, cancelPlacing } = useGridDrag({ columns, hours, slotMinutes, today, nowMinutes, options: drag, pxPerMinute, scrollRef, pageScroll });
 
   return (
     <>
