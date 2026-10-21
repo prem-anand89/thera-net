@@ -129,6 +129,8 @@ export interface Clinic {
   timezone?: string;
   /** Default country code for new phone numbers (e.g. +91). Absent = India. */
   defaultCountryCode?: string;
+  /** The clinic sends each therapist tomorrow's agenda by email each evening. Absent = on. */
+  agendaEnabled?: boolean;
   /**
    * Patient communications module (booking requests, feedback capture,
    * Google review nudges, re-engagement reminders). Off by default — see

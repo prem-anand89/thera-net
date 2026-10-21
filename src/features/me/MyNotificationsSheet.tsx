@@ -33,16 +33,15 @@ export function MyNotificationsSheet({
   );
   const isOn = (category: PushCategory) => choices?.find((c) => c.category === category)?.enabled ?? PUSH_CATEGORY_DEFAULT[category];
   const emailOn = therapist?.emailAppointmentUpdates !== false;
-  const agendaOn = therapist?.emailDailyAgenda !== false;
 
-  async function setEmail(next: boolean, field: 'emailAppointmentUpdates' | 'emailDailyAgenda' = 'emailAppointmentUpdates') {
+  async function setEmail(next: boolean) {
     if (!therapist) return;
     setBusy(true);
     setError(null);
     try {
       await repos.therapists.put({
         ...therapist,
-        [field]: next,
+        emailAppointmentUpdates: next,
         updatedAt: new Date().toISOString(),
       });
     } catch (e) {
@@ -101,23 +100,6 @@ export function MyNotificationsSheet({
         )}
         {therapist && (
           <div className="space-y-1.5 border-t border-[var(--border)] pt-4">
-            <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
-              <span>
-                <span className="block text-sm font-medium text-[var(--ink)]">Email me tomorrow's agenda</span>
-                <span className="block text-xs text-[var(--muted)]">
-                  One email each evening at 8 pm listing tomorrow's appointments, with a calendar file.
-                </span>
-              </span>
-              <input
-                type="checkbox"
-                role="switch"
-                className="h-5 w-5 shrink-0 accent-[var(--teal)]"
-                aria-label="Email me tomorrow's agenda"
-                checked={agendaOn}
-                disabled={busy}
-                onChange={(e) => void setEmail(e.target.checked, 'emailDailyAgenda')}
-              />
-            </label>
             <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
               <span>
                 <span className="block text-sm font-medium text-[var(--ink)]">Email me each appointment</span>

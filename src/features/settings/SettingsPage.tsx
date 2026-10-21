@@ -1249,12 +1249,12 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
   );
 }
 
-type ClinicRegionFields = Pick<Clinic, 'timezone' | 'defaultCountryCode'>;
+type ClinicRegionFields = Pick<Clinic, 'timezone' | 'defaultCountryCode' | 'agendaEnabled'>;
 
 /** Time zone and phone country code: what every server-sent time and every new phone number starts from. */
 function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<ClinicRegionFields>(
-    (c) => ({ timezone: clinicTimezone(c), defaultCountryCode: clinicCountryCode(c) }),
+    (c) => ({ timezone: clinicTimezone(c), defaultCountryCode: clinicCountryCode(c), agendaEnabled: c.agendaEnabled !== false }),
     onDirtyChange
   );
   const [editing, setEditing] = useState(false);
@@ -1270,7 +1270,7 @@ function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
     <div className="mt-6">
       <SectionCard
         id="settings-card-region"
-        title="Region"
+        title="Region and agenda"
         action={editing ? undefined : <SetOnceEditButton label="Edit region" onClick={() => setEditing(true)} />}
       >
         <fieldset disabled={!editing} className="contents">
@@ -1321,6 +1321,22 @@ function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
               </select>
             </Field>
           </div>
+          <label className="mt-4 flex min-h-11 cursor-pointer items-center justify-between gap-3">
+            <span>
+              <span className="block text-sm font-medium text-[var(--ink)]">Daily agenda email</span>
+              <span className="block text-xs text-[var(--muted)]">
+                At 8 pm each therapist with a login gets tomorrow's appointments in one email, with a calendar file.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Daily agenda email"
+              className="h-5 w-5 shrink-0 accent-[var(--teal)]"
+              checked={form.agendaEnabled !== false}
+              onChange={(e) => set({ agendaEnabled: e.target.checked })}
+            />
+          </label>
         </fieldset>
         {editing && (
           <SectionSaveBar

@@ -21,7 +21,7 @@ export function escapeHtml(value: string): string {
 }
 
 function icsEscape(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\;').replace(/\n/g, '\\n');
+  return value.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
 }
 
 function icsStamp(date: Date): string {

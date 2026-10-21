@@ -67,16 +67,6 @@ describe('MyNotificationsSheet', () => {
     expect(put.mock.calls[0][0]).toMatchObject({ id: 't1', emailAppointmentUpdates: false });
   });
 
-  it('the daily agenda switch is on by default and saves its own opt-out without touching the per-appointment one', async () => {
-    render(<MyNotificationsSheet open onClose={() => {}} role="therapist" therapist={therapist} />);
-    const agenda = screen.getByRole('switch', { name: /tomorrow's agenda/i });
-    expect(agenda).toBeChecked();
-    fireEvent.click(agenda);
-    await waitFor(() => expect(put).toHaveBeenCalled());
-    expect(put.mock.calls[0][0]).toMatchObject({ id: 't1', emailDailyAgenda: false });
-    expect(put.mock.calls[0][0].emailAppointmentUpdates).toBeUndefined();
-  });
-
   it('"hide patient names" starts off and saves an explicit on', async () => {
     render(<MyNotificationsSheet open onClose={() => {}} role="therapist" therapist={therapist} />);
     const hide = screen.getByRole('switch', { name: 'Hide patient names in notifications' });

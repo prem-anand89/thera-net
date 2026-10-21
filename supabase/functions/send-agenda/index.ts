@@ -41,10 +41,11 @@ Deno.serve(async (request) => {
   const now = new Date();
   const summary = { clinics: 0, sent: 0, skipped: 0, failed: 0 };
 
-  const { data: clinics, error: clinicsError } = await admin.from('clinics').select('id, name, timezone, agenda_hour');
+  const { data: clinics, error: clinicsError } = await admin.from('clinics').select('id, name, timezone, agenda_hour, agenda_enabled');
   if (clinicsError) return json({ error: clinicsError.message }, 500);
 
   for (const clinic of clinics ?? []) {
+    if (clinic.agenda_enabled === false) continue;
     const tz = clinic.timezone || DEFAULT_CLINIC_TIMEZONE;
     if (zonedParts(now, tz).hour !== (clinic.agenda_hour ?? 20)) continue;
     summary.clinics++;
@@ -54,7 +55,7 @@ Deno.serve(async (request) => {
 
     const [{ data: therapists }, { data: appointments }] = await Promise.all([
       admin
-        .from('therapists').select('id, name, user_id, email_daily_agenda')
+        .from('therapists').select('id, name, user_id')
         .eq('clinic_id', clinic.id).eq('active', true).not('user_id', 'is', null),
       admin
         .from('appointments').select('id, therapist_id, patient_name, scheduled_at, duration_minutes')
@@ -64,7 +65,6 @@ Deno.serve(async (request) => {
     ]);
 
     for (const therapist of therapists ?? []) {
-      if (therapist.email_daily_agenda === false) continue;
       const mine: AgendaAppointment[] = (appointments ?? [])
         .filter((a) => a.therapist_id === therapist.id)
         .map((a) => ({ id: a.id, patientName: a.patient_name, startsAt: a.scheduled_at, durationMinutes: a.duration_minutes ?? 30 }));

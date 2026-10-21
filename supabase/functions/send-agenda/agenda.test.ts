@@ -39,3 +39,8 @@ Deno.test('one calendar file holds an event per appointment, with the same UID a
 Deno.test('a date heading is the date it names', () => {
   assertEquals(dayHeading('2026-10-22'), 'Thu, 22 Oct');
 });
+
+Deno.test('semicolons and commas in a patient name are escaped in the calendar file', () => {
+  const ics = buildAgendaIcs({ ...input, appointments: [{ ...input.appointments[0], patientName: 'Rao; Anil, Jr' }] }, new Date('2026-10-21T14:30:00Z'));
+  assertStringIncludes(ics, 'SUMMARY:Appointment: Rao\\; Anil\\, Jr');
+});
