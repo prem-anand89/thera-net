@@ -76,6 +76,12 @@ describe('MobileDayGrid', () => {
     else expect(block).not.toHaveTextContent('10:00 AM');
   });
 
+  it('offers free time every "start step" minutes while booking and blocks keep the appointment length', () => {
+    const { container } = render(<MobileDayGrid {...dayProps({ slotMinutes: 60, stepMinutes: 15, appointments: [], nowMinutes: 8 * 60 })} />);
+    const labels = [...container.querySelectorAll('button[aria-label^="Book"]')].map((b) => b.getAttribute('aria-label')!.replace(/.* at /, ''));
+    expect(labels.slice(0, 5)).toEqual(['9:00 AM', '9:15 AM', '9:30 AM', '9:45 AM', '10:00 AM']);
+  });
+
   it('keeps a free slot at least 44px tall even for 15-minute slots', () => {
     render(<MobileDayGrid {...dayProps({ slotMinutes: 15 })} />);
     const slot = screen.getByRole('button', { name: 'Book Dr Ravi at 11:00 AM' });

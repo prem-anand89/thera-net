@@ -32,6 +32,7 @@ import {
   type SlotHoursStatus,
   type ClosedRange,
   dayLoad,
+  startStepMinutes,
 } from '@/domain/schedule';
 import type { Appointment, AppointmentRequest, UUID, WorkingHours } from '@/domain/types';
 import { InstallAppBanner } from '@/components/InstallAppBanner';
@@ -170,6 +171,8 @@ export function ScheduleBookingsView({
   const isTherapist = scope.role === 'therapist';
   const myTherapistId = scope.myTherapistId;
   const slotMinutes = clinic.slotDurationMinutes || 30;
+  // Staff start times (Settings → "Start times every"); the slot length stays the default length.
+  const stepMinutes = startStepMinutes(clinic);
   const hours = useMemo(
     () => ({ startHour: clinic.bookingStartHour ?? 9, endHour: clinic.bookingEndHour ?? 17 }),
     [clinic.bookingStartHour, clinic.bookingEndHour]
@@ -367,11 +370,11 @@ export function ScheduleBookingsView({
         if (!t || t.active === false) return [];
         // Free time is only offered where the viewer can book (a colleague's column is view-only).
         if (!canManageAll && id !== myTherapistId) return [];
-        const gaps = freeGaps(dayAppointments, id, date, hours, slotMinutes, { notBefore: dayNow ?? undefined, alignToSlots: true, working: workingFor(id, date) });
+        const gaps = freeGaps(dayAppointments, id, date, hours, slotMinutes, { notBefore: dayNow ?? undefined, alignToSlots: true, alignStep: stepMinutes, minMinutes: stepMinutes, working: workingFor(id, date) });
         return gaps.map((g) => ({ ...g, therapistId: id, therapistName: t.name }));
       })
       .sort((a, b) => a.start - b.start);
-  }, [closedToday.closed, date, today, selectedIds, roster, rosterById, dayAppointments, hours, slotMinutes, dayNow, workingFor, canManageAll, myTherapistId]);
+  }, [closedToday.closed, date, today, selectedIds, roster, rosterById, dayAppointments, hours, slotMinutes, stepMinutes, dayNow, workingFor, canManageAll, myTherapistId]);
   const closures = useMemo(
     () => groupClosedRanges(closedDates ?? []).filter((range) => range.to >= today).slice(0, 8),
     [closedDates, today]
@@ -1057,6 +1060,7 @@ export function ScheduleBookingsView({
                     appointments={dayAppointments}
                     hours={phoneHours}
                     slotMinutes={slotMinutes}
+                    stepMinutes={stepMinutes}
                     closed={closedToday}
                     colorFor={colorFor}
                     selectedId={selectedId}
@@ -1077,6 +1081,7 @@ export function ScheduleBookingsView({
                     appointments={threeDayAppointments}
                     hours={phoneHours}
                     slotMinutes={slotMinutes}
+                    stepMinutes={stepMinutes}
                     closedFor={closedFor}
                     colorFor={colorFor}
                     selectedId={selectedId}
@@ -1106,6 +1111,7 @@ export function ScheduleBookingsView({
                       appointments={visibleAppointments.filter((a) => a.therapistId === singleTherapist.id)}
                       hours={displayHours}
                       slotMinutes={slotMinutes}
+                      stepMinutes={stepMinutes}
                       closedFor={closedFor}
                       colorFor={colorFor}
                       selectedId={selectedId}
@@ -1123,6 +1129,7 @@ export function ScheduleBookingsView({
                       appointments={visibleAppointments}
                       hours={displayHours}
                       slotMinutes={slotMinutes}
+                      stepMinutes={stepMinutes}
                       closedFor={closedFor}
                       colorFor={colorFor}
                       reasonFor={reasonFor}
@@ -1151,6 +1158,7 @@ export function ScheduleBookingsView({
                     appointments={dayAppointments}
                     hours={displayHours}
                     slotMinutes={slotMinutes}
+                    stepMinutes={stepMinutes}
                     closed={closedToday}
                     colorFor={colorFor}
                     selectedId={selectedId}
@@ -1171,6 +1179,7 @@ export function ScheduleBookingsView({
                 appointments={dayAppointments}
                 hours={hours}
                 slotMinutes={slotMinutes}
+                stepMinutes={stepMinutes}
                 closed={closedToday}
                 nowMinutes={dayNow}
                 onPick={({ therapistId, time }) => { setFindTime(false); openBooking({ date, time, therapistId }); }}

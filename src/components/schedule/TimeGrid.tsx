@@ -47,8 +47,11 @@ export type MultiLaneConfig = {
   maxLanes: number;
   /** Therapist pill for a block; null for unassigned. */
   pillFor: (appointment: Appointment) => { name: string } | null;
-  /** True when at least one bookable therapist is free and working at that time. */
-  freeAt: (minutes: number) => boolean;
+  /**
+   * Booking: true when at least one bookable therapist is free and working for [minutes, minutes + length).
+   * Moving: true when the moving appointment's own therapist is free then (its own time counts as free).
+   */
+  freeAt: (minutes: number, length: number, moving?: { id: string; therapistId: string | null }) => boolean;
   /** Opens the list behind a "+N" chip. */
   onOverflow: (appointments: Appointment[], title: string) => void;
 };
@@ -65,7 +68,10 @@ type DayColumnProps = {
   date: string;
   appointments: Appointment[];
   hours: GridHours;
+  /** Default appointment length (and the length of legacy rows with none). */
   slotMinutes: number;
+  /** Free time is offered every this many minutes; defaults to slotMinutes. */
+  stepMinutes?: number;
   closed: ClosedDayInfo;
   colorFor: (appointment: Appointment) => string;
   /** Short condition / reason shown on blocks an hour or longer. */
@@ -134,6 +140,7 @@ export function DayColumn({
   appointments,
   hours,
   slotMinutes,
+  stepMinutes = slotMinutes,
   closed,
   colorFor,
   reasonFor,
@@ -182,22 +189,26 @@ export function DayColumn({
   const freeAt = multi?.freeAt;
   const placeLength = drag?.placing?.duration ?? null;
   const movingId = placeLength !== null ? drag?.draggingId ?? null : null;
+  const movingTherapistId = movingId ? appointments.find((a) => a.id === movingId)?.therapistId ?? null : null;
+  const moving = useMemo(() => (movingId ? { id: movingId, therapistId: movingTherapistId } : null), [movingId, movingTherapistId]);
   // Placing targets come every 30 minutes and must fit the moving appointment's own length; booking targets follow the clinic slot.
-  const targetStep = placeLength !== null ? PLACE_STEP_MINUTES : slotMinutes;
+  const targetStep = placeLength !== null ? PLACE_STEP_MINUTES : stepMinutes;
   const freeSlots = useMemo(() => {
     if ((!onBook && placeLength === null) || closed.closed || isPastDay) return [];
     return generateScheduleSlots(targetStep, hours.startHour, hours.endHour).filter((slot) => {
       if (nowMinutes !== null && slot.minutes < nowMinutes) return false;
-      const end = slot.minutes + (placeLength ?? slotMinutes);
+      const length = placeLength ?? stepMinutes;
+      const end = slot.minutes + length;
       if (placeLength !== null && end > hours.endHour * 60) return false;
-      // Shared column: free when any bookable therapist is free and working, not when nobody is booked.
-      if (freeAt) return freeAt(slot.minutes);
+      // Shared column: free when any bookable therapist is free and working, not when nobody is booked;
+      // when moving, only the moving appointment's own therapist counts.
+      if (freeAt) return freeAt(slot.minutes, length, moving ?? undefined);
       // Same rule as the server: every non-cancelled appointment holds its time (the one being moved frees its own).
       return !blocks.some(
         (b) => b.appointment.id !== movingId && b.appointment.status !== 'cancelled' && b.start < end && b.end > slot.minutes
       );
     });
-  }, [onBook, placeLength, movingId, targetStep, closed.closed, isPastDay, slotMinutes, hours.startHour, hours.endHour, nowMinutes, blocks, freeAt]);
+  }, [onBook, placeLength, movingId, moving, targetStep, closed.closed, isPastDay, stepMinutes, hours.startHour, hours.endHour, nowMinutes, blocks, freeAt]);
   const offHours = useMemo(() => {
     if (!working || closed.closed) return [];
     const open = hours.startHour * 60;
@@ -291,7 +302,7 @@ export function DayColumn({
       <div className="absolute inset-y-0 right-0" style={{ left: rail ? RAIL_W : 0 }}>
       {freeSlots.map((slot) => {
         const geometry = blockGeometry(slot.minutes, targetStep, hours.startHour, pxPerMinute);
-        const isOffHours = Boolean(working && !withinWorking(working, slot.minutes, placeLength ?? slotMinutes));
+        const isOffHours = Boolean(working && !withinWorking(working, slot.minutes, placeLength ?? stepMinutes));
         return (
           <button
             key={slot.time}
@@ -907,6 +918,7 @@ function GridFrame({
   columns,
   hours,
   slotMinutes,
+  stepMinutes,
   today,
   nowMinutes,
   colorFor,
@@ -923,6 +935,7 @@ function GridFrame({
   columns: GridColumn[];
   hours: GridHours;
   slotMinutes: number;
+  stepMinutes?: number;
   today: string;
   nowMinutes: number;
   colorFor: (appointment: Appointment) => string;
@@ -1016,6 +1029,7 @@ function GridFrame({
             appointments={column.appointments}
             hours={hours}
             slotMinutes={slotMinutes}
+            stepMinutes={stepMinutes}
             closed={column.closed}
             colorFor={colorFor}
             reasonFor={column.isColleague ? undefined : reasonFor}
@@ -1058,6 +1072,7 @@ export function ResourceDayGrid({
   appointments,
   hours,
   slotMinutes,
+  stepMinutes,
   closed,
   colorFor,
   reasonFor,
@@ -1079,6 +1094,8 @@ export function ResourceDayGrid({
   appointments: Appointment[];
   hours: GridHours;
   slotMinutes: number;
+  /** Free time is offered every this many minutes (the clinic's "Start times every"); defaults to slotMinutes. */
+  stepMinutes?: number;
   closed: ClosedDayInfo;
   colorFor: (appointment: Appointment) => string;
   /** Short condition / reason shown on blocks an hour or longer. */
@@ -1154,6 +1171,7 @@ export function ResourceDayGrid({
       columns={columns}
       hours={hours}
       slotMinutes={slotMinutes}
+      stepMinutes={stepMinutes}
       today={today}
       nowMinutes={nowMinutes}
       colorFor={colorFor}
@@ -1200,6 +1218,7 @@ export function WeekTimeGrid({
   appointments,
   hours,
   slotMinutes,
+  stepMinutes = slotMinutes,
   closedFor,
   colorFor,
   reasonFor,
@@ -1221,6 +1240,8 @@ export function WeekTimeGrid({
   appointments: Appointment[];
   hours: GridHours;
   slotMinutes: number;
+  /** Free time is offered every this many minutes (the clinic's "Start times every"); defaults to slotMinutes. */
+  stepMinutes?: number;
   closedFor: (date: string) => ClosedDayInfo;
   colorFor: (appointment: Appointment) => string;
   /** Short condition / reason shown on blocks an hour or longer. */
@@ -1248,17 +1269,15 @@ export function WeekTimeGrid({
     let multiColumn: Pick<GridColumn, 'multi' | 'working' | 'onBook'> | null = null;
     if (multi) {
       const bookable = multi.therapists.filter((t) => t.id && multi.canBookFor(t.id));
-      const freeTherapistIds = (minutes: number) =>
+      const clashes = (therapistId: string, minutes: number, length: number, ignoreId?: string) =>
+        dayAppointments.some((a) => {
+          if (a.therapistId !== therapistId || a.status === 'cancelled' || a.id === ignoreId) return false;
+          const start = minutesOfDay(a.scheduledAt);
+          return start < minutes + length && start + appointmentMinutes(a, slotMinutes) > minutes;
+        });
+      const freeTherapistIds = (minutes: number, length = stepMinutes) =>
         bookable
-          .filter(
-            (t) =>
-              withinWorking(multi.workingForTherapist(t.id, day), minutes, slotMinutes) &&
-              !dayAppointments.some((a) => {
-                if (a.therapistId !== t.id || a.status === 'cancelled') return false;
-                const start = minutesOfDay(a.scheduledAt);
-                return start < minutes + slotMinutes && start + appointmentMinutes(a, slotMinutes) > minutes;
-              })
-          )
+          .filter((t) => withinWorking(multi.workingForTherapist(t.id, day), minutes, length) && !clashes(t.id, minutes, length))
           .map((t) => t.id);
       const byId = new Map(multi.therapists.map((t) => [t.id, t]));
       multiColumn = {
@@ -1276,7 +1295,11 @@ export function WeekTimeGrid({
             const therapist = a.therapistId ? byId.get(a.therapistId) : undefined;
             return therapist ? { name: shortName(therapist.name) } : null;
           },
-          freeAt: (minutes) => freeTherapistIds(minutes).length > 0,
+          // A move may land outside working hours (it asks first, as in Day view), so only clashes count.
+          freeAt: (minutes, length, moving) =>
+            moving
+              ? Boolean(moving.therapistId) && !clashes(moving.therapistId!, minutes, length, moving.id)
+              : freeTherapistIds(minutes, length).length > 0,
           onOverflow: (list, title) => setOverflowList({ title, appointments: list }),
         },
       };
@@ -1325,6 +1348,7 @@ export function WeekTimeGrid({
         columns={columns}
         hours={hours}
         slotMinutes={slotMinutes}
+        stepMinutes={stepMinutes}
         today={today}
         nowMinutes={nowMinutes}
         colorFor={colorFor}

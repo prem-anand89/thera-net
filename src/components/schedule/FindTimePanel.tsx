@@ -11,6 +11,7 @@ export function FindTimePanel({
   appointments,
   hours,
   slotMinutes,
+  stepMinutes = slotMinutes,
   closed,
   nowMinutes,
   onPick,
@@ -20,7 +21,10 @@ export function FindTimePanel({
   therapists: { id: UUID; name: string; color: string }[];
   appointments: Appointment[];
   hours: { startHour: number; endHour: number };
+  /** Default appointment length: a start is offered only if this much time is free. */
   slotMinutes: number;
+  /** Starts are offered every this many minutes; defaults to slotMinutes. */
+  stepMinutes?: number;
   closed: ClosedDayInfo;
   /** Minutes after midnight when `date` is today; past times are skipped. */
   nowMinutes: number | null;
@@ -38,10 +42,11 @@ export function FindTimePanel({
         const starts = freeGaps(appointments, therapist.id, date, hours, slotMinutes, {
           notBefore: nowMinutes ?? undefined,
           alignToSlots: true,
+          alignStep: stepMinutes,
           working: workingFor?.(therapist.id),
         }).flatMap((gap) => {
           const result: number[] = [];
-          for (let at = gap.start; at + slotMinutes <= gap.end; at += slotMinutes) result.push(at);
+          for (let at = gap.start; at + slotMinutes <= gap.end; at += stepMinutes) result.push(at);
           return result;
         });
         return (

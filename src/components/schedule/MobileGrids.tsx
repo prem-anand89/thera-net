@@ -16,12 +16,12 @@ export function MobileDayGrid(props: Omit<ResourceProps, 'phone' | 'pxPerMinute'
     <ResourceDayGrid
       {...props}
       phone
-      pxPerMinute={single ? phoneSingleColumnPxPerMinute(props.slotMinutes) : phonePxPerMinute(props.slotMinutes)}
+      pxPerMinute={single ? phoneSingleColumnPxPerMinute(props.stepMinutes ?? props.slotMinutes) : phonePxPerMinute(props.stepMinutes ?? props.slotMinutes)}
     />
   );
 }
 
 /** Phone 3-Day view: one therapist, three date columns. `days` must hold the 3 dates. */
 export function MobileThreeDayGrid(props: Omit<WeekProps, 'phone' | 'pxPerMinute'>) {
-  return <WeekTimeGrid {...props} phone pxPerMinute={phonePxPerMinute(props.slotMinutes)} />;
+  return <WeekTimeGrid {...props} phone pxPerMinute={phonePxPerMinute(props.stepMinutes ?? props.slotMinutes)} />;
 }

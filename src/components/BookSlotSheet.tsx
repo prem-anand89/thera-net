@@ -21,6 +21,7 @@ import {
   patientAttendance,
   lengthLabel,
   generateScheduleSlots,
+  startStepMinutes,
   isClosedDay,
   isTherapistSlotOccupied,
   localDateTime,
@@ -75,7 +76,7 @@ type BookSlotSheetProps = {
   rescheduleAppointment?: Appointment;
 };
 
-const LENGTH_OPTIONS = [30, 45, 60, 90];
+const LENGTH_OPTIONS = [15, 30, 45, 60, 90];
 
 function displayDate(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', {
@@ -104,6 +105,8 @@ export function BookSlotSheet({
   const clinic = useClinic();
   const { myTherapistId } = useWorkspaceScope();
   const slotMinutes = clinic.slotDurationMinutes || 30;
+  // Start times follow the clinic's "Start times every"; the slot length stays the default length.
+  const stepMinutes = startStepMinutes(clinic);
   const startHour = clinic.bookingStartHour ?? 9;
   const endHour = clinic.bookingEndHour ?? 17;
   const today = toLocalDateStr(new Date());
@@ -276,7 +279,7 @@ export function BookSlotSheet({
     bufferHours,
     working: workingNow,
   });
-  const slots = generateScheduleSlots(slotMinutes, slotWindow.startHour, slotWindow.endHour);
+  const slots = generateScheduleSlots(stepMinutes, slotWindow.startHour, slotWindow.endHour);
   const workingSlots = slots.filter(
     (slot) => slotHoursStatus({ minutes: slot.minutes, length: lengthMinutes, working: workingNow, clinicHours: { startHour, endHour } }) === 'ok'
   );

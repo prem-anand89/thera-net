@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, edgeScrollSpeed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
+import { addWeeks, bookableWindow, dayLoad, lengthLabel, dragTarget, dropAllowed, edgeScrollSpeed, resizeTarget, snapMinutes, seriesDates, seriesProblem, slotHoursStatus, displayHoursFor, withinWorking, workingHoursProblem, workingIntervals, firstAvailableSlot, nextAppointmentFor, patientAttendance, appointmentsOverlap, assignLanes, belongsToColumn, blockGeometry, countByDate, filterHistory, formatMinutes, freeGaps, generateScheduleSlots, startStepMinutes, getWeekStart, groupClosedRanges, isClosedDay, isPublicSlotTaken, isTherapistSlotOccupied, localDateTime, toLocalDateStr, weekDays } from './schedule';
 import type { Appointment, UUID } from './types';
 
 const at = (date: string, time: string) => localDateTime(date, time).toISOString();
@@ -237,6 +237,25 @@ describe('slot-aligned free time', () => {
     expect(freeGaps(rows, 't1', '2026-10-01', hours, 30, { alignToSlots: true, notBefore: 550 })).toEqual([
       { start: 570, end: 600 }, // 9:10 -> 9:30
       { start: 660, end: 720 },
+    ]);
+  });
+});
+
+describe('start times every N minutes', () => {
+  it('uses the clinic start step, else the slot length, else 30', () => {
+    expect(startStepMinutes({ slotDurationMinutes: 60, startStepMinutes: 15 })).toBe(15);
+    expect(startStepMinutes({ slotDurationMinutes: 60, startStepMinutes: null })).toBe(60);
+    expect(startStepMinutes({ slotDurationMinutes: 45 })).toBe(45);
+    expect(startStepMinutes({})).toBe(30);
+  });
+
+  it('aligns gap starts to the start step, not the appointment length', () => {
+    const rows = [appt({ id: '1', scheduledAt: at('2026-10-01', '10:00'), durationMinutes: 40 })];
+    const hours = { startHour: 9, endHour: 12 };
+    // 60-minute slots, 15-minute starts: free time after a 40-minute booking begins at 10:45, not 11:00.
+    expect(freeGaps(rows, 't1', '2026-10-01', hours, 60, { alignToSlots: true, alignStep: 15, minMinutes: 15 })).toEqual([
+      { start: 540, end: 600 },
+      { start: 645, end: 720 },
     ]);
   });
 });

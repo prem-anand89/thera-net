@@ -66,6 +66,14 @@ export function generateScheduleSlots(
   return slots;
 }
 
+/**
+ * How often staff can start an appointment: the clinic's "Start times every"
+ * (15 or 30), else its slot length. Public booking always uses the slot length.
+ */
+export function startStepMinutes(clinic: { slotDurationMinutes?: number | null; startStepMinutes?: number | null }): number {
+  return clinic.startStepMinutes || clinic.slotDurationMinutes || 30;
+}
+
 export function appointmentStartsOnDate(appointment: Appointment, date: string): boolean {
   return toLocalDateStr(new Date(appointment.scheduledAt)) === date;
 }
@@ -144,13 +152,14 @@ export function freeGaps(
   date: string,
   hours: { startHour: number; endHour: number },
   fallbackMinutes: number,
-  options: { minMinutes?: number; notBefore?: number; alignToSlots?: boolean; working?: Interval[] } = {}
+  options: { minMinutes?: number; notBefore?: number; alignToSlots?: boolean; alignStep?: number; working?: Interval[] } = {}
 ): Interval[] {
   const open = hours.startHour * 60;
-  // Round a start up onto the clinic's slot grid (09:00, 09:30, …), so free
+  // Round a start up onto the clinic's start-time grid (09:00, 09:30, …), so free
   // time after a 45-minute booking or "now" is offered at a bookable time.
+  const step = options.alignStep ?? fallbackMinutes;
   const align = (minutes: number) =>
-    options.alignToSlots ? open + Math.ceil((minutes - open) / fallbackMinutes) * fallbackMinutes : minutes;
+    options.alignToSlots ? open + Math.ceil((minutes - open) / step) * step : minutes;
   const dayStart = Math.max(open, options.notBefore ?? 0);
   const dayEnd = hours.endHour * 60;
   const busy = appointments

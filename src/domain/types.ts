@@ -125,6 +125,8 @@ export interface Clinic {
    */
   signaturePath?: string | null;
   slotDurationMinutes: number;
+  /** Staff start times come every this many minutes (15 or 30). Absent/null = every slotDurationMinutes. Public booking ignores it. */
+  startStepMinutes?: number | null;
   /** IANA zone (e.g. Asia/Kolkata) every server-sent time uses. Absent = India. */
   timezone?: string;
   /** Default country code for new phone numbers (e.g. +91). Absent = India. */

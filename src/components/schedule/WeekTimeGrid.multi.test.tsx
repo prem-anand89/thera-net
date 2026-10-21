@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Appointment } from '@/domain/types';
 import { localDateTime } from '@/domain/schedule';
 import { WeekTimeGrid, type GridTherapist } from './TimeGrid';
@@ -135,6 +135,33 @@ describe('WeekTimeGrid with several therapists', () => {
     );
     expect(container.querySelector('button[aria-label*="9:00 AM"]')).toBeNull();
     expect(container.querySelector('button[aria-label*="10:00 AM"]')).not.toBeNull();
+  });
+
+  it('moving an appointment offers times where its own therapist fits the full length, whoever else is free', () => {
+    vi.useFakeTimers();
+    try {
+      const mine = appointment({ id: 'mine', therapistId: 't1', scheduledAt: localDateTime(DAY, '09:00').toISOString(), durationMinutes: 60 });
+      // t1 is busy 10:30-11:00; t2 is free all morning (would make plain "free time" show 10:30).
+      const other = appointment({ id: 'other', therapistId: 't1', patientName: 'Ravi K', scheduledAt: localDateTime(DAY, '10:30').toISOString(), durationMinutes: 30 });
+      render(
+        <WeekTimeGrid
+          {...props(
+            { appointments: [mine, other], drag: { canDrag: () => true, onMove: vi.fn() } },
+            { therapists: therapists.slice(0, 2) }
+          )}
+        />
+      );
+      fireEvent.pointerDown(screen.getByRole('button', { name: /Priya Sharma/ }), { pointerType: 'touch', clientX: 50, clientY: 50 });
+      act(() => {
+        vi.advanceTimersByTime(350);
+      });
+      fireEvent.pointerUp(window, { pointerType: 'touch' });
+      const targets = screen.getAllByRole('button', { name: /^Move here/ }).map((b) => b.getAttribute('aria-label')!.replace(/.* at /, '').replace(/ \(.*/, ''));
+      // 9:00 (its own time), 9:30 (ends 10:30, just clear of Ravi) and 11:00 (after Ravi, to closing). 10:00 and 10:30 run into Ravi.
+      expect(targets).toEqual(['9:00 AM', '9:30 AM', '11:00 AM']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('tapping free time offers only the therapists free then', () => {

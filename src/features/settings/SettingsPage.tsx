@@ -1383,6 +1383,7 @@ type ClinicHoursFields = Pick<
   | 'staffBookingBufferHours'
   | 'closedWeekdays'
   | 'slotDurationMinutes'
+  | 'startStepMinutes'
 >;
 
 function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
@@ -1394,6 +1395,7 @@ function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean)
         staffBookingBufferHours: c.staffBookingBufferHours ?? 3,
         closedWeekdays: c.closedWeekdays ?? [],
         slotDurationMinutes: c.slotDurationMinutes ?? 30,
+        startStepMinutes: c.startStepMinutes ?? null,
       }),
       onDirtyChange
     );
@@ -1450,7 +1452,7 @@ function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean)
               label={
                 <>
                   Default appointment duration
-                  <InfoTip text="The length of a standard appointment. This sets default time blocks on the schedule calendar and online booking." />
+                  <InfoTip text="The length of a standard appointment. Online booking offers patients start times at this interval." />
                 </>
               }
             >
@@ -1463,6 +1465,27 @@ function ClinicHoursSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean)
                 <option value={30}>30 minutes</option>
                 <option value={45}>45 minutes</option>
                 <option value={60}>60 minutes</option>
+              </select>
+            </Field>
+
+            <Field
+              label={
+                <>
+                  Start times every
+                  <InfoTip text="How often staff can start an appointment on the schedule and in the booking sheet, e.g. every 15 minutes with 60-minute appointments. Online booking for patients keeps the appointment duration." />
+                </>
+              }
+              htmlFor="clinic-start-step"
+            >
+              <select
+                id="clinic-start-step"
+                className={inputCls}
+                value={form.startStepMinutes ?? ''}
+                onChange={(e) => set({ startStepMinutes: e.target.value ? Number(e.target.value) : null })}
+              >
+                <option value="">Same as duration ({form.slotDurationMinutes ?? 30} min)</option>
+                <option value={15}>15 minutes</option>
+                <option value={30}>30 minutes</option>
               </select>
             </Field>
 

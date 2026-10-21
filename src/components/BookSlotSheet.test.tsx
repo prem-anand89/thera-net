@@ -115,6 +115,18 @@ describe('BookSlotSheet', () => {
     expect(slot('10:30 AM')).toBeEnabled();
   });
 
+  it('offers start times every "Start times every" minutes, with 15 minutes as a length', () => {
+    data.clinic = { slotDurationMinutes: 60, startStepMinutes: 15 };
+    try {
+      render(<BookSlotSheet isOpen onClose={() => {}} prefilledDate="2026-10-01" />);
+      expect(slot('10:15 AM')).toBeEnabled();
+      expect(slot('10:45 AM')).toBeEnabled();
+      expect(within(screen.getByRole('radiogroup', { name: 'Length' })).getByRole('radio', { name: '15m' })).toBeInTheDocument();
+    } finally {
+      data.clinic = {};
+    }
+  });
+
   it('disables occupied time for the chosen length', () => {
     render(<BookSlotSheet isOpen onClose={() => {}} appointments={[appointment({})]} prefilledDate="2026-10-01" />);
     expect(slot('11:00 AM')).toBeDisabled();
