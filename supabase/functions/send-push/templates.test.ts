@@ -1,5 +1,5 @@
 import { assertEquals, assertStringIncludes } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { buildBookingRequestPayload, buildPayload, sanitizePatientName, sanitizeSlotLabel } from './templates.ts';
+import { buildBookingRequestPayload, buildOvernightRequestsPayload, buildPayload, sanitizePatientName, sanitizeSlotLabel } from './templates.ts';
 
 Deno.test('appointment payload shows clinic-local time and no patient data', () => {
   const p = buildPayload('appointment_confirmed', '2026-10-03T10:30:00Z', 'Asia/Kolkata');
@@ -100,4 +100,9 @@ Deno.test('a request date reads as the date it names, not shifted by the server 
   const p = buildBookingRequestPayload({ patientName: 'Meera', date: '2026-10-21', timeLabel: '9:00 AM' }, 'Asia/Kolkata');
   assertStringIncludes(p.body, '21 Oct');
   assertEquals(buildBookingRequestPayload({ patientName: 'Meera', date: null, timeLabel: null }, 'Asia/Kolkata', true).body, '');
+});
+
+Deno.test('the overnight note counts the requests and says so in the singular', () => {
+  assertEquals(buildOvernightRequestsPayload(1).body, '1 new booking request came in overnight');
+  assertEquals(buildOvernightRequestsPayload(3).body, '3 new booking requests came in overnight');
 });

@@ -1,9 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 import { encryptPayload, vapidAuthHeader } from '../_shared/webPush.ts';
-import { buildAppointmentPayload, buildBookingRequestPayload, buildPayload, type PushKind, type PushPayload } from './templates.ts';
+import { buildAppointmentPayload, buildBookingRequestPayload, buildOvernightRequestsPayload, buildPayload, type PushKind, type PushPayload } from './templates.ts';
 import { PUSH_CATEGORY_BY_KIND, withoutOptedOut, type PushCategory } from './preferences.ts';
 import { subscriptionsToRemove } from './delivery.ts';
-import { DEFAULT_CLINIC_TIMEZONE, inQuietHours, localDate } from '../_shared/zoned.ts';
+import { DEFAULT_CLINIC_TIMEZONE, inQuietHours, localDate, zonedMidnight } from '../_shared/zoned.ts';
 
 /** Quiet hours in the clinic's own time: nothing is pushed from 11 pm to 6 am, except changes to today's appointments. */
 const QUIET_FROM_HOUR = 23;
@@ -88,6 +88,19 @@ async function resolveRecipients(req: SendRequest, tz: string, now: Date): Promi
           recentNewCount,
         }),
     };
+  }
+
+  if (req.kind === 'overnight_requests') {
+    // Requests still pending that arrived since quiet hours began last evening (they were never pushed).
+    const since = new Date(zonedMidnight(localDate(now, tz), tz).getTime() - (24 - QUIET_FROM_HOUR) * 3600_000);
+    const { count } = await admin
+      .from('appointment_requests').select('id', { count: 'exact', head: true })
+      .eq('clinic_id', req.clinic_id).eq('status', 'pending').gte('created_at', since.toISOString());
+    if (!count) return NOTHING;
+    const { data: members } = await admin
+      .from('clinic_members').select('user_id')
+      .eq('clinic_id', req.clinic_id).in('role', ['admin', 'front_desk']);
+    return { userIds: (members ?? []).map((m) => m.user_id), sameDay: false, build: () => buildOvernightRequestsPayload(count) };
   }
 
   if (req.kind === 'booking_request') {

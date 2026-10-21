@@ -26,6 +26,7 @@ export const PUSH_CATEGORY_BY_KIND = {
   appointment_cancelled: 'appointment_changes',
   appointment_reassigned: 'appointment_changes',
   booking_request: 'booking_request',
+  overnight_requests: 'booking_request',
   low_rating_feedback: 'low_rating_feedback',
 } as const satisfies Record<string, PushCategory>;
 

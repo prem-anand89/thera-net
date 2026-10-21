@@ -4,6 +4,7 @@ export type PushKind =
   | 'appointment_cancelled'
   | 'appointment_reassigned'
   | 'booking_request'
+  | 'overnight_requests'
   | 'low_rating_feedback';
 
 export interface PushPayload {
@@ -59,6 +60,16 @@ export function buildBookingRequestPayload(details: BookingDetails, timeZone: st
   };
 }
 
+/** The morning note for booking requests that arrived while pushes were paused (quiet hours). */
+export function buildOvernightRequestsPayload(count: number): PushPayload {
+  return {
+    title: 'Booking requests waiting',
+    body: `${count} new booking request${count === 1 ? '' : 's'} came in overnight`,
+    tag: 'booking-request',
+    url: '/schedule?tab=bookings',
+  };
+}
+
 /** "Today", "Tomorrow" or "Wed 21 Oct" for a local date, relative to the local date `today`. */
 export function relativeDayLabel(ymd: string, today: string): string {
   if (ymd === today) return 'Today';
@@ -70,7 +81,7 @@ export function relativeDayLabel(ymd: string, today: string): string {
 }
 
 export interface AppointmentPushInput {
-  kind: Exclude<PushKind, 'booking_request' | 'low_rating_feedback'>;
+  kind: Exclude<PushKind, 'booking_request' | 'overnight_requests' | 'low_rating_feedback'>;
   appointmentId: string;
   therapistId: string;
   /** Null when the recipient asked to keep patient names off notifications. */
@@ -130,5 +141,7 @@ export function buildPayload(kind: PushKind, when: string | null, timeZone: stri
       return { title: 'Thera.Net', body: 'New low-rated feedback, open to review', tag: 'feedback', url: '/schedule?tab=feedback' };
     case 'booking_request':
       throw new Error('booking_request uses buildBookingRequestPayload');
+    case 'overnight_requests':
+      throw new Error('overnight_requests uses buildOvernightRequestsPayload');
   }
 }

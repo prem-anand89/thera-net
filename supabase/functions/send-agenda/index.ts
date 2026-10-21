@@ -10,6 +10,9 @@ import { buildAgendaEmail, buildAgendaIcs, type AgendaAppointment } from './agen
  * verify_jwt is off like the other trigger-style functions here. The request carries nothing the function trusts:
  * it only ever does this idempotent, time-gated job.
  */
+/** Clinic-local hour pushes resume after quiet hours; the overnight-requests note goes out in its first quarter hour. */
+const OVERNIGHT_NUDGE_HOUR = 6;
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -45,8 +48,17 @@ Deno.serve(async (request) => {
   if (clinicsError) return json({ error: clinicsError.message }, 500);
 
   for (const clinic of clinics ?? []) {
-    if (clinic.agenda_enabled === false) continue;
     const tz = clinic.timezone || DEFAULT_CLINIC_TIMEZONE;
+    // First run after quiet hours end: one note for booking requests that came in overnight (send-push counts them).
+    const local = zonedParts(now, tz);
+    if (local.hour === OVERNIGHT_NUDGE_HOUR && local.minute < 15) {
+      await fetch(`${url}/functions/v1/send-push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
+        body: JSON.stringify({ kind: 'overnight_requests', clinic_id: clinic.id, row_id: clinic.id }),
+      }).catch((error) => console.error('overnight nudge failed:', error));
+    }
+    if (clinic.agenda_enabled === false) continue;
     if (zonedParts(now, tz).hour !== (clinic.agenda_hour ?? 20)) continue;
     summary.clinics++;
 
