@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 import { encryptPayload, vapidAuthHeader } from '../_shared/webPush.ts';
 import { buildAppointmentPayload, buildBookingRequestPayload, buildPayload, type PushKind, type PushPayload } from './templates.ts';
 import { PUSH_CATEGORY_BY_KIND, withoutOptedOut, type PushCategory } from './preferences.ts';
+import { subscriptionsToRemove } from './delivery.ts';
 import { DEFAULT_CLINIC_TIMEZONE, inQuietHours, localDate } from '../_shared/zoned.ts';
 
 /** Quiet hours in the clinic's own time: nothing is pushed from 11 pm to 6 am, except changes to today's appointments. */
@@ -194,15 +195,14 @@ Deno.serve(async (request) => {
     })
   );
 
-  const gone: string[] = [];
   const failures: { status: number; detail: string }[] = [];
   let sent = 0;
   for (const r of results) {
     if (r.status !== 'fulfilled') continue;
     if (r.value.status === 201) sent++;
     else failures.push({ status: r.value.status, detail: r.value.detail });
-    if (r.value.status === 404 || r.value.status === 410) gone.push(r.value.id);
   }
+  const gone = subscriptionsToRemove(results.flatMap((r) => (r.status === 'fulfilled' ? [{ id: r.value.id, status: r.value.status }] : [])));
   if (gone.length) await admin.from('push_subscriptions').delete().in('id', gone);
 
   if (results.some((r) => r.status === 'rejected')) {
