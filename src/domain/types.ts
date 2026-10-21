@@ -131,6 +131,8 @@ export interface Clinic {
   defaultCountryCode?: string;
   /** The clinic sends each therapist tomorrow's agenda by email each evening. Absent = on. */
   agendaEnabled?: boolean;
+  /** Clinic-local hour (0-23) the agenda email goes out. Absent = 20 (8 pm). */
+  agendaHour?: number;
   /**
    * Patient communications module (booking requests, feedback capture,
    * Google review nudges, re-engagement reminders). Off by default — see

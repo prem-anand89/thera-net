@@ -1249,12 +1249,16 @@ function ClinicProfileSection({ onDirtyChange }: { onDirtyChange: (dirty: boolea
   );
 }
 
-type ClinicRegionFields = Pick<Clinic, 'timezone' | 'defaultCountryCode' | 'agendaEnabled'>;
+type ClinicRegionFields = Pick<Clinic, 'timezone' | 'defaultCountryCode' | 'agendaEnabled' | 'agendaHour'>;
 
 /** Time zone and phone country code: what every server-sent time and every new phone number starts from. */
+/** Evening hours offered for the agenda email (clinic time). */
+const AGENDA_HOURS = [16, 17, 18, 19, 20, 21, 22];
+const hourLabel = (hour: number) => `${hour % 12 === 0 ? 12 : hour % 12}:00 ${hour < 12 ? 'am' : 'pm'}`;
+
 function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { form, set, save, cancel, dirty, saved, busy, error } = useClinicSectionForm<ClinicRegionFields>(
-    (c) => ({ timezone: clinicTimezone(c), defaultCountryCode: clinicCountryCode(c), agendaEnabled: c.agendaEnabled !== false }),
+    (c) => ({ timezone: clinicTimezone(c), defaultCountryCode: clinicCountryCode(c), agendaEnabled: c.agendaEnabled !== false, agendaHour: c.agendaHour ?? 20 }),
     onDirtyChange
   );
   const [editing, setEditing] = useState(false);
@@ -1325,7 +1329,7 @@ function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
             <span>
               <span className="block text-sm font-medium text-[var(--ink)]">Daily agenda email</span>
               <span className="block text-xs text-[var(--muted)]">
-                At 8 pm each therapist with a login gets tomorrow's appointments in one email, with a calendar file.
+                Each therapist with a login gets tomorrow's appointments in one email, with a calendar file.
               </span>
             </span>
             <input
@@ -1337,6 +1341,22 @@ function ClinicRegionSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
               onChange={(e) => set({ agendaEnabled: e.target.checked })}
             />
           </label>
+          {form.agendaEnabled !== false && (
+            <Field label="Send at" htmlFor="clinic-agenda-hour">
+              <select
+                id="clinic-agenda-hour"
+                className={`${inputCls} sm:max-w-[10rem]`}
+                value={form.agendaHour ?? 20}
+                onChange={(e) => set({ agendaHour: Number(e.target.value) })}
+              >
+                {[...new Set([...AGENDA_HOURS, form.agendaHour ?? 20])].sort((a, b) => a - b).map((hour) => (
+                  <option key={hour} value={hour}>
+                    {hourLabel(hour)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
         </fieldset>
         {editing && (
           <SectionSaveBar
