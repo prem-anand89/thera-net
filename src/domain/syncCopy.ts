@@ -9,6 +9,8 @@ const TABLE_PHRASE: Record<SyncedTable, { one: string; many: string }> = {
   treatment_catalog: { one: 'settings change', many: 'settings changes' },
   patients: { one: 'patient change', many: 'patient changes' },
   visits: { one: 'visit', many: 'visits' },
+  visit_items: { one: 'visit service', many: 'visit services' },
+  visit_credits: { one: 'revenue share', many: 'revenue shares' },
   invoices: { one: 'invoice', many: 'invoices' },
   invoice_payments: { one: 'payment change', many: 'payment changes' },
   payments: { one: 'payment', many: 'payments' },

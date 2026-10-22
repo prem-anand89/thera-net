@@ -352,6 +352,9 @@ export interface CatalogItem {
   sessionCount: number;
   basePricePaise: Paise;
   active: boolean;
+  /** How long one session takes, 1–480 min (per session for a package). Optional/null = not set;
+   *  older cached rows lack the key. Snapshotted onto a visit's service line when it's entered. */
+  durationMinutes?: number | null;
   updatedAt: string;
 }
 
@@ -575,10 +578,63 @@ export interface Visit {
    * Optional: older cached rows predate this and default to 'clinic'.
    */
   location?: 'clinic' | 'home';
+  /**
+   * How the visit's revenue shares (VisitCredit rows) are kept: 'auto' = recomputed from the service
+   * lines whenever they change; 'manual' = someone edited the shares by hand, so line changes leave them
+   * alone. Absent (older cached rows) = 'auto'.
+   */
+  creditsMode?: 'auto' | 'manual';
   updatedAt: string;
   /** Auth user who created/last touched this row. Optional: older cached rows lack the key. */
   createdBy?: UUID | null;
   updatedBy?: UUID | null;
+}
+
+/**
+ * One service on a visit (`visit_items`). A visit with no rows here is read as one implicit line built
+ * from its own columns (older visits). The line's deliverer is `assistingTherapistId ?? visit.therapistId`:
+ * null means the visit's primary delivered it, so changing the primary needs no line updates.
+ * Frozen once the visit is on an invoice (server trigger). Soft-deleted via `deleted`, like visits.
+ */
+export interface VisitItem {
+  id: UUID;
+  clinicId: UUID;
+  visitId: UUID;
+  /** Display order; the first line is the visit's main service (= visit.serviceCatalogId). */
+  position: number;
+  serviceCatalogId: UUID;
+  /** Snapshots at entry, like the visit's own catalog snapshot. */
+  serviceName: string;
+  catalogPricePaise: Paise;
+  /** The line's price before the visit-level adjustment (the catalog price at entry; ₹0 for a package continuation). */
+  pricePaise: Paise;
+  /** null = the visit's primary therapist; set = an assistant tagged on this service (never the primary). */
+  assistingTherapistId: UUID | null;
+  /** Snapshot of the service's duration at entry; null when the service has none. */
+  durationMinutes: number | null;
+  /** At most one per visit: the package purchase or session the visit's package columns describe. */
+  isPackageLine: boolean;
+  deleted: boolean;
+  createdBy?: UUID | null;
+  updatedBy?: UUID | null;
+  updatedAt: string;
+}
+
+/**
+ * One therapist's share of a visit's bill (`visit_credits`). A visit's live rows sum exactly to
+ * `actualBillPaise`, and the primary therapist always has one. Editable by an admin, front desk or the
+ * visit's own therapist, also after invoicing (shares are internal, not on the invoice).
+ */
+export interface VisitCredit {
+  id: UUID;
+  clinicId: UUID;
+  visitId: UUID;
+  therapistId: UUID;
+  amountPaise: Paise;
+  deleted: boolean;
+  /** Who last changed this share (shown on the visit). */
+  updatedBy?: UUID | null;
+  updatedAt: string;
 }
 
 export type PaymentMode = 'Cash' | 'Card' | 'UPI' | 'Insurance';

@@ -423,7 +423,7 @@ queued with a visible error.
 #### Three Roles (Enforced Server-Side via RLS)
 - **admin** — full read/write on everything: roster, catalog, all therapists' visits, billing settings, feature toggles
 - **therapist** — clinic-wide reads, scoped writes (own visits/notes only), no roster/catalog/pricing changes
-- **front_desk** — reads and visit/invoice entry, no clinical-notes access (enforced by `consultation_notes` RLS since `20261022100000`, so notes never reach a front-desk device; bills get the referral block through `get_invoice_referral(visit_id)`), no roster/catalog writes, excluded from clinical dashboards
+- **front_desk** — reads and visit/invoice entry, and can correct any visit (its lines and revenue shares too: `visits_update` / `visit_items_update` / `visit_credits_update` allow admin, front desk or the visit's own therapist since `20261023100000`; deleting a visit stays admin or own therapist), no clinical-notes access (enforced by `consultation_notes` RLS since `20261022100000`, so notes never reach a front-desk device; bills get the referral block through `get_invoice_referral(visit_id)`), no roster/catalog writes, excluded from clinical dashboards
 
 #### Self-Service Sign-In (Email/Password and Google)
 - **`LoginPage.tsx`** offers both email/password (`signInWithPassword`/`signUp`)
@@ -1570,6 +1570,8 @@ name             text NOT NULL
 session_count    int NOT NULL (default 1, package pricing)
 base_price_paise bigint NOT NULL
 active           boolean NOT NULL (default true)
+duration_minutes smallint (NULLABLE, 1–480) — optional length of one session
+                 (per session for a package); snapshotted onto visit_items
 created_by, updated_by  uuid (NULLABLE)
 updated_at       timestamptz NOT NULL
 ```
@@ -1638,11 +1640,63 @@ clinical_status       text NOT NULL — 'pending' | 'documented' | 'reviewed'
 consultation_note_id  uuid (FOREIGN KEY → consultation_notes.id, NULLABLE)
 reauthorization_required  boolean NOT NULL
 location              text (NULLABLE) — 'clinic' | 'home'
+credits_mode          text NOT NULL (default 'auto') — 'auto' | 'manual': whether the
+                       visit_credits rows follow the service lines or were edited by hand
 deleted               boolean NOT NULL (default false)
 created_by, updated_by  uuid (NULLABLE)
 updated_at            timestamptz NOT NULL
 INDEXES: clinic+date, patient, clinic+updated
 ```
+RLS (since `20261023100000`): select/insert any clinic member; **update** admin, front desk or the
+visit's own therapist (`visits_update`); delete admin or own therapist (`visits_delete`).
+
+#### `visit_items` / `visit_credits` (multi-service, multi-therapist visits)
+
+Migration `20261023100000_visit_items_and_credits.sql`, Dexie `version(26)`. Both hang off a visit
+(`visit_id → visits.id ON DELETE CASCADE`), sync through the outbox like visits (in `ALL_SYNCED_TABLES`
+and `CLIENT_WRITABLE_TABLES`, published to realtime), soft-delete with `deleted`, carry
+`created_by/updated_by/updated_at` set by `set_updated_at()`, and have the sync tombstone and audit
+(`audit_row_change`) triggers. A visit with no `visit_items` rows (all older visits) is read as one
+implicit line built from its own columns; no backfill.
+```sql
+-- visit_items: one row per service on a visit
+id, clinic_id, visit_id   uuid NOT NULL
+position                  int NOT NULL — display order; position 0 = the visit's main service
+service_catalog_id        uuid NOT NULL (FOREIGN KEY → service_catalog.id)
+service_name              text NOT NULL — snapshot at entry
+catalog_price_paise       bigint NOT NULL — snapshot at entry
+price_paise               bigint NOT NULL — the line's price before the visit-level adjustment
+assisting_therapist_id    uuid (FOREIGN KEY → therapists.id, NULLABLE) — null = the visit's
+                           primary delivered it; set = assistant tagged on this service
+duration_minutes          smallint (NULLABLE, 1–480) — snapshot of the service's duration
+is_package_line           boolean NOT NULL (default false)
+deleted                   boolean NOT NULL (default false)
+INDEXES: visit_id; (clinic_id, updated_at, id); UNIQUE (visit_id) WHERE is_package_line AND NOT deleted
+
+-- visit_credits: one row per therapist credited on a visit
+id, clinic_id, visit_id   uuid NOT NULL
+therapist_id              uuid NOT NULL (FOREIGN KEY → therapists.id)
+amount_paise              bigint NOT NULL (>= 0) — share of the visit's actual_bill_paise
+deleted                   boolean NOT NULL (default false)
+INDEXES: visit_id; (clinic_id, updated_at, id)
+```
+- A line's **deliverer** is `assisting_therapist_id ?? visits.therapist_id`, so changing the primary
+  needs no line updates. Trigger `check_visit_item` rejects an assistant equal to the visit's
+  therapist (not checked on a deleted line) and a line whose `clinic_id` differs from its visit's;
+  `check_visit_credit` does the clinic check for shares.
+- **Invoiced visits freeze their lines**: `protect_invoiced_visit_items` rejects insert/update/delete
+  of a line whose visit has `invoice_id` (errcode 42501, "This visit is on an invoice; its services are
+  frozen."; a delete cascading from a visit/clinic delete is let through, for `admin_delete_clinic` /
+  `admin_wipe_clinic_data`). Shares stay editable after invoicing (internal, not on the invoice; the audit trail logs it).
+- Invariants kept by the app (not the server): Σ line `catalog_price_paise` = `visits.catalog_price_paise`;
+  Σ line `price_paise` + `adjustment_paise` = `actual_bill_paise`; Σ live credits = `actual_bill_paise`,
+  the primary always has a row.
+- RLS (both): select/insert any clinic member; update/delete admin, front desk or the parent visit's own
+  therapist (an assisting therapist cannot change lines or shares, even their own).
+- Client: `repos.visitItems` / `repos.visitCredits` — `listByVisitIds(ids)`, `listByClinic(clinicId,
+  range?)` (range = the parent visit's date, inclusive; deleted visits skipped), `bulkPut(rows)` (rows +
+  outbox entries in one transaction). Reads skip `deleted` rows. Dexie indexes: `visit_items: id,
+  clinicId, visitId, [clinicId+updatedAt]`; `visit_credits: id, clinicId, visitId, therapistId`.
 
 #### `invoices`
 ```sql
@@ -3384,6 +3438,8 @@ name             text NOT NULL
 session_count    int NOT NULL (default 1, package pricing)
 base_price_paise bigint NOT NULL
 active           boolean NOT NULL (default true)
+duration_minutes smallint (NULLABLE, 1–480) — optional length of one session
+                 (per session for a package); snapshotted onto visit_items
 created_by, updated_by  uuid (NULLABLE)
 updated_at       timestamptz NOT NULL
 ```
@@ -3452,11 +3508,63 @@ clinical_status       text NOT NULL — 'pending' | 'documented' | 'reviewed'
 consultation_note_id  uuid (FOREIGN KEY → consultation_notes.id, NULLABLE)
 reauthorization_required  boolean NOT NULL
 location              text (NULLABLE) — 'clinic' | 'home'
+credits_mode          text NOT NULL (default 'auto') — 'auto' | 'manual': whether the
+                       visit_credits rows follow the service lines or were edited by hand
 deleted               boolean NOT NULL (default false)
 created_by, updated_by  uuid (NULLABLE)
 updated_at            timestamptz NOT NULL
 INDEXES: clinic+date, patient, clinic+updated
 ```
+RLS (since `20261023100000`): select/insert any clinic member; **update** admin, front desk or the
+visit's own therapist (`visits_update`); delete admin or own therapist (`visits_delete`).
+
+#### `visit_items` / `visit_credits` (multi-service, multi-therapist visits)
+
+Migration `20261023100000_visit_items_and_credits.sql`, Dexie `version(26)`. Both hang off a visit
+(`visit_id → visits.id ON DELETE CASCADE`), sync through the outbox like visits (in `ALL_SYNCED_TABLES`
+and `CLIENT_WRITABLE_TABLES`, published to realtime), soft-delete with `deleted`, carry
+`created_by/updated_by/updated_at` set by `set_updated_at()`, and have the sync tombstone and audit
+(`audit_row_change`) triggers. A visit with no `visit_items` rows (all older visits) is read as one
+implicit line built from its own columns; no backfill.
+```sql
+-- visit_items: one row per service on a visit
+id, clinic_id, visit_id   uuid NOT NULL
+position                  int NOT NULL — display order; position 0 = the visit's main service
+service_catalog_id        uuid NOT NULL (FOREIGN KEY → service_catalog.id)
+service_name              text NOT NULL — snapshot at entry
+catalog_price_paise       bigint NOT NULL — snapshot at entry
+price_paise               bigint NOT NULL — the line's price before the visit-level adjustment
+assisting_therapist_id    uuid (FOREIGN KEY → therapists.id, NULLABLE) — null = the visit's
+                           primary delivered it; set = assistant tagged on this service
+duration_minutes          smallint (NULLABLE, 1–480) — snapshot of the service's duration
+is_package_line           boolean NOT NULL (default false)
+deleted                   boolean NOT NULL (default false)
+INDEXES: visit_id; (clinic_id, updated_at, id); UNIQUE (visit_id) WHERE is_package_line AND NOT deleted
+
+-- visit_credits: one row per therapist credited on a visit
+id, clinic_id, visit_id   uuid NOT NULL
+therapist_id              uuid NOT NULL (FOREIGN KEY → therapists.id)
+amount_paise              bigint NOT NULL (>= 0) — share of the visit's actual_bill_paise
+deleted                   boolean NOT NULL (default false)
+INDEXES: visit_id; (clinic_id, updated_at, id)
+```
+- A line's **deliverer** is `assisting_therapist_id ?? visits.therapist_id`, so changing the primary
+  needs no line updates. Trigger `check_visit_item` rejects an assistant equal to the visit's
+  therapist (not checked on a deleted line) and a line whose `clinic_id` differs from its visit's;
+  `check_visit_credit` does the clinic check for shares.
+- **Invoiced visits freeze their lines**: `protect_invoiced_visit_items` rejects insert/update/delete
+  of a line whose visit has `invoice_id` (errcode 42501, "This visit is on an invoice; its services are
+  frozen."; a delete cascading from a visit/clinic delete is let through, for `admin_delete_clinic` /
+  `admin_wipe_clinic_data`). Shares stay editable after invoicing (internal, not on the invoice; the audit trail logs it).
+- Invariants kept by the app (not the server): Σ line `catalog_price_paise` = `visits.catalog_price_paise`;
+  Σ line `price_paise` + `adjustment_paise` = `actual_bill_paise`; Σ live credits = `actual_bill_paise`,
+  the primary always has a row.
+- RLS (both): select/insert any clinic member; update/delete admin, front desk or the parent visit's own
+  therapist (an assisting therapist cannot change lines or shares, even their own).
+- Client: `repos.visitItems` / `repos.visitCredits` — `listByVisitIds(ids)`, `listByClinic(clinicId,
+  range?)` (range = the parent visit's date, inclusive; deleted visits skipped), `bulkPut(rows)` (rows +
+  outbox entries in one transaction). Reads skip `deleted` rows. Dexie indexes: `visit_items: id,
+  clinicId, visitId, [clinicId+updatedAt]`; `visit_credits: id, clinicId, visitId, therapistId`.
 
 #### `invoices`
 ```sql

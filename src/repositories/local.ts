@@ -11,6 +11,8 @@ import type {
   TreatmentItem,
   Patient,
   Visit,
+  VisitItem,
+  VisitCredit,
   Invoice,
   InvoicePayment,
   Payment,
@@ -34,6 +36,7 @@ import type {
   PatientRepo,
   VisitRepo,
   VisitFilter,
+  VisitChildRepo,
   InvoiceRepo,
   InvoicePaymentRepo,
   PaymentRepo,
@@ -250,6 +253,54 @@ const visits: VisitRepo = {
     });
   },
 };
+
+/** Every row is written and queued in one transaction, so a visit's lines/shares sync together. */
+async function bulkPutWithOutbox<T extends { id: string; updatedAt: string }>(
+  table: SyncedTable,
+  rows: T[]
+): Promise<void> {
+  if (!rows.length) return;
+  await db.transaction('rw', db.table(table), db.outbox, async () => {
+    await db.table(table).bulkPut(rows);
+    const ts = Date.now();
+    await db.outbox.bulkAdd(rows.map((r) => ({ table, rowId: r.id, ts })));
+  });
+  notifySync?.();
+}
+
+/** Shared by visit_items and visit_credits: both hang off a visit and are read per visit or per clinic. */
+function visitChildRepo<T extends { id: string; visitId: string; deleted: boolean; updatedAt: string }>(
+  table: 'visit_items' | 'visit_credits'
+): VisitChildRepo<T> {
+  const t = () => db.table<T, string>(table);
+  return {
+    async listByVisitIds(ids) {
+      if (!ids.length) return [];
+      const rows = await t().where('visitId').anyOf(ids).toArray();
+      return rows.filter((r) => !r.deleted);
+    },
+    async listByClinic(clinicId, range) {
+      if (!range) {
+        const rows = await t().where('clinicId').equals(clinicId).toArray();
+        return rows.filter((r) => !r.deleted);
+      }
+      // The rows carry no date of their own; the range is the parent visit's date.
+      const visitIds = (
+        await db.visits
+          .where('[clinicId+visitDate]')
+          .between([clinicId, range.from], [clinicId, range.to], true, true)
+          .toArray()
+      )
+        .filter((v) => !v.deleted)
+        .map((v) => v.id);
+      return this.listByVisitIds(visitIds);
+    },
+    bulkPut: (rows) => bulkPutWithOutbox(table, rows),
+  };
+}
+
+const visitItems = visitChildRepo<VisitItem>('visit_items');
+const visitCredits = visitChildRepo<VisitCredit>('visit_credits');
 
 const invoices: InvoiceRepo = {
   get: (id) => db.invoices.get(id),
@@ -488,6 +539,8 @@ export const repos: Repos = {
   treatmentCatalog,
   patients,
   visits,
+  visitItems,
+  visitCredits,
   invoices,
   invoicePayments,
   payments,

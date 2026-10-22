@@ -8,6 +8,8 @@ import type {
   TreatmentItem,
   Patient,
   Visit,
+  VisitItem,
+  VisitCredit,
   Invoice,
   InvoicePayment,
   Payment,
@@ -63,6 +65,8 @@ export type SyncedTable =
   | 'treatment_catalog'
   | 'patients'
   | 'visits'
+  | 'visit_items'
+  | 'visit_credits'
   | 'invoices'
   | 'invoice_payments'
   | 'payments'
@@ -99,6 +103,8 @@ export const ALL_SYNCED_TABLES = [
   'treatment_catalog',
   'patients',
   'visits',
+  'visit_items',
+  'visit_credits',
   'invoices',
   'invoice_payments',
   'payments',
@@ -151,6 +157,8 @@ export const CLIENT_WRITABLE_TABLES = [
   'treatment_catalog',
   'patients',
   'visits',
+  'visit_items',
+  'visit_credits',
   'invoice_payments',
   'payments',
   'settlements',
@@ -171,6 +179,8 @@ export class ClinicDB extends Dexie {
   treatment_catalog!: Table<TreatmentItem, string>;
   patients!: Table<Patient, string>;
   visits!: Table<Visit, string>;
+  visit_items!: Table<VisitItem, string>;
+  visit_credits!: Table<VisitCredit, string>;
   invoices!: Table<Invoice, string>;
   invoice_payments!: Table<InvoicePayment, string>;
   payments!: Table<Payment, string>;
@@ -312,6 +322,11 @@ export class ClinicDB extends Dexie {
     // Per-person push alert switches (read by the send-push edge function).
     this.version(25).stores({
       user_push_preferences: 'id, clinicId, userId, [userId+clinicId+category]',
+    });
+    // A visit's service lines and revenue shares (multi-service, multi-therapist visits).
+    this.version(26).stores({
+      visit_items: 'id, clinicId, visitId, [clinicId+updatedAt]',
+      visit_credits: 'id, clinicId, visitId, therapistId',
     });
   }
 }

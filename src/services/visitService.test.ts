@@ -122,6 +122,8 @@ function makeFakeRepos(clinicOverrides: Partial<Clinic> = {}) {
       markInvoiced: async () => {},
       markUninvoiced: async () => {},
     },
+    visitItems: { listByVisitIds: async () => [], listByClinic: async () => [], bulkPut: async () => {} },
+    visitCredits: { listByVisitIds: async () => [], listByClinic: async () => [], bulkPut: async () => {} },
     invoices: {
       get: async () => undefined,
       list: async () => [],

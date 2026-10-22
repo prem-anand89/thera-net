@@ -11,6 +11,8 @@ import type {
   TreatmentItem,
   Patient,
   Visit,
+  VisitItem,
+  VisitCredit,
   Invoice,
   InvoicePayment,
   Payment,
@@ -115,6 +117,20 @@ export interface VisitRepo {
   /** Mirrors void_invoice() locally: the visits are released from their invoice. */
   markUninvoiced(ids: UUID[]): Promise<void>;
 }
+
+/**
+ * A visit's child rows (service lines, revenue shares). Reads skip soft-deleted rows. `range` is a
+ * visit-date range (inclusive yyyy-mm-dd): only rows whose visit falls in it (and isn't deleted).
+ */
+export interface VisitChildRepo<T> {
+  listByVisitIds(ids: UUID[]): Promise<T[]>;
+  listByClinic(clinicId: UUID, range?: { from: string; to: string }): Promise<T[]>;
+  /** Writes every row and queues each for sync, in one transaction. */
+  bulkPut(rows: T[]): Promise<void>;
+}
+
+export type VisitItemRepo = VisitChildRepo<VisitItem>;
+export type VisitCreditRepo = VisitChildRepo<VisitCredit>;
 
 export interface InvoiceRepo {
   get(id: UUID): Promise<Invoice | undefined>;
@@ -294,6 +310,8 @@ export interface Repos {
   treatmentCatalog: TreatmentCatalogRepo;
   patients: PatientRepo;
   visits: VisitRepo;
+  visitItems: VisitItemRepo;
+  visitCredits: VisitCreditRepo;
   invoices: InvoiceRepo;
   invoicePayments: InvoicePaymentRepo;
   payments: PaymentRepo;

@@ -137,6 +137,8 @@ function makeFakeRepos() {
       markInvoiced: async () => {},
       markUninvoiced: async () => {},
     },
+    visitItems: { listByVisitIds: async () => [], listByClinic: async () => [], bulkPut: async () => {} },
+    visitCredits: { listByVisitIds: async () => [], listByClinic: async () => [], bulkPut: async () => {} },
     invoices: {
       get: async (id) => invoices.get(id),
       list: async (clinicId) => [...invoices.values()].filter((i) => i.clinicId === clinicId),
