@@ -1682,8 +1682,9 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
 ```
 - A line's **deliverer** is `assisting_therapist_id ?? visits.therapist_id`, so changing the primary
   needs no line updates. Trigger `check_visit_item` rejects an assistant equal to the visit's
-  therapist (not checked on a deleted line) and a line whose `clinic_id` differs from its visit's;
-  `check_visit_credit` does the clinic check for shares.
+  therapist (not checked on a deleted line), a line whose `clinic_id` differs from its visit's, and an
+  assistant who isn't a therapist of that clinic; `check_visit_credit` does the clinic check for shares
+  and requires the credited therapist to be of that clinic (all errcode 23514).
 - **Invoiced visits freeze their lines**: `protect_invoiced_visit_items` rejects insert/update/delete
   of a line whose visit has `invoice_id` (errcode 42501, "This visit is on an invoice; its services are
   frozen."; a delete cascading from a visit/clinic delete is let through, for `admin_delete_clinic` /
@@ -1691,8 +1692,14 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
 - Invariants kept by the app (not the server): Σ line `catalog_price_paise` = `visits.catalog_price_paise`;
   Σ line `price_paise` + `adjustment_paise` = `actual_bill_paise`; Σ live credits = `actual_bill_paise`,
   the primary always has a row.
-- RLS (both): select/insert any clinic member; update/delete admin, front desk or the parent visit's own
-  therapist (an assisting therapist cannot change lines or shares, even their own).
+- RLS (both): select any clinic member; **insert** admin, front desk, the parent visit's own therapist,
+  or whoever created the visit (`visits.created_by = auth.uid()`, stamped by `set_updated_at()` on the
+  server insert, so a therapist logging a visit for a colleague can add its lines and shares, also when
+  pushed later from offline) — helper `can_add_visit_children(visit_id)`; **update/delete** admin, front
+  desk or the parent visit's own therapist (`can_edit_visit_children(visit_id)`; update's `with check`
+  applies it to the new row, so a line or share can't be moved onto a visit the caller couldn't edit).
+  An assisting or unrelated therapist cannot add, change or delete lines or shares, so nobody can credit
+  themselves on someone else's visit.
 - Client: `repos.visitItems` / `repos.visitCredits` — `listByVisitIds(ids)`, `listByClinic(clinicId,
   range?)` (range = the parent visit's date, inclusive; deleted visits skipped), `bulkPut(rows)` (rows +
   outbox entries in one transaction). Reads skip `deleted` rows. Dexie indexes: `visit_items: id,
@@ -3550,8 +3557,9 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
 ```
 - A line's **deliverer** is `assisting_therapist_id ?? visits.therapist_id`, so changing the primary
   needs no line updates. Trigger `check_visit_item` rejects an assistant equal to the visit's
-  therapist (not checked on a deleted line) and a line whose `clinic_id` differs from its visit's;
-  `check_visit_credit` does the clinic check for shares.
+  therapist (not checked on a deleted line), a line whose `clinic_id` differs from its visit's, and an
+  assistant who isn't a therapist of that clinic; `check_visit_credit` does the clinic check for shares
+  and requires the credited therapist to be of that clinic (all errcode 23514).
 - **Invoiced visits freeze their lines**: `protect_invoiced_visit_items` rejects insert/update/delete
   of a line whose visit has `invoice_id` (errcode 42501, "This visit is on an invoice; its services are
   frozen."; a delete cascading from a visit/clinic delete is let through, for `admin_delete_clinic` /
@@ -3559,8 +3567,14 @@ INDEXES: visit_id; (clinic_id, updated_at, id)
 - Invariants kept by the app (not the server): Σ line `catalog_price_paise` = `visits.catalog_price_paise`;
   Σ line `price_paise` + `adjustment_paise` = `actual_bill_paise`; Σ live credits = `actual_bill_paise`,
   the primary always has a row.
-- RLS (both): select/insert any clinic member; update/delete admin, front desk or the parent visit's own
-  therapist (an assisting therapist cannot change lines or shares, even their own).
+- RLS (both): select any clinic member; **insert** admin, front desk, the parent visit's own therapist,
+  or whoever created the visit (`visits.created_by = auth.uid()`, stamped by `set_updated_at()` on the
+  server insert, so a therapist logging a visit for a colleague can add its lines and shares, also when
+  pushed later from offline) — helper `can_add_visit_children(visit_id)`; **update/delete** admin, front
+  desk or the parent visit's own therapist (`can_edit_visit_children(visit_id)`; update's `with check`
+  applies it to the new row, so a line or share can't be moved onto a visit the caller couldn't edit).
+  An assisting or unrelated therapist cannot add, change or delete lines or shares, so nobody can credit
+  themselves on someone else's visit.
 - Client: `repos.visitItems` / `repos.visitCredits` — `listByVisitIds(ids)`, `listByClinic(clinicId,
   range?)` (range = the parent visit's date, inclusive; deleted visits skipped), `bulkPut(rows)` (rows +
   outbox entries in one transaction). Reads skip `deleted` rows. Dexie indexes: `visit_items: id,
