@@ -1,8 +1,9 @@
-import type { UUID } from '@/domain/types';
+import type { UUID, Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
-import { roundToRupeeHalfUp } from '@/domain/money';
+import { attributionMovements, packageSessionShares } from '@/domain/payBase';
 import { monthDateRange, type FyMonth } from '@/domain/fiscalYear';
 import type { Repos } from '@/repositories/types';
+import { loadPackageGroups } from './reportService';
 
 /**
  * One rupee movement from one therapist's row to another's, for a given
@@ -40,73 +41,59 @@ export interface AttributionEntry {
 /**
  * Per-transaction ledger for a month: every rupee that moved between
  * therapists via either manual Shared/Split or automatic package-session
- * attribution. Mirrors reportService.monthly's own two loops exactly (same
- * source visits, same in-window scoping for package attribution) so this
- * list always sums to the same deltas that produced that month's Net
- * figures — see reportService.ts for the aggregate versions of both loops.
+ * attribution. Built from the very same payBase movements reportService
+ * aggregates (same source visits, same in-window scoping for package
+ * attribution), so this list always sums to the same deltas that produced
+ * that month's Net figures — see domain/payBase.ts.
  */
 export function createAttributionAuditService(repos: Repos) {
   return {
     async monthly(clinicId: UUID, month: FyMonth): Promise<AttributionEntry[]> {
       const { from, to } = monthDateRange(month);
       const visits = await repos.visits.list({ clinicId, from, to });
-      const entries: AttributionEntry[] = [];
+      const packageGroups = await loadPackageGroups(visits, repos);
+      const visitById = new Map<UUID, Visit>(visits.map((v) => [v.id, v]));
+      for (const group of packageGroups.values()) for (const g of group) visitById.set(g.id, g);
 
-      for (const v of visits) {
-        if (!v.sharedTherapistId || !v.sharedPct) continue;
-        entries.push({
-          mechanism: 'manual_split',
-          visitId: v.id,
-          visitDate: v.visitDate,
-          patientId: v.patientId,
-          fromTherapistId: v.therapistId,
-          toTherapistId: v.sharedTherapistId,
-          grossPaise: roundToRupeeHalfUp((v.actualBillPaise * v.sharedPct) / 100),
-          postTaxPaise: roundToRupeeHalfUp((v.postTaxPaise * v.sharedPct) / 100),
-          packageGroupId: null,
-          sharedPct: v.sharedPct,
-          visitBillPaise: v.actualBillPaise,
-          packageTotalPaise: null,
-          packageSessionCount: null,
-          sessionIndex: null,
-        });
-      }
-
-      const packageGroupIds = new Set(
-        visits.filter((v) => v.packageGroupId && (v.packageTotal ?? 1) > 1).map((v) => v.packageGroupId!)
-      );
-      await Promise.all(
-        [...packageGroupIds].map(async (groupId) => {
-          const group = await repos.visits.listByPackageGroup(groupId);
-          const packageTotal = group[0]?.packageTotal || group.length;
-          const billingVisit = group.reduce(
-            (max, g) => (g.actualBillPaise > max.actualBillPaise ? g : max),
-            group[0]
-          );
-          const perSessionShare = Math.floor(billingVisit.postTaxPaise / 100 / packageTotal) * 100;
-          if (perSessionShare <= 0) return;
-          for (const g of group) {
-            if (g.visitDate < from || g.visitDate > to) continue;
-            if (g.id === billingVisit.id || g.therapistId === billingVisit.therapistId) continue;
-            entries.push({
-              mechanism: 'package_attribution',
-              visitId: g.id,
-              visitDate: g.visitDate,
-              patientId: g.patientId,
-              fromTherapistId: billingVisit.therapistId,
-              toTherapistId: g.therapistId,
-              grossPaise: null,
-              postTaxPaise: perSessionShare as Paise,
-              packageGroupId: groupId,
-              sharedPct: null,
-              visitBillPaise: null,
-              packageTotalPaise: billingVisit.actualBillPaise,
-              packageSessionCount: packageTotal,
-              sessionIndex: g.sessionIndex,
-            });
+      const entries: AttributionEntry[] = attributionMovements({ visits, packageGroups, from, to })
+        // Per-line revenue shares get their own audit shape when they land.
+        .filter((m) => m.mechanism !== 'line_share')
+        .map((m): AttributionEntry => {
+          const v = visitById.get(m.visitId)!;
+          const common = {
+            visitId: m.visitId,
+            visitDate: v.visitDate,
+            patientId: v.patientId,
+            fromTherapistId: m.fromTherapistId,
+            toTherapistId: m.toTherapistId,
+            postTaxPaise: m.postTaxPaise,
+          };
+          if (m.mechanism === 'manual_split') {
+            return {
+              ...common,
+              mechanism: 'manual_split',
+              grossPaise: m.grossPaise,
+              packageGroupId: null,
+              sharedPct: v.sharedPct ?? null,
+              visitBillPaise: v.actualBillPaise,
+              packageTotalPaise: null,
+              packageSessionCount: null,
+              sessionIndex: null,
+            };
           }
-        })
-      );
+          const { billingVisit, packageTotal } = packageSessionShares(packageGroups.get(v.packageGroupId!)!);
+          return {
+            ...common,
+            mechanism: 'package_attribution',
+            grossPaise: null,
+            packageGroupId: v.packageGroupId,
+            sharedPct: null,
+            visitBillPaise: null,
+            packageTotalPaise: billingVisit.actualBillPaise,
+            packageSessionCount: packageTotal,
+            sessionIndex: v.sessionIndex,
+          };
+        });
 
       return entries.sort((a, b) => a.visitDate.localeCompare(b.visitDate));
     },

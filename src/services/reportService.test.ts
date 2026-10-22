@@ -465,6 +465,28 @@ describe('reportService.monthly — netPostTaxPaise package attribution', () => 
   });
 });
 
+describe('reportService.monthly — netClinicSharePaise (payroll base)', () => {
+  it('moves clinic share by the split pct and the package per-session ratio, leaving the total untouched', async () => {
+    const pkg = { packageGroupId: 'pkg-c', packageTotal: 3 };
+    const repos = makeFakeRepos([
+      // Shared 30% with Aishwarya.
+      visit({ therapistId: PREM, clinicSharePaise: rs(4049), sharedTherapistId: AISH, sharedPct: 30 }),
+      // A 3-session package billed by Prem; Aishwarya runs session 2.
+      visit({ ...pkg, id: 'p1', therapistId: PREM, visitDate: '2026-07-01', actualBillPaise: rs(3000), clinicSharePaise: rs(2250), postTaxPaise: rs(2025), sessionIndex: 1 }),
+      visit({ ...pkg, id: 'p2', therapistId: AISH, visitDate: '2026-07-08', actualBillPaise: 0, clinicSharePaise: 0, postTaxPaise: 0, sessionIndex: 2 }),
+    ]);
+    const report = await createReportService(repos).monthly(CLINIC, JULY);
+    const prem = report.rows.find((r) => r.therapistId === PREM)!;
+    const aish = report.rows.find((r) => r.therapistId === AISH)!;
+    const moved = roundToRupeeHalfUp((rs(4049) * 30) / 100) + Math.floor(rs(2250) / 100 / 3) * 100;
+    expect(aish.netClinicSharePaise).toBe(moved);
+    expect(prem.netClinicSharePaise).toBe(rs(4049) + rs(2250) - moved);
+    expect(report.total.netClinicSharePaise).toBe(report.total.clinicSharePaise);
+    // The billed clinic-share column itself never moves.
+    expect(prem.clinicSharePaise).toBe(rs(4049) + rs(2250));
+  });
+});
+
 describe('reportService.toCsv — configurable share labels', () => {
   it('defaults the share columns to Clinic/Partner', async () => {
     const report = await createReportService(makeFakeRepos([visit({})])).monthly(CLINIC, JULY);

@@ -4706,8 +4706,8 @@ Both are folded into ONE number, `TherapistMonthRow.netPostTaxPaise`
 each row's summed `postTaxPaise`, adjusted by (1) the manual-split delta
 (a same-visit % moved between two named therapists, always net-zero across
 the month) and (2) an automatic package-attribution delta, computed
-**per package group, as explicit deltas the biller gives away** —
-`packageAttributionDeltas()`:
+**per package group, as explicit movements the biller gives away** —
+`attributionMovements()` in `src/domain/payBase.ts`:
 1. Find the group's **billing visit** (the one with the largest bill —
    everything else is logged at ₹0 by convention).
 2. `perSessionShare = floor(billingVisit.postTaxPaise / packageTotal)`
@@ -4762,6 +4762,30 @@ revenue, ignoring splits" concept anymore — that used to be a parallel
 `attributedRevenuePaise` field/column, folded into `netPostTaxPaise` instead
 so there's one lens, not two.
 
+**Pay base — one function for each therapist's money** (`src/domain/payBase.ts`).
+Both mechanisms live in ONE pure module, never re-implemented elsewhere:
+`attributionMovements(input)` returns every therapist-to-therapist
+`Movement` for a `[from,to]` window (`mechanism` `manual_split` |
+`package_attribution` | `line_share` — the last reserved for per-line
+revenue shares, nothing produces it yet), each carrying the gross,
+clinic-share and post-tax amount moved; `payBaseByTherapist(input)` puts
+every in-window visit's billed amounts under its primary therapist and
+applies every movement (equal and opposite, so Σ over therapists always
+equals Σ over visits on all three bases). Input is
+`{ visits, packageGroups, from, to }`; the function is pure, so callers
+fetch the full package groups themselves (`loadPackageGroups` in
+`reportService.ts`, via `repos.visits.listByPackageGroup`). Rules: a manual
+split moves `roundToRupeeHalfUp(amount × sharedPct / 100)` of the bill,
+clinic share and post-tax each; a package session moves
+`floor(billing visit's figure / 100 / packageTotal) × 100` of clinic share
+and post-tax, and **no gross** (so `Shared` stays manual-split-only).
+`reportService` (Shared / Net / `netClinicSharePaise`) and the attribution
+audit both read from it; future payroll will too. **Never compute
+therapist attribution anywhere else** — add an input to `PayBaseInput`
+instead. `TherapistMonthRow.netClinicSharePaise` is the clinic share after
+the same movements (the payroll base); like Net, its Total equals the
+billed `clinicSharePaise`.
+
 **Manual Shared and package attribution move money on different bases.**
 The `Shared` column is a % of the **gross** bill; the amount actually
 reflected in `Net` for the same split is the same % applied to
@@ -4775,10 +4799,10 @@ explicitly so it doesn't read as the two disagreeing by mistake.
 per-transaction ledger for a month — every rupee either mechanism moved,
 with the visit, patient, from/to therapist, and gross/post-tax amounts —
 so a disputed Shared or Net figure can be traced back to the specific
-visit(s) that produced it, rather than taken on faith. Mirrors
-`reportService.monthly`'s own two loops exactly (same source visits, same
-in-window scoping for package attribution) so the list always sums to the
-same deltas that produced that month's Net figures. A **Basis** column
+visit(s) that produced it, rather than taken on faith. Built from the
+same `attributionMovements()` output `reportService` aggregates (same
+source visits, same in-window scoping for package attribution) so the list
+always sums to the same deltas that produced that month's Net figures. A **Basis** column
 shows what the moved amount is a share OF — a bare "₹500" moved between
 two names is unverifiable on its own: for `manual_split`, the full visit
 bill and the % applied; for `package_attribution`, the billing visit's

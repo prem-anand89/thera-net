@@ -140,6 +140,7 @@ const ZERO_MONTH_ROW: Omit<TherapistMonthRow, 'therapistId' | 'therapistName'> =
   partnerSharePaise: 0,
   adjustmentPaise: 0,
   sharedPaise: 0,
+  netClinicSharePaise: 0,
   netPostTaxPaise: 0,
   visitCount: 0,
   billedSessionCount: 0,
