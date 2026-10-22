@@ -570,6 +570,25 @@ describe('reportService.monthly — service lines and revenue shares', () => {
     expect(calls.visitCredits.calls).toBe(1);
   });
 
+  it('assistant on a zero-bill visit gets a row with an assisted count', async () => {
+    const v = visit({ id: 'z1', therapistId: PREM, actualBillPaise: 0, clinicSharePaise: 0, postTaxPaise: 0 });
+    const items = [lineItem('z1', { position: 0 }), lineItem('z1', { position: 1, assistingTherapistId: AISH })];
+    const report = await createReportService(makeFakeRepos([v], { items })).monthly(CLINIC, JULY);
+    const aish = report.rows.find((r) => r.therapistId === AISH)!;
+    expect(aish).toMatchObject({ visitCount: 0, patientsTreated: 1, assistedVisitCount: 1, netPostTaxPaise: 0 });
+  });
+
+  it('split off: the assistant still gets a row with an assisted count and no money', async () => {
+    const v = visit({ id: 's1', therapistId: PREM, actualBillPaise: rs(1000), clinicSharePaise: rs(750), postTaxPaise: rs(675) });
+    const items = [lineItem('s1', { position: 0, pricePaise: rs(500) }), lineItem('s1', { position: 1, pricePaise: rs(500), assistingTherapistId: AISH })];
+    const report = await createReportService(
+      makeFakeRepos([v], { items, clinic: { enableTherapistSplit: false } })
+    ).monthly(CLINIC, JULY);
+    const aish = report.rows.find((r) => r.therapistId === AISH)!;
+    expect(aish).toMatchObject({ patientsTreated: 1, assistedVisitCount: 1, sharedPaise: 0, netPostTaxPaise: 0 });
+    expect(report.total.assistedVisitCount).toBe(0);
+  });
+
   it("repairs shares that don't add up with the clinic's split setting", async () => {
     const v = visit({ id: 'lv2', therapistId: PREM, actualBillPaise: rs(1300), clinicSharePaise: rs(975), postTaxPaise: rs(878) });
     const items = [
@@ -582,7 +601,10 @@ describe('reportService.monthly — service lines and revenue shares', () => {
     const off = await createReportService(
       makeFakeRepos([v], { items, credits, clinic: { enableTherapistSplit: false } })
     ).monthly(CLINIC, JULY);
-    expect(off.rows.find((r) => r.therapistId === AISH)).toBeUndefined();
+    const aish = off.rows.find((r) => r.therapistId === AISH)!;
+    expect(aish.sharedPaise).toBe(0);
+    expect(aish.netPostTaxPaise).toBe(0);
+    expect(aish).toMatchObject({ patientsTreated: 1, assistedVisitCount: 1 }); // split off: row, count, no money
   });
 
   it("bases a package's session shares on the package line, loading the whole group's lines", async () => {

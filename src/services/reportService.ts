@@ -2,7 +2,7 @@ import type { UUID, Visit } from '@/domain/types';
 import type { Paise } from '@/domain/money';
 import { paiseToRupees } from '@/domain/money';
 import { attributablePackageGroupIds, payBaseByTherapist, type PayBaseInput } from '@/domain/payBase';
-import { deliverer } from '@/domain/visitLines';
+import { treatedTherapists } from '@/domain/visitLines';
 import { monthDateRange, monthName, type FyMonth } from '@/domain/fiscalYear';
 import type { Repos } from '@/repositories/types';
 
@@ -245,16 +245,11 @@ export function createReportService(repos: Repos) {
       }
 
       // Patients treated / assisted visits, from the same service lines: each visit counts once per therapist
-      // who delivered a line on it (visits without lines: the primary; an assistant only shows where they have
-      // a row, i.e. split on), and the Total is just the visit count.
+      // who delivered a line on it (visits without lines: the primary). Every such therapist gets a row, with
+      // zero money when nothing moved to them (₹0 visits, split off), so assisted work is never dropped.
       for (const v of visits) {
-        const live = (payBaseInput.items.get(v.id) ?? []).filter((i) => !i.deleted);
-        const treated = new Set<UUID>(live.length > 0 ? live.map((i) => deliverer(i, v.therapistId)) : [v.therapistId]);
-        for (const id of treated) {
-          // An assistant with no row of their own (therapist split off: all money stays with the primary)
-          // is not listed; the primary always has one from the loop above.
-          const row = rowsById.get(id);
-          if (!row) continue;
+        for (const id of treatedTherapists(payBaseInput.items.get(v.id) ?? [], v.therapistId)) {
+          const row = rowFor(id);
           row.patientsTreated += 1;
           if (id !== v.therapistId) row.assistedVisitCount += 1;
         }

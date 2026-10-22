@@ -1,6 +1,6 @@
 import { addDays, isClosedDay, workingIntervals } from './schedule';
 import type { Visit, VisitItem, WorkingHours } from './types';
-import { deliverer, therapistMinutes } from './visitLines';
+import { therapistMinutes, treatedTherapists } from './visitLines';
 
 /**
  * A visit as utilisation sees it. Visits with live service lines (`items`) count each therapist's
@@ -49,9 +49,7 @@ function liveItems(v: UtilisationVisit): VisitItem[] {
  * one live line (visits without lines: they are the primary); `assisted` = treated but not the primary.
  */
 export function visitInvolvement(v: UtilisationVisit, therapistId: string): { treated: boolean; assisted: boolean } {
-  const items = liveItems(v);
-  if (items.length === 0) return { treated: v.therapistId === therapistId, assisted: false };
-  const treated = items.some((i) => deliverer(i, v.therapistId) === therapistId);
+  const treated = treatedTherapists(v.items ?? [], v.therapistId).has(therapistId);
   return { treated, assisted: treated && v.therapistId !== therapistId };
 }
 

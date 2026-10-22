@@ -23,7 +23,7 @@ export function therapistStatus(input: {
   const { utilisation: u, clinicUtilisation: c, previousUtilisation: p, patientsTreated } = input;
   const t = STATUS_THRESHOLDS;
   if (u == null || patientsTreated < MIN_VISITS_FOR_RANKING) {
-    return { status: 'insufficient', reason: `Fewer than ${MIN_VISITS_FOR_RANKING} visits, or no available hours` };
+    return { status: 'insufficient', reason: `Fewer than ${MIN_VISITS_FOR_RANKING} patients treated, or no available hours` };
   }
   const pct = (x: number) => `${Math.round(x * 100)}%`;
   if (u < t.lowBelow) return { status: 'attention', reason: `Utilisation ${pct(u)} is below ${pct(t.lowBelow)}` };

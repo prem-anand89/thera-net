@@ -141,6 +141,15 @@ export function rebalanceCredits(
 }
 
 /**
+ * Who was treated on a visit: the deliverers of its live lines, or the visit's own therapist when it has
+ * none. The one rule behind "patients treated" in the reports and utilisation.
+ */
+export function treatedTherapists(items: VisitItem[], primaryId: UUID): Set<UUID> {
+  const lines = liveLines(items);
+  return new Set(lines.length > 0 ? lines.map((l) => deliverer(l, primaryId)) : [primaryId]);
+}
+
+/**
  * Minutes a therapist is counted for on one visit (utilisation). Nobody enters time:
  * - not delivering any live line → 0;
  * - every line they delivered has a duration → the sum of those durations, capped at the sitting;

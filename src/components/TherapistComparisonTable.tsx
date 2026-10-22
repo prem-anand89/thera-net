@@ -237,7 +237,7 @@ export function TherapistComparisonTable({
       </p>
       {anyLeader && (
         <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
-          Top marks the best in each column among therapists with at least {MIN_VISITS_FOR_RANKING} visits in the period.
+          Top marks the best in each column among therapists with at least {MIN_VISITS_FOR_RANKING} patients treated in the period.
         </p>
       )}
       {showUtilisation && rows.some((r) => r.utilisationClinicHours) && (

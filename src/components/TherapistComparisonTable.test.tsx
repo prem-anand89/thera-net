@@ -74,7 +74,7 @@ describe('TherapistComparisonTable ranking', () => {
   it('marks the leader of each column and explains the minimum', () => {
     render(<TherapistComparisonTable rows={two} showPostTax={false} ownLabel="BM" />);
     expect(screen.getAllByText('Top').length).toBeGreaterThan(0);
-    expect(screen.getByText(/at least 20 visits/)).toBeInTheDocument();
+    expect(screen.getByText(/at least 20 patients treated/)).toBeInTheDocument();
   });
 
   it('shows no marks when only one therapist is eligible', () => {
